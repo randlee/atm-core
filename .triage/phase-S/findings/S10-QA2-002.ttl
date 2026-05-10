@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S10-QA2-002>
+  a triage:Finding ;
+  triage:findingId "S10-QA2-002" ;
+  triage:title "tracing::warn! at daemon_observability.rs:494 is a permanent silent no-op — not documented" ;
+  triage:description "After init_tracing() removal, no global tracing subscriber is installed in atm-daemon. The tracing::warn! call at daemon_observability.rs:494 (in level_for_outcome for unknown outcomes) is a permanent silent no-op in production with no code comment acknowledging this. Fix: either add an inline comment stating that no global tracing subscriber is installed and warn! is intentionally a no-op (lifecycle events route exclusively through emit_runtime_event()), or replace the tracing::warn! with an explicit emit path or eprintln! for unknown outcomes." ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:promoteToBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S10-QA2-002/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/953dee2> .
+
+<urn:atm:triage:occurrence/S10-QA2-002/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 494 ;
+  triage:snippet "tracing::warn!(\"unknown level_for_outcome ...\") — permanent silent no-op: no global tracing subscriber installed after init_tracing() removal" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "953dee2" ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/953dee2> .
+
+<urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/953dee2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s10-daemon-retained-logger" ;
+  triage:headSha "953dee2" ;
+  triage:orderIndex 2 .

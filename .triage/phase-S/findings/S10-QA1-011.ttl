@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S10-QA1-011>
+  a triage:Finding ;
+  triage:findingId "S10-QA1-011" ;
+  triage:title "query() and follow() unavailability not documented in daemon requirements" ;
+  triage:description "DaemonObservability.query() and .follow() at daemon_observability.rs:152-171 return typed Err (observability_query / observability_follow) indicating those surfaces are unavailable in the daemon. Neither sprint-S10.md nor docs/atm-daemon/requirements.md explicitly lists query/follow unavailability as an accepted limitation for S.10. Add a note to docs/atm-daemon/requirements.md REQ-DAEMON-OBS-001/002 section stating that query() and follow() are deferred to a later sprint, with log querying delegated to the CLI-owned log query surface." ;
+  triage:category "DOC" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:promoteToBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S10-QA1-011/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:occurrence/S10-QA1-011/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 152 ;
+  triage:snippet "query() and follow() return typed Err — unavailability not documented as accepted deferred limitation in requirements doc" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "320b658" ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s10-daemon-retained-logger" ;
+  triage:headSha "320b658" ;
+  triage:orderIndex 1 .

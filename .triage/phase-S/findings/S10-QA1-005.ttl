@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S10-QA1-005>
+  a triage:Finding ;
+  triage:findingId "S10-QA1-005" ;
+  triage:title "project_doctor_report() does not plumb live DaemonObservability sink health into DoctorReport" ;
+  triage:description "Sprint S.10 §2 requires health() to 'reflect real retained-sink state, not the fault-injection stub'. DaemonObservability.health() at daemon_observability.rs:174 correctly calls self.logger.health() on the live sink, but this signal is never plumbed into project_doctor_report() at runtime_health.rs:580-622. The doctor report includes report.observability via atm_core::doctor::run_doctor, but runtime_status_finding() uses error_codes that do not reflect live sink state. Plumb DaemonObservability.health() into project_doctor_report() to add a dedicated observability-health DoctorFinding." ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:promoteToBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S10-QA1-005/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:occurrence/S10-QA1-005/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 735 ;
+  triage:snippet "runtime_status_finding() projects member counts and sqlite_ready but does not incorporate DaemonObservability.health() result" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "320b658" ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s10-daemon-retained-logger" ;
+  triage:headSha "320b658" ;
+  triage:orderIndex 1 .

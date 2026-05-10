@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S10-QA1-001>
+  a triage:Finding ;
+  triage:findingId "S10-QA1-001" ;
+  triage:title "sc_observability imported in library target — violates RULE-001" ;
+  triage:description "daemon_observability.rs is compiled as part of the atm_daemon [lib] target (included via `mod daemon_observability` in lib.rs). It imports sc_observability and sc_observability_types at lines 13-20. RULE-001 permits sc_observability imports only in true binary entry points (main.rs). Two clean options: (1) collapse atm-daemon to binary-only by removing [lib] — daemon_observability.rs becomes part of the binary target alongside main.rs; (2) keep [lib] but pass observability through the ObservabilityPort trait, constructing the concrete sc_observability adapter exclusively in main.rs." ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:promoteToBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S10-QA1-001/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:occurrence/S10-QA1-001/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 13 ;
+  triage:snippet "use sc_observability and sc_observability_types in library target module — RULE-001 violation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "320b658" ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s10-daemon-retained-logger" ;
+  triage:headSha "320b658" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S10-QA1-018>
+  a triage:Finding ;
+  triage:findingId "S10-QA1-018" ;
+  triage:title "home_dir: PathBuf crosses pub(crate) API boundary as raw unvalidated path (RBP-004)" ;
+  triage:description "runtime_health.rs:399: DaemonRequestDispatcher::new(home_dir: PathBuf, ...) accepts a raw PathBuf at the pub(crate) API boundary. Nothing in the type prevents callers from passing an arbitrary or unresolved path where only a validated ATM home directory is semantically valid. Consider a ValidatedHomePath or AtmHomeDir newtype that enforces the invariant (must be existing dir, resolved absolute path) at construction time. Given pub(crate) scope this is a low-urgency improvement aligned with the project's stated RBP-004 policy for paths at API boundaries." ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:promoteToBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S10-QA1-018/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:occurrence/S10-QA1-018/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 399 ;
+  triage:snippet "pub(crate) fn new(home_dir: PathBuf, ...) — raw PathBuf crosses pub(crate) API boundary without newtype enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "320b658" ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s10-daemon-retained-logger" ;
+  triage:headSha "320b658" ;
+  triage:orderIndex 1 .
