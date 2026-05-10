@@ -137,7 +137,7 @@ fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             &target.team,
             &target.agent,
             [workflow_path],
-            runtime.default_lock_timeout(),
+            runtime.mailbox_timeout_policy().workflow_lock_timeout,
             |_source_paths, source_files| {
                 let mut workflow_state =
                     runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;

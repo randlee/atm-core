@@ -16,6 +16,7 @@ use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
+use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort};
 use atm_core::protocol::{
     RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
@@ -514,6 +515,29 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    pub(crate) fn list(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
+        match self.send_request(RequestEnvelope::List(query))? {
+            ResponseEnvelope::List(outcome) => {
+                let _ = self.observability_port.emit(CommandEvent {
+                    command: "list",
+                    action: "list",
+                    outcome: "ok",
+                    team: outcome.team.clone(),
+                    agent: outcome.agent.clone(),
+                    sender: outcome.agent.clone(),
+                    message_id: None,
+                    requires_ack: false,
+                    dry_run: false,
+                    task_id: None,
+                    error_code: None,
+                    error_message: None,
+                });
+                Ok(outcome)
+            }
+            other => Err(unexpected_response("list", other)),
+        }
+    }
+
     pub(crate) fn clear(&self, query: ClearQuery) -> Result<ClearOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Clear(query))? {
             ResponseEnvelope::Clear(outcome) => {
@@ -763,6 +787,8 @@ mod tests {
                 None,
                 None,
                 None,
+                None,
+                None,
             )
             .expect("read query")
         }
@@ -964,7 +990,10 @@ mod tests {
 
         assert_eq!(outcome.agent.as_str(), TEST_RECIPIENT);
         assert_eq!(outcome.count, 1);
-        assert_eq!(outcome.messages[0].envelope.text, "read me");
+        assert_eq!(
+            outcome.message.expect("selected message").envelope.text,
+            "read me"
+        );
     }
 
     #[test]

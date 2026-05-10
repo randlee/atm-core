@@ -719,7 +719,10 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
     let started = Instant::now();
     let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
     assert_eq!(outcome.count, 1);
-    assert_eq!(outcome.messages[0].envelope.text, "already read");
+    assert_eq!(
+        outcome.message.expect("selected message").envelope.text,
+        "already read"
+    );
     assert!(
         started.elapsed() < TEST_LOCK_BUDGET_CEILING,
         "retain only a coarse non-blocking budget here; recv_timeout-based tests above already cover deadlock detection"
@@ -755,9 +758,9 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
         outcome
-            .messages
-            .iter()
-            .any(|message| message.envelope.text == "hello sidecar"),
+            .message
+            .as_ref()
+            .is_some_and(|message| message.envelope.text == "hello sidecar"),
         "read outcome should include the ULID-authored message"
     );
 
@@ -986,6 +989,8 @@ impl Fixture {
             false,
             false,
             AckActivationMode::ReadOnly,
+            None,
+            None,
             None,
             None,
             None,

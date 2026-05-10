@@ -16,6 +16,7 @@ use crate::doctor::{DoctorQuery, DoctorReport};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::home;
+use crate::list::{ListOutcome, ListQuery};
 use crate::read::{ReadOutcome, ReadQuery};
 use crate::send::{SendOutcome, SendRequest};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -39,6 +40,7 @@ pub enum SendResponseEnvelope {
 pub enum RequestEnvelope {
     Send(SendRequestEnvelope),
     Heartbeat(TeamMemberHeartbeatRequest),
+    List(ListQuery),
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
@@ -49,6 +51,7 @@ pub enum RequestEnvelope {
 pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
     Heartbeat(TeamMemberHeartbeatResponse),
+    List(ListOutcome),
     Receive(ReadOutcome),
     Clear(ClearOutcome),
     Doctor(DoctorReport),
@@ -164,15 +167,17 @@ pub enum MessageKind {
     SendComposeRequest = 0x0001,
     SendAcknowledgeRequest = 0x0002,
     HeartbeatRequest = 0x0003,
-    ReceiveRequest = 0x0004,
-    ClearRequest = 0x0005,
-    DoctorRequest = 0x0006,
+    ListRequest = 0x0004,
+    ReceiveRequest = 0x0005,
+    ClearRequest = 0x0006,
+    DoctorRequest = 0x0007,
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
     HeartbeatResponse = 0x1003,
-    ReceiveResponse = 0x1004,
-    ClearResponse = 0x1005,
-    DoctorResponse = 0x1006,
+    ListResponse = 0x1004,
+    ReceiveResponse = 0x1005,
+    ClearResponse = 0x1006,
+    DoctorResponse = 0x1007,
     ErrorResponse = 0x1fff,
 }
 
@@ -187,6 +192,7 @@ impl MessageKind {
             Self::SendComposeRequest
                 | Self::SendAcknowledgeRequest
                 | Self::HeartbeatRequest
+                | Self::ListRequest
                 | Self::ReceiveRequest
                 | Self::ClearRequest
                 | Self::DoctorRequest
@@ -206,15 +212,17 @@ impl TryFrom<u16> for MessageKind {
             0x0001 => Self::SendComposeRequest,
             0x0002 => Self::SendAcknowledgeRequest,
             0x0003 => Self::HeartbeatRequest,
-            0x0004 => Self::ReceiveRequest,
-            0x0005 => Self::ClearRequest,
-            0x0006 => Self::DoctorRequest,
+            0x0004 => Self::ListRequest,
+            0x0005 => Self::ReceiveRequest,
+            0x0006 => Self::ClearRequest,
+            0x0007 => Self::DoctorRequest,
             0x1001 => Self::SendSentResponse,
             0x1002 => Self::SendAcknowledgedResponse,
             0x1003 => Self::HeartbeatResponse,
-            0x1004 => Self::ReceiveResponse,
-            0x1005 => Self::ClearResponse,
-            0x1006 => Self::DoctorResponse,
+            0x1004 => Self::ListResponse,
+            0x1005 => Self::ReceiveResponse,
+            0x1006 => Self::ClearResponse,
+            0x1007 => Self::DoctorResponse,
             0x1fff => Self::ErrorResponse,
             _ => {
                 return Err(AtmError::validation(format!(
@@ -461,6 +469,7 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
             MessageKind::SendAcknowledgeRequest
         }
         RequestEnvelope::Heartbeat(_) => MessageKind::HeartbeatRequest,
+        RequestEnvelope::List(_) => MessageKind::ListRequest,
         RequestEnvelope::Receive(_) => MessageKind::ReceiveRequest,
         RequestEnvelope::Clear(_) => MessageKind::ClearRequest,
         RequestEnvelope::Doctor(_) => MessageKind::DoctorRequest,
@@ -474,6 +483,7 @@ fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
             MessageKind::SendAcknowledgedResponse
         }
         ResponseEnvelope::Heartbeat(_) => MessageKind::HeartbeatResponse,
+        ResponseEnvelope::List(_) => MessageKind::ListResponse,
         ResponseEnvelope::Receive(_) => MessageKind::ReceiveResponse,
         ResponseEnvelope::Clear(_) => MessageKind::ClearResponse,
         ResponseEnvelope::Doctor(_) => MessageKind::DoctorResponse,

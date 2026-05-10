@@ -117,9 +117,14 @@ Required rules:
   ATM errors rather than validation
 - conformance tests should validate behavior through the `atm-core` store
   traits rather than by depending on internal SQLite details
-- follow-on Phase S queue work may add bounded metadata-query helpers and
-  supporting indexes for `atm list` / selector-driven `atm read`, but
-  selector semantics remain owned by `atm-core`
+- Phase S queue support includes bounded mailbox metadata-query helpers and
+  supporting indexes/row projections for `atm list` / selector-driven
+  `atm read`, but selector semantics remain owned by `atm-core`
+- bounded mailbox metadata queries in this crate must:
+  - return metadata rows only, not full message bodies
+  - support a hard SQL `LIMIT`
+  - expose queue counts separately from row fetch
+  - preserve durable `taskId` lookup for metadata rows
 - most SQLite tests should use dedicated in-memory fixtures with explicit
   setup/cleanup
 - only a small deliberate suite may use on-disk temporary databases for

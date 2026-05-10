@@ -354,9 +354,8 @@ pub enum DisplayBucket {
 #[serde(rename_all = "snake_case")]
 pub enum ReadSelection {
     Actionable,
-    UnreadOnly,
-    PendingAckOnly,
-    ActionableWithHistory,
+    Unread,
+    PendingAck,
     All,
 }
 

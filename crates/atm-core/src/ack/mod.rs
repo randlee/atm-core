@@ -238,7 +238,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             source_workflow_path,
             reply_workflow_path,
         ],
-        runtime.default_lock_timeout(),
+        runtime.mailbox_timeout_policy().workflow_lock_timeout,
         |_source_paths, source_files| {
             let mut source_workflow_state =
                 runtime.load_workflow_state(&request.home_dir, &team, &actor)?;
@@ -323,8 +323,9 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         agent: hook_reply_agent,
         team: hook_reply_team,
     };
+    let mut hook_warnings = Vec::new();
     runtime.maybe_run_post_send_hook(
-        &mut outcome.warnings,
+        &mut hook_warnings,
         config.as_ref(),
         PostSendHookContext {
             sender: &actor,
@@ -337,6 +338,10 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             task_id: outcome.task_id.as_ref(),
         },
     );
+    outcome.warnings = hook_warnings
+        .into_iter()
+        .map(|warning| warning.render())
+        .collect();
 
     let _ = observability.emit(CommandEvent {
         command: "ack",

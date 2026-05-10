@@ -14,6 +14,7 @@ use atm_core::{
         self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::AtmError,
+    list::list_mail,
     observability::{
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
         CommandEvent, LogTailSession, ObservabilityPort,
@@ -551,6 +552,10 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
+            RequestEnvelope::List(query) => Ok(ResponseEnvelope::List(list_mail(
+                query,
+                &self.observability,
+            )?)),
             RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(read_mail(
                 query,
                 &self.observability,

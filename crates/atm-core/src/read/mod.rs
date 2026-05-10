@@ -17,13 +17,13 @@ use crate::identity;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::MessageEnvelope;
+use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
 use crate::types::{
     AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
-    SourceIndex, TeamName,
+    SourceIndex, TaskId, TeamName,
 };
 use crate::workflow;
 
@@ -39,9 +39,11 @@ pub struct ReadQuery {
     pub seen_state_filter: bool,
     pub seen_state_update: bool,
     pub ack_activation_mode: AckActivationMode,
-    pub limit: Option<usize>,
+    pub message_id_filter: Option<LegacyMessageId>,
     pub sender_filter: Option<AgentName>,
     pub timestamp_filter: Option<IsoTimestamp>,
+    pub task_filter: Option<TaskId>,
+    pub contains_filter: Option<String>,
     pub timeout_secs: Option<u64>,
 }
 
@@ -57,9 +59,11 @@ impl ReadQuery {
         seen_state_filter: bool,
         seen_state_update: bool,
         ack_activation_mode: AckActivationMode,
-        limit: Option<usize>,
+        message_id_filter: Option<&str>,
         sender_filter: Option<&str>,
         timestamp_filter: Option<IsoTimestamp>,
+        task_filter: Option<&str>,
+        contains_filter: Option<&str>,
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
         Ok(Self {
@@ -72,9 +76,21 @@ impl ReadQuery {
             seen_state_filter,
             seen_state_update,
             ack_activation_mode,
-            limit,
+            message_id_filter: message_id_filter
+                .map(|value| {
+                    value.parse::<LegacyMessageId>().map_err(|source| {
+                        AtmError::validation(format!("invalid message id: {value}"))
+                            .with_recovery(
+                                "Provide a valid UUID-formatted --message-id before retrying `atm read`.",
+                            )
+                            .with_source(source)
+                    })
+                })
+                .transpose()?,
             sender_filter: sender_filter.map(str::parse).transpose()?,
             timestamp_filter,
+            task_filter: task_filter.map(str::parse).transpose()?,
+            contains_filter: contains_filter.map(ToOwned::to_owned),
             timeout_secs,
         })
     }
@@ -108,10 +124,14 @@ pub struct ReadOutcome {
     pub team: TeamName,
     pub agent: AgentName,
     pub selection_mode: ReadSelection,
-    pub history_collapsed: bool,
     pub mutation_applied: bool,
     pub count: usize,
-    pub messages: Vec<ClassifiedMessage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<ClassifiedMessage>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub selected_message_id: Option<LegacyMessageId>,
+    pub match_count: usize,
+    pub additional_match_count: usize,
     pub bucket_counts: BucketCounts,
 }
 
@@ -234,59 +254,78 @@ fn read_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         }
     }
 
-    sort_and_limit_selected(&mut selected, query.limit);
+    let match_count = selected.len();
+    sort_and_limit_selected(&mut selected, Some(1));
     let mutation_needed = displayed_messages_require_mutation(&selected);
 
-    let (mutation_applied, output_messages, bucket_counts) = if timed_out
-        || selected.is_empty()
-        || !mutation_needed
-    {
-        (
-            false,
-            output_messages_from_selection(&selected, &source_files, &workflow_state),
-            bucket_counts,
-        )
-    } else {
-        runtime.with_locked_source_files(
-            &query.home_dir,
-            &target.team,
-            &target.agent,
-            [workflow_path],
-            runtime.default_lock_timeout(),
-            |_source_paths, source_files| {
-                let mut workflow_state =
-                    runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
-                let (bucket_counts, mut selected) = selection_state_for_source_files(
-                    source_files,
-                    &workflow_state,
-                    &query,
-                    seen_watermark,
-                );
-                sort_and_limit_selected(&mut selected, query.limit);
-                let mutation = apply_display_mutations(
-                    source_files,
-                    &mut workflow_state,
-                    &selected,
-                    query.ack_activation_mode,
-                    own_inbox,
-                );
-                if mutation.mailbox_changed {
-                    runtime.commit_source_files(source_files)?;
-                }
-                if mutation.workflow_changed {
-                    runtime.save_workflow_state(
+    let (mutation_applied, output_message, bucket_counts, selected_message_id, match_count) =
+        if timed_out || selected.is_empty() || !mutation_needed {
+            (
+                false,
+                output_messages_from_selection(&selected, &source_files, &workflow_state)
+                    .into_iter()
+                    .next(),
+                bucket_counts,
+                selected
+                    .first()
+                    .and_then(|message| message.envelope.message_id),
+                match_count,
+            )
+        } else {
+            runtime.with_locked_source_files(
+                &query.home_dir,
+                &target.team,
+                &target.agent,
+                [workflow_path],
+                runtime.mailbox_timeout_policy().workflow_lock_timeout,
+                |_source_paths, source_files| {
+                    let mut workflow_state = runtime.load_workflow_state(
                         &query.home_dir,
                         &target.team,
                         &target.agent,
-                        &workflow_state,
                     )?;
-                }
-                let output_messages =
-                    output_messages_from_selection(&selected, source_files, &workflow_state);
-                Ok((mutation.any_changed, output_messages, bucket_counts))
-            },
-        )?
-    };
+                    let (bucket_counts, mut selected) = selection_state_for_source_files(
+                        source_files,
+                        &workflow_state,
+                        &query,
+                        seen_watermark,
+                    );
+                    let match_count = selected.len();
+                    sort_and_limit_selected(&mut selected, Some(1));
+                    let mutation = apply_display_mutations(
+                        source_files,
+                        &mut workflow_state,
+                        &selected,
+                        query.ack_activation_mode,
+                        own_inbox,
+                    );
+                    if mutation.mailbox_changed {
+                        runtime.commit_source_files(source_files)?;
+                    }
+                    if mutation.workflow_changed {
+                        runtime.save_workflow_state(
+                            &query.home_dir,
+                            &target.team,
+                            &target.agent,
+                            &workflow_state,
+                        )?;
+                    }
+                    let output_message =
+                        output_messages_from_selection(&selected, source_files, &workflow_state)
+                            .into_iter()
+                            .next();
+                    Ok((
+                        mutation.any_changed,
+                        output_message,
+                        bucket_counts,
+                        selected
+                            .first()
+                            .and_then(|message| message.envelope.message_id),
+                        match_count,
+                    ))
+                },
+            )?
+        };
 
     if query.seen_state_update
         && !selected.is_empty()
@@ -303,19 +342,17 @@ fn read_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         )?;
     }
 
-    let history_collapsed = query.selection_mode != ReadSelection::All
-        && query.selection_mode != ReadSelection::ActionableWithHistory
-        && bucket_counts.history > 0;
-
     let outcome = ReadOutcome {
         action: "read".to_string(),
         team: target.team.clone(),
         agent: target.agent.clone(),
         selection_mode: query.selection_mode,
-        history_collapsed,
         mutation_applied,
-        count: output_messages.len(),
-        messages: output_messages,
+        count: usize::from(output_message.is_some()),
+        message: output_message,
+        selected_message_id,
+        match_count,
+        additional_match_count: match_count.saturating_sub(1),
         bucket_counts,
     };
 
@@ -337,7 +374,7 @@ fn read_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     Ok(outcome)
 }
 
-fn selection_state_for_source_files(
+pub(crate) fn selection_state_for_source_files(
     source_files: &[SourceFile],
     workflow_state: &workflow::WorkflowStateFile,
     query: &ReadQuery,
@@ -354,11 +391,21 @@ fn selection_state_for_source_files(
         ),
         workflow_state,
     );
-    let bucket_counts = bucket_counts_for(&classified_all);
+    let logical_current = logical_current_messages(classified_all.clone());
+    let bucket_counts = bucket_counts_for(&logical_current);
+    if let Some(message_id) = query.message_id_filter {
+        let selected = classified_all
+            .into_iter()
+            .filter(|message| message.envelope.message_id == Some(message_id))
+            .collect();
+        return (bucket_counts, selected);
+    }
     let filtered = apply_filters(
-        classified_all.clone(),
+        logical_current,
         query.sender_filter.as_ref(),
         query.timestamp_filter,
+        query.task_filter.as_ref(),
+        query.contains_filter.as_deref(),
     );
     let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
     (bucket_counts, selected)
@@ -525,11 +572,37 @@ fn apply_filters(
     messages: Vec<ClassifiedMessage>,
     sender_filter: Option<&AgentName>,
     timestamp_filter: Option<IsoTimestamp>,
+    task_filter: Option<&TaskId>,
+    contains_filter: Option<&str>,
 ) -> Vec<ClassifiedMessage> {
-    filters::apply_timestamp_filter(
-        filters::apply_sender_filter(messages, sender_filter),
-        timestamp_filter,
+    filters::apply_contains_filter(
+        filters::apply_task_filter(
+            filters::apply_timestamp_filter(
+                filters::apply_sender_filter(messages, sender_filter),
+                timestamp_filter,
+            ),
+            task_filter,
+        ),
+        contains_filter,
     )
+}
+
+fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedMessage> {
+    let projected = messages
+        .iter()
+        .map(|message| message.envelope.clone())
+        .collect::<Vec<_>>();
+    let thread_index = ThreadIndex::new(&projected);
+
+    messages
+        .into_iter()
+        .filter(|message| {
+            message
+                .envelope
+                .message_id
+                .is_none_or(|message_id| thread_index.is_terminal(message_id))
+        })
+        .collect()
 }
 
 fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
@@ -580,15 +653,23 @@ fn selected_after_filters(
     seen_watermark: Option<IsoTimestamp>,
 ) -> Vec<ClassifiedMessage> {
     let classified = classify_all(messages.to_vec(), workflow_state);
+    if let Some(message_id) = query.message_id_filter {
+        return classified
+            .into_iter()
+            .filter(|message| message.envelope.message_id == Some(message_id))
+            .collect();
+    }
     let filtered = apply_filters(
-        classified,
+        logical_current_messages(classified),
         query.sender_filter.as_ref(),
         query.timestamp_filter,
+        query.task_filter.as_ref(),
+        query.contains_filter.as_deref(),
     );
     select_messages(&filtered, query.selection_mode, seen_watermark)
 }
 
-fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, limit: Option<usize>) {
+pub(crate) fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, limit: Option<usize>) {
     selected.sort_by(|left, right| {
         right
             .envelope
@@ -783,7 +864,7 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{
         AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
-        TeamName,
+        TaskId, TeamName,
     };
     use crate::workflow;
 
@@ -853,9 +934,11 @@ mod tests {
             seen_state_filter: false,
             seen_state_update: false,
             ack_activation_mode: AckActivationMode::ReadOnly,
-            limit: None,
+            message_id_filter: None,
             sender_filter: None,
             timestamp_filter: None,
+            task_filter: None,
+            contains_filter: None,
             timeout_secs: None,
         };
 
@@ -897,6 +980,8 @@ mod tests {
             None,
             None,
             None,
+            None,
+            None,
         )
         .expect_err("invalid target");
 
@@ -916,6 +1001,8 @@ mod tests {
             false,
             false,
             AckActivationMode::ReadOnly,
+            None,
+            None,
             None,
             None,
             None,
@@ -953,9 +1040,11 @@ mod tests {
             seen_state_filter: false,
             seen_state_update: false,
             ack_activation_mode: AckActivationMode::ReadOnly,
-            limit: None,
+            message_id_filter: None,
             sender_filter: None,
             timestamp_filter: None,
+            task_filter: None,
+            contains_filter: None,
             timeout_secs: None,
         };
 
@@ -994,9 +1083,11 @@ mod tests {
             seen_state_filter: false,
             seen_state_update: false,
             ack_activation_mode: AckActivationMode::ReadOnly,
-            limit: None,
+            message_id_filter: None,
             sender_filter: None,
             timestamp_filter: None,
+            task_filter: None,
+            contains_filter: None,
             timeout_secs: None,
         };
         let all = ReadQuery {
@@ -1035,9 +1126,11 @@ mod tests {
             seen_state_filter: false,
             seen_state_update: false,
             ack_activation_mode: AckActivationMode::ReadOnly,
-            limit: None,
+            message_id_filter: None,
             sender_filter: None,
             timestamp_filter: None,
+            task_filter: None,
+            contains_filter: None,
             timeout_secs: None,
         };
         let all = ReadQuery {
@@ -1047,5 +1140,104 @@ mod tests {
 
         assert!(selected_after_filters(&messages, &workflow_state, &actionable, None).is_empty());
         assert!(selected_after_filters(&messages, &workflow_state, &all, None).is_empty());
+    }
+
+    #[test]
+    fn task_filter_matches_logical_current_terminal_message_only() {
+        let root_id = LegacyMessageId::new();
+        let terminal_id = LegacyMessageId::new();
+        let task_id: TaskId = "TASK-77".parse().expect("task id");
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                MessageEnvelope {
+                    task_id: Some(task_id.clone()),
+                    ..message("root", root_id, None, None, false)
+                },
+                MessageEnvelope {
+                    task_id: Some(task_id.clone()),
+                    ..message(
+                        "terminal",
+                        terminal_id,
+                        Some(root_id),
+                        Some(ThreadMode::AddDetails),
+                        false,
+                    )
+                },
+            ],
+        }];
+        let query = ReadQuery {
+            home_dir: PathBuf::new(),
+            current_dir: PathBuf::new(),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            selection_mode: ReadSelection::All,
+            seen_state_filter: false,
+            seen_state_update: false,
+            ack_activation_mode: AckActivationMode::ReadOnly,
+            message_id_filter: None,
+            sender_filter: None,
+            timestamp_filter: None,
+            task_filter: Some(task_id),
+            contains_filter: None,
+            timeout_secs: None,
+        };
+
+        let (_counts, selected) = selection_state_for_source_files(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            &query,
+            None,
+        );
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].envelope.message_id, Some(terminal_id));
+    }
+
+    #[test]
+    fn exact_message_id_bypasses_logical_current_collapse() {
+        let root_id = LegacyMessageId::new();
+        let terminal_id = LegacyMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                message("root", root_id, None, None, false),
+                message(
+                    "terminal",
+                    terminal_id,
+                    Some(root_id),
+                    Some(ThreadMode::AddDetails),
+                    false,
+                ),
+            ],
+        }];
+        let query = ReadQuery {
+            home_dir: PathBuf::new(),
+            current_dir: PathBuf::new(),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            selection_mode: ReadSelection::All,
+            seen_state_filter: false,
+            seen_state_update: false,
+            ack_activation_mode: AckActivationMode::ReadOnly,
+            message_id_filter: Some(root_id),
+            sender_filter: None,
+            timestamp_filter: None,
+            task_filter: None,
+            contains_filter: None,
+            timeout_secs: None,
+        };
+
+        let (_counts, selected) = selection_state_for_source_files(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            &query,
+            None,
+        );
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].envelope.message_id, Some(root_id));
     }
 }
