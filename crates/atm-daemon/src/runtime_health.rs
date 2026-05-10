@@ -413,6 +413,7 @@ impl DaemonRequestDispatcher {
     }
 
     pub(crate) fn new(
+        // Must be the validated ATM home dir for this daemon runtime.
         home_dir: PathBuf,
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,

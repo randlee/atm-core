@@ -491,6 +491,8 @@ fn level_for_outcome(outcome: &str) -> Level {
         "timeout" => Level::Warn,
         "error" | "failed" => Level::Error,
         other => {
+            // No global tracing subscriber is installed in production; daemon lifecycle records
+            // route through emit_runtime_event(), so this unknown-outcome warning is intentionally silent.
             tracing::warn!(
                 code = %AtmErrorCode::ObservabilityEmitFailed,
                 outcome = other,
