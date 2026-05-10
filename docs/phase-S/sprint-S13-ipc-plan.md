@@ -22,6 +22,16 @@ accepted in tasking:
 - typed daemon exit codes
 - explicit runtime SLOs
 
+It also reconciles the specific Opus failure inventory from the follow-up
+analysis at `integrate/phase-S @ 847b150`:
+- accept-error lifecycle wedge
+- missing Drop-based socket cleanup
+- missing typed exit codes
+- accept-after-terminate silent drop
+- dispatch-handle retention until shutdown
+- event-channel disconnect wedge
+- supervisor-restart preference over internal re-bind
+
 ## Current Failure Shape
 
 The current local IPC serving path in
@@ -59,7 +69,6 @@ In scope:
 Out of scope:
 - replacing the current peer transport with persistent sessions
 - `atm-core` business logic changes
-- SQLite/rusqlite concurrency redesign
 - daemon-spawning test exceptions
 
 ## Design Areas
@@ -89,6 +98,10 @@ Out of scope:
 6. Accept-loop fatal failures request daemon shutdown through
    `ShutdownBeacon`, wake the listener if needed, drain tracked work, clean up
    the endpoint, and return a typed runtime exit.
+7. If shutdown is already requested when `accept()` returns a live stream, the
+   connection runtime sends one typed daemon-shutting-down response when
+   framing is still possible, then closes the stream. Silent reset is not the
+   target behavior.
 
 ### Thread ownership
 
@@ -113,6 +126,10 @@ Out of scope:
   transport/runtime error and release the socket.
 - Detached, untracked request execution remains forbidden under
   `REQ-DAEMON-TRANSPORT-004`.
+- Dispatch-worker handles must be reaped continuously as part of connection
+  lifecycle bookkeeping rather than only after a successful response write or
+  at final shutdown. The goal is to prevent bounded-but-cumulative `JoinHandle`
+  retention under sustained faulted traffic.
 
 ### Why this shape
 
@@ -124,6 +141,12 @@ This keeps transport proof obligations local:
 
 That is materially easier to reason about than the current
 accept-thread-plus-event-channel structure.
+
+This also removes the specific Opus `event_tx.send` / `event_rx.recv` wedge
+class from the core serve path. A direct accept loop plus shared beacon makes
+channel-disconnect deadlock impossible in the transport control plane because
+the main serving thread no longer depends on an internal event bus to observe
+accept failure or terminate state.
 
 ### 2. `ShutdownBeacon`
 
@@ -173,6 +196,9 @@ listener is ready until the daemon has fully stopped serving.
 - own endpoint cleanup on drop
 - remove Unix socket-path artifacts when required
 - guarantee endpoint unpublication before daemon ownership release
+- provide one cleanup path that runs on ordinary shutdown, fatal return, and
+  panic unwind so stale socket artifacts are not left behind until the next
+  bind attempt
 
 ### Drop contract
 
@@ -184,6 +210,10 @@ listener is ready until the daemon has fully stopped serving.
 This ordering is required by ADR-002. The host must never re-advertise
 "daemon available" by releasing `owner.lock` while the old endpoint is still
 reachable or stale.
+
+The implementation target is Drop-based cleanup rather than bind-time cleanup
+alone. Bind-time stale-socket removal remains a defensive recovery step, but it
+is no longer the primary cleanup mechanism.
 
 ### Launch/owner ordering
 
@@ -223,6 +253,8 @@ become machine-actionable instead of collapsing into one generic error exit.
 - the supervisor must not hot-loop forever on `64`
 - restart policy must preserve the host-wide singleton invariant from ADR-002
 - restart is a clean new process, not an in-process listener self-heal loop
+- bind failure is not retried internally by the daemon transport. It exits with
+  a typed code and lets the host supervisor apply bounded backoff.
 
 ### 5. Runtime SLOs
 
@@ -262,6 +294,21 @@ consistent with ADR-002:
 - endpoint publication happens only after ownership is held
 - endpoint unpublication happens before ownership release
 
+### Restart model
+
+S.13 explicitly adopts the supervisor-restart model recommended by the Opus
+analysis:
+- no internal IPC re-bind loop after fatal listener failure
+- no in-process ownership release/reacquire cycle to recover transport faults
+- no attempt to reinstall process-global lifecycle hooks in place
+
+Rationale:
+- ADR-002 singleton ownership remains simpler to prove when fatal listener
+  faults lead to one typed process exit
+- process-global lifecycle hook installation is not a clean hot-reload seam
+- every other fatal runtime category already relies on clean restart rather
+  than in-process daemon resurrection
+
 If implementation work needs stronger wording than ADR-002 currently has,
 the follow-on implementation sprint should amend ADR-002 explicitly rather than
 encoding the rule only in code comments.
@@ -281,6 +328,10 @@ Primary code targets:
   - replace the event-channel serve orchestration with a direct accept loop
   - add the connection receive loop and shared `ShutdownBeacon` wiring
   - move endpoint cleanup behind `SocketEndpointGuard`
+  - return a typed daemon-shutting-down result rather than silently dropping
+    streams accepted after shutdown begins
+  - reap tracked dispatch handles incrementally instead of only at
+    post-response / final-shutdown boundaries
 - `crates/atm-daemon/src/lifecycle_control.rs`
   - keep platform hooks, but expose them as shutdown/reload requests into the
     beacon-driven runtime contract
@@ -295,6 +346,23 @@ Secondary implementation work:
 - targeted runtime tests for accept failure, shutdown wake, endpoint cleanup,
   and bounded drain
 - doc updates if ADR-002 wording needs to be strengthened
+
+## Deferred From S.13
+
+The Opus report included several items that are explicitly not part of the S.13
+planning/implementation target unless later tasking expands scope:
+
+- partial-write categorization improvements
+  - keep this as a logging/observability follow-up, not a blocker for the core
+    receive-loop redesign
+- bind-failure subcoding for richer operator UX
+  - S.13 requires typed exit classes and no internal retry; finer-grained bind
+    diagnostics can follow separately
+- composite error chaining when both serve and shutdown fail
+  - useful operator signal, but secondary to removing the fatal-path wedge
+- Windows eventfd-equivalent lifecycle wake primitive
+  - already accepted as a documented exception rather than a mandatory S.13
+    redesign item
 
 ## References
 

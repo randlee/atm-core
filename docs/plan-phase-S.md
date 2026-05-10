@@ -642,8 +642,8 @@ Required closeout work:
   implementation begins
 - define the daemon runtime SLOs for wedge recovery, accept-error teardown,
   clean shutdown, and endpoint cleanup
-- keep rusqlite review/hardening as a separate future sprint rather than
-  mixing store concurrency work into the transport hardening line
+- keep unrelated storage-layer review/hardening separate rather than mixing
+  store concurrency work into the transport hardening line
 
 ## 6. Removed Windows CI Guardrail
 
