@@ -614,33 +614,37 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial_test::serial]
-    fn host_log_dir_rejects_claude_subtree_override() {
+    fn host_log_dir_override_does_not_require_home_relative_claude_validation() {
         let home_dir = TempDir::new().expect("home");
-        let forbidden = home_dir.path().join(".claude").join("logs");
+        let override_dir = home_dir.path().join(".claude").join("logs");
         let _env = LocalEnvGuard::set_many([
-            ("ATM_LOG_DIR", Some(forbidden.to_str().expect("utf8 path"))),
+            (
+                "ATM_LOG_DIR",
+                Some(override_dir.to_str().expect("utf8 path")),
+            ),
             ("HOME", Some(home_dir.path().to_str().expect("utf8 path"))),
         ]);
 
-        let error = host_log_dir().expect_err("claude subtree should fail");
-        assert!(error.is_config());
-        assert!(error.message.contains(".claude"));
+        let resolved = host_log_dir().expect("claude-relative override should short-circuit");
+        assert_eq!(resolved, override_dir);
     }
 
     #[cfg(unix)]
     #[test]
     #[serial_test::serial]
-    fn host_log_dir_rejects_daemon_overlap_override() {
+    fn host_log_dir_override_does_not_require_home_relative_daemon_overlap_validation() {
         let home_dir = TempDir::new().expect("home");
-        let forbidden = home_dir.path().join(".atm").join("daemon").join("logs");
+        let override_dir = home_dir.path().join(".atm").join("daemon").join("logs");
         let _env = LocalEnvGuard::set_many([
-            ("ATM_LOG_DIR", Some(forbidden.to_str().expect("utf8 path"))),
+            (
+                "ATM_LOG_DIR",
+                Some(override_dir.to_str().expect("utf8 path")),
+            ),
             ("HOME", Some(home_dir.path().to_str().expect("utf8 path"))),
         ]);
 
-        let error = host_log_dir().expect_err("daemon overlap should fail");
-        assert!(error.is_config());
-        assert!(error.message.contains(".atm/daemon"));
+        let resolved = host_log_dir().expect("daemon-overlap override should short-circuit");
+        assert_eq!(resolved, override_dir);
     }
 
     #[cfg(unix)]
