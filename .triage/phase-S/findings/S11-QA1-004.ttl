@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S11-QA1-004>
+  a triage:Finding ;
+  triage:findingId "S11-QA1-004" ;
+  triage:title "sprint-S11.md silent on ADR-011 overlap-exclusion rule scope decision" ;
+  triage:description "Two tests added in this sprint document that ADR-011 overlap checks (daemon-overlap, claude-directory) are deliberately skipped. sprint-S11.md (lines 31-34) references ADR-011 but is silent on whether these overlap rules are deferred, retracted, or out of scope. Fix: update sprint-S11.md to explicitly state the ADR-011 overlap-exclusion rules are out of scope for S.11 because overlap checks require HOME resolution (which defeats the headless scenario), and reference the ADR amendment that documents this." ;
+  triage:category "DOC" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s11-log-dir-override-order" ;
+  triage:promoteToBranch "feature/pS-s11-log-dir-override-order" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S11-QA1-004/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb> .
+
+<urn:atm:triage:occurrence/S11-QA1-004/s11/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S11.md" ;
+  triage:line 31 ;
+  triage:snippet "References ADR-011 but is silent on overlap-exclusion rule scope — tests document skipped overlap checks without sprint-level acknowledgment" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "34bf2eb" ;
+  triage:branch "feature/pS-s11-log-dir-override-order" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb> .
+
+<urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s11-log-dir-override-order" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s11-log-dir-override-order" ;
+  triage:headSha "34bf2eb" ;
+  triage:orderIndex 1 .
