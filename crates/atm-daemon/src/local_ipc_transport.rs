@@ -31,6 +31,9 @@ const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
 #[derive(Debug, Default)]
 struct ServeLoopSignals {
     reload_requested: AtomicBool,
+    // The serve loop needs to retain the full typed accept failure for later propagation, so a
+    // mutex-backed slot is required here; an atomic flag alone could not carry the original
+    // `AtmError` across the lifecycle/accept thread boundary.
     accept_error: Mutex<Option<AtmError>>,
 }
 
@@ -43,21 +46,29 @@ impl ServeLoopSignals {
         self.reload_requested.swap(false, Ordering::SeqCst)
     }
 
-    fn record_accept_error(&self, error: AtmError) {
-        let mut slot = self
-            .accept_error
-            .lock()
-            .expect("serve-loop accept-error lock");
+    fn record_accept_error(&self, error: AtmError) -> Result<(), AtmError> {
+        let mut slot = self.accept_error.lock().map_err(|_| {
+            AtmError::daemon_unavailable("serve-loop accept-error state lock poisoned")
+                .with_recovery(
+                    "Restart the daemon; the same-host serve loop can no longer preserve accept failures safely.",
+                )
+        })?;
         if slot.is_none() {
             *slot = Some(error);
         }
+        Ok(())
     }
 
-    fn take_accept_error(&self) -> Option<AtmError> {
+    fn take_accept_error(&self) -> Result<Option<AtmError>, AtmError> {
         self.accept_error
             .lock()
-            .expect("serve-loop accept-error lock")
-            .take()
+            .map_err(|_| {
+                AtmError::daemon_unavailable("serve-loop accept-error state lock poisoned")
+                    .with_recovery(
+                        "Restart the daemon; the same-host serve loop can no longer preserve accept failures safely.",
+                    )
+            })
+            .map(|mut slot| slot.take())
     }
 }
 
@@ -266,7 +277,7 @@ impl PreparedRuntimeServer {
                         Err(error) => {
                             shutdown_beacon.trip();
                             let _ = lifecycle_control.notify_state_change();
-                            signals.record_accept_error(error);
+                            let _ = signals.record_accept_error(error);
                             let _ = wake_listener(&endpoint_path);
                             return;
                         }
@@ -280,7 +291,7 @@ impl PreparedRuntimeServer {
                         {
                             shutdown_beacon.trip();
                             let _ = lifecycle_control.notify_state_change();
-                            signals.record_accept_error(error);
+                            let _ = signals.record_accept_error(error);
                             let _ = wake_listener(&endpoint_path);
                             return;
                         }
@@ -298,7 +309,7 @@ impl PreparedRuntimeServer {
                             if let Err(error) = wake_listener(&endpoint_path) {
                                 shutdown_beacon.trip();
                                 let _ = lifecycle_control.notify_state_change();
-                                signals.record_accept_error(
+                                let _ = signals.record_accept_error(
                                     AtmError::daemon_lifecycle_wedge(
                                         "daemon lifecycle waiter could not wake the direct local IPC accept loop for reload handling",
                                     )
@@ -324,11 +335,20 @@ impl PreparedRuntimeServer {
                     serve_error = Some(error);
                     break;
                 }
-                if let Some(error) = signals.take_accept_error() {
-                    shutdown_beacon.trip();
-                    let _ = lifecycle_control.notify_state_change();
-                    serve_error = Some(error);
-                    break;
+                match signals.take_accept_error() {
+                    Ok(Some(error)) => {
+                        shutdown_beacon.trip();
+                        let _ = lifecycle_control.notify_state_change();
+                        serve_error = Some(error);
+                        break;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        shutdown_beacon.trip();
+                        let _ = lifecycle_control.notify_state_change();
+                        serve_error = Some(error);
+                        break;
+                    }
                 }
                 // Reload work stays serialized inside the direct accept loop so the listener never
                 // races a partially-applied runtime view update.
@@ -371,11 +391,20 @@ impl PreparedRuntimeServer {
                     }
                 };
 
-                if let Some(error) = signals.take_accept_error() {
-                    shutdown_beacon.trip();
-                    let _ = lifecycle_control.notify_state_change();
-                    serve_error = Some(error);
-                    break;
+                match signals.take_accept_error() {
+                    Ok(Some(error)) => {
+                        shutdown_beacon.trip();
+                        let _ = lifecycle_control.notify_state_change();
+                        serve_error = Some(error);
+                        break;
+                    }
+                    Ok(None) => {}
+                    Err(error) => {
+                        shutdown_beacon.trip();
+                        let _ = lifecycle_control.notify_state_change();
+                        serve_error = Some(error);
+                        break;
+                    }
                 }
                 if signals.take_reload() {
                     drop(stream);

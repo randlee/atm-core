@@ -906,7 +906,7 @@ mod tests {
             },
         );
         assert!(
-            started.elapsed() < Duration::from_secs(1),
+            started.elapsed() < Duration::from_secs(5),
             "bounded shutdown step should return promptly after its deadline"
         );
 

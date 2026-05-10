@@ -7,7 +7,11 @@ use signal_hook::SigId;
 
 const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(1);
 
+// Installation takes this global slot only after the outer install lock so concurrent daemon
+// startup/teardown never races lifecycle-hook ownership or leaves a half-installed worker behind.
 static SHARED_LIFECYCLE: Mutex<Option<SharedLifecycleControlState>> = Mutex::new(None);
+// The separate install lock preserves a consistent install/shutdown order around signal-hook
+// registration without forcing that cross-thread coordination through the shared state mutex.
 static INSTALL_LOCK: Mutex<()> = Mutex::new(());
 
 #[derive(Debug, Clone)]
@@ -260,12 +264,15 @@ impl LifecycleControlSourceAdapter {
                     "Restart the daemon; the lifecycle wake worker crashed while the runtime was shutting down.",
                 ))
             }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
-                "daemon lifecycle wake worker exceeded the bounded shutdown deadline",
-            )
-            .with_recovery(
-                "Restart the daemon; the lifecycle wake worker did not stop within the bounded teardown window.",
-            )),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                let _ = join_helper.join();
+                Err(AtmError::daemon_unavailable(
+                    "daemon lifecycle wake worker exceeded the bounded shutdown deadline",
+                )
+                .with_recovery(
+                    "Restart the daemon; the lifecycle wake worker did not stop within the bounded teardown window.",
+                ))
+            }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 let _ = join_helper.join();
                 Err(AtmError::daemon_unavailable(

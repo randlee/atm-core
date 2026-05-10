@@ -191,6 +191,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
         ("ATM_LOG_DIR", None),
+        ("ATM_DAEMON_SOCKET", None),
         ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
     ]);
