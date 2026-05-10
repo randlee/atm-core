@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S9-ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "S9-ATM-QA-001" ;
+  triage:title "init_observability() passes atm_home() to retained_log_dir(), violating host-scoped log root" ;
+  triage:description "crates/atm/src/main.rs:104 — init_observability() passes the atm_home() result to retained_log_dir(), placing retained logs under {ATM_HOME}/.atm/logs/ when ATM_HOME is set. This violates sprint-S9 §1.3 (logs are host-scoped not team-scoped), ADR-011, and REQ-P-OBS-002. host_log_dir() exists in atm-core but is dead code — no caller uses it. Fix: call home::host_log_dir() directly in init_observability(), removing the atm_home() argument path. This also resolves ARCH-002/ATM-QA-007 (retained_log_dir() re-implements ATM_LOG_DIR read that belongs in atm-core)." ;
+  triage:category "REQ" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T02:30:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s9-logging-defaults" ;
+  triage:promoteToBranch "feature/pS-s9-logging-defaults" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-ATM-QA-001/s9/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74> .
+
+<urn:atm:triage:occurrence/S9-ATM-QA-001/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/main.rs" ;
+  triage:line 104 ;
+  triage:snippet "init_observability() passes atm_home() result to retained_log_dir() — uses ATM_HOME-scoped path, not host-scoped; host_log_dir() is dead production code with no callers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6f3b74" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74> .
+
+<urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s9-logging-defaults" ;
+  triage:headSha "d6f3b74" ;
+  triage:orderIndex 1 .
