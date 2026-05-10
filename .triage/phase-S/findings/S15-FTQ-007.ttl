@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S15-FTQ-007>
+  a triage:Finding ;
+  triage:findingId "S15-FTQ-007" ;
+  triage:title "compose_runtime_start test uses daemon_socket_path() without tempdir scoping" ;
+  triage:description "tests.rs compose_runtime_start_writes_retained_log_and_reports_healthy_observability calls daemon_socket_path() independently after compose_runtime(). The EnvGuard sets ATM_HOME but does not clear ATM_DAEMON_SOCKET. If ATM_DAEMON_SOCKET is set in the environment (by host or another test), daemon_socket_path() bypasses ATM_HOME and both the runtime internals and the test-side connect call resolve to the same host socket, enabling race between sequential test runs. The reference pattern (local_ipc_runtime_round_trips_doctor_requests_on_shared_transport) passes an explicit tempdir-scoped socket_path to prepare_runtime_at_socket_path(), fully eliminating the daemon_socket_path() resolution." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S15-FTQ-007/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S15-FTQ-007/pS-s15-rusqlite-hardening/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+# Occurrence on s14-impl (lower priority branch)
+<urn:atm:triage:occurrence/S15-FTQ-007/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 206 ;
+  triage:snippet "let socket_path = atm_core::protocol::daemon_socket_path().expect(\"daemon socket path\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+# Occurrence on s15-rusqlite-hardening (highest open branch, promote target)
+<urn:atm:triage:occurrence/S15-FTQ-007/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 206 ;
+  triage:snippet "let socket_path = atm_core::protocol::daemon_socket_path().expect(\"daemon socket path\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+# WorktreeSnapshot nodes
+<urn:atm:triage:worktree/pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .

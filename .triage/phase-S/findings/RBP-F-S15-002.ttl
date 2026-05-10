@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F-S15-002>
+  a triage:Finding ;
+  triage:findingId "RBP-F-S15-002" ;
+  triage:title "lifecycle_control.rs:10 SHARED_LIFECYCLE double-checked locking pattern missing rationale comment" ;
+  triage:description "lifecycle_control.rs:10 SHARED_LIFECYCLE + INSTALL_LOCK two-lock scheme has no inline rationale comment. Add comment explaining the double-checked locking pattern is required to prevent signal-hook deadlock." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F-S15-002/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F-S15-002/pS-s14-impl/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F-S15-002/pS-s15-rusqlite-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F-S15-002/pS-s15-rusqlite-hardening/2> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:occurrence/RBP-F-S15-002/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 10 ;
+  triage:snippet "static SHARED_LIFECYCLE: Mutex<Option<SharedLifecycleControlState>> = Mutex::new(None);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/RBP-F-S15-002/pS-s14-impl/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 11 ;
+  triage:snippet "static INSTALL_LOCK: Mutex<()> = Mutex::new(());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/RBP-F-S15-002/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 10 ;
+  triage:snippet "static SHARED_LIFECYCLE: Mutex<Option<SharedLifecycleControlState>> = Mutex::new(None);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:occurrence/RBP-F-S15-002/pS-s15-rusqlite-hardening/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 11 ;
+  triage:snippet "static INSTALL_LOCK: Mutex<()> = Mutex::new(());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:worktree/pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .

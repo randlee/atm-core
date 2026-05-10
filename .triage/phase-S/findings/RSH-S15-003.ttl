@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-S15-003>
+  a triage:Finding ;
+  triage:findingId "RSH-S15-003" ;
+  triage:title "shutdown_beacon.rs:22 wait_until_tripped busy-spin via yield_now" ;
+  triage:description "wait_until_tripped implementation uses yield_now busy-spin with no sleep. Dead code in production but callable from tests. Consider replacing with a condvar wait or sleep-based backoff to avoid CPU waste in test scenarios." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-S15-003/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-S15-003/pS-s15-rusqlite-hardening/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:occurrence/RSH-S15-003/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 27 ;
+  triage:snippet "std::thread::yield_now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/RSH-S15-003/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 27 ;
+  triage:snippet "std::thread::yield_now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:worktree/pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .

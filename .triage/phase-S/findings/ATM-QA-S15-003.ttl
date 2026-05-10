@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S15-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S15-003" ;
+  triage:title "ATM-QA-006 Windows lifecycle sleep exemption not documented in cross-platform-guidelines or architecture docs" ;
+  triage:description "ATM-QA-006 exempts lifecycle_control.rs:510 fixed 25ms sleep on Windows production code. Inline comment exists at that line. However no explicit entry confirms this exemption in docs/cross-platform-guidelines.md or docs/atm-daemon/architecture.md. Add an explicit exemption entry to one of those docs." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:fixedOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
+  triage:fixedOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:worktree/pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .
