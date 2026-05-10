@@ -35,6 +35,7 @@ const ATM_SERVICE_NAME: &str = "atm";
 const ATM_COMMAND_TARGET: &str = "atm.command";
 const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
+const MAX_RETAINED_QUERY_RECORD_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConsoleLogRoute {
@@ -518,24 +519,43 @@ fn map_field_match(
 }
 
 fn map_snapshot(snapshot: sc_observability_types::LogSnapshot) -> Result<AtmLogSnapshot, AtmError> {
-    let records = snapshot
-        .events
-        .into_iter()
-        .map(map_record)
-        .collect::<Result<Vec<_>, _>>()?;
+    let records = snapshot.events.into_iter().try_fold(
+        Vec::new(),
+        |mut records, event| -> Result<Vec<AtmLogRecord>, AtmError> {
+            if let Some(record) = map_record(event)? {
+                records.push(record);
+            }
+            Ok(records)
+        },
+    )?;
     Ok(AtmLogSnapshot {
         records,
         truncated: snapshot.truncated,
     })
 }
 
-fn map_record(event: LogEvent) -> Result<AtmLogRecord, AtmError> {
+fn map_record(event: LogEvent) -> Result<Option<AtmLogRecord>, AtmError> {
+    let encoded = serde_json::to_vec(&event).map_err(|source| {
+        AtmError::observability_query("failed to encode shared retained log event")
+            .with_source(source)
+    })?;
+    if encoded.len() > MAX_RETAINED_QUERY_RECORD_BYTES {
+        tracing::warn!(
+            bytes = encoded.len(),
+            max_bytes = MAX_RETAINED_QUERY_RECORD_BYTES,
+            service = %event.service,
+            target = %event.target,
+            action = %event.action,
+            "dropping oversized retained log record during ATM projection"
+        );
+        return Ok(None);
+    }
     let fields = serde_json::from_value::<LogFieldMap>(serde_json::Value::Object(event.fields))
         .map_err(|source| {
             AtmError::observability_query("failed to project shared log fields into ATM types")
                 .with_source(source)
         })?;
-    Ok(AtmLogRecord {
+    Ok(Some(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
         severity: map_level_back(event.level),
         service: event.service.to_string(),
@@ -543,7 +563,7 @@ fn map_record(event: LogEvent) -> Result<AtmLogRecord, AtmError> {
         action: Some(event.action.to_string()),
         message: event.message,
         fields,
-    })
+    }))
 }
 
 fn map_timestamp(timestamp: atm_core::types::IsoTimestamp) -> Result<Timestamp, AtmError> {

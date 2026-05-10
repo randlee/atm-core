@@ -309,6 +309,22 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn concrete_adapter_fails_closed_when_atm_log_dir_is_invalid() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _env = EnvGuard::set_many([
+            ("ATM_LOG", Some("info")),
+            ("ATM_LOG_DIR", Some("relative/logs")),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
+        ]);
+
+        let error = CliObservability::new(tempdir.path(), CliObservabilityOptions::default())
+            .expect_err("invalid ATM_LOG_DIR should fail closed");
+        assert!(error.is_config());
+        assert!(error.message.contains("absolute path"));
+    }
+
+    #[test]
     fn cli_observability_is_debuggable() {
         let observability =
             CliObservability::from_test_port(atm_core::observability::NullObservability);

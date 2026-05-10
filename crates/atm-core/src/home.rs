@@ -236,22 +236,23 @@ pub fn resolve_user_home() -> Result<PathBuf, AtmError> {
 }
 
 /// Unix-only ATM_LOG_DIR validation tests cover non-UTF-8 and path-shape cases.
-/// Windows keeps these invariants compile-checked here and exercises them in cross-target validation.
+/// Windows keeps these invariants compile-checked here, and cross-target CI verifies the
+/// shared `host_log_dir()` contract even though the path-shape override cases below stay Unix-only.
 #[cfg(test)]
 mod tests {
-    #[cfg(unix)]
     use std::ffi::OsString;
     use std::sync::{Mutex, MutexGuard, OnceLock};
 
     use tempfile::TempDir;
 
+    #[cfg(unix)]
+    use super::MAX_HOST_LOG_DIR_UTF8_BYTES;
     use super::{
-        MAX_HOST_LOG_DIR_UTF8_BYTES, atm_home, host_db_dir_from_home, host_log_dir_from_home,
-        host_mail_db_path_from_home, host_runtime_dir_from_home, host_runtime_lock_path_from_home,
-        inbox_path, inbox_path_from_home, team_dir, team_dir_from_home,
-        workflow_state_path_from_home,
+        atm_home, host_db_dir_from_home, host_log_dir_from_home, host_mail_db_path_from_home,
+        host_runtime_dir_from_home, host_runtime_lock_path_from_home, inbox_path,
+        inbox_path_from_home, team_dir, team_dir_from_home, workflow_state_path_from_home,
     };
-    #[cfg(any(unix, windows))]
+    #[cfg(unix)]
     use super::{host_db_dir, host_log_dir, host_mail_db_path, host_runtime_dir};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, TeamName};
