@@ -65,7 +65,8 @@ Initial crate requirement IDs:
   `REQ-P-MEMBERS-001`.
 - `REQ-ATM-OBS-001` `atm` owns concrete observability bootstrap and injection
   into `atm-core`. Satisfies the CLI bootstrap/injection aspects of:
-  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
+  `REQ-P-LOG-001`, `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`, `REQ-P-OBS-002`,
+  `REQ-P-OBS-003`.
 - `REQ-ATM-RUNTIME-001` `atm` owns CLI-to-runtime request mapping and daemon
   client use in production over `AtmProtocol` and `ClientTransport` while
   preserving in-process testability. Satisfies the CLI/runtime-entry aspects of:

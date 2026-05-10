@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-RSH-004>
+  a triage:Finding ;
+  triage:findingId "S8-RSH-004" ;
+  triage:title "load_export_policy re-walks filesystem on every commit_mailbox_state" ;
+  triage:description "crates/atm-core/src/mailbox/store.rs:39 — load_export_policy calls config::load_config(config_dir) on every invocation, which re-reads and re-parses the .atm.toml file from disk each time commit_mailbox_state is called (line 34 via commit_source_files). For batched commits iterating over multiple source files the config is loaded once per file, multiplying disk I/O unnecessarily. The fix is to load the policy once before the loop in commit_source_files and pass the SharedInboxExportPolicy as a parameter to commit_mailbox_state, or cache it in a once_cell or lazy static keyed by config_dir. The finding exists only on the feature branch; integrate/phase-S does not contain load_export_policy in store.rs." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RSH-004/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-RSH-004/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 39 ;
+  triage:snippet "fn load_export_policy(path: &Path) -> Result<SharedInboxExportPolicy, AtmError> { let config_dir = path.parent()…; let … = config::load_config(config_dir)?… — re-reads .atm.toml from disk on every commit_mailbox_state call; no caching or pass-through parameter" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 .

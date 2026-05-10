@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "S8-ATM-QA-002" ;
+  triage:title "Retrieval stub uses LegacyMessageId (UUID) not AtmMessageId (ULID) — undocumented format contract" ;
+  triage:description "retrieval_stub_text() at crates/atm-core/src/schema/inbox_message.rs:450-462 resolves the message id for the 'atm read --message-id <id>' stub by preferring message.message_id (LegacyMessageId / UUID) and falling back to LegacyMessageId::from_atm_message_id() on the ULID. In both paths the rendered stub embeds a UUID string. No documentation states that 'atm read --message-id' accepts UUID format. The forward schema direction (AtmMessageId) is ULID. Needs either: (a) code fix to use AtmMessageId ULID directly so the stub reflects the intended contract, or (b) explicit documented commitment that UUID is the intended permanent contract for --message-id." ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteTo "feature/pS-s8-jsonl-compat" ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-ATM-QA-002/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-ATM-QA-002/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 450 ;
+  triage:snippet "fn retrieval_stub_text(message: &MessageEnvelope) -> Result<String, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 ;
+  triage:status "absent" ;
+  triage:note "retrieval_stub_text() not present on integrate/phase-S; function introduced only on feature/pS-s8-jsonl-compat." .

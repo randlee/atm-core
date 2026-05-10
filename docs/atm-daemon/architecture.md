@@ -199,6 +199,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - watcher/reconcile observation of ATM-authored compatibility projection
   updates must be idempotent for the same logical message; re-observing the
   same retrieval-stub projection must not create a new-mail churn loop
+- ADR reference:
+  - `ADR-010`
 - the watcher/reconcile boundary minimum method set is defined in product
   [architecture.md §21.6.1](../architecture.md)
 

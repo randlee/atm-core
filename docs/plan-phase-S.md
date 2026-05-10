@@ -540,6 +540,8 @@ Required closeout work:
 - reconcile product and crate-local observability docs with the new retained
   path and event baseline
 - prevent self-induced churn loops in watcher/reconcile paths
+- prove no reconcile event fires when a retained-log append writes to
+  `~/.atm/logs/atm.log.jsonl`
 
 ## 6. Removed Windows CI Guardrail
 

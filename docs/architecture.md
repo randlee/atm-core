@@ -282,6 +282,8 @@ ATM still owns:
 - ATM-specific structured fields
 - mapping CLI filters to shared query/follow APIs
 - ATM doctor projections over shared health models
+- the host-scoped retained-log root contract, including `ATM_LOG_DIR` as the
+  exact retained-log-directory override
 - ATM-owned config semantics for baseline roster, alias resolution, and
   runtime-identity precedence
 

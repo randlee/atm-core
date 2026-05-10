@@ -4,15 +4,16 @@
 plan_type: sprint_plan
 phase: S
 sprint: "S.9"
-status: planned
+status: in-review
 estimated_scope: S
 ```
 
 ## Goal
 
 Finish Phase S retained logging by moving ATM-owned retained logs to the
-host-scoped ATM state root and defining the minimum default retained event set
-that must be present without extra operator tuning.
+host-scoped ATM state root, defining the minimum default retained event set,
+and preventing log-directory activity from feeding false watcher/reconcile
+signals back into mailbox handling.
 
 ## Governing Requirements
 
@@ -26,6 +27,7 @@ that must be present without extra operator tuning.
 ## Governing ADRs
 
 - `docs/adr/ADR-011-host-scoped-retained-log-root.md`
+- `docs/adr/ADR-010-claude-jsonl-compatibility-envelope.md`
 
 ## Hard Dependencies
 
@@ -33,6 +35,18 @@ that must be present without extra operator tuning.
 - the shared `sc-observability` integration remains the retained log/query
   substrate
 - host-scoped runtime/state ownership remains rooted under `~/.atm/`
+
+## Planning-Phase Deliverables
+
+This planning commit is docs-only:
+
+- sprint-S9 implementation plan
+- ADR-011
+- product/crate logging contract alignment
+
+This commit must not implement `ARCH-002` through `ARCH-005`. Those are
+pre-existing code contradictions already listed in Required Code Targets and
+belong to the implementation sprint on this same worktree after plan review.
 
 ## Required Work
 
@@ -42,6 +56,18 @@ that must be present without extra operator tuning.
 1.2 Add `host_log_dir() -> Result<PathBuf, AtmError>` that honors
     `ATM_LOG_DIR` first, then falls back to the OS user home.
 1.3 Keep retained logs host-scoped and independent of `ATM_HOME`.
+1.4 `host_log_dir_from_home(...)` returns a raw `PathBuf`; no `AtmLogDir`
+    newtype is required for V1, matching the existing host-runtime and host-db
+    helper style.
+1.5 Failure inventory for `host_log_dir()`:
+    - home dir unresolvable -> typed config error
+    - `ATM_LOG_DIR` set but empty or non-UTF-8 -> typed config error
+    - log-dir creation/open failure -> typed I/O/config startup failure with
+      path context
+    - recovery guidance for all three: fail closed, log to stderr, operator
+      repair required before retry
+1.6 Forbidden-path invariant:
+    - the resolved retained log path must never live under `~/.claude/`
 
 2. Move retained ATM logs to the ATM host state root.
 2.1 Default retained log file:
@@ -60,14 +86,29 @@ that must be present without extra operator tuning.
     - shutdown requested
     - shutdown completed
 3.2 Retain every `warn!` and `error!` event across ATM subsystems by default.
-3.3 Keep the shared console sink disabled by default for ordinary CLI command
+3.3 Degraded-state and abnormal-exit signals are covered by the default
+    `warn!` / `error!` baseline rather than by a second info-only lifecycle
+    family.
+3.4 Keep the shared console sink disabled by default for ordinary CLI command
     execution.
 
 4. Document the retained logging contract.
 4.1 Add `docs/atm-daemon/logging.md`.
 4.2 Document the default retained path and `ATM_LOG_DIR`.
 4.3 Document the minimum retained event set.
-4.4 Cross-link the daemon logging contract from top-level and crate-local docs.
+4.4 Document startup fail-closed sink initialization, mid-run fail-open write
+    behavior, local-filesystem-only support, and bounded shutdown flush rules.
+4.5 Document V1 log rotation as a known limitation rather than an implemented
+    feature.
+4.6 Cross-link the daemon logging contract from top-level and crate-local docs.
+
+5. Ensure log-directory writes do not trigger spurious mailbox/watcher events.
+5.1 Verify the daemon filesystem watcher excludes `~/.atm/logs/` from the set
+    of paths that trigger reconcile or inbox-import events.
+5.2 Verify retained-log appends do not create new-mail churn when the daemon
+    is otherwise idle.
+5.3 Keep the watcher exclusion rule documented in Phase S closeout and project
+    summaries so the implementation sprint cannot silently drop it.
 
 ## Required Code Targets
 
@@ -93,15 +134,27 @@ that must be present without extra operator tuning.
 
 ## Acceptance Criteria
 
+Planning-branch closeout:
+
+- `just lint` PASS
+- all changed planning docs are internally consistent
+- `ARCH-002` through `ARCH-005` remain untouched on this commit
+
+Implementation-sprint acceptance:
+
 - ATM retained logs default to `~/.atm/logs/atm.log.jsonl`
 - `ATM_LOG_DIR` redirects the exact retained log directory
 - retained logging is host-scoped and independent of `ATM_HOME`
 - default retained logging includes daemon lifecycle `info!` events plus all
   `warn!` / `error!` events across ATM subsystems
-- the shared console sink remains off by default for ordinary CLI command
-  execution
+- sink initialization fails closed at startup with typed path/context errors
+- mid-run retained-log write failures degrade to stderr-once plus continued
+  operation rather than daemon termination
 - no ATM-owned retained log defaults point at `~/logs/`, `~/.claude/logs/`,
   or `.local/share/logs/`
+- no reconcile event fires when a normal retained-log append writes to
+  `~/.atm/logs/atm.log.jsonl`
+- `atm doctor` surfaces the resolved retained log path
 
 ## Required Validation
 

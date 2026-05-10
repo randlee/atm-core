@@ -125,6 +125,8 @@ Disposition:
   - host-scoped retained log directory contract
   - `ATM_LOG_DIR` redirect behavior
   - minimum default retained daemon-lifecycle / warning / error event set
+  - watcher/reconcile exclusion for `~/.atm/logs/` so retained-log appends do
+    not create false reconcile work
 
 ## Deferred Follow-Up
 

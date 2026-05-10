@@ -176,6 +176,9 @@ Initial crate requirement IDs:
   daemon/runtime/transport `warn!` / `error!` event at the default retained
   logger level and host-scoped retained path. Satisfies:
   `REQ-P-OBS-002`, `REQ-P-OBS-003`, `REQ-CORE-OBS-002`.
+  If S.9 introduces any public retained-logging trait or sink boundary, that
+  trait must be sealed by default per the product architecture trait-extension
+  policy.
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
   consumed by `atm doctor`. Satisfies:
   `REQ-CORE-DOCTOR-002`.
@@ -210,7 +213,7 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-RUNTIME-008` watcher/reconcile handling of ATM-authored
   compatibility projection updates must remain idempotent for the same
   logical message and must not create self-induced churn loops. Satisfies:
-  `REQ-CORE-COMPAT-001`, `REQ-P-RELIABILITY-001`.
+  `REQ-CORE-COMPAT-001`, `REQ-P-RELIABILITY-001`, `ADR-010`.
 
 ## 4. Required References
 

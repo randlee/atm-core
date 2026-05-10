@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-RSH-002>
+  a triage:Finding ;
+  triage:findingId "S8-RSH-002" ;
+  triage:title "No OS path-length ceiling on tilde-expanded hook paths" ;
+  triage:description "crates/atm-core/src/config/discovery.rs:64 — after tilde expansion via expand_home_tilde (line 66) and the subsequent has_home_tilde_prefix branch (line 67), the fully-resolved PathBuf is used without any OS path-length validation. On Linux (PATH_MAX = 4096) and macOS (PATH_MAX = 1024) a crafted or misconfigured home directory path could produce an expanded hook path exceeding PATH_MAX, which the kernel rejects with ENAMETOOLONG. The user receives a confusing I/O error rather than a clear configuration error. The fix is to check resolved.as_os_str().len() against a platform PATH_MAX constant (via libc or a hard-coded safe ceiling) after resolution and before storing the path, returning AtmError { kind: AtmErrorKind::Config } with an actionable message. The finding exists only on the feature branch; integrate/phase-S does not contain tilde-expansion logic in discovery.rs." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RSH-002/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-RSH-002/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/discovery.rs" ;
+  triage:line 64 ;
+  triage:snippet "let has_home_tilde_prefix = matches!(program.as_str(), \"~\") || program.starts_with(\"~/\") || program.starts_with(\"~\\\\\"); let expanded_program = expand_home_tilde(program)?; — no PATH_MAX length check after expansion; oversized paths produce ENAMETOOLONG I/O errors instead of Config errors" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 .
