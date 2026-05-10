@@ -18,6 +18,7 @@ use atm_core::protocol::{
     RuntimeReadinessState, TeamMemberHeartbeatRequest,
 };
 use atm_core::schema::{AgentMember, TeamConfig};
+use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
@@ -218,6 +219,89 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
         .expect("recv serve result")
         .expect("serve runtime result");
     join.join().expect("join serve thread");
+}
+
+#[test]
+#[serial]
+fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let _env = EnvGuard::set_many([
+        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        ("ATM_LOG_DIR", None),
+        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+    ]);
+    let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+    let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
+    let observability = std::sync::Arc::new(
+        crate::test_observability::TestDaemonObservability::new(
+            atm_core::home::host_log_dir_from_home(&atm_home),
+        )
+        .expect("test observability"),
+    );
+    let runtime = crate::composition::compose_runtime(observability).expect("compose runtime");
+    let socket_path = atm_core::protocol::daemon_socket_path().expect("daemon socket path");
+    let (result_tx, result_rx) = mpsc::channel();
+
+    let join = std::thread::spawn(move || {
+        let result = runtime.start();
+        result_tx.send(result).expect("send runtime result");
+    });
+
+    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path);
+    stream
+        .set_send_timeout(Some(Duration::from_secs(5)))
+        .expect("set send timeout");
+    stream
+        .set_recv_timeout(Some(Duration::from_secs(5)))
+        .expect("set recv timeout");
+    let request = RequestEnvelope::Doctor(DoctorQuery {
+        home_dir: atm_home.clone(),
+        current_dir: atm_home.clone(),
+        team_override: None,
+    });
+    let request_id = atm_core::protocol::next_request_id();
+    let frame = atm_core::protocol::request_to_frame_payload(request_id, request).expect("frame");
+    atm_core::protocol::write_frame(&mut stream, &frame, "write doctor frame").expect("write");
+    stream.flush().expect("flush");
+    let response_frame =
+        atm_core::protocol::read_frame(&mut stream, "read doctor frame", "doctor frame too large")
+            .expect("read frame")
+            .expect("response frame");
+    let (response_id, response) =
+        atm_core::protocol::response_from_frame_payload(response_frame).expect("decode response");
+    assert_eq!(response_id, request_id);
+    match response {
+        ResponseEnvelope::Doctor(report) => {
+            assert_eq!(
+                report.observability.logging_state,
+                AtmObservabilityHealthState::Healthy
+            );
+        }
+        other => panic!("expected doctor response, got {other:?}"),
+    }
+
+    let retained_log_path = atm_core::home::host_log_dir_from_home(&atm_home).join("atm.log.jsonl");
+    let deadline = Instant::now() + Duration::from_secs(3);
+    loop {
+        match std::fs::read_to_string(&retained_log_path) {
+            Ok(contents) if contents.contains("daemon start requested") => break,
+            Ok(_) | Err(_) if Instant::now() < deadline => {
+                std::thread::sleep(Duration::from_millis(5))
+            }
+            Err(error) => panic!("read retained log: {error}"),
+            Ok(contents) => panic!("retained log missing startup event: {contents}"),
+        }
+    }
+
+    lifecycle.set_terminate_for_test(true);
+    result_rx
+        .recv_timeout(Duration::from_secs(5))
+        .expect("recv runtime result")
+        .expect("runtime result");
+    join.join().expect("join runtime thread");
 }
 
 #[cfg(windows)]

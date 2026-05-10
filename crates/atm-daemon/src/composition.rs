@@ -2,11 +2,11 @@ use crate::boundary_adapters::{
     DaemonConfigIngress, DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink,
     DaemonReconcileCoordinator, FileWatchEventSource,
 };
+use crate::daemon_runtime_observability::DaemonRuntimeObservability;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::{
-    DaemonObservability, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    sqlite_remote_replay_store_from_path,
+    LocalIpcServerTransportAdapter, PeerTransportRuntime, sqlite_remote_replay_store_from_path,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::error::AtmError;
@@ -130,14 +130,16 @@ impl RuntimeComposition {
         Self::new_with_replay_store_path(
             home_dir.clone(),
             atm_core::home::host_mail_db_path_from_home(&home_dir),
-            DaemonObservability::new_for_test(atm_core::home::host_log_dir_from_home(&home_dir))?,
+            Arc::new(crate::test_observability::TestDaemonObservability::new(
+                atm_core::home::host_log_dir_from_home(&home_dir),
+            )?),
         )
     }
 
     fn new_with_replay_store_path(
         home_dir: PathBuf,
         replay_store_path: PathBuf,
-        observability: DaemonObservability,
+        observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
         let status_cache = RuntimeStatusCache::new();
         let notification_sink = DaemonNotificationSink::new();
@@ -568,7 +570,7 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
 }
 
 pub(crate) fn compose_runtime(
-    observability: DaemonObservability,
+    observability: Arc<dyn DaemonRuntimeObservability>,
 ) -> Result<RuntimeComposition, AtmError> {
     let home_dir = atm_core::home::atm_home()?;
     validate_runtime_home_dir(&home_dir)?;

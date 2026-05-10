@@ -41,6 +41,8 @@ Add a test proving that `atm-daemon` startup/shutdown lifecycle events land in t
 - `atm-daemon` writes lifecycle events to `~/.atm/logs/atm.log.jsonl` by default
 - `atm doctor` health reflects real retained-sink state, not the fault-injection stub
 - Daemon startup fails-closed when `host_log_dir()` returns Err
+- daemon-side retained log query/follow remain explicitly deferred to the
+  CLI-owned log surface for S.10
 - `just lint` PASS
 - `cargo test -p atm-daemon` PASS
 - `cargo test -p atm` PASS
@@ -51,5 +53,5 @@ Add a test proving that `atm-daemon` startup/shutdown lifecycle events land in t
 - `docs/adr/ADR-011-host-scoped-retained-log-root.md` — host-scoped log root contract
 - `docs/atm-daemon/requirements.md:171-178` — daemon observability requirements
 - Arch-ctm prod review TASK-1214-PROD-REVIEW finding #1 (P1)
-- `crates/atm-daemon/src/runtime_health.rs:79-141` — synthetic adapter to replace
+- `crates/atm-daemon/src/runtime_health.rs` — daemon doctor/runtime-health projection
 - `crates/atm/src/main.rs` — reference implementation of sc-observability bootstrap

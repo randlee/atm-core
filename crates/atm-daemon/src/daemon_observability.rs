@@ -1,8 +1,8 @@
+use std::io::ErrorKind;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::{fs, fs::OpenOptions};
 
-use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
@@ -13,16 +13,20 @@ use atm_core::observability::{
 use sc_observability::{
     JsonlFileSink, LogSink, Logger, LoggerConfig, RetentionPolicy, RotationPolicy, SinkRegistration,
 };
+#[cfg(test)]
+use sc_observability_types::LogSinkError;
 use sc_observability_types::{
     ActionName, CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent,
-    LogSinkError, OutcomeLabel, ProcessIdentity, SchemaVersion, ServiceName, TargetCategory,
-    Timestamp,
+    OutcomeLabel, ProcessIdentity, SchemaVersion, ServiceName, TargetCategory, Timestamp,
 };
 use serde_json::Map;
 
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_DAEMON_TARGET: &str = "atm.daemon";
 const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
+const RETAINED_LOG_ROTATION_MAX_BYTES: u64 = 10 * 1024 * 1024;
+const RETAINED_LOG_ROTATION_MAX_FILES: u32 = 5;
+const RETAINED_LOG_RETENTION_MAX_AGE_DAYS: u32 = 7;
 #[cfg(test)]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 
@@ -78,11 +82,6 @@ impl DaemonObservability {
         })
     }
 
-    #[cfg(test)]
-    pub(crate) fn new_for_test(log_dir: PathBuf) -> Result<Self, AtmError> {
-        Self::bootstrap_at_log_dir(log_dir)
-    }
-
     pub(crate) fn emit_runtime_event(
         &self,
         action: &'static str,
@@ -112,19 +111,17 @@ impl DaemonObservability {
             )
             .with_source(source)
         })?;
-        if !self.active_log_path.exists() {
-            return Ok(());
-        }
-        let file = OpenOptions::new()
-            .append(true)
-            .open(&self.active_log_path)
-            .map_err(|source| {
-                AtmError::observability_health(format!(
+        let file = match OpenOptions::new().append(true).open(&self.active_log_path) {
+            Ok(file) => file,
+            Err(source) if source.kind() == ErrorKind::NotFound => return Ok(()),
+            Err(source) => {
+                return Err(AtmError::observability_health(format!(
                     "failed to open retained observability sink at {} for best-effort flush",
                     self.active_log_path.display()
                 ))
-                .with_source(source)
-            })?;
+                .with_source(source));
+            }
+        };
         file.sync_all().map_err(|source| {
             AtmError::observability_health(format!(
                 "failed to sync retained observability sink at {}",
@@ -135,7 +132,7 @@ impl DaemonObservability {
     }
 }
 
-impl boundary::sealed::Sealed for DaemonObservability {}
+impl atm_core::boundary::sealed::Sealed for DaemonObservability {}
 
 impl ObservabilityPort for DaemonObservability {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
@@ -182,6 +179,21 @@ impl ObservabilityPort for DaemonObservability {
     }
 }
 
+impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
+    fn emit_runtime_event(
+        &self,
+        action: &'static str,
+        outcome: &'static str,
+        message: &'static str,
+    ) -> Result<(), AtmError> {
+        Self::emit_runtime_event(self, action, outcome, message)
+    }
+
+    fn best_effort_flush_blocking(&self) -> Result<(), AtmError> {
+        Self::best_effort_flush_blocking(self)
+    }
+}
+
 fn build_logger(
     log_dir: &Path,
     retained_sink_fault: Option<RetainedSinkFaultMode>,
@@ -197,14 +209,29 @@ fn build_logger(
         AtmError::observability_bootstrap("failed to initialize shared daemon observability logger")
             .with_source(source)
     })?;
+    // sc-observability 1.0.0 JsonlFileSink performs synchronous local-file writes.
+    // atm-daemon satisfies ADR-011's non-blocking-executor rule by never calling
+    // this sink from an async executor thread; retained writes stay on ordinary
+    // daemon OS threads, and shutdown flush runs on a dedicated finalizer thread.
     let sink = Arc::new(JsonlFileSink::new(
         active_log_path.clone(),
-        RotationPolicy::default(),
-        RetentionPolicy::default(),
+        RotationPolicy {
+            max_bytes: RETAINED_LOG_ROTATION_MAX_BYTES,
+            max_files: RETAINED_LOG_ROTATION_MAX_FILES,
+        },
+        RetentionPolicy {
+            max_age_days: RETAINED_LOG_RETENTION_MAX_AGE_DAYS,
+        },
     ));
+    #[cfg(test)]
     let sink: Arc<dyn LogSink> = match retained_sink_fault {
         Some(mode) => Arc::new(RetainedSinkHealthOverride::new(sink, mode)),
         None => sink,
+    };
+    #[cfg(not(test))]
+    let sink: Arc<dyn LogSink> = {
+        let _ = retained_sink_fault;
+        sink
     };
     builder.register_sink(SinkRegistration::new(sink));
     Ok((builder.build(), active_log_path))
@@ -252,18 +279,6 @@ fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
             "invalid {ATM_LOG_LEVEL_ENV} value `{value}`; use `trace`, `debug`, `info`, `warn`, `error`, or `off`"
         ))),
     }
-}
-
-pub fn tracing_level_override() -> Result<tracing::Level, AtmError> {
-    Ok(
-        match logger_level_override()?.unwrap_or(SharedLevelFilter::Info) {
-            SharedLevelFilter::Trace => tracing::Level::TRACE,
-            SharedLevelFilter::Debug => tracing::Level::DEBUG,
-            SharedLevelFilter::Info => tracing::Level::INFO,
-            SharedLevelFilter::Warn => tracing::Level::WARN,
-            SharedLevelFilter::Error | SharedLevelFilter::Off => tracing::Level::ERROR,
-        },
-    )
 }
 
 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
@@ -486,17 +501,20 @@ fn level_for_outcome(outcome: &str) -> Level {
     }
 }
 
+#[cfg(test)]
 struct RetainedSinkHealthOverride {
     inner: Arc<dyn LogSink>,
     mode: RetainedSinkFaultMode,
 }
 
+#[cfg(test)]
 impl RetainedSinkHealthOverride {
     fn new(inner: Arc<dyn LogSink>, mode: RetainedSinkFaultMode) -> Self {
         Self { inner, mode }
     }
 }
 
+#[cfg(test)]
 impl LogSink for RetainedSinkHealthOverride {
     fn write(&self, _event: &LogEvent) -> Result<(), LogSinkError> {
         match self.mode {
@@ -601,5 +619,61 @@ mod tests {
         let error = DaemonObservability::bootstrap().expect_err("invalid ATM_LOG_DIR");
         assert!(error.is_config());
         assert!(error.message.contains("absolute path"));
+    }
+
+    #[test]
+    #[serial]
+    fn bootstrap_fails_closed_when_retained_log_dir_cannot_be_created() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let blocked_parent = tempdir.path().join("blocked-parent");
+        std::fs::write(&blocked_parent, "not a directory").expect("blocked parent");
+        let blocked_log_dir = blocked_parent.join("logs");
+        let _env = EnvGuard::set_many([
+            (
+                "ATM_LOG_DIR",
+                Some(blocked_log_dir.to_str().expect("utf8 blocked log dir")),
+            ),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
+            ("USERPROFILE", None),
+            ("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", None),
+        ]);
+
+        let error =
+            DaemonObservability::bootstrap().expect_err("retained log dir create should fail");
+        assert!(error.is_observability_bootstrap());
+        assert!(
+            error
+                .message
+                .contains(&blocked_log_dir.display().to_string())
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn bootstrap_fails_closed_when_retained_log_file_is_not_appendable() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let blocked_log_dir = tempdir.path().join("logs");
+        std::fs::create_dir_all(&blocked_log_dir).expect("blocked log dir");
+        std::fs::create_dir(blocked_log_dir.join("atm.log.jsonl"))
+            .expect("non-appendable log path");
+        let _env = EnvGuard::set_many([
+            (
+                "ATM_LOG_DIR",
+                Some(blocked_log_dir.to_str().expect("utf8 blocked log dir")),
+            ),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
+            ("USERPROFILE", None),
+            ("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", None),
+        ]);
+
+        let error =
+            DaemonObservability::bootstrap().expect_err("retained log file open should fail");
+        assert!(error.is_observability_bootstrap());
+        assert!(error.message.contains("atm.log.jsonl"));
+        assert!(
+            error
+                .message
+                .contains(&blocked_log_dir.join("atm.log.jsonl").display().to_string())
+        );
     }
 }

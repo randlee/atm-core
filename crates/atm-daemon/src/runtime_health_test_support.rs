@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::Arc;
 
 impl RuntimeStatusCache {
     pub(crate) fn member_state_for_test(
@@ -92,9 +93,12 @@ impl DaemonRequestDispatcher {
                 None
             }
         };
-        let observability =
-            DaemonObservability::new_for_test(atm_core::home::host_log_dir_from_home(&home_dir))
-                .expect("daemon test observability");
+        let observability = Arc::new(
+            crate::test_observability::TestDaemonObservability::new(
+                atm_core::home::host_log_dir_from_home(&home_dir),
+            )
+            .expect("daemon test observability"),
+        );
         Self {
             home_dir: home_dir.clone(),
             observability,

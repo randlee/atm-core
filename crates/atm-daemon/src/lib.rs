@@ -3,7 +3,7 @@
 
 mod boundary_adapters;
 pub(crate) mod composition;
-mod daemon_observability;
+mod daemon_runtime_observability;
 mod direct_boundaries;
 // ADR-002 intentionally splits launch.lock admission from owner.lock serving
 // ownership so only one launcher can fork while only one daemon can publish the
@@ -15,6 +15,8 @@ mod notification_runtime;
 mod peer_transport;
 mod reconcile_runtime;
 mod runtime_health;
+#[cfg(test)]
+mod test_observability;
 mod watch_runtime;
 
 use std::path::PathBuf;
@@ -23,8 +25,7 @@ use std::time::Duration;
 
 use atm_core::error::AtmError;
 use atm_rusqlite::SqliteBoundaryAssembly;
-pub(crate) use daemon_observability::DaemonObservability;
-pub use daemon_observability::tracing_level_override;
+pub use daemon_runtime_observability::DaemonRuntimeObservability;
 
 pub(crate) use atm_rusqlite::RemoteReplayStateRecord;
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
@@ -81,16 +82,9 @@ pub(crate) fn sqlite_remote_replay_store_from_path(
 /// # Errors
 ///
 /// Returns [`AtmError`] when the daemon transport cannot start or serve.
-pub fn run_daemon() -> Result<(), AtmError> {
-    let observability = bootstrap_observability()?;
-    run_daemon_with_observability(observability)
-}
-
-pub fn bootstrap_observability() -> Result<DaemonObservability, AtmError> {
-    DaemonObservability::bootstrap()
-}
-
-pub fn run_daemon_with_observability(observability: DaemonObservability) -> Result<(), AtmError> {
+pub fn run_daemon_with_observability(
+    observability: Arc<dyn DaemonRuntimeObservability>,
+) -> Result<(), AtmError> {
     composition::compose_runtime(observability)?.start()
 }
 
