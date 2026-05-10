@@ -61,10 +61,9 @@ Before starting a sprint:
    - `rust-best-practices-agent` in QA-1 only
    - `rust-service-hardening-agent` when service-runtime review is in scope
    - `flaky-test-qa` when test instability risk is present
-7. QA-2 and later rounds must omit `rust-best-practices-agent`. Any unresolved
-   QA-1 RBP findings that are not fixed in the first fix round carry to the
-   next phase backlog automatically and are not re-raised in later QA rounds on
-   the same sprint branch.
+7. QA-2 and later rounds must omit `rust-best-practices-agent`. All RBP
+   findings from QA-1 must be fixed before merge — merge gate is 0B+0I+0m
+   with no exceptions and no backlog deferral.
 8. If QA passes and CI is green, merge may proceed.
 9. If QA fails, `team-lead` first runs `/triaging-findings` to correlate the
    findings across worktrees and determine the promoted fix branch.
