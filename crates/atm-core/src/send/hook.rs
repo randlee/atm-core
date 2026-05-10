@@ -18,7 +18,7 @@ use crate::config;
 use crate::config::types::HookRecipient;
 use crate::error::AtmErrorCode;
 
-use super::{PostSendHookContext, qualified_sender_identity};
+use super::{PostSendHookContext, WarningEntry, qualified_sender_identity};
 
 const POST_SEND_HOOK_TIMEOUT: Duration = Duration::from_secs(5);
 const POST_SEND_HOOK_MAX_STDOUT_BYTES: usize = 8 * 1024;
@@ -55,7 +55,7 @@ impl HookCancellationToken {
 }
 
 pub(super) fn maybe_run_post_send_hook(
-    warnings: &mut Vec<String>,
+    warnings: &mut Vec<WarningEntry>,
     config: Option<&config::AtmConfig>,
     context: PostSendHookContext<'_>,
 ) {
@@ -88,7 +88,7 @@ pub(super) fn maybe_run_post_send_hook(
 }
 
 fn execute_post_send_hook(
-    warnings: &mut Vec<String>,
+    warnings: &mut Vec<WarningEntry>,
     config: &config::AtmConfig,
     rule: &config::types::PostSendHookRule,
     context: &PostSendHookContext<'_>,
@@ -138,10 +138,6 @@ fn execute_post_send_hook(
     let mut child = match command.spawn() {
         Ok(child) => child,
         Err(error) => {
-            let warning = format!(
-                "warning: post-send hook failed to start from {}: {error}. Check that the hook command in .atm.toml points to a valid executable.",
-                command_path.display()
-            );
             warn!(
                 code = %AtmErrorCode::WarningHookExecutionFailed,
                 sender = %context.sender,
@@ -152,7 +148,13 @@ fn execute_post_send_hook(
                 %error,
                 "post-send hook failed to start"
             );
-            warnings.push(warning);
+            warnings.push(WarningEntry::new(
+                format!(
+                    "warning: post-send hook failed to start from {}: {error}.",
+                    command_path.display()
+                ),
+                Some("Check that the hook command in .atm.toml points to a valid executable."),
+            ));
             return;
         }
     };
@@ -169,10 +171,6 @@ fn execute_post_send_hook(
                     finish_post_send_hook_stdout_capture(stdout_reader.take(), &command_path),
                 );
                 if !status.success() {
-                    let warning = format!(
-                        "warning: post-send hook exited unsuccessfully from {} with status {status}. Check the hook script for errors; it exited with a non-zero status.",
-                        command_path.display()
-                    );
                     warn!(
                         code = %AtmErrorCode::WarningHookExecutionFailed,
                         sender = %context.sender,
@@ -183,7 +181,13 @@ fn execute_post_send_hook(
                         %status,
                         "post-send hook exited unsuccessfully"
                     );
-                    warnings.push(warning);
+                    warnings.push(WarningEntry::new(
+                        format!(
+                            "warning: post-send hook exited unsuccessfully from {} with status {status}.",
+                            command_path.display()
+                        ),
+                        Some("Check the hook script for errors; it exited with a non-zero status."),
+                    ));
                 }
                 return;
             }
@@ -197,11 +201,6 @@ fn execute_post_send_hook(
                     &stdout_cancellation,
                     &command_path,
                 );
-                let warning = format!(
-                    "warning: post-send hook timed out after {}s for {}. The hook script exceeded the 5-second timeout; ensure it exits promptly.",
-                    POST_SEND_HOOK_TIMEOUT.as_secs(),
-                    command_path.display()
-                );
                 warn!(
                     code = %AtmErrorCode::WarningHookExecutionFailed,
                     sender = %context.sender,
@@ -212,7 +211,16 @@ fn execute_post_send_hook(
                     timeout_seconds = POST_SEND_HOOK_TIMEOUT.as_secs(),
                     "post-send hook timed out"
                 );
-                warnings.push(warning);
+                warnings.push(WarningEntry::new(
+                    format!(
+                        "warning: post-send hook timed out after {}s for {}.",
+                        POST_SEND_HOOK_TIMEOUT.as_secs(),
+                        command_path.display()
+                    ),
+                    Some(
+                        "The hook script exceeded the 5-second timeout; ensure it exits promptly.",
+                    ),
+                ));
                 return;
             }
             Err(error) => {
@@ -221,10 +229,6 @@ fn execute_post_send_hook(
                     stdout_reader.take(),
                     &stdout_cancellation,
                     &command_path,
-                );
-                let warning = format!(
-                    "warning: post-send hook status check failed for {}: {error}. This is an OS-level error; check that the hook process is not being killed externally.",
-                    command_path.display()
                 );
                 warn!(
                     code = %AtmErrorCode::WarningHookExecutionFailed,
@@ -236,7 +240,13 @@ fn execute_post_send_hook(
                     %error,
                     "post-send hook status check failed"
                 );
-                warnings.push(warning);
+                warnings.push(WarningEntry::new(
+                    format!(
+                        "warning: post-send hook status check failed for {}: {error}.",
+                        command_path.display()
+                    ),
+                    Some("This is an OS-level error; check that the hook process is not being killed externally."),
+                ));
                 return;
             }
         }

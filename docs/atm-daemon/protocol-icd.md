@@ -226,18 +226,20 @@ Phase S packet families:
 - `0x0001` `send_compose_request`
 - `0x0002` `send_acknowledge_request`
 - `0x0003` `heartbeat_request`
-- `0x0004` `receive_request`
-- `0x0005` `clear_request`
-- `0x0006` `doctor_request`
+- `0x0004` `list_request`
+- `0x0005` `receive_request`
+- `0x0006` `clear_request`
+- `0x0007` `doctor_request`
 
 ### 6.2 Success Response Packet Kinds
 
 - `0x1001` `send_sent_response`
 - `0x1002` `send_acknowledged_response`
 - `0x1003` `heartbeat_response`
-- `0x1004` `receive_response`
-- `0x1005` `clear_response`
-- `0x1006` `doctor_response`
+- `0x1004` `list_response`
+- `0x1005` `receive_response`
+- `0x1006` `clear_response`
+- `0x1007` `doctor_response`
 
 ### 6.3 Error Packet Kind
 
@@ -261,15 +263,17 @@ Error responses are ATM protocol packets, not out-of-band transport exceptions.
 | `0x0001` | `send_compose_request` | `atm send` | retained send workflow over daemon transport |
 | `0x0002` | `send_acknowledge_request` | `atm ack` | retained ack workflow is send-shaped, not a separate top-level ack packet family |
 | `0x0003` | `heartbeat_request` | daemon/runtime heartbeat path | not a retained user CLI command; runtime/member liveness path |
-| `0x0004` | `receive_request` | `atm read` | retained read workflow |
-| `0x0005` | `clear_request` | `atm clear` | retained clear workflow |
-| `0x0006` | `doctor_request` | `atm doctor` | retained doctor runtime query surface |
+| `0x0004` | `list_request` | `atm list` | bounded metadata queue query workflow |
+| `0x0005` | `receive_request` | `atm read` | retained single-message read workflow |
+| `0x0006` | `clear_request` | `atm clear` | retained clear workflow |
+| `0x0007` | `doctor_request` | `atm doctor` | retained doctor runtime query surface |
 | `0x1001` | `send_sent_response` | response to `atm send` | success response |
 | `0x1002` | `send_acknowledged_response` | response to `atm ack` | success response |
 | `0x1003` | `heartbeat_response` | response to heartbeat | success response |
-| `0x1004` | `receive_response` | response to `atm read` | success response |
-| `0x1005` | `clear_response` | response to `atm clear` | success response |
-| `0x1006` | `doctor_response` | response to `atm doctor` | success response |
+| `0x1004` | `list_response` | response to `atm list` | success response |
+| `0x1005` | `receive_response` | response to `atm read` | success response |
+| `0x1006` | `clear_response` | response to `atm clear` | success response |
+| `0x1007` | `doctor_response` | response to `atm doctor` | success response |
 | `0x1fff` | `error_response` | typed service failure | may answer any request kind |
 
 Current non-packet retained workflows:
@@ -310,12 +314,14 @@ Field-authority rule:
 | `send_compose_request` | `SendRequest` | `RequestEnvelope::Send(SendRequestEnvelope::Compose(...))` |
 | `send_acknowledge_request` | `AckRequest` | `RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(...))` |
 | `heartbeat_request` | `TeamMemberHeartbeatRequest` | `RequestEnvelope::Heartbeat(...)` |
+| `list_request` | `ListQuery` | `RequestEnvelope::List(...)` |
 | `receive_request` | `ReadQuery` | `RequestEnvelope::Receive(...)` |
 | `clear_request` | `ClearQuery` | `RequestEnvelope::Clear(...)` |
 | `doctor_request` | `DoctorQuery` | `RequestEnvelope::Doctor(...)` |
 | `send_sent_response` | `SendOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Sent(...))` |
 | `send_acknowledged_response` | `AckOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(...))` |
 | `heartbeat_response` | `TeamMemberHeartbeatResponse` | `ResponseEnvelope::Heartbeat(...)` |
+| `list_response` | `ListOutcome` | `ResponseEnvelope::List(...)` |
 | `receive_response` | `ReadOutcome` | `ResponseEnvelope::Receive(...)` |
 | `clear_response` | `ClearOutcome` | `ResponseEnvelope::Clear(...)` |
 | `doctor_response` | `DoctorReport` | `ResponseEnvelope::Doctor(...)` |
@@ -349,6 +355,8 @@ The current protocol-layer envelope mapping is:
   - `send_acknowledge_request`
 - `RequestEnvelope::Heartbeat(...)`
   - `heartbeat_request`
+- `RequestEnvelope::List(...)`
+  - `list_request`
 - `RequestEnvelope::Receive(...)`
   - `receive_request`
 - `RequestEnvelope::Clear(...)`
@@ -362,6 +370,8 @@ The current protocol-layer envelope mapping is:
   - `send_acknowledged_response`
 - `ResponseEnvelope::Heartbeat(...)`
   - `heartbeat_response`
+- `ResponseEnvelope::List(...)`
+  - `list_response`
 - `ResponseEnvelope::Receive(...)`
   - `receive_response`
 - `ResponseEnvelope::Clear(...)`
@@ -414,6 +424,7 @@ Success-family pairing rules:
 - `send_compose_request -> send_sent_response | error_response`
 - `send_acknowledge_request -> send_acknowledged_response | error_response`
 - `heartbeat_request -> heartbeat_response | error_response`
+- `list_request -> list_response | error_response`
 - `receive_request -> receive_response | error_response`
 - `clear_request -> clear_response | error_response`
 - `doctor_request -> doctor_response | error_response`

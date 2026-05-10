@@ -17,7 +17,7 @@ use crate::read::state;
 use crate::schema::MessageEnvelope;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::types::{AgentName, MessageClass, SourceIndex, TeamName};
+use crate::types::{AgentName, CommandAction, MessageClass, SourceIndex, TeamName};
 use crate::workflow;
 
 /// Parameters for clearing read or acknowledged mailbox messages.
@@ -43,7 +43,7 @@ pub struct RemovedByClass {
 /// Result of one mailbox cleanup command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearOutcome {
-    pub action: String,
+    pub action: CommandAction,
     pub team: TeamName,
     pub agent: AgentName,
     pub removed_total: usize,
@@ -137,7 +137,7 @@ fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             &target.team,
             &target.agent,
             [workflow_path],
-            runtime.default_lock_timeout(),
+            runtime.mailbox_timeout_policy().workflow_lock_timeout,
             |_source_paths, source_files| {
                 let mut workflow_state =
                     runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
@@ -169,7 +169,7 @@ fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     };
 
     let outcome = ClearOutcome {
-        action: "clear".to_string(),
+        action: CommandAction::Clear,
         team: target.team.clone(),
         agent: target.agent.clone(),
         removed_total,

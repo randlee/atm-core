@@ -41,8 +41,10 @@ Phase R redesign notes:
 - the current daemon packet family serves `send`, `ack`, `read`, `clear`, and
   `doctor`; retained `log`, `teams`, and `members` stay outside the daemon
   request/response packet surface in the current Phase S line
-- S.5 planning adds `atm list` as a distinct CLI verb; S.7 owns the aligned
-  list/read implementation while S.8 owns the JSONL retrieval-stub
+- the current daemon packet family also serves `list` as the bounded metadata
+  queue query surface
+- S.7 lands the aligned `atm list` / single-message `atm read`
+  implementation while S.8 owns the JSONL retrieval-stub
   compatibility path that preserves the exact
   `atm read --message-id <id>` retrieval command
 

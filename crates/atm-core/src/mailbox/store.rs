@@ -7,7 +7,8 @@ use crate::error::AtmError;
 use crate::mailbox::atomic;
 use crate::mailbox::lock;
 use crate::mailbox::source::{
-    SourceFile, discover_source_paths, load_source_files, rediscover_and_validate_source_paths,
+    SourceFile, SummarySourceFile, discover_source_paths, load_source_files,
+    load_summary_source_files, rediscover_and_validate_source_paths,
 };
 use crate::schema::MessageEnvelope;
 use crate::types::{AgentName, TeamName};
@@ -40,6 +41,16 @@ pub(crate) fn observe_source_files(
 ) -> Result<Vec<SourceFile>, AtmError> {
     let source_paths = discover_source_paths(home_dir, team, agent)?;
     load_source_files(&source_paths)
+}
+
+pub(crate) fn observe_summary_source_files(
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    contains_filter: Option<&str>,
+) -> Result<Vec<SummarySourceFile>, AtmError> {
+    let source_paths = discover_source_paths(home_dir, team, agent)?;
+    load_summary_source_files(&source_paths, contains_filter)
 }
 
 /// Reload one mailbox source set under the deterministic mailbox lock plan

@@ -16,7 +16,7 @@ use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
-use crate::types::{AgentName, TaskId, TeamName};
+use crate::types::{AgentName, CommandAction, TaskId, TeamName};
 use crate::workflow;
 
 mod alert_state;
@@ -87,7 +87,7 @@ impl SendRequest {
 /// Result of sending one ATM mailbox message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendOutcome {
-    pub action: String,
+    pub action: CommandAction,
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
@@ -100,13 +100,33 @@ pub struct SendOutcome {
     pub summary: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
-    // TODO(v1.1.0): Replace this Vec<String> with a structured WarningEntry type
-    // so degraded-mode warnings can carry recovery guidance separately from the
-    // rendered message text.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub warnings: Vec<String>,
+    pub warnings: Vec<WarningEntry>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct WarningEntry {
+    pub message: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recovery: Option<String>,
+}
+
+impl WarningEntry {
+    pub fn new(message: impl Into<String>, recovery: Option<impl Into<String>>) -> Self {
+        Self {
+            message: message.into(),
+            recovery: recovery.map(Into::into),
+        }
+    }
+
+    pub fn render(&self) -> String {
+        match &self.recovery {
+            Some(recovery) => format!("{} Recovery: {recovery}", self.message),
+            None => self.message.clone(),
+        }
+    }
 }
 
 /// Send one mailbox message to a team member.
@@ -189,11 +209,14 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
                 ));
             }
 
-            warnings.push(format!(
-                "warning: team config is missing at {}; send used existing inbox fallback for {}@{}. Restore the team config.",
-                team_dir.join("config.json").display(),
-                recipient.agent,
-                recipient.team
+            warnings.push(WarningEntry::new(
+                format!(
+                    "warning: team config is missing at {}; send used existing inbox fallback for {}@{}.",
+                    team_dir.join("config.json").display(),
+                    recipient.agent,
+                    recipient.team
+                ),
+                Some("Restore the team config."),
             ));
             warn!(code = %AtmErrorCode::WarningMissingTeamConfigFallback,
                 config_path = %team_dir.join("config.json").display(),
@@ -263,7 +286,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
     let command_outcome = if request.dry_run { "dry_run" } else { "sent" };
     let mut outcome = SendOutcome {
-        action: "send".to_string(),
+        action: CommandAction::Send,
         team: recipient.team.clone(),
         agent: recipient.agent.clone(),
         sender: canonical_sender.clone(),
@@ -469,7 +492,7 @@ fn append_mailbox_message_and_seed_workflow(
         team,
         agent,
         [inbox_path.to_path_buf()],
-        runtime.default_lock_timeout(),
+        runtime.mailbox_timeout_policy().workflow_lock_timeout,
         |workflow_state| {
             if require_existing_inbox && !inbox_path.exists() {
                 return Ok(((), false));
@@ -643,7 +666,7 @@ fn set_canonical_sender_metadata(
 }
 
 pub(crate) fn maybe_run_post_send_hook(
-    warnings: &mut Vec<String>,
+    warnings: &mut Vec<WarningEntry>,
     config: Option<&config::AtmConfig>,
     context: PostSendHookContext<'_>,
 ) {
