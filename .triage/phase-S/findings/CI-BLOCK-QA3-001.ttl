@@ -5,31 +5,49 @@
   a triage:Finding ;
   triage:findingId "CI-BLOCK-QA3-001" ;
   triage:title "Ungated unix-only import — AtmObservabilityHealthState in tests.rs" ;
-  triage:description "use atm_core::observability::AtmObservabilityHealthState at tests.rs:18 is ungated. The symbol is consumed only at tests.rs:240 inside the #[cfg(unix)] test fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability. On Windows, -D warnings (-D unused-imports) produces: error: unused import: atm_core::observability::AtmObservabilityHealthState. Fix: add #[cfg(unix)] gate above line 18. Root cause: same pattern as CI-BLOCK-001 and CI-BLOCK-NEW-001 — every edit to tests.rs that adds unix-gated test functions must also gate their exclusive imports. Sweep confirmed: DoctorStatus (lines 170/933/974), RequestDispatcher (lines 127/282), assemble_boundary (line 474) all have cross-platform usage and do NOT need gating." ;
+  triage:description "use atm_core::observability::AtmObservabilityHealthState at tests.rs:18 is ungated. Symbol consumed only inside #[cfg(unix)] test fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability at line 240. On Windows, -D warnings produces: error: unused import. Fix: add #[cfg(unix)] gate above line 18. Pattern: same root as CI-BLOCK-001 and CI-BLOCK-NEW-001 — ungated import of unix-only-used symbol. S.15 is absent: that branch refactored tests.rs to use a combined import with cross-platform usage, so no violation exists there." ;
   triage:category "CI" ;
-  triage:severity "blocking" ;
+  triage:severity "important" ;
   triage:rule "PORT-003" ;
   triage:triageMode "followup_pass" ;
   triage:phaseId "phase-S" ;
   triage:repeatable true ;
-  triage:sweepScope "file" ;
+  triage:sweepScope "crate" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-10T23:15:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-05-10T23:30:00Z"^^xsd:dateTime ;
   triage:highestOpenBranch "feature/pS-s13-ipc-hardening" ;
   triage:promoteToBranch "feature/pS-s13-ipc-hardening" ;
+  triage:mergeForwardNeeded true ;
+  triage:propagated false ;
+  triage:regressed false ;
   triage:hasOccurrence <urn:atm:triage:occurrence/CI-BLOCK-QA3-001/s13/1> ;
-  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/a580516> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-BLOCK-QA3-001/s14/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/a580516> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s14-impl/90fc60b> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/a580516> .
 
 <urn:atm:triage:occurrence/CI-BLOCK-QA3-001/s13/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
   triage:line 18 ;
-  triage:snippet "use atm_core::observability::AtmObservabilityHealthState; — ungated; used only inside #[cfg(unix)] test at line 240; Windows: error[E0432] unused import" ;
+  triage:snippet "use atm_core::observability::AtmObservabilityHealthState; -- ungated; used only inside #[cfg(unix)] test fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability at line 240" ;
   triage:status "open" ;
   triage:closed false ;
   triage:headSha "a580516" ;
-  triage:branch "feature/pS-s13-ipc-hardening" .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/a580516> .
+
+<urn:atm:triage:occurrence/CI-BLOCK-QA3-001/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 18 ;
+  triage:snippet "use atm_core::observability::AtmObservabilityHealthState; -- ungated; same as s13; S.13 fix not yet merged forward to this branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "90fc60b" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s14-impl/90fc60b> .
 
 <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/a580516>
   a triage:WorktreeSnapshot ;
@@ -38,3 +56,19 @@
   triage:headSha "a580516" ;
   triage:orderIndex 1 ;
   triage:branchState "open" .
+
+<urn:atm:triage:worktree/feature-pS-s14-impl/90fc60b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "90fc60b" ;
+  triage:orderIndex 2 ;
+  triage:branchState "merge_forward_needed" .
+
+<urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/fcce391>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "fcce391" ;
+  triage:orderIndex 3 ;
+  triage:branchState "absent" .
