@@ -329,9 +329,47 @@ impl RuntimeComposition {
 
     fn start_background_lanes(&self) -> Result<(), AtmError> {
         self._notification_sink.start()?;
-        self._watch_event_source.start()?;
-        self._reconcile_coordinator.start()?;
+        if let Err(error) = self._watch_event_source.start() {
+            self.rollback_partially_started_lanes(false, true);
+            return Err(error);
+        }
+        if let Err(error) = self._reconcile_coordinator.start() {
+            self.rollback_partially_started_lanes(true, true);
+            return Err(error);
+        }
         Ok(())
+    }
+
+    fn rollback_partially_started_lanes(&self, watch_started: bool, notification_started: bool) {
+        const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
+        if watch_started
+            && let Err(error) = shutdown_lane_with_deadline(
+                "watch event source",
+                BACKGROUND_LANE_SHUTDOWN_DEADLINE,
+                self._watch_event_source.clone(),
+                |lane| lane.shutdown(),
+            )
+        {
+            tracing::warn!(
+                %error,
+                lane = "watch event source",
+                "daemon background lane rollback shutdown was incomplete"
+            );
+        }
+        if notification_started
+            && let Err(error) = shutdown_lane_with_deadline(
+                "notification sink",
+                BACKGROUND_LANE_SHUTDOWN_DEADLINE,
+                self._notification_sink.clone(),
+                |lane| lane.shutdown(),
+            )
+        {
+            tracing::warn!(
+                %error,
+                lane = "notification sink",
+                "daemon background lane rollback shutdown was incomplete"
+            );
+        }
     }
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
@@ -394,21 +432,31 @@ where
     let shutdown_handle = std::thread::spawn(move || {
         let _ = result_tx.send(shutdown(lane));
     });
-    let result = match result_rx.recv_timeout(deadline) {
-        Ok(result) => result,
+    match result_rx.recv_timeout(deadline) {
+        Ok(result) => {
+            shutdown_handle.join().map_err(|_| {
+                AtmError::daemon_unavailable(format!(
+                    "daemon {lane_name} shutdown worker panicked unexpectedly"
+                ))
+            })?;
+            result
+        }
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
             format!("daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"),
         )),
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(
-            format!("daemon {lane_name} shutdown worker disconnected unexpectedly"),
-        )),
-    };
-    shutdown_handle.join().map_err(|_| {
-        AtmError::daemon_unavailable(format!(
-            "daemon {lane_name} shutdown worker panicked unexpectedly"
-        ))
-    })?;
-    result
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => shutdown_handle.join().map_or_else(
+            |_| {
+                Err(AtmError::daemon_unavailable(format!(
+                    "daemon {lane_name} shutdown worker panicked unexpectedly"
+                )))
+            },
+            |_| {
+                Err(AtmError::daemon_unavailable(format!(
+                    "daemon {lane_name} shutdown worker disconnected unexpectedly"
+                )))
+            },
+        ),
+    }
 }
 
 fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError> {
@@ -458,10 +506,12 @@ pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
 mod tests {
     use atm_core::boundary::ServerTransport;
     use serial_test::serial;
+    use std::sync::mpsc;
+    use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
     use super::RuntimeComposition;
-    use super::{RuntimeLifecycle, RuntimeLifecycleState};
+    use super::{RuntimeLifecycle, RuntimeLifecycleState, shutdown_lane_with_deadline};
 
     #[test]
     fn runtime_lifecycle_allows_only_documented_transitions() {
@@ -578,5 +628,23 @@ mod tests {
                 .contains("cannot bootstrap the daemon directly")
         );
         assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
+    }
+
+    #[test]
+    fn shutdown_lane_timeout_returns_without_waiting_for_worker_completion() {
+        let (release_tx, release_rx) = mpsc::channel();
+        let started = Instant::now();
+        let result =
+            shutdown_lane_with_deadline("test lane", Duration::from_millis(20), release_rx, |rx| {
+                let _ = rx.recv();
+                Ok(())
+            });
+        let elapsed = started.elapsed();
+        assert!(result.is_err(), "expected deadline error");
+        assert!(
+            elapsed < Duration::from_millis(200),
+            "shutdown helper blocked too long after timeout: {elapsed:?}"
+        );
+        let _ = release_tx.send(());
     }
 }
