@@ -694,6 +694,7 @@ fn build_runtime_status_cache_state(
                 "runtime_health: invalid team name from storage under {}: {team_name}",
                 teams_root.display()
             ))
+            .with_recovery("ensure team name is valid UTF-8")
             .with_source(error)
         })?;
         let config_path = entry.path().join("config.json");
@@ -715,6 +716,7 @@ fn build_runtime_status_cache_state(
                 "failed to parse daemon team config {}: {error}",
                 config_path.display()
             ))
+            .with_recovery("check atm message format")
             .with_source(error)
         })?;
         for member in config.members {
@@ -859,10 +861,12 @@ impl boundary::StatusSource for DaemonStatusSource {
 #[cfg(test)]
 mod tests {
     use super::DaemonRequestDispatcher;
+    use serial_test::serial;
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
 
     #[test]
+    #[serial]
     fn bounded_shutdown_step_returns_after_deadline() {
         let release = Arc::new((Mutex::new(false), Condvar::new()));
         let blocker = Arc::clone(&release);
