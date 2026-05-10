@@ -50,7 +50,7 @@ Drop-order issue in `host_log_dir_rejects_non_utf8_override` — env_lock releas
 **INTG-FTQ-007** `crates/atm-daemon/src/reconcile_runtime.rs:784`  
 Nondeterministic coalescing in duplicate notification test. Fix: use deterministic ordering or assert count only.
 
-**INTG-RSH-003** `crates/atm-core/src/config/discovery.rs:66`  
+**INTG-RSH-003** `crates/atm-core/src/config/discovery.rs:66`
 No PATH_MAX ceiling on tilde-expanded hook paths. Confirmed satisfied on the `integrate/phase-S` base; verify the guard remains intact on this branch head.
 
 **INTG-RSH-004** `crates/atm-daemon/src/reconcile_runtime.rs:471`  
