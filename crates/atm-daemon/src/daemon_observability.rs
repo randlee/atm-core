@@ -442,6 +442,8 @@ impl LogSink for RetainedJsonlFileSink {
         let mut line = serde_json::to_vec(event).map_err(|error| self.mark_failure(error))?;
         line.push(b'\n');
         self.rotate_if_needed(line.len() as u64);
+        // Reopen per append intentionally: retained daemon events prioritize append-safety across
+        // rotation/replacement over holding one long-lived write handle open on the hot path.
         let mut file = OpenOptions::new()
             .create(true)
             .append(true)

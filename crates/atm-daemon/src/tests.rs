@@ -34,7 +34,7 @@ use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
 use std::sync::Arc;
 use std::sync::mpsc;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tempfile::TempDir;
 
 #[cfg(unix)]
@@ -202,7 +202,8 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         )
         .expect("test observability"),
     );
-    let runtime = crate::composition::compose_runtime(observability).expect("compose runtime");
+    let runtime =
+        crate::composition::compose_runtime(observability.clone()).expect("compose runtime");
     let socket_path = atm_core::protocol::daemon_socket_path().expect("daemon socket path");
     let (result_tx, result_rx) = mpsc::channel();
 
@@ -244,16 +245,9 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         other => panic!("expected doctor response, got {other:?}"),
     }
 
-    let retained_log_path = atm_core::home::host_log_dir_from_home(&atm_home).join("atm.log.jsonl");
-    let deadline = Instant::now() + Duration::from_secs(3);
-    loop {
-        match std::fs::read_to_string(&retained_log_path) {
-            Ok(contents) if contents.contains("daemon start requested") => break,
-            Ok(_) | Err(_) if Instant::now() < deadline => std::thread::yield_now(),
-            Err(error) => panic!("read retained log: {error}"),
-            Ok(contents) => panic!("retained log missing startup event: {contents}"),
-        }
-    }
+    observability
+        .wait_for_message_contains("daemon start requested", Duration::from_secs(3))
+        .expect("startup event should be recorded without busy-spin polling");
 
     lifecycle.set_terminate_for_test(true);
     result_rx
@@ -261,6 +255,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         .expect("recv runtime result")
         .expect("runtime result");
     join.join().expect("join runtime thread");
+    DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
 }
 
 #[cfg(windows)]

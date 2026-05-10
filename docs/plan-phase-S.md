@@ -641,6 +641,9 @@ Goal:
 - close the remaining daemon-runtime hardening gaps left after S.13 across
   lifecycle control, reconcile/watch shutdown, runtime status bounds, doctor
   projection detail, and retained-observability flush behavior
+- carry forward the accepted S.13 direct-accept-loop contract from
+  `docs/phase-S/sprint-S13-ipc-plan.md` as the runtime baseline that S.14
+  hardens rather than redesigns
 
 Required outcomes:
 - lifecycle wake workers are explicitly owned and joined with timeout

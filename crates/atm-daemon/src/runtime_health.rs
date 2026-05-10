@@ -788,6 +788,9 @@ fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {
         },
         RuntimeReadinessState::Degraded => DoctorFinding {
             severity: DoctorSeverity::Warning,
+            // Runtime degradation intentionally reuses the warning observability-health code so
+            // doctor output keeps one degraded-warning bucket until a daemon-specific code is
+            // added across the shared ATM diagnostic taxonomy.
             code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded,
             message: summary,
             remediation: snapshot.detail.clone().or(Some(
@@ -873,7 +876,9 @@ impl boundary::StatusSource for DaemonStatusSource {
 
 #[cfg(test)]
 mod tests {
-    use super::DaemonRequestDispatcher;
+    use super::{
+        DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
+    };
     use serial_test::serial;
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
@@ -907,6 +912,69 @@ mod tests {
 
         let (released, wake) = &*release;
         *released.lock().expect("released") = true;
+        wake.notify_all();
+        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+    }
+
+    #[test]
+    #[serial]
+    fn bounded_shutdown_step_does_not_exceed_retained_finalizer_cap() {
+        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+
+        let retained_release = Arc::new((Mutex::new(false), Condvar::new()));
+        {
+            let mut handles = SHUTDOWN_FINALIZER_THREADS
+                .lock()
+                .expect("shutdown finalizer thread registry lock");
+            for _ in 0..MAX_SHUTDOWN_FINALIZER_THREADS {
+                let retained_release = Arc::clone(&retained_release);
+                handles.push(std::thread::spawn(move || {
+                    let (released, wake) = &*retained_release;
+                    let mut released = released.lock().expect("retained release");
+                    while !*released {
+                        let wait = wake
+                            .wait_timeout(released, Duration::from_secs(5))
+                            .expect("retained release wait");
+                        released = wait.0;
+                        assert!(!wait.1.timed_out(), "retained release wait timed out");
+                    }
+                }));
+            }
+        }
+
+        let overflow_release = Arc::new((Mutex::new(false), Condvar::new()));
+        let blocker = Arc::clone(&overflow_release);
+        DaemonRequestDispatcher::run_bounded_shutdown_step(
+            "blocking_cap_test_step",
+            Duration::from_millis(10),
+            move || {
+                let (released, wake) = &*blocker;
+                let mut released = released.lock().expect("overflow release");
+                while !*released {
+                    let wait = wake
+                        .wait_timeout(released, Duration::from_secs(5))
+                        .expect("overflow release wait");
+                    released = wait.0;
+                    assert!(!wait.1.timed_out(), "overflow release wait timed out");
+                }
+                Ok(())
+            },
+        );
+
+        assert_eq!(
+            SHUTDOWN_FINALIZER_THREADS
+                .lock()
+                .expect("shutdown finalizer thread registry lock")
+                .len(),
+            MAX_SHUTDOWN_FINALIZER_THREADS,
+            "cap-exceeded path should not retain more than the documented shutdown finalizer thread budget"
+        );
+
+        let (released, wake) = &*overflow_release;
+        *released.lock().expect("overflow release") = true;
+        wake.notify_all();
+        let (released, wake) = &*retained_release;
+        *released.lock().expect("retained release") = true;
         wake.notify_all();
         DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
     }

@@ -287,9 +287,14 @@ impl ReconcileRuntime {
                     let _ = join_helper.join();
                     return Err(AtmError::daemon_unavailable(
                         "reconcile runtime worker panicked during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; the reconcile background lane crashed while shutting down.",
                     ));
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
+                    // Intentional detach: once the bounded deadline expires, shutdown returns the
+                    // typed timeout failure immediately instead of waiting forever on the helper.
                     drop(join_helper);
                     tracing::warn!(
                         timeout_ms = RECONCILE_SHUTDOWN_DEADLINE.as_millis(),

@@ -679,6 +679,7 @@ fn write_shutdown_response(
 fn schedule_delayed_listener_wake(endpoint_path: PathBuf, delay: Duration) {
     // Fire-and-forget: this helper only opens one local connection to unblock accept(), so
     // shutdown does not need to retain or join the wake thread after it has been scheduled.
+    // The `_wake_handle` binding makes that intentional detach explicit at the call site.
     let _wake_handle = thread::Builder::new()
         .name("delayed-listener-wake".to_owned())
         .spawn(move || {
@@ -1279,5 +1280,51 @@ mod tests {
         );
         let _ = release_tx.send(());
         drop(active_connection);
+    }
+
+    #[test]
+    fn tracked_dispatch_handle_capacity_overflow_returns_lifecycle_wedge() {
+        let registry = ActiveConnectionRegistry::default();
+
+        let (release_first_tx, release_first_rx) = mpsc::sync_channel(1);
+        let (completion_first_tx, completion_first_rx) = mpsc::sync_channel(1);
+        let first_join = std::thread::spawn(move || {
+            let _ = release_first_rx.recv();
+            let _ = completion_first_tx.send(());
+        });
+        registry
+            .push_dispatch_handle(
+                TrackedDispatchHandle {
+                    completion_rx: completion_first_rx,
+                    join_handle: first_join,
+                },
+                1,
+            )
+            .expect("first handle should fit within capacity");
+
+        let (completion_second_tx, completion_second_rx) = mpsc::sync_channel(1);
+        let second_join = std::thread::spawn(move || {
+            let _ = completion_second_tx.send(());
+        });
+        let error = registry
+            .push_dispatch_handle(
+                TrackedDispatchHandle {
+                    completion_rx: completion_second_rx,
+                    join_handle: second_join,
+                },
+                1,
+            )
+            .expect_err("second handle should be rejected once the bounded registry is full");
+        assert!(
+            error
+                .message
+                .contains("tracked daemon dispatch registry exceeded its bounded capacity"),
+            "unexpected error: {error:?}"
+        );
+
+        let _ = release_first_tx.send(());
+        registry
+            .join_tracked_dispatches(Duration::from_secs(1))
+            .expect("drain first tracked dispatch");
     }
 }
