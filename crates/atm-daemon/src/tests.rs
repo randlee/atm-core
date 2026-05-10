@@ -205,13 +205,14 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
         )
         .expect("test observability"),
     );
+    let socket_path = atm_core::protocol::daemon_socket_path().expect("daemon socket path");
     let runtime =
         crate::composition::compose_runtime(observability.clone()).expect("compose runtime");
-    let socket_path = atm_core::protocol::daemon_socket_path().expect("daemon socket path");
     let (result_tx, result_rx) = mpsc::channel();
+    let runtime_socket_path = socket_path.clone();
 
     let join = std::thread::spawn(move || {
-        let result = runtime.start();
+        let result = runtime.start_with_socket_path_for_test(runtime_socket_path);
         result_tx.send(result).expect("send runtime result");
     });
 
