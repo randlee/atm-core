@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-RBP-F004>
+  a triage:Finding ;
+  triage:findingId "S7-RBP-F004" ;
+  triage:title "_seen_watermark silently ignored in apply_selection_mode" ;
+  triage:description "crates/atm-core/src/read/filters.rs:71 — apply_selection_mode accepts `_seen_watermark: Option<IsoTimestamp>` but never uses it; the underscore suppresses the warning without addressing the omission. The integrate/phase-S branch has implemented the correct behaviour (seen_watermark used in history_visible). Fix: implement the seen_watermark logic on the feature branch to match the integrate baseline." ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "sprint" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RBP-F004/s7/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+# --- Occurrences on feature/pS-s7-queue-query (9c01bca) ---
+
+<urn:atm:triage:occurrence/S7-RBP-F004/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/filters.rs" ;
+  triage:line 71 ;
+  triage:snippet "_seen_watermark: Option<IsoTimestamp>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/76a646c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "76a646c" ;
+  triage:orderIndex 2 .

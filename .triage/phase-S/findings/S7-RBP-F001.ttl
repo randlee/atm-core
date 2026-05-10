@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-RBP-F001>
+  a triage:Finding ;
+  triage:findingId "S7-RBP-F001" ;
+  triage:title "Missing .with_recovery() on AtmError::validation() calls in mailbox_metadata.rs" ;
+  triage:description "mailbox_metadata.rs lines 99-130 — 4 new S.7 AtmError::validation() calls on DB row parse failures are missing .with_recovery() chaining: (1) line 99: message_key parse failure; (2) line 106: legacy_message_id parse failure; (3) line 115: parent_message_id parse failure; (4) line 127: timestamp parse failure. All four are in query_bounded_mailbox_metadata(). Required by rust-best-practices merge gate: every AtmError::validation() must chain .with_recovery(). File is new in S.7 and not yet present on integrate/phase-S (not merged)." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:fileFilter "mailbox_metadata.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence
+    <urn:atm:triage:occurrence/S7-RBP-F001/pS-s7-queue-query/1> ,
+    <urn:atm:triage:occurrence/S7-RBP-F001/pS-s7-queue-query/2> ,
+    <urn:atm:triage:occurrence/S7-RBP-F001/pS-s7-queue-query/3> ,
+    <urn:atm:triage:occurrence/S7-RBP-F001/pS-s7-queue-query/4> ;
+  triage:openOn
+    <urn:atm:triage:worktree/pS-s7-queue-query/9c01bca> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s7-queue-query/9c01bca> .
+
+# --- Occurrence 1: mailbox_metadata.rs:99 — message_key ---
+<urn:atm:triage:occurrence/S7-RBP-F001/pS-s7-queue-query/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 99 ;
+  triage:snippet "AtmError::validation(format!(\"failed to parse bounded mailbox metadata message key: {error}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s7-queue-query/9c01bca> .
+
+# --- Occurrence 2: mailbox_metadata.rs:106 — legacy_message_id ---
+<urn:atm:triage:occurrence/S7-RBP-F001/pS-s7-queue-query/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 106 ;
+  triage:snippet "AtmError::validation(format!(\"failed to parse bounded mailbox metadata legacy_message_id: {error}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s7-queue-query/9c01bca> .
+
+# --- Occurrence 3: mailbox_metadata.rs:115 — parent_message_id ---
+<urn:atm:triage:occurrence/S7-RBP-F001/pS-s7-queue-query/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 115 ;
+  triage:snippet "AtmError::validation(format!(\"failed to parse bounded mailbox metadata parent_message_id: {error}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s7-queue-query/9c01bca> .
+
+# --- Occurrence 4: mailbox_metadata.rs:127 — timestamp ---
+<urn:atm:triage:occurrence/S7-RBP-F001/pS-s7-queue-query/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 127 ;
+  triage:snippet "AtmError::validation(format!(\"failed to parse bounded mailbox metadata timestamp: {error}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s7-queue-query/9c01bca> .
+
+# --- WorktreeSnapshot ---
+<urn:atm:triage:worktree/pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .
