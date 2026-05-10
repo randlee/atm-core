@@ -933,6 +933,7 @@ mod tests {
     use atm_core::error_codes::AtmErrorCode;
     #[cfg(unix)]
     use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
+    #[cfg(unix)]
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     #[cfg(unix)]
     use serial_test::serial;
