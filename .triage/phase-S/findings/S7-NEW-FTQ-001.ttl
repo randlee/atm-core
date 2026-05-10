@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-NEW-FTQ-001>
+  a triage:Finding ;
+  triage:findingId "S7-NEW-FTQ-001" ;
+  triage:title "read_message helper uses live Utc::now() — no timestamp parameter for ordering guarantees" ;
+  triage:description "crates/atm-core/tests/mailbox_locking.rs:1261 — the read_message helper constructs MessageEnvelope with IsoTimestamp::from_datetime(Utc::now()) and accepts no explicit timestamp parameter. If two read_message calls land on the same millisecond in a fast test environment, sort_and_limit_selected() falls through to a UUID tiebreak on message_id (random UUIDv4), yielding non-deterministic ordering. The fix round for S7-FTQ-001 added pending_ack_message_at(timestamp) as an explicit-offset variant for pending-ack helpers, but left read_message without an equivalent. All 448 tests currently pass; this is theoretical flakiness exposure only, not an active failure. Fix: add read_message_at(from, text, message_id, timestamp) variant parallel to pending_ack_message_at, and have read_message delegate to it via Utc::now() — matching the established pattern." ;
+  triage:category "FTQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteTo "feature/pS-s7-queue-query" ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-NEW-FTQ-001/s7/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/2328521> .
+
+<urn:atm:triage:occurrence/S7-NEW-FTQ-001/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1261 ;
+  triage:snippet "timestamp: IsoTimestamp::from_datetime(Utc::now()) — read_message has no explicit timestamp parameter; concurrent calls on the same millisecond fall through to UUID tiebreak → non-deterministic sort order; pending_ack_message_at pattern already established but not mirrored for read_message" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2328521" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/2328521> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/2328521>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "2328521" ;
+  triage:orderIndex 1 .
