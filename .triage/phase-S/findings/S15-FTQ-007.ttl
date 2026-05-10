@@ -4,9 +4,9 @@
 <urn:atm:triage:finding/S15-FTQ-007>
   a triage:Finding ;
   triage:findingId "S15-FTQ-007" ;
-  triage:title "compose_runtime_start test uses daemon_socket_path() without tempdir scoping" ;
-  triage:description "tests.rs compose_runtime_start_writes_retained_log_and_reports_healthy_observability calls daemon_socket_path() independently after compose_runtime(). The EnvGuard sets ATM_HOME but does not clear ATM_DAEMON_SOCKET. If ATM_DAEMON_SOCKET is set in the environment (by host or another test), daemon_socket_path() bypasses ATM_HOME and both the runtime internals and the test-side connect call resolve to the same host socket, enabling race between sequential test runs. The reference pattern (local_ipc_runtime_round_trips_doctor_requests_on_shared_transport) passes an explicit tempdir-scoped socket_path to prepare_runtime_at_socket_path(), fully eliminating the daemon_socket_path() resolution." ;
-  triage:triageMode "initial_pass" ;
+  triage:title "ATM_HOME env race window between compose_runtime and daemon_socket_path" ;
+  triage:description "tests.rs compose_runtime_start_writes_retained_log_and_reports_healthy_observability calls daemon_socket_path() twice: once inside compose_runtime() -> LocalIpcServerTransportAdapter::prepare_runtime() (local_ipc_transport.rs:598) and again explicitly on line 210. EnvGuard clears ATM_DAEMON_SOCKET (line 196) so the override path is not taken, but both calls re-read ATM_HOME independently from the environment. A concurrent mutation of ATM_HOME between the two reads (e.g. via another serial test's EnvGuard Drop interleaving on a thread scheduler context-switch) can cause the socket path captured by compose_runtime to differ from the socket_path used by connect_daemon_local_ipc_until_ready. The #[serial] attribute serializes test entry but does not eliminate intra-test ATM_HOME mutation by background threads. The correct fix is to call daemon_socket_path() once before compose_runtime, capture the result, pass it to prepare_runtime_at_socket_path(), and use the same PathBuf on line 210 — matching the local_ipc_runtime_round_trips_doctor_requests_on_shared_transport pattern (lines 117-121)." ;
+  triage:triageMode "followup_pass" ;
   triage:category "FTQ" ;
   triage:phaseId "phase-S" ;
   triage:severity "important" ;
@@ -15,11 +15,14 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:followupAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:followupHeadSha "a7ecacc" ;
+  triage:followupVerdict "STILL OPEN — ATM_DAEMON_SOCKET guard added (line 196) prevents override-path contamination but does not eliminate the two-call pattern; daemon_socket_path() is called inside compose_runtime (local_ipc_transport.rs:598) and again on line 210, each re-reading ATM_HOME independently; race window survives" ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S15-FTQ-007/pS-s14-impl/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/S15-FTQ-007/pS-s15-rusqlite-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S15-FTQ-007/pS-s15-rusqlite-hardening/2> ;
   triage:openOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> ;
-  triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/a7ecacc> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/a7ecacc> .
 
 # Occurrence on s14-impl (lower priority branch)
 <urn:atm:triage:occurrence/S15-FTQ-007/pS-s14-impl/1>
@@ -33,17 +36,18 @@
   triage:headSha "571fa1c" ;
   triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
 
-# Occurrence on s15-rusqlite-hardening (highest open branch, promote target)
-<urn:atm:triage:occurrence/S15-FTQ-007/pS-s15-rusqlite-hardening/1>
+# Occurrence on s15-rusqlite-hardening — QA-2 followup at a7ecacc (highest open branch)
+<urn:atm:triage:occurrence/S15-FTQ-007/pS-s15-rusqlite-hardening/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 206 ;
+  triage:line 210 ;
   triage:snippet "let socket_path = atm_core::protocol::daemon_socket_path().expect(\"daemon socket path\");" ;
+  triage:note "ATM_DAEMON_SOCKET now cleared by EnvGuard (line 196); however compose_runtime() also calls daemon_socket_path() internally via LocalIpcServerTransportAdapter::prepare_runtime (local_ipc_transport.rs:598), producing two independent ATM_HOME reads; fix must capture socket path once and pass explicitly to both sides" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pS-s15-rusqlite-hardening" ;
-  triage:headSha "493f2b1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+  triage:headSha "a7ecacc" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/a7ecacc> .
 
 # WorktreeSnapshot nodes
 <urn:atm:triage:worktree/pS-s14-impl/571fa1c>
@@ -53,9 +57,9 @@
   triage:headSha "571fa1c" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/a7ecacc>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pS-s15-rusqlite-hardening" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
-  triage:headSha "493f2b1" ;
+  triage:headSha "a7ecacc" ;
   triage:orderIndex 2 .
