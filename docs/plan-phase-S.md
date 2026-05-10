@@ -638,26 +638,27 @@ Required closeout work:
 - update the daemon architecture and sprint docs so the shutdown-beacon and
   endpoint-guard contracts are explicit
 
-### S.14 Runtime Hardening For Timeout-Detach Cleanup
+### S.14 Daemon Runtime Hardening
 
 Goal:
-- follow S.13 by tightening the remaining runtime shutdown edges where bounded
-  deadlines intentionally detach helper workers instead of waiting forever
+- close the remaining daemon-runtime hardening gaps left after S.13 across
+  lifecycle control, reconcile/watch shutdown, runtime status bounds, doctor
+  projection detail, and retained-observability flush behavior
+- carry forward the accepted S.13 direct-accept-loop contract from
+  `docs/phase-S/sprint-S13-ipc-plan.md` as the runtime baseline that S.14
+  hardens rather than redesigns
 
 Required outcomes:
-- orphaned-worker timeout-detach behavior is documented and intentional rather
-  than an implicit side effect
-- background runtime shutdown keeps bounded deadlines without silent worker-loss
-  semantics
-- runtime-health wording, tests, and triage records match the accepted detach
-  policy
+- lifecycle wake workers are explicitly owned and joined with timeout
+- reconcile/watch shutdown timeout is observable as typed failure
+- bounded runtime state stays bounded in actual retained cardinality
+- `atm doctor` projects daemon runtime health with the full required detail
 
 Required closeout work:
-- audit daemon runtime shutdown helpers that still drop timed-out workers
-- document the accepted detach contract and any remaining follow-up hardening
-  work
-- keep the associated triage and sprint docs aligned with the landed runtime
-  behavior
+- add the S.14 sprint authority docs under `docs/phase-S/`
+- land the S.14 runtime hardening fixes on the follow-on implementation branch
+- keep daemon architecture and phase-plan docs aligned on the accepted
+  resource-cap and eviction contracts
 
 ### S.15 SQLite Write-Worker / MessageAppendQueue Planning
 

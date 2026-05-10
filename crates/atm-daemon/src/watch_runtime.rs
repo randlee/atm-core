@@ -234,9 +234,14 @@ impl WatchRuntime {
                     let _ = join_helper.join();
                     return Err(AtmError::daemon_unavailable(
                         "watch runtime worker panicked during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; the watch background lane crashed while shutting down.",
                     ));
                 }
                 Err(mpsc::RecvTimeoutError::Timeout) => {
+                    // Intentional detach: the timeout path must fail fast instead of blocking
+                    // indefinitely on a stalled join helper during daemon shutdown.
                     drop(join_helper);
                     tracing::warn!(
                         timeout_ms = WATCH_SHUTDOWN_DEADLINE.as_millis(),
