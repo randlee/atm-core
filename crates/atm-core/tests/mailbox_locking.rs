@@ -1235,6 +1235,15 @@ fn pending_ack_message_at(
 }
 
 fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageEnvelope {
+    read_message_at(from, text, message_id, Utc::now())
+}
+
+fn read_message_at(
+    from: &str,
+    text: &str,
+    message_id: LegacyMessageId,
+    timestamp: chrono::DateTime<Utc>,
+) -> MessageEnvelope {
     let mut extra = serde_json::Map::new();
     let mut metadata = serde_json::Map::new();
     let mut atm = serde_json::Map::new();
@@ -1258,7 +1267,7 @@ fn read_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageE
     MessageEnvelope {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
-        timestamp: IsoTimestamp::from_datetime(Utc::now()),
+        timestamp: IsoTimestamp::from_datetime(timestamp),
         read: true,
         source_team: Some(PRIMARY_TEAM.parse::<TeamName>().expect("team")),
         summary: None,
