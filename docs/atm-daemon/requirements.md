@@ -176,6 +176,9 @@ Initial crate requirement IDs:
   daemon/runtime/transport `warn!` / `error!` event at the default retained
   logger level and host-scoped retained path. Satisfies:
   `REQ-P-OBS-002`, `REQ-P-OBS-003`, `REQ-CORE-OBS-002`.
+  In S.10, daemon-side historical log `query()` / `follow()` remain deferred;
+  operators use the CLI-owned retained-log surface until a later sprint
+  extracts daemon-side query/follow support explicitly.
   If S.9 introduces any public retained-logging trait or sink boundary, that
   trait must be sealed by default per the product architecture trait-extension
   policy.

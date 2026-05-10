@@ -86,23 +86,23 @@ Shutdown behavior:
 
 ## Rotation Policy
 
-V1 does not define built-in retained-log rotation.
+ATM retained logs use explicit built-in rotation:
 
-Operator guidance:
-
-- retained logs may grow without automatic rollover
-- use a filesystem with quota or external log management if growth matters
-
-Future work:
-
-- a later sprint may add bounded size/rotation if operator evidence justifies
-  it
+- active file rotation at `10 MiB`
+- retain the newest `5` rotated files beside the active log
+- prune rotated files older than `7` days
 
 ## Implementation Constraints
 
 - retained-log writes must not block async executor threads
 - the implementation must use a dedicated sync writer thread or an explicit
   blocking task boundary
+- `atm-daemon` satisfies that rule by keeping `JsonlFileSink` synchronous file
+  I/O on ordinary daemon OS threads rather than on an async executor thread;
+  the bounded shutdown flush runs on its own finalizer thread
+- explicit daemon retained-log sink policy is `10 MiB` active-file rotation,
+  `5` rotated files, and `7`-day rotated-file pruning so host-scoped retained
+  diagnostics stay bounded by default
 - watcher/reconcile paths must exclude `~/.atm/logs/` so retained-log appends
   cannot create false mailbox/reconcile churn
 

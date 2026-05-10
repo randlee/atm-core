@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
@@ -14,12 +13,7 @@ use atm_core::{
         self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::AtmError,
-    home,
     list::list_mail,
-    observability::{
-        AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-        CommandEvent, LogTailSession, ObservabilityPort, RetainedSinkFaultMode,
-    },
     process::process_is_alive,
     protocol::{
         HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
@@ -33,6 +27,8 @@ use atm_core::{
 };
 use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
+use crate::daemon_runtime_observability::DaemonRuntimeObservability;
+
 const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
 const MAX_RELOAD_TEAMS: usize = 256;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
@@ -41,106 +37,11 @@ const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
 
 #[cfg(test)]
+// The shutdown-step helper is static, so timed-out join handles need one
+// process-wide test registry that drain_shutdown_finalizer_threads_for_test()
+// can clean up after each bounded-timeout scenario.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
-
-#[derive(Debug, Clone)]
-struct DaemonObservability {
-    retained_sink_fault: Option<RetainedSinkFaultMode>,
-}
-
-impl DaemonObservability {
-    fn new() -> Result<Self, AtmError> {
-        let retained_sink_fault = match std::env::var("ATM_OBSERVABILITY_RETAINED_SINK_FAULT")
-            .ok()
-            .map(|value| value.trim().to_ascii_lowercase())
-            .filter(|value| !value.is_empty())
-        {
-            None => None,
-            Some(value) => match value.as_str() {
-                "degraded" => Some(RetainedSinkFaultMode::Degraded),
-                "unavailable" => Some(RetainedSinkFaultMode::Unavailable),
-                _ => {
-                    return Err(AtmError::observability_bootstrap(format!(
-                        "invalid ATM_OBSERVABILITY_RETAINED_SINK_FAULT value `{value}`; use `degraded` or `unavailable`"
-                    )));
-                }
-            },
-        };
-        Ok(Self::new_with_sink_fault(retained_sink_fault))
-    }
-
-    fn new_with_sink_fault(retained_sink_fault: Option<RetainedSinkFaultMode>) -> Self {
-        Self {
-            retained_sink_fault,
-        }
-    }
-
-    fn active_log_path(&self) -> Result<PathBuf, AtmError> {
-        Ok(home::host_log_dir()?.join("atm.log.jsonl"))
-    }
-
-    fn best_effort_flush_blocking(&self) -> Result<(), AtmError> {
-        let active_log_path = self.active_log_path()?;
-        if !active_log_path.exists() {
-            return Ok(());
-        }
-        let file = OpenOptions::new()
-            .append(true)
-            .open(&active_log_path)
-            .map_err(|source| {
-                AtmError::observability_health(format!(
-                    "failed to open retained observability sink at {} for best-effort flush",
-                    active_log_path.display()
-                ))
-                .with_source(source)
-            })?;
-        file.sync_all().map_err(|source| {
-            AtmError::observability_health(format!(
-                "failed to sync retained observability sink at {}",
-                active_log_path.display()
-            ))
-            .with_source(source)
-        })
-    }
-}
-
-impl boundary::sealed::Sealed for DaemonObservability {}
-
-impl ObservabilityPort for DaemonObservability {
-    fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
-        // R.15 keeps retained-log emission owned by the shared observability
-        // stack, so the daemon-side health adapter is intentionally a no-op.
-        Ok(())
-    }
-
-    fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
-        // Runtime health only needs the shared observability surface to be
-        // queryable; command-log projection still lives in atm-core.
-        Ok(AtmLogSnapshot::default())
-    }
-
-    fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
-        // Doctor health does not tail logs directly in R.15, so the daemon
-        // adapter exposes an empty tail session instead of a second log owner.
-        Ok(LogTailSession::empty())
-    }
-
-    fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        let active_log_path = self.active_log_path()?;
-        let logging_state = match self.retained_sink_fault {
-            None => AtmObservabilityHealthState::Healthy,
-            Some(RetainedSinkFaultMode::Degraded) => AtmObservabilityHealthState::Degraded,
-            Some(RetainedSinkFaultMode::Unavailable) => AtmObservabilityHealthState::Unavailable,
-        };
-        Ok(AtmObservabilityHealth {
-            active_log_path: Some(active_log_path),
-            logging_state,
-            query_state: Some(AtmObservabilityHealthState::Healthy),
-            detail: None,
-        })
-    }
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 struct RuntimeMemberKey {
@@ -419,12 +320,23 @@ fn finish_runtime_snapshot(
     }
 }
 
-#[derive(Debug)]
 pub(crate) struct DaemonRequestDispatcher {
+    // Invariant: this is the validated ATM_HOME root for the running daemon,
+    // not an arbitrary workspace path.
     home_dir: PathBuf,
-    observability: DaemonObservability,
+    observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
     sqlite_boundary: Option<SqliteBoundaryAssembly>,
+}
+
+impl std::fmt::Debug for DaemonRequestDispatcher {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("DaemonRequestDispatcher")
+            .field("home_dir", &self.home_dir)
+            .field("status_cache", &self.status_cache)
+            .field("sqlite_boundary_present", &self.sqlite_boundary.is_some())
+            .finish()
+    }
 }
 
 impl DaemonRequestDispatcher {
@@ -480,6 +392,8 @@ impl DaemonRequestDispatcher {
                 }
                 #[cfg(not(test))]
                 {
+                    // Intentionally detach the timed-out worker so shutdown
+                    // remains bounded even if the finalizer exits later.
                     drop(shutdown_handle);
                 }
                 tracing::warn!(
@@ -498,7 +412,12 @@ impl DaemonRequestDispatcher {
         }
     }
 
-    pub(crate) fn new(home_dir: PathBuf, status_cache: RuntimeStatusCache) -> Self {
+    pub(crate) fn new(
+        // Must be the validated ATM home dir for this daemon runtime.
+        home_dir: PathBuf,
+        status_cache: RuntimeStatusCache,
+        observability: Arc<dyn DaemonRuntimeObservability>,
+    ) -> Self {
         let sqlite_boundary = match assemble_default_boundary() {
             Ok(boundary) => {
                 if let Err(error) =
@@ -516,20 +435,25 @@ impl DaemonRequestDispatcher {
                 None
             }
         };
-        let observability = match DaemonObservability::new() {
-            Ok(observability) => observability,
-            Err(error) => {
-                // Daemon health treats invalid retained-sink fault injection as a local
-                // non-fatal test knob and falls back to Healthy after warning, unlike CLI bootstrap.
-                tracing::warn!(%error, "failed to initialize daemon observability state");
-                DaemonObservability::new_with_sink_fault(None)
-            }
-        };
         Self {
             home_dir: home_dir.clone(),
             observability,
             status_cache,
             sqlite_boundary,
+        }
+    }
+
+    pub(crate) fn emit_runtime_event(
+        &self,
+        action: &'static str,
+        outcome: &'static str,
+        message: &'static str,
+    ) {
+        if let Err(error) = self
+            .observability
+            .emit_runtime_event(action, outcome, message)
+        {
+            tracing::warn!(%error, action, outcome, "daemon runtime lifecycle emission failed");
         }
     }
 }
@@ -541,12 +465,12 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
-                    send_mail(request, &self.observability)?,
+                    send_mail(request, self.observability.as_ref())?,
                 )))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail(request, &self.observability)?,
+                    ack_mail(request, self.observability.as_ref())?,
                 )))
             }
             RequestEnvelope::Heartbeat(request) => {
@@ -554,15 +478,15 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             }
             RequestEnvelope::List(query) => Ok(ResponseEnvelope::List(list_mail(
                 query,
-                &self.observability,
+                self.observability.as_ref(),
             )?)),
             RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(read_mail(
                 query,
-                &self.observability,
+                self.observability.as_ref(),
             )?)),
             RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail(
                 query,
-                &self.observability,
+                self.observability.as_ref(),
             )?)),
             RequestEnvelope::Doctor(query) => {
                 Ok(ResponseEnvelope::Doctor(self.project_doctor_report(query)?))
@@ -671,7 +595,12 @@ impl DaemonRequestDispatcher {
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
-        let mut report = doctor::run_doctor(query, &self.observability)?;
+        let mut report = doctor::run_doctor(query, self.observability.as_ref())?;
+        let daemon_observability_finding = match self.observability.health() {
+            Ok(health) => daemon_observability_finding(&health),
+            Err(error) => doctor::health::observability_finding_from_error(&error),
+        };
+        report.findings.push(daemon_observability_finding);
         let runtime_status = match &report.member_roster {
             Some(roster) => self.status_cache.snapshot_for_members(
                 roster
@@ -857,6 +786,53 @@ fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {
             remediation: snapshot.detail.clone().or(Some(
                 "Restore daemon runtime availability and rerun `atm doctor`.".to_string(),
             )),
+        },
+    }
+}
+
+fn daemon_observability_finding(
+    health: &atm_core::observability::AtmObservabilityHealth,
+) -> DoctorFinding {
+    let path = health
+        .active_log_path
+        .as_ref()
+        .map(|path| path.display().to_string())
+        .unwrap_or_else(|| "<unavailable>".to_string());
+    let detail = health
+        .detail
+        .as_ref()
+        .map(|detail| format!(" Detail: {detail}"))
+        .unwrap_or_default();
+    match health.logging_state {
+        atm_core::observability::AtmObservabilityHealthState::Healthy => DoctorFinding {
+            severity: DoctorSeverity::Info,
+            code: atm_core::error_codes::AtmErrorCode::ObservabilityHealthOk,
+            message: format!(
+                "daemon retained observability sink is healthy at {path}; daemon query/follow remain deferred to the CLI-owned log surface.{detail}"
+            ),
+            remediation: None,
+        },
+        atm_core::observability::AtmObservabilityHealthState::Degraded => DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded,
+            message: format!(
+                "daemon retained observability sink is degraded at {path}; daemon query/follow remain deferred to the CLI-owned log surface.{detail}"
+            ),
+            remediation: Some(
+                "Inspect the daemon retained log path and sink errors, then re-run `atm doctor`."
+                    .to_string(),
+            ),
+        },
+        atm_core::observability::AtmObservabilityHealthState::Unavailable => DoctorFinding {
+            severity: DoctorSeverity::Error,
+            code: atm_core::error_codes::AtmErrorCode::ObservabilityHealthFailed,
+            message: format!(
+                "daemon retained observability sink is unavailable at {path}; daemon query/follow remain deferred to the CLI-owned log surface.{detail}"
+            ),
+            remediation: Some(
+                "Restore the daemon retained-log path and confirm it is writable before re-running `atm doctor`."
+                    .to_string(),
+            ),
         },
     }
 }

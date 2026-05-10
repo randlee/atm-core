@@ -1,4 +1,5 @@
 use super::*;
+use std::sync::Arc;
 
 impl RuntimeStatusCache {
     pub(crate) fn member_state_for_test(
@@ -92,9 +93,15 @@ impl DaemonRequestDispatcher {
                 None
             }
         };
+        let observability = Arc::new(
+            crate::test_observability::TestDaemonObservability::new(
+                atm_core::home::host_log_dir_from_home(&home_dir),
+            )
+            .expect("daemon test observability"),
+        );
         Self {
             home_dir: home_dir.clone(),
-            observability: DaemonObservability::new_with_sink_fault(None),
+            observability,
             status_cache,
             sqlite_boundary,
         }

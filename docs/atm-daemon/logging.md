@@ -94,18 +94,32 @@ Cross-reference:
 
 ## Rotation / Size Cap
 
-V1 defines no built-in retained-log rotation.
+The daemon retained log uses explicit built-in rotation:
 
-Current operator contract:
+- active file rotation at `10 MiB`
+- retain the newest `5` rotated files beside the active log
+- prune rotated files older than `7` days
 
-- ATM will continue appending to the retained log file
-- operators are responsible for external rotation or quota management
-- a filesystem with quota or external log management is recommended
+Operator contract:
 
-Future work:
+- ATM keeps a bounded recent daemon history under the host-scoped log root
+- operators may still layer external rotation or quota management if they need
+  stricter retention
 
-- a later sprint may introduce bounded rotation if operator evidence justifies
-  it
+## Non-Blocking Write Constraint
+
+ADR-011 forbids retained-log writes from blocking async executor threads.
+
+`atm-daemon` satisfies that requirement by architecture rather than by an
+internal sink worker thread:
+
+- the daemon does not route retained-log writes through an async executor
+- `sc-observability 1.0.0` `JsonlFileSink` performs synchronous local-file
+  writes on the daemon's ordinary OS threads
+- shutdown flush runs on a dedicated bounded finalizer thread
+
+That keeps retained logging out of async-executor hot paths while preserving
+the fail-closed bootstrap and fail-open mid-run behavior required by ADR-011.
 
 ## Watcher / Reconcile Exclusion
 

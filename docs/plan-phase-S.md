@@ -543,6 +543,28 @@ Required closeout work:
 - prove no reconcile event fires when a retained-log append writes to
   `~/.atm/logs/atm.log.jsonl`
 
+### S.10 Daemon Retained Logger Bootstrap
+
+Goal:
+- make `atm-daemon` boot the live retained logger rather than reporting
+  synthetic observability health from a stub
+
+Required outcomes:
+- daemon startup/shutdown lifecycle events land in `~/.atm/logs/atm.log.jsonl`
+- `atm doctor` reflects live daemon retained-sink health
+- daemon retained-log bootstrap fails closed when the host-scoped log path
+  cannot be created or opened
+- daemon retained logs rotate explicitly at bounded size/retention settings
+
+Required closeout work:
+- keep `sc-observability` imports out of the `atm-daemon` library target and
+  construct the concrete adapter only in the binary entrypoint
+- replace the legacy stderr-only bootstrap path with the live retained logger
+- add a daemon-runtime integration test that boots the composed runtime and
+  verifies retained-log output plus healthy doctor observability
+- document that daemon-side query/follow remain deferred to the CLI-owned
+  retained-log surface
+
 ## 6. Removed Windows CI Guardrail
 
 The temporary Windows clippy narrowing used during S.0-S.3 is retired.

@@ -2,6 +2,7 @@ use crate::boundary_adapters::{
     DaemonConfigIngress, DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink,
     DaemonReconcileCoordinator, FileWatchEventSource,
 };
+use crate::daemon_runtime_observability::DaemonRuntimeObservability;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::{
@@ -129,12 +130,16 @@ impl RuntimeComposition {
         Self::new_with_replay_store_path(
             home_dir.clone(),
             atm_core::home::host_mail_db_path_from_home(&home_dir),
+            Arc::new(crate::test_observability::TestDaemonObservability::new(
+                atm_core::home::host_log_dir_from_home(&home_dir),
+            )?),
         )
     }
 
     fn new_with_replay_store_path(
         home_dir: PathBuf,
         replay_store_path: PathBuf,
+        observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
         let status_cache = RuntimeStatusCache::new();
         let notification_sink = DaemonNotificationSink::new();
@@ -156,6 +161,7 @@ impl RuntimeComposition {
             request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
                 home_dir,
                 status_cache.clone(),
+                observability,
             )),
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
@@ -177,6 +183,11 @@ impl RuntimeComposition {
     }
 
     fn begin_shutdown(&self) -> Result<(), AtmError> {
+        self.request_dispatcher.emit_runtime_event(
+            "shutdown_requested",
+            "ok",
+            "daemon shutdown requested",
+        );
         self.lifecycle.transition(RuntimeLifecycleState::Draining)?;
         // Attempt every lane shutdown even if one lane fails so the runtime
         // still reaches checkpoint/flush finalization with the fullest cleanup
@@ -190,12 +201,22 @@ impl RuntimeComposition {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
+        self.request_dispatcher.emit_runtime_event(
+            "start_requested",
+            "ok",
+            "daemon start requested",
+        );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         // Startup replay must finish before the daemon binds its socket so
         // crash-recovered work cannot race newly accepted requests.
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
+                self.request_dispatcher.emit_runtime_event(
+                    "startup_failed",
+                    "failed",
+                    "daemon startup failed",
+                );
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
@@ -212,6 +233,11 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
+            self.request_dispatcher.emit_runtime_event(
+                "startup_failed",
+                "failed",
+                "daemon startup failed",
+            );
             self.lifecycle.force_stopped()?;
             return Err(error);
         }
@@ -224,11 +250,21 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during runtime preparation rollback"
                     );
                 }
+                self.request_dispatcher.emit_runtime_event(
+                    "startup_failed",
+                    "failed",
+                    "daemon startup failed",
+                );
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
         };
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
+        self.request_dispatcher.emit_runtime_event(
+            "startup_completed",
+            "ok",
+            "daemon startup completed",
+        );
         let request_dispatcher = Arc::clone(&self.request_dispatcher);
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
@@ -247,10 +283,20 @@ impl RuntimeComposition {
         &self,
         socket_path: PathBuf,
     ) -> Result<(), AtmError> {
+        self.request_dispatcher.emit_runtime_event(
+            "start_requested",
+            "ok",
+            "daemon start requested",
+        );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
+                self.request_dispatcher.emit_runtime_event(
+                    "startup_failed",
+                    "failed",
+                    "daemon startup failed",
+                );
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
@@ -267,6 +313,11 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
+            self.request_dispatcher.emit_runtime_event(
+                "startup_failed",
+                "failed",
+                "daemon startup failed",
+            );
             self.lifecycle.force_stopped()?;
             return Err(error);
         }
@@ -282,11 +333,21 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during test runtime preparation rollback"
                     );
                 }
+                self.request_dispatcher.emit_runtime_event(
+                    "startup_failed",
+                    "failed",
+                    "daemon startup failed",
+                );
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
         };
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
+        self.request_dispatcher.emit_runtime_event(
+            "startup_completed",
+            "ok",
+            "daemon startup completed",
+        );
         let request_dispatcher = Arc::clone(&self.request_dispatcher);
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
@@ -323,6 +384,18 @@ impl RuntimeComposition {
                 Err(error) => Err(error),
                 Ok(()) => Err(force_error),
             };
+        }
+        match result.as_ref() {
+            Ok(()) => self.request_dispatcher.emit_runtime_event(
+                "shutdown_completed",
+                "ok",
+                "daemon shutdown completed",
+            ),
+            Err(_) => self.request_dispatcher.emit_runtime_event(
+                "shutdown_failed",
+                "failed",
+                "daemon shutdown failed",
+            ),
         }
         result
     }
@@ -496,10 +569,16 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
     Ok(())
 }
 
-pub(crate) fn compose_runtime() -> Result<RuntimeComposition, AtmError> {
+pub(crate) fn compose_runtime(
+    observability: Arc<dyn DaemonRuntimeObservability>,
+) -> Result<RuntimeComposition, AtmError> {
     let home_dir = atm_core::home::atm_home()?;
     validate_runtime_home_dir(&home_dir)?;
-    RuntimeComposition::new_with_replay_store_path(home_dir, atm_core::home::host_mail_db_path()?)
+    RuntimeComposition::new_with_replay_store_path(
+        home_dir,
+        atm_core::home::host_mail_db_path()?,
+        observability,
+    )
 }
 
 #[cfg(all(test, unix))]
@@ -611,6 +690,11 @@ mod tests {
 
         assert!(error.is_daemon_unavailable());
         assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
+        let retained_log_path =
+            atm_core::home::host_log_dir_from_home(tempdir.path()).join("atm.log.jsonl");
+        let retained_log = std::fs::read_to_string(retained_log_path).expect("retained log");
+        assert!(retained_log.contains("daemon start requested"));
+        assert!(retained_log.contains("daemon startup failed"));
     }
 
     #[test]

@@ -117,12 +117,13 @@ dependencies = [
  "chrono",
  "fs2",
  "interprocess",
+ "sc-observability",
+ "sc-observability-types",
  "serde_json",
  "serial_test",
  "signal-hook",
  "tempfile",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
