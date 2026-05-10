@@ -114,10 +114,10 @@ fn init_observability(stderr_logs: bool) -> Result<observability::CliObservabili
         AtmError::observability_bootstrap("failed to validate ATM observability target")
             .with_source(source)
     })?;
-    let logger = build_logger(&home_dir, console_log_route, &service_name)?;
+    let (logger, active_log_path) = build_logger(&home_dir, console_log_route, &service_name)?;
 
     Ok(observability::CliObservability::from_boxed_port(Box::new(
-        ScObservabilityAdapter::new(logger, service_name, target_category),
+        ScObservabilityAdapter::new(logger, active_log_path, service_name, target_category),
     )))
 }
 
@@ -125,11 +125,15 @@ pub(crate) fn build_logger(
     home_dir: &Path,
     console_log_route: ConsoleLogRoute,
     service_name: &ServiceName,
-) -> Result<Logger, AtmError> {
-    let mut config = LoggerConfig::default_for(service_name.clone(), log_root(home_dir));
+) -> Result<(Logger, PathBuf), AtmError> {
+    let log_dir = retained_log_dir(home_dir)?;
+    let active_log_path = log_dir.join("atm.log.jsonl");
+    let mut config = LoggerConfig::default_for(service_name.clone(), log_dir);
     if let Some(level) = logger_level_override()? {
         config.level = level;
     }
+    // Keep the default Info threshold so retained logging captures the S.9
+    // daemon lifecycle baseline unless ATM_LOG explicitly overrides it.
     // ATM CLI owns stdout/stderr UX by default; only opt into a shared
     // console sink when the CLI routing rule explicitly selects one.
     config.enable_console_sink = false;
@@ -141,19 +145,21 @@ pub(crate) fn build_logger(
         builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
     }
     if let Some(mode) = retained_sink_fault_mode()? {
-        register_retained_sink_fault(&mut builder, home_dir, mode);
+        register_retained_sink_fault(&mut builder, home_dir, mode)?;
     }
-    Ok(builder.build())
+    Ok((builder.build(), active_log_path))
 }
 
-fn log_root(home_dir: &Path) -> PathBuf {
-    home_dir.join(".local").join("share")
+fn retained_log_dir(home_dir: &Path) -> Result<PathBuf, AtmError> {
+    if let Some(path) = std::env::var_os("ATM_LOG_DIR").filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(path));
+    }
+
+    Ok(home::host_log_dir_from_home(home_dir))
 }
 
-fn fault_injection_log_path(home_dir: &Path) -> PathBuf {
-    log_root(home_dir)
-        .join("logs")
-        .join("atm-fault-injection.log.jsonl")
+fn fault_injection_log_path(home_dir: &Path) -> Result<PathBuf, AtmError> {
+    Ok(retained_log_dir(home_dir)?.join("atm-fault-injection.log.jsonl"))
 }
 
 fn init_tracing(stderr_logs: bool) -> Result<(), AtmError> {
@@ -231,15 +237,16 @@ fn register_retained_sink_fault(
     builder: &mut LoggerBuilder,
     home_dir: &Path,
     mode: RetainedSinkFaultMode,
-) {
+) -> Result<(), AtmError> {
     let sink = Arc::new(JsonlFileSink::new(
-        fault_injection_log_path(home_dir),
+        fault_injection_log_path(home_dir)?,
         RotationPolicy::default(),
         RetentionPolicy::default(),
     ));
     builder.register_sink(SinkRegistration::new(Arc::new(
         RetainedSinkHealthOverride::new(sink, mode),
     )));
+    Ok(())
 }
 
 struct RetainedSinkHealthOverride {
@@ -281,14 +288,21 @@ impl LogSink for RetainedSinkHealthOverride {
 
 struct ScObservabilityAdapter {
     logger: Logger,
+    active_log_path: PathBuf,
     service_name: ServiceName,
     target_category: TargetCategory,
 }
 
 impl ScObservabilityAdapter {
-    fn new(logger: Logger, service_name: ServiceName, target_category: TargetCategory) -> Self {
+    fn new(
+        logger: Logger,
+        active_log_path: PathBuf,
+        service_name: ServiceName,
+        target_category: TargetCategory,
+    ) -> Self {
         Self {
             logger,
+            active_log_path,
             service_name,
             target_category,
         }
@@ -338,7 +352,7 @@ impl ObservabilityPort for ScObservabilityAdapter {
             .as_ref()
             .and_then(|query| query.last_error.clone().map(render_diagnostic_summary));
         Ok(AtmObservabilityHealth {
-            active_log_path: Some(report.active_log_path),
+            active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state,
             detail: report
@@ -652,9 +666,10 @@ pub(crate) fn new_adapter_port(
     } else {
         ConsoleLogRoute::Disabled
     };
-    let logger = build_logger(home_dir, console_log_route, &service_name)?;
+    let (logger, active_log_path) = build_logger(home_dir, console_log_route, &service_name)?;
     Ok(Box::new(ScObservabilityAdapter::new(
         logger,
+        active_log_path,
         service_name,
         target_category,
     )))

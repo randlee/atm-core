@@ -78,6 +78,24 @@ pub fn host_mail_db_path_from_home(home_dir: &Path) -> PathBuf {
     host_db_dir_from_home(home_dir).join("mail.db")
 }
 
+/// Resolve the host-scoped ATM retained log directory independent of `ATM_HOME`.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the OS user-home directory cannot be resolved.
+pub fn host_log_dir() -> Result<PathBuf, AtmError> {
+    if let Some(path) = env::var_os("ATM_LOG_DIR").filter(|value| !value.is_empty()) {
+        return Ok(PathBuf::from(path));
+    }
+
+    Ok(host_log_dir_from_home(&resolve_user_home()?))
+}
+
+/// Resolve the host-scoped ATM retained log directory from an explicit user-home root.
+pub fn host_log_dir_from_home(home_dir: &Path) -> PathBuf {
+    home_dir.join(".atm").join("logs")
+}
+
 /// Resolve the team directory for `team` under the current ATM home.
 ///
 /// # Errors
@@ -166,12 +184,12 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        atm_home, host_db_dir_from_home, host_mail_db_path_from_home, host_runtime_dir_from_home,
-        host_runtime_lock_path_from_home, inbox_path, inbox_path_from_home, team_dir,
-        team_dir_from_home, workflow_state_path_from_home,
+        atm_home, host_db_dir_from_home, host_log_dir_from_home, host_mail_db_path_from_home,
+        host_runtime_dir_from_home, host_runtime_lock_path_from_home, inbox_path,
+        inbox_path_from_home, team_dir, team_dir_from_home, workflow_state_path_from_home,
     };
     #[cfg(unix)]
-    use super::{host_db_dir, host_mail_db_path, host_runtime_dir};
+    use super::{host_db_dir, host_log_dir, host_mail_db_path, host_runtime_dir};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
     // Serializes process-environment mutation inside this test module. This is
@@ -361,6 +379,43 @@ mod tests {
             host_mail_db_path_from_home(tempdir.path()),
             tempdir.path().join(".atm").join("db").join("mail.db")
         );
+    }
+
+    #[test]
+    fn host_log_dir_from_home_uses_fixed_atm_logs_subtree() {
+        let tempdir = TempDir::new().expect("tempdir");
+        assert_eq!(
+            host_log_dir_from_home(tempdir.path()),
+            tempdir.path().join(".atm").join("logs")
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial]
+    fn host_log_dir_prefers_atm_log_dir_override() {
+        let _guard = env_lock().lock().expect("env lock");
+        let tempdir = TempDir::new().expect("tempdir");
+        let _atm_log_dir =
+            EnvGuard::set_raw("ATM_LOG_DIR", tempdir.path().to_str().expect("utf8 path"));
+
+        let resolved = host_log_dir().expect("host log dir");
+        assert_eq!(resolved, tempdir.path());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[serial_test::serial]
+    fn host_log_dir_uses_os_home_not_atm_home() {
+        let _guard = env_lock().lock().expect("env lock");
+        let atm_home_dir = TempDir::new().expect("atm home");
+        let os_home_dir = TempDir::new().expect("os home");
+        let _atm_home = EnvGuard::set("ATM_HOME", atm_home_dir.path());
+        let _atm_log_dir = EnvGuard::remove("ATM_LOG_DIR");
+        let _home = EnvGuard::set_raw("HOME", os_home_dir.path().to_str().expect("utf8 path"));
+
+        let resolved = host_log_dir().expect("host log dir");
+        assert_eq!(resolved, os_home_dir.path().join(".atm").join("logs"));
     }
 
     #[test]

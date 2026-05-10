@@ -14,6 +14,7 @@ use atm_core::{
         self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::AtmError,
+    home,
     list::list_mail,
     observability::{
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
@@ -77,16 +78,12 @@ impl DaemonObservability {
         }
     }
 
+    fn active_log_path(&self) -> PathBuf {
+        home::host_log_dir_from_home(&self.home_dir).join("atm.log.jsonl")
+    }
+
     fn best_effort_flush(&self) -> Result<(), AtmError> {
-        #[cfg(unix)]
-        let active_log_path = self
-            .home_dir
-            .join(".local")
-            .join("share")
-            .join("logs")
-            .join("atm.log.jsonl");
-        #[cfg(not(unix))]
-        let active_log_path = self.home_dir.join("logs").join("atm.log.jsonl");
+        let active_log_path = self.active_log_path();
         if !active_log_path.exists() {
             return Ok(());
         }
@@ -132,15 +129,7 @@ impl ObservabilityPort for DaemonObservability {
     }
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        #[cfg(unix)]
-        let active_log_path = self
-            .home_dir
-            .join(".local")
-            .join("share")
-            .join("logs")
-            .join("atm.log.jsonl");
-        #[cfg(not(unix))]
-        let active_log_path = self.home_dir.join("logs").join("atm.log.jsonl");
+        let active_log_path = self.active_log_path();
         let logging_state = match self.retained_sink_fault {
             RetainedSinkFault::Healthy => AtmObservabilityHealthState::Healthy,
             RetainedSinkFault::Degraded => AtmObservabilityHealthState::Degraded,
@@ -434,6 +423,7 @@ fn finish_runtime_snapshot(
 
 #[derive(Debug)]
 pub(crate) struct DaemonRequestDispatcher {
+    home_dir: PathBuf,
     observability: DaemonObservability,
     status_cache: RuntimeStatusCache,
     sqlite_boundary: Option<SqliteBoundaryAssembly>,
@@ -529,6 +519,7 @@ impl DaemonRequestDispatcher {
             }
         };
         Self {
+            home_dir: home_dir.clone(),
             observability: DaemonObservability::new(home_dir),
             status_cache,
             sqlite_boundary,
@@ -589,11 +580,8 @@ impl DaemonRequestDispatcher {
                 )
             })?;
         let current_state = self.status_cache.clone_state()?;
-        let next_state = build_runtime_status_cache_state(
-            Some(&current_state),
-            &self.observability.home_dir,
-            roster_store,
-        )?;
+        let next_state =
+            build_runtime_status_cache_state(Some(&current_state), &self.home_dir, roster_store)?;
         let reloaded_members = next_state.members.len();
         self.status_cache.replace_state(next_state)?;
         tracing::info!(
