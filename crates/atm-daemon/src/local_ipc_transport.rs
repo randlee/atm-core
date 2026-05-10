@@ -940,6 +940,8 @@ mod tests {
     #[cfg(unix)]
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
     #[cfg(unix)]
+    use crate::test_support::{LifecycleFlagResetGuard, connect_daemon_local_ipc_until_ready};
+    #[cfg(unix)]
     use atm_core::boundary::RequestDispatcher;
     #[cfg(unix)]
     use atm_core::doctor::DoctorQuery;
@@ -1022,46 +1024,6 @@ mod tests {
             request: RequestEnvelope,
         ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
             panic!("intentional dispatcher panic for test: {request:?}");
-        }
-    }
-
-    #[cfg(unix)]
-    struct LifecycleFlagResetGuard {
-        lifecycle: LifecycleControlSourceAdapter,
-    }
-
-    #[cfg(unix)]
-    impl LifecycleFlagResetGuard {
-        fn install(lifecycle: LifecycleControlSourceAdapter) -> Self {
-            lifecycle.set_terminate_for_test(false);
-            lifecycle.set_reload_for_test(false);
-            Self { lifecycle }
-        }
-    }
-
-    #[cfg(unix)]
-    impl Drop for LifecycleFlagResetGuard {
-        fn drop(&mut self) {
-            self.lifecycle.set_terminate_for_test(false);
-            self.lifecycle.set_reload_for_test(false);
-        }
-    }
-
-    #[cfg(unix)]
-    fn connect_daemon_local_ipc_until_ready(endpoint_path: &Path) -> LocalSocketStream {
-        let deadline = Instant::now() + Duration::from_secs(3);
-        loop {
-            match LocalSocketStream::connect(
-                atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)
-                    .expect("ipc name"),
-            ) {
-                Ok(stream) => return stream,
-                Err(error) if Instant::now() < deadline => {
-                    let _ = error;
-                    std::thread::yield_now();
-                }
-                Err(error) => panic!("connect daemon local ipc: {error}"),
-            }
         }
     }
 

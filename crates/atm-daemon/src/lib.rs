@@ -19,6 +19,8 @@ mod runtime_health;
 mod shutdown_beacon;
 #[cfg(test)]
 mod test_observability;
+#[cfg(test)]
+mod test_support;
 mod watch_runtime;
 
 use std::path::PathBuf;
