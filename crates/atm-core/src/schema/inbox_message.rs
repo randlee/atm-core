@@ -8,6 +8,7 @@ use tracing::warn;
 use ulid::Ulid;
 use uuid::Uuid;
 
+use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES};
 use crate::error::AtmError;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
@@ -319,6 +320,21 @@ pub struct PendingAck {
     pub acked_at: Option<IsoTimestamp>,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct SharedInboxExportPolicy {
+    pub(crate) atm_authored_body_export_max_bytes: ByteCount,
+}
+
+impl Default for SharedInboxExportPolicy {
+    fn default() -> Self {
+        Self {
+            atm_authored_body_export_max_bytes: ByteCount::new(
+                DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES,
+            ),
+        }
+    }
+}
+
 fn ensure_object<'a>(parent: &'a mut Map<String, Value>, key: &str) -> &'a mut Map<String, Value> {
     let entry = parent
         .entry(key.to_string())
@@ -332,7 +348,15 @@ fn ensure_object<'a>(parent: &'a mut Map<String, Value>, key: &str) -> &'a mut M
     entry
 }
 
+#[cfg(test)]
 pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, AtmError> {
+    to_shared_inbox_value_with_policy(message, SharedInboxExportPolicy::default())
+}
+
+pub(crate) fn to_shared_inbox_value_with_policy(
+    message: &MessageEnvelope,
+    policy: SharedInboxExportPolicy,
+) -> Result<Value, AtmError> {
     let mut value = serde_json::to_value(message).map_err(|error| {
         AtmError::mailbox_write(format!(
             "failed to serialize shared inbox envelope for {} at {:?}: {error}",
@@ -347,6 +371,9 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
                 "failed to serialize shared inbox envelope for {} at {:?}: envelope did not encode as a JSON object",
                 message.from, message.timestamp
             ))
+            .with_recovery(
+                "Preserve the ATM shared-inbox envelope shape so serialization produces one JSON object per message before retrying mailbox export.",
+            )
         })?;
     // The legacy UUID `message_id` is stripped here but deliberately not
     // forwarded. Forwarded ATM message ids must remain ULID-authored per
@@ -409,7 +436,45 @@ pub(crate) fn to_shared_inbox_value(message: &MessageEnvelope) -> Result<Value, 
     if let Some(value) = task_id {
         atm.entry("taskId".to_string()).or_insert(value);
     }
+    if should_export_retrieval_stub(message, policy)? {
+        let retrieval_stub = retrieval_stub_text(message)?;
+        object.insert("text".to_string(), Value::String(retrieval_stub));
+    }
     Ok(value)
+}
+
+fn should_export_retrieval_stub(
+    message: &MessageEnvelope,
+    policy: SharedInboxExportPolicy,
+) -> Result<bool, AtmError> {
+    let export_cap = policy
+        .atm_authored_body_export_max_bytes
+        .as_usize()
+        .ok_or_else(|| {
+            AtmError::mailbox_write(format!(
+                "failed to compare ATM-authored export cap for {} at {:?}: configured byte cap does not fit into usize",
+                message.from, message.timestamp
+            ))
+            .with_recovery(
+                "Lower [atm].claude_jsonl_body_export_max_bytes to a bounded value before retrying mailbox export.",
+            )
+        })?;
+
+    Ok(message.atm_message_id().is_some()
+        && (policy.atm_authored_body_export_max_bytes.is_zero() || message.text.len() > export_cap))
+}
+
+fn retrieval_stub_text(message: &MessageEnvelope) -> Result<String, AtmError> {
+    let Some(message_id) = message.atm_message_id() else {
+        return Err(AtmError::mailbox_write(format!(
+            "failed to project shared inbox retrieval stub for {} at {:?}: ATM-authored message is missing metadata.atm.messageId",
+            message.from, message.timestamp
+        ))
+        .with_recovery(
+            "Ensure ATM-authored messages retain metadata.atm.messageId so the retrieval stub can reference the durable ATM message id.",
+        ));
+    };
+    Ok(format!("atm read --message-id {message_id}"))
 }
 
 impl MessageEnvelope {
@@ -545,9 +610,11 @@ mod tests {
 
     use super::{
         AlertKind, AtmMessageId, AtmMetadataFields, ForwardMetadataEnvelope, IsoTimestamp,
-        LegacyMessageId, MessageEnvelope, MessageMetadata, PendingAck,
+        LegacyMessageId, MessageEnvelope, MessageMetadata, PendingAck, SharedInboxExportPolicy,
         hydrate_legacy_fields_from_metadata, to_shared_inbox_value,
+        to_shared_inbox_value_with_policy,
     };
+    use crate::config::types::ByteCount;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
 
@@ -834,6 +901,183 @@ mod tests {
             Some(&json!("2026-03-30T00:00:02Z"))
         );
         assert!(atm["acknowledgesMessageId"].as_str().is_some());
+    }
+
+    #[test]
+    fn shared_inbox_write_stubs_oversized_atm_authored_messages() {
+        let atm_message_id = AtmMessageId::new();
+        let legacy_message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
+        let mut metadata = Map::new();
+        let mut atm = Map::new();
+        atm.insert("messageId".to_string(), json!(atm_message_id.to_string()));
+        metadata.insert("atm".to_string(), Value::Object(atm));
+        let mut extra = Map::new();
+        extra.insert("metadata".to_string(), Value::Object(metadata));
+        let envelope = MessageEnvelope {
+            from: TEST_SENDER.parse().expect("agent"),
+            text: "x".repeat(32),
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: Some(TEST_TEAM.parse().expect("team")),
+            summary: Some("oversized".into()),
+            message_id: Some(legacy_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: None,
+            extra,
+        };
+
+        let encoded = to_shared_inbox_value_with_policy(
+            &envelope,
+            SharedInboxExportPolicy {
+                atm_authored_body_export_max_bytes: ByteCount::new(8),
+            },
+        )
+        .expect("encode");
+
+        assert_eq!(
+            encoded["text"],
+            json!(format!("atm read --message-id {atm_message_id}"))
+        );
+        assert_eq!(encoded["summary"], json!("oversized"));
+        assert_eq!(
+            encoded["metadata"]["atm"]["messageId"],
+            json!(atm_message_id.to_string())
+        );
+    }
+
+    #[test]
+    fn shared_inbox_write_exports_full_body_at_exact_cap() {
+        let atm_message_id = AtmMessageId::new();
+        let legacy_message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
+        let text = "x".repeat(32);
+        let mut metadata = Map::new();
+        let mut atm = Map::new();
+        atm.insert("messageId".to_string(), json!(atm_message_id.to_string()));
+        metadata.insert("atm".to_string(), Value::Object(atm));
+        let mut extra = Map::new();
+        extra.insert("metadata".to_string(), Value::Object(metadata));
+        let envelope = MessageEnvelope {
+            from: TEST_SENDER.parse().expect("agent"),
+            text: text.clone(),
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: Some(TEST_TEAM.parse().expect("team")),
+            summary: Some("exact-cap".into()),
+            message_id: Some(legacy_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: None,
+            extra,
+        };
+
+        let encoded = to_shared_inbox_value_with_policy(
+            &envelope,
+            SharedInboxExportPolicy {
+                atm_authored_body_export_max_bytes: ByteCount::new(text.len() as u64),
+            },
+        )
+        .expect("encode");
+
+        assert_eq!(encoded["text"], json!(text));
+    }
+
+    #[test]
+    fn shared_inbox_write_exports_stub_above_cap() {
+        let atm_message_id = AtmMessageId::new();
+        let legacy_message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
+        let text = "x".repeat(32);
+        let mut metadata = Map::new();
+        let mut atm = Map::new();
+        atm.insert("messageId".to_string(), json!(atm_message_id.to_string()));
+        metadata.insert("atm".to_string(), Value::Object(atm));
+        let mut extra = Map::new();
+        extra.insert("metadata".to_string(), Value::Object(metadata));
+        let envelope = MessageEnvelope {
+            from: TEST_SENDER.parse().expect("agent"),
+            text,
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: Some(TEST_TEAM.parse().expect("team")),
+            summary: Some("above-cap".into()),
+            message_id: Some(legacy_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: None,
+            extra,
+        };
+
+        let encoded = to_shared_inbox_value_with_policy(
+            &envelope,
+            SharedInboxExportPolicy {
+                atm_authored_body_export_max_bytes: ByteCount::new(31),
+            },
+        )
+        .expect("encode");
+
+        assert_eq!(
+            encoded["text"],
+            json!(format!("atm read --message-id {atm_message_id}"))
+        );
+    }
+
+    #[test]
+    fn shared_inbox_write_keeps_full_body_for_claude_native_messages() {
+        let envelope = MessageEnvelope {
+            from: TEST_SENDER.parse().expect("agent"),
+            text: "x".repeat(32),
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: None,
+            summary: Some("native".into()),
+            message_id: None,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: None,
+            extra: Map::new(),
+        };
+
+        let encoded = to_shared_inbox_value_with_policy(
+            &envelope,
+            SharedInboxExportPolicy {
+                atm_authored_body_export_max_bytes: ByteCount::new(8),
+            },
+        )
+        .expect("encode");
+
+        assert_eq!(encoded["text"], json!("x".repeat(32)));
     }
 
     #[test]

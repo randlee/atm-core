@@ -90,9 +90,9 @@ Disposition:
     shared selector semantics, and bounded durable query behavior must stay
     assigned to follow-on Phase S execution work.
 
-19. ATM-authored Claude JSONL compatibility projection still lacks the
-    implemented export-cap, retrieval-stub, and watcher no-churn behavior
-    accepted in ADR-010.
+19. ATM-authored Claude JSONL compatibility projection is resolved on the
+    S.8 implementation branch through the export-cap config, retrieval-stub
+    projection, and daemon no-churn identity proof accepted in ADR-010.
 
 20. The triage process hardening line is incomplete until `qa-triage`,
     `triaging-findings`, and the phase integration-worktree ownership rule all
