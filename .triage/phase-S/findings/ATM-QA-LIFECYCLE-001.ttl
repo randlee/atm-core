@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-LIFECYCLE-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-LIFECYCLE-001" ;
+  triage:title "Bare #[allow(dead_code)] on pub(crate) wait_for_state_change_timeout" ;
+  triage:description "lifecycle_control.rs:183 has bare #[allow(dead_code)] on pub(crate) fn wait_for_state_change_timeout. This suppresses unused-symbol warning without explaining the platform/test context. Fix: replace with #[cfg_attr(any(windows, not(test)), allow(dead_code))] to mirror surrounding lifecycle_control.rs patterns, or gate the function with #[cfg(test)] if only used in tests." ;
+  triage:category "PORT" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T22:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s13-ipc-hardening" ;
+  triage:promoteToBranch "feature/pS-s13-ipc-hardening" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-LIFECYCLE-001/s13/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/2b16650> .
+
+<urn:atm:triage:occurrence/ATM-QA-LIFECYCLE-001/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 183 ;
+  triage:snippet "#[allow(dead_code)] pub(crate) fn wait_for_state_change_timeout — bare suppressor without platform/test context" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2b16650" ;
+  triage:branch "feature/pS-s13-ipc-hardening" .
+
+<urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/2b16650>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "2b16650" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
