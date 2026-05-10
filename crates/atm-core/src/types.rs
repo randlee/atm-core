@@ -365,3 +365,13 @@ pub enum AckActivationMode {
     PromoteDisplayedUnread,
     ReadOnly,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandAction {
+    Ack,
+    Clear,
+    List,
+    Read,
+    Send,
+}

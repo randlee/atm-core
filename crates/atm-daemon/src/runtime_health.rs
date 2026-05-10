@@ -491,7 +491,9 @@ impl DaemonRequestDispatcher {
                         .push(shutdown_handle);
                 }
                 #[cfg(not(test))]
-                drop(shutdown_handle);
+                {
+                    let _ = shutdown_handle.join();
+                }
                 tracing::warn!(
                     step = label,
                     timeout_ms = deadline.as_millis(),

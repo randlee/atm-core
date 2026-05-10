@@ -929,20 +929,22 @@ impl Fixture {
         };
         fixture.write_primary_inbox(
             PRIMARY_AGENT,
-            &[pending_ack_message(
+            &[pending_ack_message_at(
                 SECONDARY_AGENT,
                 "arch pending",
                 arch_message_id,
                 PRIMARY_TEAM,
+                Utc::now() - chrono::Duration::seconds(1),
             )],
         );
         fixture.write_primary_inbox(
             SECONDARY_AGENT,
-            &[pending_ack_message(
+            &[pending_ack_message_at(
                 PRIMARY_AGENT,
                 &format!("{SECONDARY_AGENT} pending"),
                 qa_message_id,
                 PRIMARY_TEAM,
+                Utc::now() - chrono::Duration::seconds(1),
             )],
         );
 
@@ -1183,6 +1185,16 @@ fn pending_ack_message(
     message_id: LegacyMessageId,
     source_team: &str,
 ) -> MessageEnvelope {
+    pending_ack_message_at(from, text, message_id, source_team, Utc::now())
+}
+
+fn pending_ack_message_at(
+    from: &str,
+    text: &str,
+    message_id: LegacyMessageId,
+    source_team: &str,
+    timestamp: chrono::DateTime<Utc>,
+) -> MessageEnvelope {
     let mut extra = serde_json::Map::new();
     let mut metadata = serde_json::Map::new();
     let mut atm = serde_json::Map::new();
@@ -1206,12 +1218,12 @@ fn pending_ack_message(
     MessageEnvelope {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
-        timestamp: IsoTimestamp::from_datetime(Utc::now()),
+        timestamp: IsoTimestamp::from_datetime(timestamp),
         read: true,
         source_team: Some(source_team.parse::<TeamName>().expect("team")),
         summary: None,
         message_id: Some(message_id),
-        pending_ack_at: Some(IsoTimestamp::from_datetime(Utc::now())),
+        pending_ack_at: Some(IsoTimestamp::from_datetime(timestamp)),
         acknowledged_at: None,
         acknowledges_message_id: None,
         parent_message_id: None,

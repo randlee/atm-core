@@ -1,9 +1,9 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use atm_core::home;
 use atm_core::list::ListQuery;
-use atm_core::types::IsoTimestamp;
 use clap::Args;
 
+use crate::commands::util::parse_timestamp;
 use crate::composition::CliComposition;
 use crate::observability::CliObservability;
 use crate::output;
@@ -93,12 +93,6 @@ impl ListCommand {
             atm_core::types::ReadSelection::Actionable
         }
     }
-}
-
-fn parse_timestamp(value: &str) -> Result<IsoTimestamp> {
-    chrono::DateTime::parse_from_rfc3339(value)
-        .with_context(|| format!("invalid ISO 8601 timestamp: {value}"))
-        .map(|timestamp| timestamp.with_timezone(&chrono::Utc).into())
 }
 
 #[cfg(test)]

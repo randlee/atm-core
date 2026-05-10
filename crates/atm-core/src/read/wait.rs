@@ -3,6 +3,8 @@ use std::time::{Duration, Instant};
 
 use crate::error::AtmError;
 
+pub(crate) const DEFAULT_WAIT_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
 pub fn wait_for_eligible_message<T, FLoad, FEligible>(
     timeout_secs: u64,
     mut load_messages: FLoad,
@@ -13,7 +15,6 @@ where
     FEligible: Fn(&[T]) -> bool,
 {
     let timeout = Duration::from_secs(timeout_secs);
-    let poll_interval = Duration::from_millis(100);
     let start = Instant::now();
 
     loop {
@@ -26,6 +27,6 @@ where
             return Ok(true);
         }
 
-        thread::sleep(poll_interval);
+        thread::sleep(DEFAULT_WAIT_POLL_INTERVAL);
     }
 }

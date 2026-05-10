@@ -10,6 +10,8 @@ use crate::send::{PostSendHookContext, maybe_run_post_send_hook};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
 
+const WORKFLOW_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RetainedMailboxTimeoutPolicy {
     pub(crate) workflow_lock_timeout: Duration,
@@ -167,7 +169,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
 
     fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
         RetainedMailboxTimeoutPolicy {
-            workflow_lock_timeout: crate::mailbox::lock::default_lock_timeout(),
+            workflow_lock_timeout: WORKFLOW_LOCK_TIMEOUT,
         }
     }
 

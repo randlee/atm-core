@@ -16,7 +16,7 @@ use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
-use crate::types::{AgentName, TaskId, TeamName};
+use crate::types::{AgentName, CommandAction, TaskId, TeamName};
 use crate::workflow;
 
 mod alert_state;
@@ -87,7 +87,7 @@ impl SendRequest {
 /// Result of sending one ATM mailbox message.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct SendOutcome {
-    pub action: String,
+    pub action: CommandAction,
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
@@ -286,7 +286,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
     let command_outcome = if request.dry_run { "dry_run" } else { "sent" };
     let mut outcome = SendOutcome {
-        action: "send".to_string(),
+        action: CommandAction::Send,
         team: recipient.team.clone(),
         agent: recipient.agent.clone(),
         sender: canonical_sender.clone(),

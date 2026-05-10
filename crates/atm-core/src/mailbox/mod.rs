@@ -7,15 +7,19 @@ pub(crate) mod source;
 pub(crate) mod store;
 pub(crate) mod surface;
 
+use std::borrow::Cow;
 use std::fs;
 use std::path::Path;
 
+use serde::Deserialize;
 use serde_json::Value;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
+use crate::mailbox::source::SummaryMessage;
 use crate::schema::inbox_message::hydrate_legacy_fields_from_metadata;
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope, ThreadMode};
+use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// Append one message to a shared inbox file under the mailbox lock.
@@ -122,11 +126,71 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     parse_mailbox_contents(&raw, path)
 }
 
+pub(crate) fn read_message_summaries(
+    path: &Path,
+    contains_filter: Option<&str>,
+) -> Result<Vec<SummaryMessage>, AtmError> {
+    if !path.exists() {
+        return Ok(Vec::new());
+    }
+
+    let file_size = fs::metadata(path).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxRead,
+            format!("failed to inspect mailbox file {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.",
+        )
+        .with_source(error)
+    })?;
+    if file_size.len() > MAX_MAILBOX_READ_BYTES {
+        return Err(
+            AtmError::new(
+                AtmErrorKind::MailboxRead,
+                format!(
+                    "mailbox file {} exceeds the {}-byte read limit",
+                    path.display(),
+                    MAX_MAILBOX_READ_BYTES
+                ),
+            )
+            .with_recovery(
+                "Trim or archive oversized mailbox contents before retrying `atm list` so ATM does not load an unbounded mailbox into memory.",
+            ),
+        );
+    }
+
+    let raw = fs::read_to_string(path).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxRead,
+            format!("failed to read mailbox file {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.",
+        )
+        .with_source(error)
+    })?;
+
+    parse_mailbox_summary_contents(&raw, path, contains_filter)
+}
+
 fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     match raw.chars().find(|ch| !ch.is_whitespace()) {
         None => Ok(Vec::new()),
         Some('[') => parse_mailbox_array(raw, path),
         Some(_) => Ok(parse_mailbox_jsonl(raw, path)),
+    }
+}
+
+fn parse_mailbox_summary_contents(
+    raw: &str,
+    path: &Path,
+    contains_filter: Option<&str>,
+) -> Result<Vec<SummaryMessage>, AtmError> {
+    match raw.chars().find(|ch| !ch.is_whitespace()) {
+        None => Ok(Vec::new()),
+        Some('[') => parse_mailbox_summary_array(raw, path, contains_filter),
+        Some(_) => Ok(parse_mailbox_summary_jsonl(raw, path, contains_filter)),
     }
 }
 
@@ -165,6 +229,44 @@ fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, A
         .collect())
 }
 
+fn parse_mailbox_summary_array(
+    raw: &str,
+    path: &Path,
+    contains_filter: Option<&str>,
+) -> Result<Vec<SummaryMessage>, AtmError> {
+    let records = serde_json::from_str::<Vec<SummaryMailboxRecord<'_>>>(raw).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxRead,
+            format!("failed to parse mailbox array {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Inspect the mailbox file for malformed JSON array syntax or partial writes before retrying `atm list`.",
+        )
+        .with_source(error)
+    })?;
+
+    Ok(records
+        .into_iter()
+        .enumerate()
+        .filter_map(
+            |(index, record)| match summarize_mailbox_record(record, contains_filter) {
+                Ok(Some(message)) => Some(message),
+                Ok(None) => None,
+                Err(error) => {
+                    warn!(
+                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
+                        line = index + 1,
+                        mailbox_path = %path.display(),
+                        %error,
+                        "skipping malformed mailbox record during bounded list projection"
+                    );
+                    None
+                }
+            },
+        )
+        .collect())
+}
+
 fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<MessageEnvelope> {
     raw.lines()
         .enumerate()
@@ -184,6 +286,50 @@ fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<MessageEnvelope> {
                         raw_record = %line,
                         %error,
                         "skipping malformed mailbox record"
+                    );
+                    None
+                }
+            }
+        })
+        .collect()
+}
+
+fn parse_mailbox_summary_jsonl(
+    raw: &str,
+    path: &Path,
+    contains_filter: Option<&str>,
+) -> Vec<SummaryMessage> {
+    raw.lines()
+        .enumerate()
+        .filter_map(|(index, line)| {
+            if line.trim().is_empty() {
+                return None;
+            }
+
+            match serde_json::from_str::<SummaryMailboxRecord<'_>>(line)
+                .map_err(|error| {
+                    AtmError::new(
+                        AtmErrorKind::MailboxRead,
+                        format!(
+                            "failed to parse mailbox JSONL record {}:{}: {error}",
+                            path.display(),
+                            index + 1
+                        ),
+                    )
+                    .with_source(error)
+                })
+                .and_then(|record| summarize_mailbox_record(record, contains_filter))
+            {
+                Ok(Some(message)) => Some(message),
+                Ok(None) => None,
+                Err(error) => {
+                    warn!(
+                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
+                        line = index + 1,
+                        mailbox_path = %path.display(),
+                        raw_record = %line,
+                        %error,
+                        "skipping malformed mailbox record during bounded list projection"
                     );
                     None
                 }
@@ -236,6 +382,174 @@ fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize
         );
         object.remove("message_id");
     }
+}
+
+#[derive(Debug, Deserialize)]
+struct SummaryMailboxRecord<'a> {
+    from: AgentName,
+    #[serde(borrow)]
+    text: Cow<'a, str>,
+    timestamp: IsoTimestamp,
+    read: bool,
+    #[serde(default)]
+    source_team: Option<TeamName>,
+    #[serde(default)]
+    summary: Option<String>,
+    #[serde(rename = "message_id", default)]
+    message_id: Option<String>,
+    #[serde(rename = "pendingAckAt", default)]
+    pending_ack_at: Option<IsoTimestamp>,
+    #[serde(rename = "acknowledgedAt", default)]
+    acknowledged_at: Option<IsoTimestamp>,
+    #[serde(rename = "acknowledgesMessageId", default)]
+    acknowledges_message_id: Option<String>,
+    #[serde(rename = "parentMessageId", default)]
+    parent_message_id: Option<String>,
+    #[serde(rename = "threadMode", default)]
+    thread_mode: Option<ThreadMode>,
+    #[serde(rename = "staleAt", default)]
+    stale_at: Option<IsoTimestamp>,
+    #[serde(rename = "taskId", default)]
+    task_id: Option<TaskId>,
+    #[serde(default)]
+    metadata: Option<SummaryMailboxMetadata>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct SummaryMailboxMetadata {
+    #[serde(default)]
+    atm: Option<SummaryAtmMetadata>,
+}
+
+#[derive(Debug, Default, Deserialize)]
+struct SummaryAtmMetadata {
+    #[serde(rename = "messageId", default)]
+    message_id: Option<String>,
+    #[serde(rename = "sourceTeam", default)]
+    source_team: Option<TeamName>,
+    #[serde(rename = "pendingAckAt", default)]
+    pending_ack_at: Option<IsoTimestamp>,
+    #[serde(rename = "acknowledgedAt", default)]
+    acknowledged_at: Option<IsoTimestamp>,
+    #[serde(rename = "acknowledgesMessageId", default)]
+    acknowledges_message_id: Option<String>,
+    #[serde(rename = "parentMessageId", default)]
+    parent_message_id: Option<String>,
+    #[serde(rename = "threadMode", default)]
+    thread_mode: Option<ThreadMode>,
+    #[serde(rename = "staleAt", default)]
+    stale_at: Option<IsoTimestamp>,
+    #[serde(rename = "taskId", default)]
+    task_id: Option<TaskId>,
+}
+
+fn summarize_mailbox_record(
+    record: SummaryMailboxRecord<'_>,
+    contains_filter: Option<&str>,
+) -> Result<Option<SummaryMessage>, AtmError> {
+    let atm = record
+        .metadata
+        .as_ref()
+        .and_then(|metadata| metadata.atm.as_ref());
+    let message_id = parse_legacy_id(record.message_id.as_deref())
+        .or_else(|| parse_atm_id(atm.and_then(|value| value.message_id.as_deref())));
+    let acknowledges_message_id = parse_legacy_id(record.acknowledges_message_id.as_deref())
+        .or_else(|| parse_atm_id(atm.and_then(|value| value.acknowledges_message_id.as_deref())));
+    let parent_message_id = parse_legacy_id(record.parent_message_id.as_deref())
+        .or_else(|| parse_atm_id(atm.and_then(|value| value.parent_message_id.as_deref())));
+    let summary_preview = summarize_text(record.summary.as_deref(), record.text.as_ref());
+    let body_contains_match = contains_filter
+        .map(str::trim)
+        .filter(|value| !value.is_empty())
+        .is_some_and(|needle| ascii_case_insensitive_contains(record.text.as_ref(), needle));
+    let idle_notification_sender = idle_notification_sender_from_text(record.text.as_ref());
+
+    Ok(Some(SummaryMessage {
+        envelope: MessageEnvelope {
+            from: record.from,
+            text: String::new(),
+            timestamp: record.timestamp,
+            read: record.read,
+            source_team: record
+                .source_team
+                .or_else(|| atm.and_then(|value| value.source_team.clone())),
+            summary: record.summary,
+            message_id,
+            pending_ack_at: record
+                .pending_ack_at
+                .or_else(|| atm.and_then(|value| value.pending_ack_at)),
+            acknowledged_at: record
+                .acknowledged_at
+                .or_else(|| atm.and_then(|value| value.acknowledged_at)),
+            acknowledges_message_id,
+            parent_message_id,
+            thread_mode: record
+                .thread_mode
+                .or_else(|| atm.and_then(|value| value.thread_mode)),
+            stale_at: record
+                .stale_at
+                .or_else(|| atm.and_then(|value| value.stale_at)),
+            task_id: record
+                .task_id
+                .or_else(|| atm.and_then(|value| value.task_id.clone())),
+            extra: serde_json::Map::new(),
+        },
+        summary_preview,
+        body_contains_match,
+        idle_notification_sender,
+    }))
+}
+
+fn parse_legacy_id(value: Option<&str>) -> Option<LegacyMessageId> {
+    value.and_then(|value| value.parse::<LegacyMessageId>().ok())
+}
+
+fn parse_atm_id(value: Option<&str>) -> Option<LegacyMessageId> {
+    value
+        .and_then(|value| value.parse::<AtmMessageId>().ok())
+        .map(LegacyMessageId::from_atm_message_id)
+}
+
+fn summarize_text(summary: Option<&str>, text: &str) -> String {
+    if let Some(summary) = summary.map(str::trim).filter(|value| !value.is_empty()) {
+        return summary.to_string();
+    }
+
+    let first_line = text
+        .lines()
+        .map(str::trim)
+        .find(|value| !value.is_empty())
+        .unwrap_or("");
+    let mut summary = first_line.to_string();
+    if summary.len() > 120 {
+        summary.truncate(117);
+        summary.push_str("...");
+    }
+    summary
+}
+
+fn ascii_case_insensitive_contains(haystack: &str, needle: &str) -> bool {
+    let needle = needle.as_bytes();
+    if needle.is_empty() {
+        return true;
+    }
+    haystack.as_bytes().windows(needle.len()).any(|window| {
+        window
+            .iter()
+            .zip(needle.iter())
+            .all(|(left, right)| left.eq_ignore_ascii_case(right))
+    })
+}
+
+fn idle_notification_sender_from_text(text: &str) -> Option<AgentName> {
+    let value = serde_json::from_str::<Value>(text).ok()?;
+    if value.get("type").and_then(Value::as_str) != Some("idle_notification") {
+        return None;
+    }
+    value
+        .get("from")
+        .and_then(Value::as_str)
+        .and_then(|sender| sender.parse().ok())
 }
 
 #[cfg(test)]

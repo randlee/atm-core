@@ -22,10 +22,13 @@ use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
 use crate::types::{
-    AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
-    SourceIndex, TaskId, TeamName,
+    AckActivationMode, AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass,
+    ReadSelection, SourceIndex, TaskId, TeamName,
 };
 use crate::workflow;
+
+pub const MAX_CONTAINS_FILTER_LEN: usize = 1024;
+pub const MAX_TIMEOUT_SECS: u64 = 3600;
 
 /// Parameters for querying and optionally mutating one mailbox display surface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -66,6 +69,8 @@ impl ReadQuery {
         contains_filter: Option<&str>,
         timeout_secs: Option<u64>,
     ) -> Result<Self, AtmError> {
+        let contains_filter = normalize_contains_filter(contains_filter)?;
+        let timeout_secs = validate_timeout_secs(timeout_secs)?;
         Ok(Self {
             home_dir,
             current_dir,
@@ -90,9 +95,38 @@ impl ReadQuery {
             sender_filter: sender_filter.map(str::parse).transpose()?,
             timestamp_filter,
             task_filter: task_filter.map(str::parse).transpose()?,
-            contains_filter: contains_filter.map(ToOwned::to_owned),
+            contains_filter,
             timeout_secs,
         })
+    }
+}
+
+pub(crate) fn normalize_contains_filter(
+    contains_filter: Option<&str>,
+) -> Result<Option<String>, AtmError> {
+    match contains_filter.map(str::trim).filter(|value| !value.is_empty()) {
+        Some(value) if value.len() > MAX_CONTAINS_FILTER_LEN => Err(
+            AtmError::validation(format!(
+                "contains filter exceeds the {}-byte maximum",
+                MAX_CONTAINS_FILTER_LEN
+            ))
+            .with_recovery(
+                "Shorten the `--contains` filter before retrying so ATM can keep daemon-side substring scans bounded.",
+            ),
+        ),
+        Some(value) => Ok(Some(value.to_string())),
+        None => Ok(None),
+    }
+}
+
+fn validate_timeout_secs(timeout_secs: Option<u64>) -> Result<Option<u64>, AtmError> {
+    match timeout_secs {
+        Some(value) if value > MAX_TIMEOUT_SECS => Err(AtmError::validation(format!(
+            "timeout exceeds the {} second maximum",
+            MAX_TIMEOUT_SECS
+        ))
+        .with_recovery("Use a timeout no greater than one hour before retrying `atm read`.")),
+        _ => Ok(timeout_secs),
     }
 }
 
@@ -108,9 +142,9 @@ pub struct BucketCounts {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClassifiedMessage {
     #[serde(skip)]
-    source_index: SourceIndex,
+    pub(crate) source_index: SourceIndex,
     #[serde(skip)]
-    source_path: PathBuf,
+    pub(crate) source_path: PathBuf,
     pub bucket: DisplayBucket,
     pub class: MessageClass,
     #[serde(flatten)]
@@ -120,7 +154,7 @@ pub struct ClassifiedMessage {
 /// Result of one mailbox read/query command.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadOutcome {
-    pub action: String,
+    pub action: CommandAction,
     pub team: TeamName,
     pub agent: AgentName,
     pub selection_mode: ReadSelection,
@@ -343,7 +377,7 @@ fn read_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     }
 
     let outcome = ReadOutcome {
-        action: "read".to_string(),
+        action: CommandAction::Read,
         team: target.team.clone(),
         agent: target.agent.clone(),
         selection_mode: query.selection_mode,
@@ -876,17 +910,18 @@ mod tests {
         }
     }
 
-    fn message(
+    fn message_at(
         text: &str,
         message_id: LegacyMessageId,
         parent_message_id: Option<LegacyMessageId>,
         thread_mode: Option<ThreadMode>,
         read: bool,
+        timestamp: IsoTimestamp,
     ) -> MessageEnvelope {
         MessageEnvelope {
             from: ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent"),
             text: text.to_string(),
-            timestamp: IsoTimestamp::now(),
+            timestamp,
             read,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
@@ -900,6 +935,23 @@ mod tests {
             task_id: None,
             extra: Map::new(),
         }
+    }
+
+    fn message(
+        text: &str,
+        message_id: LegacyMessageId,
+        parent_message_id: Option<LegacyMessageId>,
+        thread_mode: Option<ThreadMode>,
+        read: bool,
+    ) -> MessageEnvelope {
+        message_at(
+            text,
+            message_id,
+            parent_message_id,
+            thread_mode,
+            read,
+            IsoTimestamp::now(),
+        )
     }
 
     #[test]
@@ -1017,16 +1069,20 @@ mod tests {
     fn actionable_selection_prefers_terminal_thread_message() {
         let root_id = LegacyMessageId::new();
         let terminal_id = LegacyMessageId::new();
+        let root_at =
+            IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::seconds(1));
+        let terminal_at = IsoTimestamp::now();
         let source_files = vec![SourceFile {
             path: PathBuf::from("recipient.json"),
             messages: vec![
-                message("root", root_id, None, None, false),
-                message(
+                message_at("root", root_id, None, None, false, root_at),
+                message_at(
                     "detail",
                     terminal_id,
                     Some(root_id),
                     Some(ThreadMode::AddDetails),
                     false,
+                    terminal_at,
                 ),
             ],
         }];
@@ -1147,21 +1203,25 @@ mod tests {
         let root_id = LegacyMessageId::new();
         let terminal_id = LegacyMessageId::new();
         let task_id: TaskId = "TASK-77".parse().expect("task id");
+        let root_at =
+            IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::seconds(1));
+        let terminal_at = IsoTimestamp::now();
         let source_files = vec![SourceFile {
             path: PathBuf::from("recipient.json"),
             messages: vec![
                 MessageEnvelope {
                     task_id: Some(task_id.clone()),
-                    ..message("root", root_id, None, None, false)
+                    ..message_at("root", root_id, None, None, false, root_at)
                 },
                 MessageEnvelope {
                     task_id: Some(task_id.clone()),
-                    ..message(
+                    ..message_at(
                         "terminal",
                         terminal_id,
                         Some(root_id),
                         Some(ThreadMode::AddDetails),
                         false,
+                        terminal_at,
                     )
                 },
             ],

@@ -10,6 +10,7 @@ pub mod members;
 pub mod read;
 pub mod send;
 pub mod teams;
+pub(crate) mod util;
 
 pub use ack::AckCommand;
 pub use clear::ClearCommand;

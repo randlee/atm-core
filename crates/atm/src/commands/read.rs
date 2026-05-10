@@ -1,9 +1,10 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use atm_core::home;
 use atm_core::read::ReadQuery;
-use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
+use atm_core::types::{AckActivationMode, ReadSelection};
 use clap::Args;
 
+use crate::commands::util::parse_timestamp;
 use crate::composition::CliComposition;
 use crate::observability::CliObservability;
 use crate::output;
@@ -152,18 +153,12 @@ impl ReadCommand {
         }
         if self.since_last_seen {
             warnings.push(
-                "warning: `atm read --since-last-seen` is redundant because it is the default behavior."
+                "note: `atm read --since-last-seen` remains supported as an explicit restatement of the default seen-state behavior."
                     .to_string(),
             );
         }
         warnings
     }
-}
-
-fn parse_timestamp(value: &str) -> Result<IsoTimestamp> {
-    chrono::DateTime::parse_from_rfc3339(value)
-        .with_context(|| format!("invalid ISO 8601 timestamp: {value}"))
-        .map(|timestamp| timestamp.with_timezone(&chrono::Utc).into())
 }
 
 #[cfg(test)]

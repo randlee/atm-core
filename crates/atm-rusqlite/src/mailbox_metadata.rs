@@ -99,6 +99,9 @@ pub fn query_mailbox_metadata_rows(
                     AtmError::validation(format!(
                         "failed to parse bounded mailbox metadata message key: {error}"
                     ))
+                    .with_recovery(
+                        "Repair or remove the malformed message-key row before retrying the bounded mailbox metadata query.",
+                    )
                 })?,
                 legacy_message_id: legacy_message_id
                     .map(|value| {
@@ -106,6 +109,9 @@ pub fn query_mailbox_metadata_rows(
                             AtmError::validation(format!(
                                 "failed to parse bounded mailbox metadata legacy_message_id: {error}"
                             ))
+                            .with_recovery(
+                                "Repair or remove the malformed legacy_message_id row before retrying the bounded mailbox metadata query.",
+                            )
                         })
                     })
                     .transpose()?,
@@ -115,6 +121,9 @@ pub fn query_mailbox_metadata_rows(
                             AtmError::validation(format!(
                                 "failed to parse bounded mailbox metadata parent_message_id: {error}"
                             ))
+                            .with_recovery(
+                                "Repair or remove the malformed parent_message_id row before retrying the bounded mailbox metadata query.",
+                            )
                         })
                     })
                     .transpose()?,
@@ -127,6 +136,9 @@ pub fn query_mailbox_metadata_rows(
                         AtmError::validation(format!(
                             "failed to parse bounded mailbox metadata timestamp: {error}"
                         ))
+                        .with_recovery(
+                            "Repair or remove the malformed bounded-mailbox timestamp row before retrying the metadata query.",
+                        )
                     })?,
                 read: read != 0,
                 pending_ack: pending_ack_at.is_some() && acknowledged_at.is_none(),
