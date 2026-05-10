@@ -59,8 +59,10 @@ Follow-up work:
 - `atm-rusqlite` implements store contracts; it does not define them.
 - `atm-rusqlite` must not own workflow, routing, daemon, watcher, transport,
   or notifier business logic.
-- bounded queue-query support for Phase S may add concrete SQL projections or
-  indexes, but logical message selection rules remain in `atm-core`
+- bounded queue-query support for Phase S now owns the concrete SQL metadata
+  projections and bounded row/count helpers used by `atm list` and
+  selector-driven `atm read`, while logical message selection rules remain in
+  `atm-core`
 - all direct SQLite access stays inside this crate.
 - concrete `rusqlite` types, row mappers, connection wiring, and migration
   helpers remain private implementation details.

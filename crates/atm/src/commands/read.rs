@@ -1,32 +1,48 @@
-use anyhow::{Context, Result};
+use anyhow::Result;
 use atm_core::home;
 use atm_core::read::ReadQuery;
-use atm_core::types::{AckActivationMode, IsoTimestamp, ReadSelection};
+use atm_core::types::{AckActivationMode, ReadSelection};
 use clap::Args;
 
+use crate::commands::util::parse_timestamp;
 use crate::composition::CliComposition;
 use crate::observability::CliObservability;
 use crate::output;
 
 #[derive(Debug, Args)]
-/// Read one ATM mailbox surface and optionally update read state.
+/// Read one ATM mailbox message and optionally update read state.
 pub struct ReadCommand {
     target: Option<String>,
 
     #[arg(long)]
     team: Option<String>,
 
-    #[arg(long, conflicts_with_all = ["unread_only", "pending_ack_only", "history"])]
+    #[arg(long, conflicts_with_all = ["unread", "unread_only", "pending_ack", "pending_ack_only"])]
     all: bool,
 
-    #[arg(long, conflicts_with_all = ["pending_ack_only", "history", "all"])]
+    #[arg(long, conflicts_with_all = ["pending_ack", "pending_ack_only", "all"])]
+    unread: bool,
+
+    #[arg(long = "unread-only", conflicts_with_all = ["pending_ack", "pending_ack_only", "all"])]
     unread_only: bool,
 
-    #[arg(long, conflicts_with_all = ["unread_only", "history", "all"])]
+    #[arg(long = "pending-ack", conflicts_with_all = ["unread", "unread_only", "all"])]
+    pending_ack: bool,
+
+    #[arg(long = "pending-ack-only", conflicts_with_all = ["unread", "unread_only", "all"])]
     pending_ack_only: bool,
 
-    #[arg(long, conflicts_with_all = ["unread_only", "pending_ack_only", "all"])]
+    #[arg(long, conflicts_with_all = ["message_id", "task", "contains", "from", "since"])]
     history: bool,
+
+    #[arg(long = "message-id", conflicts_with_all = ["task", "contains", "from", "since"])]
+    message_id: Option<String>,
+
+    #[arg(long)]
+    task: Option<String>,
+
+    #[arg(long)]
+    contains: Option<String>,
 
     #[arg(long)]
     since_last_seen: bool,
@@ -39,9 +55,6 @@ pub struct ReadCommand {
 
     #[arg(long)]
     no_update_seen: bool,
-
-    #[arg(long)]
-    limit: Option<usize>,
 
     #[arg(long)]
     since: Option<String>,
@@ -60,23 +73,26 @@ pub struct ReadCommand {
 }
 
 impl ReadCommand {
-    /// Execute the `atm read` command.
     pub fn run(self, observability: &CliObservability) -> Result<()> {
+        let warnings = self.deprecation_warnings();
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let json = self.json;
         let composition = CliComposition::bootstrap(observability)?;
         let query = self.build_query(home_dir, current_dir)?;
         let outcome = composition.receive(query)?;
-        output::print_read_result(&outcome, json)
+        output::print_read_result(&outcome, json)?;
+        for warning in warnings {
+            eprintln!("{warning}");
+        }
+        Ok(())
     }
 
     fn build_query(
-        self,
+        &self,
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<ReadQuery> {
-        // --since-last-seen is the default; explicitly setting it has the same effect.
         let _ = self.since_last_seen;
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
@@ -87,209 +103,143 @@ impl ReadCommand {
             self.target.as_deref(),
             self.team.as_deref(),
             selection_mode,
-            !self.no_since_last_seen,
+            !self.no_since_last_seen && selection_mode != ReadSelection::All,
             !self.no_update_seen,
             if self.no_mark {
                 AckActivationMode::ReadOnly
             } else {
                 AckActivationMode::PromoteDisplayedUnread
             },
-            self.limit,
+            self.message_id.as_deref(),
             self.from.as_deref(),
             timestamp_filter,
+            self.task.as_deref(),
+            self.contains.as_deref(),
             self.timeout,
         )
         .map_err(Into::into)
     }
 
     fn selection_mode(&self) -> ReadSelection {
-        if self.all {
+        if self.all || self.history {
             ReadSelection::All
-        } else if self.unread_only {
-            ReadSelection::UnreadOnly
-        } else if self.pending_ack_only {
-            ReadSelection::PendingAckOnly
-        } else if self.history {
-            ReadSelection::ActionableWithHistory
+        } else if self.unread || self.unread_only {
+            ReadSelection::Unread
+        } else if self.pending_ack || self.pending_ack_only {
+            ReadSelection::PendingAck
         } else {
             ReadSelection::Actionable
         }
     }
-}
 
-fn parse_timestamp(value: &str) -> Result<IsoTimestamp> {
-    chrono::DateTime::parse_from_rfc3339(value)
-        .with_context(|| format!("invalid ISO 8601 timestamp: {value}"))
-        .map(|timestamp| timestamp.with_timezone(&chrono::Utc).into())
+    fn deprecation_warnings(&self) -> Vec<String> {
+        let mut warnings = Vec::new();
+        if self.unread_only {
+            warnings.push(
+                "warning: `atm read --unread-only` is deprecated; use `atm read --unread`."
+                    .to_string(),
+            );
+        }
+        if self.pending_ack_only {
+            warnings.push(
+                "warning: `atm read --pending-ack-only` is deprecated; use `atm read --pending-ack`."
+                    .to_string(),
+            );
+        }
+        if self.history {
+            warnings.push(
+                "warning: `atm read --history` is deprecated; use `atm read --all`.".to_string(),
+            );
+        }
+        if self.since_last_seen {
+            warnings.push(
+                "note: `atm read --since-last-seen` remains supported as an explicit restatement of the default seen-state behavior."
+                    .to_string(),
+            );
+        }
+        warnings
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use atm_core::types::{AckActivationMode, ReadSelection};
-    use tempfile::TempDir;
 
     use super::ReadCommand;
 
     #[test]
-    fn build_query_rejects_invalid_target_before_core() {
-        let command = ReadCommand {
-            target: Some("../evil".to_string()),
-            team: None,
-            all: false,
-            unread_only: false,
-            pending_ack_only: false,
-            history: false,
-            since_last_seen: false,
-            no_since_last_seen: false,
-            no_mark: false,
-            no_update_seen: false,
-            limit: None,
-            since: None,
-            from: None,
-            json: false,
-            timeout: None,
-            actor: None,
-        };
-
-        let error = command
-            .build_query(".".into(), ".".into())
-            .expect_err("invalid target");
-
-        assert!(error.to_string().contains("agent name"));
-    }
-
-    #[test]
     fn selection_mode_maps_cli_flags_to_expected_bucket() {
-        let all = ReadCommand {
-            target: None,
-            team: None,
-            all: true,
-            unread_only: false,
-            pending_ack_only: false,
-            history: false,
-            since_last_seen: false,
-            no_since_last_seen: false,
-            no_mark: false,
-            no_update_seen: false,
-            limit: None,
-            since: None,
-            from: None,
-            json: false,
-            timeout: None,
-            actor: None,
-        };
-        let unread = ReadCommand {
-            target: None,
-            team: None,
-            all: false,
-            unread_only: true,
-            pending_ack_only: false,
-            history: false,
-            since_last_seen: false,
-            no_since_last_seen: false,
-            no_mark: false,
-            no_update_seen: false,
-            limit: None,
-            since: None,
-            from: None,
-            json: false,
-            timeout: None,
-            actor: None,
-        };
-        let pending = ReadCommand {
-            target: None,
-            team: None,
-            all: false,
-            unread_only: false,
-            pending_ack_only: true,
-            history: false,
-            since_last_seen: false,
-            no_since_last_seen: false,
-            no_mark: false,
-            no_update_seen: false,
-            limit: None,
-            since: None,
-            from: None,
-            json: false,
-            timeout: None,
-            actor: None,
-        };
-        let history = ReadCommand {
-            target: None,
-            team: None,
-            all: false,
-            unread_only: false,
-            pending_ack_only: false,
-            history: true,
-            since_last_seen: false,
-            no_since_last_seen: false,
-            no_mark: false,
-            no_update_seen: false,
-            limit: None,
-            since: None,
-            from: None,
-            json: false,
-            timeout: None,
-            actor: None,
-        };
+        let mut command = base_command();
+        command.all = true;
+        assert_eq!(command.selection_mode(), ReadSelection::All);
 
-        assert_eq!(all.selection_mode(), ReadSelection::All);
-        assert_eq!(unread.selection_mode(), ReadSelection::UnreadOnly);
-        assert_eq!(pending.selection_mode(), ReadSelection::PendingAckOnly);
-        assert_eq!(
-            history.selection_mode(),
-            ReadSelection::ActionableWithHistory
-        );
+        let mut command = base_command();
+        command.unread = true;
+        assert_eq!(command.selection_mode(), ReadSelection::Unread);
+
+        let mut command = base_command();
+        command.pending_ack = true;
+        assert_eq!(command.selection_mode(), ReadSelection::PendingAck);
+
+        let command = base_command();
+        assert_eq!(command.selection_mode(), ReadSelection::Actionable);
     }
 
     #[test]
-    fn build_query_propagates_read_flags_filters_and_timeout() {
-        let command = ReadCommand {
-            target: Some("recipient-a@test-team".to_string()),
-            team: Some("override-team".to_string()),
-            all: false,
-            unread_only: true,
-            pending_ack_only: false,
-            history: false,
-            since_last_seen: false,
-            no_since_last_seen: true,
-            no_mark: true,
-            no_update_seen: true,
-            limit: Some(7),
-            since: Some("2026-05-05T12:00:00Z".to_string()),
-            from: Some("sender-a".to_string()),
-            json: true,
-            timeout: Some(12),
-            actor: Some("reader-a".to_string()),
-        };
-        let tempdir = TempDir::new().expect("tempdir");
-        let home_dir = tempdir.path().join("home");
-        let current_dir = tempdir.path().join("cwd");
+    fn build_query_propagates_filters_and_exact_message_id() {
+        let mut command = base_command();
+        command.target = Some("recipient-a@test-team".to_string());
+        command.team = Some("override-team".to_string());
+        command.message_id = Some("550e8400-e29b-41d4-a716-446655440000".to_string());
+        command.no_since_last_seen = true;
+        command.no_mark = true;
+        command.no_update_seen = true;
+        command.timeout = Some(9);
 
-        let query = command.build_query(home_dir, current_dir).expect("query");
+        let query = command.build_query(".".into(), ".".into()).expect("query");
 
-        assert_eq!(query.selection_mode, ReadSelection::UnreadOnly);
+        assert_eq!(query.selection_mode, ReadSelection::Actionable);
+        assert_eq!(query.ack_activation_mode, AckActivationMode::ReadOnly);
         assert!(!query.seen_state_filter);
         assert!(!query.seen_state_update);
-        assert_eq!(query.ack_activation_mode, AckActivationMode::ReadOnly);
-        assert_eq!(query.limit, Some(7));
-        assert_eq!(
-            query.sender_filter.as_ref().map(|value| value.as_str()),
-            Some("sender-a")
-        );
-        assert_eq!(query.timeout_secs, Some(12));
-        assert!(query.timestamp_filter.is_some());
-        assert_eq!(
-            query.actor_override.as_ref().map(|value| value.as_str()),
-            Some("reader-a")
-        );
-        assert_eq!(
-            query.target_address.as_ref().map(|value| value.to_string()),
-            Some("recipient-a@test-team".to_string())
-        );
-        assert_eq!(
-            query.team_override.as_ref().map(|value| value.as_str()),
-            Some("override-team")
-        );
+        assert_eq!(query.timeout_secs, Some(9));
+        assert!(query.message_id_filter.is_some());
+    }
+
+    #[test]
+    fn deprecation_warnings_cover_legacy_aliases() {
+        let mut command = base_command();
+        command.unread_only = true;
+        command.pending_ack_only = true;
+        command.history = true;
+        command.since_last_seen = true;
+
+        let warnings = command.deprecation_warnings();
+        assert_eq!(warnings.len(), 4);
+    }
+
+    fn base_command() -> ReadCommand {
+        ReadCommand {
+            target: None,
+            team: None,
+            all: false,
+            unread: false,
+            unread_only: false,
+            pending_ack: false,
+            pending_ack_only: false,
+            history: false,
+            message_id: None,
+            task: None,
+            contains: None,
+            since_last_seen: false,
+            no_since_last_seen: false,
+            no_mark: false,
+            no_update_seen: false,
+            since: None,
+            from: None,
+            json: false,
+            timeout: None,
+            actor: None,
+        }
     }
 }

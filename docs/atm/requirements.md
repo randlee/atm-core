@@ -154,7 +154,7 @@ Required Phase R rules:
 - the daemon request/response packet surface currently covers:
   - `send`
   - `ack` through the send-shaped acknowledge request
-  - `list` (packet mapping pending refinement per ADR-009 Follow-Up Work)
+  - `list`
   - `read`
   - `clear`
   - `doctor`
@@ -166,6 +166,10 @@ Required Phase R rules:
 - `atm` owns legacy queue-flag deprecation warnings and the exact
   `atm read --message-id <id>` retrieval guidance shown for ATM-authored JSONL
   body stubs
+- `atm` owns the queue-inspection CLI split where:
+  - `atm list` parses shared filters and renders bounded metadata rows
+  - `atm read` parses the same shared filters, resolves one selected message,
+    and renders match metadata when additional matches remain
 - daemon auto-start is a supervised runtime entry concern, not a side effect of
   transport object construction
 - the CLI-side auto-start path must acquire the documented pre-spawn launch

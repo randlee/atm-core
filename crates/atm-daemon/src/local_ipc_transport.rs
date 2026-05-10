@@ -35,7 +35,11 @@ enum ServeEvent {
 pub(crate) struct ActiveConnectionRegistry {
     active_connections: AtomicUsize,
     active_dispatches: AtomicUsize,
+    // JoinHandles stay behind this mutex so shutdown and post-request reap paths can
+    // deterministically join finished dispatch workers without racing the accept loop.
     dispatch_handles: Mutex<Vec<JoinHandle<()>>>,
+    // The drain-state mutex has no payload of its own; it exists only to pair the condition
+    // variable with a stable lock while shutdown waits for active work to change.
     drain_state: Mutex<()>,
     drain_wake: Condvar,
 }
@@ -73,20 +77,50 @@ impl ActiveConnectionRegistry {
     ) -> Result<std::sync::MutexGuard<'_, Vec<JoinHandle<()>>>, AtmError> {
         self.dispatch_handles
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("active dispatch handle lock poisoned"))
+            .map_err(|_| {
+                AtmError::daemon_unavailable("active dispatch handle lock poisoned").with_recovery(
+                    "Restart the daemon; tracked dispatch worker state may be inconsistent after the poisoned lock.",
+                )
+            })
+    }
+
+    fn reap_finished_dispatches(&self) -> Result<(), AtmError> {
+        let finished = {
+            let mut handles = self.lock_dispatch_handles()?;
+            let mut pending = Vec::with_capacity(handles.len());
+            let mut finished = Vec::new();
+            for handle in handles.drain(..) {
+                if handle.is_finished() {
+                    finished.push(handle);
+                } else {
+                    pending.push(handle);
+                }
+            }
+            *handles = pending;
+            finished
+        };
+        for handle in finished {
+            handle.join().map_err(|_| {
+                AtmError::daemon_unavailable("daemon dispatch thread panicked").with_recovery(
+                    "Restart the daemon; one completed dispatch worker panicked before it could be reaped cleanly.",
+                )
+            })?;
+        }
+        Ok(())
     }
 
     fn join_tracked_dispatches(&self) -> Result<(), AtmError> {
+        self.reap_finished_dispatches()?;
         let handles = {
-            let mut handles = self.dispatch_handles.lock().map_err(|_| {
-                AtmError::daemon_unavailable("active dispatch handle lock poisoned")
-            })?;
+            let mut handles = self.lock_dispatch_handles()?;
             std::mem::take(&mut *handles)
         };
         for handle in handles {
-            handle
-                .join()
-                .map_err(|_| AtmError::daemon_unavailable("daemon dispatch thread panicked"))?;
+            handle.join().map_err(|_| {
+                AtmError::daemon_unavailable("daemon dispatch thread panicked").with_recovery(
+                    "Restart the daemon; one tracked dispatch worker panicked during shutdown.",
+                )
+            })?;
         }
         Ok(())
     }
@@ -95,11 +129,19 @@ impl ActiveConnectionRegistry {
         let state = self
             .drain_state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
+            .map_err(|_| {
+                AtmError::daemon_unavailable("active connection drain lock poisoned").with_recovery(
+                    "Restart the daemon; shutdown drain coordination can no longer observe connection progress safely.",
+                )
+            })?;
         let (_state, wait_result) = self
             .drain_wake
             .wait_timeout(state, timeout)
-            .map_err(|_| AtmError::daemon_unavailable("active connection drain lock poisoned"))?;
+            .map_err(|_| {
+                AtmError::daemon_unavailable("active connection drain lock poisoned").with_recovery(
+                    "Restart the daemon; shutdown drain coordination can no longer observe connection progress safely.",
+                )
+            })?;
         if wait_result.timed_out() {
             return Ok(());
         }
@@ -145,6 +187,14 @@ pub(crate) struct PreparedRuntimeServer {
     codec: JsonAtmProtocolCodec,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LocalIpcEndpointPreparation {
+    #[cfg_attr(windows, allow(dead_code))]
+    FilesystemEndpointPrepared,
+    #[cfg_attr(unix, allow(dead_code))]
+    NonFilesystemEndpointPrepared,
+}
+
 impl std::fmt::Debug for PreparedRuntimeServer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PreparedRuntimeServer")
@@ -161,7 +211,7 @@ impl PreparedRuntimeServer {
         // instance that failed before it could service lifecycle-control requests.
         let lifecycle_control = LifecycleControlSourceAdapter::install()?;
         let ownership = HostOwnershipAdapter::new().acquire()?;
-        prepare_local_ipc_endpoint(&endpoint_path)?;
+        let endpoint_preparation = prepare_local_ipc_endpoint(&endpoint_path)?;
         let listener = ListenerOptions::new()
             .name(atm_core::protocol::daemon_local_ipc_name_from_path(
                 &endpoint_path,
@@ -178,6 +228,7 @@ impl PreparedRuntimeServer {
             max_concurrent_connections = MAX_CONCURRENT_CONNECTIONS,
             max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
             request_deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
+            endpoint_preparation = ?endpoint_preparation,
             "daemon local IPC transport limits configured"
         );
         emit_ready_signal_if_requested()?;
@@ -444,7 +495,9 @@ impl boundary::ServerTransport for LocalIpcServerTransportAdapter {
 }
 
 #[cfg(unix)]
-fn prepare_local_ipc_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
+fn prepare_local_ipc_endpoint(
+    endpoint_path: &Path,
+) -> Result<LocalIpcEndpointPreparation, AtmError> {
     if let Some(parent) = endpoint_path.parent() {
         fs::create_dir_all(parent).map_err(|source| {
             AtmError::daemon_unavailable(format!(
@@ -454,14 +507,17 @@ fn prepare_local_ipc_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
             .with_source(source)
         })?;
     }
-    remove_stale_endpoint(endpoint_path)
+    remove_stale_endpoint(endpoint_path)?;
+    Ok(LocalIpcEndpointPreparation::FilesystemEndpointPrepared)
 }
 
 #[cfg(not(unix))]
-fn prepare_local_ipc_endpoint(_endpoint_path: &Path) -> Result<(), AtmError> {
+fn prepare_local_ipc_endpoint(
+    _endpoint_path: &Path,
+) -> Result<LocalIpcEndpointPreparation, AtmError> {
     // Windows named-pipe-backed local IPC does not allocate a filesystem socket path, so
-    // there is no parent directory to create or stale endpoint file to unlink here.
-    Ok(())
+    // endpoint preparation is explicitly a non-filesystem step rather than a silent no-op.
+    Ok(LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared)
 }
 
 #[cfg(unix)]
@@ -638,5 +694,41 @@ fn handle_connection(
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable("failed to flush daemon response frame").with_source(source)
     })?;
+    registry.reap_finished_dispatches()?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[cfg(unix)]
+    use tempfile::TempDir;
+
+    #[cfg(unix)]
+    #[test]
+    fn prepare_local_ipc_endpoint_reports_filesystem_preparation() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let endpoint = tempdir.path().join("daemon.sock");
+
+        let result = prepare_local_ipc_endpoint(&endpoint).expect("prepare endpoint");
+
+        assert_eq!(
+            result,
+            LocalIpcEndpointPreparation::FilesystemEndpointPrepared
+        );
+        assert!(endpoint.parent().expect("parent").exists());
+    }
+
+    #[cfg(windows)]
+    #[test]
+    fn prepare_local_ipc_endpoint_reports_non_filesystem_preparation() {
+        let endpoint = PathBuf::from(r"\\.\pipe\atm-test-daemon");
+
+        let result = prepare_local_ipc_endpoint(&endpoint).expect("prepare endpoint");
+
+        assert_eq!(
+            result,
+            LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared
+        );
+    }
 }

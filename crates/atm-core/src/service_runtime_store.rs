@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::boundary;
 use crate::error::AtmError;
 use crate::mailbox;
-use crate::mailbox::source::SourceFile;
+use crate::mailbox::source::{SourceFile, SummarySourceFile};
 use crate::schema::MessageEnvelope;
 use crate::schema::TeamConfig;
 use crate::service_runtime::LocalServiceRuntime;
@@ -48,6 +48,13 @@ pub(crate) trait RetainedMailboxRuntime {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Vec<SourceFile>, AtmError>;
+    fn observe_summary_source_files(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        contains_filter: Option<&str>,
+    ) -> Result<Vec<SummarySourceFile>, AtmError>;
     fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError>;
     fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError>;
     fn commit_mailbox_state(
@@ -75,6 +82,15 @@ pub(crate) fn observe_source_files(
     agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
     mailbox::store::observe_source_files(home_dir, team, agent)
+}
+
+pub(crate) fn observe_summary_source_files(
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    contains_filter: Option<&str>,
+) -> Result<Vec<SummarySourceFile>, AtmError> {
+    mailbox::store::observe_summary_source_files(home_dir, team, agent, contains_filter)
 }
 
 pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
@@ -122,6 +138,17 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         // persistence path is fully lifted behind the store boundary.
         let _ = self.mail_store.as_ref();
         observe_source_files(home_dir, team, agent)
+    }
+
+    fn observe_summary_source_files(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        contains_filter: Option<&str>,
+    ) -> Result<Vec<SummarySourceFile>, AtmError> {
+        let _ = self.mail_store.as_ref();
+        observe_summary_source_files(home_dir, team, agent, contains_filter)
     }
 
     fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError> {

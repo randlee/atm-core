@@ -4,7 +4,7 @@
 plan_type: sprint_plan
 phase: S
 sprint: "S.7"
-status: planned
+status: in-review
 estimated_scope: L
 ```
 
@@ -73,9 +73,10 @@ detail surface.
     non-ack unread messages.
 
 5. Implement the bounded durable query path.
-5.1 Extend the concrete SQLite path in `crates/atm-rusqlite/src/shared_db.rs`
-    so list/count queries are bounded and do not materialize full mailbox
-    history for operator-facing responses.
+5.1 Extend the concrete SQLite path under
+    `crates/atm-rusqlite/src/mailbox_metadata.rs` so list/count queries are
+    bounded and do not materialize full mailbox history for operator-facing
+    responses.
 5.2 Keep selection semantics owned by `atm-core`, not by `atm-rusqlite`.
 
 6. Close the retained `atm-core` follow-up items surfaced by TODO triage.
@@ -93,11 +94,17 @@ detail surface.
 - `crates/atm/src/commands/mod.rs`
 - `crates/atm/src/main.rs`
 - `crates/atm/src/output.rs`
+- `crates/atm/src/commands/util.rs`
 - `crates/atm-core/src/read/mod.rs`
 - `crates/atm-core/src/read/filters.rs`
 - `crates/atm-core/src/read/wait.rs`
-- `crates/atm-core/src/workflow.rs`
-- `crates/atm-rusqlite/src/shared_db.rs`
+- `crates/atm-core/src/list.rs`
+- `crates/atm-core/src/service_runtime.rs`
+- `crates/atm-core/src/mailbox/mod.rs`
+- `crates/atm-core/src/mailbox/source.rs`
+- `crates/atm-core/src/mailbox/store.rs`
+- `crates/atm-rusqlite/src/mailbox_metadata.rs`
+- `crates/atm-daemon/src/runtime_health.rs`
 
 ## Required Document Updates
 
@@ -116,6 +123,8 @@ detail surface.
 - default queue inspection is bounded by query behavior rather than render
   truncation
 - `atm read` returns exactly one logical current message
+- file-backed `atm list` projects bounded summary rows without retaining full
+  message-body allocations in the list response path
 - selector-driven reads report extra matches in metadata instead of returning
   multiple full bodies
 - successor/task-thread selection operates on terminal-node logical current
@@ -129,3 +138,6 @@ detail surface.
 - targeted CLI tests for `atm list` and `atm read`
 - queue selection tests in `atm-core`
 - SQLite-backed bounded-query tests in `atm-rusqlite`
+- Windows-target validation:
+  - `cargo xwin check --workspace --target x86_64-pc-windows-msvc`
+  - `cargo xwin clippy --cross-compiler clang --workspace --all-targets --target x86_64-pc-windows-msvc -- -D warnings`

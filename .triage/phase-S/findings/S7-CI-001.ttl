@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-CI-001>
+  a triage:Finding ;
+  triage:findingId "S7-CI-001" ;
+  triage:title "Linux CI panic — read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox: timestamp collision causes non-deterministic sort" ;
+  triage:description "crates/atm-core/tests/mailbox_locking.rs:759 (feature/pS-s7-queue-query) — Fixture::new() writes an 'arch pending' message whose timestamp is set to IsoTimestamp::from_datetime(Utc::now()) at fixture construction time. send_mail is then called in the test body, generating a 'hello sidecar' message whose timestamp is extracted from its ULID (millisecond precision). On Linux CI, Fixture::new() and send_mail execute within the same millisecond, so both messages share the same IsoTimestamp when compared. sort_and_limit_selected(&mut selected, Some(1)) sorts descending by timestamp and falls through to a UUID-v4 tiebreak on message_id (right.envelope.message_id.cmp(&left.envelope.message_id)). Because UUIDs are random, ~50% of tiebreak outcomes sort 'arch pending' ahead of 'hello sidecar', so limit=1 returns 'arch pending' as outcome.message. The assertion outcome.message.as_ref().is_some_and(|m| m.envelope.text == \"hello sidecar\") then fails. macOS and Windows do not reproduce because their CI runners are slower or the timing window is wider, so the ULID timestamp is reliably newer. Fix: construct the 'arch pending' fixture message with an explicitly past timestamp (e.g. Utc::now() - Duration::seconds(1)) so 'hello sidecar' always wins the sort deterministically. Same root cause as S7-FTQ-001." ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-CI-001/s7/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-CI-001/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 759 ;
+  triage:snippet "outcome.message.as_ref().is_some_and(|message| message.envelope.text == \"hello sidecar\") — fails when sort_and_limit_selected(Some(1)) picks 'arch pending' (PendingAck, Utc::now()) over 'hello sidecar' (Unread, ULID ms) via UUID-v4 tiebreak under same-millisecond timestamp collision; fix: give pending_ack_message a past timestamp so 'hello sidecar' always sorts first" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/76a646c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "76a646c" ;
+  triage:orderIndex 2 ;
+  triage:status "absent" ;
+  triage:note "Test assertion uses outcome.messages.iter().any(...) on integrate/phase-S (ReadOutcome.messages: Vec); violation present only on feature/pS-s7-queue-query where ReadOutcome.message: Option is the single-select variant." .

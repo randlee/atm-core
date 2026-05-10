@@ -220,6 +220,50 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     join.join().expect("join serve thread");
 }
 
+#[cfg(windows)]
+#[test]
+#[serial]
+fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let socket_path = tempdir.path().join("daemon.sock");
+    let server_transport = LocalIpcServerTransportAdapter::new();
+    let runtime = server_transport
+        .prepare_runtime_at_socket_path(socket_path)
+        .expect("prepare runtime");
+    let (lifecycle, _reset) = {
+        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+        let reset = LifecycleFlagResetGuard::install(lifecycle.clone());
+        (lifecycle, reset)
+    };
+    let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
+    let (serve_result_tx, serve_result_rx) = mpsc::channel();
+
+    let join = std::thread::spawn(move || {
+        let result = runtime.serve_with_runtime_hooks(
+            dispatcher,
+            Duration::from_millis(500),
+            Duration::from_secs(2),
+            || Ok(()),
+            || Ok(()),
+            || {},
+        );
+        serve_result_tx.send(result).expect("send serve result");
+    });
+
+    let shutdown_started = Instant::now();
+    lifecycle.set_terminate_for_test(true);
+
+    serve_result_rx
+        .recv_timeout(Duration::from_secs(3))
+        .expect("recv serve result")
+        .expect("serve runtime result");
+    assert!(
+        shutdown_started.elapsed() < Duration::from_secs(3),
+        "windows same-host runtime shutdown should complete within the documented bounded deadline"
+    );
+    join.join().expect("join serve thread");
+}
+
 #[test]
 fn daemon_host_runtime_lock_path_ignores_atm_home() {
     let tempdir = TempDir::new().expect("tempdir");

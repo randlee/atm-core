@@ -2,6 +2,7 @@ use anyhow::Result;
 use atm_core::ack::AckOutcome;
 use atm_core::clear::ClearOutcome;
 use atm_core::doctor::{DoctorReport, DoctorSeverity, DoctorStatus};
+use atm_core::list::ListOutcome;
 use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
 use atm_core::protocol::{
     RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusSnapshot,
@@ -11,7 +12,6 @@ use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
     AddMemberOutcome, BackupOutcome, MembersList, RestoreOutcome, RestorePlan, TeamsList,
 };
-use atm_core::types::DisplayBucket;
 
 /// Print one send result in human-readable or JSON form.
 pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
@@ -25,7 +25,56 @@ pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
     }
 
     for warning in &outcome.warnings {
-        eprintln!("{warning}");
+        eprintln!("{}", warning.render());
+    }
+
+    Ok(())
+}
+
+/// Print one list result in human-readable or JSON form.
+pub fn print_list_result(outcome: &ListOutcome, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+        return Ok(());
+    }
+
+    println!("Queue: {}@{}", outcome.agent, outcome.team);
+    println!(
+        "Unread: {} | Pending-Ack: {} | History: {}",
+        outcome.bucket_counts.unread,
+        outcome.bucket_counts.pending_ack,
+        outcome.bucket_counts.history
+    );
+
+    for row in &outcome.rows {
+        println!(
+            "- {} {}: {}",
+            row.timestamp.into_inner().to_rfc3339(),
+            row.from,
+            row.summary
+        );
+        println!(
+            "  message_id: {}",
+            row.message_id
+                .map(|message_id| message_id.to_string())
+                .unwrap_or_else(|| "<none>".to_string())
+        );
+        if let Some(task_id) = &row.task_id {
+            println!("  task_id: {task_id}");
+        }
+        println!(
+            "  state: {}{}",
+            if row.read { "read" } else { "unread" },
+            if row.pending_ack { " pending-ack" } else { "" }
+        );
+    }
+
+    if outcome.history_collapsed && outcome.bucket_counts.history > 0 {
+        println!();
+        println!(
+            "History: {} older messages hidden. Use --all to show them.",
+            outcome.bucket_counts.history
+        );
     }
 
     Ok(())
@@ -45,17 +94,39 @@ pub fn print_read_result(outcome: &ReadOutcome, json: bool) -> Result<()> {
         outcome.bucket_counts.pending_ack,
         outcome.bucket_counts.history
     );
+    println!(
+        "Selected: {} | Matches: {} | Additional: {}",
+        outcome
+            .selected_message_id
+            .map(|message_id| message_id.to_string())
+            .unwrap_or_else(|| "<none>".to_string()),
+        outcome.match_count,
+        outcome.additional_match_count
+    );
+    if let Some(message) = &outcome.message {
+        println!();
+        println!("From: {}", message.envelope.from);
+        println!(
+            "At: {}",
+            message.envelope.timestamp.into_inner().to_rfc3339()
+        );
+        if let Some(task_id) = &message.envelope.task_id {
+            println!("Task: {task_id}");
+        }
+        if let Some(summary) = message.envelope.summary.as_deref() {
+            println!("Summary: {summary}");
+        }
+        println!("Body:");
+        println!("{}", message.envelope.text);
+    } else {
+        println!();
+        println!("No matching message.");
+    }
 
-    print_bucket(outcome, DisplayBucket::Unread, "Unread");
-    print_bucket(outcome, DisplayBucket::PendingAck, "Pending Ack");
-
-    if !outcome.history_collapsed {
-        print_bucket(outcome, DisplayBucket::History, "History");
-    } else if outcome.bucket_counts.history > 0 {
+    if outcome.additional_match_count > 0 {
         println!();
         println!(
-            "History: {} older messages hidden. Use --history or --all to show them.",
-            outcome.bucket_counts.history
+            "Additional matches remain. Use `atm list` with the same filters to inspect them."
         );
     }
 
@@ -341,36 +412,6 @@ pub fn print_restore_result(outcome: &RestoreOutcome, json: bool) -> Result<()> 
         );
     }
     Ok(())
-}
-
-fn print_bucket(outcome: &ReadOutcome, bucket: DisplayBucket, label: &str) {
-    let messages = outcome
-        .messages
-        .iter()
-        .filter(|message| message.bucket == bucket)
-        .collect::<Vec<_>>();
-
-    if messages.is_empty() {
-        return;
-    }
-
-    println!();
-    println!("{label}:");
-    for message in messages {
-        println!(
-            "- {} {}: {}",
-            message.envelope.timestamp.into_inner().to_rfc3339(),
-            message.envelope.from,
-            message
-                .envelope
-                .summary
-                .as_deref()
-                .unwrap_or(message.envelope.text.as_str())
-        );
-        if let Some(message_id) = message.envelope.message_id {
-            println!("  message_id: {message_id}");
-        }
-    }
 }
 
 fn empty_dash(value: &str) -> &str {

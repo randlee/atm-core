@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-RSH-F002>
+  a triage:Finding ;
+  triage:findingId "S7-RSH-F002" ;
+  triage:title "No server-side default limit for atm list without --limit" ;
+  triage:description "crates/atm-core/src/list.rs:171 calls sort_and_limit_selected(&mut selected, query.limit). When the user omits --limit, query.limit is None, and sort_and_limit_selected at read/mod.rs:682-684 only calls selected.truncate(limit) inside an if let Some(limit) guard — so with None, all matched messages are returned. For a local file-based mailbox this is low severity, but at the IPC boundary (RequestEnvelope::List is dispatched via daemon in runtime_health.rs:555) an unbounded payload can be serialized and written across the Unix socket, consuming arbitrary memory proportional to mailbox size. A server-side cap (e.g. DEFAULT_LIST_LIMIT = 200, MAX_LIST_LIMIT = 10_000) applied in list_mail or in sort_and_limit_selected before returning would bound the response. The finding exists only on the feature branch; integrate/phase-S has no list.rs or atm list command." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s7-queue-query" ;
+  triage:promoteToBranch "feature/pS-s7-queue-query" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RSH-F002/s7/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-RSH-F002/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 171 ;
+  triage:snippet "sort_and_limit_selected(&mut selected, query.limit) — None limit passes all matched messages to the response; no server-side cap; unbounded IPC payload proportional to mailbox size" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .

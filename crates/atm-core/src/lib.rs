@@ -21,6 +21,8 @@ pub mod error_codes;
 pub mod home;
 /// Internal identity resolution and hook lookup helpers.
 pub(crate) mod identity;
+/// Bounded metadata queue query workflows and output models.
+pub mod list;
 /// Log query and filtering types for the CLI log surface.
 pub mod log;
 /// Internal mailbox persistence and parsing helpers.
