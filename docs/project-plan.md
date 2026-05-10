@@ -60,6 +60,7 @@ Phase-S planning note:
   - `S.6` daemon post-mortem runtime remediation
   - `S.7` bounded queue-query implementation
   - `S.8` Claude JSONL compatibility-envelope implementation
+  - `S.9` host-scoped retained logging defaults
 
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton

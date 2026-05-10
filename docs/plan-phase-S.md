@@ -518,6 +518,27 @@ Required closeout work:
 - export `atm read --message-id <id>` stubs for oversized ATM-authored bodies
 - preserve summary text while keeping full ATM-authored bodies durable in
   SQLite
+
+### S.9 Host-Scoped Logging Defaults
+
+Goal:
+- move retained ATM logs to the host-scoped ATM state root and define the
+  minimum default retained event set required for daemon operability
+
+Required outcomes:
+- ATM retained logs default to `~/.atm/logs/atm.log.jsonl`
+- `ATM_LOG_DIR` redirects the exact retained log directory
+- retained logs remain host-scoped and independent of `ATM_HOME`
+- default retained logging includes daemon lifecycle `info!` events plus all
+  `warn!` / `error!` events across ATM subsystems
+
+Required closeout work:
+- add `host_log_dir()` and `host_log_dir_from_home(...)` to `atm-core`
+- move CLI observability bootstrap and daemon health/reporting to the
+  host-scoped ATM log directory
+- add `docs/atm-daemon/logging.md`
+- reconcile product and crate-local observability docs with the new retained
+  path and event baseline
 - prevent self-induced churn loops in watcher/reconcile paths
 
 ## 6. Removed Windows CI Guardrail

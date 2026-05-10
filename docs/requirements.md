@@ -1866,12 +1866,19 @@ Required rules:
 Product requirement ID:
 - `REQ-P-OBS-001` ATM observability must satisfy the documented best-effort
   emit behavior and shared query/follow/health expectations.
+- `REQ-P-OBS-002` ATM retained logs must use one host-scoped ATM-owned default
+  directory and must not derive that retained location from `ATM_HOME`.
+- `REQ-P-OBS-003` ATM retained logging must be non-silent by default for the
+  daemon lifecycle baseline and for every warning/error emitted by ATM
+  subsystems.
 
 Satisfied by:
 - `REQ-ATM-OBS-001` for CLI bootstrap/injection aspects
 - `REQ-CORE-LOG-001` for ATM log query/follow service aspects
 - `REQ-CORE-DOCTOR-001` for observability health reporting aspects
 - `REQ-CORE-OBS-001` for ATM event and query-model boundary aspects
+- `REQ-DAEMON-OBS-001` and `REQ-DAEMON-OBS-002` for daemon/runtime retained
+  event-baseline aspects
 
 ATM must emit structured records through `sc-observability`.
 
@@ -1906,12 +1913,25 @@ Emission is best-effort:
 
 Sink policy:
 - the shared file sink is required for retained ATM observability
+- default ATM-owned retained logs live at `~/.atm/logs/atm.log.jsonl`
+- `ATM_LOG_DIR` overrides the exact retained log directory
+- retained log location is host-scoped and must not derive from `ATM_HOME`
+- ATM-owned retained logs must not default to:
+  - `~/logs/`
+  - `~/.claude/logs/`
+  - `.local/share/logs/`
 - the shared console sink is optional and must remain off by default for normal
   ATM CLI command execution so command output stays stable
 - console logging may be enabled later for explicit local debugging or
   integration testing
 
 Diagnostic logging rules:
+- retained logging must include the daemon lifecycle baseline by default:
+  - start requested
+  - startup completed / ready
+  - shutdown requested
+  - shutdown completed
+  - degraded / abnormal-exit signals
 - command failures must emit structured failure diagnostics before the CLI
   exits, even when the command fails before reaching a core service
 - degraded recovery paths that intentionally continue, such as malformed-record
@@ -1921,6 +1941,8 @@ Diagnostic logging rules:
   addition to human-readable text
 - command lifecycle failure events must include the stable error code when one
   is available
+- every `warn!` / `error!` event emitted by ATM subsystems must remain present
+  in retained logs by default
 
 `atm log` and `atm doctor` are not best-effort features in the same sense:
 - they are explicit observability consumers

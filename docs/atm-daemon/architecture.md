@@ -177,6 +177,14 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   debug-only runtime path replaces it in production.
 - plugin-local observability does not replace daemon-owned runtime/transport
   sinks; daemon-owned events stay daemon-owned.
+- daemon retained-log reporting must use the host-scoped ATM log contract:
+  `~/.atm/logs/atm.log.jsonl` by default and `ATM_LOG_DIR` when overridden.
+- daemon health/reporting must not point retained-log status at `.local/share`,
+  `~/logs`, `~/.claude/logs`, or other non-ATM-owned defaults.
+- the default retained daemon logging baseline must keep:
+  - daemon lifecycle `info!` events
+  - every daemon/runtime/transport `warn!` event
+  - every daemon/runtime/transport `error!` event
 - runtime subsystems stay fully isolated:
   - SQL/store calls belong only to the store boundary
   - file-watch/reconcile logic belongs only to the watcher/reconcile boundary

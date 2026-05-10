@@ -89,6 +89,9 @@ Initial crate requirement IDs:
 
 - initializing the concrete shared logger once per CLI process
 - mapping ATM env/config decisions into shared logger configuration
+- resolving the retained log directory through the host-scoped ATM log-path
+  contract rather than through `ATM_HOME`
+- honoring `ATM_LOG_DIR` as the exact retained log-directory override
 - consuming the published `sc-observability = "1.0.0"` crate baseline rather
   than a local pre-publish checkout
 - exposing one structured construction contract for the concrete adapter:
@@ -98,6 +101,9 @@ Initial crate requirement IDs:
   implementation surfaces a concrete defect
 - logging CLI bootstrap, parse, and terminal command failures with stable
   ATM-owned error codes before exit
+- keeping the default retained logger baseline high enough to preserve daemon
+  lifecycle `info!` events plus all `warn!` / `error!` events when `ATM_LOG`
+  is unset
 - using the single ATM-owned code registry defined by
   [`../atm-error-codes.md`](../atm-error-codes.md) rather than local ad hoc
   code strings

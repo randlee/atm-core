@@ -98,6 +98,12 @@ Disposition:
     `triaging-findings`, and the phase integration-worktree ownership rule all
     agree on the canonical `triage_root`.
 
+21. Retained ATM logging still uses an operationally weak default contract:
+    the current log-root behavior is split from the `~/.atm/` host state tree,
+    the `ATM_LOG_DIR` redirect is not yet part of the owned contract, and the
+    minimum daemon-lifecycle / warning / error event baseline is not yet
+    explicitly planned and reviewed.
+
 ## Assigned Follow-On Sprint Ownership
 
 - `S.6`
@@ -115,6 +121,10 @@ Disposition:
   - `[atm].claude_jsonl_body_export_max_bytes`
   - oversized ATM-authored retrieval-stub export
   - watcher/reconcile no-churn handling for ATM-authored projections
+- `S.9`
+  - host-scoped retained log directory contract
+  - `ATM_LOG_DIR` redirect behavior
+  - minimum default retained daemon-lifecycle / warning / error event set
 
 ## Deferred Follow-Up
 
