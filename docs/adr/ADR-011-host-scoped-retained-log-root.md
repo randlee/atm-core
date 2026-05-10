@@ -4,7 +4,7 @@
 | --- | --- |
 | ID | ADR-011 |
 | Status | Accepted |
-| Date | 2026-05-10 |
+| Date | 2026-05-09 |
 | Deciders | arch-ctm, team-lead |
 | Relates-to | ADR-010 |
 | Supersedes | — |

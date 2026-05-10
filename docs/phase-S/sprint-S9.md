@@ -147,6 +147,9 @@ Implementation-sprint acceptance:
 - retained logging is host-scoped and independent of `ATM_HOME`
 - default retained logging includes daemon lifecycle `info!` events plus all
   `warn!` / `error!` events across ATM subsystems
+- console sink remains disabled by default; no retained-log output appears on
+  stdout/stderr during normal `atm send` / `atm read` runs unless an explicit
+  logging opt-in such as `ATM_LOG` is set
 - sink initialization fails closed at startup with typed path/context errors
 - mid-run retained-log write failures degrade to stderr-once plus continued
   operation rather than daemon termination
