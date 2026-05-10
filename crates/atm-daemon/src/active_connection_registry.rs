@@ -71,6 +71,33 @@ impl ActiveConnectionRegistry {
         })
     }
 
+    pub(crate) fn push_dispatch_handle(
+        &self,
+        handle: TrackedDispatchHandle,
+        max_handles: usize,
+    ) -> Result<(), AtmError> {
+        let mut handles = match self.lock_dispatch_handles() {
+            Ok(handles) => handles,
+            Err(error) => {
+                let _ = handle.join_handle.join();
+                return Err(error);
+            }
+        };
+        if handles.len() >= max_handles {
+            let _ = handle.join_handle.join();
+            return Err(
+                AtmError::daemon_lifecycle_wedge(format!(
+                    "tracked daemon dispatch registry exceeded its bounded capacity of {max_handles} handles"
+                ))
+                .with_recovery(
+                    "Restart the daemon; tracked request-work accounting lost its bounded-cap invariant.",
+                ),
+            );
+        }
+        handles.push(handle);
+        Ok(())
+    }
+
     pub(crate) fn reap_finished_dispatches(&self) -> Result<(), AtmError> {
         let finished = {
             let mut handles = self.lock_dispatch_handles()?;
@@ -177,7 +204,12 @@ fn join_dispatch_handle_with_timeout(
                 timeout_ms = timeout.as_millis() as u64,
                 "tracked daemon dispatch worker exceeded the shutdown join deadline; detaching"
             );
-            Ok(())
+            Err(AtmError::daemon_lifecycle_wedge(
+                "tracked daemon dispatch worker exceeded the shutdown join deadline",
+            )
+            .with_recovery(
+                "Restart the daemon; a request worker outlived the bounded shutdown window.",
+            ))
         }
     }
 }

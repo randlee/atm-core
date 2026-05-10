@@ -399,7 +399,7 @@ fn install_platform_hooks(
                 }
                 // `signal_hook::flag` does not expose a blocking cross-platform wake primitive on
                 // Windows, so the lifecycle worker uses one bounded polling exception that Phase S
-                // documents explicitly in plan-phase-S.md §4.1.
+                // documents explicitly in docs/plan-phase-S.md §4.1, Accepted production exceptions.
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
         })

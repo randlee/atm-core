@@ -283,7 +283,7 @@ impl PreparedRuntimeServer {
                         if shutdown_beacon.is_tripped() {
                             return;
                         }
-                        #[cfg(test)]
+                        #[cfg(all(test, unix))]
                         if let Some(error) = take_injected_accept_error_for_test() {
                             shutdown_beacon.trip();
                             let _ = lifecycle_control.notify_state_change();
@@ -707,11 +707,11 @@ fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 static INJECTED_ACCEPT_ERROR_FOR_TEST: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>> =
     std::sync::Mutex::new(None);
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(crate) fn install_injected_accept_error_for_test(
     signal: std::sync::mpsc::SyncSender<()>,
 ) -> InjectAcceptErrorGuard {
@@ -721,10 +721,10 @@ pub(crate) fn install_injected_accept_error_for_test(
     InjectAcceptErrorGuard
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 pub(crate) struct InjectAcceptErrorGuard;
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 impl Drop for InjectAcceptErrorGuard {
     fn drop(&mut self) {
         *INJECTED_ACCEPT_ERROR_FOR_TEST
@@ -733,7 +733,7 @@ impl Drop for InjectAcceptErrorGuard {
     }
 }
 
-#[cfg(test)]
+#[cfg(all(test, unix))]
 fn take_injected_accept_error_for_test() -> Option<AtmError> {
     let sender = INJECTED_ACCEPT_ERROR_FOR_TEST
         .lock()
@@ -871,16 +871,13 @@ fn handle_connection(
         let _ = completion_tx.send(());
         let _ = dispatch_event_tx.send(ServeEvent::DispatchFinished);
     });
-    match registry.lock_dispatch_handles() {
-        Ok(mut handles) => handles.push(TrackedDispatchHandle {
+    registry.push_dispatch_handle(
+        TrackedDispatchHandle {
             completion_rx,
             join_handle: dispatch_handle,
-        }),
-        Err(error) => {
-            let _ = dispatch_handle.join();
-            return Err(error);
-        }
-    }
+        },
+        MAX_CONCURRENT_CONNECTIONS,
+    )?;
     let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {
         Ok(Ok(response)) => response,
         Ok(Err(error)) => ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error)),
@@ -924,9 +921,12 @@ mod tests {
     use super::*;
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
     use atm_core::boundary::RequestDispatcher;
+    #[cfg(unix)]
+    use atm_core::doctor::DoctorQuery;
     use atm_core::doctor::{
-        DoctorEnvironmentVisibility, DoctorQuery, DoctorReport, DoctorStatus, DoctorSummary,
+        DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary,
     };
+    #[cfg(unix)]
     use atm_core::error_codes::AtmErrorCode;
     use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
@@ -1265,12 +1265,14 @@ mod tests {
             let _ = completion_tx.send(());
         });
         registry
-            .lock_dispatch_handles()
-            .expect("dispatch handle lock")
-            .push(TrackedDispatchHandle {
-                completion_rx,
-                join_handle,
-            });
+            .push_dispatch_handle(
+                TrackedDispatchHandle {
+                    completion_rx,
+                    join_handle,
+                },
+                1,
+            )
+            .expect("dispatch handle push");
         let force_shutdown = AtomicBool::new(false);
         let shutdown_started = Instant::now();
         let error = drain_active_connections_for_shutdown(
@@ -1286,7 +1288,11 @@ mod tests {
             "forced cancel should bound shutdown even when tracked request work never completes"
         );
         assert!(force_shutdown.load(Ordering::SeqCst));
-        assert!(error.message.contains("forced cancel deadline elapsed"));
+        assert!(
+            error
+                .message
+                .contains("tracked daemon dispatch worker exceeded the shutdown join deadline")
+        );
         let _ = release_tx.send(());
         drop(active_connection);
     }
