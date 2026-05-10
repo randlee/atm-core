@@ -1,0 +1,127 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CI-BLOCK-001>
+  a triage:Finding ;
+  triage:findingId "CI-BLOCK-001" ;
+  triage:title "Ungated Unix-only test imports — DoctorQuery and EnvGuard" ;
+  triage:description "crates/atm-daemon/src/tests.rs:13 imports DoctorQuery and line 22 imports atm_core::test_support::EnvGuard at module level but both are only used inside #[cfg(unix)] test blocks. Windows clippy reports unused import error. Same cfg(unix) gate pattern as existing finding S13-CI-001 (which covered tests.rs:28 and :114). These are new locations. (1) tests.rs:12-14 — the multi-line use atm_core::doctor::{..., DoctorQuery, ...} import is ungated; DoctorQuery is only used at lines 201, 269 which are inside #[cfg(unix)] test functions; on Windows this produces an unused import warning-as-error. (2) tests.rs:22 — use atm_core::test_support::EnvGuard is ungated; EnvGuard is only used at line 239 inside a #[cfg(unix)] test function; on Windows this produces an unused import warning-as-error. Fix: add #[cfg(unix)] gates to both import sites or restructure them into #[cfg(unix)] submodule." ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s15-rusqlite-hardening" ;
+  triage:promoteToBranch "feature/pS-s15-rusqlite-hardening" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-BLOCK-001/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-BLOCK-001/s13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-BLOCK-001/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-BLOCK-001/s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-BLOCK-001/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-BLOCK-001/s15/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9> .
+
+# --- s13 occurrences (4c03c2c) ---
+
+<urn:atm:triage:occurrence/CI-BLOCK-001/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 13 ;
+  triage:snippet "DoctorEnvironmentVisibility, DoctorQuery, DoctorReport, DoctorStatus, DoctorSummary, — DoctorQuery is ungated; only used inside #[cfg(unix)] test blocks at lines 201 and 269; on Windows this is an unused import (warnings-as-errors); fix: add #[cfg(unix)] gate to the enclosing use atm_core::doctor::{...} import or split DoctorQuery into a separate #[cfg(unix)] use statement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "4c03c2c" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c> .
+
+<urn:atm:triage:occurrence/CI-BLOCK-001/s13/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 22 ;
+  triage:snippet "use atm_core::test_support::EnvGuard; — ungated module-level import; EnvGuard is only used at line 239 inside #[cfg(unix)] test fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability; on Windows this is an unused import (warnings-as-errors); fix: add #[cfg(unix)] gate to this use statement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "4c03c2c" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c> .
+
+# --- s14 occurrences (cf57c48, propagated via merge from s13) ---
+
+<urn:atm:triage:occurrence/CI-BLOCK-001/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 13 ;
+  triage:snippet "DoctorEnvironmentVisibility, DoctorQuery, DoctorReport, DoctorStatus, DoctorSummary, — DoctorQuery ungated; propagated from s13 via merge; same fix required" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "cf57c48" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48> .
+
+<urn:atm:triage:occurrence/CI-BLOCK-001/s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 22 ;
+  triage:snippet "use atm_core::test_support::EnvGuard; — ungated; propagated from s13 via merge; same fix required" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "cf57c48" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48> .
+
+# --- s15 occurrences (93c63a9, propagated via merge from s13) ---
+
+<urn:atm:triage:occurrence/CI-BLOCK-001/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 13 ;
+  triage:snippet "DoctorEnvironmentVisibility, DoctorQuery, DoctorReport, DoctorStatus, DoctorSummary, — DoctorQuery ungated; propagated from s13 via merge; same fix required" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "93c63a9" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9> .
+
+<urn:atm:triage:occurrence/CI-BLOCK-001/s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 22 ;
+  triage:snippet "use atm_core::test_support::EnvGuard; — ungated; propagated from s13 via merge; same fix required" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "93c63a9" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .

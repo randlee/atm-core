@@ -221,10 +221,11 @@ impl ReconcileRuntime {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        let mut state =
-            self.inner.state.lock().map_err(|_| {
-                AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
-            })?;
+        let mut state = self.inner.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
+                "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
+            )
+        })?;
         if state.started {
             return Ok(());
         }
@@ -246,7 +247,8 @@ impl ReconcileRuntime {
                 let _ = handle.join();
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime worker lock poisoned",
-                ));
+                )
+                .with_recovery("Restart the daemon; reconcile worker ownership can no longer be tracked safely."));
             }
         };
         *worker = Some(handle);
@@ -256,7 +258,9 @@ impl ReconcileRuntime {
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
         {
             let mut state = self.inner.state.lock().map_err(|_| {
-                AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
+                AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
+                    "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
+                )
             })?;
             state.shutdown = true;
             self.inner.wake.notify_all();
@@ -265,7 +269,10 @@ impl ReconcileRuntime {
             .inner
             .worker
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("reconcile runtime worker lock poisoned"))?
+            .map_err(|_| {
+                AtmError::daemon_unavailable("reconcile runtime worker lock poisoned")
+                    .with_recovery("Restart the daemon; reconcile worker ownership can no longer be tracked safely.")
+            })?
             .take()
         {
             let (result_tx, result_rx) = mpsc::sync_channel(1);
@@ -309,7 +316,9 @@ impl ReconcileRuntime {
     pub(crate) fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
         let waiter_id = {
             let mut state = self.inner.state.lock().map_err(|_| {
-                AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
+                AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
+                    "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
+                )
             })?;
             if !state.started {
                 return Err(AtmError::daemon_unavailable(
@@ -345,10 +354,11 @@ impl ReconcileRuntime {
             waiter_id
         };
 
-        let mut state =
-            self.inner.state.lock().map_err(|_| {
-                AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
-            })?;
+        let mut state = self.inner.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
+                "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
+            )
+        })?;
         loop {
             if state.shutdown {
                 state.release_waiter(waiter_id);

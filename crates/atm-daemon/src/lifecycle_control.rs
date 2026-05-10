@@ -199,7 +199,7 @@ impl LifecycleControlSourceAdapter {
         self.state_change.wait_for_change(observed_generation)
     }
 
-    #[allow(dead_code)]
+    #[cfg_attr(any(windows, not(test)), allow(dead_code))]
     pub(crate) fn wait_for_state_change_timeout(
         &self,
         observed_generation: &mut u64,
@@ -690,6 +690,28 @@ mod unix_tests {
             .shutdown_worker_with_timeout()
             .expect("shutdown lifecycle worker");
         let _ = first;
+    }
+
+    #[test]
+    fn wait_for_state_change_timeout_reports_timeout_then_wake() {
+        let adapter = LifecycleControlSourceAdapter::new_for_test();
+        let mut observed_generation = adapter.event_generation().expect("generation");
+
+        let timed_out = adapter
+            .wait_for_state_change_timeout(&mut observed_generation, Duration::from_millis(10))
+            .expect("timeout wait");
+        assert!(
+            !timed_out,
+            "short timeout without a state change should report false"
+        );
+
+        adapter
+            .notify_state_change()
+            .expect("notify lifecycle state change");
+        let changed = adapter
+            .wait_for_state_change_timeout(&mut observed_generation, Duration::from_secs(1))
+            .expect("wake wait");
+        assert!(changed, "explicit notify should wake the timed wait");
     }
 }
 

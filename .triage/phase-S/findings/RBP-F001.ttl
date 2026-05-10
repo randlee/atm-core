@@ -4,149 +4,346 @@
 <urn:atm:triage:finding/RBP-F001>
   a triage:Finding ;
   triage:findingId "RBP-F001" ;
-  triage:title "Infallible Result in AtmError-returning methods — two occurrences" ;
-  triage:description "Two occurrences of the same pattern: (1) reconcile_runtime.rs:103 — ReconcileFailureSnapshot::to_error() discards original AtmErrorCode; the struct captures only message and recovery, discarding the error code variant from AtmError::from(); to_error() hardcodes AtmError::daemon_unavailable regardless of original code. (2) local_ipc_transport.rs:60-63 — ActiveConnectionRegistry::interrupt_all returns Result<(), AtmError> but only calls notify_all() and returns Ok(()); the error variant is never reachable, making any caller error-handling dead code." ;
+  triage:title "RBP-004: request_id flows as plain u64 — needs NonZeroRequestId(NonZeroU64) newtype" ;
+  triage:description "crates/atm-core/src/protocol.rs:275 — request_id flows as plain u64 across multiple public codec boundaries; the non-zero invariant is re-validated at each callsite via nonzero_request_id(). Fix: introduce NonZeroRequestId(NonZeroU64) newtype to encode the invariant at the type level, eliminating repeated validation. Occurrences span protocol.rs (struct fields, function params, next_request_id return type, nonzero_request_id helper), boundary/mod.rs (two fn params), and peer_transport.rs (one fn param)." ;
   triage:phaseId "phase-S" ;
-  triage:triageMode "followup_pass" ;
+  triage:triageMode "initial_pass" ;
   triage:category "RBP" ;
-  triage:severity "minor" ;
-  triage:repeatable false ;
-  triage:sweepScope "file" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-08T12:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence
-    <urn:atm:triage:occurrence/RBP-F001/pS-s1-boundary-extraction/1> ,
-    <urn:atm:triage:occurrence/RBP-F001/pS-s2-windows-ipc/1> ,
-    <urn:atm:triage:occurrence/RBP-F001/pS-s2-windows-ipc/2> ,
-    <urn:atm:triage:occurrence/RBP-F001/pS-s3-runtime-control/1> ,
-    <urn:atm:triage:occurrence/RBP-F001/pS-s3-runtime-control/2> ,
-    <urn:atm:triage:occurrence/RBP-F001/pS-s4-hardening/1> ,
-    <urn:atm:triage:occurrence/RBP-F001/integrate-phase-S/1> ;
+    <urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/1> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/2> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/3> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/4> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/5> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/6> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/7> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/8> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/1> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/2> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/3> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/4> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/5> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/6> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/7> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/8> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/1> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/2> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/3> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/4> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/5> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/6> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/7> ,
+    <urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/8> ;
   triage:openOn
-    <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> ,
-    <urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039> ,
-    <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> ,
-    <urn:atm:triage:worktree/pS-s4-hardening/689a48f> ,
-    <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
-  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+    <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> ,
+    <urn:atm:triage:worktree/pS-s14-impl/cf57c48> ,
+    <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
 
-# --- Occurrence 1: reconcile_runtime.rs:103 on pS-s1-boundary-extraction ---
-<urn:atm:triage:occurrence/RBP-F001/pS-s1-boundary-extraction/1>
+# ============================================================
+# Occurrences on feature/pS-s13-ipc-hardening (head: 4c03c2c)
+# ============================================================
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
-  triage:line 103 ;
-  triage:snippet "fn to_error(&self) -> AtmError { let error = AtmError::daemon_unavailable(self.message.clone());" ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 150 ;
+  triage:snippet "pub request_id: u64," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> .
 
-# --- Occurrence 1: reconcile_runtime.rs:103 on pS-s2-windows-ipc ---
-<urn:atm:triage:occurrence/RBP-F001/pS-s2-windows-ipc/1>
+<urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/2>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
-  triage:line 103 ;
-  triage:snippet "fn to_error(&self) -> AtmError { let error = AtmError::daemon_unavailable(self.message.clone());" ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 249 ;
+  triage:snippet "request_id: u64," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "a7f8039" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> .
 
-# --- Occurrence 2 (NEW): local_ipc_transport.rs:60-63 on pS-s2-windows-ipc ---
-<urn:atm:triage:occurrence/RBP-F001/pS-s2-windows-ipc/2>
+<urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/3>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
-  triage:line 60 ;
-  triage:snippet "pub(crate) fn interrupt_all(&self) -> Result<(), AtmError> { self.drain_wake.notify_all(); Ok(()) }" ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 261 ;
+  triage:snippet "request_id: u64," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "a7f8039" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> .
 
-# --- Occurrence 1: reconcile_runtime.rs:103 on pS-s3-runtime-control ---
-<urn:atm:triage:occurrence/RBP-F001/pS-s3-runtime-control/1>
+<urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/4>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
-  triage:line 103 ;
-  triage:snippet "fn to_error(&self) -> AtmError { let error = AtmError::daemon_unavailable(self.message.clone());" ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 275 ;
+  triage:snippet "pub fn next_request_id() -> u64 {" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "98c151c" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> .
 
-# --- Occurrence 2 (NEW): local_ipc_transport.rs:60-63 on pS-s3-runtime-control ---
-<urn:atm:triage:occurrence/RBP-F001/pS-s3-runtime-control/2>
+<urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/5>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
-  triage:line 60 ;
-  triage:snippet "pub(crate) fn interrupt_all(&self) -> Result<(), AtmError> { self.drain_wake.notify_all(); Ok(()) }" ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 285 ;
+  triage:snippet "request_id: u64," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "98c151c" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/98c151c> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> .
 
-# --- Occurrence 1: reconcile_runtime.rs:103 on pS-s4-hardening ---
-<urn:atm:triage:occurrence/RBP-F001/pS-s4-hardening/1>
+<urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/6>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
-  triage:line 103 ;
-  triage:snippet "fn to_error(&self) -> AtmError { let error = AtmError::daemon_unavailable(self.message.clone());" ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 312 ;
+  triage:snippet "request_id: u64," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s4-hardening/689a48f> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> .
 
-# --- Occurrence 1: reconcile_runtime.rs:103 on integrate/phase-S ---
-<urn:atm:triage:occurrence/RBP-F001/integrate-phase-S/1>
+<urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/7>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
-  triage:line 103 ;
-  triage:snippet "fn to_error(&self) -> AtmError { let error = AtmError::daemon_unavailable(self.message.clone());" ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 454 ;
+  triage:snippet "fn nonzero_request_id(request_id: u64) -> Result<u64, AtmError> {" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> .
 
-# --- WorktreeSnapshots ---
-<urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1>
+<urn:atm:triage:occurrence/RBP-F001/pS-s13-ipc-hardening/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mod.rs" ;
+  triage:line 165 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> .
+
+# ============================================================
+# Occurrences on feature/pS-s14-impl (head: cf57c48)
+# ============================================================
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 150 ;
+  triage:snippet "pub request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 249 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 261 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 275 ;
+  triage:snippet "pub fn next_request_id() -> u64 {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 285 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 312 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 454 ;
+  triage:snippet "fn nonzero_request_id(request_id: u64) -> Result<u64, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s14-impl/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mod.rs" ;
+  triage:line 165 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> .
+
+# ============================================================
+# Occurrences on feature/pS-s15-rusqlite-hardening (head: 93c63a9)
+# Highest open branch — full workspace sweep performed
+# ============================================================
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 150 ;
+  triage:snippet "pub request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 249 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 261 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 275 ;
+  triage:snippet "pub fn next_request_id() -> u64 {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 285 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 312 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 454 ;
+  triage:snippet "fn nonzero_request_id(request_id: u64) -> Result<u64, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F001/pS-s15-rusqlite-hardening/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mod.rs" ;
+  triage:line 165 ;
+  triage:snippet "request_id: u64," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+# ============================================================
+# WorktreeSnapshots
+# ============================================================
+
+<urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pS-s2-windows-ipc/a7f8039>
+<urn:atm:triage:worktree/pS-s14-impl/cf57c48>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
-  triage:headSha "a7f8039" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pS-s3-runtime-control/98c151c>
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
-  triage:headSha "98c151c" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
   triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/pS-s4-hardening/689a48f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:orderIndex 4 .
-
-<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
-  a triage:WorktreeSnapshot ;
-  triage:branch "integrate/phase-S" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:orderIndex 5 .

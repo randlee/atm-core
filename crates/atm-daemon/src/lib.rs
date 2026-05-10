@@ -19,6 +19,8 @@ mod runtime_health;
 mod shutdown_beacon;
 #[cfg(test)]
 mod test_observability;
+#[cfg(test)]
+mod test_support;
 mod watch_runtime;
 
 use std::path::PathBuf;
@@ -33,8 +35,8 @@ pub(crate) use atm_rusqlite::RemoteReplayStateRecord;
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
 pub(crate) use peer_transport::{PeerTransportRuntime, RemoteReplayStore};
 
-pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
-pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
+pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);
+pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DaemonExitCode {

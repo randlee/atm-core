@@ -1,7 +1,7 @@
 # Sprint S.13 — IPC/Socket Runtime Hardening Plan
 
 **Branch**: feature/pS-s13-ipc-transport-plan  
-**Base**: integrate/phase-S @ 77badd5  
+**Base**: integrate/phase-S @ f152ae3  
 **PR target**: integrate/phase-S  
 **Status**: Planning
 

@@ -4,8 +4,8 @@
 <urn:atm:triage:finding/RSH-006>
   a triage:Finding ;
   triage:findingId "RSH-006" ;
-  triage:title "Unbounded fs::read_to_string without size guard in runtime_health.rs:822" ;
-  triage:description "crates/atm-daemon/src/runtime_health.rs:822 — fs::read_to_string used without first checking file size. On a malicious or corrupt filesystem this can allocate arbitrarily large buffers. Should check metadata size before reading, or use a capped read. (quality-mgr reported as RSH-005 in S.1 QA-2 report; remapped RSH-006 to avoid ID collision with existing phase-S RSH-005 which covers SIGTERM dead code on feature/pS-s3-runtime-control.)" ;
+  triage:title "MAX_RELOAD_TEAMS counter includes non-config entries — off-by-many under high load" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs — entries.enumerate() iterates over all read_dir entries (including non-config entries like dotfiles and metadata) before filtering. The index counter advances for every DirEntry regardless of whether it represents a valid team config, so the MAX_RELOAD_TEAMS guard fires prematurely under high non-config entry loads. Fix: filter the iterator to config-only entries before enumerate(), or count only entries that pass the TeamName parse check." ;
   triage:category "RSH" ;
   triage:severity "minor" ;
   triage:triageMode "initial_pass" ;
@@ -14,25 +14,66 @@
   triage:sweepScope "file" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-08T23:30:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/s1/1> ;
-  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> ;
-  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+  triage:triagedAt "2026-05-10T17:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #230, QA-1 TASK-1230" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/s15/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c> .
 
-<urn:atm:triage:occurrence/RSH-006/s1/1>
+<urn:atm:triage:occurrence/RSH-006/s13/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/runtime_health.rs" ;
-  triage:line 822 ;
-  triage:snippet "fs::read_to_string — no size guard before read" ;
+  triage:line 674 ;
+  triage:snippet "for (index, entry) in entries.enumerate() { if index >= MAX_RELOAD_TEAMS {" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:headSha "661f0fb" ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+  triage:headSha "4c03c2c" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c> .
 
-<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb>
+<urn:atm:triage:occurrence/RSH-006/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 675 ;
+  triage:snippet "for (index, entry) in entries.enumerate() { if index >= MAX_RELOAD_TEAMS {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "cf57c48" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48> .
+
+<urn:atm:triage:occurrence/RSH-006/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 674 ;
+  triage:snippet "for (index, entry) in entries.enumerate() { if index >= MAX_RELOAD_TEAMS {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "93c63a9" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9> .
+
+<urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
-  triage:headSha "661f0fb" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
   triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 .

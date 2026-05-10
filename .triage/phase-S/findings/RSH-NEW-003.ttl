@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-NEW-003>
+  a triage:Finding ;
+  triage:findingId "RSH-NEW-003" ;
+  triage:title "SHUTDOWN_FINALIZER_THREADS — unbounded Vec grows under repeated timeout" ;
+  triage:description "static SHUTDOWN_FINALIZER_THREADS: Mutex<Vec<JoinHandle<()>>> at runtime_health.rs:43 has no capacity cap. Every timed-out shutdown worker is pushed without limit. In a long-running daemon with repeated checkpoint timeouts the vec grows unbounded. Fix: add a MAX_SHUTDOWN_FINALIZER_THREADS const and warn+skip-push (or join-inline with short timeout) when the limit is reached, preventing unbounded memory growth." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:rule "RSH" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T23:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s13-ipc-hardening" ;
+  triage:promoteToBranch "feature/pS-s13-ipc-hardening" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-NEW-003/s13/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/2b16650> .
+
+<urn:atm:triage:occurrence/RSH-NEW-003/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 43 ;
+  triage:snippet "static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> — no capacity bound; push at :390 without limit check" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2b16650" ;
+  triage:branch "feature/pS-s13-ipc-hardening" .
+
+<urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/2b16650>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "2b16650" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .

@@ -36,11 +36,11 @@ const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
+const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 
-#[cfg(test)]
-// The shutdown-step helper is static, so timed-out join handles need one
-// process-wide test registry that drain_shutdown_finalizer_threads_for_test()
-// can clean up after each bounded-timeout scenario.
+// Timed-out shutdown workers are retained in one process-wide registry instead of being dropped
+// orphaned; tests drain the registry explicitly and production keeps the handles reachable until
+// process shutdown completes.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
 
@@ -385,23 +385,26 @@ impl DaemonRequestDispatcher {
                 tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
             }
             Err(mpsc::RecvTimeoutError::Timeout) => {
-                #[cfg(test)]
-                {
-                    SHUTDOWN_FINALIZER_THREADS
-                        .lock()
-                        .expect("shutdown finalizer thread registry lock")
-                        .push(shutdown_handle);
-                }
-                #[cfg(not(test))]
-                {
-                    // Intentionally detach the timed-out worker; thread runs to completion orphaned, not joined.
-                    // Keeps shutdown bounded even if the finalizer exits later.
-                    drop(shutdown_handle);
+                // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
+                // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
+                // than dropping it orphaned because tests and orderly process teardown can join it
+                // later once the blocking storage step finishes.
+                let mut handles = SHUTDOWN_FINALIZER_THREADS
+                    .lock()
+                    .expect("shutdown finalizer thread registry lock");
+                if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS {
+                    handles.push(shutdown_handle);
+                } else {
+                    tracing::warn!(
+                        step = label,
+                        cap = MAX_SHUTDOWN_FINALIZER_THREADS,
+                        "shutdown finalizer thread cap reached; dropping retained worker handle"
+                    );
                 }
                 tracing::warn!(
                     step = label,
                     timeout_ms = deadline.as_millis(),
-                    "daemon shutdown finalizer step exceeded its deadline"
+                    "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
                 );
             }
             Err(mpsc::RecvTimeoutError::Disconnected) => {

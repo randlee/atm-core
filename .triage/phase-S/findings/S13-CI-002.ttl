@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S13-CI-002>
+  a triage:Finding ;
+  triage:findingId "S13-CI-002" ;
+  triage:title "Ungated test_support import — connect_daemon_local_ipc_until_ready use at tests.rs:10" ;
+  triage:description "tests.rs:10 imports connect_daemon_local_ipc_until_ready from test_support as part of a combined use statement with LifecycleFlagResetGuard. connect_daemon_local_ipc_until_ready is #[cfg(unix)]-gated in test_support.rs; the import is not gated, causing Windows E0432. Fix: split the use statement and gate the connect_daemon_local_ipc_until_ready import with #[cfg(unix)]. Same cfg(unix) gate pattern as S13-CI-001." ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T22:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s13-ipc-hardening" ;
+  triage:promoteToBranch "feature/pS-s13-ipc-hardening" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-CI-002/s13/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/2b16650> .
+
+<urn:atm:triage:occurrence/S13-CI-002/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 10 ;
+  triage:snippet "test_support::{LifecycleFlagResetGuard, connect_daemon_local_ipc_until_ready} — connect_daemon_local_ipc_until_ready not gated; Windows E0432" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2b16650" ;
+  triage:branch "feature/pS-s13-ipc-hardening" .
+
+<urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/2b16650>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "2b16650" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .

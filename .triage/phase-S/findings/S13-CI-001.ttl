@@ -1,0 +1,127 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S13-CI-001>
+  a triage:Finding ;
+  triage:findingId "S13-CI-001" ;
+  triage:title "Ungated Unix-only test imports — cfg(unix) gate pattern" ;
+  triage:description "Windows clippy reports unused imports and not-in-scope errors for Unix-only test items in crates/atm-daemon/src/tests.rs and crates/atm-daemon/src/local_ipc_transport.rs. FIX-R7 gated 4 locations in the local_ipc_transport.rs test module; two locations in tests.rs remain ungated at 46069a9. (1) tests.rs:28 — 'use interprocess::local_socket::traits::Stream as _' is not gated by #[cfg(unix)]; on Windows this is an unused import (warnings-as-errors). (2) tests.rs:114 — fn connect_daemon_local_ipc_until_ready returns LocalSocketStream (the type at line 27 is #[cfg(unix)]-gated); on Windows, LocalSocketStream is not in scope, causing E0412. Both items must be gated with #[cfg(unix)]. Pattern is repeatable across all open branches because s14 and s15 both merged s13's state." ;
+  triage:category "CI" ;
+  triage:severity "blocking" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T12:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s15-rusqlite-hardening" ;
+  triage:promoteToBranch "feature/pS-s15-rusqlite-hardening" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-CI-001/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-CI-001/s13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-CI-001/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-CI-001/s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-CI-001/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-CI-001/s15/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/46069a9> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s14-impl/3da95f8> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/803d446> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/803d446> .
+
+# --- s13 occurrences (46069a9) ---
+
+<urn:atm:triage:occurrence/S13-CI-001/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 28 ;
+  triage:snippet "use interprocess::local_socket::traits::Stream as _; — ungated; on Windows this import is unused (warnings-as-errors) because all consuming test functions are #[cfg(unix)]-gated; fix: add #[cfg(unix)] gate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "46069a9" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/46069a9> .
+
+<urn:atm:triage:occurrence/S13-CI-001/s13/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 114 ;
+  triage:snippet "fn connect_daemon_local_ipc_until_ready(endpoint_path: &std::path::Path) -> LocalSocketStream { — ungated helper function; LocalSocketStream (line 27) is #[cfg(unix)]-gated so its type is not in scope on Windows causing E0412; fix: add #[cfg(unix)] gate to the function" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "46069a9" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/46069a9> .
+
+# --- s14 occurrences (3da95f8, propagated via merge from s13) ---
+
+<urn:atm:triage:occurrence/S13-CI-001/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 28 ;
+  triage:snippet "use interprocess::local_socket::traits::Stream as _; — ungated; propagated from s13 via merge; same fix required" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "3da95f8" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s14-impl/3da95f8> .
+
+<urn:atm:triage:occurrence/S13-CI-001/s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 114 ;
+  triage:snippet "fn connect_daemon_local_ipc_until_ready(endpoint_path: &std::path::Path) -> LocalSocketStream { — ungated; propagated from s13 via merge; same fix required" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "3da95f8" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s14-impl/3da95f8> .
+
+# --- s15 occurrences (803d446, propagated via merge from s13) ---
+
+<urn:atm:triage:occurrence/S13-CI-001/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 28 ;
+  triage:snippet "use interprocess::local_socket::traits::Stream as _; — ungated; propagated from s13 via merge; same fix required" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "803d446" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/803d446> .
+
+<urn:atm:triage:occurrence/S13-CI-001/s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 114 ;
+  triage:snippet "fn connect_daemon_local_ipc_until_ready(endpoint_path: &std::path::Path) -> LocalSocketStream { — ungated; propagated from s13 via merge; same fix required" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "803d446" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/803d446> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/46069a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "46069a9" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/feature-pS-s14-impl/3da95f8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "3da95f8" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/803d446>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "803d446" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
