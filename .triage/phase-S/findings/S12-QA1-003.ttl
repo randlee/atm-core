@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S12-QA1-003>
+  a triage:Finding ;
+  triage:findingId "S12-QA1-003" ;
+  triage:title "ReconcileRuntimeInner Mutex fields lack RBP-006 justification comments (reconcile_runtime.rs:31,35,144)" ;
+  triage:description "reconcile_runtime.rs:31,35: ReconcileRuntimeInner.state (Mutex<ReconcileState>) and .worker (Mutex<Option<JoinHandle<()>>>) carry no justification comment for Mutex use. reconcile_runtime.rs:144: notification_fingerprints (Arc<Mutex<HashMap<ReconcileKey, HashSet<String>>>>) constructed inline inside a closure with no comment explaining why shared mutation is needed across executor invocations. The fingerprint map must survive across executor invocations so change-detection between successive reconcile cycles works correctly — this rationale is not stated. Fix: add struct-level comment on ReconcileRuntimeInner and inline comment at notification_fingerprints construction explaining the cross-invocation sharing requirement." ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:promoteToBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-003/s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-003/s12/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-003/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 31 ;
+  triage:snippet "ReconcileRuntimeInner { state: Mutex<ReconcileState>, worker: Mutex<Option<JoinHandle<()>>> } — no justification comment on Mutex fields (RBP-006)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-003/s12/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 144 ;
+  triage:snippet "Arc<Mutex<HashMap<ReconcileKey, HashSet<String>>>> constructed inline in closure — no comment explaining why shared mutation needed across executor invocations (RBP-006)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s12-intg-gate-findings" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

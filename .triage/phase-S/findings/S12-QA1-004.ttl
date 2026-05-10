@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S12-QA1-004>
+  a triage:Finding ;
+  triage:findingId "S12-QA1-004" ;
+  triage:title "sprint-S12.md describes INTG-RSH-003 incorrectly — wrong finding attributed to that ID" ;
+  triage:description "docs/phase-S/sprint-S12.md:53: The sprint doc describes INTG-RSH-003 as 'Pre-existing reconcile_runtime shutdown race — document intentional deferral if out of scope, otherwise apply same bounded-shutdown pattern.' The canonical triage record (INTG-RSH-003.ttl) defines it as 'No PATH_MAX ceiling on tilde-expanded hook paths' in crates/atm-core/src/config/discovery.rs:66. These are completely different findings. Sprint-S12.md designates triage records as canonical (line 70). The sprint doc description of INTG-RSH-003 is incorrect and creates confusion about what was required. Fix: correct sprint-S12.md line 53 to describe the canonical finding: 'crates/atm-core/src/config/discovery.rs:66 — No PATH_MAX ceiling on tilde-expanded hook paths (CONFIRMED SATISFIED on integrate/phase-S base; verify still present at bd9e0e8).'" ;
+  triage:category "DOC" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:promoteToBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-004/s12/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-004/s12/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S12.md" ;
+  triage:line 53 ;
+  triage:snippet "INTG-RSH-003 described as reconcile_runtime shutdown race — canonical triage record defines it as PATH_MAX ceiling in config/discovery.rs:66" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s12-intg-gate-findings" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

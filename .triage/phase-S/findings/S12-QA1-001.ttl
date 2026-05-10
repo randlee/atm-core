@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S12-QA1-001>
+  a triage:Finding ;
+  triage:findingId "S12-QA1-001" ;
+  triage:title "INTG-RBP-001/002 recovery text differs from canonical triage spec — cross-doc conflict (BP-ECR-002)" ;
+  triage:description "runtime_health.rs:697 and :719: The canonical triage records INTG-RBP-001 and INTG-RBP-002 (labeled 'canonical finding records' in sprint-S12.md:70) specify operator-actionable .with_recovery() strings. INTG-RBP-001 canonical: 'Remove or rename the malformed team directory under the ATM teams root before retrying.' Implemented: 'ensure team name is valid UTF-8'. INTG-RBP-002 canonical: 'Repair or remove the malformed team config file and restart atm-daemon or send SIGHUP.' Implemented: 'check atm message format'. The shorter strings do not satisfy requirements.md BP-ECR-002 ('operator-actionable failures still exist without .with_recovery() guidance') because they state what to fix but not how. Fix: update runtime_health.rs recovery strings to match canonical triage record text, OR update triage records and explain the shorter text rationale." ;
+  triage:category "REQ" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:promoteToBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-001/s12/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-001/s12/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-001/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 697 ;
+  triage:snippet ".with_recovery(\"ensure team name is valid UTF-8\") — canonical triage specifies \"Remove or rename the malformed team directory under the ATM teams root before retrying.\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-001/s12/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 719 ;
+  triage:snippet ".with_recovery(\"check atm message format\") — canonical triage specifies \"Repair or remove the malformed team config file and restart atm-daemon or send SIGHUP.\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s12-intg-gate-findings" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .
