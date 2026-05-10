@@ -23,6 +23,7 @@ use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
+#[cfg(unix)]
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
@@ -153,6 +154,7 @@ fn daemon_shutdown_signal_install_reuses_shared_flags() {
 
 #[test]
 #[serial]
+#[cfg(unix)]
 fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     // TempDir uniqueness is process-local; #[serial] keeps this same-host transport smoke test
     // from racing other lifecycle-control and singleton-sensitive daemon tests.
@@ -227,6 +229,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
 
 #[test]
 #[serial]
+#[cfg(unix)]
 fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
