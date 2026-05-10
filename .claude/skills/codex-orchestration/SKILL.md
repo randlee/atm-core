@@ -38,11 +38,11 @@ Before starting a sprint:
    - installed Rust reviewers from `sc-rust`
 5. The following QA reporting skill exists in `.claude/skills/`:
    - `quality-management-gh/`
-5. `quality-mgr` must read:
+6. `quality-mgr` must read:
    - `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
-6. `quality-mgr` must also read:
+7. `quality-mgr` must also read:
    - `.claude/skills/quality-management-gh/SKILL.md`
-7. `sc-compose` is available for rendering the JSON and markdown templates.
+8. `sc-compose` is available for rendering the JSON and markdown templates.
 
 ## Sprint Flow
 
@@ -64,6 +64,8 @@ Before starting a sprint:
 7. QA-2 and later rounds must omit `rust-best-practices-agent`. All RBP
    findings from QA-1 must be fixed before merge — merge gate is 0B+0I+0m
    with no exceptions and no backlog deferral.
+   QA-1 RBP findings route back to `arch-ctm` via `fix-assignment.xml.j2`
+   before QA-2, following the standard triage-and-fix path.
 8. If QA passes and CI is green, merge may proceed.
 9. If QA fails, `team-lead` first runs `/triaging-findings` to correlate the
    findings across worktrees and determine the promoted fix branch.
