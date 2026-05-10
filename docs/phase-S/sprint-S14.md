@@ -13,6 +13,9 @@ remaining shutdown-ownership, bounded-state, doctor-projection, and retained
 observability gaps that are still open across lifecycle control, reconcile,
 watch, runtime health, and daemon observability.
 
+S.0-S.4 remain fully closed on the Phase S line, including the temporary
+Windows lint-guardrail removal recorded in `docs/plan-phase-S.md` §6.
+
 `docs/phase-S/sprint-S14-runtime-plan.md` is the authoritative design document
 for this sprint.
 

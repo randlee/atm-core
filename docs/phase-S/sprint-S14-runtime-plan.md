@@ -77,12 +77,17 @@ Out of scope:
   - keep the install-once process-global model, but make repeated
     `LifecycleControlSourceAdapter::install()` calls reuse the same stored
     worker instead of spawning detached replacements
-  - add a daemon-private `shutdown_worker_with_timeout()` path that:
+- add a daemon-private `shutdown_worker_with_timeout()` path that:
     - requests worker stop
     - wakes the worker
     - joins with a documented bounded deadline
     - returns a typed `AtmError` on timeout or panic rather than silently
       detaching
+  - keep the lifecycle wake worker on `std::thread::spawn`, not Tokio; the
+    worker owns OS-specific blocking state (`UnixStream` read-half on Unix,
+    polling loop on Windows) and shutdown joins it from daemon runtime
+    teardown outside async context so no Tokio worker thread performs a
+    blocking join
   - wire that shutdown into daemon runtime teardown so the lifecycle helper is
     part of the same bounded shutdown contract as other runtime workers
 - Test / proof:
@@ -170,6 +175,7 @@ Out of scope:
   - preserve the existing “do not evict current key or identity-conflict
     entries first” selection policy unless a stricter one is documented in the
     implementation sprint
+  - satisfies: `REQ-DAEMON-RUNTIME-004`, `REQ-DAEMON-STATUS-002`
 - Test / proof:
   - add runtime-health tests that drive new-key insertion at the cap and prove
     cardinality never exceeds `MAX_STATUS_CACHE_ENTRIES`
@@ -189,6 +195,7 @@ Out of scope:
     eviction/removal rather than demotion
   - let missing entries project as `Unknown` through snapshot/doctor scope
     rules instead of retaining a permanent dead map entry
+  - satisfies: `REQ-DAEMON-RUNTIME-004`, `REQ-DAEMON-STATUS-002`
 - Test / proof:
   - add a status-cache test that inserts past the cap and proves:
     - retained map size stays bounded
@@ -213,8 +220,9 @@ Out of scope:
     - `sqlite_ready`
     - `degraded_ingest`
   - keep `report.runtime_status = Some(runtime_status)` as the machine-readable
-    payload, but align the human-facing doctor finding with
-    `docs/atm-daemon/architecture.md §3.5` and `REQ-DAEMON-HEALTH-001`
+    payload, but align the human-facing doctor finding with the
+    `docs/atm-daemon/architecture.md` doctor health contract distinction under
+    `§3.3 Status Ownership` and `REQ-DAEMON-HEALTH-001`
 - Test / proof:
   - add doctor projection coverage that verifies degraded SQLite / degraded
     ingest / singleton-owner details are present in the finding output
@@ -228,12 +236,15 @@ Out of scope:
   - `notification_fingerprints` is an unbounded `HashMap<ReconcileKey, HashSet<String>>`
   - repeated unique targets can grow the map without limit
 - Fix approach:
-  - introduce a documented cardinality cap for tracked fingerprint sets
+  - introduce a documented cardinality cap for tracked fingerprint sets:
+    `MAX_RECONCILE_FINGERPRINT_KEYS: usize = 1024`
   - keep the current keying model, but add bounded retention:
-    - if inserting a new key at capacity, evict the oldest or least-recently
-      refreshed key before inserting the new one
-  - record the accepted cap in daemon requirements/architecture under
-    `REQ-DAEMON-RUNTIME-004`
+    - if inserting a new key at capacity, evict the oldest tracked key before
+      inserting the new one
+    - full-registry behavior is therefore `evict-oldest-and-log`, not
+      fail-closed or silent drop
+  - record `MAX_RECONCILE_FINGERPRINT_KEYS` in daemon requirements/architecture
+    under `REQ-DAEMON-RUNTIME-004`
 - Test / proof:
   - add reconcile notification tests that prove the fingerprint registry:
     - stays within the documented cap
@@ -305,6 +316,17 @@ Out of scope:
   just in semantic labels or doctor projection.
 - New tests must preserve the no-fixed-sleep and bounded-wait contract already
   recorded for Phase S.
+
+## Runtime SLOs
+
+| Component | Authority | Bound | Timeout / saturation outcome |
+|---|---|---:|---|
+| Lifecycle wake worker join | `docs/atm-daemon/architecture.md §3.4`, `docs/plan-phase-S.md §4.1` | bounded shutdown deadline (implementation-defined in S.14) | typed `daemon_unavailable` failure if the wake worker cannot join cleanly |
+| Reconcile runtime drain | `docs/atm-daemon/architecture.md §3.4` | `2s` | typed shutdown error; caller must not treat timeout as clean drain |
+| Watch runtime drain | `docs/atm-daemon/architecture.md §3.4` | `2s` | typed shutdown error; caller must not treat timeout as clean drain |
+| Retained-log flush | `docs/atm-daemon/architecture.md §3.4`, `docs/plan-phase-S.md §4.1` | `2s` best-effort | typed observability-health failure if flush/sync cannot complete on the active sink |
+| Status-cache insert / evict | `docs/atm-daemon/architecture.md §3.2`, `REQ-DAEMON-RUNTIME-004` | `4096` live entries | new-key insert must evict-before-insert so retained cardinality never exceeds the cap |
+| Reconcile fingerprint registry | `docs/atm-daemon/architecture.md §3.2`, `REQ-DAEMON-RUNTIME-004` | `1024` keys | evict oldest tracked key, log the eviction, and continue with the newest target |
 
 ## Acceptance Mapping
 

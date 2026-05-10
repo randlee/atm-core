@@ -615,6 +615,45 @@ Required closeout work:
 - update `docs/phase-S/sprint-S12.md` plus the 12 resolved INTG TTL records so
   documentation and machine-readable triage state agree on closure
 
+### S.13 IPC/Socket Runtime Hardening
+
+Goal:
+- harden the same-host daemon transport runtime so fatal local-IPC errors
+  cannot wedge shutdown and endpoint cleanup remains supervisor-safe
+
+Required outcomes:
+- one shared shutdown primitive coordinates accept, lifecycle, and connection
+  teardown
+- endpoint cleanup occurs before singleton ownership release
+- typed daemon runtime failures replace silent transport wedges
+- the transport correctness story remains separate from peer-socket follow-on
+  work
+
+Required closeout work:
+- add the S.13 sprint authority docs under `docs/phase-S/`
+- implement the local IPC hardening pass on
+  `feature/pS-s13-ipc-hardening`
+- clear the S.13 QA rounds on the same branch head before merge
+
+### S.14 Daemon Runtime Hardening
+
+Goal:
+- close the remaining daemon-runtime hardening gaps left after S.13 across
+  lifecycle control, reconcile/watch shutdown, runtime status bounds, doctor
+  projection detail, and retained-observability flush behavior
+
+Required outcomes:
+- lifecycle wake workers are explicitly owned and joined with timeout
+- reconcile/watch shutdown timeout is observable as typed failure
+- bounded runtime state stays bounded in actual retained cardinality
+- `atm doctor` projects daemon runtime health with the full required detail
+
+Required closeout work:
+- add the S.14 sprint authority docs under `docs/phase-S/`
+- land the S.14 runtime hardening fixes on the follow-on implementation branch
+- keep daemon architecture and phase-plan docs aligned on the accepted
+  resource-cap and eviction contracts
+
 ## 6. Removed Windows CI Guardrail
 
 The temporary Windows clippy narrowing used during S.0-S.3 is retired.
