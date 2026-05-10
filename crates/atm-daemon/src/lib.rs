@@ -35,6 +35,28 @@ pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);
 pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);
 
 #[derive(Debug, Clone)]
+pub(crate) struct AtmHomeDir(PathBuf);
+
+impl AtmHomeDir {
+    pub(crate) fn resolve() -> Result<Self, AtmError> {
+        Ok(Self(atm_core::home::atm_home()?))
+    }
+
+    pub(crate) fn as_path(&self) -> &std::path::Path {
+        &self.0
+    }
+
+    pub(crate) fn into_inner(self) -> PathBuf {
+        self.0
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_path_for_test(path: PathBuf) -> Self {
+        Self(path)
+    }
+}
+
+#[derive(Debug, Clone)]
 struct SqliteRemoteReplayStore {
     assembly: Arc<SqliteBoundaryAssembly>,
 }

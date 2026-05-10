@@ -6,7 +6,8 @@ use crate::daemon_runtime_observability::DaemonRuntimeObservability;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::{
-    LocalIpcServerTransportAdapter, PeerTransportRuntime, sqlite_remote_replay_store_from_path,
+    AtmHomeDir, LocalIpcServerTransportAdapter, PeerTransportRuntime,
+    sqlite_remote_replay_store_from_path,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::error::AtmError;
@@ -128,7 +129,7 @@ impl RuntimeComposition {
     #[cfg_attr(windows, allow(dead_code))]
     fn new(home_dir: PathBuf) -> Result<Self, AtmError> {
         Self::new_with_replay_store_path(
-            home_dir.clone(),
+            AtmHomeDir::from_path_for_test(home_dir.clone()),
             atm_core::home::host_mail_db_path_from_home(&home_dir),
             Arc::new(crate::test_observability::TestDaemonObservability::new(
                 atm_core::home::host_log_dir_from_home(&home_dir),
@@ -137,7 +138,7 @@ impl RuntimeComposition {
     }
 
     fn new_with_replay_store_path(
-        home_dir: PathBuf,
+        home_dir: AtmHomeDir,
         replay_store_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
@@ -572,8 +573,8 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
 pub(crate) fn compose_runtime(
     observability: Arc<dyn DaemonRuntimeObservability>,
 ) -> Result<RuntimeComposition, AtmError> {
-    let home_dir = atm_core::home::atm_home()?;
-    validate_runtime_home_dir(&home_dir)?;
+    let home_dir = AtmHomeDir::resolve()?;
+    validate_runtime_home_dir(home_dir.as_path())?;
     RuntimeComposition::new_with_replay_store_path(
         home_dir,
         atm_core::home::host_mail_db_path()?,

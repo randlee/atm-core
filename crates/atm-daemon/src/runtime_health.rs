@@ -27,6 +27,7 @@ use atm_core::{
 };
 use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
+use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
 
 const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
@@ -392,8 +393,8 @@ impl DaemonRequestDispatcher {
                 }
                 #[cfg(not(test))]
                 {
-                    // Intentionally detach the timed-out worker so shutdown
-                    // remains bounded even if the finalizer exits later.
+                    // Intentionally detach the timed-out worker; thread runs to completion orphaned, not joined.
+                    // Keeps shutdown bounded even if the finalizer exits later.
                     drop(shutdown_handle);
                 }
                 tracing::warn!(
@@ -414,10 +415,11 @@ impl DaemonRequestDispatcher {
 
     pub(crate) fn new(
         // Must be the validated ATM home dir for this daemon runtime.
-        home_dir: PathBuf,
+        home_dir: AtmHomeDir,
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Self {
+        let home_dir = home_dir.into_inner();
         let sqlite_boundary = match assemble_default_boundary() {
             Ok(boundary) => {
                 if let Err(error) =
