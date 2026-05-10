@@ -25,6 +25,7 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
 #[cfg(unix)]
 use interprocess::local_socket::Stream as LocalSocketStream;
+#[cfg(unix)]
 use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
 use std::fs::OpenOptions;
@@ -111,6 +112,7 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
     }
 }
 
+#[cfg(unix)]
 fn connect_daemon_local_ipc_until_ready(endpoint_path: &std::path::Path) -> LocalSocketStream {
     let deadline = Instant::now() + Duration::from_secs(3);
     loop {
