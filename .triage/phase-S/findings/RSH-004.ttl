@@ -4,235 +4,81 @@
 <urn:atm:triage:finding/RSH-004>
   a triage:Finding ;
   triage:findingId "RSH-004" ;
-  triage:title "Probe file cleanup failure silently returns Ok(()) — new occurrence in peer_transport.rs" ;
-  triage:description "composition.rs:409/497/535 — probe file cleanup failures silently return Ok(()). followup_pass found a new occurrence: crates/atm-daemon/src/peer_transport.rs:95-97 — ATM_DAEMON_PEER_ADDR parse failure silently degrades via .ok().and_then rather than propagating or logging the error." ;
+  triage:title "Timeout-set failure on cap-exceeded connection silently discarded" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs:353 — When a connection capacity cap is exceeded, set_recv_timeout/set_send_timeout failures are silently discarded via let _ = ... rather than dropping the stream. The stream continues to write_frame/flush/continue even if timeout setup failed. Fix: drop the stream explicitly on timeout-set failure." ;
   triage:phaseId "phase-S" ;
-  triage:triageMode "followup_pass" ;
+  triage:triageMode "initial_pass" ;
   triage:category "RSH" ;
   triage:severity "minor" ;
-  triage:repeatable false ;
-  triage:sweepScope "file" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
 
-  # composition.rs probe cleanup occurrences (original)
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s1/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s2/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s3/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s3/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s4/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s4/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/integrate-phase-S/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/integrate-phase-S/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s15/1> ;
 
-  # peer_transport.rs ATM_DAEMON_PEER_ADDR silent-degrade occurrences (new — followup_pass)
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s1/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s2/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s3/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s4/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/integrate-phase-S/3> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s13/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s13/4c03c2c> .
 
-  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s2/a7f8039> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s3/98c151c> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
-  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
-  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+# ── Occurrences ─────────────────────────────────────────────────────────────────
 
-# ── composition.rs probe cleanup occurrences (original RSH-004 pattern) ────────
-
-# Occurrence 1: pS-s1-boundary-extraction — home probe (line 409)
-<urn:atm:triage:occurrence/RSH-004/pS-s1/1>
+<urn:atm:triage:occurrence/RSH-004/pS-s13/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 409 ;
-  triage:snippet "if let Err(error) = std::fs::remove_file(&probe_path) { tracing::warn!(...); } Ok(())" ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 353 ;
+  triage:snippet "let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE)); let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
 
-# Occurrence 1: pS-s2-windows-ipc — home probe (line 409)
-<urn:atm:triage:occurrence/RSH-004/pS-s2/1>
+<urn:atm:triage:occurrence/RSH-004/pS-s14/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 409 ;
-  triage:snippet "if let Err(error) = std::fs::remove_file(&probe_path) { tracing::warn!(...); } Ok(())" ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 353 ;
+  triage:snippet "let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE)); let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "a7f8039" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
 
-# Occurrence 1: pS-s3-runtime-control — socket probe (line 497)
-<urn:atm:triage:occurrence/RSH-004/pS-s3/1>
+<urn:atm:triage:occurrence/RSH-004/pS-s15/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 497 ;
-  triage:snippet "if let Err(error) = std::fs::remove_file(&probe_path) { tracing::warn!(...\"failed to remove daemon socket write probe file\"); } Ok(())" ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 353 ;
+  triage:snippet "let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE)); let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "98c151c" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3/98c151c> .
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
 
-# Occurrence 2: pS-s3-runtime-control — home probe (line 535)
-<urn:atm:triage:occurrence/RSH-004/pS-s3/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 535 ;
-  triage:snippet "if let Err(error) = std::fs::remove_file(&probe_path) { tracing::warn!(...\"failed to remove atm-daemon home write probe file\"); } Ok(())" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "98c151c" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3/98c151c> .
+# ── WorktreeSnapshot nodes ───────────────────────────────────────────────────────
 
-# Occurrence 1: pS-s4-hardening — socket probe (line 497)
-<urn:atm:triage:occurrence/RSH-004/pS-s4/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 497 ;
-  triage:snippet "if let Err(error) = std::fs::remove_file(&probe_path) { tracing::warn!(...\"failed to remove daemon socket write probe file\"); } Ok(())" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
-
-# Occurrence 2: pS-s4-hardening — home probe (line 535)
-<urn:atm:triage:occurrence/RSH-004/pS-s4/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 535 ;
-  triage:snippet "if let Err(error) = std::fs::remove_file(&probe_path) { tracing::warn!(...\"failed to remove atm-daemon home write probe file\"); } Ok(())" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
-
-# Occurrence 1: integrate/phase-S — socket probe (line 497)
-<urn:atm:triage:occurrence/RSH-004/integrate-phase-S/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 497 ;
-  triage:snippet "if let Err(error) = std::fs::remove_file(&probe_path) { tracing::warn!(...\"failed to remove daemon socket write probe file\"); } Ok(())" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
-
-# Occurrence 2: integrate/phase-S — home probe (line 535)
-<urn:atm:triage:occurrence/RSH-004/integrate-phase-S/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 535 ;
-  triage:snippet "if let Err(error) = std::fs::remove_file(&probe_path) { tracing::warn!(...\"failed to remove atm-daemon home write probe file\"); } Ok(())" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
-
-# ── peer_transport.rs ATM_DAEMON_PEER_ADDR silent-degrade occurrences (new — followup_pass) ──
-
-# Occurrence 2: pS-s1-boundary-extraction — peer_transport ATM_DAEMON_PEER_ADDR (line 95)
-<urn:atm:triage:occurrence/RSH-004/pS-s1/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
-  triage:line 95 ;
-  triage:snippet "let endpoint = std::env::var(\"ATM_DAEMON_PEER_ADDR\").ok().and_then(|raw| parse_peer_endpoint(&raw));" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
-
-# Occurrence 2: pS-s2-windows-ipc — peer_transport ATM_DAEMON_PEER_ADDR (line 95) — new occurrence reported
-<urn:atm:triage:occurrence/RSH-004/pS-s2/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
-  triage:line 95 ;
-  triage:snippet "let endpoint = std::env::var(\"ATM_DAEMON_PEER_ADDR\").ok().and_then(|raw| parse_peer_endpoint(&raw));" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "a7f8039" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
-
-# Occurrence 3: pS-s3-runtime-control — peer_transport ATM_DAEMON_PEER_ADDR (line 95)
-<urn:atm:triage:occurrence/RSH-004/pS-s3/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
-  triage:line 95 ;
-  triage:snippet "let endpoint = std::env::var(\"ATM_DAEMON_PEER_ADDR\").ok().and_then(|raw| parse_peer_endpoint(&raw));" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "98c151c" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3/98c151c> .
-
-# Occurrence 3: pS-s4-hardening — peer_transport ATM_DAEMON_PEER_ADDR (line 123)
-<urn:atm:triage:occurrence/RSH-004/pS-s4/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
-  triage:line 123 ;
-  triage:snippet "let endpoint = std::env::var(\"ATM_DAEMON_PEER_ADDR\").ok().and_then(|raw| parse_peer_endpoint(&raw));" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
-
-# Occurrence 3: integrate/phase-S — peer_transport ATM_DAEMON_PEER_ADDR (line 123)
-<urn:atm:triage:occurrence/RSH-004/integrate-phase-S/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
-  triage:line 123 ;
-  triage:snippet "let endpoint = std::env::var(\"ATM_DAEMON_PEER_ADDR\").ok().and_then(|raw| parse_peer_endpoint(&raw));" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
-
-# ── WorktreeSnapshot nodes ──────────────────────────────────────────────────────
-
-<urn:atm:triage:worktree/pS-s1/ab12ea1>
+<urn:atm:triage:worktree/pS-s13/4c03c2c>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pS-s2/a7f8039>
+<urn:atm:triage:worktree/pS-s14/cf57c48>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
-  triage:headSha "a7f8039" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pS-s3/98c151c>
+<urn:atm:triage:worktree/pS-s15/93c63a9>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
-  triage:headSha "98c151c" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
   triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/pS-s4/689a48f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:orderIndex 4 .
-
-<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
-  a triage:WorktreeSnapshot ;
-  triage:branch "integrate/phase-S" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:orderIndex 5 .

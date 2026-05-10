@@ -4,87 +4,75 @@
 <urn:atm:triage:finding/ARCH-002>
   a triage:Finding ;
   triage:findingId "ARCH-002" ;
-  triage:title "UnixStream directly imported in atm CLI composition.rs — no LocalIpcClientTransportAdapter" ;
-  triage:description "crates/atm/src/composition.rs:8 still directly imports and uses std::os::unix::net::UnixStream via LocalSocketClientTransport::try_connect. Sprint AC required extraction. No LocalIpcClientTransportAdapter was created." ;
+  triage:title "sc-observability in library [dependencies] but only used from main.rs binary path" ;
+  triage:description "crates/atm-daemon/Cargo.toml:18 — sc-observability is declared in library [dependencies] but is only used from main.rs (binary path) via daemon_observability.rs, which is not in lib.rs. The source boundary is clean but the Cargo manifest adds unnecessary coupling to the library. Fix: move sc-observability to [[bin]] dependencies or a separate binary-only section." ;
   triage:category "ARCH" ;
-  triage:severity "blocking" ;
+  triage:severity "minor" ;
   triage:triageMode "initial_pass" ;
   triage:phaseId "phase-S" ;
-  triage:repeatable true ;
-  triage:sweepScope "workspace" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-08T22:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s1/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s1/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s1/3> ;
-  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1> ;
-  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1> .
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002/s15/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9> .
 
-<urn:atm:triage:occurrence/ARCH-002/s1/1>
+<urn:atm:triage:occurrence/ARCH-002/s13/1>
   a triage:Occurrence ;
-  triage:file "crates/atm/src/composition.rs" ;
-  triage:line 12 ;
-  triage:snippet "os::unix::net::UnixStream," ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability = \"1.0.0\"" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:headSha "ab12ea1" ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1> .
+  triage:headSha "4c03c2c" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c> .
 
-<urn:atm:triage:occurrence/ARCH-002/s1/2>
+<urn:atm:triage:occurrence/ARCH-002/s14/1>
   a triage:Occurrence ;
-  triage:file "crates/atm/src/composition.rs" ;
-  triage:line 161 ;
-  triage:snippet "fn try_connect(&self) -> Result<UnixStream, AtmError>" ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability = \"1.0.0\"" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:headSha "ab12ea1" ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1> .
+  triage:headSha "cf57c48" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48> .
 
-<urn:atm:triage:occurrence/ARCH-002/s1/3>
+<urn:atm:triage:occurrence/ARCH-002/s15/1>
   a triage:Occurrence ;
-  triage:file "crates/atm/src/composition.rs" ;
-  triage:line 162 ;
-  triage:snippet "UnixStream::connect(self.socket_path.as_ref())" ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability = \"1.0.0\"" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:headSha "ab12ea1" ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1> .
+  triage:headSha "93c63a9" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9> .
 
-<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/ab12ea1>
+<urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/689a48f>
+<urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
-  triage:headSha "689a48f" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/feature-pS-s3-runtime-control/689a48f>
+<urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
-  triage:headSha "689a48f" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
   triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/feature-pS-s4-hardening/689a48f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:orderIndex 4 .
-
-<urn:atm:triage:worktree/integrate-phase-S/689a48f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "integrate/phase-S" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
-  triage:headSha "689a48f" ;
-  triage:orderIndex 5 .

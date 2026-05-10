@@ -6,122 +6,230 @@
 <urn:atm:triage:finding/RBP-F004>
   a triage:Finding ;
   triage:findingId "RBP-F004" ;
-  triage:title "signal-hook listed as unconditional dependency; should be platform-gated to cfg(unix)" ;
-  triage:description "crates/atm-daemon/Cargo.toml lists signal-hook as an unconditional dependency. It is a Unix-only crate and must be gated under [target.'cfg(unix)'.dependencies] to avoid pulling Unix-only code into Windows builds." ;
+  triage:title "RBP-001: Lock-poison errors missing with_recovery() call in watch_runtime" ;
+  triage:description "crates/atm-daemon/src/watch_runtime.rs — Lock-poison errors handled via map_err or manual match but not chained with .with_recovery(). Affected lock sites: start() line 179 (.state.lock()), start() line 196 (.worker.lock()), shutdown() line 212 (.state.lock()), shutdown() line 221 (.worker.lock()), poll() line 265 (.state.lock()). Fix: chain .with_recovery() on lock acquisition to provide actionable recovery hints consistent with project convention." ;
   triage:triageMode "initial_pass" ;
   triage:category "RBP" ;
   triage:phaseId "phase-S" ;
   triage:severity "minor" ;
-  triage:repeatable false ;
-  triage:sweepScope "file" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
 
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s1/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s2/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s3/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s4/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/integrate-phase-S/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s13/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s13/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s13/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s14/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s14/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s14/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s15/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s15/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pS-s15/5> ;
 
-  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s2/a7f8039> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s3/98c151c> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
-  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s13/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15/93c63a9> ;
 
-  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+  triage:promoteTo <urn:atm:triage:worktree/pS-s13/4c03c2c> .
 
-# ── Occurrences ───────────────────────────────────────────────────────────────
+# ── Occurrences — feature/pS-s13-ipc-hardening ───────────────────────────────
 
-<urn:atm:triage:occurrence/RBP-F004/pS-s1/1>
+<urn:atm:triage:occurrence/RBP-F004/pS-s13/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 21 ;
-  triage:snippet "signal-hook = \"0.3\"" ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 179 ;
+  triage:snippet ".lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime state lock poisoned\"))" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
 
-<urn:atm:triage:occurrence/RBP-F004/pS-s2/1>
+<urn:atm:triage:occurrence/RBP-F004/pS-s13/2>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 22 ;
-  triage:snippet "signal-hook = \"0.3\"" ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 196 ;
+  triage:snippet "match self.inner.worker.lock() { Ok(worker) => worker, Err(_) => { ... return Err(AtmError::daemon_unavailable(\"watch runtime worker lock poisoned\")); } }" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "a7f8039" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s2/a7f8039> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
 
-<urn:atm:triage:occurrence/RBP-F004/pS-s3/1>
+<urn:atm:triage:occurrence/RBP-F004/pS-s13/3>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 22 ;
-  triage:snippet "signal-hook = \"0.3\"" ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 212 ;
+  triage:snippet "self.inner.state.lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime state lock poisoned\"))" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "98c151c" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3/98c151c> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
 
-<urn:atm:triage:occurrence/RBP-F004/pS-s4/1>
+<urn:atm:triage:occurrence/RBP-F004/pS-s13/4>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 21 ;
-  triage:snippet "signal-hook = \"0.3\"" ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 221 ;
+  triage:snippet ".lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime worker lock poisoned\"))" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
 
-<urn:atm:triage:occurrence/RBP-F004/integrate-phase-S/1>
+<urn:atm:triage:occurrence/RBP-F004/pS-s13/5>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 21 ;
-  triage:snippet "signal-hook = \"0.3\"" ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 265 ;
+  triage:snippet ".lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime state lock poisoned\"))" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
+
+# ── Occurrences — feature/pS-s14-impl ────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RBP-F004/pS-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 179 ;
+  triage:snippet ".lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime state lock poisoned\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F004/pS-s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 196 ;
+  triage:snippet "match self.inner.worker.lock() { Ok(worker) => worker, Err(_) => { ... return Err(AtmError::daemon_unavailable(\"watch runtime worker lock poisoned\")); } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F004/pS-s14/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 212 ;
+  triage:snippet "self.inner.state.lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime state lock poisoned\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F004/pS-s14/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 221 ;
+  triage:snippet ".lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime worker lock poisoned\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/RBP-F004/pS-s14/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 271 ;
+  triage:snippet ".lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime state lock poisoned\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+# ── Occurrences — feature/pS-s15-rusqlite-hardening ──────────────────────────
+
+<urn:atm:triage:occurrence/RBP-F004/pS-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 179 ;
+  triage:snippet ".lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime state lock poisoned\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F004/pS-s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 196 ;
+  triage:snippet "match self.inner.worker.lock() { Ok(worker) => worker, Err(_) => { ... return Err(AtmError::daemon_unavailable(\"watch runtime worker lock poisoned\")); } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F004/pS-s15/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 212 ;
+  triage:snippet "self.inner.state.lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime state lock poisoned\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F004/pS-s15/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 221 ;
+  triage:snippet ".lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime worker lock poisoned\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:occurrence/RBP-F004/pS-s15/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 265 ;
+  triage:snippet ".lock().map_err(|_| AtmError::daemon_unavailable(\"watch runtime state lock poisoned\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
 
 # ── WorktreeSnapshots ─────────────────────────────────────────────────────────
 
-<urn:atm:triage:worktree/pS-s1/ab12ea1>
+<urn:atm:triage:worktree/pS-s13/4c03c2c>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pS-s2/a7f8039>
+<urn:atm:triage:worktree/pS-s14/cf57c48>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
-  triage:headSha "a7f8039" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pS-s3/98c151c>
+<urn:atm:triage:worktree/pS-s15/93c63a9>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
-  triage:headSha "98c151c" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
   triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/pS-s4/689a48f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:orderIndex 4 .
-
-<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
-  a triage:WorktreeSnapshot ;
-  triage:branch "integrate/phase-S" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:orderIndex 5 .

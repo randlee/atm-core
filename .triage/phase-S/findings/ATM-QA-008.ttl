@@ -3,279 +3,145 @@
 
 # -----------------------------------------------------------------------
 # Finding: ATM-QA-008
-# TOML boundary state 'planned' post-S.1 should be unix_implemented_windows_pending
-# Generated: 2026-05-08T00:00:00Z  triage_mode: initial_pass
+# FORCE_CANCEL_DEADLINE=10s + GRACEFUL_DRAIN_DEADLINE=5s = 16s worst-case
+# violates 5s clean-shutdown SLO
+# Generated: 2026-05-10T00:00:00Z  triage_mode: initial_pass
+# Worktrees: pS-s13-ipc-hardening, pS-s14-impl, pS-s15-rusqlite-hardening
 # -----------------------------------------------------------------------
 
 <urn:atm:triage:finding/ATM-QA-008>
   a triage:Finding ;
   triage:findingId "ATM-QA-008" ;
-  triage:title "TOML boundary state 'planned' post-S.1 should be unix_implemented_windows_pending" ;
-  triage:description "lifecycle-control-source.toml and host-ownership-daemon.toml both have state = 'planned' post-S.1 extraction; should be 'unix_implemented_windows_pending'. Workspace sweep also found shared-db.toml carrying state = 'planned'." ;
+  triage:title "FORCE_CANCEL_DEADLINE=10s + GRACEFUL_DRAIN_DEADLINE=5s = 16s worst-case — violates 5s clean-shutdown SLO" ;
+  triage:description "crates/atm-daemon/src/lib.rs:37 — FORCE_CANCEL_DEADLINE=10s combined with GRACEFUL_DRAIN_DEADLINE=5s yields 16s worst-case shutdown time, violating the 5s clean-shutdown SLO defined in plan §5. Fix: reduce FORCE_CANCEL_DEADLINE or restructure shutdown stages to stay within the 5s SLO." ;
   triage:triageMode "initial_pass" ;
   triage:category "ATM-QA" ;
   triage:phaseId "phase-S" ;
   triage:severity "important" ;
-  triage:repeatable true ;
-  triage:sweepScope "workspace" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
 
-  # occurrences on feature/pS-s1-boundary-extraction (order_index 1)
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s1/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s1/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s1/3> ;
+  # occurrences on feature/pS-s13-ipc-hardening (order_index 1)
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s13/2> ;
 
-  # occurrences on feature/pS-s2-windows-ipc (order_index 2)
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s2/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s2/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s2/3> ;
+  # occurrences on feature/pS-s14-impl (order_index 2)
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s14/2> ;
 
-  # occurrences on feature/pS-s3-runtime-control (order_index 3)
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s3/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s3/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s3/3> ;
+  # occurrences on feature/pS-s15-rusqlite-hardening (order_index 3)
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s15/2> ;
 
-  # occurrences on feature/pS-s4-hardening (order_index 4)
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s4/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s4/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s4/3> ;
+  # all three branches open; highest open branch = highest order_index (pS-s15)
+  triage:openOn <urn:atm:triage:worktree/pS-s13/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15/93c63a9> ;
 
-  # occurrences on integrate/phase-S (order_index 5)
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/integrate-pS/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/integrate-pS/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/integrate-pS/3> ;
-
-  # all branches open; highest open = lowest order_index (first sprint)
-  triage:openOn <urn:atm:triage:worktree/pS-s1/ab12ea1> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s2/ab12ea1> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s3/689a48f> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s4/689a48f> ;
-  triage:openOn <urn:atm:triage:worktree/integrate-pS/689a48f> ;
-
-  triage:promoteTo <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15/93c63a9> .
 
 # -----------------------------------------------------------------------
-# Occurrences: feature/pS-s1-boundary-extraction  (ab12ea1, order_index 1)
+# Occurrences: feature/pS-s13-ipc-hardening  (4c03c2c, order_index 1)
 # -----------------------------------------------------------------------
 
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s1/1>
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s13/1>
   a triage:Occurrence ;
-  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
-  triage:line 71 ;
-  triage:snippet "state = \"planned\"" ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 36 ;
+  triage:snippet "pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
 
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s1/2>
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s13/2>
   a triage:Occurrence ;
-  triage:file "boundaries/atm-daemon/host-ownership-daemon.toml" ;
-  triage:line 69 ;
-  triage:snippet "state = \"planned\"" ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 37 ;
+  triage:snippet "pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
-
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s1/3>
-  a triage:Occurrence ;
-  triage:file "boundaries/atm-rusqlite/shared-db.toml" ;
-  triage:line 68 ;
-  triage:snippet "state = \"planned\"" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s1/ab12ea1> .
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
 
 # -----------------------------------------------------------------------
-# Occurrences: feature/pS-s2-windows-ipc  (ab12ea1, order_index 2)
+# Occurrences: feature/pS-s14-impl  (cf57c48, order_index 2)
 # -----------------------------------------------------------------------
 
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s2/1>
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s14/1>
   a triage:Occurrence ;
-  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
-  triage:line 71 ;
-  triage:snippet "state = \"planned\"" ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 36 ;
+  triage:snippet "pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s2/ab12ea1> .
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
 
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s2/2>
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s14/2>
   a triage:Occurrence ;
-  triage:file "boundaries/atm-daemon/host-ownership-daemon.toml" ;
-  triage:line 69 ;
-  triage:snippet "state = \"planned\"" ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 37 ;
+  triage:snippet "pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s2/ab12ea1> .
-
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s2/3>
-  a triage:Occurrence ;
-  triage:file "boundaries/atm-rusqlite/shared-db.toml" ;
-  triage:line 68 ;
-  triage:snippet "state = \"planned\"" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s2/ab12ea1> .
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
 
 # -----------------------------------------------------------------------
-# Occurrences: feature/pS-s3-runtime-control  (689a48f, order_index 3)
+# Occurrences: feature/pS-s15-rusqlite-hardening  (93c63a9, order_index 3)
 # -----------------------------------------------------------------------
 
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s3/1>
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s15/1>
   a triage:Occurrence ;
-  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
-  triage:line 70 ;
-  triage:snippet "state = \"planned\"" ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 36 ;
+  triage:snippet "pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3/689a48f> .
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
 
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s3/2>
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s15/2>
   a triage:Occurrence ;
-  triage:file "boundaries/atm-daemon/host-ownership-daemon.toml" ;
-  triage:line 69 ;
-  triage:snippet "state = \"planned\"" ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 37 ;
+  triage:snippet "pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s3/3>
-  a triage:Occurrence ;
-  triage:file "boundaries/atm-rusqlite/shared-db.toml" ;
-  triage:line 68 ;
-  triage:snippet "state = \"planned\"" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3/689a48f> .
-
-# -----------------------------------------------------------------------
-# Occurrences: feature/pS-s4-hardening  (689a48f, order_index 4)
-# -----------------------------------------------------------------------
-
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s4/1>
-  a triage:Occurrence ;
-  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
-  triage:line 70 ;
-  triage:snippet "state = \"planned\"" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s4/2>
-  a triage:Occurrence ;
-  triage:file "boundaries/atm-daemon/host-ownership-daemon.toml" ;
-  triage:line 69 ;
-  triage:snippet "state = \"planned\"" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-008/pS-s4/3>
-  a triage:Occurrence ;
-  triage:file "boundaries/atm-rusqlite/shared-db.toml" ;
-  triage:line 68 ;
-  triage:snippet "state = \"planned\"" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s4/689a48f> .
-
-# -----------------------------------------------------------------------
-# Occurrences: integrate/phase-S  (689a48f, order_index 5)
-# -----------------------------------------------------------------------
-
-<urn:atm:triage:occurrence/ATM-QA-008/integrate-pS/1>
-  a triage:Occurrence ;
-  triage:file "boundaries/atm-daemon/lifecycle-control-source.toml" ;
-  triage:line 70 ;
-  triage:snippet "state = \"planned\"" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-S" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-pS/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-008/integrate-pS/2>
-  a triage:Occurrence ;
-  triage:file "boundaries/atm-daemon/host-ownership-daemon.toml" ;
-  triage:line 69 ;
-  triage:snippet "state = \"planned\"" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-S" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-pS/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-008/integrate-pS/3>
-  a triage:Occurrence ;
-  triage:file "boundaries/atm-rusqlite/shared-db.toml" ;
-  triage:line 68 ;
-  triage:snippet "state = \"planned\"" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-S" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-pS/689a48f> .
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
 
 # -----------------------------------------------------------------------
 # WorktreeSnapshots
 # -----------------------------------------------------------------------
 
-<urn:atm:triage:worktree/pS-s1/ab12ea1>
+<urn:atm:triage:worktree/pS-s13/4c03c2c>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pS-s2/ab12ea1>
+<urn:atm:triage:worktree/pS-s14/cf57c48>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
-  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pS-s3/689a48f>
+<urn:atm:triage:worktree/pS-s15/93c63a9>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
-  triage:headSha "689a48f" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
   triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/pS-s4/689a48f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:orderIndex 4 .
-
-<urn:atm:triage:worktree/integrate-pS/689a48f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "integrate/phase-S" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
-  triage:headSha "689a48f" ;
-  triage:orderIndex 5 .
