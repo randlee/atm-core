@@ -619,25 +619,28 @@ Required closeout work:
 - update `docs/phase-S/sprint-S12.md` plus the 12 resolved INTG TTL records so
   documentation and machine-readable triage state agree on closure
 
-### S.13 IPC/Socket Runtime Hardening
+### S.13 IPC And Socket Shutdown Hardening
 
 Goal:
-- harden the same-host daemon transport runtime so fatal local-IPC errors
-  cannot wedge shutdown and endpoint cleanup remains supervisor-safe
+- simplify same-host daemon transport shutdown so fatal accept/lifecycle paths
+  stay bounded, typed, and ownership-safe under the existing singleton model
 
 Required outcomes:
-- one shared shutdown primitive coordinates accept, lifecycle, and connection
-  teardown
-- endpoint cleanup occurs before singleton ownership release
-- typed daemon runtime failures replace silent transport wedges
-- the transport correctness story remains separate from peer-socket follow-on
-  work
+- local IPC shutdown uses one shared transport shutdown signal and explicit
+  `Running -> Draining -> Stopped` lifecycle transitions
+- accept-error, terminate, and shutdown-drain paths remain bounded and testable
+- endpoint cleanup happens before singleton ownership release
+- typed daemon exit mapping distinguishes configuration, transport-fatal, and
+  lifecycle-wedge failures
 
 Required closeout work:
-- add the S.13 sprint authority docs under `docs/phase-S/`
-- implement the local IPC hardening pass on
-  `feature/pS-s13-ipc-hardening`
-- clear the S.13 QA rounds on the same branch head before merge
+- harden `crates/atm-daemon/src/local_ipc_transport.rs`,
+  `lifecycle_control.rs`, `composition.rs`, and daemon tests around accept-loop
+  failure, connection drain, and endpoint cleanup
+- add regression coverage for accept-error teardown, terminate rejection, and
+  panic-safe socket cleanup
+- update the daemon architecture and sprint docs so the shutdown-beacon and
+  endpoint-guard contracts are explicit
 
 ### S.14 Daemon Runtime Hardening
 
@@ -660,6 +663,30 @@ Required closeout work:
 - land the S.14 runtime hardening fixes on the follow-on implementation branch
 - keep daemon architecture and phase-plan docs aligned on the accepted
   resource-cap and eviction contracts
+
+### S.15 SQLite Write-Worker / MessageAppendQueue Planning
+
+Goal:
+- define the next `atm-rusqlite` hardening pass around one in-process
+  write-worker and a bounded message-append queue that increases throughput
+  without widening current crate contracts
+
+Required outcomes:
+- the single-writer design, batching limits, queue backpressure contract, and
+  shutdown semantics are documented authoritatively
+- the mailbox append hot path drops the pre-write probe in favor of
+  row-count-based insertion detection under explicit immutability rules
+- follow-on implementation scope, test policy, and singleton assumptions are
+  recorded before code changes start
+
+Required closeout work:
+- produce `docs/phase-S/sprint-S15.md`,
+  `docs/phase-S/sprint-S15-rusqlite-plan.md`, and
+  `docs/adr/ADR-ATM-RUSQLITE-002.md` as the governing S.15 planning set
+- document queue capacity, batching constants, `spawn_blocking` requirements,
+  and per-batch isolation semantics for the future implementation sprint
+- keep S.15 sequenced after the S.13/S.14 runtime hardening line so the writer
+  plan can depend on the already-accepted daemon singleton/runtime contracts
 
 
 ## 6. Removed Windows CI Guardrail
