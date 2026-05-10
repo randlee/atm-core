@@ -124,7 +124,6 @@ dependencies = [
  "signal-hook",
  "tempfile",
  "tracing",
- "tracing-subscriber",
 ]
 
 [[package]]
