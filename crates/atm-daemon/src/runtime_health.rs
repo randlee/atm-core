@@ -36,6 +36,7 @@ const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
 const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
+const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 
 // Timed-out shutdown workers are retained in one process-wide registry instead of being dropped
 // orphaned; tests drain the registry explicitly and production keeps the handles reachable until
@@ -111,12 +112,34 @@ impl RuntimeStatusCache {
             team: request.team.clone(),
             member: request.member.clone(),
         };
-        let current_key = key.clone();
         let last_active_at = Some(request.observed_at);
         let mut cache = self
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        let is_new_key = !cache.members.contains_key(&key);
+        if is_new_key && cache.members.len() >= MAX_STATUS_CACHE_ENTRIES {
+            let eviction_candidate = cache
+                .members
+                .iter()
+                .filter(|(_, record)| record.state != RuntimeMemberState::IdentityConflict)
+                .min_by_key(|(_, record)| {
+                    (
+                        record.state == RuntimeMemberState::Unknown,
+                        record.last_active_at,
+                    )
+                })
+                .map(|(key, record)| (key.clone(), record.clone()));
+            if let Some((evicted_key, evicted_record)) = eviction_candidate {
+                cache.members.remove(&evicted_key);
+                tracing::warn!(
+                    team = %evicted_key.team,
+                    member = %evicted_key.member,
+                    pid = evicted_record.pid,
+                    "evicted daemon runtime status-cache entry after reaching the bounded cap"
+                );
+            }
+        }
         cache.members.insert(
             key,
             RuntimeMemberRecord {
@@ -125,27 +148,6 @@ impl RuntimeStatusCache {
                 last_active_at,
             },
         );
-        if cache.members.len() > MAX_STATUS_CACHE_ENTRIES
-            && let Some((evicted_key, evicted_record)) = cache
-                .members
-                .iter()
-                .filter(|(candidate, record)| {
-                    **candidate != current_key
-                        && record.state != RuntimeMemberState::IdentityConflict
-                        && record.state != RuntimeMemberState::Unknown
-                })
-                .min_by_key(|(_, record)| record.last_active_at)
-                .map(|(key, record)| (key.clone(), record.clone()))
-            && let Some(record) = cache.members.get_mut(&evicted_key)
-        {
-            record.state = RuntimeMemberState::Unknown;
-            tracing::warn!(
-                team = %evicted_key.team,
-                member = %evicted_key.member,
-                pid = evicted_record.pid,
-                "demoted daemon runtime status-cache entry to explicit unknown after reaching the bounded cap"
-            );
-        }
         cache.sqlite_ready = true;
         Ok(TeamMemberHeartbeatResponse {
             team: request.team.clone(),
@@ -387,10 +389,18 @@ impl DaemonRequestDispatcher {
                 // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
                 // than dropping it orphaned because tests and orderly process teardown can join it
                 // later once the blocking storage step finishes.
-                SHUTDOWN_FINALIZER_THREADS
+                let mut handles = SHUTDOWN_FINALIZER_THREADS
                     .lock()
-                    .expect("shutdown finalizer thread registry lock")
-                    .push(shutdown_handle);
+                    .expect("shutdown finalizer thread registry lock");
+                if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS {
+                    handles.push(shutdown_handle);
+                } else {
+                    tracing::warn!(
+                        step = label,
+                        cap = MAX_SHUTDOWN_FINALIZER_THREADS,
+                        "shutdown finalizer thread cap reached; dropping retained worker handle"
+                    );
+                }
                 tracing::warn!(
                     step = label,
                     timeout_ms = deadline.as_millis(),
@@ -758,9 +768,12 @@ fn build_runtime_status_cache_state(
 
 fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {
     let summary = format!(
-        "daemon runtime liveness is {:?}; readiness is {:?}; active={}, idle={}, offline={}, unknown={}",
+        "daemon runtime liveness is {:?}; readiness is {:?}; owner_pid={:?}; sqlite_ready={}; degraded_ingest={}; active={}, idle={}, offline={}, unknown={}",
         snapshot.liveness,
         snapshot.readiness,
+        snapshot.singleton_owner_pid,
+        snapshot.sqlite_ready,
+        snapshot.degraded_ingest,
         snapshot.member_counts.active_members,
         snapshot.member_counts.idle_members,
         snapshot.member_counts.offline_members,

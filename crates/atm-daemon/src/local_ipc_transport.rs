@@ -88,12 +88,11 @@ impl SocketEndpointGuard {
             return Ok(());
         }
         match self.preparation {
+            #[cfg(unix)]
             LocalIpcEndpointPreparation::FilesystemEndpointPrepared => {
-                #[cfg(unix)]
-                {
-                    remove_stale_endpoint(self.endpoint_path())?;
-                }
+                remove_stale_endpoint(self.endpoint_path())?;
             }
+            #[cfg(not(unix))]
             LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared => {
                 // Windows same-host IPC publishes a named pipe rather than a filesystem
                 // socket path; once the listener has dropped there is no extra path
@@ -135,10 +134,14 @@ pub(crate) struct RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeSh
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(unix)]
 enum LocalIpcEndpointPreparation {
-    #[cfg_attr(windows, allow(dead_code))]
     FilesystemEndpointPrepared,
-    #[cfg_attr(unix, allow(dead_code))]
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[cfg(not(unix))]
+enum LocalIpcEndpointPreparation {
     NonFilesystemEndpointPrepared,
 }
 
@@ -502,6 +505,17 @@ impl PreparedRuntimeServer {
                     shutdown_error = Some(error);
                 }
             }
+            if let Err(error) = lifecycle_control.shutdown_worker_with_timeout() {
+                if let Some(existing) = shutdown_error.as_ref() {
+                    tracing::warn!(
+                        begin_shutdown_error = %existing,
+                        lifecycle_worker_error = %error,
+                        "daemon lifecycle worker shutdown failed after an earlier shutdown-start error"
+                    );
+                } else {
+                    shutdown_error = Some(error);
+                }
+            }
             if let Err(error) = endpoint_guard.unpublish() {
                 if let Some(existing) = shutdown_error.as_ref() {
                     tracing::warn!(
@@ -663,10 +677,15 @@ fn write_shutdown_response(
 }
 
 fn schedule_delayed_listener_wake(endpoint_path: PathBuf, delay: Duration) {
-    thread::spawn(move || {
-        thread::sleep(delay);
-        let _ = wake_listener(&endpoint_path);
-    });
+    // Fire-and-forget: this helper only opens one local connection to unblock accept(), so
+    // shutdown does not need to retain or join the wake thread after it has been scheduled.
+    let _wake_handle = thread::Builder::new()
+        .name("delayed-listener-wake".to_owned())
+        .spawn(move || {
+            thread::sleep(delay);
+            let _ = wake_listener(&endpoint_path);
+        })
+        .expect("delayed-listener-wake thread");
 }
 
 fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {
@@ -940,17 +959,15 @@ mod tests {
     #[cfg(unix)]
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
     #[cfg(unix)]
+    use crate::test_support::{
+        DoctorOnlyDispatcher, LifecycleFlagResetGuard, connect_daemon_local_ipc_until_ready,
+    };
+    #[cfg(unix)]
     use atm_core::boundary::RequestDispatcher;
     #[cfg(unix)]
     use atm_core::doctor::DoctorQuery;
     #[cfg(unix)]
-    use atm_core::doctor::{
-        DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary,
-    };
-    #[cfg(unix)]
     use atm_core::error_codes::AtmErrorCode;
-    #[cfg(unix)]
-    use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
     #[cfg(unix)]
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     #[cfg(unix)]
@@ -966,50 +983,6 @@ mod tests {
 
     #[cfg(unix)]
     #[derive(Debug, Default)]
-    struct DoctorOnlyDispatcher;
-
-    #[cfg(unix)]
-    impl atm_core::boundary::sealed::Sealed for DoctorOnlyDispatcher {}
-
-    #[cfg(unix)]
-    impl RequestDispatcher for DoctorOnlyDispatcher {
-        fn dispatch(
-            &self,
-            request: RequestEnvelope,
-        ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
-            match request {
-                RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(DoctorReport {
-                    summary: DoctorSummary {
-                        status: DoctorStatus::Healthy,
-                        message: "ok".to_string(),
-                        info_count: 0,
-                        warning_count: 0,
-                        error_count: 0,
-                    },
-                    findings: Vec::new(),
-                    recommendations: Vec::new(),
-                    environment: DoctorEnvironmentVisibility {
-                        atm_home: None,
-                        atm_team: None,
-                        atm_identity: None,
-                        team_override: None,
-                    },
-                    member_roster: None,
-                    observability: AtmObservabilityHealth {
-                        active_log_path: None,
-                        logging_state: AtmObservabilityHealthState::Healthy,
-                        query_state: Some(AtmObservabilityHealthState::Healthy),
-                        detail: None,
-                    },
-                    runtime_status: None,
-                })),
-                other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
-            }
-        }
-    }
-
-    #[cfg(unix)]
-    #[derive(Debug, Default)]
     struct PanicDispatcher;
 
     #[cfg(unix)]
@@ -1022,46 +995,6 @@ mod tests {
             request: RequestEnvelope,
         ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
             panic!("intentional dispatcher panic for test: {request:?}");
-        }
-    }
-
-    #[cfg(unix)]
-    struct LifecycleFlagResetGuard {
-        lifecycle: LifecycleControlSourceAdapter,
-    }
-
-    #[cfg(unix)]
-    impl LifecycleFlagResetGuard {
-        fn install(lifecycle: LifecycleControlSourceAdapter) -> Self {
-            lifecycle.set_terminate_for_test(false);
-            lifecycle.set_reload_for_test(false);
-            Self { lifecycle }
-        }
-    }
-
-    #[cfg(unix)]
-    impl Drop for LifecycleFlagResetGuard {
-        fn drop(&mut self) {
-            self.lifecycle.set_terminate_for_test(false);
-            self.lifecycle.set_reload_for_test(false);
-        }
-    }
-
-    #[cfg(unix)]
-    fn connect_daemon_local_ipc_until_ready(endpoint_path: &Path) -> LocalSocketStream {
-        let deadline = Instant::now() + Duration::from_secs(3);
-        loop {
-            match LocalSocketStream::connect(
-                atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)
-                    .expect("ipc name"),
-            ) {
-                Ok(stream) => return stream,
-                Err(error) if Instant::now() < deadline => {
-                    let _ = error;
-                    std::thread::yield_now();
-                }
-                Err(error) => panic!("connect daemon local ipc: {error}"),
-            }
         }
     }
 
