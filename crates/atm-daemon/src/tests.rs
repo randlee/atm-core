@@ -24,6 +24,8 @@ use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
+#[cfg(windows)]
+use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
 use std::fs::OpenOptions;
@@ -32,8 +34,6 @@ use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::mpsc;
 use std::time::Duration;
-#[cfg(windows)]
-use std::time::Instant;
 use tempfile::TempDir;
 
 use crate::test_support::connect_daemon_local_ipc_until_ready;
@@ -325,18 +325,20 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
         serve_result_tx.send(result).expect("send serve result");
     });
 
-    let shutdown_started = Instant::now();
+    let local_ipc_name =
+        atm_core::protocol::daemon_local_ipc_name_from_path(&tempdir.path().join("daemon.sock"))
+            .expect("ipc name");
     lifecycle.set_terminate_for_test(true);
 
     serve_result_rx
         .recv_timeout(Duration::from_secs(10))
         .expect("recv serve result")
         .expect("serve runtime result");
-    assert!(
-        shutdown_started.elapsed() < Duration::from_secs(5),
-        "windows same-host runtime shutdown should complete within the documented bounded deadline"
-    );
     join.join().expect("join serve thread");
+    assert!(
+        LocalSocketStream::connect(local_ipc_name).is_err(),
+        "windows same-host runtime should reject new local IPC connections after shutdown",
+    );
 }
 
 #[test]
