@@ -39,6 +39,10 @@ struct ReconcileRuntimeInner {
     pending_changed: Condvar,
     debounce: Duration,
     executor: ReconcileExecutor,
+    // Lock ordering invariant: if code ever needs both runtime state and the
+    // fingerprint registry, it must drop `state` before locking this mutex.
+    // The registry is ancillary reconcile-emission state and must never nest
+    // inside the primary runtime lifecycle lock.
     #[cfg_attr(not(test), allow(dead_code))]
     notification_fingerprints: Arc<Mutex<NotificationFingerprintRegistry>>,
 }
@@ -107,6 +111,9 @@ struct PendingReconcile {
 
 #[derive(Default)]
 struct NotificationFingerprintRegistry {
+    // Each key retains the distinct fingerprint strings already emitted for one
+    // reconcile target so duplicate inbox projections do not re-notify until a
+    // genuinely new fingerprint appears.
     entries: HashMap<ReconcileKey, HashSet<String>>,
     order: VecDeque<ReconcileKey>,
 }
@@ -269,10 +276,22 @@ impl ReconcileRuntime {
             state.worker.take()
         };
         if let Some(handle) = handle {
+            let worker_thread_id = handle.thread().id();
             let (result_tx, result_rx) = mpsc::sync_channel(1);
-            let join_helper = thread::spawn(move || {
-                let _ = result_tx.send(handle.join());
-            });
+            let join_helper = thread::Builder::new()
+                .name("atm-daemon-reconcile-join".to_string())
+                .spawn(move || {
+                    let _ = result_tx.send(handle.join());
+                })
+                .map_err(|source| {
+                    AtmError::daemon_unavailable(
+                        "failed to spawn reconcile runtime join helper during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; reconcile shutdown could not create its bounded join helper.",
+                    )
+                    .with_source(source)
+                })?;
             match result_rx.recv_timeout(RECONCILE_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
@@ -291,6 +310,7 @@ impl ReconcileRuntime {
                     // typed timeout failure immediately instead of waiting forever on the helper.
                     drop(join_helper);
                     tracing::warn!(
+                        thread_id = ?worker_thread_id,
                         timeout_ms = RECONCILE_SHUTDOWN_DEADLINE.as_millis(),
                         "reconcile runtime worker exceeded shutdown deadline; detaching join helper"
                     );
@@ -304,8 +324,15 @@ impl ReconcileRuntime {
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
                     tracing::warn!(
+                        thread_id = ?worker_thread_id,
                         "reconcile runtime worker join helper exited before reporting shutdown status"
                     );
+                    return Err(AtmError::daemon_unavailable(
+                        "reconcile runtime join helper disconnected during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; the reconcile background lane did not report bounded shutdown status cleanly.",
+                    ));
                 }
             }
         }

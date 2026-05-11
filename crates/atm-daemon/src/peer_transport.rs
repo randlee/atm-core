@@ -106,10 +106,17 @@ impl PeerClientTransport {
         let endpoint = daemon_peer_endpoint_from_env();
         let config = std::env::current_dir()
             .ok()
-            .and_then(|current_dir| {
-                atm_core::boundary_support::load_workspace_config(ConfigLoadRequest { current_dir })
-                    .ok()
-                    .and_then(|response| response.config)
+            .and_then(|current_dir| match atm_core::boundary_support::load_workspace_config(
+                ConfigLoadRequest { current_dir },
+            ) {
+                Ok(response) => response.config,
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        "failed to load workspace config while constructing peer transport; using default remote retry budget"
+                    );
+                    None
+                }
             })
             .map(|config| PeerTransportConfig::from_config(Some(&config)))
             .unwrap_or_default();
@@ -808,8 +815,14 @@ mod tests {
         lifecycle.set_terminate_for_test(true);
 
         let tempdir = TempDir::new().expect("tempdir");
+        let endpoint = {
+            let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+            let endpoint = listener.local_addr().expect("addr");
+            drop(listener);
+            endpoint
+        };
         let transport = PeerTransportRuntime::new_for_test(
-            SocketAddr::from((Ipv4Addr::LOCALHOST, 9)),
+            endpoint,
             PeerTransportConfig {
                 remote_retry_budget: Duration::from_secs(1),
             },
@@ -892,9 +905,9 @@ mod tests {
 
         send_started_rx.recv().expect("send started");
         let response = response_rx
-            .recv()
-            .expect("response delivered")
-            .expect("response");
+            .recv_timeout(Duration::from_secs(5))
+            .expect("response wait")
+            .expect("response delivered");
         assert!(matches!(response, ResponseEnvelope::Heartbeat(_)));
     }
 

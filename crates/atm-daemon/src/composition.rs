@@ -19,6 +19,8 @@ use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub(crate) enum RuntimeLifecycleState {
     Starting,
@@ -481,7 +483,6 @@ impl RuntimeComposition {
     }
 
     fn rollback_partially_started_lanes(&self, started_lanes: StartedLanes) {
-        const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
         if started_lanes.watch_started
             && let Err(error) = shutdown_lane_with_deadline(
                 "watch event source",
@@ -513,7 +514,6 @@ impl RuntimeComposition {
     }
 
     fn shutdown_background_lanes(&self) -> Result<(), AtmError> {
-        const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
         let mut first_error = None;
         for (lane_name, shutdown) in [
             (

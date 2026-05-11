@@ -2709,11 +2709,11 @@ Architectural rules:
   exempt from the singleton rule
 
 Phase R operational defaults:
-- graceful shutdown drain deadline: current code `2s`
-- force-cancel deadline: current code `3s` total
-- `GAP-T5-001`: historical operator docs still referenced `5s` / `10s`; that
-  older pair remains a tracked contract gap until product/ops accepts or
-  revises the current daemon shutdown budget explicitly
+- graceful shutdown drain deadline: `2s`
+- force-cancel deadline: `3s` total
+- the pre-Phase-T `5s` / `10s` operator guidance is retired; daemon runtime,
+  crate docs, and sprint closeout now converge on the shipped `2s` / `3s`
+  shutdown contract
 - daemon auto-start publish deadline: `10s`
   (`AUTO_START_PUBLISH_TIMEOUT`)
 - same-host daemon request deadline: `3s`
