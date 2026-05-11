@@ -1,0 +1,115 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T3-009>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T3-009" ;
+  triage:title "temp_disk_target() and PathBuf import dead code on T.3 — clippy -D dead-code CI fail" ;
+  triage:description "In crates/atm-rusqlite/src/writer/mod.rs on feature/pT-t3-immutable-rows at e5a8d09: (1) fn temp_disk_target() at line 475 is defined but never called — all callers were removed when the stale deadline-flush test body was deleted in FIX-R5. Clippy -D warnings / -D dead-code fails with 'function temp_disk_target is never used'. (2) use std::path::PathBuf at line 458 is unused after temp_disk_target is removed (PathBuf was only used in temp_disk_target's signature). Fix: delete fn temp_disk_target() at lines 475-479 AND delete use std::path::PathBuf at line 458. Note: ATM-QA-T4-002 already identified the same dead-code pattern on T.4 (open) and T.3 (open). This finding covers the T.3-specific fix path, since T.3 cannot receive the T.4 fix via merge-forward." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dead-code" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-009/pT-t3-immutable-rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-009/pT-t3-immutable-rows/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-009/pT-t4-windows-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-009/pT-t4-windows-runtime/2> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/e5a8d09> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/b5d3186> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t4-windows-runtime/b5d3186> .
+
+# Occurrence 1: T3 — unused fn temp_disk_target()
+<urn:atm:triage:occurrence/ATM-QA-T3-009/pT-t3-immutable-rows/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 475 ;
+  triage:snippet "fn temp_disk_target() -> (TempDir, Arc<SharedDbTarget>, PathBuf) {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "e5a8d09" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/e5a8d09> .
+
+# Occurrence 2: T3 — unused PathBuf import
+<urn:atm:triage:occurrence/ATM-QA-T3-009/pT-t3-immutable-rows/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 458 ;
+  triage:snippet "use std::path::PathBuf;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "e5a8d09" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/e5a8d09> .
+
+# Occurrence 3: T4 — unused fn temp_disk_target() (same dead-code pattern, no callers at this signature)
+<urn:atm:triage:occurrence/ATM-QA-T3-009/pT-t4-windows-runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 475 ;
+  triage:snippet "fn temp_disk_target() -> (TempDir, Arc<SharedDbTarget>, PathBuf) {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "b5d3186" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/b5d3186> .
+
+# Occurrence 4: T4 — unused PathBuf import
+<urn:atm:triage:occurrence/ATM-QA-T3-009/pT-t4-windows-runtime/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 458 ;
+  triage:snippet "use std::path::PathBuf;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "b5d3186" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/b5d3186> .
+
+# WorktreeSnapshot nodes
+<urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/937791c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "937791c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/e5a8d09>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "e5a8d09" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/b5d3186>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "b5d3186" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5-hardening/30082e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-T/de6ac72>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "de6ac72" ;
+  triage:orderIndex 6 .
