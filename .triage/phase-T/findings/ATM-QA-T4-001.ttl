@@ -2,16 +2,25 @@
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
 # Finding: ATM-QA-T4-001
-# REQ-RUSQLITE-IMMUT-003 exception clause for invariant validation queries
-# dropped in T.4 merge conflict resolution.
-# Triage mode: initial_pass | Phase: phase-T | Date: 2026-05-10
+# REQ-RUSQLITE-IMMUT-003 exception clause — Section 5 still missing after FIX-R4
+# Triage mode: followup_pass | Phase: phase-T | Updated: 2026-05-10
+#
+# followup_pass summary (sweep on b5d3186 / 30082e8):
+#   T1/T2:     absent  — requirements.md does not contain IMMUT-003
+#   T3/sec3:   fixed   — exception clause present (e5a8d09)
+#   T3/sec5:   open    — Section 5 bullet has no exception clause (e5a8d09)
+#   T4/sec3:   fixed   — merged T3 exception clause (b5d3186)
+#   T4/sec5:   open    — Section 5 bullet still has no exception clause (b5d3186)
+#   T5/sec3:   open    — short form inherited; no exception clause (30082e8)
+#   T5/sec5:   open    — Section 5 bullet still has no exception clause (30082e8)
+#   integrate: absent  — requirements.md not present on this branch
 
 <urn:atm:triage:finding/ATM-QA-T4-001>
   a triage:Finding ;
   triage:findingId "ATM-QA-T4-001" ;
-  triage:title "REQ-RUSQLITE-IMMUT-003 exception clause for invariant validation queries dropped in T.4 merge conflict resolution" ;
-  triage:description "docs/atm-rusqlite/requirements.md Section 3 (around line 70) and Section 5 (around line 130) on T.4 (475de31) are missing the exception clause: This ban applies to hot-path probe queries only; crate-owned invariant validation queries that reject known schema/logical violations before SQL submission are permitted. This text existed on T.3 (1113b99) but was dropped during T.4's merge conflict resolution with integrate/phase-T. T.5 (6450bb5) inherited the defect." ;
-  triage:triageMode "initial_pass" ;
+  triage:title "REQ-RUSQLITE-IMMUT-003 exception clause — Section 5 still missing after FIX-R4" ;
+  triage:description "FIX-R4 (41e00e2, now superseded by b5d3186 on T4) restored Section 3 by merging T3. Section 5 on T4 (b5d3186) still reads 'immutable-row enforcement must remove the pre-write probe from the hot mailbox write path' with no exception clause. T5 (30082e8) inherited both the Section 3 short form (also missing exception clause) and the Section 5 gap. T3 (e5a8d09) is fixed in Section 3 only; Section 5 on T3 also lacks the exception clause. Required addition: This ban applies to hot-path probe queries only; crate-owned invariant validation queries that reject known schema or logical violations before SQL submission are permitted." ;
+  triage:triageMode "followup_pass" ;
   triage:category "missing_exception_clause" ;
   triage:phaseId "phase-T" ;
   triage:severity "important" ;
@@ -20,110 +29,159 @@
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T4-001/T4/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T4-001/T4/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T4-001/T5/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T4-001/T5/2> ;
-  triage:openOn <urn:atm:triage:worktree/T4/475de31> ;
-  triage:openOn <urn:atm:triage:worktree/T5/6450bb5> ;
-  triage:promoteTo <urn:atm:triage:worktree/T5/6450bb5> .
 
-# Occurrence 1: T4 Section 3 (lines 70-73) — exception clause absent
-<urn:atm:triage:occurrence/ATM-QA-T4-001/T4/1>
+  # Open occurrences — T3 Section 5
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T4-001/T3/sec5> ;
+  # Open occurrences — T4 Section 5
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T4-001/T4/sec5> ;
+  # Open occurrences — T5 Section 3
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T4-001/T5/sec3> ;
+  # Open occurrences — T5 Section 5
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T4-001/T5/sec5> ;
+
+  # Fixed occurrences — T3 Section 3, T4 Section 3 (merged from T3)
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T4-001/T3/sec3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T4-001/T4/sec3> ;
+
+  triage:openOn <urn:atm:triage:worktree/T3/e5a8d09> ;
+  triage:openOn <urn:atm:triage:worktree/T4/b5d3186> ;
+  triage:openOn <urn:atm:triage:worktree/T5/30082e8> ;
+  triage:fixedOn <urn:atm:triage:worktree/T3/e5a8d09> ;
+  triage:fixedOn <urn:atm:triage:worktree/T4/b5d3186> ;
+  triage:promoteTo <urn:atm:triage:worktree/T5/30082e8> .
+
+# --- Occurrences ---
+
+# T3 Section 3 — FIXED (exception clause present after merge)
+<urn:atm:triage:occurrence/ATM-QA-T4-001/T3/sec3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 70 ;
+  triage:snippet "- `REQ-RUSQLITE-IMMUT-003` the hot mailbox write path must not issue an existence probe ... This ban does not apply to crate-owned invariant validation queries that must run before INSERT" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "e5a8d09" ;
+  triage:section "Section 3" ;
+  triage:note "Exception clause present on T3 Section 3 as of e5a8d09." ;
+  triage:occursIn <urn:atm:triage:worktree/T3/e5a8d09> .
+
+# T3 Section 5 — OPEN (exception clause absent)
+<urn:atm:triage:occurrence/ATM-QA-T4-001/T3/sec5>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 134 ;
+  triage:snippet "- `REQ-RUSQLITE-IMMUT-003` immutable-row enforcement must remove the pre-write probe from the hot mailbox write path" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "e5a8d09" ;
+  triage:section "Section 5" ;
+  triage:note "Section 5 IMMUT-003 bullet on T3 has no exception clause. FIX-R4 only restored Section 3; Section 5 gap predates FIX-R4 and was not addressed." ;
+  triage:occursIn <urn:atm:triage:worktree/T3/e5a8d09> .
+
+# T4 Section 3 — FIXED (merged from T3 at b5d3186)
+<urn:atm:triage:occurrence/ATM-QA-T4-001/T4/sec3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 70 ;
+  triage:snippet "- `REQ-RUSQLITE-IMMUT-003` the hot mailbox write path must not issue an existence probe ... This ban does not apply to crate-owned invariant validation queries that must run before INSERT" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "b5d3186" ;
+  triage:section "Section 3" ;
+  triage:note "Section 3 exception clause restored on T4 via merge of T3 (b5d3186). FIX-R4 (41e00e2) was the initiating fix; subsequent merge to b5d3186 carries it forward." ;
+  triage:occursIn <urn:atm:triage:worktree/T4/b5d3186> .
+
+# T4 Section 5 — OPEN (exception clause absent; confirmed QA-5)
+<urn:atm:triage:occurrence/ATM-QA-T4-001/T4/sec5>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 134 ;
+  triage:snippet "- `REQ-RUSQLITE-IMMUT-003` immutable-row enforcement must remove the pre-write probe from the hot mailbox write path" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "b5d3186" ;
+  triage:section "Section 5" ;
+  triage:note "FIX-R4 (41e00e2) did not update Section 5. Still open at b5d3186. Confirmed Important by quality-mgr QA-5." ;
+  triage:occursIn <urn:atm:triage:worktree/T4/b5d3186> .
+
+# T5 Section 3 — OPEN (short form; no exception clause; merge from T4 did not propagate full text)
+<urn:atm:triage:occurrence/ATM-QA-T4-001/T5/sec3>
   a triage:Occurrence ;
   triage:file "docs/atm-rusqlite/requirements.md" ;
   triage:line 70 ;
   triage:snippet "- `REQ-RUSQLITE-IMMUT-003` the hot mailbox write path must not issue a pre-write probe before submitting message inserts to the writer lane; queue semantics and row-count detection own duplicate handling. Satisfies: `REQ-RUNTIME-002`." ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "475de31" ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
   triage:section "Section 3" ;
-  triage:note "Exception clause missing: This ban applies to hot-path probe queries only; crate-owned invariant validation queries that reject known schema/logical violations before SQL submission are permitted." ;
-  triage:occursIn <urn:atm:triage:worktree/T4/475de31> .
+  triage:note "T5 Section 3 at 30082e8 has the old short form without exception clause. T4's full-form text was not propagated to T5 despite the merge." ;
+  triage:occursIn <urn:atm:triage:worktree/T5/30082e8> .
 
-# Occurrence 2: T4 Section 5 (lines 130-131) — exception clause absent
-<urn:atm:triage:occurrence/ATM-QA-T4-001/T4/2>
+# T5 Section 5 — OPEN (exception clause absent; inherited from T4)
+<urn:atm:triage:occurrence/ATM-QA-T4-001/T5/sec5>
   a triage:Occurrence ;
   triage:file "docs/atm-rusqlite/requirements.md" ;
   triage:line 130 ;
   triage:snippet "- `REQ-RUSQLITE-IMMUT-003` immutable-row enforcement must remove the pre-write probe from the hot mailbox write path" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "475de31" ;
-  triage:section "Section 5" ;
-  triage:note "Exception clause missing after IMMUT-003 bullet in Section 5 summary list." ;
-  triage:occursIn <urn:atm:triage:worktree/T4/475de31> .
-
-# Occurrence 3: T5 Section 3 (lines 70-73) — exception clause absent (inherited from T4)
-<urn:atm:triage:occurrence/ATM-QA-T4-001/T5/1>
-  a triage:Occurrence ;
-  triage:file "docs/atm-rusqlite/requirements.md" ;
-  triage:line 70 ;
-  triage:snippet "- `REQ-RUSQLITE-IMMUT-003` the hot mailbox write path must not issue a pre-write probe before submitting message inserts to the writer lane; queue semantics and row-count detection own duplicate handling. Satisfies: `REQ-RUNTIME-002`." ;
-  triage:status "open" ;
-  triage:closed false ;
   triage:branch "feature/pT-t5-hardening" ;
-  triage:headSha "6450bb5" ;
-  triage:section "Section 3" ;
-  triage:note "Exception clause missing: inherited from T4 merge without restoring T3 text." ;
-  triage:occursIn <urn:atm:triage:worktree/T5/6450bb5> .
-
-# Occurrence 4: T5 Section 5 (lines 129-130) — exception clause absent (inherited from T4)
-<urn:atm:triage:occurrence/ATM-QA-T4-001/T5/2>
-  a triage:Occurrence ;
-  triage:file "docs/atm-rusqlite/requirements.md" ;
-  triage:line 129 ;
-  triage:snippet "- `REQ-RUSQLITE-IMMUT-003` immutable-row enforcement must remove the pre-write probe from the hot mailbox write path" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t5-hardening" ;
-  triage:headSha "6450bb5" ;
+  triage:headSha "30082e8" ;
   triage:section "Section 5" ;
-  triage:note "Exception clause missing after IMMUT-003 bullet in Section 5 summary list." ;
-  triage:occursIn <urn:atm:triage:worktree/T5/6450bb5> .
+  triage:note "T5 Section 5 IMMUT-003 bullet has no exception clause, inherited from T4 which also lacks it." ;
+  triage:occursIn <urn:atm:triage:worktree/T5/30082e8> .
 
-# Worktree snapshots
+# --- Worktree Snapshots ---
 
 <urn:atm:triage:worktree/T1/0e6b024>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t1-integration-gate" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
   triage:headSha "0e6b024" ;
-  triage:orderIndex 1 .
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
 
-<urn:atm:triage:worktree/T2/38cda3c>
+<urn:atm:triage:worktree/T2/937791c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
-  triage:headSha "38cda3c" ;
-  triage:orderIndex 2 .
+  triage:headSha "937791c" ;
+  triage:orderIndex 2 ;
+  triage:branchState "absent" .
 
-<urn:atm:triage:worktree/T3/1113b99>
+<urn:atm:triage:worktree/T3/e5a8d09>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t3-immutable-rows" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
-  triage:headSha "1113b99" ;
-  triage:orderIndex 3 .
+  triage:headSha "e5a8d09" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
 
-<urn:atm:triage:worktree/T4/475de31>
+<urn:atm:triage:worktree/T4/b5d3186>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t4-windows-runtime" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
-  triage:headSha "475de31" ;
-  triage:orderIndex 4 .
+  triage:headSha "b5d3186" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
 
-<urn:atm:triage:worktree/T5/6450bb5>
+<urn:atm:triage:worktree/T5/30082e8>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t5-hardening" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
-  triage:headSha "6450bb5" ;
-  triage:orderIndex 5 .
+  triage:headSha "30082e8" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .
 
-<urn:atm:triage:worktree/integrate-phase-T/afba6b7>
+<urn:atm:triage:worktree/integrate-phase-T/39aa9ca>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
-  triage:headSha "afba6b7" ;
-  triage:orderIndex 6 .
+  triage:headSha "39aa9ca" ;
+  triage:orderIndex 6 ;
+  triage:branchState "absent" .
