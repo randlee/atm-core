@@ -5,6 +5,7 @@
 mod mailbox_metadata;
 mod roster_store;
 mod shared_db;
+mod writer;
 
 use atm_core::boundary;
 use atm_core::error::AtmError;
@@ -17,9 +18,7 @@ use mailbox_metadata::{
 #[cfg(test)]
 use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, OptionalExtension, params};
-use shared_db::{
-    SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error, sqlite_thread_mode,
-};
+use shared_db::{SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error};
 use std::net::SocketAddr;
 use std::path::Path;
 #[cfg(test)]
@@ -280,100 +279,7 @@ impl boundary::MailStore for SqliteMailStore {
         &self,
         request: boundary::MailStoreUpsertMessageRequest,
     ) -> Result<boundary::MailStoreUpsertMessageResponse, AtmError> {
-        let record = request.record;
-        let envelope_json = serialize_json(&record.envelope, "mail-store envelope")?;
-        let parent_message_id = record
-            .envelope
-            .parent_message_id
-            .as_ref()
-            .map(ToString::to_string);
-        let thread_mode = sqlite_thread_mode(record.envelope.thread_mode);
-        let stale_at = record
-            .envelope
-            .stale_at
-            .map(|value| value.into_inner().to_rfc3339());
-        let pending_ack_at = record
-            .envelope
-            .pending_ack_at
-            .map(|value| value.into_inner().to_rfc3339());
-        let acknowledged_at = record
-            .envelope
-            .acknowledged_at
-            .map(|value| value.into_inner().to_rfc3339());
-        let from_agent = record.envelope.from.to_string();
-        let message_text = record.envelope.text.clone();
-        let summary = record.envelope.summary.clone();
-        let message_at = record.envelope.timestamp.into_inner().to_rfc3339();
-        let legacy_message_id = record.envelope.message_id.as_ref().map(ToString::to_string);
-        let inserted = self.db.with_transaction(|transaction| {
-            let existing: Option<i64> = transaction
-                .query_row(
-                    "SELECT 1 FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
-                    params![
-                        record.team.as_str(),
-                        record.agent.as_str(),
-                        record.message_key.as_ref()
-                    ],
-                    |row| row.get(0),
-                )
-                .optional()
-                .map_err(|error| self.db.error("failed to probe existing mail-store message", error))?;
-            transaction
-                .execute(
-                    "INSERT INTO mail_messages(team, agent, message_key, envelope_json, from_agent, message_text, summary, message_at, legacy_message_id, parent_message_id, thread_mode, stale_at, imported_from, recorded_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14)
-                     ON CONFLICT(team, agent, message_key) DO UPDATE SET
-                       envelope_json = excluded.envelope_json,
-                       from_agent = excluded.from_agent,
-                       message_text = excluded.message_text,
-                       summary = excluded.summary,
-                       message_at = excluded.message_at,
-                       legacy_message_id = excluded.legacy_message_id,
-                       parent_message_id = excluded.parent_message_id,
-                       thread_mode = excluded.thread_mode,
-                       stale_at = excluded.stale_at,
-                       imported_from = excluded.imported_from,
-                       recorded_at = excluded.recorded_at;",
-                    params![
-                        record.team.as_str(),
-                        record.agent.as_str(),
-                        record.message_key.as_ref(),
-                        envelope_json,
-                        from_agent,
-                        message_text,
-                        summary,
-                        message_at,
-                        legacy_message_id,
-                        parent_message_id,
-                        thread_mode,
-                        stale_at,
-                        record.imported_from,
-                        record.recorded_at.map(|value| value.into_inner().to_rfc3339()),
-                    ],
-                )
-                .map_err(|error| self.db.error("failed to upsert mail-store message", error))?;
-            transaction
-                .execute(
-                    "INSERT INTO ack_state(team, agent, message_key, pending_ack_at, acknowledged_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                     ON CONFLICT(team, agent, message_key) DO UPDATE SET
-                       pending_ack_at = excluded.pending_ack_at,
-                       acknowledged_at = excluded.acknowledged_at,
-                       updated_at = excluded.updated_at;",
-                    params![
-                        record.team.as_str(),
-                        record.agent.as_str(),
-                        record.message_key.as_ref(),
-                        pending_ack_at,
-                        acknowledged_at,
-                        record.recorded_at.map(|value| value.into_inner().to_rfc3339()),
-                    ],
-                )
-                .map_err(|error| self.db.error("failed to upsert ack-state row", error))?;
-            Ok(existing.is_none())
-        })?;
-
-        Ok(boundary::MailStoreUpsertMessageResponse { record, inserted })
+        self.db.submit_upsert_message(request)
     }
 
     fn load_message(
@@ -435,44 +341,7 @@ impl boundary::MailStore for SqliteMailStore {
         &self,
         request: boundary::MailStoreUpsertVisibilityStateRequest,
     ) -> Result<boundary::MailStoreUpsertVisibilityStateResponse, AtmError> {
-        let state_json = serialize_json(&request.state, "mail-store visibility state")?;
-        self.db.with_transaction(|transaction| {
-            transaction
-                .execute(
-                    "INSERT INTO mail_visibility_states(team, agent, message_key, state_json)
-                     VALUES (?1, ?2, ?3, ?4)
-                     ON CONFLICT(team, agent, message_key) DO UPDATE SET
-                       state_json = excluded.state_json;",
-                    params![
-                        request.team.as_str(),
-                        request.agent.as_str(),
-                        request.state.message_key.as_ref(),
-                        state_json,
-                    ],
-                )
-                .map_err(|error| self.db.error("failed to upsert mail-store visibility state", error))?;
-            transaction
-                .execute(
-                    "INSERT INTO ack_state(team, agent, message_key, pending_ack_at, acknowledged_at, updated_at)
-                     VALUES (?1, ?2, ?3, ?4, ?5, ?6)
-                     ON CONFLICT(team, agent, message_key) DO UPDATE SET
-                       pending_ack_at = excluded.pending_ack_at,
-                       acknowledged_at = excluded.acknowledged_at,
-                       updated_at = excluded.updated_at;",
-                    params![
-                        request.team.as_str(),
-                        request.agent.as_str(),
-                        request.state.message_key.as_ref(),
-                        request.state.pending_ack_at.map(|value| value.into_inner().to_rfc3339()),
-                        request.state.acknowledged_at.map(|value| value.into_inner().to_rfc3339()),
-                        request.state.updated_at.map(|value| value.into_inner().to_rfc3339()),
-                    ],
-                )
-                .map_err(|error| self.db.error("failed to upsert ack-state visibility projection", error))?;
-            Ok(boundary::MailStoreUpsertVisibilityStateResponse {
-                state: request.state,
-            })
-        })
+        self.db.submit_upsert_visibility_state(request)
     }
 
     fn load_visibility_state(
@@ -995,6 +864,7 @@ impl boundary::TaskStore for SqliteTaskStore {
 mod tests {
     use super::*;
     use atm_core::MessageKey;
+    use atm_core::boundary::MailStore as _;
     use atm_core::doctor::DoctorQuery;
     use atm_core::protocol::RequestEnvelope;
     use atm_core::schema::TeamConfig;
@@ -1159,7 +1029,9 @@ mod tests {
         assert_eq!(read_only.code, AtmErrorCode::MailboxWriteFailed);
 
         let in_memory_busy = sqlite_error(
-            &SharedDbTarget::InMemory,
+            &SharedDbTarget::InMemory {
+                uri: "file:atm-rusqlite-test?mode=memory&cache=shared".to_string(),
+            },
             "database busy",
             RusqliteError::SqliteFailure(
                 Error {
@@ -1490,6 +1362,81 @@ mod tests {
             })
             .expect_err("duplicate legacy identity");
         assert!(duplicate_legacy_identity.is_validation());
+    }
+
+    #[test]
+    fn duplicate_upsert_reports_inserted_false_and_keeps_record_loadable() {
+        let assembly = in_memory_assembly();
+        let store = assembly.mail_store();
+        let record = boundary::MailStoreMessageRecord {
+            team: team(),
+            agent: agent(),
+            message_key: message_key("atm:duplicate"),
+            envelope: envelope(),
+            imported_from: None,
+            recorded_at: Some(IsoTimestamp::now()),
+        };
+
+        let first = store
+            .upsert_message(boundary::MailStoreUpsertMessageRequest {
+                record: record.clone(),
+            })
+            .expect("first upsert");
+        let second = store
+            .upsert_message(boundary::MailStoreUpsertMessageRequest {
+                record: record.clone(),
+            })
+            .expect("second upsert");
+
+        assert!(first.inserted);
+        assert!(!second.inserted);
+        let loaded = store
+            .load_message(boundary::MailStoreLoadMessageRequest {
+                team: team(),
+                agent: agent(),
+                message_key: message_key("atm:duplicate"),
+            })
+            .expect("load duplicate");
+        assert_eq!(loaded.record, Some(record));
+    }
+
+    #[test]
+    fn concurrent_hot_path_upserts_succeed_through_writer_lane() {
+        let assembly = in_memory_assembly();
+        let store = Arc::clone(&assembly.mail_store);
+        let mut workers: Vec<std::thread::JoinHandle<bool>> = Vec::new();
+        for index in 0..16 {
+            let store = Arc::clone(&store);
+            workers.push(std::thread::spawn(move || {
+                let response = store.upsert_message(boundary::MailStoreUpsertMessageRequest {
+                    record: boundary::MailStoreMessageRecord {
+                        team: team(),
+                        agent: agent(),
+                        message_key: message_key(&format!("atm:concurrent-{index}")),
+                        envelope: envelope(),
+                        imported_from: Some("concurrency-test".to_string()),
+                        recorded_at: Some(IsoTimestamp::now()),
+                    },
+                });
+                response.expect("concurrent upsert").inserted
+            }));
+        }
+
+        let inserted = workers
+            .into_iter()
+            .map(|worker| worker.join().expect("writer thread join"))
+            .filter(|inserted| *inserted)
+            .count();
+        assert_eq!(inserted, 16);
+
+        let health = assembly
+            .mail_store()
+            .health_snapshot(boundary::MailStoreHealthSnapshotRequest {
+                team: team(),
+                agent: agent(),
+            })
+            .expect("health after concurrent upserts");
+        assert_eq!(health.snapshot.total_messages, 16);
     }
 
     #[test]
