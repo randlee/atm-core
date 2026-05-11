@@ -809,6 +809,10 @@ fn is_duplicate_registration(error: &AtmError) -> bool {
     error.code == atm_core::error_codes::AtmErrorCode::DaemonGraftSessionAlreadyRegistered
 }
 
+// Parallel to `LocalIpcClientTransportAdapter` in crates/atm/src/composition.rs.
+// Kept separate: atm-graft must not depend on the atm crate; sharing via
+// atm-daemon-client would require exposing the IPC exchange internals as a
+// public API surface, which is out of scope for that boundary crate.
 #[derive(Debug)]
 struct GraftLocalIpcClientTransport {
     endpoint: DaemonLocalIpcEndpoint,

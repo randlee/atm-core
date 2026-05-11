@@ -52,6 +52,10 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
+// Parallel to `GraftLocalIpcClientTransport` in crates/atm-graft/src/lib.rs.
+// Kept separate: atm-graft must not depend on the atm crate; sharing via
+// atm-daemon-client would require exposing the IPC exchange internals as a
+// public API surface, which is out of scope for that boundary crate.
 #[derive(Debug)]
 struct LocalIpcClientTransportAdapter {
     endpoint: DaemonLocalIpcEndpoint,
