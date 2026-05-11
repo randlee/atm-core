@@ -113,6 +113,9 @@ impl LifecycleStateChange {
 
     #[cfg_attr(any(windows, not(test)), allow(dead_code))]
     fn wait_for_change(&self, observed_generation: &mut u64) -> Result<(), AtmError> {
+        // The Windows lifecycle worker still relies on bounded polling as the
+        // accepted portability exception documented in
+        // `docs/atm-daemon/architecture.md`.
         const LIFECYCLE_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
         while !self.wait_for_change_timeout(observed_generation, LIFECYCLE_WAIT_TIMEOUT)? {}
         Ok(())

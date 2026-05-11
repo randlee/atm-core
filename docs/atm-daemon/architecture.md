@@ -348,6 +348,10 @@ Lifecycle state model:
     only
   - that polling loop must stay isolated to `lifecycle_control.rs` and remain
     under the same explicit shutdown/join contract as the Unix wake worker
+- accepted same-host transport fault-injection inventory also includes the
+  test-only `INJECTED_ACCEPT_ERROR_FOR_TEST` hook in `local_ipc_transport.rs`
+  so both Unix and Windows test lanes can force the bounded fatal-accept path
+  without introducing a production-only OS behavior difference
 
 Privacy boundary:
 - the lifecycle state type and transport/runtime adapter internals remain
@@ -502,7 +506,7 @@ Force-cancel rule:
 |---|---|---|
 | Wedge recovery | `<= 1s` | fatal transport events or shutdown beacons must unblock the lifecycle waiter and serving path promptly |
 | Accept-error teardown | `<= 2s` | a fatal local-IPC accept failure must reach typed runtime exit after drain start and endpoint unpublication |
-| Clean shutdown | `<= 5s` | orderly daemon shutdown, including tracked request drain and background-lane stop, stays bounded |
+| Clean shutdown | `<= 3s` current code / `<= 10s` historical target | `GAP-T5-001`: code currently drains for `2s` and force-cancels by `3s`, while older operator docs still referenced `5s` / `10s`; the accepted contract must be ruled explicitly rather than inferred |
 | Socket cleanup | `<= 100ms` | same-host endpoint unpublication completes promptly once serving stops |
 
 Exit-code expectations tied to these SLOs:
@@ -512,9 +516,15 @@ Exit-code expectations tied to these SLOs:
   restart
 - lifecycle-wedge detection exits `71`
 
-Required deadlines:
-- normal drain deadline: `5s`
-- force-cancel deadline after drain starts: `10s` total
+Current implemented deadlines:
+- normal drain deadline: `2s`
+- force-cancel deadline after drain starts: `3s` total
+
+Open gap:
+- `GAP-T5-001`: historical Phase S / early Phase T operator docs used `5s`
+  and `10s`; until product/ops accepts or revises the current code budget,
+  treat that older pair as a tracked documentation gap rather than an active
+  acceptance contract
 
 Ordering rule:
 - singleton ownership is released only after listener shutdown and checkpoint
@@ -563,6 +573,7 @@ Required caps:
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
 - reconcile notification fingerprint registry cap: `1024` keys
+- reconcile notification fingerprint per-key cap: `256` fingerprints
 - watch subscription cap: `256` active subscriptions
 - notification work queue depth: `256`
 
@@ -579,11 +590,16 @@ Required saturation behavior:
 - reconcile notification fingerprint registry cap exceeded: evict the oldest
   tracked key before inserting the new key so the daemon preserves the latest
   active reconcile targets without retaining unbounded fingerprint state
+- reconcile fingerprint set for one key exceeded: truncate deterministically to
+  the bounded `256`-fingerprint set before storing the snapshot used for later
+  change detection
 - notification queue full: fail the enqueue with typed degraded delivery status
   rather than silently buffering beyond the cap
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   from the live-member map so the retained map cardinality remains bounded;
-  removed entries project as explicit `unknown` on later snapshot/doctor reads
+  removed entries project as explicit `unknown` on later snapshot/doctor reads;
+  when the cache is saturated entirely by identity-conflict records, evict the
+  oldest conflict entry rather than growing past the documented cap
   and still emit structured warning output
 
 ## 3.3 Status Ownership

@@ -396,10 +396,20 @@ Required runtime rules:
   - bounded remote retry queue depth: `256`
   - SQLite handle/pool budget: min `1`, max `4`
   - live status-cache cap: `4096`
+  - bounded reconcile fingerprint entries per key:
+    `MAX_RECONCILE_FINGERPRINTS_PER_KEY = 256`, drop-oldest-and-log
   - reconcile notification fingerprint registry cap:
     `MAX_RECONCILE_FINGERPRINT_KEYS = 1024`, evict-oldest-and-log
   - watch subscription cap: `256`
-  - notification work queue depth: `256`
+  - notification work queue depth:
+    `DEFAULT_NOTIFICATION_QUEUE_CAPACITY = 64`
+- authoritative bounded shutdown deadlines:
+  - graceful singleton drain deadline: `2s`
+  - force-cancel deadline: `3s`
+  - reconcile lane shutdown deadline:
+    `RECONCILE_SHUTDOWN_DEADLINE = 2s` in production
+  - notification lane shutdown deadline:
+    `NOTIFICATION_SHUTDOWN_DEADLINE = 3s`
 - request work launched from the server path must remain tracked by runtime
   shutdown accounting until it completes or is cancelled
 - the current Phase R transport remains single-request-per-connection, so the

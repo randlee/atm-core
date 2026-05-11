@@ -1,0 +1,124 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-T7-005>
+  a triage:Finding ;
+  triage:findingId "FTQ-T7-005" ;
+  triage:title "shutdown_beacon wait_until_tripped busy-polls without entry confirmation in tests" ;
+  triage:description "crates/atm-daemon/src/shutdown_beacon.rs:47 — wait_until_tripped busy-polls with 5ms sleep. In tests, thread::yield_now() is called before trip with no confirmation the waiter is inside the polling loop. Fix: add a channel or condvar to confirm waiter entry before testing the trip condition." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence
+    <urn:atm:triage:occurrence/FTQ-T7-005/pT-t4/1> ,
+    <urn:atm:triage:occurrence/FTQ-T7-005/pT-t5/1> ,
+    <urn:atm:triage:occurrence/FTQ-T7-005/pT-t6/1> ,
+    <urn:atm:triage:occurrence/FTQ-T7-005/pT-t7/1> ,
+    <urn:atm:triage:occurrence/FTQ-T7-005/pT-t8/1> ;
+  triage:openOn
+    <urn:atm:triage:worktree/pT-t4/68a83ea> ,
+    <urn:atm:triage:worktree/pT-t5/a99dde9> ,
+    <urn:atm:triage:worktree/pT-t6/500315d> ,
+    <urn:atm:triage:worktree/pT-t7/6986027> ,
+    <urn:atm:triage:worktree/pT-t8/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+# -- Occurrences --
+
+<urn:atm:triage:occurrence/FTQ-T7-005/pT-t4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 47 ;
+  triage:snippet "std::thread::yield_now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "68a83ea" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/68a83ea> .
+
+<urn:atm:triage:occurrence/FTQ-T7-005/pT-t5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 47 ;
+  triage:snippet "std::thread::yield_now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/a99dde9> .
+
+<urn:atm:triage:occurrence/FTQ-T7-005/pT-t6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 47 ;
+  triage:snippet "std::thread::yield_now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/500315d> .
+
+<urn:atm:triage:occurrence/FTQ-T7-005/pT-t7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 47 ;
+  triage:snippet "std::thread::yield_now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7/6986027> .
+
+<urn:atm:triage:occurrence/FTQ-T7-005/pT-t8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 47 ;
+  triage:snippet "std::thread::yield_now();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+# -- WorktreeSnapshots --
+
+<urn:atm:triage:worktree/pT-t4/68a83ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "68a83ea" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/a99dde9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pT-t6/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pT-t7/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pT-t8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .

@@ -2709,8 +2709,11 @@ Architectural rules:
   exempt from the singleton rule
 
 Phase R operational defaults:
-- graceful shutdown drain deadline: `5s`
-- force-cancel deadline: `10s` total
+- graceful shutdown drain deadline: `2s`
+- force-cancel deadline: `3s` total
+- the pre-Phase-T `5s` / `10s` operator guidance is retired; daemon runtime,
+  crate docs, and sprint closeout now converge on the shipped `2s` / `3s`
+  shutdown contract
 - daemon auto-start publish deadline: `10s`
   (`AUTO_START_PUBLISH_TIMEOUT`)
 - same-host daemon request deadline: `3s`

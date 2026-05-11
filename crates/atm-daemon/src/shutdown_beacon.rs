@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(test)]
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Default)]
@@ -17,14 +18,14 @@ impl ShutdownBeacon {
         self.tripped.load(Ordering::SeqCst)
     }
 
-    #[cfg_attr(any(windows, not(test)), allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn wait_until_tripped(&self, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             if self.is_tripped() {
                 return true;
             }
-            std::thread::sleep(Duration::from_millis(5));
+            std::thread::park_timeout(Duration::from_millis(5));
         }
         self.is_tripped()
     }
@@ -40,11 +41,13 @@ mod tests {
     fn wait_until_tripped_returns_true_after_trip() {
         let beacon = Arc::new(ShutdownBeacon::default());
         let waiter = Arc::clone(&beacon);
+        let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(1);
         let join = std::thread::spawn(move || {
+            let _ = ready_tx.send(());
             assert!(waiter.wait_until_tripped(Duration::from_secs(1)));
         });
 
-        std::thread::yield_now();
+        ready_rx.recv().expect("shutdown beacon waiter entered");
         beacon.trip();
 
         join.join().expect("join shutdown beacon waiter");

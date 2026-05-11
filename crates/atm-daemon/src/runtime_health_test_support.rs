@@ -85,6 +85,14 @@ impl RuntimeStatusCache {
     ) -> Result<TeamMemberHeartbeatResponse, AtmError> {
         self.record_heartbeat(request, pid_changed)
     }
+
+    pub(crate) fn record_identity_conflict_for_test(
+        &self,
+        request: &TeamMemberHeartbeatRequest,
+        existing_pid: u32,
+    ) -> Result<(), AtmError> {
+        self.record_identity_conflict(request, existing_pid)
+    }
 }
 
 impl DaemonRequestDispatcher {
