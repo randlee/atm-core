@@ -15,6 +15,9 @@ The daemon/runtime expansion adds:
 - `atm-daemon`: daemon runtime binary / transport host
 - `atm-rusqlite`: first concrete SQLite store implementation
 
+The Phase T embedded-client expansion adds:
+- `atm-graft`: thin embedded ATM client for Rust host agents
+
 The CLI stays thin. Product logic moves into `atm-core`.
 
 The retained command surface is:
