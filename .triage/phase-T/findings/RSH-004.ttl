@@ -4,49 +4,50 @@
 <urn:atm:triage:finding/RSH-004>
   a triage:Finding ;
   triage:findingId "RSH-004" ;
-  triage:title "No upper bound on envelope_json size before entering write queue" ;
-  triage:description "crates/atm-rusqlite/src/writer/ops.rs:42 no upper bound on envelope_json serialized size before entering the write queue. Fix: add MAX_ENVELOPE_JSON_BYTES guard at submit_upsert_message call site." ;
+  triage:title "No envelope_json size limit before INSERT" ;
+  triage:description "crates/atm-rusqlite/src/writer/ops.rs — No upper bound on envelope_json serialized size before entering the write queue. T2 introduced MAX_ENVELOPE_JSON_BYTES guard via validate_upsert_message_request; T3 diverged (immutable-rows refactor) and the guard is absent on T3 and above." ;
   triage:phaseId "phase-T" ;
   triage:category "RSH" ;
-  triage:triageMode "initial_pass" ;
-  triage:severity "minor" ;
+  triage:triageMode "followup_pass" ;
+  triage:severity "important" ;
   triage:repeatable false ;
-  triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:openOn <urn:atm:triage:worktree/pT-t2/5275b3c> ;
-  triage:promoteTo <urn:atm:triage:worktree/pT-t2/5275b3c> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pT-t2/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pT-t2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pT-t3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pT-t3/2> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t2/5275b3c> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
   triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime .
 
-<urn:atm:triage:occurrence/RSH-004/pT-t2/1>
+<urn:atm:triage:occurrence/RSH-004/pT-t3/1>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
-  triage:line 42 ;
-  triage:snippet "let envelope_json = serialize_json(&record.envelope, \"mail-store envelope\")?;" ;
+  triage:line 43 ;
+  triage:snippet "let envelope_json = serialize_json(&record.envelope, \"mail-store envelope\")?" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
 
-<urn:atm:triage:occurrence/RSH-004/pT-t2/2>
+<urn:atm:triage:occurrence/RSH-004/pT-t3/2>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
-  triage:line 94 ;
+  triage:line 78 ;
   triage:snippet "envelope_json," ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
 
-<urn:atm:triage:worktree/pT-t1/bfb6511>
+<urn:atm:triage:worktree/pT-t1/bdc8ce1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t1-integration-gate" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
+  triage:headSha "bdc8ce1" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pT-t2/5275b3c>
@@ -56,18 +57,18 @@
   triage:headSha "5275b3c" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pT-t3/4b04c20>
+<urn:atm:triage:worktree/pT-t3/f9f1e3f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t3-immutable-rows" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "f9f1e3f" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/pT-t4/4b04c20>
+<urn:atm:triage:worktree/pT-t4/b71366f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t4-windows-runtime" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "b71366f" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/pT-t5/fbf64cc>
@@ -77,9 +78,9 @@
   triage:headSha "fbf64cc" ;
   triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/integrate/4b04c20>
+<urn:atm:triage:worktree/integrate/f96abd0>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "f96abd0" ;
   triage:orderIndex 9 .

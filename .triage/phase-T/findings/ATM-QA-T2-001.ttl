@@ -4,82 +4,95 @@
 <urn:atm:triage:finding/ATM-QA-T2-001>
   a triage:Finding ;
   triage:findingId "ATM-QA-T2-001" ;
-  triage:title "Writer tests absent — shutdown drain, batch drain, queue-full paths unverified" ;
-  triage:description "Sprint acceptance criterion requires bounded and test-covered worker queue, batch drain, and shutdown path. Three test scenarios missing: (a) shutdown drain: no test submits N ops, drops SqliteWriter, reopens DB, verifies all N rows present; (b) batch drain boundary: no test submits >=64 ops (BATCH_SIZE_MAX) and asserts all committed; (c) queue-full backpressure: no test saturates 256-slot SyncSender and verifies blocking or error behavior. send-failure branch at mod.rs:70 is untested." ;
+  triage:title "Missing tests: writer shutdown drain, batch drain, queue-full behavior" ;
+  triage:description "crates/atm-rusqlite/src/writer/mod.rs — No test for writer shutdown + pending-work drain (QA-001), no test for queue-full behavior at capacity 256 (QA-002). T.3 QA-1 confirms these are still unresolved carry-forwards from T.2. T.2 fix landed at 8fde385 (fn writer_drop_drains_queued_messages_before_exit, fn writer_commits_more_than_one_batch_boundary_of_messages, fn shutdown_first_drains_pending_submitters_with_daemon_unavailable, fn submit_times_out_when_the_queue_is_full). T.3 merged T.2 at 5275b3c (pre-fix) so all four test functions are absent from T.3. Merge-forward of 8fde385 into T.3 required." ;
   triage:category "ATM-QA" ;
   triage:phaseId "phase-T" ;
-  triage:triageMode "initial_pass" ;
-  triage:severity "blocking" ;
-  triage:repeatable false ;
+  triage:triageMode "followup_pass" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
   triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-10T17:51:37Z"^^xsd:dateTime ;
-  triage:openOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c> ;
-  triage:promoteTo <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t2/absence-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t2/absence-2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t2/absence-3> .
+  triage:triagedAt "2026-05-10T21:00:00Z"^^xsd:dateTime ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t3/absence-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t3/absence-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t3/absence-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t3/absence-4> .
 
-<urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t2/absence-1>
+<urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t3/absence-1>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
   triage:line 1 ;
-  triage:snippet "Test function: shutdown drain (submit N ops, drop SqliteWriter, reopen DB, verify all N rows)" ;
+  triage:snippet "fn writer_drop_drains_queued_messages_before_exit — absent; present in T.2 at line 505" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c> .
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
 
-<urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t2/absence-2>
+<urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t3/absence-2>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
   triage:line 1 ;
-  triage:snippet "Test function: batch drain boundary (submit >=64 ops BATCH_SIZE_MAX, assert all committed)" ;
+  triage:snippet "fn writer_commits_more_than_one_batch_boundary_of_messages — absent; present in T.2 at line 539" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c> .
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
 
-<urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t2/absence-3>
+<urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t3/absence-3>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 70 ;
-  triage:snippet "send-failure branch on line 70: .map_err(|_| { ... }) - untested queue-full backpressure" ;
+  triage:line 1 ;
+  triage:snippet "fn shutdown_first_drains_pending_submitters_with_daemon_unavailable — absent; present in T.2 at line 573" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c> .
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
 
-<urn:atm:triage:worktree/pT-t1-integration-gate/bfb6511>
+<urn:atm:triage:occurrence/ATM-QA-T2-001/pT-t3/absence-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 1 ;
+  triage:snippet "fn submit_times_out_when_the_queue_is_full — absent; present in T.2 at line 597" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
+
+<urn:atm:triage:worktree/pT-t1-integration-gate/bdc8ce1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t1-integration-gate" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
+  triage:headSha "bdc8ce1" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c>
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
+  triage:headSha "8fde385" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pT-t3-immutable-rows/4b04c20>
+<urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t3-immutable-rows" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "f9f1e3f" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/pT-t4-windows-runtime/4b04c20>
+<urn:atm:triage:worktree/pT-t4-windows-runtime/b71366f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t4-windows-runtime" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "b71366f" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/pT-t5-hardening/fbf64cc>
@@ -89,9 +102,9 @@
   triage:headSha "fbf64cc" ;
   triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/integrate-phase-T/4b04c20>
+<urn:atm:triage:worktree/integrate-phase-T/f96abd0>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "f96abd0" ;
   triage:orderIndex 9 .
