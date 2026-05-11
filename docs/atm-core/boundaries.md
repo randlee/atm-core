@@ -113,7 +113,7 @@ Purpose:
 Notes:
 - Transport-specific listeners should not embed request-family logic.
 
-## MailStore
+## BOUNDARY-MailStore-Sqlite
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/mail-store.toml](../../boundaries/atm-core/mail-store.toml)
@@ -125,7 +125,7 @@ Purpose:
 Notes:
 - This stays the canonical durable truth behind send and receive workflows.
 
-## TaskStore
+## BOUNDARY-TaskStore-Sqlite
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/task-store.toml](../../boundaries/atm-core/task-store.toml)
@@ -137,7 +137,7 @@ Purpose:
 Notes:
 - `ack` is not a top-level public method, but it still mutates task state.
 
-## RosterStore
+## BOUNDARY-RosterStore-Sqlite
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/roster-store.toml](../../boundaries/atm-core/roster-store.toml)

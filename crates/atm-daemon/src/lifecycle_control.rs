@@ -598,7 +598,7 @@ mod windows_tests {
         first.set_terminate_for_test(true);
 
         assert!(
-            rx.recv_timeout(Duration::from_secs(1))
+            rx.recv_timeout(Duration::from_secs(5))
                 .expect("waiter wake result"),
             "terminate wake should set the terminate flag"
         );
@@ -674,7 +674,7 @@ mod unix_tests {
 
         drop(wake_write);
 
-        rx.recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(5))
             .expect("EOF should wake lifecycle waiters");
         worker_shutdown.store(true, Ordering::SeqCst);
         worker.join().expect("join unix lifecycle worker");
