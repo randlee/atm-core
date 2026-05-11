@@ -1,0 +1,115 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Finding: ATM-QA-T3-008
+# Title:   Stale disk-based deadline_flush test body not deleted — duplicate
+#          function name compile error
+# Phase:   phase-T
+# Mode:    initial_pass
+# ──────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/ATM-QA-T3-008>
+    a triage:Finding ;
+    triage:findingId "ATM-QA-T3-008" ;
+    triage:title "Stale disk-based deadline_flush test body not deleted — duplicate function name compile error" ;
+    triage:description "In crates/atm-rusqlite/src/writer/mod.rs, the stale disk-based version of deadline_flush_commits_messages_without_waiting_for_batch_capacity at lines 629-662 was not deleted when the correct in-memory replacement was added at line 916. Results in E0428 (duplicate function name) and E0308 (wrong destructure tuple arity on temp_disk_target). Fix: delete lines 629-662 entirely. The in-memory version at lines 916-949 is the only correct definition." ;
+    triage:phaseId "phase-T" ;
+    triage:triageMode "initial_pass" ;
+    triage:category "stale-test-body" ;
+    triage:severity "blocking" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "open" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-10T21:30:00Z"^^xsd:dateTime ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-008/pT-t3/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-008/pT-t3/2> ;
+    triage:openOn <urn:atm:triage:worktree/pT-t3/1113b99> ;
+    triage:promoteTo <urn:atm:triage:worktree/pT-t3/1113b99> .
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Occurrences — only on feature/pT-t3-immutable-rows (the origin of the bug)
+# ──────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ATM-QA-T3-008/pT-t3/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+    triage:line 630 ;
+    triage:snippet "fn deadline_flush_commits_messages_without_waiting_for_batch_capacity() { let (_tempdir, target) = temp_disk_target();" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pT-t3-immutable-rows" ;
+    triage:headSha "1113b99" ;
+    triage:note "Stale disk-based definition — 2-tuple temp_disk_target() destructure; causes E0428 duplicate function name and E0308 wrong tuple arity; must be deleted entirely" ;
+    triage:occursIn <urn:atm:triage:worktree/pT-t3/1113b99> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-008/pT-t3/2>
+    a triage:Occurrence ;
+    triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+    triage:line 917 ;
+    triage:snippet "fn deadline_flush_commits_messages_without_waiting_for_batch_capacity() { let target = in_memory_target();" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pT-t3-immutable-rows" ;
+    triage:headSha "1113b99" ;
+    triage:note "Correct in-memory definition — this is the keeper; presence of line-630 definition causes E0428 compile error" ;
+    triage:occursIn <urn:atm:triage:worktree/pT-t3/1113b99> .
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Worktree Snapshots
+# ──────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pT-t1/0e6b024>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pT-t1-integration-gate" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+    triage:headSha "0e6b024" ;
+    triage:orderIndex 1 ;
+    triage:branchState "absent" ;
+    triage:note "crates/atm-rusqlite not present in this worktree; finding not applicable" .
+
+<urn:atm:triage:worktree/pT-t2/38cda3c>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pT-t2-sqlite-writer" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+    triage:headSha "38cda3c" ;
+    triage:orderIndex 2 ;
+    triage:branchState "absent" ;
+    triage:note "Single disk-based definition at line 573 (2-tuple); no duplicate; E0428 not present; this is the original pre-split definition, not the stale remnant" .
+
+<urn:atm:triage:worktree/pT-t3/1113b99>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pT-t3-immutable-rows" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+    triage:headSha "1113b99" ;
+    triage:orderIndex 3 ;
+    triage:branchState "open" ;
+    triage:note "Two definitions present: stale disk-based at line 630 and correct in-memory at line 917; E0428 compile error; this is the highest open branch and the fix target" .
+
+<urn:atm:triage:worktree/pT-t4/475de31>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pT-t4-windows-runtime" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+    triage:headSha "475de31" ;
+    triage:orderIndex 4 ;
+    triage:branchState "fixed" ;
+    triage:note "Single in_memory_target() definition at line 882; stale body removed; E0428 not present; t4 already has the correct fix" .
+
+<urn:atm:triage:worktree/pT-t5/30082e8>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pT-t5-hardening" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+    triage:headSha "30082e8" ;
+    triage:orderIndex 5 ;
+    triage:branchState "absent" ;
+    triage:note "Single disk-based temp_disk_target() 3-tuple definition at line 808; no duplicate; E0428 not present; t5 merged t4 but retained its own disk-based variant (not the in-memory fix); no compile error for this specific finding" .
+
+<urn:atm:triage:worktree/integrate-pT/7b26103>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-T" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+    triage:headSha "7b26103" ;
+    triage:orderIndex 6 ;
+    triage:branchState "absent" ;
+    triage:note "crates/atm-rusqlite/src/writer/ not present in this worktree; finding not applicable" .
