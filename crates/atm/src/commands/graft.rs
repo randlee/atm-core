@@ -95,13 +95,13 @@ fn print_response(
 }
 
 trait GraftQueueResponseView {
-    fn nudges(&self) -> &[atm_core::graft::GraftNudge];
+    fn nudges(&self) -> &[atm_core::graft::NudgeEvent];
     fn remaining(&self) -> usize;
     fn dropped_count(&self) -> usize;
 }
 
 impl GraftQueueResponseView for GraftNudgeFetchResponse {
-    fn nudges(&self) -> &[atm_core::graft::GraftNudge] {
+    fn nudges(&self) -> &[atm_core::graft::NudgeEvent] {
         &self.nudges
     }
 
@@ -115,7 +115,7 @@ impl GraftQueueResponseView for GraftNudgeFetchResponse {
 }
 
 impl GraftQueueResponseView for GraftNudgeDrainResponse {
-    fn nudges(&self) -> &[atm_core::graft::GraftNudge] {
+    fn nudges(&self) -> &[atm_core::graft::NudgeEvent] {
         &self.nudges
     }
 
@@ -133,7 +133,7 @@ mod tests {
     use std::sync::Arc;
 
     use atm_core::graft::{
-        GraftNudge, GraftNudgeDrainResponse, GraftNudgeFetchResponse, GraftSessionId,
+        GraftNudgeDrainResponse, GraftNudgeFetchResponse, GraftSessionId, NudgeEvent,
     };
     use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
     use atm_core::transport::testing::FakeClientTransport;
@@ -177,7 +177,7 @@ mod tests {
             RequestEnvelope::GraftDrain(request) => {
                 Ok(ResponseEnvelope::GraftDrain(GraftNudgeDrainResponse {
                     session_id: request.session_id,
-                    nudges: vec![GraftNudge {
+                    nudges: vec![NudgeEvent {
                         message_id: atm_core::schema::LegacyMessageId::new(),
                         from: "sender".parse().expect("sender"),
                         message: "hello".to_string(),

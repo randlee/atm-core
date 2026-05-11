@@ -317,6 +317,7 @@ mod tests {
             agent: request.agent,
             session_id: request.session_id,
             registered_at: IsoTimestamp::now(),
+            queue_capacity: 256,
         }
     }
 
@@ -355,6 +356,7 @@ mod tests {
             session_id: GraftSessionId::new("session-1").expect("session"),
             nudges: vec![nudge_event()],
             remaining: 0,
+            dropped_count: 0,
         }
     }
 
@@ -370,6 +372,7 @@ mod tests {
             session_id: GraftSessionId::new("session-1").expect("session"),
             nudges: vec![nudge_event()],
             remaining: 1,
+            dropped_count: 0,
         }
     }
 
@@ -475,6 +478,7 @@ mod tests {
                 agent: request.agent,
                 session_id: request.session_id,
                 registered_at: IsoTimestamp::now(),
+                queue_capacity: 256,
             })
         }
 
@@ -496,6 +500,7 @@ mod tests {
                 session_id: request.session_id,
                 nudges: vec![nudge_event()],
                 remaining: 0,
+                dropped_count: 0,
             })
         }
 
@@ -507,6 +512,7 @@ mod tests {
                 session_id: request.session_id,
                 nudges: vec![nudge_event()],
                 remaining: 0,
+                dropped_count: 0,
             })
         }
     }

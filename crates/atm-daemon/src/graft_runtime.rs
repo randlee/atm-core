@@ -3,10 +3,10 @@ use std::sync::Mutex;
 
 use atm_core::error::AtmError;
 use atm_core::graft::{
-    GraftNudge, GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
+    GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
     GraftNudgeFetchResponse, GraftSessionId, GraftSessionRegistrationRequest,
     GraftSessionRegistrationResponse, GraftSessionUnregistrationRequest,
-    GraftSessionUnregistrationResponse,
+    GraftSessionUnregistrationResponse, NudgeEvent,
 };
 use atm_core::send::SendOutcome;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
@@ -33,7 +33,7 @@ struct RegisteredGraftSession {
     _pid: u32,
     _started_at: IsoTimestamp,
     _registered_at: IsoTimestamp,
-    nudges: VecDeque<GraftNudge>,
+    nudges: VecDeque<NudgeEvent>,
     dropped_count: usize,
 }
 
@@ -181,7 +181,7 @@ impl GraftRuntime {
             .clone()
             .or_else(|| outcome.summary.clone())
             .unwrap_or_default();
-        let nudge = GraftNudge {
+        let nudge = NudgeEvent {
             message_id: outcome.message_id,
             from: outcome.sender.clone(),
             message,
