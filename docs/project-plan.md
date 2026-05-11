@@ -50,6 +50,8 @@ Phase-S planning note:
 - Phase S implementation details must come either from `docs/plan-phase-S.md`
   or from the governing requirements, architecture, ADR, and ICD documents it
   names; the project plan does not override those lower-level sources of truth
+- Phase S was extended through `S.15` (SQLite write-worker / rusqlite
+  hardening); see `docs/plan-phase-S.md` §5
 - the planning baseline is `integrate/phase-R` at `6a072c1`
 - S.5 is the follow-on planning slice that tightens the no-flaky-test policy,
   defines which anti-flake guardrails belong in the default lint path, and

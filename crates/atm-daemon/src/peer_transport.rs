@@ -248,11 +248,12 @@ impl PeerClientTransport {
         let started = Instant::now();
         let deadline = started + self.config.remote_retry_budget;
         let terminate = daemon_terminate_flag()?;
+        let terminate_before_first_attempt = terminate.load(Ordering::SeqCst);
         let mut backoff = INITIAL_RETRY_BACKOFF;
         let mut attempt = 0u32;
 
         loop {
-            if terminate.load(Ordering::SeqCst) {
+            if attempt == 0 && terminate_before_first_attempt {
                 return Err(
                     AtmError::daemon_unavailable(
                         "daemon shutdown interrupted remote peer delivery before the next network attempt",

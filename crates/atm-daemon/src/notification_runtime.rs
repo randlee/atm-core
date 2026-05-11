@@ -21,8 +21,14 @@ pub(crate) struct NotificationRuntime {
 type NotificationPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
 
 struct NotificationRuntimeInner {
+    // State transitions, degradation, and the bounded queue must be updated
+    // atomically with respect to wakeups, so the queue and lifecycle flags live
+    // behind one mutex paired with the condvar below.
     state: Mutex<NotificationState>,
     wake: Condvar,
+    // The worker join handle is handed off exactly once between `start()` and
+    // `shutdown()`, so a separate mutex keeps that exclusive ownership transfer
+    // explicit without widening the main state critical section.
     worker: Mutex<Option<JoinHandle<()>>>,
     path_factory: NotificationPathFactory,
     queue_capacity: usize,

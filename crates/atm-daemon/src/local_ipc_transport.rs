@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::num::NonZeroU64;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -27,6 +28,7 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 const LISTENER_WAKE_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
+const TERMINATE_REJECTION_REQUEST_ID: u64 = NonZeroU64::MIN.get();
 
 #[derive(Debug, Default)]
 struct ServeLoopSignals {
@@ -455,7 +457,7 @@ impl PreparedRuntimeServer {
                         ),
                     ));
                     let frame = codec.response_to_frame(
-                        atm_core::protocol::RequestId::new(1).expect("non-zero request id"),
+                        atm_core::protocol::RequestId::new(TERMINATE_REJECTION_REQUEST_ID)?,
                         response,
                     )?;
                     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
