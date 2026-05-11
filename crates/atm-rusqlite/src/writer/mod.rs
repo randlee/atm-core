@@ -570,6 +570,41 @@ mod tests {
     }
 
     #[test]
+    fn deadline_flush_commits_messages_without_waiting_for_batch_capacity() {
+        let (_tempdir, target) = temp_disk_target();
+        let writer = SqliteWriter::start_for_test(
+            Arc::clone(&target),
+            CHANNEL_CAPACITY,
+            Duration::from_millis(50),
+            Duration::from_secs(1),
+        )
+        .expect("writer");
+
+        let mut replies = Vec::new();
+        for index in 0..3 {
+            let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+            writer
+                .sender
+                .as_ref()
+                .expect("sender")
+                .send(WriterMessage::Submit {
+                    op: Box::new(upsert_message_request(index)),
+                    reply: reply_tx,
+                })
+                .expect("queue submit");
+            replies.push(reply_rx);
+            thread::park_timeout(BATCH_TIME_BUDGET + Duration::from_millis(1));
+        }
+
+        for reply in replies {
+            assert!(reply.recv().expect("reply").is_ok());
+        }
+        assert_eq!(message_count(target.as_ref()), 3);
+
+        drop(writer);
+    }
+
+    #[test]
     fn shutdown_first_drains_pending_submitters_with_daemon_unavailable() {
         let (sender, receiver) = mpsc::sync_channel(4);
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);

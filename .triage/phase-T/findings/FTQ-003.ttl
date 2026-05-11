@@ -1,0 +1,352 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# FTQ-003 — recv_timeout(5s) too tight relative to drain(500ms) + force_cancel(2s)
+# Triaged: 2026-05-10T00:00:00Z
+# Mode: initial_pass | Phase: phase-T
+
+<urn:atm:triage:finding/FTQ-003>
+  a triage:Finding ;
+  triage:findingId "FTQ-003" ;
+  triage:title "tests.rs recv_timeout(5s) too tight relative to drain(500ms) + force_cancel(2s)" ;
+  triage:description "crates/atm-daemon/src/tests.rs: recv_timeout(Duration::from_secs(5)) leaves only ~2.5s of slack over drain(500ms) + force_cancel(2s). Widen to 15s to match the Windows test timeout pattern and prevent flaky CI failures on slow runners." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+
+  # Occurrences on feature/pT-t1-integration-gate (order_index 1)
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t1/3> ;
+
+  # Occurrences on feature/pT-t2-sqlite-writer (order_index 2)
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t2/3> ;
+
+  # Occurrences on feature/pT-t3-immutable-rows (order_index 3)
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t3/3> ;
+
+  # Occurrences on feature/pT-t4-windows-runtime (order_index 4)
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t4/3> ;
+
+  # Occurrences on feature/pT-t5-hardening (order_index 5)
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/pT-t5/3> ;
+
+  # Occurrences on integrate/phase-T (order_index 6) — highest open branch; repeatable crate sweep adds local_ipc_transport.rs and runtime_health.rs
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/6> ;
+
+  # Branch open states
+  triage:openOn <urn:atm:triage:worktree/pT-t1/0e6b024> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2/d6f89e3> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3/06b28a4> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4/d180818> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5/6450bb5> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-T/177b30e> ;
+
+  # Promote to highest open branch
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-T/177b30e> .
+
+# ── Occurrences: feature/pT-t1-integration-gate ──────────────────────────────
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 212 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1/0e6b024> .
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 292 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1/0e6b024> .
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 470 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1/0e6b024> .
+
+# ── Occurrences: feature/pT-t2-sqlite-writer ─────────────────────────────────
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 212 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "d6f89e3" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/d6f89e3> .
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 292 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "d6f89e3" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/d6f89e3> .
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 470 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "d6f89e3" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/d6f89e3> .
+
+# ── Occurrences: feature/pT-t3-immutable-rows ────────────────────────────────
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 212 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 292 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 470 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
+
+# ── Occurrences: feature/pT-t4-windows-runtime ───────────────────────────────
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 206 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "d180818" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/d180818> .
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 285 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "d180818" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/d180818> .
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 465 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "d180818" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/d180818> .
+
+# ── Occurrences: feature/pT-t5-hardening ─────────────────────────────────────
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 206 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/6450bb5> .
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 285 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/6450bb5> .
+
+<urn:atm:triage:occurrence/FTQ-003/pT-t5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 463 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/6450bb5> .
+
+# ── Occurrences: integrate/phase-T (highest open; repeatable crate sweep) ────
+
+<urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 187 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "177b30e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/177b30e> .
+
+<urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 265 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "177b30e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/177b30e> .
+
+<urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 442 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "177b30e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/177b30e> .
+
+<urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1192 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "177b30e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/177b30e> .
+
+<urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1259 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "177b30e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/177b30e> .
+
+<urn:atm:triage:occurrence/FTQ-003/integrate-phase-T/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 358 ;
+  triage:snippet "match result_rx.recv_timeout(Duration::from_secs(5))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "177b30e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/177b30e> .
+
+# ── WorktreeSnapshot nodes ────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pT-t1/0e6b024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2/d6f89e3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "d6f89e3" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3/06b28a4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4/d180818>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "d180818" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/6450bb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-T/177b30e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "177b30e" ;
+  triage:orderIndex 6 .
