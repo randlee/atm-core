@@ -33,6 +33,7 @@ use serial_test::serial;
 use std::fs::OpenOptions;
 use std::io::{Seek, SeekFrom, Write};
 use std::sync::Arc;
+use std::sync::OnceLock;
 use std::sync::mpsc;
 use std::time::Duration;
 #[cfg(windows)]
@@ -43,6 +44,19 @@ use tempfile::TempDir;
 use crate::test_support::connect_daemon_local_ipc_until_ready;
 
 const TEST_TEAM: &str = "test-team";
+
+fn test_team() -> &'static TeamName {
+    static TEST_TEAM_NAME: OnceLock<TeamName> = OnceLock::new();
+    TEST_TEAM_NAME.get_or_init(|| TEST_TEAM.parse().expect("team"))
+}
+
+struct ShutdownFinalizerDrainGuard;
+
+impl Drop for ShutdownFinalizerDrainGuard {
+    fn drop(&mut self) {
+        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+    }
+}
 
 struct StaleRecoverySignalGuard;
 
@@ -136,6 +150,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     };
     let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
     let (serve_result_tx, serve_result_rx) = mpsc::channel();
+    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
 
     let join = std::thread::spawn(move || {
         let result = runtime.serve_with_runtime_hooks(
@@ -147,12 +162,22 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
                 finalize_shutdown: || {},
+                publish_ready: move || {
+                    ready_tx.send(()).map_err(|_| {
+                        AtmError::daemon_unavailable(
+                            "doctor round-trip test failed to observe the daemon ready signal",
+                        )
+                        .with_recovery(
+                            "Rerun the same-host daemon test after restoring the bounded ready-signal handshake.",
+                        )
+                    })
+                },
             },
         );
         serve_result_tx.send(result).expect("send serve result");
     });
 
-    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path);
+    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
     stream
         .set_send_timeout(Some(Duration::from_secs(5)))
         .expect("set send timeout");
@@ -194,6 +219,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
 #[serial]
 #[cfg(unix)]
 fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
+    let _drain_guard = ShutdownFinalizerDrainGuard;
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
@@ -216,14 +242,15 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     let runtime =
         crate::composition::compose_runtime(observability.clone()).expect("compose runtime");
     let (result_tx, result_rx) = mpsc::channel();
+    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
     let runtime_socket_path = socket_path.clone();
 
     let join = std::thread::spawn(move || {
-        let result = runtime.start_with_socket_path_for_test(runtime_socket_path);
+        let result = runtime.start_with_socket_path_for_test(runtime_socket_path, Some(ready_tx));
         result_tx.send(result).expect("send runtime result");
     });
 
-    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path);
+    let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
     stream
         .set_send_timeout(Some(Duration::from_secs(5)))
         .expect("set send timeout");
@@ -299,6 +326,7 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
                 begin_shutdown: || Ok(()),
                 reload_runtime_view: || Ok(()),
                 finalize_shutdown: || {},
+                publish_ready: || Ok(()),
             },
         );
         serve_result_tx.send(result).expect("send serve result");
@@ -482,7 +510,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     assembly
         .roster_store()
         .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
-            team: TEST_TEAM.parse().expect("team"),
+            team: test_team().clone(),
             roster: TeamConfig {
                 members: members
                     .iter()
@@ -525,7 +553,7 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
     let status_cache = RuntimeStatusCache::new();
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
-    let team: TeamName = TEST_TEAM.parse().expect("team");
+    let team = test_team().clone();
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     let response = dispatcher
@@ -609,7 +637,7 @@ fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
         status_cache.clone(),
         db_path.clone(),
     );
-    let team: TeamName = TEST_TEAM.parse().expect("team");
+    let team = test_team().clone();
     let leader: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
     let qa: AgentName = "qa-a".parse().expect("member");
 
@@ -657,7 +685,7 @@ fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_stat
     let status_cache = RuntimeStatusCache::new();
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
-    let team: TeamName = TEST_TEAM.parse().expect("team");
+    let team = test_team().clone();
     let leader: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
@@ -693,6 +721,7 @@ fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_stat
 #[test]
 #[serial]
 fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
+    let _drain_guard = ShutdownFinalizerDrainGuard;
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
@@ -717,7 +746,7 @@ fn heartbeat_rejects_live_pid_conflict() {
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
-    let team: TeamName = TEST_TEAM.parse().expect("team");
+    let team = test_team().clone();
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
@@ -772,7 +801,7 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
 
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
-    let team: TeamName = TEST_TEAM.parse().expect("team");
+    let team = test_team().clone();
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     dispatcher
@@ -813,7 +842,7 @@ fn heartbeat_evicts_oldest_member_and_projects_missing_roster_entries_as_unknown
     use chrono::{Duration as ChronoDuration, Utc};
 
     let status_cache = RuntimeStatusCache::new();
-    let team: TeamName = TEST_TEAM.parse().expect("team");
+    let team = test_team().clone();
     let member: AgentName = "qa-a".parse().expect("member");
     let base = Utc::now();
     status_cache
@@ -889,7 +918,7 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
-    let team: TeamName = TEST_TEAM.parse().expect("team");
+    let team = test_team().clone();
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
     status_cache
@@ -940,7 +969,7 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
         .dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
             home_dir: atm_home.clone(),
             current_dir: atm_home,
-            team_override: Some(TEST_TEAM.parse().expect("team")),
+            team_override: Some(test_team().clone()),
         }))
         .expect("doctor response");
 
@@ -979,7 +1008,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
 
     let doctor = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
-            team: TEST_TEAM.parse().expect("team"),
+            team: test_team().clone(),
             member: ROLE_TEAM_LEAD.parse().expect("member"),
             pid: std::process::id(),
             observed_at: IsoTimestamp::now(),
@@ -989,7 +1018,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
             dispatcher.dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
                 home_dir: atm_home.clone(),
                 current_dir: atm_home,
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+                team_override: Some(test_team().clone()),
             }))
         })
         .expect("doctor response");

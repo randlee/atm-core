@@ -36,7 +36,6 @@ struct ReconcileRuntimeInner {
     wake: Condvar,
     #[cfg(test)]
     pending_changed: Condvar,
-    worker: Mutex<Option<JoinHandle<()>>>,
     debounce: Duration,
     executor: ReconcileExecutor,
     #[cfg_attr(not(test), allow(dead_code))]
@@ -47,6 +46,7 @@ struct ReconcileRuntimeInner {
 struct ReconcileState {
     started: bool,
     shutdown: bool,
+    worker: Option<JoinHandle<()>>,
     next_waiter_id: u64,
     pending_epoch: u64,
     pending: HashMap<ReconcileKey, PendingReconcile>,
@@ -212,7 +212,6 @@ impl ReconcileRuntime {
                 wake: Condvar::new(),
                 #[cfg(test)]
                 pending_changed: Condvar::new(),
-                worker: Mutex::new(None),
                 debounce,
                 executor,
                 notification_fingerprints,
@@ -241,22 +240,24 @@ impl ReconcileRuntime {
                 AtmError::daemon_unavailable("failed to spawn reconcile runtime worker")
                     .with_source(source)
             })?;
-        let mut worker = match self.inner.worker.lock() {
-            Ok(worker) => worker,
+        let mut state = match self.inner.state.lock() {
+            Ok(state) => state,
             Err(_) => {
                 let _ = handle.join();
-                return Err(AtmError::daemon_unavailable(
-                    "reconcile runtime worker lock poisoned",
-                )
-                .with_recovery("Restart the daemon; reconcile worker ownership can no longer be tracked safely."));
+                return Err(
+                    AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
+                        .with_recovery(
+                            "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
+                        ),
+                );
             }
         };
-        *worker = Some(handle);
+        state.worker = Some(handle);
         Ok(())
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
-        {
+        let handle = {
             let mut state = self.inner.state.lock().map_err(|_| {
                 AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
                     "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
@@ -264,17 +265,9 @@ impl ReconcileRuntime {
             })?;
             state.shutdown = true;
             self.inner.wake.notify_all();
-        }
-        if let Some(handle) = self
-            .inner
-            .worker
-            .lock()
-            .map_err(|_| {
-                AtmError::daemon_unavailable("reconcile runtime worker lock poisoned")
-                    .with_recovery("Restart the daemon; reconcile worker ownership can no longer be tracked safely.")
-            })?
-            .take()
-        {
+            state.worker.take()
+        };
+        if let Some(handle) = handle {
             let (result_tx, result_rx) = mpsc::sync_channel(1);
             let join_helper = thread::spawn(move || {
                 let _ = result_tx.send(handle.join());
