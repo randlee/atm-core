@@ -13,6 +13,10 @@ use crate::schema::LegacyMessageId;
 use crate::send::{SendOutcome, SendRequest};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
+pub const MAX_GRAFT_SESSION_ID_BYTES: usize = 128;
+pub const MAX_GRAFT_BATCH_LIMIT: usize = 256;
+pub const MAX_GRAFT_NUDGE_MESSAGE_BYTES: usize = 4096;
+
 /// Open unary client surface for embedded ATM consumers.
 ///
 /// This trait is intentionally not sealed. `atm-graft` must be able to
@@ -123,8 +127,8 @@ pub struct GraftSessionId(String);
 impl GraftSessionId {
     /// # Errors
     ///
-    /// Returns [`AtmError`] when the supplied session id is blank or only
-    /// whitespace.
+    /// Returns [`AtmError`] when the supplied session id is blank, only
+    /// whitespace, or exceeds [`MAX_GRAFT_SESSION_ID_BYTES`].
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
         let value = value.into();
         if value.trim().is_empty() {
@@ -132,6 +136,14 @@ impl GraftSessionId {
             // error code across all ATM subsystems; no graft-specific code is needed.
             return Err(AtmError::validation("graft session id must not be blank").with_recovery(
                 "Populate a stable non-empty graft session id before calling the graft session runtime.",
+            ));
+        }
+        if value.len() > MAX_GRAFT_SESSION_ID_BYTES {
+            return Err(AtmError::validation(format!(
+                "graft session id must be at most {MAX_GRAFT_SESSION_ID_BYTES} bytes"
+            ))
+            .with_recovery(
+                "Shorten the graft session id before calling the graft session runtime.",
             ));
         }
         Ok(Self(value))
@@ -174,7 +186,8 @@ pub struct GraftBatchLimit(NonZeroUsize);
 impl GraftBatchLimit {
     /// # Errors
     ///
-    /// Returns [`AtmError`] when the limit is zero.
+    /// Returns [`AtmError`] when the limit is zero or exceeds
+    /// [`MAX_GRAFT_BATCH_LIMIT`].
     pub fn new(value: usize) -> Result<Self, AtmError> {
         let value = NonZeroUsize::new(value).ok_or_else(|| {
             // AtmError::validation uses MessageValidationFailed, the shared boundary-validation
@@ -183,6 +196,14 @@ impl GraftBatchLimit {
                 "Use a positive graft nudge batch limit before calling the daemon graft queue surface.",
             )
         })?;
+        if value.get() > MAX_GRAFT_BATCH_LIMIT {
+            return Err(AtmError::validation(format!(
+                "graft batch limit must not exceed {MAX_GRAFT_BATCH_LIMIT}"
+            ))
+            .with_recovery(
+                "Lower the graft nudge batch limit to the documented daemon queue ceiling before calling the graft queue surface.",
+            ));
+        }
         Ok(Self(value))
     }
 
@@ -229,6 +250,11 @@ pub struct GraftSessionUnregistrationResponse {
 pub struct NudgeEvent {
     pub message_id: LegacyMessageId,
     pub from: AgentName,
+    /// Advisory graft payload text.
+    ///
+    /// Implementations producing `NudgeEvent` values must bound this field to
+    /// at most [`MAX_GRAFT_NUDGE_MESSAGE_BYTES`] UTF-8 bytes before crossing
+    /// the public ATM graft boundary.
     pub message: String,
     pub received_at: IsoTimestamp,
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -279,7 +305,9 @@ mod tests {
         GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
         GraftNudgeFetchResponse, GraftSession, GraftSessionId, GraftSessionPort,
         GraftSessionRegistrationRequest, GraftSessionRegistrationResponse, GraftSessionState,
-        GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse, NudgeEvent,
+        GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
+        MAX_GRAFT_BATCH_LIMIT, MAX_GRAFT_NUDGE_MESSAGE_BYTES, MAX_GRAFT_SESSION_ID_BYTES,
+        NudgeEvent,
     };
     use crate::error::AtmError;
     use crate::schema::LegacyMessageId;
@@ -302,6 +330,28 @@ mod tests {
             error
                 .to_string()
                 .contains("graft batch limit must be greater than zero")
+        );
+    }
+
+    #[test]
+    fn graft_session_id_rejects_overlong_values() {
+        let overlong = "a".repeat(MAX_GRAFT_SESSION_ID_BYTES + 1);
+        let error = GraftSessionId::new(overlong).expect_err("overlong session id should fail");
+        assert!(
+            error
+                .to_string()
+                .contains("graft session id must be at most")
+        );
+    }
+
+    #[test]
+    fn graft_batch_limit_rejects_values_above_documented_ceiling() {
+        let error = GraftBatchLimit::new(MAX_GRAFT_BATCH_LIMIT + 1)
+            .expect_err("oversized graft batch limit should fail");
+        assert!(
+            error
+                .to_string()
+                .contains("graft batch limit must not exceed")
         );
     }
 
@@ -460,6 +510,11 @@ mod tests {
     #[test]
     fn nudge_event_round_trips_json() {
         assert_json_round_trip(&nudge_event());
+    }
+
+    #[test]
+    fn nudge_message_contract_exposes_documented_max_bytes() {
+        assert_eq!(MAX_GRAFT_NUDGE_MESSAGE_BYTES, 4096);
     }
 
     #[test]
