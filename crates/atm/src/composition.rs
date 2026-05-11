@@ -9,12 +9,6 @@ use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
-use atm_core::graft::{
-    AtmGraftClient, GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
-    GraftNudgeFetchResponse, GraftSessionPort, GraftSessionRegistrationRequest,
-    GraftSessionRegistrationResponse, GraftSessionUnregistrationRequest,
-    GraftSessionUnregistrationResponse,
-};
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort};
 use atm_core::protocol::{
@@ -52,10 +46,6 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
-// Parallel to `GraftLocalIpcClientTransport` in crates/atm-graft/src/lib.rs.
-// Kept separate: atm-graft must not depend on the atm crate; sharing via
-// atm-daemon-client would require exposing the IPC exchange internals as a
-// public API surface, which is out of scope for that boundary crate.
 #[derive(Debug)]
 struct LocalIpcClientTransportAdapter {
     endpoint: DaemonLocalIpcEndpoint,
@@ -324,46 +314,6 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn register_graft_session(
-        &self,
-        request: GraftSessionRegistrationRequest,
-    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftRegister(request))? {
-            ResponseEnvelope::GraftRegister(response) => Ok(response),
-            other => Err(unexpected_response("graft register", other)),
-        }
-    }
-
-    pub(crate) fn unregister_graft_session(
-        &self,
-        request: GraftSessionUnregistrationRequest,
-    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftUnregister(request))? {
-            ResponseEnvelope::GraftUnregister(response) => Ok(response),
-            other => Err(unexpected_response("graft unregister", other)),
-        }
-    }
-
-    pub(crate) fn fetch_graft_nudges(
-        &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftFetch(request))? {
-            ResponseEnvelope::GraftFetch(response) => Ok(response),
-            other => Err(unexpected_response("graft fetch", other)),
-        }
-    }
-
-    pub(crate) fn drain_graft_nudges(
-        &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftDrain(request))? {
-            ResponseEnvelope::GraftDrain(response) => Ok(response),
-            other => Err(unexpected_response("graft drain", other)),
-        }
-    }
-
     pub(crate) fn bootstrap(observability: &'a CliObservability) -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
         let daemon_bin = resolve_daemon_bin()?;
@@ -400,50 +350,6 @@ fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
     )
 }
 
-impl AtmGraftClient for CliComposition<'_> {
-    fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
-        CliComposition::send(self, request)
-    }
-
-    fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
-        CliComposition::receive(self, query)
-    }
-
-    fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
-        CliComposition::ack(self, request)
-    }
-}
-
-impl GraftSessionPort for CliComposition<'_> {
-    fn register_session(
-        &self,
-        request: GraftSessionRegistrationRequest,
-    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
-        CliComposition::register_graft_session(self, request)
-    }
-
-    fn unregister_session(
-        &self,
-        request: GraftSessionUnregistrationRequest,
-    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
-        CliComposition::unregister_graft_session(self, request)
-    }
-
-    fn fetch_nudges(
-        &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError> {
-        CliComposition::fetch_graft_nudges(self, request)
-    }
-
-    fn drain_nudges(
-        &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError> {
-        CliComposition::drain_graft_nudges(self, request)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use std::fs;
@@ -455,7 +361,6 @@ mod tests {
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::{DoctorQuery, DoctorStatus};
     use atm_core::error::AtmError;
-    use atm_core::graft::AtmGraftClient;
     use atm_core::protocol::{
         ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
     };
@@ -910,36 +815,6 @@ mod tests {
         assert_eq!(replies[0].text, "received and starting");
         assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
         assert!(replies[0].pending_ack_at.is_none());
-    }
-
-    #[test]
-    fn cli_composition_supports_graft_client_surface_without_daemon() {
-        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
-        let composition_observability = CliObservability::fallback();
-        let composition = CliComposition::from_transport(
-            Arc::new(LoopbackClientTransport::new(Arc::new(
-                atm_core::observability::NullObservability,
-            ))),
-            &composition_observability,
-        );
-        let client: &dyn AtmGraftClient = &composition;
-
-        let send_outcome = client
-            .send_message(fixture.send_request("graft send"))
-            .expect("send through graft client surface");
-        assert_eq!(send_outcome.sender.as_str(), TEST_SENDER);
-
-        let read_outcome = client
-            .read_message(fixture.read_query())
-            .expect("read through graft client surface");
-        assert_eq!(read_outcome.count, 1);
-
-        let (message_id, pending_ack) = fixture.pending_ack_message("please ack");
-        fixture.write_inbox_messages(TEST_SENDER, &[pending_ack]);
-        let ack_outcome = client
-            .acknowledge_message(fixture.ack_request(message_id, "received and starting"))
-            .expect("ack through graft client surface");
-        assert_eq!(ack_outcome.message_id, message_id);
     }
 
     #[test]

@@ -136,18 +136,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "atm-graft"
-version = "1.2.0"
-dependencies = [
- "agent-team-mail-core",
- "atm-daemon-client",
- "interprocess",
- "serde_json",
- "tempfile",
- "tracing",
-]
-
-[[package]]
 name = "atm-rusqlite"
 version = "1.2.0"
 dependencies = [
