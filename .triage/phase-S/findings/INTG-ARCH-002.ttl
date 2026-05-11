@@ -13,9 +13,10 @@
   triage:phaseId "phase-S" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-11T01:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-11T02:11:06Z"^^xsd:dateTime ;
   triage:highestOpenBranch "integrate/phase-S" ;
   triage:promoteToBranch "integrate/phase-S" ;
   triage:mergeForwardNeeded false ;
@@ -30,9 +31,9 @@
   triage:file "crates/atm-daemon/src/composition.rs" ;
   triage:line 220 ;
   triage:snippet "dispatcher.emit_runtime_event" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:headSha "4118b27" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "67d6c90" ;
   triage:branch "integrate/phase-S" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
 
@@ -40,6 +41,6 @@
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-S" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
-  triage:headSha "4118b27" ;
+  triage:headSha "67d6c90" ;
   triage:orderIndex 1 ;
   triage:branchState "open" .
