@@ -3,52 +3,56 @@
 
 # ──────────────────────────────────────────────────────────
 #  Finding: ATM-QA-T3-007
-#  Writer behavioral tests use disk; requirements prefer in-memory
-#  Phase: phase-T  |  Triage mode: initial_pass
+#  Behavioral batch-isolation tests use temp_disk_target() instead of in_memory_target()
+#  Phase: phase-T  |  Triage mode: followup_pass
+#
+#  Followup context (QA-3 FAIL at 6668842):
+#    T.3 partially migrated writer tests to in_memory_target() but the two
+#    batch-isolation tests remain on temp_disk_target():
+#      - invalid_message_row_does_not_poison_other_rows_in_same_batch (line 685)
+#      - single_successor_violation_does_not_poison_other_rows_in_same_batch (line 755)
+#    Both include persistence-irrelevant db_path.exists() assertions (lines 748, 844).
+#    T.4 and T.5 inherited these open occurrences unchanged.
 # ──────────────────────────────────────────────────────────
 
 <urn:atm:triage:finding/ATM-QA-T3-007>
   a triage:Finding ;
   triage:findingId "ATM-QA-T3-007" ;
-  triage:title "Writer behavioral tests use disk; requirements prefer in-memory" ;
-  triage:description "crates/atm-rusqlite/src/writer/mod.rs test module: all behavioral tests (drain, batch, shutdown, queue-full) use temp_disk_target(). REQ-RUSQLITE-TEST-001 prefers SharedDbTarget::InMemory for behavioral tests; disk should only be used for persistence-verification tests. Fix: migrate non-persistence writer tests to SharedDbTarget::InMemory." ;
+  triage:title "Behavioral batch-isolation tests use temp_disk_target() instead of in_memory_target()" ;
+  triage:description "crates/atm-rusqlite/src/writer/mod.rs: invalid_message_row_does_not_poison_other_rows_in_same_batch and single_successor_violation_does_not_poison_other_rows_in_same_batch use temp_disk_target() but test no filesystem behavior. requirements.md:163-165 restricts on-disk temp databases to reopen/migration/filesystem tests. Fix: convert both to in_memory_target() and remove db_path.exists() assertions at lines 748 and 844 on T.3." ;
   triage:phaseId "phase-T" ;
-  triage:triageMode "initial_pass" ;
-  triage:category "wrong_test_target" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "wrong_db_target_in_test" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:followupAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
 
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t2-sqlite-writer/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t2-sqlite-writer/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t2-sqlite-writer/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/5> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/6> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/5> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/6> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/5> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/6> ;
+  # T.3 occurrences (two specific batch-isolation tests still open)
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/invalid-batch> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/single-successor> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/db-path-exists-748> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/db-path-exists-844> ;
+  # T.4 occurrences (inherited from T.3, merge_forward_needed)
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/invalid-batch> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/single-successor> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/db-path-exists-706> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/db-path-exists-802> ;
+  # T.5 occurrences (inherited from T.4, merge_forward_needed)
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/invalid-batch> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/single-successor> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/db-path-exists-706> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/db-path-exists-802> ;
 
-  triage:openOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> ;
+  # T.2 previously-recorded occurrences (drain/batch tests) are now fixed;
+  # T.3 migrated non-batch-isolation tests to in_memory_target — those are fixed too.
+  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/6668842> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/475de31> ;
   triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> ;
-  triage:promoteTo <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
+  triage:promoteTo <urn:atm:triage:worktree/pT-t3-immutable-rows/6668842> .
 
 # ── Worktree Snapshots ─────────────────────────────────────
 
@@ -57,194 +61,104 @@
   triage:branch "feature/pT-t1-integration-gate" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
   triage:headSha "0e6b024" ;
-  triage:orderIndex 1 .
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
 
-<urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385>
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/38cda3c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
-  triage:headSha "8fde385" ;
-  triage:orderIndex 2 .
+  triage:headSha "38cda3c" ;
+  triage:orderIndex 2 ;
+  triage:branchState "absent" .
 
-<urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4>
+<urn:atm:triage:worktree/pT-t3-immutable-rows/6668842>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t3-immutable-rows" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
-  triage:headSha "06b28a4" ;
-  triage:orderIndex 3 .
+  triage:headSha "6668842" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
 
-<urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53>
+<urn:atm:triage:worktree/pT-t4-windows-runtime/475de31>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t4-windows-runtime" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
-  triage:headSha "8baee53" ;
-  triage:orderIndex 4 .
+  triage:headSha "475de31" ;
+  triage:orderIndex 4 ;
+  triage:branchState "merge_forward_needed" .
 
 <urn:atm:triage:worktree/pT-t5-hardening/6450bb5>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t5-hardening" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
   triage:headSha "6450bb5" ;
-  triage:orderIndex 5 .
+  triage:orderIndex 5 ;
+  triage:branchState "merge_forward_needed" .
 
-<urn:atm:triage:worktree/integrate-phase-T/47a3681>
+<urn:atm:triage:worktree/integrate-phase-T/05d5bfc>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
-  triage:headSha "47a3681" ;
-  triage:orderIndex 6 .
+  triage:headSha "05d5bfc" ;
+  triage:orderIndex 6 ;
+  triage:branchState "absent" .
 
-# ── Occurrences: feature/pT-t2-sqlite-writer ──────────────
+# ── Occurrences: feature/pT-t3-immutable-rows (highest_open_branch) ──────────
 
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t2-sqlite-writer/1>
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/invalid-batch>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 438 ;
-  triage:snippet "fn temp_disk_target() -> (TempDir, Arc<SharedDbTarget>)" ;
-  triage:testFunction "temp_disk_target (helper definition)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "8fde385" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t2-sqlite-writer/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 506 ;
-  triage:snippet "let (_tempdir, target) = temp_disk_target();" ;
-  triage:testFunction "writer_drop_drains_queued_messages_before_exit" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "8fde385" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t2-sqlite-writer/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 540 ;
-  triage:snippet "let (_tempdir, target) = temp_disk_target();" ;
-  triage:testFunction "writer_commits_more_than_one_batch_boundary_of_messages" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "8fde385" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
-
-# ── Occurrences: feature/pT-t3-immutable-rows ─────────────
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 442 ;
-  triage:snippet "fn temp_disk_target() -> (TempDir, Arc<SharedDbTarget>, PathBuf)" ;
-  triage:testFunction "temp_disk_target (helper definition)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "06b28a4" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> .
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 521 ;
-  triage:snippet "let (_tempdir, target, _db_path) = temp_disk_target();" ;
-  triage:testFunction "writer_drop_drains_queued_messages_before_exit" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "06b28a4" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> .
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 555 ;
-  triage:snippet "let (_tempdir, target, _db_path) = temp_disk_target();" ;
-  triage:testFunction "writer_commits_more_than_one_batch_boundary_of_messages" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "06b28a4" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> .
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/4>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 643 ;
+  triage:line 685 ;
   triage:snippet "let (_tempdir, target, db_path) = temp_disk_target();" ;
   triage:testFunction "invalid_message_row_does_not_poison_other_rows_in_same_batch" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "06b28a4" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> .
+  triage:headSha "6668842" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/6668842> .
 
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/5>
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/single-successor>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 713 ;
+  triage:line 755 ;
   triage:snippet "let (_tempdir, target, db_path) = temp_disk_target();" ;
   triage:testFunction "single_successor_violation_does_not_poison_other_rows_in_same_batch" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "06b28a4" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> .
+  triage:headSha "6668842" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/6668842> .
 
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/6>
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/db-path-exists-748>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 809 ;
-  triage:snippet "let (_tempdir, target, _db_path) = temp_disk_target();" ;
-  triage:testFunction "deadline_flush_commits_messages_without_waiting_for_batch_capacity" ;
+  triage:line 748 ;
+  triage:snippet "db_path.exists()," ;
+  triage:testFunction "invalid_message_row_does_not_poison_other_rows_in_same_batch" ;
+  triage:note "persistence-irrelevant holdover; must be removed when test converts to in_memory_target" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "06b28a4" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> .
+  triage:headSha "6668842" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/6668842> .
 
-# ── Occurrences: feature/pT-t4-windows-runtime ────────────
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/1>
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t3-immutable-rows/db-path-exists-844>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 442 ;
-  triage:snippet "fn temp_disk_target() -> (TempDir, Arc<SharedDbTarget>, PathBuf)" ;
-  triage:testFunction "temp_disk_target (helper definition)" ;
+  triage:line 844 ;
+  triage:snippet "db_path.exists()," ;
+  triage:testFunction "single_successor_violation_does_not_poison_other_rows_in_same_batch" ;
+  triage:note "persistence-irrelevant holdover; must be removed when test converts to in_memory_target" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "8baee53" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "6668842" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/6668842> .
 
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 521 ;
-  triage:snippet "let (_tempdir, target, _db_path) = temp_disk_target();" ;
-  triage:testFunction "writer_drop_drains_queued_messages_before_exit" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "8baee53" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+# ── Occurrences: feature/pT-t4-windows-runtime (merge_forward_needed) ────────
 
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 555 ;
-  triage:snippet "let (_tempdir, target, _db_path) = temp_disk_target();" ;
-  triage:testFunction "writer_commits_more_than_one_batch_boundary_of_messages" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "8baee53" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/4>
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/invalid-batch>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
   triage:line 643 ;
@@ -253,10 +167,10 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "8baee53" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+  triage:headSha "475de31" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/475de31> .
 
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/5>
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/single-successor>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
   triage:line 713 ;
@@ -265,63 +179,41 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "8baee53" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+  triage:headSha "475de31" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/475de31> .
 
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/6>
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/db-path-exists-706>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 809 ;
-  triage:snippet "let (_tempdir, target, _db_path) = temp_disk_target();" ;
-  triage:testFunction "deadline_flush_commits_messages_without_waiting_for_batch_capacity" ;
+  triage:line 706 ;
+  triage:snippet "db_path.exists()," ;
+  triage:testFunction "invalid_message_row_does_not_poison_other_rows_in_same_batch" ;
+  triage:note "persistence-irrelevant holdover; closes on merge-forward from T.3 fix" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "8baee53" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+  triage:headSha "475de31" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/475de31> .
 
-# ── Occurrences: feature/pT-t5-hardening ──────────────────
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/1>
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t4-windows-runtime/db-path-exists-802>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 442 ;
-  triage:snippet "fn temp_disk_target() -> (TempDir, Arc<SharedDbTarget>, PathBuf)" ;
-  triage:testFunction "temp_disk_target (helper definition)" ;
+  triage:line 802 ;
+  triage:snippet "db_path.exists()," ;
+  triage:testFunction "single_successor_violation_does_not_poison_other_rows_in_same_batch" ;
+  triage:note "persistence-irrelevant holdover; closes on merge-forward from T.3 fix" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t5-hardening" ;
-  triage:headSha "6450bb5" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "475de31" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/475de31> .
 
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/2>
+# ── Occurrences: feature/pT-t5-hardening (merge_forward_needed) ──────────────
+
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/invalid-batch>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 521 ;
-  triage:snippet "let (_tempdir, target, _db_path) = temp_disk_target();" ;
-  triage:testFunction "writer_drop_drains_queued_messages_before_exit" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t5-hardening" ;
-  triage:headSha "6450bb5" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 555 ;
-  triage:snippet "let (_tempdir, target, _db_path) = temp_disk_target();" ;
-  triage:testFunction "writer_commits_more_than_one_batch_boundary_of_messages" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t5-hardening" ;
-  triage:headSha "6450bb5" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
-
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/4>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 643 ;
+  triage:line 642 ;
   triage:snippet "let (_tempdir, target, db_path) = temp_disk_target();" ;
   triage:testFunction "invalid_message_row_does_not_poison_other_rows_in_same_batch" ;
   triage:status "open" ;
@@ -330,10 +222,10 @@
   triage:headSha "6450bb5" ;
   triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
 
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/5>
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/single-successor>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 713 ;
+  triage:line 712 ;
   triage:snippet "let (_tempdir, target, db_path) = temp_disk_target();" ;
   triage:testFunction "single_successor_violation_does_not_poison_other_rows_in_same_batch" ;
   triage:status "open" ;
@@ -342,12 +234,26 @@
   triage:headSha "6450bb5" ;
   triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
 
-<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/6>
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/db-path-exists-706>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 809 ;
-  triage:snippet "let (_tempdir, target, _db_path) = temp_disk_target();" ;
-  triage:testFunction "deadline_flush_commits_messages_without_waiting_for_batch_capacity" ;
+  triage:line 706 ;
+  triage:snippet "db_path.exists()," ;
+  triage:testFunction "invalid_message_row_does_not_poison_other_rows_in_same_batch" ;
+  triage:note "persistence-irrelevant holdover; closes on merge-forward from T.3 fix" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-007/pT-t5-hardening/db-path-exists-802>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 802 ;
+  triage:snippet "db_path.exists()," ;
+  triage:testFunction "single_successor_violation_does_not_poison_other_rows_in_same_batch" ;
+  triage:note "persistence-irrelevant holdover; closes on merge-forward from T.3 fix" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t5-hardening" ;
