@@ -40,7 +40,7 @@ code_references:
 
 Context:
 - The protocol is shared by CLI clients, daemon server/runtime, in-process
-  transport tests, and thin extension crates such as atm-graft.
+  transport tests, and thin extension crates.
 
 Decision:
 - `AtmProtocol` is owned by `atm-core`, not by `atm-daemon`.
@@ -91,7 +91,7 @@ Decision:
   top-level protocol family.
 
 Consequences:
-- Thin extensions such as atm-graft expose a smaller public surface.
+- Thin extensions expose a smaller public surface.
 - Task-state rules still remain explicit in store and workflow boundaries.
 - The reply emitted by that workflow must hardcode `requires_ack = false`.
 - Send-shaped request data may carry `parentMessageId`, `threadMode`, and
@@ -147,8 +147,6 @@ daemon remains a runtime wrapper only.
 Required subsystem boundaries:
 - `AtmProtocol` boundary
 - `ClientTransport` boundary
-- graft-facing `AtmGraftClient` boundary
-- graft-facing `GraftSessionPort` boundary
 - `ServerTransport` boundary
 - `RequestDispatcher` boundary
 - `MailStore` boundary
@@ -206,8 +204,6 @@ Phase R redesign notes:
 - `atm-core` owns the shared `AtmProtocol` contract
 - `atm-core` owns the public boundary contracts for transport, dispatch,
   store, ingress/export, watch/reconcile, and notification/status surfaces
-- `atm-core` also owns the thin graft-facing daemon client/session contract so
-  embedded consumers do not mint daemon-shaped API types outside the core crate
 - `atm-core` owns the ATM frame schema used by both same-host local IPC and
   cross-host daemon transport
 - `atm-core` owns the queue-query semantics shared by `atm list` and
@@ -223,12 +219,6 @@ Phase R redesign notes:
   - clear
   - doctor
   - heartbeat
-- `atm-core` owns the typed graft-facing semantic DTO families for:
-  - graft registration / unregistration
-  - pending-nudge fetch / drain
-  - daemon-originated graft nudge payloads
-  Packet-kind allocation for those semantic DTOs is deferred to the daemon
-  runtime sprint that implements them.
 - thin-client workflow surfaces should center on `send` and `receive`
 - `ack` remains a workflow/state concern, but thin-client protocol shape
   should carry it inside send-shaped requests rather than a separate top-level

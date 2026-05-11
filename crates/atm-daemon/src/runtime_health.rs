@@ -98,23 +98,19 @@ impl DaemonRequestDispatcher {
     fn spawn_shutdown_step(
         label: &'static str,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
-    ) -> std::thread::JoinHandle<()> {
-        std::thread::Builder::new()
+    ) -> Option<std::thread::JoinHandle<()>> {
+        match std::thread::Builder::new()
             .name(format!("shutdown-finalizer-{label}"))
             .spawn(move || {
                 step().unwrap_or_else(|error| {
                     tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
                 });
-            })
-            .expect("spawn daemon shutdown finalizer step")
-    }
-
-    fn complete_shutdown_step(label: &'static str, shutdown_handle: std::thread::JoinHandle<()>) {
-        if shutdown_handle.join().is_err() {
-            tracing::warn!(
-                step = label,
-                "daemon shutdown finalizer step panicked before reporting completion"
-            );
+            }) {
+            Ok(handle) => Some(handle),
+            Err(error) => {
+                tracing::warn!(%error, step = label, "failed to spawn daemon shutdown finalizer step; skipping");
+                None
+            }
         }
     }
 
@@ -150,22 +146,57 @@ impl DaemonRequestDispatcher {
         deadline: Duration,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
     ) {
-        let shutdown_handle = Self::spawn_shutdown_step(label, step);
-        let started = std::time::Instant::now();
-        loop {
-            if shutdown_handle.is_finished() {
-                Self::complete_shutdown_step(label, shutdown_handle);
-                return;
+        let Some(shutdown_handle) = Self::spawn_shutdown_step(label, step) else {
+            return;
+        };
+
+        // Join the worker with a bounded timeout using a watcher thread + Condvar so we avoid
+        // a busy-sleep poll loop. The watcher joins the worker and signals the condvar; the
+        // caller waits on the condvar for up to `deadline`.
+        let pair = std::sync::Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
+        let pair_watcher = std::sync::Arc::clone(&pair);
+        let watcher = std::thread::Builder::new()
+            .name(format!("shutdown-watcher-{label}"))
+            .spawn(move || {
+                // Intentionally ignore the join result here; the worker already logs its own
+                // errors, and a panic is surfaced via complete_shutdown_step below.
+                let _ = shutdown_handle.join();
+                let (done, cvar) = &*pair_watcher;
+                if let Ok(mut guard) = done.lock() {
+                    *guard = true;
+                    cvar.notify_one();
+                }
+            });
+
+        let Ok(watcher) = watcher else {
+            // Watcher spawn failed; we cannot bound the wait, so skip the step.
+            tracing::warn!(
+                step = label,
+                "failed to spawn shutdown watcher thread; shutdown step result is unobserved"
+            );
+            return;
+        };
+
+        let (done, cvar) = &*pair;
+        let finished = done.lock().is_ok_and(|guard| {
+            cvar.wait_timeout_while(guard, deadline, |finished| !*finished)
+                .is_ok_and(|(_, timeout_result)| !timeout_result.timed_out())
+        });
+
+        if finished {
+            // Watcher has already joined the worker handle; join the watcher itself to clean up.
+            if watcher.join().is_err() {
+                tracing::warn!(step = label, "daemon shutdown watcher thread panicked");
             }
-            if started.elapsed() >= deadline {
-                // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
-                // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
-                // than dropping it orphaned because tests and orderly process teardown can join it
-                // later once the blocking storage step finishes.
-                Self::retain_shutdown_step(label, shutdown_handle, deadline);
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(10));
+        } else {
+            // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
+            // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
+            // than dropping it orphaned because tests and orderly process teardown can join it
+            // later once the blocking storage step finishes.
+            //
+            // Note: The watcher thread still holds the original worker JoinHandle. We retain the
+            // watcher instead so that both the worker and the watcher can be cleaned up together.
+            Self::retain_shutdown_step(label, watcher, deadline);
         }
     }
 

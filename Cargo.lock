@@ -14,7 +14,6 @@ dependencies = [
  "interprocess",
  "sc-observability",
  "sc-observability-types",
- "serde",
  "serde_json",
  "serial_test",
  "tempfile",

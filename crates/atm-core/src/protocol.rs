@@ -410,11 +410,21 @@ pub fn read_frame(
     read_error: &'static str,
     oversize_error: &'static str,
 ) -> Result<Option<FramePayload>, AtmError> {
+    // Static assertion: all fixed-offset slice conversions below rely on the header being exactly
+    // ATM_FRAME_HEADER_BYTES (22) bytes. This fires at compile time if the constant ever changes.
+    const _: () = assert!(
+        ATM_FRAME_HEADER_BYTES == 22,
+        "read_frame slice offsets must be updated if ATM_FRAME_HEADER_BYTES changes"
+    );
+
     let Some(header) = read_frame_header(reader, read_error)? else {
         return Ok(None);
     };
 
-    let magic = u32::from_be_bytes(header[0..4].try_into().expect("magic"));
+    let magic =
+        u32::from_be_bytes(header[0..4].try_into().unwrap_or_else(|_| {
+            unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes")
+        }));
     if magic != ATM_FRAME_MAGIC {
         return Err(AtmError::validation(format!(
             "unsupported ATM daemon frame magic 0x{magic:08x}"
@@ -424,7 +434,10 @@ pub fn read_frame(
         ));
     }
 
-    let version = u16::from_be_bytes(header[4..6].try_into().expect("version"));
+    let version =
+        u16::from_be_bytes(header[4..6].try_into().unwrap_or_else(|_| {
+            unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes")
+        }));
     if version != ATM_FRAME_VERSION_V1 {
         return Err(AtmError::validation(format!(
             "unsupported ATM daemon frame version {version}"
@@ -435,8 +448,13 @@ pub fn read_frame(
     }
 
     let message_kind =
-        MessageKind::try_from(u16::from_be_bytes(header[6..8].try_into().expect("kind")))?;
-    let flags = u16::from_be_bytes(header[8..10].try_into().expect("flags"));
+        MessageKind::try_from(u16::from_be_bytes(header[6..8].try_into().unwrap_or_else(
+            |_| unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes"),
+        )))?;
+    let flags =
+        u16::from_be_bytes(header[8..10].try_into().unwrap_or_else(|_| {
+            unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes")
+        }));
     if flags != ATM_FRAME_FLAGS_V1 {
         return Err(AtmError::validation(format!(
             "unsupported ATM daemon frame flags 0x{flags:04x} for version {version}"
@@ -446,9 +464,14 @@ pub fn read_frame(
         ));
     }
     let request_id = RequestId::new(u64::from_be_bytes(
-        header[10..18].try_into().expect("request id"),
+        header[10..18].try_into().unwrap_or_else(|_| {
+            unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes")
+        }),
     ))?;
-    let payload_length = u32::from_be_bytes(header[18..22].try_into().expect("payload")) as usize;
+    let payload_length =
+        u32::from_be_bytes(header[18..22].try_into().unwrap_or_else(|_| {
+            unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes")
+        })) as usize;
     if payload_length > MAX_DAEMON_FRAME_BYTES {
         return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
             "Reduce the daemon request/response payload size before retrying the ATM command.",
