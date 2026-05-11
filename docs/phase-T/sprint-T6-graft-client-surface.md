@@ -1,7 +1,7 @@
 # Sprint T.6 Graft Client Surface
 
 **Branch**: `integrate/phase-T`
-**Base**: `integrate/phase-T @ 1232244`
+**Base**: `integrate/phase-T @ 75d341b`
 **PR target**: `integrate/phase-T`
 **Status**: Planning
 
@@ -18,6 +18,9 @@ dependency on `atm-daemon`.
 
 ## Deliverables
 
+- name the concrete `atm-core` graft-facing traits:
+  - `AtmGraftClient`
+  - `GraftSessionPort`
 - add the public `atm-core` client-side models needed by embedded consumers
   for:
   - `send`
@@ -27,6 +30,9 @@ dependency on `atm-daemon`.
   - nudge drain / fetch
 - make the public client-facing types typed and explicit rather than
   CLI-composition-only
+- ensure `AtmGraftClient` owns the unary daemon request surface and
+  `GraftSessionPort` owns the session registration / receive-loop contract so
+  T.8 does not re-mint parallel trait names
 - keep the surface small enough that `atm-graft` behaves mostly like an ATM
   client embedded inside an agent
 - ensure the retained CLI can consume the same client surface where practical

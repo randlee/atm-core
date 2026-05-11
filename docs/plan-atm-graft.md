@@ -7,7 +7,7 @@ implementation-targeted plan aligned to the current Phase T daemon/runtime
 baseline rather than the older Phase Q planning line.
 
 Planning baseline:
-- `integrate/phase-T @ 1232244`
+- `integrate/phase-T @ 75d341b`
 
 ## 2. Non-Negotiable Boundary Rules
 
@@ -38,6 +38,7 @@ Remaining gaps relative to `atm-graft`:
   agents
 - the public client-facing `atm-core` surface still needs a dedicated
   embeddable shape rather than exposing only CLI-oriented composition
+- no documented automatic embedded-mode injection loop exists yet
 
 Planning consequence:
 - `atm-graft` is no longer a large protocol bootstrap effort
@@ -73,6 +74,7 @@ Required change:
 - add graft registration / unregistration handlers
 - add daemon-owned bounded nudge queueing
 - add nudge drain/fetch requests for embedded and hook/poll consumers
+- add one live embedded-session receive loop per active `GraftSession`
 - keep queue ownership and backpressure behavior entirely daemon-side
 - update the protocol/interface docs for registration, drain/fetch, and daemon
   event payloads
@@ -94,12 +96,15 @@ Required change:
 
 ### T.6: Embeddable Graft Client Surface
 
-Owning crates:
+Implementation scope:
 - `atm-core`
 - `atm`
 - `atm-daemon`
 
 Deliverables:
+- name the concrete `atm-core` graft-facing traits:
+  - `AtmGraftClient`
+  - `GraftSessionPort`
 - typed `atm-core` client/request/response/session models used by embedded
   consumers
 - explicit `atm-core` ownership of any public graft-facing protocol types
@@ -108,7 +113,7 @@ Deliverables:
 
 ### T.7: Graft Runtime In Daemon
 
-Owning crates:
+Implementation scope:
 - `atm-daemon`
 - `atm-core`
 - `atm`
@@ -117,19 +122,27 @@ Deliverables:
 - graft registration / unregistration protocol
 - daemon-owned bounded pending-nudge queue
 - daemon-owned drain/fetch API
+- automatic embedded-session nudge receive/injection path
 - typed backpressure and queue-overflow behavior
 - hook-facing `atm` command surface for nudge drain on the same daemon API
 
+Documentation sections amended by T.7:
+- `docs/atm-graft/architecture.md` §2.5 `GraftSession`
+- `docs/atm-graft/architecture.md` §2.6 `Nudge Delivery Model`
+- `docs/atm-graft/requirements.md` §5 `Phase T Embedded-Graft Rules`
+- `docs/atm-graft/requirements.md` §5.2 `Req-QA Verification Anchors`
+
 ### T.8: `atm-graft` Crate
 
-Owning crates:
+Implementation scope:
 - `atm-graft`
 - `atm-core`
 
 Deliverables:
 - `atm-graft` crate
 - minimal `[atm.graft]` config activation
-- `GraftSession`
+- `GraftSession` as the concrete implementation of the `atm_core`
+  `GraftSessionPort` trait
 - public API limited to:
   - `send`
   - `read`
@@ -157,24 +170,31 @@ To keep the first implementation tractable:
   need; `from` and `message` are the minimum
 - keep the embedded crate small; for the most part this is simply an ATM client
   embedded in an agent process
+- do not treat manual poll-only behavior as sufficient for embedded mode;
+  automatic context injection is the point of `atm-graft`
+- do not treat `tmux send-keys` or related terminal automation as a
+  production-ready integration mechanism
 
 ## 7. Integration Modes
 
 Embedded session mode:
-- a modified host binary links `atm-graft`
+- a custom host CLI links `atm-graft` in-process
 - `GraftSession` registers with the daemon
 - nudges are delivered through the daemon session path
-- the host drains fetched nudges between tool calls
+- one live receive task/thread runs for the active session
+- the host receives automatic between-tool-call injection through the graft
+  bridge
 
-Hook/poll mode:
-- the host binary is not modified for direct embedding
-- a post-tool-use hook invokes an `atm` command to fetch pending nudge text
-- the daemon returns pending nudges for the current `ATM_IDENTITY`
-- the command emits insertion-ready text and clears or advances the daemon queue
+Non-production companion path:
+- a CLI drain/poll command may still exist for debugging, migration, or
+  non-embedded environments
+- that path is explicitly not the production completion target for
+  `atm-graft`
 
 Architectural consequence:
 - the queue must live in the daemon
 - `atm-graft` becomes one consumer path, not the owner of queued nudge state
+- external terminal automation is not part of the production acceptance path
 
 ## 8. Phase T Dependency
 

@@ -1,7 +1,7 @@
 # Sprint T.8 ATM-Graft Crate
 
 **Branch**: `integrate/phase-T`
-**Base**: `integrate/phase-T @ 1232244`
+**Base**: `integrate/phase-T @ 75d341b`
 **PR target**: `integrate/phase-T`
 **Status**: Planning
 
@@ -18,13 +18,14 @@ Add `atm-graft` as a thin embedded ATM client crate for Rust host agents.
 
 - add the `atm-graft` crate
 - add minimal `[atm.graft]` activation support in ATM-owned config loading
-- add `GraftSession`
+- add `GraftSession` as the concrete implementation of the `atm_core`
+  `GraftSessionPort` trait
 - expose a small public API limited to:
   - `send`
   - `read`
   - `ack`
   - session lifecycle
-  - host-facing nudge fetch/drain
+  - host-facing automatic nudge injection integration
 - keep the crate runtime-neutral at its core
 - add any first convenience runtime adapter only if the host integration proves
   it necessary
@@ -44,9 +45,13 @@ Add `atm-graft` as a thin embedded ATM client crate for Rust host agents.
 - graft mode is inert when `.atm.toml` is absent and active only through the
   ATM-owned config rules
 - `GraftSession` lifecycle is explicit and test-covered
+- embedded mode automatically injects nudges into host context between tool
+  calls via one live receive task/thread
 - the public API remains intentionally small and does not mirror the full CLI
 - the host-facing bridge is sufficient for between-tool-call insertion without
   forcing host-specific tool-loop logic into the crate
+- no production acceptance path relies on `tmux send-keys`, shell-hook polling,
+  or other external terminal automation
 
 ## Required Validation
 

@@ -1,15 +1,15 @@
 # Sprint T.7 Graft Runtime
 
 **Branch**: `integrate/phase-T`
-**Base**: `integrate/phase-T @ 1232244`
+**Base**: `integrate/phase-T @ 75d341b`
 **PR target**: `integrate/phase-T`
 **Status**: Planning
 
 ## Goal
 
 Add the small daemon-side runtime features embedded and hook/poll graft
-consumers actually need: registration, bounded nudge queueing, and drain/fetch
-access.
+consumers actually need: registration, bounded nudge queueing, one live
+embedded-session receive path, and drain/fetch access.
 
 ## Preconditions
 
@@ -20,11 +20,13 @@ access.
 
 - add graft registration / unregistration handling in the daemon/runtime line
 - add a daemon-owned bounded pending-nudge queue
+- add one live embedded-session receive path for daemon-originated nudges
 - add a typed drain/fetch API for embedded and hook/poll consumers
 - add explicit backpressure and queue-overflow behavior with structured error
   identity and observability
 - add the hook-facing `atm` command surface that consumes the same daemon API
-  rather than creating a separate binary
+  rather than creating a separate binary, while keeping that CLI path
+  explicitly out of the production `atm-graft` acceptance target
 - update the daemon protocol/interface docs for registration, drain/fetch, and
   nudge payload boundaries
 
@@ -36,18 +38,24 @@ access.
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/protocol-icd.md`
-- `docs/atm-graft/architecture.md`
-- `docs/atm-graft/requirements.md`
+- `docs/atm-graft/architecture.md` §2.5 `GraftSession` and §2.6
+  `Nudge Delivery Model`
+- `docs/atm-graft/requirements.md` §5 `Phase T Embedded-Graft Rules` and §5.2
+  `Req-QA Verification Anchors`
 
 ## Acceptance Criteria
 
 - registration and unregistration paths exist and are test-covered
 - pending nudge queue ownership is daemon-side, not graft-side
+- embedded sessions automatically receive nudges through one live receive
+  task/thread per active session
 - the queue is bounded and its overflow/backpressure behavior is explicit
 - embedded consumers and hook/poll consumers use the same daemon-owned drain
   contract
 - the hook-facing path is on the `atm` CLI surface, not on a separate
   `atm-graft` executable
+- production acceptance does not rely on `tmux send-keys` or any equivalent
+  terminal automation path
 
 ## Required Validation
 

@@ -14,6 +14,8 @@ pre-daemon workspace.
 ## 2. Architectural Rules
 
 - `atm-graft` is the embedded crate linked into a Rust host-agent executable.
+- the intended production host is a custom agent CLI with `atm-graft` linked
+  in-process so ATM nudges can be injected without terminal automation layers.
 - `atm-graft` depends on `atm-core` semantic types, request/result contracts,
   config semantics, and error vocabulary.
 - `atm-graft` must not depend on `atm-daemon` as a Rust crate; it talks to the
@@ -27,13 +29,15 @@ pre-daemon workspace.
   execution/spawn integration; optional adapters such as `tokio` may be
   provided as additive conveniences.
 - `atm-graft` must not own host-specific tool-loop surgery. It exposes a host
-  injection fetch/bridge; the embedding executable decides when to drain and
-  surface daemon-owned nudges.
+  injection bridge, but embedded mode must still perform automatic
+  between-tool-call nudge delivery rather than relying on manual polling.
+- external terminal automation such as `tmux send-keys` is explicitly out of
+  scope as a production graft-delivery mechanism
 
 ## 2.1 Implementation Target Snapshot
 
 The current planning target for this design is:
-- `integrate/phase-T @ 1232244`
+- `integrate/phase-T @ 75d341b`
 
 Current Phase T realities that this architecture must target:
 - the daemon/runtime baseline already exists and is no longer speculative
@@ -83,7 +87,9 @@ Required follow-on ownership in `atm-core`:
   - graft registration / unregistration
   - nudge drain / fetch
 - typed same-host client traits for request execution and session-facing
-  control, with an explicit sealed/open decision
+  control, with an explicit sealed/open decision:
+  - `AtmGraftClient`
+  - `GraftSessionPort`
 - typed daemon-originated event payloads needed by `atm-graft`, at minimum:
   - `NudgeEvent`
   - registration rejection / shutdown notices if surfaced to the client
@@ -126,9 +132,10 @@ The active runtime object is `GraftSession`.
 Responsibilities:
 - connect to the same-host daemon API
 - register the current host-agent identity and process context
-- receive daemon-originated nudge events or drain queued nudges through the
-  daemon-owned interface
-- expose fetched daemon-owned nudges to the embedding host executable
+- run one live receive task/thread for daemon-originated nudge events while the
+  session is active
+- expose daemon-originated nudges to the embedding host executable
+- drive automatic between-tool-call injection through the host bridge
 - shut down cleanly and unregister when appropriate
 
 Architectural rules:
@@ -137,6 +144,10 @@ Architectural rules:
   executable's business logic
 - session lifecycle failures remain typed and observable; they must not collapse
   into silent disabled behavior after activation succeeded
+- embedded mode must keep exactly one active receive task/thread per active
+  session; omitting the receive loop defeats the purpose of `atm-graft`
+- the host supplies the execution model for that receive loop, but `atm-graft`
+  must require the loop to exist
 
 Queue-ownership rule:
 - bounded pending-nudge state belongs in the daemon
@@ -165,17 +176,19 @@ Architectural rules:
 - the host-facing payload is structured and contains at least:
   - `from`
   - `message`
-- fetched nudge drain order must preserve daemon queue order from the
-  perspective of the embedding agent loop
+- nudge receipt and injection must be automatic in embedded mode; manual
+  polling alone is insufficient for `atm-graft`
+- delivered nudge order must preserve daemon queue order from the perspective
+  of the embedding agent loop
 - nudges are advisory delivery signals, not durable mail truth; authoritative
   message state remains behind daemon-backed `read` calls
 
-Alternate integration rule:
-- the same pending nudge state must also be accessible through a daemon poll /
-  drain request so hook-driven hosts can fetch insertion text without embedding
-  `atm-graft`
-- this hook-driven path belongs to the `atm` CLI surface, not to a separate
-  `atm-graft` executable
+Non-production companion rule:
+- the same pending nudge state may also be exposed through a daemon poll /
+  drain request on the `atm` CLI surface for debugging, migration, or
+  non-embedded environments
+- that CLI path is not a substitute for embedded-mode automatic injection and
+  must not be treated as production-complete `atm-graft` behavior
 
 ## 2.7 Client API Boundary
 
@@ -187,7 +200,7 @@ Required public capability groups:
   - `send`
   - `read`
   - `ack`
-- host-facing nudge fetch / drain access
+- host-facing automatic nudge injection integration
 
 Boundary rule:
 - a hook-facing command that prints insertion-ready nudge text is an `atm`
@@ -225,5 +238,9 @@ not true:
 - the daemon remains the sole owner of pending-nudge queue state
 - the hook/poll nudge path uses the same daemon API contract as the embedded
   session path
+- embedded mode includes one required receive task/thread and automatic
+  between-tool-call nudge injection
+- production graft delivery does not rely on `tmux send-keys` or equivalent
+  external terminal automation
 - the public `atm-graft` API remains limited to the documented thin embedded
   client surface rather than mirroring the full CLI

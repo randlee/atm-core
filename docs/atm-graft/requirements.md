@@ -17,7 +17,7 @@ product requirements without re-owning `atm-core` service semantics,
 - same-host daemon-client integration for linked Rust host-agent executables
 - graft-session registration and lifecycle
 - automatic daemon-originated nudge subscription when graft mode is active
-- host-facing nudge fetch / injection bridge for between-tool-call insertion
+- automatic between-tool-call nudge injection bridge for the embedding host
 - graft-mode activation rules based on discovered `.atm.toml`
 - graft-side observability through an ATM-owned injected boundary supplied by
   the embedding host
@@ -110,16 +110,24 @@ Required rules:
 - the host-facing nudge payload is structured and must contain at least:
   - `from`
   - `message`
-- the host executable owns the final insertion point between tool calls;
-  `atm-graft` owns only the fetch / bridge surface that makes those nudges
-  available
+- in embedded mode, `atm-graft` must automatically surface daemon-originated
+  nudges into the host's between-tool-call context flow; manual polling is not
+  sufficient for `atm-graft` acceptance
+- production `atm-graft` acceptance must not depend on `tmux send-keys`,
+  shell-hook polling, or any equivalent external terminal-injection mechanism
+- the intended production integration is a custom host CLI with `atm-graft`
+  linked in-process so context injection happens without terminal automation
+- the host executable owns the final insertion point between tool calls, but
+  `atm-graft` must drive that path automatically through its session/runtime
+  bridge rather than exposing only a passive fetch API
 - `atm-graft` must expose a small library surface rather than mirroring the
   full CLI:
   - daemon client operations for `send`, `read`, and `ack`
   - graft-session lifecycle entrypoints
-  - host-facing nudge fetch/drain access
+  - host-facing automatic nudge-delivery integration points
 - any hook-facing command that renders insertion-ready nudge text belongs on
-  the `atm` CLI surface and must call the same daemon API used by `atm-graft`
+  the `atm` CLI surface and must call the same daemon API used by `atm-graft`,
+  but it is not a production substitute for embedded-mode automatic injection
 - `atm-graft` must emit structured observability for:
   - active / inactive graft mode
   - daemon connect / reconnect
@@ -136,7 +144,7 @@ The current daemon/runtime line already satisfies more of the embedded-client
 baseline than the earlier Phase Q planning assumed.
 
 Current planning baseline:
-- `integrate/phase-T @ 1232244`
+- `integrate/phase-T @ 75d341b`
 
 Baseline assumptions for `atm-graft` planning:
 - same-host daemon singleton/runtime ownership already exists
@@ -149,12 +157,13 @@ Baseline assumptions for `atm-graft` planning:
 Remaining prerequisites specific to `atm-graft`:
 - a small embeddable client surface owned by `atm-core`
 - graft-session registration and unregistration
-- daemon-owned bounded nudge drain access for embedded and hook/poll consumers
+- one live receive loop for embedded sessions plus daemon-owned bounded nudge
+  queue/drain access
 - minimal `[atm.graft]` config support in ATM-owned config loading
 
 Scope-simplification rule for the first implementation pass:
 - `atm-graft` v1 should keep its public API to `send`, `read`, `ack`,
-  `GraftSession`, and host-facing nudge fetch/drain access
+  `GraftSession`, and automatic host-facing nudge injection integration
 - runtime heartbeat / activity reporting is explicitly deferred unless host
   integration proves it is needed in the same sprint
 
@@ -167,13 +176,18 @@ Scope-simplification rule for the first implementation pass:
   - `atm-graft` remains inert when `.atm.toml` is absent
 - `REQ-GRAFT-RUNTIME-001`
   - a documented `GraftSession` lifecycle type exists
+  - embedded mode includes one live receive task/thread per active
+    `GraftSession`
   - registration and clean shutdown/unregistration are test-covered
 - `REQ-GRAFT-CLIENT-001`
   - the public embedded client surface supports `send`, `read`, and `ack`
   - `atm-graft` does not take a Rust dependency on `atm-daemon`
 - `REQ-GRAFT-NOTIFY-001`
-  - daemon-owned drain/fetch surfaces exist for nudges
-  - the host-facing nudge payload exposes at least `from` and `message`
+- daemon-originated nudge receipt is automatic in embedded mode
+- daemon-owned drain/fetch surfaces exist for the session/runtime bridge
+- the host-facing nudge payload exposes at least `from` and `message`
+- no acceptance path relies on `tmux send-keys` or external terminal key
+  injection as the delivery mechanism
 - `REQ-GRAFT-OBS-001`
   - graft activation/connectivity/registration/nudge paths emit through an
     injected ATM-owned observability boundary
