@@ -5,7 +5,7 @@ use std::time::Duration;
 use atm_core::error::AtmError;
 use signal_hook::SigId;
 
-const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(1);
+const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 // Installation takes this global slot only after the outer install lock so concurrent daemon
 // startup/teardown never races lifecycle-hook ownership or leaves a half-installed worker behind.
