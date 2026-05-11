@@ -101,6 +101,7 @@ Status:
   - `crates/atm-core`
   - `crates/atm`
   - `crates/atm-daemon`
+  - `crates/atm-graft`
   - `crates/atm-rusqlite`
   - `crates/sc-lint-*` support crates
 
@@ -129,6 +130,7 @@ The abandoned Phase Q target implementation was split across:
 - `crates/atm-core`
 - `crates/atm`
 - `crates/atm-daemon`
+- `crates/atm-graft`
 - `crates/atm-rusqlite`
 
 Crate-local scope detail is owned by:
@@ -142,6 +144,9 @@ Crate-local scope detail is owned by:
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
+- [`docs/atm-graft/requirements.md`](./atm-graft/requirements.md)
+- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
+- [`docs/atm-graft/boundaries.md`](./atm-graft/boundaries.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
@@ -2948,3 +2953,64 @@ Acceptance:
   Python/CI glue
 - the migration boundary between `atm-core` and `sc-lint` is explicit rather
   than implied
+
+## 25. Phase S — Windows-Complete Daemon Parity And SQLite Durability [IN PROGRESS]
+
+Goal:
+- deliver a production-ready daemon that works correctly on both Unix and Windows
+  through the same-host local IPC transport and singleton lifecycle
+- add SQLite durability for remote replay state via `atm-rusqlite`
+
+Summary:
+- Sprints S.0–S.15 cover: Windows IPC transport, runtime control, daemon
+  hardening, policy lint, SQLite write-worker planning and implementation,
+  JSONL log compatibility, logging defaults, retained log bootstrap, and
+  integration gate cleanup
+- S.13–S.15 delivered the local IPC transport, Windows same-host runtime, and
+  SQLite write-worker foundation
+- Integration branch `integrate/phase-S` carries all merged sprint work
+- PR #231 (`integrate/phase-S → develop`) merged at c6847d1; fixes are Sprint T.1 scope landing on `integrate/phase-T`
+
+Cross-reference:
+- The authoritative sprint-by-sprint Phase S plan lives in
+  [`docs/plan-phase-S.md`](./plan-phase-S.md).
+- Phase S gate findings: `.triage/phase-S/findings/INTG-*.ttl`
+
+## 26. Phase T — Integration Gate Closure And SQLite Writer-Lane Delivery [ACTIVE]
+
+Goal:
+- close the Phase S integration gate (PR #231) by fixing all 16 INTG-* findings
+- deliver the architectural work deferred from Phase S: SQLite single-writer
+  lane, immutable message-row semantics, Windows same-host runtime parity
+  tests, and remaining daemon/runtime hardening
+- add the thin embedded `atm-graft` follow-on on top of the now-complete
+  daemon/IPC baseline
+
+Sprints:
+- T.1 (integrate/phase-S): fix 16 open INTG-* findings to clear Phase S gate
+- T.2 (integrate/phase-T): implement crate-private SQLite single-writer lane
+  (long-lived connection, bounded queue, drain/shutdown) per ADR-ATM-RUSQLITE-002
+- T.3 (integrate/phase-T): enforce immutable message-row semantics — remove
+  pre-write SELECT probe, insert-first writer-owned semantics, rows-changed
+  detection, reject known invariant violations before SQL
+- T.4 (integrate/phase-T): add real Windows same-host runtime parity tests for
+  local IPC request/response, lifecycle control, singleton admission/rejection,
+  and orderly shutdown
+- T.5 (integrate/phase-T): close RuntimeStatusCache all-conflict overflow edge,
+  bound reconcile fingerprint sets per mailbox key, reconcile shutdown deadline
+  contract between code (2s/3s) and architecture doc (5s/10s)
+- T.6 (integrate/phase-T): define the embeddable graft-facing daemon client
+  surface in `atm-core` so a host agent can embed ATM as a thin client rather
+  than re-implementing transport/runtime logic
+- T.7 (integrate/phase-T): add daemon-side graft registration plus bounded
+  nudge queue/drain behavior for embedded and hook/poll consumers
+- T.8 (integrate/phase-T): add the `atm-graft` crate as a thin ATM client
+  embedded in a Rust host agent
+
+Integration branch: `integrate/phase-T`
+
+Cross-reference:
+- The authoritative sprint-by-sprint Phase T plan lives in
+  [`docs/plan-phase-T.md`](./plan-phase-T.md).
+- The dedicated `atm-graft` implementation plan lives in
+  [`docs/plan-atm-graft.md`](./plan-atm-graft.md).

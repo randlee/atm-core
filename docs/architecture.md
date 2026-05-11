@@ -15,6 +15,9 @@ The daemon/runtime expansion adds:
 - `atm-daemon`: daemon runtime binary / transport host
 - `atm-rusqlite`: first concrete SQLite store implementation
 
+The Phase T embedded-client expansion adds:
+- `atm-graft`: thin embedded ATM client for Rust host agents
+
 The CLI stays thin. Product logic moves into `atm-core`.
 
 The retained command surface is:
@@ -39,6 +42,7 @@ moved into:
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 Phase-Q supersession note:
@@ -82,11 +86,12 @@ Phase-S portability note:
 
 ## 2. Crate Boundaries
 
-The post-Q product runtime is implemented by four crates:
+The post-Q product runtime is implemented by five crates:
 
 - `atm-core`
 - `atm`
 - `atm-daemon`
+- `atm-graft`
 - `atm-rusqlite`
 
 Product-level boundary rules:
@@ -96,17 +101,23 @@ Product-level boundary rules:
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
 - `atm-daemon` owns runtime composition, transport adapters, singleton
   enforcement, and live-status runtime state.
+- `atm-graft` owns embedded Rust host-agent daemon-client runtime behavior,
+  including registration, automatic nudge delivery, and host context-injection
+  bridging.
 - `atm-rusqlite` owns the first concrete SQLite implementation of the durable
   store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.
+- `atm-graft` must not own daemon business logic or direct store / inbox I/O.
 - `atm-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
 - crate-local boundary records in `docs/<crate>/boundaries.md` are the
   machine-readable contract used to drive architectural linting and review
 - thin-client workflow surfaces should be modeled around `send` and `receive`
   rather than a broad command inventory
+- Phase T adds `atm-graft` as the production thin-client line on top of the
+  existing daemon/IPC baseline rather than as a separate runtime architecture
 - `ack` may remain a retained CLI/user workflow, but thin-client protocol
   surfaces should carry it through send-shaped request data rather than a
   separate top-level method family
@@ -148,6 +159,8 @@ Crate-local boundary detail is owned by:
 - [`docs/atm/boundaries.md`](./atm/boundaries.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
+- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
+- [`docs/atm-graft/boundaries.md`](./atm-graft/boundaries.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 

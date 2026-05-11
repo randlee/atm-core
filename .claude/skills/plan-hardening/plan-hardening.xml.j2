@@ -1,6 +1,6 @@
 ---
 name: plan-hardening-task
-version: 1.0.0
+version: 1.1.0
 description: team-lead assignment template for full phase-plan hardening before implementation.
 format: xml
 required_variables:
@@ -164,10 +164,11 @@ required_variables:
     <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. Team-lead should review that ACK and outline first, then discuss any scope concerns with the user after the ACK is received. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
-    <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so plan review can begin in parallel.</step>
+    <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead critical review can begin in parallel.</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Send the git commit hash to team-lead and request a quality-mgr critical plan review.</step>
-    <step id="h">After the validation report, read ATM again for follow-up work.</step>
+    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Send the git commit hash to team-lead and explicitly request a critical review of the hardened plan, with special focus on sprint deliverables and acceptance criteria. Team-lead should push back or request another hardening pass if those are still unclear.</step>
+    <step id="h">Only after team-lead critical review passes should team-lead route the hardened plan to quality-mgr for focused plan QA.</step>
+    <step id="i">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>

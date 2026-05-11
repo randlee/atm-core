@@ -56,7 +56,7 @@ Before dispatching reviewers, expand `review_targets` to the full sprint diff:
 
 ```bash
 cd <worktree_path>
-git diff integrate/phase-R...HEAD --name-only
+git diff <integration_branch>...HEAD --name-only
 ```
 
 Use the complete output as `review_targets` for every reviewer, regardless of the
@@ -96,6 +96,10 @@ TODO-specific rule:
    - when rechecking prior findings, pass `triage_records`, `round_limit`,
      `changed_files`, and `carry_forward_findings_json` through the rendered
      reviewer templates instead of wrapper prose
+   - for `req-qa`, also pass any explicit sprint `deliverables`,
+     `acceptance_criteria`, and named `expected_artifacts` when the task
+     assignment provides them; req-qa is responsible for presence checks, not
+     just drift detection
 6. Launch all selected reviewers as background Task agents. Never run cargo,
    clippy, or broad QA analysis yourself in the foreground.
 7. Collect the reviewer results and classify them as:
@@ -132,6 +136,14 @@ For docs-only plan review:
 - use the Rust supplement to decide whether `rust-best-practices-agent` or
   `rust-service-hardening-agent` should be added
 - do not run `rust-qa-agent` for docs-only review
+
+Reviewer ownership note:
+- `req-qa` owns verification that sprint deliverables, acceptance criteria,
+  and named artifacts are actually present in the implementation or planning
+  docs
+- `arch-qa` owns structural and boundary compliance of the code that exists
+- a branch is not merge-ready if req-qa cannot trace planned deliverables to
+  concrete repository evidence
 
 ## Output Format
 

@@ -67,10 +67,13 @@ Crate-local ownership docs live under:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-graft/requirements.md`](./atm-graft/requirements.md)
+- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
+- [`docs/atm-graft/boundaries.md`](./atm-graft/boundaries.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 - [`docs/atm/boundaries.md`](./atm/boundaries.md)
 
@@ -2972,6 +2975,9 @@ mail correctness.
   - shared test infrastructure must exercise the same handler/dispatcher
     contract on Unix and Windows rather than maintaining separate product-level
     transport semantics per platform
+  - Phase T extension: this same logical daemon API also underpins the embedded
+    `atm-graft` client line; see
+    [`docs/atm-graft/requirements.md`](./atm-graft/requirements.md)
 
 - `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit
   dispatcher boundary with injectable typed handlers.
@@ -3122,6 +3128,22 @@ mail correctness.
     of JSONL
   - the later agent plugin crate must align to this daemon API rather than
     introducing a parallel message transport
+
+- `REQ-P-GRAFT-001` First-party embedded Rust host-agent integration must use
+  one daemon-backed graft crate aligned to the Phase T runtime boundaries.
+
+  Required behavior:
+  - the first-party embedded Rust host-agent integration crate is `atm-graft`
+  - `atm-graft` uses the same-host daemon API for `send`, `read`, `ack`,
+    session registration, and automatic nudge delivery
+  - `atm-graft` must not access SQLite or inbox JSONL directly
+  - if no `.atm.toml` is discovered, `atm-graft` remains inactive
+  - when active, automatic daemon registration and automatic between-tool-call
+    context injection are enabled by default and may be disabled only by
+    explicit config or runtime opt-out
+  - the production target is a custom host CLI with `atm-graft` linked
+    in-process; production acceptance must not depend on `tmux send-keys` or
+    equivalent terminal automation
 
 ### 21.6 Lock Elimination Target
 
