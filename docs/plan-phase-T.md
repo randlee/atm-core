@@ -18,6 +18,7 @@ Phase T turns those residuals into explicit follow-up sprints with narrower
 acceptance gates than the overloaded S.14 / S.15 hardening branches.
 
 Planning baseline:
+- `docs/project-plan.md` §25 (Phase S) and §26 (Phase T)
 - `integrate/phase-S` review baseline: `bdac03c`
 - Phase T planning worktree:
   `/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T`
@@ -53,13 +54,20 @@ Phase T therefore splits the residual work into:
 - one `integrate/phase-S` cleanup sprint (`T.1`)
 - four focused follow-up sprints on `integrate/phase-T` (`T.2`–`T.5`)
 
+Forward-integration rule:
+- `integrate/phase-T` was branched from `integrate/phase-S` at `bdac03c`
+- `T.1` lands on `integrate/phase-S` and reaches `integrate/phase-T` only by
+  forward-merge from `develop` after the `integrate/phase-S` gate PR merges
+- `T.2`–`T.5` must not open implementation PRs until that forward-merge brings
+  the accepted `T.1` fixes into `integrate/phase-T`
+
 ## 4. Dependency Graph
 
 | Sprint | Purpose | Base | Depends on | Can run in parallel with |
 | --- | --- | --- | --- | --- |
 | `T.1` | integrate/phase-S gate patch cleanup | `integrate/phase-S @ bdac03c` | none | `T.2`–`T.5` planning only |
 | `T.2` | SQLite single-writer lane | `integrate/phase-T @ bdac03c` | none | `T.4`, `T.5` |
-| `T.3` | Immutable message rows + probe removal | `integrate/phase-T @ bdac03c` | `T.2` | `T.4`, `T.5` after `T.2` branch-cut |
+| `T.3` | Immutable message rows + probe removal | `integrate/phase-T @ bdac03c` | `T.2` merge | `T.4`, `T.5` |
 | `T.4` | Windows same-host runtime parity | `integrate/phase-T @ bdac03c` | none | `T.2`, `T.5` |
 | `T.5` | Remaining daemon hardening | `integrate/phase-T @ bdac03c` | none | `T.2`, `T.4` |
 

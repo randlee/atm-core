@@ -18,6 +18,13 @@ startup/shutdown.
   - daemon singleton admission and rejection
   - lifecycle terminate / bounded shutdown behavior
   - retained-log bootstrap and orderly shutdown on Windows
+- audit and remove compile-only Windows test guards and cfg-gated runtime skips
+  in the named daemon test files, replacing them with real runtime coverage
+  rather than layering runtime tests on top of lingering compile-only stubs:
+  - `crates/atm-daemon/src/tests.rs`
+  - `crates/atm-daemon/src/local_ipc_transport.rs`
+  - `crates/atm-daemon/src/test_observability.rs`
+  - `crates/atm-daemon/src/test_support.rs`
 - keep Unix parity tests intact while making the Windows runtime path a
   first-class execution lane
 - document any remaining accepted Windows-specific runtime exception explicitly
@@ -37,10 +44,13 @@ startup/shutdown.
 ## Acceptance Criteria
 
 - Windows parity is proven by runtime tests, not only by `cargo xwin check`
+  (`REQ-P-PLATFORM-001`, `REQ-P-PLATFORM-002`)
 - the same-host local IPC path, singleton path, and lifecycle shutdown path all
   have Windows runtime coverage
 - retained-log startup/shutdown is exercised on Windows through the real daemon
   flow
+- compile-only Windows runtime stubs in the named test files are removed or
+  explicitly reduced to non-runtime helper scope
 - any remaining platform exception is documented with explicit rationale
 
 ## QA Pointers

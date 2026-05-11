@@ -11,6 +11,15 @@ Finish the mailbox hot-write contract by enforcing immutable `mail_messages`
 rows, removing the pre-write probe, and using writer-owned row-count semantics
 instead of conflict-driven row mutation.
 
+Ownership note:
+- `T.2` owns the main `ADR-ATM-RUSQLITE-002` writer-lane design update
+- `T.3` owns only the immutable-row addendum and the hot-path semantic
+  completion on top of the accepted `T.2` writer implementation
+
+Pre-QA dependency:
+- `crates/atm-rusqlite/src/writer/ops.rs` is a `T.2` deliverable
+- `T.3` QA must not proceed until that file exists on the accepted `T.2` base
+
 ## Deliverables
 
 - remove the pre-write `SELECT 1 ...` probe from `MailStore::upsert_message`
@@ -42,6 +51,8 @@ instead of conflict-driven row mutation.
   message content
 - known logical/schema violations are rejected before SQL wherever the crate
   already owns the invariant
+- invalid rows are rejected before SQL submission and valid rows in the same
+  drained batch are unaffected
 
 ## QA Pointers
 

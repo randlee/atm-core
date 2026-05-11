@@ -10,6 +10,13 @@
 Close the remaining open `INTG-*` findings already triaged on
 `integrate/phase-S` so the Phase S merge gate is clean.
 
+PR-target rationale:
+- `develop` is intentional here
+- `T.1` changes land on `integrate/phase-S`, are validated in the Phase S gate
+  PR, and then flow forward through the `integrate/phase-S -> develop ->
+  integrate/phase-T` sequence rather than opening a direct `integrate/phase-T`
+  implementation path
+
 ## Deliverables
 
 - close the open architecture findings:
