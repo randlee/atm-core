@@ -73,11 +73,6 @@ Introduce one crate-private in-process SQLite write worker that:
 
 - use `docs/phase-S/sprint-S15-rusqlite-plan.md` as the canonical design for
   the S.15 implementation shape and any follow-on QA reconciliation
-- the `T.3` immutable-row addendum completes the hot mailbox contract by:
-  - removing the pre-write message existence probe
-  - making `mail_messages` insert-only with duplicate-key `DO NOTHING`
-  - rejecting crate-owned logical invariants before SQL submission where the
-    crate already owns the rule
 - benchmark the resulting hot-path throughput and latency
 - review WAL autocheckpoint tuning separately if sustained write load requires
   it

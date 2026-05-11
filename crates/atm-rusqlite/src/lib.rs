@@ -1345,12 +1345,6 @@ mod tests {
             })
             .expect_err("duplicate successor");
         assert!(duplicate_successor.is_validation());
-        assert!(
-            duplicate_successor
-                .message
-                .contains("single-successor invariant"),
-            "duplicate successor should be rejected by crate-owned validation before sqlite constraint handling"
-        );
 
         let duplicate_legacy_identity = store
             .upsert_message(boundary::MailStoreUpsertMessageRequest {
@@ -1368,19 +1362,13 @@ mod tests {
             })
             .expect_err("duplicate legacy identity");
         assert!(duplicate_legacy_identity.is_validation());
-        assert!(
-            duplicate_legacy_identity
-                .message
-                .contains("already owned by"),
-            "legacy identity collision should be rejected by crate-owned validation before sqlite constraint handling"
-        );
     }
 
     #[test]
     fn duplicate_upsert_reports_inserted_false_and_keeps_record_loadable() {
         let assembly = in_memory_assembly();
         let store = assembly.mail_store();
-        let original = boundary::MailStoreMessageRecord {
+        let record = boundary::MailStoreMessageRecord {
             team: team(),
             agent: agent(),
             message_key: message_key("atm:duplicate"),
@@ -1388,26 +1376,15 @@ mod tests {
             imported_from: None,
             recorded_at: Some(IsoTimestamp::now()),
         };
-        let replacement = boundary::MailStoreMessageRecord {
-            envelope: MessageEnvelope {
-                text: "rewritten duplicate payload".to_string(),
-                summary: Some("rewritten summary".to_string()),
-                pending_ack_at: None,
-                ..original.envelope.clone()
-            },
-            imported_from: Some("duplicate-rewrite-attempt".to_string()),
-            recorded_at: Some(IsoTimestamp::now()),
-            ..original.clone()
-        };
 
         let first = store
             .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: original.clone(),
+                record: record.clone(),
             })
             .expect("first upsert");
         let second = store
             .upsert_message(boundary::MailStoreUpsertMessageRequest {
-                record: replacement,
+                record: record.clone(),
             })
             .expect("second upsert");
 
@@ -1420,7 +1397,7 @@ mod tests {
                 message_key: message_key("atm:duplicate"),
             })
             .expect("load duplicate");
-        assert_eq!(loaded.record, Some(original));
+        assert_eq!(loaded.record, Some(record));
     }
 
     #[test]
