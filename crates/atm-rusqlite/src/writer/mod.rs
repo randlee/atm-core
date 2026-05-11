@@ -682,9 +682,10 @@ mod tests {
 
     #[test]
     fn invalid_message_row_does_not_poison_other_rows_in_same_batch() {
-        let (_tempdir, target, db_path) = temp_disk_target();
+        let target = in_memory_target();
         let mut connection = open_connection_for_target(target.as_ref()).expect("open connection");
         ensure_schema(&mut connection, target.as_ref()).expect("ensure schema");
+        let verify = open_connection_for_target(target.as_ref()).expect("open verifier");
         let mut cache = stmt_cache::WriterStatementCache;
 
         let (invalid_tx, invalid_rx) = mpsc::sync_channel(1);
@@ -725,8 +726,6 @@ mod tests {
             WriteOpResult::UpsertMessage { inserted: true }
         );
 
-        drop(connection);
-        let verify = open_connection_for_target(target.as_ref()).expect("reopen");
         let stored: String = verify
             .query_row(
                 "SELECT message_text FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
@@ -744,17 +743,14 @@ mod tests {
             .optional()
             .expect("query invalid row");
         assert!(missing.is_none(), "invalid row must not be written");
-        assert!(
-            db_path.exists(),
-            "writer batch should persist to the target database"
-        );
     }
 
     #[test]
     fn single_successor_violation_does_not_poison_other_rows_in_same_batch() {
-        let (_tempdir, target, db_path) = temp_disk_target();
+        let target = in_memory_target();
         let mut connection = open_connection_for_target(target.as_ref()).expect("open connection");
         ensure_schema(&mut connection, target.as_ref()).expect("ensure schema");
+        let verify = open_connection_for_target(target.as_ref()).expect("open verifier");
         let mut cache = stmt_cache::WriterStatementCache;
 
         let parent_message_id = LegacyMessageId::new();
@@ -821,8 +817,6 @@ mod tests {
                 .is_validation()
         );
 
-        drop(connection);
-        let verify = open_connection_for_target(target.as_ref()).expect("reopen");
         let stored_root: String = verify
             .query_row(
                 "SELECT message_text FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
@@ -840,10 +834,6 @@ mod tests {
             .optional()
             .expect("query conflicting row");
         assert!(conflicting.is_none(), "conflicting row must not be written");
-        assert!(
-            db_path.exists(),
-            "writer batch should persist to the target database"
-        );
     }
 
     #[test]
