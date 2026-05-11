@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T6-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T6-005" ;
+  triage:title "Public re-export posture for graft module undocumented" ;
+  triage:description "crates/atm-core/src/lib.rs — callers may use atm_core::graft::AtmGraftClient or a top-level re-export. The posture must be explicit before T.7/T.8 diverge on import paths." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-005/pT-t6-graft-client-surface/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:occurrence/ATM-QA-T6-005/pT-t6-graft-client-surface/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/lib.rs" ;
+  triage:line 108 ;
+  triage:snippet "pub use graft::{ AtmGraftClient, GraftBatchLimit, GraftNudge, GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest, GraftNudgeFetchResponse, GraftSessionId, GraftSessionPort, GraftSessionRegistrationRequest, GraftSessionRegistrationResponse, GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse, };" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .

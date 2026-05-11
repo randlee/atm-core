@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-T6-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-T6-F002" ;
+  triage:title "GraftSessionId::new and GraftBatchLimit::new use wrong error code MessageValidationFailed" ;
+  triage:description "crates/atm-core/src/graft.rs:109 — GraftSessionId::new and GraftBatchLimit::new use AtmError::validation() which maps to MessageValidationFailed error code. Semantically wrong for session/batch construction failures." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T6-F002/pT-t6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T6-F002/pT-t6/2> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6/37eee04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:occurrence/RBP-T6-F002/pT-t6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 109 ;
+  triage:snippet "return Err(AtmError::validation(\"graft session id must not be blank\").with_recovery(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:occurrence/RBP-T6-F002/pT-t6/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 138 ;
+  triage:snippet "AtmError::validation(\"graft batch limit must be greater than zero\").with_recovery(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:worktree/pT-t6/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .

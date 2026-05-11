@@ -49,6 +49,11 @@ Pre-QA dependency:
 - the hot write path no longer performs the pre-write probe
 - duplicate writes preserve the first payload and do not silently rewrite
   message content
+- `WriteOpResult::UpsertMessage { inserted: bool }` reports `true` on the
+  first insert and `false` on duplicate-key no-op replays
+- rows-changed detection (`rows_changed()`) is used to determine
+  `inserted=true/false` rather than a pre-write probe or conflict-driven
+  mutation
 - known logical/schema violations are rejected before SQL wherever the crate
   already owns the invariant
 - invalid rows are rejected before SQL submission and valid rows in the same

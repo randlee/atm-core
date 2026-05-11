@@ -67,10 +67,14 @@ Initial crate requirement IDs:
   writes must preserve the original envelope/payload fields and keep mutable
   live state in the projection tables instead of rewriting the immutable row.
   Satisfies: `REQ-RUNTIME-002`.
-- `REQ-RUSQLITE-IMMUT-003` the hot mailbox write path must not issue a
-  pre-write probe before submitting message inserts to the writer lane; queue
-  semantics and row-count detection own duplicate handling. Satisfies:
-  `REQ-RUNTIME-002`.
+- `REQ-RUSQLITE-IMMUT-003` the hot mailbox write path must not issue an
+  existence probe before submitting message inserts to the writer lane, such
+  as `SELECT 1` or `COUNT(*)` used only to decide whether a duplicate key
+  should be written. Queue semantics and row-count detection own duplicate
+  handling. This ban does not apply to crate-owned invariant validation queries
+  that must run before `INSERT` (for example single-successor or legacy
+  identity checks), as documented in [`architecture.md`](./architecture.md).
+  Satisfies: `REQ-RUNTIME-002`.
 
 ## 4. Required References
 
@@ -128,7 +132,9 @@ Required rules:
 - `REQ-RUSQLITE-IMMUT-002` duplicate message writes must preserve the first
   stored payload and must not rewrite immutable `mail_messages` envelope fields
 - `REQ-RUSQLITE-IMMUT-003` immutable-row enforcement must remove the pre-write
-  probe from the hot mailbox write path
+  probe from the hot mailbox write path. This ban applies to hot-path probe
+  queries only; crate-owned invariant validation queries that reject known
+  schema or logical violations before SQL submission are permitted.
 - `MailStore`, `TaskStore`, and `RosterStore` may share one internal SQLite
   root object, but they must not collapse into one public god-interface
 - the durable schema must expose:

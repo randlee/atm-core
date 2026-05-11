@@ -225,6 +225,12 @@ impl SharedDb {
 
         let target = Arc::new(SharedDbTarget::Path(path));
         let writer = Arc::new(SqliteWriter::start(Arc::clone(&target))?);
+        tracing::debug!(
+            writer_handles = 1,
+            reader_budget = MAX_SQLITE_READER_CONNECTIONS,
+            path = %target.display(),
+            "sqlite boundary assembly opened"
+        );
         Ok(Self {
             target,
             writer,
@@ -341,6 +347,11 @@ impl SharedDb {
                 )
         })?;
         if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {
+            tracing::warn!(
+                limit = MAX_SQLITE_READER_CONNECTIONS,
+                current = %connection_count,
+                "sqlite reader connection budget exhausted"
+            );
             return Err(AtmError::daemon_unavailable(format!(
                 "sqlite connection budget exceeded (max {MAX_SQLITE_READER_CONNECTIONS} concurrent reader handles with one permanent writer handle)"
             ))
