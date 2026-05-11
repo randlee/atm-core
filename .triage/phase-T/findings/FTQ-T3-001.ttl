@@ -1,0 +1,207 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-T3-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-T3-001" ;
+  triage:title "Windows-only race in concurrent_normal_send_and_missing_config_notice_complete_without_data_loss" ;
+  triage:description "crates/atm-core/tests/mailbox_locking.rs:502 — test panics on Windows (.expect('missing-config notice') on notices.first() returning None). macOS and Ubuntu pass. Outside T.3 change scope. integrate/phase-T base CI is clean. Appears to be a pre-existing flaky race condition that was previously masked by Clippy failures causing test stage to be skipped. The test carries #[serial_test::serial(env)] which serializes against other serial(env) tests only, not all concurrent tests; on Windows the notice inbox write may not be visible to the reading thread within the test's implicit wait budget. Likely needs a Windows-specific wait budget increase or a global #[serial] guard." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/tests/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t3-immutable-rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t3-immutable-rows/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t3-immutable-rows/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t4-windows-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t4-windows-runtime/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t4-windows-runtime/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t5-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t5-hardening/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t5-hardening/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t6-graft-client-surface/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t6-graft-client-surface/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t6-graft-client-surface/3> ;
+
+  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/d4619f6> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/97d12e0> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/30082e8> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+# --- Occurrences on feature/pT-t3-immutable-rows ---
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t3-immutable-rows/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 434 ;
+  triage:snippet ".expect(\"missing-config notice\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "d4619f6" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/d4619f6> .
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t3-immutable-rows/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 449 ;
+  triage:snippet "fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "d4619f6" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/d4619f6> .
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t3-immutable-rows/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 502 ;
+  triage:snippet "notices.first().expect(\"missing-config notice\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "d4619f6" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/d4619f6> .
+
+# --- Occurrences on feature/pT-t4-windows-runtime ---
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t4-windows-runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 434 ;
+  triage:snippet ".expect(\"missing-config notice\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "97d12e0" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/97d12e0> .
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t4-windows-runtime/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 449 ;
+  triage:snippet "fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "97d12e0" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/97d12e0> .
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t4-windows-runtime/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 502 ;
+  triage:snippet "notices.first().expect(\"missing-config notice\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "97d12e0" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/97d12e0> .
+
+# --- Occurrences on feature/pT-t5-hardening ---
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 434 ;
+  triage:snippet ".expect(\"missing-config notice\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/30082e8> .
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t5-hardening/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 449 ;
+  triage:snippet "fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/30082e8> .
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t5-hardening/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 502 ;
+  triage:snippet "notices.first().expect(\"missing-config notice\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/30082e8> .
+
+# --- Occurrences on feature/pT-t6-graft-client-surface (promote_to_branch) ---
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t6-graft-client-surface/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 434 ;
+  triage:snippet ".expect(\"missing-config notice\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t6-graft-client-surface/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 449 ;
+  triage:snippet "fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:occurrence/FTQ-T3-001/pT-t6-graft-client-surface/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 502 ;
+  triage:snippet "notices.first().expect(\"missing-config notice\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/d4619f6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "d4619f6" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/97d12e0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "97d12e0" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5-hardening/30082e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .
