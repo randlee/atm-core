@@ -565,6 +565,8 @@ Required caps:
 - reconcile notification fingerprint registry cap: `1024` keys
 - watch subscription cap: `256` active subscriptions
 - notification work queue depth: `256`
+- graft session cap: `128`
+- graft nudge queue depth per registered session: `256`
 
 Required saturation behavior:
 - connection cap exceeded: reject new accepts with a typed over-capacity error
@@ -581,10 +583,31 @@ Required saturation behavior:
   active reconcile targets without retaining unbounded fingerprint state
 - notification queue full: fail the enqueue with typed degraded delivery status
   rather than silently buffering beyond the cap
+- graft session cap exceeded: reject the registration with typed
+  daemon-unavailable failure rather than retaining unbounded session state
+- graft nudge queue full: evict the oldest queued nudge for that session,
+  increment a dropped-count projection, and emit structured warning output
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   from the live-member map so the retained map cardinality remains bounded;
   removed entries project as explicit `unknown` on later snapshot/doctor reads
   and still emit structured warning output
+
+## 3.2.1 Graft Runtime Ownership
+
+The daemon owns the bounded graft registration and nudge queue runtime.
+
+Architectural rules:
+- queued graft nudges belong to daemon memory, not to `atm-graft`
+- T.7 exposes typed register/unregister/fetch/drain requests over the shared
+  ATM frame protocol
+- T.7 does not own the concrete `GraftSession` lifecycle type or
+  `[atm.graft]` config activation; those remain T.8 `atm-graft` crate
+  responsibilities
+- `atm graft fetch` and `atm graft drain` are companion CLI/debug paths built
+  on the same daemon API and must not be treated as the production embedded
+  delivery path
+- queue overflow must not affect durable ATM mailbox truth; it only degrades
+  the advisory nudge stream
 
 ## 3.3 Status Ownership
 

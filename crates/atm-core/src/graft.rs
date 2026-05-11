@@ -164,6 +164,7 @@ pub struct GraftSessionRegistrationResponse {
     pub agent: AgentName,
     pub session_id: GraftSessionId,
     pub registered_at: IsoTimestamp,
+    pub queue_capacity: usize,
 }
 
 /// Daemon unregistration request for one embedded graft session.
@@ -203,6 +204,8 @@ pub struct GraftNudgeFetchResponse {
     pub session_id: GraftSessionId,
     pub nudges: Vec<GraftNudge>,
     pub remaining: usize,
+    #[serde(default)]
+    pub dropped_count: usize,
 }
 
 /// Drain request for one active embedded graft session.
@@ -218,6 +221,8 @@ pub struct GraftNudgeDrainResponse {
     pub session_id: GraftSessionId,
     pub nudges: Vec<GraftNudge>,
     pub remaining: usize,
+    #[serde(default)]
+    pub dropped_count: usize,
 }
 
 #[cfg(test)]

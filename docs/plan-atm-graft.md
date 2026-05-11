@@ -122,7 +122,8 @@ Deliverables:
 - graft registration / unregistration protocol
 - daemon-owned bounded pending-nudge queue
 - daemon-owned drain/fetch API
-- automatic embedded-session nudge receive/injection path
+- daemon-side support consumed by the automatic embedded-session
+  nudge receive/injection path implemented in `T.8`
 - typed backpressure and queue-overflow behavior
 - hook-facing `atm` command surface for nudge drain on the same daemon API
 
@@ -179,9 +180,10 @@ To keep the first implementation tractable:
 
 Embedded session mode:
 - a custom host CLI links `atm-graft` in-process
-- `GraftSession` registers with the daemon
+- `GraftSession` registers with the daemon through the `T.7` session/runtime
+  protocol
 - nudges are delivered through the daemon session path
-- one live receive task/thread runs for the active session
+- one live receive task/thread runs for the active session inside `atm-graft`
 - the host receives automatic between-tool-call injection through the graft
   bridge
 

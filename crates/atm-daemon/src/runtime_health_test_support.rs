@@ -128,6 +128,7 @@ impl DaemonRequestDispatcher {
             observability,
             status_cache,
             sqlite_boundary,
+            graft_runtime: crate::graft_runtime::GraftRuntime::new(),
         }
     }
 }

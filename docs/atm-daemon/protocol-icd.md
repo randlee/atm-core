@@ -100,7 +100,8 @@ Rule:
 ## 3.2 Phase T Graft Semantic Surface
 
 Sprint T.6 introduces the typed graft-facing semantic DTO family in
-`atm-core` without yet adding new daemon packet kinds.
+`atm-core`; Sprint T.7 adds the concrete daemon packet kinds that carry that
+family over the same framed request/response transport.
 
 The new semantic surface covers:
 - graft registration
@@ -113,8 +114,10 @@ Rules:
 - these DTOs live in `atm-core`, not in `atm-daemon`
 - embedded consumers must not invent alternate raw payload shapes outside this
   semantic family
-- concrete packet-kind allocation for the graft runtime is deferred to Sprint
-  T.7 when the daemon-side registration and nudge queue runtime lands
+- T.7 keeps the daemon side request/response shaped:
+  registration, unregistration, fetch, and drain are all typed ATM packets
+- the daemon remains the sole owner of queued nudge state; the protocol
+  exposes snapshot/drain projections rather than transferring queue ownership
 
 ## 4. Transport Model
 
@@ -249,6 +252,10 @@ Phase S packet families:
 - `0x0005` `receive_request`
 - `0x0006` `clear_request`
 - `0x0007` `doctor_request`
+- `0x0008` `graft_register_request`
+- `0x0009` `graft_unregister_request`
+- `0x000a` `graft_fetch_request`
+- `0x000b` `graft_drain_request`
 
 ### 6.2 Success Response Packet Kinds
 
@@ -259,6 +266,10 @@ Phase S packet families:
 - `0x1005` `receive_response`
 - `0x1006` `clear_response`
 - `0x1007` `doctor_response`
+- `0x1008` `graft_register_response`
+- `0x1009` `graft_unregister_response`
+- `0x100a` `graft_fetch_response`
+- `0x100b` `graft_drain_response`
 
 ### 6.3 Error Packet Kind
 
@@ -286,6 +297,10 @@ Error responses are ATM protocol packets, not out-of-band transport exceptions.
 | `0x0005` | `receive_request` | `atm read` | retained single-message read workflow |
 | `0x0006` | `clear_request` | `atm clear` | retained clear workflow |
 | `0x0007` | `doctor_request` | `atm doctor` | retained doctor runtime query surface |
+| `0x0008` | `graft_register_request` | graft session runtime | daemon-side registration for one active graft session |
+| `0x0009` | `graft_unregister_request` | graft session runtime | daemon-side unregister for one active graft session |
+| `0x000a` | `graft_fetch_request` | graft session runtime / `atm graft fetch` | snapshot queued nudges without draining |
+| `0x000b` | `graft_drain_request` | graft session runtime / `atm graft drain` | drain queued nudges in FIFO order |
 | `0x1001` | `send_sent_response` | response to `atm send` | success response |
 | `0x1002` | `send_acknowledged_response` | response to `atm ack` | success response |
 | `0x1003` | `heartbeat_response` | response to heartbeat | success response |
@@ -293,6 +308,10 @@ Error responses are ATM protocol packets, not out-of-band transport exceptions.
 | `0x1005` | `receive_response` | response to `atm read` | success response |
 | `0x1006` | `clear_response` | response to `atm clear` | success response |
 | `0x1007` | `doctor_response` | response to `atm doctor` | success response |
+| `0x1008` | `graft_register_response` | response to graft register | success response |
+| `0x1009` | `graft_unregister_response` | response to graft unregister | success response |
+| `0x100a` | `graft_fetch_response` | response to `atm graft fetch` | success response |
+| `0x100b` | `graft_drain_response` | response to `atm graft drain` | success response |
 | `0x1fff` | `error_response` | typed service failure | may answer any request kind |
 
 Current non-packet retained workflows:
@@ -337,6 +356,10 @@ Field-authority rule:
 | `receive_request` | `ReadQuery` | `RequestEnvelope::Receive(...)` |
 | `clear_request` | `ClearQuery` | `RequestEnvelope::Clear(...)` |
 | `doctor_request` | `DoctorQuery` | `RequestEnvelope::Doctor(...)` |
+| `graft_register_request` | `GraftSessionRegistrationRequest` | `RequestEnvelope::GraftRegister(...)` |
+| `graft_unregister_request` | `GraftSessionUnregistrationRequest` | `RequestEnvelope::GraftUnregister(...)` |
+| `graft_fetch_request` | `GraftNudgeFetchRequest` | `RequestEnvelope::GraftFetch(...)` |
+| `graft_drain_request` | `GraftNudgeDrainRequest` | `RequestEnvelope::GraftDrain(...)` |
 | `send_sent_response` | `SendOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Sent(...))` |
 | `send_acknowledged_response` | `AckOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(...))` |
 | `heartbeat_response` | `TeamMemberHeartbeatResponse` | `ResponseEnvelope::Heartbeat(...)` |
@@ -344,6 +367,10 @@ Field-authority rule:
 | `receive_response` | `ReadOutcome` | `ResponseEnvelope::Receive(...)` |
 | `clear_response` | `ClearOutcome` | `ResponseEnvelope::Clear(...)` |
 | `doctor_response` | `DoctorReport` | `ResponseEnvelope::Doctor(...)` |
+| `graft_register_response` | `GraftSessionRegistrationResponse` | `ResponseEnvelope::GraftRegister(...)` |
+| `graft_unregister_response` | `GraftSessionUnregistrationResponse` | `ResponseEnvelope::GraftUnregister(...)` |
+| `graft_fetch_response` | `GraftNudgeFetchResponse` | `ResponseEnvelope::GraftFetch(...)` |
+| `graft_drain_response` | `GraftNudgeDrainResponse` | `ResponseEnvelope::GraftDrain(...)` |
 | `error_response` | `ProtocolErrorEnvelope` | `ResponseEnvelope::Error(...)` |
 
 ### 7.1.1 DTO Definition References
