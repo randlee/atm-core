@@ -11,6 +11,7 @@ use std::time::Duration;
 
 const DEFAULT_NOTIFICATION_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
+const NOTIFICATION_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
 
 #[derive(Clone)]
 pub(crate) struct NotificationRuntime {
@@ -20,9 +21,11 @@ pub(crate) struct NotificationRuntime {
 type NotificationPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
 
 struct NotificationRuntimeInner {
+    // State transitions, degradation, and the bounded queue must be updated
+    // atomically with respect to wakeups, so the queue and lifecycle flags live
+    // behind one mutex paired with the condvar below.
     state: Mutex<NotificationState>,
     wake: Condvar,
-    worker: Mutex<Option<JoinHandle<()>>>,
     path_factory: NotificationPathFactory,
     queue_capacity: usize,
 }
@@ -33,6 +36,7 @@ struct NotificationState {
     shutdown: bool,
     degraded_message: Option<String>,
     queue: VecDeque<NotificationEvent>,
+    worker: Option<JoinHandle<()>>,
 }
 
 impl NotificationRuntime {
@@ -48,7 +52,6 @@ impl NotificationRuntime {
             inner: Arc::new(NotificationRuntimeInner {
                 state: Mutex::new(NotificationState::default()),
                 wake: Condvar::new(),
-                worker: Mutex::new(None),
                 path_factory,
                 queue_capacity,
             }),
@@ -74,37 +77,58 @@ impl NotificationRuntime {
                 AtmError::daemon_unavailable("failed to spawn notification runtime worker")
                     .with_source(source)
             })?;
-        let mut worker = match self.inner.worker.lock() {
-            Ok(worker) => worker,
+        let mut state = match self.inner.state.lock() {
+            Ok(state) => state,
             Err(_) => {
                 let _ = handle.join();
                 return Err(AtmError::daemon_unavailable(
-                    "notification runtime worker lock poisoned",
+                    "notification runtime state lock poisoned",
+                )
+                .with_recovery(
+                    "Restart the daemon; notification lifecycle state can no longer be trusted.",
                 ));
             }
         };
-        *worker = Some(handle);
+        state.worker = Some(handle);
         Ok(())
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
-        {
+        let handle = {
             let mut state = self.inner.state.lock().map_err(|_| {
                 AtmError::daemon_unavailable("notification runtime state lock poisoned")
+                    .with_recovery(
+                        "Restart the daemon; notification lifecycle state can no longer be trusted.",
+                    )
             })?;
             state.shutdown = true;
             self.inner.wake.notify_all();
-        }
-        if let Some(handle) = self
-            .inner
-            .worker
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("notification runtime worker lock poisoned"))?
-            .take()
-        {
-            handle.join().map_err(|_| {
-                AtmError::daemon_unavailable("notification runtime worker panicked during shutdown")
-            })?;
+            state.worker.take()
+        };
+        if let Some(handle) = handle {
+            let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+            std::thread::spawn(move || {
+                let _ = result_tx.send(handle.join());
+            });
+            match result_rx.recv_timeout(NOTIFICATION_SHUTDOWN_DEADLINE) {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => {
+                    return Err(AtmError::daemon_unavailable(
+                        "notification runtime worker panicked during shutdown",
+                    ));
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    return Err(AtmError::daemon_unavailable(format!(
+                        "notification runtime shutdown exceeded the {:?} deadline",
+                        NOTIFICATION_SHUTDOWN_DEADLINE
+                    )));
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(AtmError::daemon_unavailable(
+                        "notification runtime join helper disconnected during shutdown",
+                    ));
+                }
+            }
         }
         Ok(())
     }

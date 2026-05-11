@@ -44,6 +44,14 @@ use crate::test_support::connect_daemon_local_ipc_until_ready;
 
 const TEST_TEAM: &str = "test-team";
 
+struct ShutdownFinalizerDrainGuard;
+
+impl Drop for ShutdownFinalizerDrainGuard {
+    fn drop(&mut self) {
+        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+    }
+}
+
 struct StaleRecoverySignalGuard;
 
 impl StaleRecoverySignalGuard {
@@ -194,6 +202,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
 #[serial]
 #[cfg(unix)]
 fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
+    let _drain_guard = ShutdownFinalizerDrainGuard;
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
@@ -693,6 +702,7 @@ fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_stat
 #[test]
 #[serial]
 fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
+    let _drain_guard = ShutdownFinalizerDrainGuard;
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");

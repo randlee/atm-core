@@ -1,4 +1,4 @@
-use crate::writer::{SqliteWriter, WriteOp, WriteOpResult};
+use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_core::error::AtmError;
 use atm_core::home;
 #[cfg(test)]
@@ -9,6 +9,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+/// Keep one permanent writer handle plus at most three concurrent reader handles so the
+/// same-process SQLite budget stays explicit under WAL mode without turning read bursts into an
+/// unbounded connection fan-out.
 const MAX_SQLITE_READER_CONNECTIONS: usize = 3;
 #[cfg(test)]
 static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
@@ -159,10 +162,15 @@ impl SharedDbTarget {
 pub(crate) struct SharedDb {
     target: Arc<SharedDbTarget>,
     writer: Arc<SqliteWriter>,
+    // Reader handles are budgeted across cloned SharedDb adapters, so the
+    // counter must be shared and synchronized independently of any one
+    // connection instance.
     connection_count: Arc<Mutex<usize>>,
 }
 
 struct SharedDbConnectionGuard {
+    // Connection release can happen on whichever clone drops the guard, so the
+    // shared counter uses the same synchronized ownership model as SharedDb.
     connection_count: Arc<Mutex<usize>>,
 }
 
@@ -261,6 +269,7 @@ impl SharedDb {
         &self,
         request: atm_core::boundary::MailStoreUpsertMessageRequest,
     ) -> Result<atm_core::boundary::MailStoreUpsertMessageResponse, AtmError> {
+        validate_upsert_message_request(&request)?;
         let record = request.record.clone();
         let result = self.writer.submit(WriteOp::UpsertMessage(request))?;
         match result {
@@ -327,6 +336,9 @@ impl SharedDb {
     fn acquire_connection_guard(&self) -> Result<SharedDbConnectionGuard, AtmError> {
         let mut connection_count = self.connection_count.lock().map_err(|_| {
             AtmError::daemon_unavailable("sqlite connection budget state lock poisoned")
+                .with_recovery(
+                    "Restart the daemon or recreate the sqlite boundary assembly before retrying the shared connection budget path.",
+                )
         })?;
         if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {
             return Err(AtmError::daemon_unavailable(format!(

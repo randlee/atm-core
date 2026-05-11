@@ -4,6 +4,8 @@ use atm_core::boundary;
 use atm_core::error::AtmError;
 use rusqlite::{Connection, OptionalExtension, params};
 
+pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
+
 #[derive(Debug, Clone)]
 pub(crate) enum WriteOp {
     UpsertMessage(boundary::MailStoreUpsertMessageRequest),
@@ -32,6 +34,21 @@ pub(crate) fn execute(
     }
 }
 
+pub(crate) fn validate_upsert_message_request(
+    request: &boundary::MailStoreUpsertMessageRequest,
+) -> Result<(), AtmError> {
+    let envelope_json = serialize_json(&request.record.envelope, "mail-store envelope")?;
+    if envelope_json.len() > MAX_ENVELOPE_JSON_BYTES {
+        return Err(AtmError::validation(format!(
+            "mail-store envelope JSON exceeded the writer lane limit of {MAX_ENVELOPE_JSON_BYTES} bytes"
+        ))
+        .with_recovery(
+            "Reduce the message envelope payload before retrying or raise the documented writer-lane size ceiling intentionally.",
+        ));
+    }
+    Ok(())
+}
+
 fn execute_upsert_message(
     request: &boundary::MailStoreUpsertMessageRequest,
     connection: &Connection,
@@ -39,8 +56,8 @@ fn execute_upsert_message(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     let record = &request.record;
-    validate_message_record(record, connection, cache, target)?;
     let envelope_json = serialize_json(&record.envelope, "mail-store envelope")?;
+    validate_message_record(record, envelope_json.len(), connection, cache, target)?;
     let parent_message_id = record
         .envelope
         .parent_message_id
@@ -113,10 +130,20 @@ fn execute_upsert_message(
 
 fn validate_message_record(
     record: &boundary::MailStoreMessageRecord,
+    envelope_json_len: usize,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
+    if envelope_json_len > MAX_ENVELOPE_JSON_BYTES {
+        return Err(AtmError::validation(format!(
+            "mail-store envelope JSON exceeded the writer lane limit of {MAX_ENVELOPE_JSON_BYTES} bytes"
+        ))
+        .with_recovery(
+            "Reduce the message envelope payload before retrying or raise the documented writer-lane size ceiling intentionally.",
+        ));
+    }
+
     let message_key = record.message_key.as_ref();
     if !message_key.starts_with("atm:") && !message_key.starts_with("ext:") {
         return Err(AtmError::validation(format!(
