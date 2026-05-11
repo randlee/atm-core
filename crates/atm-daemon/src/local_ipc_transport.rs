@@ -17,6 +17,7 @@ use interprocess::local_socket::{
 use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
+use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 use crate::shutdown_beacon::ShutdownBeacon;
 
 #[cfg(unix)]
@@ -512,6 +513,7 @@ impl PreparedRuntimeServer {
                 graceful_drain_deadline,
                 force_cancel_deadline,
                 shutdown_started,
+                TRACKED_DISPATCH_JOIN_DEADLINE,
             ) {
                 if let Some(existing) = shutdown_error.as_ref() {
                     tracing::warn!(
@@ -849,53 +851,6 @@ fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
             )
             .with_source(source)
     })?;
-    Ok(())
-}
-
-fn drain_active_connections_for_shutdown(
-    registry: &ActiveConnectionRegistry,
-    force_shutdown: &AtomicBool,
-    graceful_drain_deadline: Duration,
-    force_cancel_deadline: Duration,
-    shutdown_started: Instant,
-) -> Result<(), AtmError> {
-    tracing::info!(
-        active_connections = registry.active_connections(),
-        active_work_items = registry.active_work_items(),
-        "daemon shutdown signal received; starting graceful drain"
-    );
-    let graceful_deadline = shutdown_started + graceful_drain_deadline;
-    let force_cancel_deadline = shutdown_started + force_cancel_deadline;
-    while registry.active_work_items() > 0 && Instant::now() < graceful_deadline {
-        registry.wait_for_connection_change(
-            graceful_deadline.saturating_duration_since(Instant::now()),
-        )?;
-    }
-    if registry.active_work_items() > 0 {
-        tracing::info!(
-            active_work_items = registry.active_work_items(),
-            "daemon graceful drain hit deadline; continuing toward forced cancel"
-        );
-        force_shutdown.store(true, Ordering::SeqCst);
-        registry.interrupt_all();
-    } else {
-        tracing::info!("daemon graceful drain completed cleanly");
-    }
-    while registry.active_work_items() > 0 && Instant::now() < force_cancel_deadline {
-        registry.wait_for_connection_change(
-            force_cancel_deadline.saturating_duration_since(Instant::now()),
-        )?;
-    }
-    registry.join_tracked_dispatches(TRACKED_DISPATCH_JOIN_DEADLINE)?;
-    let remaining_work_items = registry.active_work_items();
-    if remaining_work_items > 0 {
-        return Err(AtmError::daemon_unavailable(format!(
-            "forced cancel deadline elapsed with {remaining_work_items} active daemon work item(s)"
-        ))
-        .with_recovery(
-            "Restart the daemon after the wedged request workers are no longer holding the same-host runtime open.",
-        ));
-    }
     Ok(())
 }
 
@@ -1312,6 +1267,7 @@ mod tests {
             Duration::from_millis(10),
             Duration::from_millis(20),
             Instant::now(),
+            TRACKED_DISPATCH_JOIN_DEADLINE,
         )
         .expect_err("bounded drain should fail once the forced-cancel deadline elapses");
         assert!(

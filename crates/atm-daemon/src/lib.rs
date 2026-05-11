@@ -12,6 +12,7 @@ mod direct_boundaries;
 // tests::host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release.
 mod host_ownership;
 mod lifecycle_control;
+mod local_ipc_connection;
 mod local_ipc_transport;
 mod notification_runtime;
 mod peer_transport;

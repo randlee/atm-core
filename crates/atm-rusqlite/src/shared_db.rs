@@ -149,6 +149,9 @@ impl SharedDbTarget {
 #[derive(Clone)]
 pub(crate) struct SharedDb {
     target: Arc<SharedDbTarget>,
+    // Reader handles are budgeted across cloned SharedDb adapters, so the
+    // counter must be shared and synchronized independently of any one
+    // connection instance.
     connection_count: Arc<Mutex<usize>>,
     #[cfg(test)]
     // In-memory test fixtures must share one retained connection so each
@@ -157,6 +160,8 @@ pub(crate) struct SharedDb {
 }
 
 struct SharedDbConnectionGuard {
+    // Connection release can happen on whichever clone drops the guard, so the
+    // shared counter uses the same synchronized ownership model as SharedDb.
     connection_count: Arc<Mutex<usize>>,
 }
 
@@ -225,6 +230,9 @@ impl SharedDb {
         if let Some(connection) = &self.test_connection {
             let mut connection = connection.lock().map_err(|_| {
                 AtmError::daemon_unavailable("sqlite test connection lock poisoned")
+                    .with_recovery(
+                        "Recreate the in-memory sqlite test assembly before retrying the shared test connection path.",
+                    )
             })?;
             return operation(&mut connection);
         }
@@ -288,6 +296,9 @@ impl SharedDb {
     fn acquire_connection_guard(&self) -> Result<SharedDbConnectionGuard, AtmError> {
         let mut connection_count = self.connection_count.lock().map_err(|_| {
             AtmError::daemon_unavailable("sqlite connection budget state lock poisoned")
+                .with_recovery(
+                    "Restart the daemon or recreate the sqlite boundary assembly before retrying the shared connection budget path.",
+                )
         })?;
         if *connection_count >= MAX_SQLITE_CONNECTIONS {
             return Err(AtmError::daemon_unavailable(format!(
