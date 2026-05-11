@@ -39,6 +39,7 @@ fn execute_upsert_message(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     let record = &request.record;
+    validate_message_record(record, connection, cache, target)?;
     let envelope_json = serialize_json(&record.envelope, "mail-store envelope")?;
     let parent_message_id = record
         .envelope
@@ -66,26 +67,9 @@ fn execute_upsert_message(
     let recorded_at = record
         .recorded_at
         .map(|value| value.into_inner().to_rfc3339());
-    let existing: Option<i64> = cache
-        .probe_message_exists(
-            connection,
-            params![
-                record.team.as_str(),
-                record.agent.as_str(),
-                record.message_key.as_ref()
-            ],
-        )
-        .optional()
-        .map_err(|error| {
-            crate::shared_db::sqlite_error(
-                target,
-                "failed to probe existing mail-store message",
-                error,
-            )
-        })?;
 
-    cache
-        .upsert_message_row(
+    let inserted = cache
+        .insert_message_row(
             connection,
             params![
                 record.team.as_str(),
@@ -106,7 +90,8 @@ fn execute_upsert_message(
         )
         .map_err(|error| {
             crate::shared_db::sqlite_error(target, "failed to upsert mail-store message", error)
-        })?;
+        })?
+        == 1;
     cache
         .upsert_ack_state(
             connection,
@@ -123,9 +108,86 @@ fn execute_upsert_message(
             crate::shared_db::sqlite_error(target, "failed to upsert ack-state row", error)
         })?;
 
-    Ok(WriteOpResult::UpsertMessage {
-        inserted: existing.is_none(),
-    })
+    Ok(WriteOpResult::UpsertMessage { inserted })
+}
+
+fn validate_message_record(
+    record: &boundary::MailStoreMessageRecord,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    let message_key = record.message_key.as_ref();
+    if !message_key.starts_with("atm:") && !message_key.starts_with("ext:") {
+        return Err(AtmError::validation(format!(
+            "mail-store message_key must start with `atm:` or `ext:`; got `{message_key}`"
+        ))
+        .with_recovery(
+            "Rewrite the message record with an ATM-owned or external message_key prefix before retrying the sqlite write.",
+        ));
+    }
+
+    if let Some(parent_message_id) = record.envelope.parent_message_id {
+        let owner = cache
+            .load_successor_owner(
+                connection,
+                params![
+                    record.team.as_str(),
+                    record.agent.as_str(),
+                    parent_message_id.to_string()
+                ],
+            )
+            .optional()
+            .map_err(|error| {
+                crate::shared_db::sqlite_error(
+                    target,
+                    "failed to validate single-successor mail-store invariant",
+                    error,
+                )
+            })?;
+        if let Some(owner) = owner
+            && owner != message_key
+        {
+            return Err(AtmError::validation(format!(
+                "mail-store parent message `{parent_message_id}` already has successor `{owner}`; `{message_key}` would violate the single-successor invariant"
+            ))
+            .with_recovery(
+                "Reuse the existing successor message_key or choose a different parent_message_id before retrying the sqlite write.",
+            ));
+        }
+    }
+
+    if let Some(legacy_message_id) = record.envelope.message_id {
+        let owner = cache
+            .load_legacy_identity_owner(
+                connection,
+                params![
+                    record.team.as_str(),
+                    record.agent.as_str(),
+                    legacy_message_id.to_string()
+                ],
+            )
+            .optional()
+            .map_err(|error| {
+                crate::shared_db::sqlite_error(
+                    target,
+                    "failed to validate legacy message identity uniqueness",
+                    error,
+                )
+            })?;
+        if let Some(owner) = owner
+            && owner != message_key
+        {
+            return Err(AtmError::validation(format!(
+                "legacy message_id `{legacy_message_id}` is already owned by `{owner}` and cannot be reassigned to `{message_key}`"
+            ))
+            .with_recovery(
+                "Reuse the existing message_key for that legacy message identity or generate a new legacy identity before retrying the sqlite write.",
+            ));
+        }
+    }
+
+    Ok(())
 }
 
 fn execute_upsert_visibility_state(

@@ -277,3 +277,142 @@ fn copy_error(error: &AtmError) -> AtmError {
     copied.recovery = error.recovery.clone();
     copied
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atm_core::boundary;
+    use atm_core::schema::MessageEnvelope;
+    use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+    use rusqlite::OptionalExtension;
+    use std::path::PathBuf;
+    use std::sync::mpsc;
+    use tempfile::TempDir;
+
+    fn team() -> TeamName {
+        "test-team".parse().expect("team")
+    }
+
+    fn agent() -> AgentName {
+        "test-agent".parse().expect("agent")
+    }
+
+    fn actor() -> AgentName {
+        "test-actor".parse().expect("actor")
+    }
+
+    fn message_key(value: &str) -> boundary::MessageKey {
+        boundary::MessageKey::new(value).expect("message key")
+    }
+
+    fn envelope(text: &str) -> MessageEnvelope {
+        MessageEnvelope {
+            from: actor(),
+            text: text.to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(team()),
+            summary: Some(format!("summary: {text}")),
+            message_id: None,
+            pending_ack_at: Some(IsoTimestamp::now()),
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        }
+    }
+
+    fn message_record(key: &str, text: &str) -> boundary::MailStoreMessageRecord {
+        boundary::MailStoreMessageRecord {
+            team: team(),
+            agent: agent(),
+            message_key: message_key(key),
+            envelope: envelope(text),
+            imported_from: None,
+            recorded_at: Some(IsoTimestamp::now()),
+        }
+    }
+
+    fn temp_db_target() -> (TempDir, Arc<SharedDbTarget>, PathBuf) {
+        let tempdir = TempDir::new().expect("tempdir");
+        let db_path = tempdir.path().join("mail.db");
+        (
+            tempdir,
+            Arc::new(SharedDbTarget::Path(db_path.clone())),
+            db_path,
+        )
+    }
+
+    #[test]
+    fn invalid_message_row_does_not_poison_other_rows_in_same_batch() {
+        let (_tempdir, target, db_path) = temp_db_target();
+        let mut connection = open_connection_for_target(target.as_ref()).expect("open connection");
+        ensure_schema(&mut connection, target.as_ref()).expect("ensure schema");
+        let mut cache = stmt_cache::WriterStatementCache;
+
+        let (invalid_tx, invalid_rx) = mpsc::sync_channel(1);
+        let (valid_tx, valid_rx) = mpsc::sync_channel(1);
+        process_batch(
+            target.as_ref(),
+            &mut connection,
+            &mut cache,
+            vec![
+                QueuedWrite {
+                    op: Box::new(WriteOp::UpsertMessage(
+                        boundary::MailStoreUpsertMessageRequest {
+                            record: message_record("bad-key", "invalid"),
+                        },
+                    )),
+                    reply: invalid_tx,
+                },
+                QueuedWrite {
+                    op: Box::new(WriteOp::UpsertMessage(
+                        boundary::MailStoreUpsertMessageRequest {
+                            record: message_record("atm:valid", "valid"),
+                        },
+                    )),
+                    reply: valid_tx,
+                },
+            ],
+        );
+
+        let invalid = invalid_rx.recv().expect("invalid reply");
+        let valid = valid_rx.recv().expect("valid reply");
+        assert!(
+            invalid
+                .expect_err("invalid row should fail")
+                .is_validation()
+        );
+        assert_eq!(
+            valid.expect("valid row should survive same batch"),
+            WriteOpResult::UpsertMessage { inserted: true }
+        );
+
+        drop(connection);
+        let verify = open_connection_for_target(target.as_ref()).expect("reopen");
+        let stored: String = verify
+            .query_row(
+                "SELECT message_text FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                rusqlite::params![team().as_str(), agent().as_str(), "atm:valid"],
+                |row| row.get(0),
+            )
+            .expect("stored valid row");
+        assert_eq!(stored, "valid");
+        let missing: Option<String> = verify
+            .query_row(
+                "SELECT message_text FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                rusqlite::params![team().as_str(), agent().as_str(), "bad-key"],
+                |row| row.get(0),
+            )
+            .optional()
+            .expect("query invalid row");
+        assert!(missing.is_none(), "invalid row must not be written");
+        assert!(
+            db_path.exists(),
+            "writer batch should persist to the target database"
+        );
+    }
+}
