@@ -2948,3 +2948,54 @@ Acceptance:
   Python/CI glue
 - the migration boundary between `atm-core` and `sc-lint` is explicit rather
   than implied
+
+## 25. Phase S — Windows-Complete Daemon Parity And SQLite Durability [IN PROGRESS]
+
+Goal:
+- deliver a production-ready daemon that works correctly on both Unix and Windows
+  through the same-host local IPC transport and singleton lifecycle
+- add SQLite durability for remote replay state via `atm-rusqlite`
+
+Summary:
+- Sprints S.0–S.15 cover: Windows IPC transport, runtime control, daemon
+  hardening, policy lint, SQLite write-worker planning and implementation,
+  JSONL log compatibility, logging defaults, retained log bootstrap, and
+  integration gate cleanup
+- S.13–S.15 delivered the local IPC transport, Windows same-host runtime, and
+  SQLite write-worker foundation
+- Integration branch `integrate/phase-S` carries all merged sprint work
+- PR #231 (`integrate/phase-S → develop`) is currently blocked by 16 open
+  INTG-* gate findings (2B+6I+8m); fixes are Sprint T.1 scope
+
+Cross-reference:
+- The authoritative sprint-by-sprint Phase S plan lives in
+  [`docs/plan-phase-S.md`](./plan-phase-S.md).
+- Phase S gate findings: `.triage/phase-S/findings/INTG-*.ttl`
+
+## 26. Phase T — Integration Gate Closure And SQLite Writer-Lane Delivery [ACTIVE]
+
+Goal:
+- close the Phase S integration gate (PR #231) by fixing all 16 INTG-* findings
+- deliver the architectural work deferred from Phase S: SQLite single-writer
+  lane, immutable message-row semantics, Windows same-host runtime parity
+  tests, and remaining daemon/runtime hardening
+
+Sprints:
+- T.1 (integrate/phase-S): fix 16 open INTG-* findings to clear Phase S gate
+- T.2 (integrate/phase-T): implement crate-private SQLite single-writer lane
+  (long-lived connection, bounded queue, drain/shutdown) per ADR-ATM-RUSQLITE-002
+- T.3 (integrate/phase-T): enforce immutable message-row semantics — remove
+  pre-write SELECT probe, insert-first writer-owned semantics, rows-changed
+  detection, reject known invariant violations before SQL
+- T.4 (integrate/phase-T): add real Windows same-host runtime parity tests for
+  local IPC request/response, lifecycle control, singleton admission/rejection,
+  and orderly shutdown
+- T.5 (integrate/phase-T): close RuntimeStatusCache all-conflict overflow edge,
+  bound reconcile fingerprint sets per mailbox key, reconcile shutdown deadline
+  contract between code (2s/3s) and architecture doc (5s/10s)
+
+Integration branch: `integrate/phase-T`
+
+Cross-reference:
+- The authoritative sprint-by-sprint Phase T plan lives in
+  [`docs/plan-phase-T.md`](./plan-phase-T.md).

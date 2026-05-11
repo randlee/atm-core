@@ -56,7 +56,7 @@ Before dispatching reviewers, expand `review_targets` to the full sprint diff:
 
 ```bash
 cd <worktree_path>
-git diff integrate/phase-R...HEAD --name-only
+git diff <integration_branch>...HEAD --name-only
 ```
 
 Use the complete output as `review_targets` for every reviewer, regardless of the
