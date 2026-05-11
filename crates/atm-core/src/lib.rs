@@ -17,6 +17,8 @@ pub mod doctor;
 pub mod error;
 /// Stable ATM-owned error-code registry used by core and CLI layers.
 pub mod error_codes;
+/// Thin graft-facing daemon client traits and typed session DTOs.
+pub mod graft;
 /// Public ATM home and team-path resolution helpers.
 pub mod home;
 /// Internal identity resolution and hook lookup helpers.
@@ -103,4 +105,10 @@ pub use boundary::{
     TaskStoreUpdateTaskResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
 pub use config::AtmConfig;
+pub use graft::{
+    AtmGraftClient, GraftBatchLimit, GraftNudge, GraftNudgeDrainRequest, GraftNudgeDrainResponse,
+    GraftNudgeFetchRequest, GraftNudgeFetchResponse, GraftSessionId, GraftSessionPort,
+    GraftSessionRegistrationRequest, GraftSessionRegistrationResponse,
+    GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
+};
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};

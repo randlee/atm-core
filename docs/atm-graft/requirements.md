@@ -125,6 +125,10 @@ Required rules:
   - daemon client operations for `send`, `read`, and `ack`
   - graft-session lifecycle entrypoints
   - host-facing automatic nudge-delivery integration points
+- the T.6 `atm-core` public contract for that surface is:
+  - `AtmGraftClient` for unary `send` / `read` / `ack`
+  - `GraftSessionPort` for session registration and pending-nudge fetch/drain
+  - typed graft DTOs for registration, unregistration, and nudge delivery
 - any hook-facing command that renders insertion-ready nudge text belongs on
   the `atm` CLI surface and must call the same daemon API used by `atm-graft`,
   but it is not a production substitute for embedded-mode automatic injection
@@ -181,6 +185,8 @@ Scope-simplification rule for the first implementation pass:
   - registration and clean shutdown/unregistration are test-covered
 - `REQ-GRAFT-CLIENT-001`
   - the public embedded client surface supports `send`, `read`, and `ack`
+  - the public session-facing surface supports graft registration,
+    unregistration, and typed nudge fetch/drain requests
   - `atm-graft` does not take a Rust dependency on `atm-daemon`
 - `REQ-GRAFT-NOTIFY-001`
 - daemon-originated nudge receipt is automatic in embedded mode
