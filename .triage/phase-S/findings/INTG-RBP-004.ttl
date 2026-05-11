@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-RBP-004>
+  a triage:Finding ;
+  triage:findingId "INTG-RBP-004" ;
+  triage:title "schedule_delayed_listener_wake uses .expect() on thread::Builder::spawn — panic in accept loop" ;
+  triage:description "Thread spawn is a fallible OS operation. All other thread spawns use .map_err(). Fix: propagate spawn failure as AtmError or log + return ()." ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:rule "RBP-NO-EXPECT-PRODUCTION" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T01:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:mergeForwardNeeded false ;
+  triage:propagated false ;
+  triage:regressed false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-RBP-004/integrate-phase-S/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/4118b27> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
+
+<urn:atm:triage:occurrence/INTG-RBP-004/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 718 ;
+  triage:snippet "thread::Builder::new().spawn(...).expect(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "4118b27" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
+
+<urn:atm:triage:worktree/integrate-phase-S/4118b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "4118b27" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .

@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-RBP-003>
+  a triage:Finding ;
+  triage:findingId "INTG-RBP-003" ;
+  triage:title "SHUTDOWN_FINALIZER_THREADS.lock().expect() in production shutdown — panics if mutex poisoned" ;
+  triage:description "Static mutex .expect() in run_bounded_shutdown_step. If poisoned by prior panic, daemon panics instead of propagating structured error. Fix: replace with .map_err(|_| log + silently skip retention)." ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:rule "RBP-NO-EXPECT-PRODUCTION" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T01:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:mergeForwardNeeded false ;
+  triage:propagated false ;
+  triage:regressed false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-RBP-003/integrate-phase-S/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/4118b27> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
+
+<urn:atm:triage:occurrence/INTG-RBP-003/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 393 ;
+  triage:snippet "SHUTDOWN_FINALIZER_THREADS.lock().expect(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "4118b27" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
+
+<urn:atm:triage:worktree/integrate-phase-S/4118b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "4118b27" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
