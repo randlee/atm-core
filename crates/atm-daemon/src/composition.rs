@@ -575,9 +575,12 @@ where
     F: FnOnce(T) -> Result<(), AtmError> + Send + 'static,
 {
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    let shutdown_handle = std::thread::spawn(move || {
-        let _ = result_tx.send(shutdown(lane));
-    });
+    let shutdown_handle = std::thread::Builder::new()
+        .name("shutdown-lane-deadline".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(shutdown(lane));
+        })
+        .expect("spawn shutdown lane deadline helper");
     let shutdown_thread_id = shutdown_handle.thread().id();
     match result_rx.recv_timeout(deadline) {
         Ok(result) => {

@@ -250,9 +250,12 @@ impl LifecycleControlSourceAdapter {
         let _ = self.state_change.notify();
 
         let (result_tx, result_rx) = std::sync::mpsc::channel();
-        let join_helper = std::thread::spawn(move || {
-            let _ = result_tx.send(worker.join_handle.join());
-        });
+        let join_helper = std::thread::Builder::new()
+            .name("atm-daemon-lifecycle-join-helper".to_string())
+            .spawn(move || {
+                let _ = result_tx.send(worker.join_handle.join());
+            })
+            .expect("failed to spawn lifecycle join helper");
         match result_rx.recv_timeout(LIFECYCLE_WORKER_JOIN_DEADLINE) {
             Ok(Ok(())) => {
                 let _ = join_helper.join();
@@ -517,8 +520,8 @@ fn install_platform_hooks(
                     let _ = state_change.notify();
                 }
                 // `signal_hook::flag` does not expose a blocking cross-platform wake primitive on
-                // Windows, so the lifecycle worker uses one bounded polling exception that Phase S
-                // records explicitly in the daemon architecture docs.
+                // Windows, so the lifecycle worker uses one bounded polling exception recorded
+                // explicitly in `docs/atm-daemon/architecture.md`.
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
         })
