@@ -105,10 +105,14 @@ pub use boundary::{
     TaskStoreUpdateTaskResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
 pub use config::AtmConfig;
+/// Canonical stable import path for the public graft-facing client/session
+/// boundary. External consumers, including `atm-graft`, should import these
+/// types from `atm_core::...` rather than reaching into the module path.
 pub use graft::{
-    AtmGraftClient, GraftBatchLimit, GraftNudge, GraftNudgeDrainRequest, GraftNudgeDrainResponse,
-    GraftNudgeFetchRequest, GraftNudgeFetchResponse, GraftSessionId, GraftSessionPort,
-    GraftSessionRegistrationRequest, GraftSessionRegistrationResponse,
-    GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
+    AtmGraftClient, GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeDrainResponse,
+    GraftNudgeFetchRequest, GraftNudgeFetchResponse, GraftSession, GraftSessionId,
+    GraftSessionPort, GraftSessionRegistrationRequest, GraftSessionRegistrationResponse,
+    GraftSessionState, GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
+    NudgeEvent,
 };
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};

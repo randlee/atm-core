@@ -2,8 +2,9 @@
 
 use std::fmt;
 use std::num::NonZeroUsize;
+use std::str::FromStr;
 
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 
 use crate::ack::{AckOutcome, AckRequest};
 use crate::error::AtmError;
@@ -93,8 +94,28 @@ pub trait GraftSessionPort: Send + Sync {
     ) -> Result<GraftNudgeDrainResponse, AtmError>;
 }
 
+/// Explicit lifecycle states for one graft session.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum GraftSessionState {
+    Inactive,
+    Connecting,
+    Registered,
+    Disconnected,
+    Closed,
+}
+
+/// Public lifecycle projection for one graft session.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct GraftSession {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub session_id: GraftSessionId,
+    pub state: GraftSessionState,
+}
+
 /// Stable identifier for one active graft session.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
+#[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
 pub struct GraftSessionId(String);
 
@@ -115,6 +136,24 @@ impl GraftSessionId {
 
     pub fn as_str(&self) -> &str {
         &self.0
+    }
+}
+
+impl FromStr for GraftSessionId {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        Self::new(value)
+    }
+}
+
+impl<'de> Deserialize<'de> for GraftSessionId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
     }
 }
 
@@ -180,9 +219,9 @@ pub struct GraftSessionUnregistrationResponse {
     pub closed: bool,
 }
 
-/// One daemon-originated graft nudge projected to an embedded host.
+/// One daemon-originated nudge event projected to an embedded host.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftNudge {
+pub struct NudgeEvent {
     pub message_id: LegacyMessageId,
     pub from: AgentName,
     pub message: String,
@@ -202,7 +241,7 @@ pub struct GraftNudgeFetchRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraftNudgeFetchResponse {
     pub session_id: GraftSessionId,
-    pub nudges: Vec<GraftNudge>,
+    pub nudges: Vec<NudgeEvent>,
     pub remaining: usize,
     #[serde(default)]
     pub dropped_count: usize,
@@ -219,7 +258,7 @@ pub struct GraftNudgeDrainRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct GraftNudgeDrainResponse {
     pub session_id: GraftSessionId,
-    pub nudges: Vec<GraftNudge>,
+    pub nudges: Vec<NudgeEvent>,
     pub remaining: usize,
     #[serde(default)]
     pub dropped_count: usize,
@@ -227,7 +266,19 @@ pub struct GraftNudgeDrainResponse {
 
 #[cfg(test)]
 mod tests {
-    use super::{GraftBatchLimit, GraftSessionId};
+    use std::fmt;
+
+    use serde::{Deserialize, Serialize};
+
+    use super::{
+        GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
+        GraftNudgeFetchResponse, GraftSession, GraftSessionId, GraftSessionPort,
+        GraftSessionRegistrationRequest, GraftSessionRegistrationResponse, GraftSessionState,
+        GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse, NudgeEvent,
+    };
+    use crate::error::AtmError;
+    use crate::schema::LegacyMessageId;
+    use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     #[test]
     fn graft_session_id_rejects_blank_values() {
@@ -247,5 +298,236 @@ mod tests {
                 .to_string()
                 .contains("graft batch limit must be greater than zero")
         );
+    }
+
+    fn registration_request() -> GraftSessionRegistrationRequest {
+        GraftSessionRegistrationRequest {
+            team: "test-team".parse().expect("team"),
+            agent: "test-agent".parse().expect("agent"),
+            session_id: GraftSessionId::new("session-1").expect("session"),
+            pid: 42,
+            started_at: IsoTimestamp::now(),
+        }
+    }
+
+    fn registration_response() -> GraftSessionRegistrationResponse {
+        let request = registration_request();
+        GraftSessionRegistrationResponse {
+            team: request.team,
+            agent: request.agent,
+            session_id: request.session_id,
+            registered_at: IsoTimestamp::now(),
+        }
+    }
+
+    fn unregister_request() -> GraftSessionUnregistrationRequest {
+        GraftSessionUnregistrationRequest {
+            session_id: GraftSessionId::new("session-1").expect("session"),
+        }
+    }
+
+    fn unregister_response() -> GraftSessionUnregistrationResponse {
+        GraftSessionUnregistrationResponse {
+            session_id: GraftSessionId::new("session-1").expect("session"),
+            closed: true,
+        }
+    }
+
+    fn fetch_request() -> GraftNudgeFetchRequest {
+        GraftNudgeFetchRequest {
+            session_id: GraftSessionId::new("session-1").expect("session"),
+            limit: GraftBatchLimit::new(8).expect("limit"),
+        }
+    }
+
+    fn nudge_event() -> NudgeEvent {
+        NudgeEvent {
+            message_id: LegacyMessageId::new(),
+            from: "sender".parse().expect("sender"),
+            message: "hello".to_string(),
+            received_at: IsoTimestamp::now(),
+            task_id: None,
+        }
+    }
+
+    fn fetch_response() -> GraftNudgeFetchResponse {
+        GraftNudgeFetchResponse {
+            session_id: GraftSessionId::new("session-1").expect("session"),
+            nudges: vec![nudge_event()],
+            remaining: 0,
+        }
+    }
+
+    fn drain_request() -> GraftNudgeDrainRequest {
+        GraftNudgeDrainRequest {
+            session_id: GraftSessionId::new("session-1").expect("session"),
+            limit: GraftBatchLimit::new(4).expect("limit"),
+        }
+    }
+
+    fn drain_response() -> GraftNudgeDrainResponse {
+        GraftNudgeDrainResponse {
+            session_id: GraftSessionId::new("session-1").expect("session"),
+            nudges: vec![nudge_event()],
+            remaining: 1,
+        }
+    }
+
+    fn assert_json_round_trip<T>(value: &T)
+    where
+        T: Serialize + for<'de> Deserialize<'de> + PartialEq + fmt::Debug,
+    {
+        let encoded = serde_json::to_string(value).expect("encode");
+        let decoded = serde_json::from_str::<T>(&encoded).expect("decode");
+        assert_eq!(&decoded, value);
+    }
+
+    #[test]
+    fn graft_session_id_deserialize_rejects_blank_values() {
+        let error = serde_json::from_str::<GraftSessionId>("\"   \"")
+            .expect_err("blank graft session id should fail");
+        assert!(
+            error
+                .to_string()
+                .contains("graft session id must not be blank")
+        );
+    }
+
+    #[test]
+    fn graft_session_type_carries_all_documented_states() {
+        let team: TeamName = "test-team".parse().expect("team");
+        let agent: AgentName = "test-agent".parse().expect("agent");
+        let session_id = GraftSessionId::new("session-1").expect("session");
+        let states = [
+            GraftSessionState::Inactive,
+            GraftSessionState::Connecting,
+            GraftSessionState::Registered,
+            GraftSessionState::Disconnected,
+            GraftSessionState::Closed,
+        ];
+
+        for state in states {
+            let session = GraftSession {
+                team: team.clone(),
+                agent: agent.clone(),
+                session_id: session_id.clone(),
+                state,
+            };
+            assert_eq!(session.session_id.as_str(), "session-1");
+            assert_json_round_trip(&session);
+        }
+    }
+
+    #[test]
+    fn graft_registration_request_round_trips_json() {
+        assert_json_round_trip(&registration_request());
+    }
+
+    #[test]
+    fn graft_registration_response_round_trips_json() {
+        assert_json_round_trip(&registration_response());
+    }
+
+    #[test]
+    fn graft_unregistration_request_round_trips_json() {
+        assert_json_round_trip(&unregister_request());
+    }
+
+    #[test]
+    fn graft_unregistration_response_round_trips_json() {
+        assert_json_round_trip(&unregister_response());
+    }
+
+    #[test]
+    fn graft_fetch_request_round_trips_json() {
+        assert_json_round_trip(&fetch_request());
+    }
+
+    #[test]
+    fn graft_fetch_response_round_trips_json() {
+        assert_json_round_trip(&fetch_response());
+    }
+
+    #[test]
+    fn nudge_event_round_trips_json() {
+        assert_json_round_trip(&nudge_event());
+    }
+
+    #[test]
+    fn graft_drain_request_round_trips_json() {
+        assert_json_round_trip(&drain_request());
+    }
+
+    #[test]
+    fn graft_drain_response_round_trips_json() {
+        assert_json_round_trip(&drain_response());
+    }
+
+    struct MockGraftSessionPort;
+
+    impl GraftSessionPort for MockGraftSessionPort {
+        fn register_session(
+            &self,
+            request: GraftSessionRegistrationRequest,
+        ) -> Result<GraftSessionRegistrationResponse, AtmError> {
+            Ok(GraftSessionRegistrationResponse {
+                team: request.team,
+                agent: request.agent,
+                session_id: request.session_id,
+                registered_at: IsoTimestamp::now(),
+            })
+        }
+
+        fn unregister_session(
+            &self,
+            request: GraftSessionUnregistrationRequest,
+        ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
+            Ok(GraftSessionUnregistrationResponse {
+                session_id: request.session_id,
+                closed: true,
+            })
+        }
+
+        fn fetch_nudges(
+            &self,
+            request: GraftNudgeFetchRequest,
+        ) -> Result<GraftNudgeFetchResponse, AtmError> {
+            Ok(GraftNudgeFetchResponse {
+                session_id: request.session_id,
+                nudges: vec![nudge_event()],
+                remaining: 0,
+            })
+        }
+
+        fn drain_nudges(
+            &self,
+            request: GraftNudgeDrainRequest,
+        ) -> Result<GraftNudgeDrainResponse, AtmError> {
+            Ok(GraftNudgeDrainResponse {
+                session_id: request.session_id,
+                nudges: vec![nudge_event()],
+                remaining: 0,
+            })
+        }
+    }
+
+    #[test]
+    fn graft_session_port_mock_is_object_safe_and_typed() {
+        let port: &dyn GraftSessionPort = &MockGraftSessionPort;
+        let registration = port
+            .register_session(registration_request())
+            .expect("register");
+        assert_eq!(registration.session_id.as_str(), "session-1");
+
+        let fetch = port.fetch_nudges(fetch_request()).expect("fetch");
+        assert_eq!(fetch.nudges[0].message, "hello");
+
+        let drain = port.drain_nudges(drain_request()).expect("drain");
+        assert_eq!(drain.nudges[0].from.as_str(), "sender");
+
+        let unregister = port
+            .unregister_session(unregister_request())
+            .expect("unregister");
+        assert!(unregister.closed);
     }
 }
