@@ -15,10 +15,7 @@ use crate::host_ownership::{
 struct StaleRecoverySignalGuard;
 
 impl StaleRecoverySignalGuard {
-    fn install(
-        observed_tx: mpsc::SyncSender<()>,
-        continue_rx: mpsc::Receiver<()>,
-    ) -> Self {
+    fn install(observed_tx: mpsc::SyncSender<()>, continue_rx: mpsc::Receiver<()>) -> Self {
         install_stale_recovery_signal_for_test(observed_tx, continue_rx);
         Self
     }

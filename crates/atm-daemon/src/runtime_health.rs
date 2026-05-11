@@ -8,8 +8,7 @@ use atm_core::{
     boundary,
     clear::clear_mail,
     doctor::{
-        self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus,
-        DoctorSummary,
+        self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::AtmError,
     graft::{
@@ -20,8 +19,8 @@ use atm_core::{
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope, TeamMemberHeartbeatRequest,
-        TeamMemberHeartbeatResponse,
+        RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope,
+        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::read_mail,
     send::send_mail,
@@ -48,7 +47,6 @@ const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 // to recover and join those retained workers later.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
-
 
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,

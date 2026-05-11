@@ -15,6 +15,7 @@ mod host_ownership;
 mod lifecycle_control;
 mod local_ipc_connection;
 mod local_ipc_transport;
+mod local_ipc_wake;
 mod notification_runtime;
 mod peer_transport;
 mod reconcile_runtime;
@@ -29,6 +30,8 @@ mod test_support;
 mod tests_graft;
 #[cfg(test)]
 mod tests_host_ownership;
+#[cfg(test)]
+mod tests_lifecycle;
 mod watch_runtime;
 
 use std::path::PathBuf;

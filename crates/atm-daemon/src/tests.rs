@@ -2,7 +2,7 @@ use super::runtime_health::{
     DaemonRequestDispatcher, MAX_STATUS_CACHE_ENTRIES, RuntimeStatusCache,
 };
 use super::{
-    DaemonExitCode, LocalIpcServerTransportAdapter, daemon_exit_code_for_error,
+    LocalIpcServerTransportAdapter,
     lifecycle_control::LifecycleControlSourceAdapter,
     local_ipc_transport::RuntimeServeHooks,
     test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
@@ -12,6 +12,10 @@ use atm_core::doctor::DoctorQuery;
 use atm_core::doctor::DoctorStatus;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
+use atm_core::graft::{
+    GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeFetchRequest, GraftSessionId,
+    GraftSessionRegistrationRequest, GraftSessionUnregistrationRequest,
+};
 use atm_core::observability::AtmObservabilityHealthState;
 use atm_core::protocol::{
     HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState,
@@ -48,55 +52,6 @@ impl Drop for ShutdownFinalizerDrainGuard {
     fn drop(&mut self) {
         DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
     }
-}
-
-#[test]
-fn daemon_shutdown_signals_for_test_are_isolated() {
-    let first = LifecycleControlSourceAdapter::new_for_test();
-    first.set_terminate_for_test(true);
-    first.set_reload_for_test(true);
-    let second = LifecycleControlSourceAdapter::new_for_test();
-
-    assert!(!second.terminate_requested());
-    assert!(!second.reload_requested_for_test());
-}
-
-#[test]
-#[serial]
-fn daemon_shutdown_signal_install_reuses_shared_flags() {
-    let first = LifecycleControlSourceAdapter::install().expect("install first");
-    let _reset = LifecycleFlagResetGuard::install(first.clone());
-
-    let second = LifecycleControlSourceAdapter::install().expect("install second");
-    first.set_reload_for_test(true);
-    second.set_terminate_for_test(true);
-
-    assert!(second.reload_requested_for_test());
-    assert!(first.terminate_requested());
-}
-
-#[test]
-fn daemon_exit_code_mapping_matches_supervisor_contract() {
-    assert_eq!(
-        daemon_exit_code_for_error(&AtmError::daemon_lifecycle_wedge("wedged")),
-        DaemonExitCode::LifecycleWedge
-    );
-    assert_eq!(
-        daemon_exit_code_for_error(&AtmError::daemon_launch_gate_rejected("launch gate")),
-        DaemonExitCode::DoNotRestart
-    );
-    assert_eq!(
-        daemon_exit_code_for_error(&AtmError::daemon_unavailable("listener died")),
-        DaemonExitCode::TransportFatal
-    );
-    assert_eq!(
-        daemon_exit_code_for_error(&AtmError::config("bad config")),
-        DaemonExitCode::DoNotRestart
-    );
-    assert_eq!(
-        daemon_exit_code_for_error(&AtmError::validation("buggy invariant")),
-        DaemonExitCode::InternalBug
-    );
 }
 
 #[test]
@@ -363,6 +318,28 @@ fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
     .expect("write team config");
 }
 
+fn graft_registration_request(session_id: &str) -> GraftSessionRegistrationRequest {
+    GraftSessionRegistrationRequest {
+        team: test_team().clone(),
+        agent: ROLE_TEAM_LEAD.parse().expect("agent"),
+        session_id: GraftSessionId::new(session_id).expect("session id"),
+        pid: std::process::id(),
+        started_at: IsoTimestamp::now(),
+    }
+}
+
+fn graft_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
+    (tempdir, dispatcher)
+}
+
 #[test]
 fn heartbeat_updates_status_cache_and_doctor_projection() {
     let tempdir = TempDir::new().expect("tempdir");
@@ -419,6 +396,103 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
             assert_eq!(runtime_status.member_counts.unknown_members, 1);
         }
         other => panic!("expected doctor response, got {other:?}"),
+    }
+}
+
+#[test]
+fn dispatcher_routes_graft_register_requests() {
+    let (_tempdir, dispatcher) = graft_test_dispatcher();
+    let request = graft_registration_request("session-register");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .expect("register response");
+
+    match response {
+        ResponseEnvelope::GraftRegister(registered) => {
+            assert_eq!(registered.team, request.team);
+            assert_eq!(registered.agent, request.agent);
+            assert_eq!(registered.session_id, request.session_id);
+            assert_eq!(registered.queue_capacity, 256);
+        }
+        other => panic!("expected graft register response, got {other:?}"),
+    }
+}
+
+#[test]
+fn dispatcher_routes_graft_unregister_requests() {
+    let (_tempdir, dispatcher) = graft_test_dispatcher();
+    let request = graft_registration_request("session-unregister");
+    dispatcher
+        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .expect("register response");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::GraftUnregister(
+            GraftSessionUnregistrationRequest {
+                session_id: request.session_id.clone(),
+            },
+        ))
+        .expect("unregister response");
+
+    match response {
+        ResponseEnvelope::GraftUnregister(unregistered) => {
+            assert_eq!(unregistered.session_id, request.session_id);
+            assert!(unregistered.closed);
+        }
+        other => panic!("expected graft unregister response, got {other:?}"),
+    }
+}
+
+#[test]
+fn dispatcher_routes_graft_fetch_requests() {
+    let (_tempdir, dispatcher) = graft_test_dispatcher();
+    let request = graft_registration_request("session-fetch");
+    dispatcher
+        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .expect("register response");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::GraftFetch(GraftNudgeFetchRequest {
+            session_id: request.session_id.clone(),
+            limit: GraftBatchLimit::new(8).expect("limit"),
+        }))
+        .expect("fetch response");
+
+    match response {
+        ResponseEnvelope::GraftFetch(fetch) => {
+            assert_eq!(fetch.session_id, request.session_id);
+            assert!(fetch.nudges.is_empty());
+            assert_eq!(fetch.remaining, 0);
+            assert_eq!(fetch.dropped_count, 0);
+        }
+        other => panic!("expected graft fetch response, got {other:?}"),
+    }
+}
+
+#[test]
+fn dispatcher_routes_graft_drain_requests() {
+    let (_tempdir, dispatcher) = graft_test_dispatcher();
+    let request = graft_registration_request("session-drain");
+    dispatcher
+        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .expect("register response");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::GraftDrain(GraftNudgeDrainRequest {
+            session_id: request.session_id.clone(),
+            limit: GraftBatchLimit::new(8).expect("limit"),
+        }))
+        .expect("drain response");
+
+    match response {
+        ResponseEnvelope::GraftDrain(drain) => {
+            assert_eq!(drain.session_id, request.session_id);
+            assert!(drain.nudges.is_empty());
+            assert_eq!(drain.remaining, 0);
+            assert_eq!(drain.dropped_count, 0);
+        }
+        other => panic!("expected graft drain response, got {other:?}"),
     }
 }
 

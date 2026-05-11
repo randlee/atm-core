@@ -49,9 +49,9 @@ pub use atm_core::{
 /// Preferred host-facing imports for embedding `atm-graft`.
 pub mod prelude {
     pub use super::{
-        AtmConfig, DrainRequest, Event, FetchRequest, GraftClient, GraftConfig,
-        GraftObservability, GraftSession, GraftSessionOptions, HostNudgeInjector,
-        NoopGraftObservability, SessionId, SessionSnapshot,
+        AtmConfig, DrainRequest, Event, FetchRequest, GraftClient, GraftConfig, GraftObservability,
+        GraftSession, GraftSessionOptions, HostNudgeInjector, NoopGraftObservability, SessionId,
+        SessionSnapshot,
     };
 }
 
@@ -407,11 +407,22 @@ impl GraftSession {
             });
         }
 
-        set_session_state(&snapshot, GraftSessionState::Connecting, observability.as_ref())?;
+        set_session_state(
+            &snapshot,
+            GraftSessionState::Connecting,
+            observability.as_ref(),
+        )?;
 
         let register_response = client.register_session(options.registration_request())?;
-        validate_batch_limit_against_capacity(options.batch_limit, register_response.queue_capacity)?;
-        set_session_state(&snapshot, GraftSessionState::Registered, observability.as_ref())?;
+        validate_batch_limit_against_capacity(
+            options.batch_limit,
+            register_response.queue_capacity,
+        )?;
+        set_session_state(
+            &snapshot,
+            GraftSessionState::Registered,
+            observability.as_ref(),
+        )?;
 
         let worker_client = Arc::clone(&client);
         let worker_snapshot = Arc::clone(&snapshot);
@@ -495,15 +506,15 @@ impl GraftSession {
         if let Some(stop_tx) = self.stop_tx.take() {
             let _ = stop_tx.send(());
         }
-        if let Some(join_handle) = self.join_handle.take() {
-            if let Err(error) = join_receive_loop_with_deadline(join_handle) {
-                set_session_state(
-                    &self.snapshot,
-                    GraftSessionState::CloseFailed,
-                    self.observability.as_ref(),
-                )?;
-                return Err(error);
-            }
+        if let Some(join_handle) = self.join_handle.take()
+            && let Err(error) = join_receive_loop_with_deadline(join_handle)
+        {
+            set_session_state(
+                &self.snapshot,
+                GraftSessionState::CloseFailed,
+                self.observability.as_ref(),
+            )?;
+            return Err(error);
         }
         set_session_state(
             &self.snapshot,
@@ -584,13 +595,11 @@ fn write_snapshot(
     snapshot: &Arc<RwLock<SessionSnapshot>>,
     state: GraftSessionState,
 ) -> Result<(), AtmError> {
-    let mut snapshot = snapshot
-        .write()
-        .map_err(|_| {
-            AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
-                "Restart the embedding host before retrying graft session lifecycle operations.",
-            )
-        })?;
+    let mut snapshot = snapshot.write().map_err(|_| {
+        AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
+            "Restart the embedding host before retrying graft session lifecycle operations.",
+        )
+    })?;
     snapshot.state = state;
     Ok(())
 }
@@ -1162,10 +1171,7 @@ mod tests {
     }
 
     impl StateNotifyingObservability {
-        fn new(
-            registered_tx: mpsc::Sender<()>,
-            disconnected_tx: Option<mpsc::Sender<()>>,
-        ) -> Self {
+        fn new(registered_tx: mpsc::Sender<()>, disconnected_tx: Option<mpsc::Sender<()>>) -> Self {
             Self {
                 registered_tx: Mutex::new(Some(registered_tx)),
                 disconnected_tx: Mutex::new(disconnected_tx),
@@ -1177,13 +1183,21 @@ mod tests {
         fn session_state_changed(&self, snapshot: &SessionSnapshot) {
             match snapshot.state {
                 GraftSessionState::Registered => {
-                    if let Some(tx) = self.registered_tx.lock().expect("registered tx lock").as_ref()
+                    if let Some(tx) = self
+                        .registered_tx
+                        .lock()
+                        .expect("registered tx lock")
+                        .as_ref()
                     {
                         let _ = tx.send(());
                     }
                 }
                 GraftSessionState::Disconnected => {
-                    if let Some(tx) = self.disconnected_tx.lock().expect("disconnected tx lock").as_ref()
+                    if let Some(tx) = self
+                        .disconnected_tx
+                        .lock()
+                        .expect("disconnected tx lock")
+                        .as_ref()
                     {
                         let _ = tx.send(());
                     }

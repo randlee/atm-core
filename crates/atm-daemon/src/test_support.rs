@@ -81,8 +81,8 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
     ready_rx
         .recv_timeout(std::time::Duration::from_secs(3))
         .expect("daemon local ipc ready signal");
-    let ipc_name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)
-        .expect("ipc name");
+    let ipc_name =
+        atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
     let mut attempts = 0usize;
     let mut last_error = None;
