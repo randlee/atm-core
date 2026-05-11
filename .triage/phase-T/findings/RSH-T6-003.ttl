@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-T6-003>
+  a triage:Finding ;
+  triage:findingId "RSH-T6-003" ;
+  triage:title "GraftSessionId has no maximum length guard" ;
+  triage:description "crates/atm-core/src/graft.rs:106 — GraftSessionId wraps a String with no maximum length validation." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-T6-003/pT-t6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6/37eee04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:occurrence/RSH-T6-003/pT-t6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 106 ;
+  triage:snippet "pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:worktree/pT-t6/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .
