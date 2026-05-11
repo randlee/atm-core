@@ -4,31 +4,20 @@
 <urn:atm:triage:finding/RBP-T4-003>
   a triage:Finding ;
   triage:findingId "RBP-T4-003" ;
-  triage:title "TEST_TEAM const re-parsed as TeamName at ~25 call sites" ;
-  triage:description "crates/atm-daemon/src/tests.rs:41 — const TEST_TEAM: &str = \"test-team\" re-parsed as TeamName at ~25 call sites. Replace with fn test_team() -> TeamName or LazyLock<TeamName>." ;
+  triage:title "TEST_TEAM re-parsed at every call site instead of shared parsed constant" ;
+  triage:description "crates/atm-daemon/src/tests.rs const TEST_TEAM: &str re-parsed via .parse().expect() at 13 call sites. T.1 (1aca857) fixed this via OnceLock<TeamName> helper fn. T.2 through integrate/phase-T require merge-forward of the fix." ;
   triage:phaseId "phase-T" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "RBP" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/5> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/6> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/7> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/8> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/9> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/10> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/11> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/12> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/13> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t1/14> ;
+
+  # T.1 is fixed — no occurrence nodes for it (all cleared)
+  # T.2 open occurrences
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/3> ;
@@ -42,6 +31,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/11> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/12> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/14> ;
+  # T.3 open occurrences
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/3> ;
@@ -55,6 +46,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/11> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/12> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/14> ;
+  # T.4 open occurrences
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/3> ;
@@ -68,6 +61,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/11> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/12> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/14> ;
+  # T.5 open occurrences
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t5/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t5/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t5/3> ;
@@ -81,6 +76,8 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t5/11> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t5/12> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t5/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/pT-t5/14> ;
+  # integrate/phase-T open occurrences
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/integrate/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/integrate/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/integrate/3> ;
@@ -93,170 +90,61 @@
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/integrate/10> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/integrate/11> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/integrate/12> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t1/bfb6511> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t2/5275b3c> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t4/b71366f> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/integrate/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T4-003/integrate/14> ;
+
+  triage:fixedOn <urn:atm:triage:worktree/pT-t1/1aca857> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2/8fde385> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3/06b28a4> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4/8baee53> ;
   triage:openOn <urn:atm:triage:worktree/pT-t5/fbf64cc> ;
-  triage:openOn <urn:atm:triage:worktree/integrate/4b04c20> ;
-  triage:promoteTo <urn:atm:triage:worktree/pT-t1/bfb6511> .
+  triage:openOn <urn:atm:triage:worktree/integrate/d4b43f5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t2/8fde385> .
 
-# Occurrences for feature/pT-t1-integration-gate
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 45 ;
-  triage:snippet "const TEST_TEAM: &str = \"test-team\";" ;
-  triage:status "open" ;
-  triage:closed false ;
+# Worktree snapshots
+<urn:atm:triage:worktree/pT-t1/1aca857>
+  a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "1aca857" ;
+  triage:orderIndex 1 .
 
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 494 ;
-  triage:snippet "team: TEST_TEAM.parse().expect(\"team\")," ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
+<urn:atm:triage:worktree/pT-t2/8fde385>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:orderIndex 2 .
 
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 508 ;
-  triage:snippet "let team_dir = home_dir.join(\".claude\").join(\"teams\").join(TEST_TEAM);" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
+<urn:atm:triage:worktree/pT-t3/06b28a4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:orderIndex 3 .
 
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/4>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 537 ;
-  triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
+<urn:atm:triage:worktree/pT-t4/8baee53>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:orderIndex 4 .
 
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/5>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 621 ;
-  triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
+<urn:atm:triage:worktree/pT-t5/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .
 
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/6>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 669 ;
-  triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
+<urn:atm:triage:worktree/integrate/d4b43f5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:orderIndex 9 .
 
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/7>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 685 ;
-  triage:snippet ".join(TEST_TEAM)" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
-
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/8>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 730 ;
-  triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
-
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/9>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 785 ;
-  triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
-
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/10>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 826 ;
-  triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
-
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/11>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 902 ;
-  triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
-
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/12>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 953 ;
-  triage:snippet "team_override: Some(TEST_TEAM.parse().expect(\"team\"))," ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
-
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/13>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 992 ;
-  triage:snippet "team: TEST_TEAM.parse().expect(\"team\")," ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
-
-<urn:atm:triage:occurrence/RBP-T4-003/pT-t1/14>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 1002 ;
-  triage:snippet "team_override: Some(TEST_TEAM.parse().expect(\"team\"))," ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
-
-# Occurrences for feature/pT-t2-sqlite-writer (same line numbers as t1, omitting duplicates for brevity)
+# Occurrences for feature/pT-t2-sqlite-writer (8fde385) — merge_forward_needed
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
@@ -265,142 +153,153 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 485 ;
+  triage:line 494 ;
   triage:snippet "team: TEST_TEAM.parse().expect(\"team\")," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/3>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 499 ;
+  triage:line 508 ;
   triage:snippet "let team_dir = home_dir.join(\".claude\").join(\"teams\").join(TEST_TEAM);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/4>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 528 ;
+  triage:line 537 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/5>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 612 ;
+  triage:line 621 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/6>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 660 ;
+  triage:line 669 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/7>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 676 ;
+  triage:line 685 ;
   triage:snippet ".join(TEST_TEAM)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/8>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 720 ;
+  triage:line 730 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/9>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 775 ;
+  triage:line 785 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/10>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 816 ;
+  triage:line 826 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/11>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 892 ;
+  triage:line 902 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/12>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 943 ;
+  triage:line 953 ;
   triage:snippet "team_override: Some(TEST_TEAM.parse().expect(\"team\"))," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t2/13>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 982 ;
+  triage:line 992 ;
   triage:snippet "team: TEST_TEAM.parse().expect(\"team\")," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
-# Occurrences for feature/pT-t3-immutable-rows
+<urn:atm:triage:occurrence/RBP-T4-003/pT-t2/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1002 ;
+  triage:snippet "team_override: Some(TEST_TEAM.parse().expect(\"team\"))," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
+
+# Occurrences for feature/pT-t3-immutable-rows (06b28a4) — merge_forward_needed
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
@@ -409,286 +308,308 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 485 ;
+  triage:line 494 ;
   triage:snippet "team: TEST_TEAM.parse().expect(\"team\")," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/3>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 499 ;
+  triage:line 508 ;
   triage:snippet "let team_dir = home_dir.join(\".claude\").join(\"teams\").join(TEST_TEAM);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/4>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 528 ;
+  triage:line 537 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/5>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 612 ;
+  triage:line 621 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/6>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 660 ;
+  triage:line 669 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/7>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 676 ;
+  triage:line 685 ;
   triage:snippet ".join(TEST_TEAM)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/8>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 720 ;
+  triage:line 730 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/9>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 775 ;
+  triage:line 785 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/10>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 816 ;
+  triage:line 826 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/11>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 892 ;
+  triage:line 902 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/12>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 943 ;
+  triage:line 953 ;
   triage:snippet "team_override: Some(TEST_TEAM.parse().expect(\"team\"))," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t3/13>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 982 ;
+  triage:line 992 ;
   triage:snippet "team: TEST_TEAM.parse().expect(\"team\")," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
 
-# Occurrences for feature/pT-t4-windows-runtime (same pattern)
+<urn:atm:triage:occurrence/RBP-T4-003/pT-t3/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 1002 ;
+  triage:snippet "team_override: Some(TEST_TEAM.parse().expect(\"team\"))," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a4> .
+
+# Occurrences for feature/pT-t4-windows-runtime (8baee53) — merge_forward_needed
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 41 ;
+  triage:line 40 ;
   triage:snippet "const TEST_TEAM: &str = \"test-team\";" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 479 ;
+  triage:line 478 ;
   triage:snippet "team: TEST_TEAM.parse().expect(\"team\")," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/3>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 493 ;
+  triage:line 492 ;
   triage:snippet "let team_dir = home_dir.join(\".claude\").join(\"teams\").join(TEST_TEAM);" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/4>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 522 ;
+  triage:line 521 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/5>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 606 ;
+  triage:line 605 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/6>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 654 ;
+  triage:line 653 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/7>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 670 ;
+  triage:line 669 ;
   triage:snippet ".join(TEST_TEAM)" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/8>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 714 ;
+  triage:line 713 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/9>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 769 ;
+  triage:line 768 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/10>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 810 ;
+  triage:line 809 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/11>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 886 ;
+  triage:line 885 ;
   triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/12>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 937 ;
+  triage:line 936 ;
   triage:snippet "team_override: Some(TEST_TEAM.parse().expect(\"team\"))," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t4/13>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 976 ;
+  triage:line 975 ;
   triage:snippet "team: TEST_TEAM.parse().expect(\"team\")," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
-# Occurrences for feature/pT-t5-hardening
+<urn:atm:triage:occurrence/RBP-T4-003/pT-t4/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 985 ;
+  triage:snippet "team_override: Some(TEST_TEAM.parse().expect(\"team\"))," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
+
+# Occurrences for feature/pT-t5-hardening (fbf64cc) — merge_forward_needed
 <urn:atm:triage:occurrence/RBP-T4-003/pT-t5/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
@@ -832,7 +753,18 @@
   triage:headSha "fbf64cc" ;
   triage:occursIn <urn:atm:triage:worktree/pT-t5/fbf64cc> .
 
-# Occurrences for integrate/phase-T
+<urn:atm:triage:occurrence/RBP-T4-003/pT-t5/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 992 ;
+  triage:snippet "team_override: Some(TEST_TEAM.parse().expect(\"team\"))," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/fbf64cc> .
+
+# Occurrences for integrate/phase-T (d4b43f5) — merge_forward_needed
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
@@ -841,8 +773,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/2>
   a triage:Occurrence ;
@@ -852,8 +784,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/3>
   a triage:Occurrence ;
@@ -863,8 +795,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/4>
   a triage:Occurrence ;
@@ -874,8 +806,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/5>
   a triage:Occurrence ;
@@ -885,19 +817,19 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/6>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/tests.rs" ;
   triage:line 660 ;
-  triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\");" ;
+  triage:snippet "let team: TeamName = TEST_TEAM.parse().expect(\"team\")," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/7>
   a triage:Occurrence ;
@@ -907,8 +839,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/8>
   a triage:Occurrence ;
@@ -918,8 +850,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/9>
   a triage:Occurrence ;
@@ -929,8 +861,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/10>
   a triage:Occurrence ;
@@ -940,8 +872,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/11>
   a triage:Occurrence ;
@@ -951,8 +883,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
 <urn:atm:triage:occurrence/RBP-T4-003/integrate/12>
   a triage:Occurrence ;
@@ -962,48 +894,27 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
 
-# Worktree snapshots
-<urn:atm:triage:worktree/pT-t1/bfb6511>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pT-t1-integration-gate" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:orderIndex 1 .
-
-<urn:atm:triage:worktree/pT-t2/5275b3c>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:orderIndex 2 .
-
-<urn:atm:triage:worktree/pT-t3/f9f1e3f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/pT-t4/b71366f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:orderIndex 4 .
-
-<urn:atm:triage:worktree/pT-t5/fbf64cc>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pT-t5-hardening" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
-  triage:headSha "fbf64cc" ;
-  triage:orderIndex 5 .
-
-<urn:atm:triage:worktree/integrate/4b04c20>
-  a triage:WorktreeSnapshot ;
+<urn:atm:triage:occurrence/RBP-T4-003/integrate/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 982 ;
+  triage:snippet "team: TEST_TEAM.parse().expect(\"team\")," ;
+  triage:status "open" ;
+  triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:orderIndex 9 .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .
+
+<urn:atm:triage:occurrence/RBP-T4-003/integrate/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 992 ;
+  triage:snippet "team_override: Some(TEST_TEAM.parse().expect(\"team\"))," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/d4b43f5> .

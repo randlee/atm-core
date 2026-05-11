@@ -4,72 +4,85 @@
 <urn:atm:triage:finding/ATM-QA-005>
   a triage:Finding ;
   triage:findingId "ATM-QA-005" ;
-  triage:title "Phase T has no entry in project-plan.md" ;
-  triage:description "docs/project-plan.md — Phase T has no entry. Phase sequencing, gate criteria, and inter-phase dependencies cannot be verified against the baseline plan." ;
-  triage:triageMode "initial_pass" ;
+  triage:title "docs/project-plan.md missing Phase T section" ;
+  triage:description "docs/project-plan.md has no Phase T entry. Fix: add Phase T section with phase goal, integrate/phase-T branch, T.1-T.5 sprint list, gate criteria." ;
+  triage:triageMode "followup_pass" ;
   triage:category "ATM-QA" ;
   triage:phaseId "phase-T" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
-  triage:openOn <urn:atm:triage:worktree/develop/main> ;
-  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-T/4b04c20> ;
-  triage:promoteTo <urn:atm:triage:worktree/feature-pT-t1-integration-gate/bfb6511> ;
+  triage:fixedOn <urn:atm:triage:worktree/feature-pT-t1-integration-gate/1aca857> ;
+  triage:fixedOn <urn:atm:triage:worktree/feature-pT-t2-sqlite-writer/8fde385> ;
+  triage:fixedOn <urn:atm:triage:worktree/feature-pT-t3-immutable-rows/06b28a4> ;
+  triage:fixedOn <urn:atm:triage:worktree/feature-pT-t4-windows-runtime/8baee53> ;
+  triage:fixedOn <urn:atm:triage:worktree/feature-pT-t5-hardening/fbf64cc> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-T/fccfeb8> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/develop/1> .
 
+# Prior open occurrence on develop — closed; will propagate to develop on
+# integration PR merge (integrate/phase-T → develop). Not an open sprint finding.
 <urn:atm:triage:occurrence/ATM-QA-005/develop/1>
   a triage:Occurrence ;
   triage:file "docs/project-plan.md" ;
   triage:line 0 ;
   triage:snippet "Phase T section entirely absent from main repo project-plan.md" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "pending_merge" ;
+  triage:closed true ;
   triage:branch "develop" ;
-  triage:headSha "develop-baseline" ;
-  triage:occursIn <urn:atm:triage:worktree/develop/main> .
+  triage:headSha "c6847d1" ;
+  triage:occursIn <urn:atm:triage:worktree/develop/c6847d1> .
 
-<urn:atm:triage:worktree/develop/main>
+<urn:atm:triage:worktree/develop/c6847d1>
   a triage:WorktreeSnapshot ;
   triage:branch "develop" ;
   triage:path "/Users/randlee/Documents/github/atm-core" ;
-  triage:headSha "develop-baseline" ;
+  triage:headSha "c6847d1" ;
   triage:orderIndex 0 ;
-  triage:description "Main repository on develop branch (baseline, not a worktree)" .
+  triage:description "Main repository on develop branch (baseline). Phase T section will propagate on integration PR merge." .
 
-<urn:atm:triage:worktree/feature-pT-t1-integration-gate/bfb6511>
+<urn:atm:triage:worktree/feature-pT-t1-integration-gate/1aca857>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t1-integration-gate" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
+  triage:headSha "1aca857" ;
   triage:orderIndex 1 ;
-  triage:status "fixed" .
+  triage:branchState "fixed" ;
+  triage:fixLine 2983 ;
+  triage:fixSnippet "## 26. Phase T — Integration Gate Closure And SQLite Writer-Lane Delivery [ACTIVE]" .
 
-<urn:atm:triage:worktree/feature-pT-t2-sqlite-writer/5275b3c>
+<urn:atm:triage:worktree/feature-pT-t2-sqlite-writer/8fde385>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
+  triage:headSha "8fde385" ;
   triage:orderIndex 2 ;
-  triage:status "fixed" .
+  triage:branchState "fixed" ;
+  triage:fixLine 2983 ;
+  triage:fixSnippet "## 26. Phase T — Integration Gate Closure And SQLite Writer-Lane Delivery [ACTIVE]" .
 
-<urn:atm:triage:worktree/feature-pT-t3-immutable-rows/f9f1e3f>
+<urn:atm:triage:worktree/feature-pT-t3-immutable-rows/06b28a4>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t3-immutable-rows" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
+  triage:headSha "06b28a4" ;
   triage:orderIndex 3 ;
-  triage:status "fixed" .
+  triage:branchState "fixed" ;
+  triage:fixLine 2983 ;
+  triage:fixSnippet "## 26. Phase T — Integration Gate Closure And SQLite Writer-Lane Delivery [ACTIVE]" .
 
-<urn:atm:triage:worktree/feature-pT-t4-windows-runtime/b71366f>
+<urn:atm:triage:worktree/feature-pT-t4-windows-runtime/8baee53>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t4-windows-runtime" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
+  triage:headSha "8baee53" ;
   triage:orderIndex 4 ;
-  triage:status "fixed" .
+  triage:branchState "fixed" ;
+  triage:fixLine 2979 ;
+  triage:fixSnippet "## 26. Phase T — Integration Gate Closure And SQLite Writer-Lane Delivery [ACTIVE]" .
 
 <urn:atm:triage:worktree/feature-pT-t5-hardening/fbf64cc>
   a triage:WorktreeSnapshot ;
@@ -77,12 +90,16 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
   triage:headSha "fbf64cc" ;
   triage:orderIndex 5 ;
-  triage:status "fixed" .
+  triage:branchState "fixed" ;
+  triage:fixLine 2979 ;
+  triage:fixSnippet "## 26. Phase T — Integration Gate Closure And SQLite Writer-Lane Delivery [ACTIVE]" .
 
-<urn:atm:triage:worktree/integrate-phase-T/4b04c20>
+<urn:atm:triage:worktree/integrate-phase-T/fccfeb8>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "fccfeb8" ;
   triage:orderIndex 9 ;
-  triage:status "fixed" .
+  triage:branchState "fixed" ;
+  triage:fixLine 2979 ;
+  triage:fixSnippet "## 26. Phase T — Integration Gate Closure And SQLite Writer-Lane Delivery [ACTIVE]" .
