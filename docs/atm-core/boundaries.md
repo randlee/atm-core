@@ -49,6 +49,9 @@ Notes:
   and receive.
 - Thin graft-facing clients should layer typed workflow/session DTOs above this
   transport rather than publishing daemon-shaped transport details directly.
+- Shared same-host daemon bootstrap helpers used by transport consumers now
+  live in `atm-daemon-client`; this boundary still owns the request/response
+  transport contract itself.
 
 ## AtmGraftClient / GraftSessionPort
 

@@ -1,14 +1,12 @@
 //! Thin embedded ATM client crate for graft-aware host agents.
 
 use std::fmt;
-use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
 use std::sync::mpsc::{self, RecvTimeoutError, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::boundary;
@@ -27,15 +25,13 @@ use atm_core::protocol::{
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use fs2::FileExt;
+use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor};
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
 const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const DEFAULT_BATCH_LIMIT: usize = 64;
-const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 /// Public alias for the ATM-core graft session projection DTO.
@@ -193,7 +189,7 @@ impl GraftClient {
         let daemon_bin = resolve_daemon_bin()?;
         let transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
-        supervisor.ensure_daemon_available(transport.as_ref())?;
+        supervisor.ensure_daemon_available(|| transport.try_connect().map(|_| ()))?;
         Ok(Self::from_transport(transport))
     }
 
@@ -813,63 +809,6 @@ fn is_duplicate_registration(error: &AtmError) -> bool {
     error.code == atm_core::error_codes::AtmErrorCode::DaemonGraftSessionAlreadyRegistered
 }
 
-#[derive(Debug, Clone)]
-struct DaemonLocalIpcEndpoint(PathBuf);
-
-impl DaemonLocalIpcEndpoint {
-    fn new(path: PathBuf) -> Result<Self, AtmError> {
-        validate_daemon_path("daemon local IPC endpoint", &path)?;
-        Ok(Self(path))
-    }
-
-    fn display(&self) -> std::path::Display<'_> {
-        self.0.display()
-    }
-}
-
-impl AsRef<Path> for DaemonLocalIpcEndpoint {
-    fn as_ref(&self) -> &Path {
-        &self.0
-    }
-}
-
-#[derive(Debug, Clone)]
-struct DaemonBinaryPath(PathBuf);
-
-impl DaemonBinaryPath {
-    fn new(path: PathBuf) -> Result<Self, AtmError> {
-        validate_daemon_path("daemon binary path", &path)?;
-        Ok(Self(path))
-    }
-
-    fn display(&self) -> std::path::Display<'_> {
-        self.0.display()
-    }
-}
-
-impl AsRef<Path> for DaemonBinaryPath {
-    fn as_ref(&self) -> &Path {
-        &self.0
-    }
-}
-
-fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
-    if path.as_os_str().is_empty() {
-        return Err(AtmError::validation(format!("{label} must not be empty")).with_recovery(
-            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 daemon local IPC endpoint before invoking the graft daemon client.",
-        ));
-    }
-    if path.to_str().is_none() {
-        return Err(AtmError::validation(format!(
-            "{label} must be valid UTF-8 at the ATM boundary"
-        ))
-        .with_recovery(
-            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 daemon local IPC endpoint before invoking the graft daemon client.",
-        ));
-    }
-    Ok(())
-}
-
 #[derive(Debug)]
 struct GraftLocalIpcClientTransport {
     endpoint: DaemonLocalIpcEndpoint,
@@ -951,168 +890,6 @@ impl boundary::sealed::Sealed for GraftLocalIpcClientTransport {}
 impl ClientTransport for GraftLocalIpcClientTransport {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         self.exchange(request)
-    }
-}
-
-#[derive(Debug)]
-struct DaemonSupervisor {
-    endpoint: DaemonLocalIpcEndpoint,
-    daemon_bin: DaemonBinaryPath,
-}
-
-impl DaemonSupervisor {
-    fn new(endpoint: DaemonLocalIpcEndpoint, daemon_bin: DaemonBinaryPath) -> Self {
-        Self {
-            endpoint,
-            daemon_bin,
-        }
-    }
-
-    fn ensure_daemon_available(
-        &self,
-        transport: &GraftLocalIpcClientTransport,
-    ) -> Result<(), AtmError> {
-        self.ensure_daemon_available_with_timeout(
-            transport,
-            AUTO_START_PUBLISH_TIMEOUT,
-            Duration::from_millis(25),
-        )
-    }
-
-    fn ensure_daemon_available_with_timeout(
-        &self,
-        transport: &GraftLocalIpcClientTransport,
-        publish_timeout: Duration,
-        poll_interval: Duration,
-    ) -> Result<(), AtmError> {
-        self.ensure_daemon_available_with_lock_path(
-            transport,
-            publish_timeout,
-            poll_interval,
-            atm_core::home::host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
-        )
-    }
-
-    fn ensure_daemon_available_with_lock_path(
-        &self,
-        transport: &GraftLocalIpcClientTransport,
-        publish_timeout: Duration,
-        poll_interval: Duration,
-        launch_lock_path: PathBuf,
-    ) -> Result<(), AtmError> {
-        if transport.try_connect().is_ok() {
-            return Ok(());
-        }
-        let deadline = Instant::now() + publish_timeout;
-        loop {
-            if transport.try_connect().is_ok() {
-                return Ok(());
-            }
-            if let Some(_guard) = LaunchGateGuard::try_acquire_at(launch_lock_path.clone())? {
-                if transport.try_connect().is_ok() {
-                    return Ok(());
-                }
-                self.spawn_daemon()?;
-                while Instant::now() < deadline {
-                    if transport.try_connect().is_ok() {
-                        return Ok(());
-                    }
-                    thread::sleep(poll_interval);
-                }
-                return Err(AtmError::daemon_auto_start_failed(format!(
-                    "failed to connect to daemon local IPC endpoint at {} after auto-start",
-                    self.endpoint.display()
-                )));
-            }
-            if Instant::now() >= deadline {
-                return Err(LaunchGateGuard::rejected_error(&self.endpoint));
-            }
-            thread::sleep(poll_interval);
-        }
-    }
-
-    fn spawn_daemon(&self) -> Result<(), AtmError> {
-        if !self.daemon_bin.as_ref().is_file() {
-            return Err(
-                AtmError::daemon_unavailable(format!(
-                    "daemon binary is missing at {}",
-                    self.daemon_bin.display()
-                ))
-                .with_recovery(
-                    "Build or install atm-daemon, or set ATM_DAEMON_BIN to the correct executable before retrying.",
-                ),
-            );
-        }
-
-        let mut command = Command::new(self.daemon_bin.as_ref());
-        command
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .env("ATM_DAEMON_SOCKET", self.endpoint.as_ref());
-        command.spawn().map_err(|source| {
-            AtmError::daemon_auto_start_failed(format!(
-                "failed to spawn daemon binary at {}",
-                self.daemon_bin.display()
-            ))
-            .with_source(source)
-        })?;
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-struct LaunchGateGuard {
-    file: File,
-}
-
-impl LaunchGateGuard {
-    fn rejected_error(endpoint: &DaemonLocalIpcEndpoint) -> AtmError {
-        AtmError::daemon_launch_gate_rejected(format!(
-            "daemon launch gate remained owned while connecting to {}",
-            endpoint.display()
-        ))
-    }
-
-    fn try_acquire_at(lock_path: PathBuf) -> Result<Option<Self>, AtmError> {
-        if let Some(parent) = lock_path.parent() {
-            fs::create_dir_all(parent).map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to create daemon launch lock directory at {}",
-                    parent.display()
-                ))
-                .with_source(source)
-            })?;
-        }
-        let file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .truncate(false)
-            .open(&lock_path)
-            .map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to open daemon launch gate at {}",
-                    lock_path.display()
-                ))
-                .with_source(source)
-            })?;
-
-        match file.try_lock_exclusive() {
-            Ok(()) => Ok(Some(Self { file })),
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
-            Err(source) => Err(AtmError::daemon_unavailable(format!(
-                "failed to acquire daemon launch gate at {}",
-                lock_path.display()
-            ))
-            .with_source(source)),
-        }
-    }
-}
-
-impl Drop for LaunchGateGuard {
-    fn drop(&mut self) {
-        let _ = self.file.unlock();
     }
 }
 
