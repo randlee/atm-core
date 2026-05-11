@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T7-008>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T7-008" ;
+  triage:title "enqueue_nudge_for_recipient emits tracing::warn! bypassing DaemonRuntimeObservability boundary" ;
+  triage:description "GraftRuntime.enqueue_nudge_for_recipient() emits tracing::warn! directly at graft_runtime.rs:198 when the nudge queue overflows. GraftRuntime holds no reference to Arc<dyn DaemonRuntimeObservability>; it is composed into RuntimeHealth which does hold the observability arc. The warn! therefore bypasses the structured observability boundary, making overflow events invisible to the health/observability subsystem. The fix requires either passing the observability reference to GraftRuntime or moving the overflow-warn emission up to RuntimeHealth's call site. Confirmed open on both T.7 (6986027) and T.8 (afbd906)." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-008/T7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-008/T8/1> ;
+  triage:openOn <urn:atm:triage:worktree/T7/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/T8/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/T8/afbd906> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-008/T7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_runtime.rs" ;
+  triage:line 198 ;
+  triage:snippet "tracing::warn!(session_id = %session_id, ... \"graft nudge queue overflowed; oldest nudge dropped\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.7" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/T7/6986027> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-008/T8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_runtime.rs" ;
+  triage:line 198 ;
+  triage:snippet "tracing::warn!(session_id = %session_id, ... \"graft nudge queue overflowed; oldest nudge dropped\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.8" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/T8/afbd906> .
+
+<urn:atm:triage:worktree/T4/68a83ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.4" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "68a83ea" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/T5/1939b55>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.5" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "1939b55" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/T6/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.6" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/T7/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.7" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/T8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.8" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .

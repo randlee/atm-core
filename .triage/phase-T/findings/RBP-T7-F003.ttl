@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-T7-F003>
+  a triage:Finding ;
+  triage:findingId "RBP-T7-F003" ;
+  triage:title "lock_state() at graft_runtime.rs:221 uses .map_err(|_| ...) without .n() recovery hint" ;
+  triage:description "lock_state() at line 221-224 in graft_runtime.rs uses .map_err(|_| AtmError::daemon_unavailable(...)) to discard the poison error. Other error sites in the same file and codebase chain .n(\"...\") (the AtmError recovery-hint builder) to provide structured recovery guidance. The lock_state map_err is the only site in graft_runtime.rs missing the .n() recovery annotation. Confirmed open on T.7 (6986027) and T.8 (afbd906)." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F003/T7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F003/T8/1> ;
+  triage:openOn <urn:atm:triage:worktree/T7/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/T8/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/T8/afbd906> .
+
+<urn:atm:triage:occurrence/RBP-T7-F003/T7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_runtime.rs" ;
+  triage:line 224 ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(\"graft session state lock poisoned\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.7" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/T7/6986027> .
+
+<urn:atm:triage:occurrence/RBP-T7-F003/T8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_runtime.rs" ;
+  triage:line 224 ;
+  triage:snippet ".map_err(|_| AtmError::daemon_unavailable(\"graft session state lock poisoned\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.8" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/T8/afbd906> .
+
+<urn:atm:triage:worktree/T4/68a83ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.4" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "68a83ea" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/T5/1939b55>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.5" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "1939b55" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/T6/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.6" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/T7/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.7" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/T8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.8" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .
