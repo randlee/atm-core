@@ -132,7 +132,9 @@ Required rules:
 - `REQ-RUSQLITE-IMMUT-002` duplicate message writes must preserve the first
   stored payload and must not rewrite immutable `mail_messages` envelope fields
 - `REQ-RUSQLITE-IMMUT-003` immutable-row enforcement must remove the pre-write
-  probe from the hot mailbox write path
+  probe from the hot mailbox write path. This ban applies to hot-path probe
+  queries only; crate-owned invariant validation queries that reject known
+  schema or logical violations before SQL submission are permitted.
 - `MailStore`, `TaskStore`, and `RosterStore` may share one internal SQLite
   root object, but they must not collapse into one public god-interface
 - the durable schema must expose:
