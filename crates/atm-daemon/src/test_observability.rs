@@ -89,9 +89,20 @@ impl TestDaemonObservability {
             }
             let now = Instant::now();
             if now >= deadline {
+                let last_seen = if recorded.is_empty() {
+                    "<no retained test messages recorded>".to_string()
+                } else {
+                    recorded
+                        .iter()
+                        .rev()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                };
                 return Err(
                     AtmError::observability_health(format!(
-                        "timed out waiting for retained test log message containing {needle:?}"
+                        "timed out waiting for retained test log message containing {needle:?}; last_seen={last_seen}"
                     ))
                     .with_recovery(
                         "Retry the daemon observability test after verifying the retained-log adapter emitted the expected startup event.",

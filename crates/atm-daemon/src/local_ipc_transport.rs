@@ -298,7 +298,9 @@ impl PreparedRuntimeServer {
                 let shutdown_beacon = Arc::clone(&shutdown_beacon);
                 let lifecycle_control = lifecycle_control.clone();
                 let endpoint_path = endpoint_path.clone();
-                scope.spawn(move || {
+                thread::Builder::new()
+                    .name("local-ipc-lifecycle-waiter".to_string())
+                    .spawn_scoped(scope, move || {
                     let mut observed_generation = match lifecycle_control.event_generation() {
                         Ok(generation) => generation,
                         Err(error) => {
@@ -350,6 +352,13 @@ impl PreparedRuntimeServer {
                         }
                     }
                 })
+                .map_err(|source| {
+                    AtmError::daemon_unavailable("failed to spawn local IPC lifecycle waiter")
+                        .with_recovery(
+                            "Restart the daemon after confirming the host can spawn the same-host lifecycle waiter thread.",
+                        )
+                        .with_source(source)
+                })?
             };
             publish_ready()?;
             loop {
@@ -502,7 +511,9 @@ impl PreparedRuntimeServer {
                 let force_shutdown = Arc::clone(&force_shutdown);
                 let registry = Arc::clone(&registry);
                 let codec = codec.clone();
-                scope.spawn(move || {
+                thread::Builder::new()
+                    .name("local-ipc-connection-worker".to_string())
+                    .spawn_scoped(scope, move || {
                     let _active = active;
                     let result = catch_unwind(AssertUnwindSafe(|| {
                         handle_connection(
@@ -524,7 +535,14 @@ impl PreparedRuntimeServer {
                             );
                         }
                     }
-                });
+                })
+                .map_err(|source| {
+                    AtmError::daemon_unavailable("failed to spawn local IPC connection worker")
+                        .with_recovery(
+                            "Restart the daemon after confirming the host can spawn same-host connection workers.",
+                        )
+                        .with_source(source)
+                })?;
             }
 
             // Every serve-loop exit path, including AcceptError and internal tracked-work failures,

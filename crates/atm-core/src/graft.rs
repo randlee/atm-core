@@ -103,6 +103,7 @@ pub enum GraftSessionState {
     Registered,
     Disconnected,
     Closed,
+    CloseFailed,
 }
 
 /// Public lifecycle projection for one graft session.
@@ -407,6 +408,7 @@ mod tests {
             GraftSessionState::Registered,
             GraftSessionState::Disconnected,
             GraftSessionState::Closed,
+            GraftSessionState::CloseFailed,
         ];
 
         for state in states {

@@ -19,6 +19,7 @@ mod notification_runtime;
 mod peer_transport;
 mod reconcile_runtime;
 mod runtime_health;
+mod runtime_status_cache;
 mod shutdown_beacon;
 #[cfg(test)]
 mod test_observability;
@@ -26,6 +27,8 @@ mod test_observability;
 mod test_support;
 #[cfg(test)]
 mod tests_graft;
+#[cfg(test)]
+mod tests_host_ownership;
 mod watch_runtime;
 
 use std::path::PathBuf;
