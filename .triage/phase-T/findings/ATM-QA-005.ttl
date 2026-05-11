@@ -1,0 +1,88 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005" ;
+  triage:title "Phase T has no entry in project-plan.md" ;
+  triage:description "docs/project-plan.md — Phase T has no entry. Phase sequencing, gate criteria, and inter-phase dependencies cannot be verified against the baseline plan." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/develop/main> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-T/4b04c20> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pT-t1-integration-gate/bfb6511> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/develop/1> .
+
+<urn:atm:triage:occurrence/ATM-QA-005/develop/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 0 ;
+  triage:snippet "Phase T section entirely absent from main repo project-plan.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "develop" ;
+  triage:headSha "develop-baseline" ;
+  triage:occursIn <urn:atm:triage:worktree/develop/main> .
+
+<urn:atm:triage:worktree/develop/main>
+  a triage:WorktreeSnapshot ;
+  triage:branch "develop" ;
+  triage:path "/Users/randlee/Documents/github/atm-core" ;
+  triage:headSha "develop-baseline" ;
+  triage:orderIndex 0 ;
+  triage:description "Main repository on develop branch (baseline, not a worktree)" .
+
+<urn:atm:triage:worktree/feature-pT-t1-integration-gate/bfb6511>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "bfb6511" ;
+  triage:orderIndex 1 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/feature-pT-t2-sqlite-writer/5275b3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:orderIndex 2 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/feature-pT-t3-immutable-rows/f9f1e3f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:orderIndex 3 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/feature-pT-t4-windows-runtime/b71366f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:orderIndex 4 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/feature-pT-t5-hardening/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/integrate-phase-T/4b04c20>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "4b04c20" ;
+  triage:orderIndex 9 ;
+  triage:status "fixed" .
