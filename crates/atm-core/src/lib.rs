@@ -105,6 +105,7 @@ pub use boundary::{
     TaskStoreUpdateTaskResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
 pub use config::AtmConfig;
+pub use config::types::GraftConfig;
 /// Canonical stable import path for the public graft-facing client/session
 /// boundary. External consumers, including `atm-graft`, should import these
 /// types from `atm_core::...` rather than reaching into the module path.

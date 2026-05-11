@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-BOUNDARY-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-BOUNDARY-001" ;
+  triage:title "rusqlite::Connection in test helper signature violates boundary rules" ;
+  triage:description "fn message_count_in_connection(connection: &rusqlite::Connection) introduced in T.3 writer/mod.rs:542 violates BOUNDARY-ServerTransport and BOUNDARY-ClientTransport-CLI rules. Fix: refactor to accept &SharedDbTarget or &Arc<SharedDbTarget> and open connection internally — eliminating rusqlite::Connection from the function signature." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-BOUNDARY-001/pT-t3-immutable-rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-BOUNDARY-001/pT-t4-windows-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-BOUNDARY-001/pT-t6-graft-client-surface/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/d4619f6> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/97d12e0> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t5-hardening/30082e8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:occurrence/ATM-QA-BOUNDARY-001/pT-t3-immutable-rows/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 542 ;
+  triage:snippet "fn message_count_in_connection(connection: &rusqlite::Connection) -> i64 {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d4619f6" ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/d4619f6> .
+
+<urn:atm:triage:occurrence/ATM-QA-BOUNDARY-001/pT-t4-windows-runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 542 ;
+  triage:snippet "fn message_count_in_connection(connection: &rusqlite::Connection) -> i64 {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "97d12e0" ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/97d12e0> .
+
+<urn:atm:triage:occurrence/ATM-QA-BOUNDARY-001/pT-t6-graft-client-surface/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 543 ;
+  triage:snippet "fn message_count_in_connection(connection: &sqlite::Connection) -> i64 {" ;
+  triage:note "sqlite is aliased as rusqlite via 'use rusqlite as sqlite;' at line 457 — semantically identical violation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "37eee04" ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/d4619f6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "d4619f6" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/97d12e0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "97d12e0" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t5-hardening/30082e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
+  triage:orderIndex 5 ;
+  triage:branchState "fixed" .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 ;
+  triage:branchState "open" .

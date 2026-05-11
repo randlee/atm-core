@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-T6-002>
+  a triage:Finding ;
+  triage:findingId "RSH-T6-002" ;
+  triage:title "GraftBatchLimit has no upper bound — NonZeroUsize only enforces greater than zero" ;
+  triage:description "crates/atm-core/src/graft.rs:130 — GraftBatchLimit wraps NonZeroUsize which only prevents zero. No maximum enforced." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-T6-002/pT-t6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6/37eee04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:occurrence/RSH-T6-002/pT-t6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 130 ;
+  triage:snippet "pub struct GraftBatchLimit(NonZeroUsize);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:worktree/pT-t6/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .
