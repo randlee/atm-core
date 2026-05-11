@@ -185,9 +185,7 @@ impl GraftRuntime {
             return Err(AtmError::validation(format!(
                 "nudge message exceeds the {MAX_GRAFT_NUDGE_MESSAGE_BYTES}-byte limit"
             ))
-            .with_recovery(
-                "Shorten the send message or summary before enqueuing a graft nudge.",
-            ));
+            .with_recovery("Shorten the send message or summary before enqueuing a graft nudge."));
         }
         let nudge = NudgeEvent {
             message_id: outcome.message_id,
