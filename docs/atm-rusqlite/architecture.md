@@ -130,6 +130,12 @@ Rules:
   - up to `3` concurrent reader handles
 - writer shutdown must be explicit and draining: the channel closes, already
   queued work drains, then the worker thread joins on drop
+- `T.3` completes the message-row semantic contract on top of the T.2 lane:
+  - `mail_messages` is immutable after the first successful insert
+  - duplicate primary-key writes use insert-first `DO NOTHING` semantics
+  - ack and visibility state remain mutable in their dedicated state tables
+  - crate-owned logical invariants such as single-successor and legacy-message
+    ownership are validated before SQL submission
 
 ## 4.2 T.2 `with_transaction(...)` caller audit
 

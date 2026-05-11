@@ -42,6 +42,7 @@ Initial allocation:
 - `REQ-RUSQLITE-MIGRATION-*`
 - `REQ-RUSQLITE-ERROR-*`
 - `REQ-RUSQLITE-TEST-*`
+- `REQ-RUSQLITE-IMMUT-*`
 
 Initial crate requirement IDs:
 
@@ -58,6 +59,22 @@ Initial crate requirement IDs:
 - `REQ-RUSQLITE-TEST-001` `atm-rusqlite` must be testable in process without
   requiring daemon or real socket runtime. Satisfies:
   `REQ-CORE-TEST-RUNTIME-001`.
+- `REQ-RUSQLITE-IMMUT-001` the hot mailbox write path must use insert-first
+  immutable-row semantics for `mail_messages`, treating duplicate message keys
+  as durable no-op replays rather than payload-rewrite events. Satisfies:
+  `REQ-RUNTIME-002`.
+- `REQ-RUSQLITE-IMMUT-002` once a `mail_messages` row exists, later ATM-owned
+  writes must preserve the original envelope/payload fields and keep mutable
+  live state in the projection tables instead of rewriting the immutable row.
+  Satisfies: `REQ-RUNTIME-002`.
+- `REQ-RUSQLITE-IMMUT-003` the hot mailbox write path must not issue an
+  existence probe before submitting message inserts to the writer lane, such
+  as `SELECT 1` or `COUNT(*)` used only to decide whether a duplicate key
+  should be written. Queue semantics and row-count detection own duplicate
+  handling. This ban does not apply to crate-owned invariant validation queries
+  that must run before `INSERT` (for example single-successor or legacy
+  identity checks), as documented in [`architecture.md`](./architecture.md).
+  Satisfies: `REQ-RUNTIME-002`.
 
 ## 4. Required References
 
@@ -110,6 +127,15 @@ Required rules:
   backpressure, not silent drop
 - async daemon callers must not block Tokio worker threads directly when
   submitting to the writer lane
+- `REQ-RUSQLITE-IMMUT-001` the immutable-row path must use insert-first
+  semantics owned by the writer lane rather than conflict-driven row mutation
+- `REQ-RUSQLITE-IMMUT-002` duplicate message writes must preserve the first
+  stored payload and must not rewrite immutable `mail_messages` envelope fields
+- `REQ-RUSQLITE-IMMUT-003` immutable-row enforcement must remove the pre-write
+  probe from the hot mailbox write path
+  This ban applies to hot-path probe queries only; crate-owned invariant
+  validation queries that reject known schema or logical violations before SQL
+  submission are permitted.
 - `MailStore`, `TaskStore`, and `RosterStore` may share one internal SQLite
   root object, but they must not collapse into one public god-interface
 - the durable schema must expose:
