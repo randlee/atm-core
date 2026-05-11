@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-T7-NEW-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-T7-NEW-001" ;
+  triage:title "LIFECYCLE_WORKER_JOIN_DEADLINE = 1s too short for loaded Windows CI" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:8 — LIFECYCLE_WORKER_JOIN_DEADLINE = Duration::from_secs(1) used as recv_timeout for joining lifecycle worker thread (line 253). Same Windows CI timing concern as FTQ-T7-006/006B: worker polls at 100ms (Unix) / 25ms (Windows); on loaded runner the join may not complete within 1s. Affects unix_install_reuses_one_lifecycle_worker_until_shutdown and windows_install_reuses_one_lifecycle_worker_until_shutdown. Fix: raise constant to Duration::from_secs(5)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T07:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pT-t7-graft-runtime" ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t7-graft-runtime/aa9265f> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T7-NEW-001/pT-t7-graft-runtime/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/pT-t7-graft-runtime/aa9265f> .
+
+<urn:atm:triage:occurrence/FTQ-T7-NEW-001/pT-t7-graft-runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 8 ;
+  triage:snippet "const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(1)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "aa9265f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7-graft-runtime/aa9265f> .
+
+<urn:atm:triage:worktree/pT-t7-graft-runtime/aa9265f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "aa9265f" ;
+  triage:orderIndex 7 .
