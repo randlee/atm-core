@@ -225,6 +225,12 @@ impl SharedDb {
 
         let target = Arc::new(SharedDbTarget::Path(path));
         let writer = Arc::new(SqliteWriter::start(Arc::clone(&target))?);
+        tracing::debug!(
+            writer_handles = 1,
+            reader_budget = MAX_SQLITE_READER_CONNECTIONS,
+            path = %target.display(),
+            "sqlite boundary assembly opened"
+        );
         Ok(Self {
             target,
             writer,
