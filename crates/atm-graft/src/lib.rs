@@ -365,6 +365,9 @@ impl GraftSession {
         injector: Arc<dyn HostNudgeInjector>,
         observability: Arc<dyn GraftObservability>,
     ) -> Result<Self, AtmError> {
+        // Config is loaded from disk on each activate() call. Per-activation disk reads are
+        // accepted by design: activate() is not a hot path, and caching would require
+        // invalidation logic that adds complexity with no practical benefit.
         let graft_config = load_graft_config(&options.workspace_root)?;
         Self::activate_with_graft_config(
             Arc::new(client),
@@ -527,6 +530,9 @@ impl GraftSession {
 
 impl Drop for GraftSession {
     fn drop(&mut self) {
+        // Drop-triggered teardown emits GraftSessionState::Closed, identical to explicit close().
+        // Merged observable state is accepted by design: callers that need to distinguish
+        // drop-driven shutdown from user-directed shutdown should call close() explicitly.
         let _ = self.close_internal();
     }
 }

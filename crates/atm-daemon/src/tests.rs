@@ -400,6 +400,7 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
 }
 
 #[test]
+#[serial]
 fn dispatcher_routes_graft_register_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-register");
@@ -420,6 +421,7 @@ fn dispatcher_routes_graft_register_requests() {
 }
 
 #[test]
+#[serial]
 fn dispatcher_routes_graft_unregister_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-unregister");
@@ -445,6 +447,7 @@ fn dispatcher_routes_graft_unregister_requests() {
 }
 
 #[test]
+#[serial]
 fn dispatcher_routes_graft_fetch_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-fetch");
@@ -471,6 +474,7 @@ fn dispatcher_routes_graft_fetch_requests() {
 }
 
 #[test]
+#[serial]
 fn dispatcher_routes_graft_drain_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-drain");
