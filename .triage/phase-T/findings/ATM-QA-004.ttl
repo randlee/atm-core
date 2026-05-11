@@ -4,41 +4,40 @@
 <urn:atm:triage:finding/ATM-QA-004>
   a triage:Finding ;
   triage:findingId "ATM-QA-004" ;
-  triage:title "std::thread::sleep as primary polling mechanism — violates cross-platform guidelines" ;
-  triage:description "crates/atm-daemon/src/test_support.rs — std::thread::sleep is the primary polling mechanism in connect_daemon_local_ipc_until_ready. docs/cross-platform-guidelines.md explicitly prohibits fixed sleeps as the primary correctness mechanism. Requires channel-based or observable-state readiness signal." ;
+  triage:title "thread::sleep sole readiness primitive in connect_daemon_local_ipc_until_ready" ;
+  triage:description "crates/atm-daemon/src/test_support.rs — std::thread::sleep(5ms) is the sole readiness primitive in connect_daemon_local_ipc_until_ready. T.1 (7a0a928) replaced it with mpsc::Receiver<()>.recv_timeout channel-based signalling. Branches T.2 through T.5 and integrate/phase-T have not received the merge-forward and remain open. T.4 QA-2 confirmed still open at 8baee53." ;
   triage:phaseId "phase-T" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "ATM-QA" ;
   triage:severity "important" ;
-  triage:repeatable true ;
-  triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/pT-t1/1> ;
+  triage:triagedAt "2026-05-10T03:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/pT-t2/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/pT-t3/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/pT-t4/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/pT-t5/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/pT-int/1> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t1/bfb6511> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t2/5275b3c> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t4/b71366f> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t1/7a0a928> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2/8fde385> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3/06b28a47> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4/8baee53> ;
   triage:openOn <urn:atm:triage:worktree/pT-t5/fbf64cc> ;
-  triage:openOn <urn:atm:triage:worktree/pT-int/4b04c20> ;
-  triage:promoteTo <urn:atm:triage:worktree/pT-t1/bfb6511> .
+  triage:openOn <urn:atm:triage:worktree/pT-int/d4b43f5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/ATM-QA-004/pT-t1/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/test_support.rs" ;
-  triage:line 91 ;
-  triage:snippet "std::thread::sleep(std::time::Duration::from_millis(5));" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:line 88 ;
+  triage:snippet "ready_rx.recv_timeout(std::time::Duration::from_secs(3)).expect(\"daemon local ipc ready signal\");" ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1/7a0a928> .
 
 <urn:atm:triage:occurrence/ATM-QA-004/pT-t2/1>
   a triage:Occurrence ;
@@ -48,8 +47,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
 
 <urn:atm:triage:occurrence/ATM-QA-004/pT-t3/1>
   a triage:Occurrence ;
@@ -59,8 +58,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:headSha "06b28a47" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/06b28a47> .
 
 <urn:atm:triage:occurrence/ATM-QA-004/pT-t4/1>
   a triage:Occurrence ;
@@ -70,8 +69,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/8baee53> .
 
 <urn:atm:triage:occurrence/ATM-QA-004/pT-t5/1>
   a triage:Occurrence ;
@@ -92,35 +91,35 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-int/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-int/d4b43f5> .
 
-<urn:atm:triage:worktree/pT-t1/bfb6511>
+<urn:atm:triage:worktree/pT-t1/7a0a928>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t1-integration-gate" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
+  triage:headSha "7a0a928" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pT-t2/5275b3c>
+<urn:atm:triage:worktree/pT-t2/8fde385>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
+  triage:headSha "8fde385" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pT-t3/f9f1e3f>
+<urn:atm:triage:worktree/pT-t3/06b28a47>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t3-immutable-rows" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
+  triage:headSha "06b28a47" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/pT-t4/b71366f>
+<urn:atm:triage:worktree/pT-t4/8baee53>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t4-windows-runtime" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
+  triage:headSha "8baee53" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/pT-t5/fbf64cc>
@@ -130,9 +129,9 @@
   triage:headSha "fbf64cc" ;
   triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/pT-int/4b04c20>
+<urn:atm:triage:worktree/pT-int/d4b43f5>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "d4b43f5" ;
   triage:orderIndex 9 .
