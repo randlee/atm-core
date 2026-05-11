@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T6-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T6-001" ;
+  triage:title "[atm.graft].enabled config model missing from RawAtmSection and AtmConfig" ;
+  triage:description "RawAtmSection has no graft subsection and AtmConfig has no graft field. Sprint doc line 46 and REQ-GRAFT-CONFIG-001 require explicit [atm.graft].enabled config support. Absent from crates/atm-core/src/config/mod.rs." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/config/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-001/pT-t6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-001/pT-t6/2> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:occurrence/ATM-QA-T6-001/pT-t6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 213 ;
+  triage:snippet "struct RawAtmSection { identity, default_team, team_members, aliases, post_send_hooks, claude_jsonl_body_export_max_bytes — no graft subsection field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:occurrence/ATM-QA-T6-001/pT-t6/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/types.rs" ;
+  triage:line 50 ;
+  triage:snippet "pub struct AtmConfig { identity, default_team, team_members, aliases, post_send_hooks, claude_jsonl_body_export_max_bytes, daemon, config_root, obsolete_identity_present — no graft field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .

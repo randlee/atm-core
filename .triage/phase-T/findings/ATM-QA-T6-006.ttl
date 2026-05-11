@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T6-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T6-006" ;
+  triage:title "REQ-GRAFT-OBS-001 not addressed — no GraftObservabilityPort stub or T.8 deferral note" ;
+  triage:description "docs/atm-graft/requirements.md:192 REQ-GRAFT-OBS-001 is not addressed in T.6. No GraftObservabilityPort stub and no explicit T.8 deferral note." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-006/pT-t6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6/37eee04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:occurrence/ATM-QA-T6-006/pT-t6/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-graft/requirements.md" ;
+  triage:line 197 ;
+  triage:snippet "- `REQ-GRAFT-OBS-001`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:worktree/pT-t6/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .
