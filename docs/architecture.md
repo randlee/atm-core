@@ -39,7 +39,6 @@ moved into:
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
-- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 Phase-Q supersession note:
@@ -109,8 +108,8 @@ Product-level boundary rules:
   machine-readable contract used to drive architectural linting and review
 - thin-client workflow surfaces should be modeled around `send` and `receive`
   rather than a broad command inventory
-- Phase T adds `atm-graft` as the production thin-client line on top of the
-  existing daemon/IPC baseline rather than as a separate runtime architecture
+- Phase T added `atm-graft` as a thin-client line (T.6–T.8); removed in pU-s0
+  as out-of-scope for the 1.0 surface
 - `ack` may remain a retained CLI/user workflow, but thin-client protocol
   surfaces should carry it through send-shaped request data rather than a
   separate top-level method family

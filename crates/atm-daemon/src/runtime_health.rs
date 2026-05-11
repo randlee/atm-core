@@ -158,9 +158,9 @@ impl DaemonRequestDispatcher {
         let watcher = std::thread::Builder::new()
             .name(format!("shutdown-watcher-{label}"))
             .spawn(move || {
-                // Intentionally ignore the join result here; the worker already logs its own
-                // errors, and a panic is surfaced via complete_shutdown_step below.
-                let _ = shutdown_handle.join();
+                if shutdown_handle.join().is_err() {
+                    tracing::warn!(step = label, "daemon shutdown finalizer step panicked");
+                }
                 let (done, cvar) = &*pair_watcher;
                 if let Ok(mut guard) = done.lock() {
                     *guard = true;
