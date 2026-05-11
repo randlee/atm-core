@@ -128,6 +128,8 @@ impl GraftSessionId {
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
         let value = value.into();
         if value.trim().is_empty() {
+            // AtmError::validation uses MessageValidationFailed, the shared boundary-validation
+            // error code across all ATM subsystems; no graft-specific code is needed.
             return Err(AtmError::validation("graft session id must not be blank").with_recovery(
                 "Populate a stable non-empty graft session id before calling the graft session runtime.",
             ));
@@ -175,6 +177,8 @@ impl GraftBatchLimit {
     /// Returns [`AtmError`] when the limit is zero.
     pub fn new(value: usize) -> Result<Self, AtmError> {
         let value = NonZeroUsize::new(value).ok_or_else(|| {
+            // AtmError::validation uses MessageValidationFailed, the shared boundary-validation
+            // error code across all ATM subsystems; no graft-specific code is needed.
             AtmError::validation("graft batch limit must be greater than zero").with_recovery(
                 "Use a positive graft nudge batch limit before calling the daemon graft queue surface.",
             )

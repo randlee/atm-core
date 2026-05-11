@@ -187,7 +187,7 @@ impl NotificationRuntime {
             ));
         }
         if let Some(message) = &state.degraded_message {
-            return Err(AtmError::daemon_unavailable(message.clone()));
+            return Err(AtmError::daemon_unavailable(message.as_str()));
         }
         if state.queue.len() >= self.inner.queue_capacity {
             return Err(AtmError::daemon_unavailable(

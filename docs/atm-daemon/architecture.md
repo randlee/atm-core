@@ -340,7 +340,7 @@ Lifecycle state model:
   - one worker instance may be reused across repeated installs while the daemon
     keeps the same process-global lifecycle adapter alive
   - runtime teardown must request worker stop, unregister the active signal
-    hooks, and join the worker within the documented `1s` bound
+    hooks, and join the worker within the documented `5s` bound
 - Windows keeps one accepted lifecycle polling exception:
   - `signal_hook::flag` exposes no matching blocking wake primitive for the
     console/service-control adapter
@@ -666,7 +666,7 @@ Required timeout defaults:
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
-- lifecycle wake-worker join during runtime teardown: `1s` max
+- lifecycle wake-worker join during runtime teardown: `5s` max
 - reconcile runtime drain during runtime teardown: `2s` max
 - watch runtime drain during runtime teardown: `2s` max
 - retained-log flush and sync during runtime teardown: `2s` best-effort max

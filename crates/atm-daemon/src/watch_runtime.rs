@@ -221,9 +221,12 @@ impl WatchRuntime {
         };
         if let Some(handle) = handle {
             let (result_tx, result_rx) = mpsc::sync_channel(1);
-            let join_helper = thread::spawn(move || {
-                let _ = result_tx.send(handle.join());
-            });
+            let join_helper = thread::Builder::new()
+                .name("atm-daemon-watch-join".to_string())
+                .spawn(move || {
+                    let _ = result_tx.send(handle.join());
+                })
+                .expect("failed to spawn watch join helper");
             match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();

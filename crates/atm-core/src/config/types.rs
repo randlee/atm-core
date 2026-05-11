@@ -74,6 +74,8 @@ pub struct AtmConfig {
     pub identity: Option<String>,
     pub default_team: Option<TeamName>,
     pub team_members: Vec<TeamName>,
+    // Alias destination values are free-form routing strings; no domain constraint is applied at the
+    // config layer, so no newtype wrapper is needed here.
     pub aliases: BTreeMap<String, String>,
     pub post_send_hooks: Vec<PostSendHookRule>,
     pub claude_jsonl_body_export_max_bytes: ByteCount,
