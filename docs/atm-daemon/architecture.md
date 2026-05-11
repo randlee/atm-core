@@ -348,6 +348,10 @@ Lifecycle state model:
     only
   - that polling loop must stay isolated to `lifecycle_control.rs` and remain
     under the same explicit shutdown/join contract as the Unix wake worker
+- accepted same-host transport fault-injection inventory also includes the
+  test-only `INJECTED_ACCEPT_ERROR_FOR_TEST` hook in `local_ipc_transport.rs`
+  so both Unix and Windows test lanes can force the bounded fatal-accept path
+  without introducing a production-only OS behavior difference
 
 Privacy boundary:
 - the lifecycle state type and transport/runtime adapter internals remain
