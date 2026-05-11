@@ -78,6 +78,7 @@ The `atm-graft` crate docs must remain aligned with:
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`../atm-daemon/requirements.md`](../atm-daemon/requirements.md)
 - [`../atm-daemon/architecture.md`](../atm-daemon/architecture.md)
+- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
 
 ## 5. Phase T Embedded-Graft Rules
 
@@ -156,3 +157,23 @@ Scope-simplification rule for the first implementation pass:
   `GraftSession`, and host-facing nudge fetch/drain access
 - runtime heartbeat / activity reporting is explicitly deferred unless host
   integration proves it is needed in the same sprint
+
+## 5.2 Req-QA Verification Anchors
+
+`req-qa` should treat these as fail-closed presence checks:
+
+- `REQ-GRAFT-CONFIG-001`
+  - `[atm.graft].enabled` exists in ATM-owned config models and config loading
+  - `atm-graft` remains inert when `.atm.toml` is absent
+- `REQ-GRAFT-RUNTIME-001`
+  - a documented `GraftSession` lifecycle type exists
+  - registration and clean shutdown/unregistration are test-covered
+- `REQ-GRAFT-CLIENT-001`
+  - the public embedded client surface supports `send`, `read`, and `ack`
+  - `atm-graft` does not take a Rust dependency on `atm-daemon`
+- `REQ-GRAFT-NOTIFY-001`
+  - daemon-owned drain/fetch surfaces exist for nudges
+  - the host-facing nudge payload exposes at least `from` and `message`
+- `REQ-GRAFT-OBS-001`
+  - graft activation/connectivity/registration/nudge paths emit through an
+    injected ATM-owned observability boundary

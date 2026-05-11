@@ -11,6 +11,11 @@ Define the small embeddable daemon-client surface needed by `atm-graft`
 without turning `atm-graft` into a second runtime stack or forcing a Rust
 dependency on `atm-daemon`.
 
+## Preconditions
+
+- `T.2` through `T.5` must be merged first so the daemon/runtime baseline is
+  stable before the graft-facing public client surface is locked
+
 ## Deliverables
 
 - add the public `atm-core` client-side models needed by embedded consumers
@@ -27,6 +32,8 @@ dependency on `atm-daemon`.
 - ensure the retained CLI can consume the same client surface where practical
   rather than diverging into a parallel contract
 - keep concrete daemon runtime details private to `atm-daemon`
+- update the public protocol/interface documentation for the graft-facing
+  client surface
 
 ## Key File Targets
 
@@ -36,6 +43,7 @@ dependency on `atm-daemon`.
   moved out or narrowed
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/requirements.md`
+- `docs/atm-daemon/protocol-icd.md`
 - `docs/atm-graft/architecture.md`
 - `docs/atm-graft/requirements.md`
 
@@ -50,6 +58,14 @@ dependency on `atm-daemon`.
 - the graft-facing surface is small and embeddable rather than mirroring the
   entire CLI
 
+## Required Validation
+
+- `cargo fmt --all --check`
+- `just lint`
+- targeted `cargo test` for any new `atm-core` client-surface modules
+- targeted `cargo test` for any `atm` CLI wiring updated to consume the same
+  client surface
+
 ## QA Pointers
 
 - `req-qa` must verify the named client surface exists in code, not only in
@@ -60,6 +76,5 @@ dependency on `atm-daemon`.
 
 ## Dependencies
 
-- should begin only after `T.2`-`T.5` are stable enough that the daemon/runtime
-  baseline is not thrashing
+- depends on `T.2` through `T.5` merging first
 - `T.7` depends on this sprint defining the client-side contract

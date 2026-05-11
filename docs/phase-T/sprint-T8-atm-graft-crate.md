@@ -9,6 +9,11 @@
 
 Add `atm-graft` as a thin embedded ATM client crate for Rust host agents.
 
+## Preconditions
+
+- `T.6` and `T.7` must merge first so the crate is built on the accepted
+  graft-facing client surface and daemon-owned runtime features
+
 ## Deliverables
 
 - add the `atm-graft` crate
@@ -43,6 +48,15 @@ Add `atm-graft` as a thin embedded ATM client crate for Rust host agents.
 - the host-facing bridge is sufficient for between-tool-call insertion without
   forcing host-specific tool-loop logic into the crate
 
+## Required Validation
+
+- `cargo fmt --all --check`
+- `just lint`
+- `cargo test -p atm-graft`
+- targeted `cargo test` for `atm-core` config loading that exercises
+  `[atm.graft].enabled`
+- `cargo xwin check --workspace --target x86_64-pc-windows-msvc`
+
 ## QA Pointers
 
 - `req-qa` must verify that the crate exists, the config activation exists, and
@@ -55,5 +69,4 @@ Add `atm-graft` as a thin embedded ATM client crate for Rust host agents.
 ## Dependencies
 
 - depends on `T.6` and `T.7`
-- should not start until the daemon/runtime baseline from `T.2`-`T.5` is
-  considered stable enough to avoid API churn
+- depends transitively on `T.2` through `T.5` through the `T.6` baseline gate

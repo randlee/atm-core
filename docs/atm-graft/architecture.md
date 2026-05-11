@@ -88,6 +88,9 @@ Required follow-on ownership in `atm-core`:
   - `NudgeEvent`
   - registration rejection / shutdown notices if surfaced to the client
 - typed config models for `[atm.graft]`
+- protocol/interface documentation updates in
+  `docs/atm-daemon/protocol-icd.md` for every graft-facing request, response,
+  and daemon-originated event boundary added by T.6/T.7
 
 Rust boundary rules:
 - semantic request / response / event types must not remain raw
@@ -211,3 +214,16 @@ Architectural rules:
   dependency
 - registration, reconnect, queue-overflow, and daemon-unavailable paths must
   keep typed error identity with recovery guidance
+
+## 2.9 Boundary Verification Anchors
+
+`arch-qa` and `req-qa` should reject the graft line if any of the following are
+not true:
+
+- `atm-graft` has no Rust dependency on `atm-daemon`
+- `atm-graft` has no direct SQLite or inbox-JSONL access
+- the daemon remains the sole owner of pending-nudge queue state
+- the hook/poll nudge path uses the same daemon API contract as the embedded
+  session path
+- the public `atm-graft` API remains limited to the documented thin embedded
+  client surface rather than mirroring the full CLI

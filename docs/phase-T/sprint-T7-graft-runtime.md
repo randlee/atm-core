@@ -11,6 +11,11 @@ Add the small daemon-side runtime features embedded and hook/poll graft
 consumers actually need: registration, bounded nudge queueing, and drain/fetch
 access.
 
+## Preconditions
+
+- `T.6` must merge first so the daemon-side registration and drain surfaces are
+  implementing an already-defined public graft client contract
+
 ## Deliverables
 
 - add graft registration / unregistration handling in the daemon/runtime line
@@ -20,6 +25,8 @@ access.
   identity and observability
 - add the hook-facing `atm` command surface that consumes the same daemon API
   rather than creating a separate binary
+- update the daemon protocol/interface docs for registration, drain/fetch, and
+  nudge payload boundaries
 
 ## Key File Targets
 
@@ -28,6 +35,7 @@ access.
 - `crates/atm/src/commands/*`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/requirements.md`
+- `docs/atm-daemon/protocol-icd.md`
 - `docs/atm-graft/architecture.md`
 - `docs/atm-graft/requirements.md`
 
@@ -41,6 +49,14 @@ access.
 - the hook-facing path is on the `atm` CLI surface, not on a separate
   `atm-graft` executable
 
+## Required Validation
+
+- `cargo fmt --all --check`
+- `just lint`
+- `cargo test -p atm-daemon`
+- targeted `cargo test` for the hook-facing `atm` nudge-drain command surface
+- `cargo xwin check --workspace --target x86_64-pc-windows-msvc`
+
 ## QA Pointers
 
 - `req-qa` must verify queue/drain deliverables are present in code and not
@@ -52,4 +68,4 @@ access.
 ## Dependencies
 
 - depends on `T.6` defining the public graft client contract
-- should complete before `T.8` is considered API-stable
+- `T.8` depends on this sprint merging first

@@ -59,6 +59,8 @@ Required change:
   by `atm-graft`
 - keep those models in `atm-core`
 - keep concrete runtime/socket behavior out of the public `atm-core` surface
+- update the protocol/interface docs that describe those client-facing request
+  and response boundaries
 
 ### G.2 Session/nudge runtime gap
 
@@ -72,6 +74,8 @@ Required change:
 - add daemon-owned bounded nudge queueing
 - add nudge drain/fetch requests for embedded and hook/poll consumers
 - keep queue ownership and backpressure behavior entirely daemon-side
+- update the protocol/interface docs for registration, drain/fetch, and daemon
+  event payloads
 
 ### G.3 Thin crate gap
 
@@ -134,6 +138,13 @@ Deliverables:
   - nudge fetch/drain
 - optional runtime adapter convenience only if needed by the host integration
 
+Sequencing rule:
+- `T.6` must land first because it defines the public graft-facing client
+  contract
+- `T.7` must land second because queue ownership and drain semantics belong in
+  the daemon rather than in the crate
+- `T.8` closes the line only after `T.6` and `T.7` are accepted
+
 ## 6. Simplifications For V1
 
 To keep the first implementation tractable:
@@ -179,3 +190,9 @@ Required upstream outcomes before `atm-graft` implementation closes:
 
 The `atm-graft` crate itself is the `T.8` deliverable, not a separate future
 phase.
+
+Required closeout checks across `T.6`-`T.8`:
+- every sprint doc includes explicit deliverables, dependencies, acceptance
+  criteria, QA pointers, and required validation
+- `docs/atm-graft/requirements.md` and `docs/atm-graft/architecture.md`
+  include concrete verification anchors for `req-qa` and `arch-qa`
