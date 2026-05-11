@@ -35,19 +35,24 @@ impl ShutdownBeacon {
 mod tests {
     use super::ShutdownBeacon;
     use std::sync::Arc;
+    use std::sync::mpsc;
     use std::time::Duration;
 
     #[test]
     fn wait_until_tripped_returns_true_after_trip() {
         let beacon = Arc::new(ShutdownBeacon::default());
         let waiter = Arc::clone(&beacon);
-        let (ready_tx, ready_rx) = std::sync::mpsc::sync_channel(1);
+        let (entered_tx, entered_rx) = mpsc::sync_channel(1);
         let join = std::thread::spawn(move || {
-            let _ = ready_tx.send(());
+            entered_tx
+                .send(())
+                .expect("notify waiter entered polling loop");
             assert!(waiter.wait_until_tripped(Duration::from_secs(1)));
         });
 
-        ready_rx.recv().expect("shutdown beacon waiter entered");
+        entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("waiter entered polling loop");
         beacon.trip();
 
         join.join().expect("join shutdown beacon waiter");

@@ -12,6 +12,11 @@ use atm_core::{
         self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::AtmError,
+    graft::{
+        GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
+        GraftNudgeFetchResponse, GraftSessionRegistrationRequest, GraftSessionRegistrationResponse,
+        GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
+    },
     list::list_mail,
     process::process_is_alive,
     protocol::{
@@ -28,6 +33,7 @@ use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
 use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
+use crate::graft_runtime::GraftRuntime;
 
 pub(crate) const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
 const MAX_RELOAD_TEAMS: usize = 256;
@@ -350,6 +356,7 @@ pub(crate) struct DaemonRequestDispatcher {
     observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
     sqlite_boundary: Option<SqliteBoundaryAssembly>,
+    graft_runtime: GraftRuntime,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -358,6 +365,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("home_dir", &self.home_dir)
             .field("status_cache", &self.status_cache)
             .field("sqlite_boundary_present", &self.sqlite_boundary.is_some())
+            .field("graft_runtime", &"GraftRuntime")
             .finish()
     }
 }
@@ -499,6 +507,7 @@ impl DaemonRequestDispatcher {
             observability,
             status_cache,
             sqlite_boundary,
+            graft_runtime: GraftRuntime::new(),
         }
     }
 
@@ -540,9 +549,16 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
-                    send_mail(request, self.observability.as_ref())?,
-                )))
+                let outcome = send_mail(request, self.observability.as_ref())?;
+                if let Err(error) = self.graft_runtime.enqueue_nudge_for_recipient(&outcome) {
+                    self.record_runtime_event(
+                        "graft_nudge_enqueue",
+                        "degraded",
+                        "graft nudge queue overflowed",
+                    );
+                    return Err(error);
+                }
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
@@ -567,6 +583,18 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => {
                 Ok(ResponseEnvelope::Doctor(self.project_doctor_report(query)?))
             }
+            RequestEnvelope::GraftRegister(request) => Ok(ResponseEnvelope::GraftRegister(
+                self.register_graft_session(request)?,
+            )),
+            RequestEnvelope::GraftUnregister(request) => Ok(ResponseEnvelope::GraftUnregister(
+                self.unregister_graft_session(request)?,
+            )),
+            RequestEnvelope::GraftFetch(request) => Ok(ResponseEnvelope::GraftFetch(
+                self.fetch_graft_nudges(request)?,
+            )),
+            RequestEnvelope::GraftDrain(request) => Ok(ResponseEnvelope::GraftDrain(
+                self.drain_graft_nudges(request)?,
+            )),
         }
     }
 }
@@ -668,6 +696,34 @@ impl DaemonRequestDispatcher {
         )?;
         self.status_cache
             .record_heartbeat(&request, durable.pid_changed)
+    }
+
+    fn register_graft_session(
+        &self,
+        request: GraftSessionRegistrationRequest,
+    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
+        self.graft_runtime.register_session(request)
+    }
+
+    fn unregister_graft_session(
+        &self,
+        request: GraftSessionUnregistrationRequest,
+    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
+        self.graft_runtime.unregister_session(request)
+    }
+
+    fn fetch_graft_nudges(
+        &self,
+        request: GraftNudgeFetchRequest,
+    ) -> Result<GraftNudgeFetchResponse, AtmError> {
+        self.graft_runtime.fetch_nudges(request)
+    }
+
+    fn drain_graft_nudges(
+        &self,
+        request: GraftNudgeDrainRequest,
+    ) -> Result<GraftNudgeDrainResponse, AtmError> {
+        self.graft_runtime.drain_nudges(request)
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {

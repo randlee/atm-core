@@ -203,6 +203,7 @@ pub struct GraftSessionRegistrationResponse {
     pub agent: AgentName,
     pub session_id: GraftSessionId,
     pub registered_at: IsoTimestamp,
+    pub queue_capacity: usize,
 }
 
 /// Daemon unregistration request for one embedded graft session.
@@ -242,6 +243,8 @@ pub struct GraftNudgeFetchResponse {
     pub session_id: GraftSessionId,
     pub nudges: Vec<NudgeEvent>,
     pub remaining: usize,
+    #[serde(default)]
+    pub dropped_count: usize,
 }
 
 /// Drain request for one active embedded graft session.
@@ -257,6 +260,8 @@ pub struct GraftNudgeDrainResponse {
     pub session_id: GraftSessionId,
     pub nudges: Vec<NudgeEvent>,
     pub remaining: usize,
+    #[serde(default)]
+    pub dropped_count: usize,
 }
 
 #[cfg(test)]
@@ -312,6 +317,7 @@ mod tests {
             agent: request.agent,
             session_id: request.session_id,
             registered_at: IsoTimestamp::now(),
+            queue_capacity: 256,
         }
     }
 
@@ -350,6 +356,7 @@ mod tests {
             session_id: GraftSessionId::new("session-1").expect("session"),
             nudges: vec![nudge_event()],
             remaining: 0,
+            dropped_count: 0,
         }
     }
 
@@ -365,6 +372,7 @@ mod tests {
             session_id: GraftSessionId::new("session-1").expect("session"),
             nudges: vec![nudge_event()],
             remaining: 1,
+            dropped_count: 0,
         }
     }
 
@@ -470,6 +478,7 @@ mod tests {
                 agent: request.agent,
                 session_id: request.session_id,
                 registered_at: IsoTimestamp::now(),
+                queue_capacity: 256,
             })
         }
 
@@ -491,6 +500,7 @@ mod tests {
                 session_id: request.session_id,
                 nudges: vec![nudge_event()],
                 remaining: 0,
+                dropped_count: 0,
             })
         }
 
@@ -502,6 +512,7 @@ mod tests {
                 session_id: request.session_id,
                 nudges: vec![nudge_event()],
                 remaining: 0,
+                dropped_count: 0,
             })
         }
     }

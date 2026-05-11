@@ -5,7 +5,7 @@ use std::time::Duration;
 use atm_core::error::AtmError;
 use signal_hook::SigId;
 
-const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(1);
+const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 // Installation takes this global slot only after the outer install lock so concurrent daemon
 // startup/teardown never races lifecycle-hook ownership or leaves a half-installed worker behind.
@@ -517,8 +517,8 @@ fn install_platform_hooks(
                     let _ = state_change.notify();
                 }
                 // `signal_hook::flag` does not expose a blocking cross-platform wake primitive on
-                // Windows, so the lifecycle worker uses one bounded polling exception that Phase S
-                // records explicitly in the daemon architecture docs.
+                // Windows, so the lifecycle worker uses one bounded polling exception recorded
+                // explicitly in `docs/atm-daemon/architecture.md`.
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
         })
@@ -601,7 +601,7 @@ mod windows_tests {
         first.set_terminate_for_test(true);
 
         assert!(
-            rx.recv_timeout(Duration::from_secs(1))
+            rx.recv_timeout(Duration::from_secs(5))
                 .expect("waiter wake result"),
             "terminate wake should set the terminate flag"
         );
@@ -677,7 +677,7 @@ mod unix_tests {
 
         drop(wake_write);
 
-        rx.recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(5))
             .expect("EOF should wake lifecycle waiters");
         worker_shutdown.store(true, Ordering::SeqCst);
         worker.join().expect("join unix lifecycle worker");

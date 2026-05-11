@@ -63,6 +63,22 @@ Notes:
   - concurrent open-handle budget capped at 4 SQLite connections
   - no full migration/bootstrap rerun on every connection acquisition
 
+## BOUNDARY-001 SharedDbTarget
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-rusqlite/shared-db.toml](../../boundaries/atm-rusqlite/shared-db.toml)
+
+Purpose:
+- Own the validated `SharedDbTarget` seam used by the crate-private writer lane
+  and SQLite test fixtures so helper APIs do not accept raw
+  `rusqlite::Connection` handles across the boundary.
+
+Notes:
+- This record exists to keep the writer-lane boundary from regressing into
+  `rusqlite::Connection` parameter leakage across helper APIs.
+- See `docs/adr/ADR-ATM-RUSQLITE-002.md` for the single-writer lane contract
+  that requires this boundary to stay crate-private and type-directed.
+
 ## SqliteMailStoreAdapter
 
 Purpose:

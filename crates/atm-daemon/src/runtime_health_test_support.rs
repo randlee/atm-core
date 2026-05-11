@@ -20,26 +20,6 @@ impl RuntimeStatusCache {
             .map(|record| record.state))
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn hydrate_member_for_test(
-        &self,
-        team: TeamName,
-        member: AgentName,
-        pid: Option<u32>,
-    ) -> Result<(), AtmError> {
-        let mut cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        let key = RuntimeMemberKey { team, member };
-        cache.members.entry(key).or_insert(RuntimeMemberRecord {
-            pid,
-            state: RuntimeMemberState::Unknown,
-            last_active_at: None,
-        });
-        Ok(())
-    }
-
     pub(crate) fn insert_member_for_test(
         &self,
         team: TeamName,
@@ -136,6 +116,7 @@ impl DaemonRequestDispatcher {
             observability,
             status_cache,
             sqlite_boundary,
+            graft_runtime: crate::graft_runtime::GraftRuntime::new(),
         }
     }
 }

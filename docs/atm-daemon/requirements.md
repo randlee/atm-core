@@ -48,6 +48,10 @@ Current request/response packet families owned by the daemon transport line:
 - clear
 - doctor
 - heartbeat
+- graft register
+- graft unregister
+- graft fetch
+- graft drain
 
 Current retained ATM surfaces not modeled as daemon request/response packets:
 - `atm log`
@@ -69,6 +73,7 @@ Initial allocation:
 - `REQ-DAEMON-HEALTH-*`
 - `REQ-DAEMON-SIGNAL-*`
 - `REQ-DAEMON-PLATFORM-*`
+- `REQ-DAEMON-GRAFT-*`
 
 Initial crate requirement IDs:
 
@@ -270,6 +275,14 @@ Requirement IDs:
 - `REQ-DAEMON-SIGNAL-001`
 - `REQ-DAEMON-PLATFORM-001`
 - `REQ-DAEMON-PLATFORM-002`
+- `REQ-DAEMON-GRAFT-001` `atm-daemon` owns graft-session registration,
+  unregistration, and bounded queued nudge state, and must expose those
+  surfaces only through the shared daemon request/response contract. Satisfies:
+  `REQ-GRAFT-RUNTIME-001`, `REQ-CORE-GRAFT-001`.
+- `REQ-DAEMON-GRAFT-002` `atm-daemon` owns graft queue saturation behavior,
+  FIFO drain order, and dropped-count projection for advisory nudge delivery
+  without affecting durable ATM mailbox truth. Satisfies:
+  `REQ-GRAFT-NOTIFY-001`, `REQ-CORE-GRAFT-001`.
 
 Required runtime rules:
 - exactly one daemon process may be active on a host at a time
@@ -485,5 +498,19 @@ Required runtime rules:
   rather than collapsing into panic/unwrap control flow
 - daemon runtime and transport paths must emit structured observability events
 - daemon must expose one explicit health/status query interface for `atm doctor`
+- graft-session registration, unregistration, and bounded queued nudge state
+  must remain daemon-owned rather than migrating into `atm-graft` or CLI-only
+  helper storage
+- graft register, unregister, fetch, and drain must use typed shared ATM frame
+  packets defined in `docs/atm-daemon/protocol-icd.md`
+- successful mailbox send completion may enqueue advisory graft nudges for
+  matching registered sessions, but failure or overflow in that advisory path
+  must not alter durable ATM mailbox truth
+- queued graft nudges must remain concretely bounded per session, preserve FIFO
+  drain order, and surface dropped-count projection when oldest-entry eviction
+  occurs
+- the daemon companion CLI path for graft fetch/drain must use the same daemon
+  API contract as the future embedded `atm-graft` crate rather than a second
+  private transport or direct-store path
 - no `atm-daemon` crate API, helper, or test support path may bless daemon
   spawning as a routine correctness strategy

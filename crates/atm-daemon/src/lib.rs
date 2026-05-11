@@ -6,6 +6,7 @@ mod boundary_adapters;
 pub(crate) mod composition;
 mod daemon_runtime_observability;
 mod direct_boundaries;
+mod graft_runtime;
 // ADR-002 (`docs/adr/ADR-002-host-wide-daemon-singleton.md`) intentionally splits
 // launch.lock admission from owner.lock serving ownership so only one launcher can
 // fork while only one daemon can publish the local IPC endpoint; see
@@ -14,6 +15,7 @@ mod host_ownership;
 mod lifecycle_control;
 mod local_ipc_connection;
 mod local_ipc_transport;
+mod local_ipc_wake;
 mod notification_runtime;
 mod peer_transport;
 mod reconcile_runtime;
