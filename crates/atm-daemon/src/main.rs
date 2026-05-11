@@ -12,7 +12,7 @@ fn main() {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("{error}");
-            1
+            atm_daemon::daemon_exit_code_for_error(&error).as_i32()
         }
     };
     std::process::exit(exit_code);

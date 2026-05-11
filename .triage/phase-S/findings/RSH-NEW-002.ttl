@@ -1,0 +1,41 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-NEW-002>
+  a triage:Finding ;
+  triage:findingId "RSH-NEW-002" ;
+  triage:title "peer_transport.rs hardening gap — deferred to phase-end gate" ;
+  triage:description "Runtime hardening gap identified in peer_transport.rs during S.13 QA-2. File is outside the S.13 sprint diff scope (S.13 = atm-daemon IPC hardening; peer_transport.rs is not a changed file). Dispatch deferred to phase-end gate on integrate/phase-S. Do not fix on S.13, S.14, or S.15 feature branches." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:rule "RSH" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:dispatchBlockedReason "Out of S.13 sprint diff scope; peer_transport.rs not changed on S.13 branch. Defer to phase-end integrate/phase-S gate." ;
+  triage:triagedAt "2026-05-10T23:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s13-ipc-hardening" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-NEW-002/s13/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/2b16650> .
+
+<urn:atm:triage:occurrence/RSH-NEW-002/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1 ;
+  triage:snippet "runtime hardening gap in peer_transport.rs — specific location TBD at phase-end review; file outside S.13 sprint scope" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2b16650" ;
+  triage:branch "feature/pS-s13-ipc-hardening" .
+
+<urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/2b16650>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "2b16650" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .

@@ -396,6 +396,8 @@ Required runtime rules:
   - bounded remote retry queue depth: `256`
   - SQLite handle/pool budget: min `1`, max `4`
   - live status-cache cap: `4096`
+  - reconcile notification fingerprint registry cap:
+    `MAX_RECONCILE_FINGERPRINT_KEYS = 1024`, evict-oldest-and-log
   - watch subscription cap: `256`
   - notification work queue depth: `256`
 - request work launched from the server path must remain tracked by runtime

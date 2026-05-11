@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-NEW-001>
+  a triage:Finding ;
+  triage:findingId "RSH-NEW-001" ;
+  triage:title "Detached thread handle not tracked — schedule_delayed_listener_wake" ;
+  triage:description "fn schedule_delayed_listener_wake at local_ipc_transport.rs:665 spawns a thread via thread::spawn but discards the JoinHandle. Combined with RSH-001-OPEN (missing thread::Builder name), the thread is fully untracked: no name in panic backtraces, no join path. Fix: use thread::Builder::new().name(\"delayed-listener-wake\") and store handle in a per-call slot or log-on-drop wrapper. If join is impractical, at minimum name the thread for diagnostics. RSH-001-OPEN covers the Builder requirement; this finding covers the handle-tracking gap." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:rule "RSH" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T23:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s13-ipc-hardening" ;
+  triage:promoteToBranch "feature/pS-s13-ipc-hardening" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-NEW-001/s13/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/2b16650> .
+
+<urn:atm:triage:occurrence/RSH-NEW-001/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 665 ;
+  triage:snippet "fn schedule_delayed_listener_wake — thread::spawn handle discarded; thread unnamed and untracked" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2b16650" ;
+  triage:branch "feature/pS-s13-ipc-hardening" .
+
+<urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/2b16650>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "2b16650" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .

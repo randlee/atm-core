@@ -1,7 +1,9 @@
 use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Condvar, Mutex};
+#[cfg(unix)]
+use std::time::{Duration, Instant};
 
 use atm_core::boundary;
 use atm_core::error::AtmError;
@@ -16,6 +18,7 @@ use crate::DaemonRuntimeObservability;
 pub(crate) struct TestDaemonObservability {
     active_log_path: PathBuf,
     detail: Mutex<Option<String>>,
+    recorded_messages: (Mutex<Vec<String>>, Condvar),
 }
 
 impl TestDaemonObservability {
@@ -42,6 +45,7 @@ impl TestDaemonObservability {
         Ok(Self {
             active_log_path,
             detail: Mutex::new(None),
+            recorded_messages: (Mutex::new(Vec::new()), Condvar::new()),
         })
     }
 
@@ -63,7 +67,40 @@ impl TestDaemonObservability {
                 self.active_log_path.display()
             ))
             .with_source(source)
-        })
+        })?;
+        let (recorded, wake) = &self.recorded_messages;
+        recorded
+            .lock()
+            .expect("test observability messages")
+            .push(message);
+        wake.notify_all();
+        Ok(())
+    }
+
+    #[cfg(unix)]
+    pub(crate) fn wait_for_message_contains(
+        &self,
+        needle: &str,
+        timeout: Duration,
+    ) -> Result<(), String> {
+        let deadline = Instant::now() + timeout;
+        let (recorded, wake) = &self.recorded_messages;
+        let mut recorded = recorded.lock().expect("test observability messages");
+        loop {
+            if recorded.iter().any(|entry| entry.contains(needle)) {
+                return Ok(());
+            }
+            let now = Instant::now();
+            if now >= deadline {
+                return Err(format!(
+                    "timed out waiting for retained test log message containing {needle:?}"
+                ));
+            }
+            let wait = wake
+                .wait_timeout(recorded, deadline.saturating_duration_since(now))
+                .expect("test observability message wait");
+            recorded = wait.0;
+        }
     }
 }
 

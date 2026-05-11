@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S14-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S14-003" ;
+  triage:title "ATM-QA-006-exemption.ttl headSha still 571fa1c after TASK-1244 — should be dcb5df9" ;
+  triage:description ".triage/phase-S/findings/ATM-QA-006-exemption.ttl line 24 still has headSha '571fa1c'. TASK-1244 was supposed to update this to dcb5df9 (the new S14 HEAD after the fix round) but the one-line TTL edit was not made. Fix: update headSha from 571fa1c to dcb5df9 in the exemption.ttl file." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S14-003/pS-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S14-003/pS-s15/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/a17efcc> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/1c8e288> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s14-impl/a17efcc> .
+
+<urn:atm:triage:occurrence/ATM-QA-S14-003/pS-s14/1>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-S/findings/ATM-QA-006-exemption.ttl" ;
+  triage:line 24 ;
+  triage:snippet "triage:headSha \"571fa1c\" ." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "a17efcc" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/a17efcc> .
+
+<urn:atm:triage:occurrence/ATM-QA-S14-003/pS-s15/1>
+  a triage:Occurrence ;
+  triage:file ".triage/phase-S/findings/ATM-QA-006-exemption.ttl" ;
+  triage:line 24 ;
+  triage:snippet "triage:headSha \"571fa1c\" ." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "1c8e288" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/1c8e288> .
+
+<urn:atm:triage:worktree/pS-s14-impl/a17efcc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "a17efcc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/1c8e288>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "1c8e288" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-ARCH-001>
+  a triage:Finding ;
+  triage:findingId "INTG-ARCH-001" ;
+  triage:title "emit_runtime_event free-standing pub(crate) method on DaemonRequestDispatcher matches RULE-002 emit_ prohibition" ;
+  triage:description "DaemonRequestDispatcher::emit_runtime_event at line 452 is a free-standing wrapper (not a trait impl) that absorbs errors silently via tracing::warn. Matches RULE-002 ^pub(crate) fn emit_ pattern. Fix: rename to record_lifecycle_event or similar non-emit_ name." ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:rule "RULE-002" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T01:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:mergeForwardNeeded false ;
+  triage:propagated false ;
+  triage:regressed false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-ARCH-001/integrate-phase-S/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/4118b27> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
+
+<urn:atm:triage:occurrence/INTG-ARCH-001/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 452 ;
+  triage:snippet "pub(crate) fn emit_runtime_event" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "4118b27" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
+
+<urn:atm:triage:worktree/integrate-phase-S/4118b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "4118b27" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .

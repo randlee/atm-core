@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "INTG-ATM-QA-002" ;
+  triage:title "Title drift between plan-phase-S.md §5 and sprint-S15.md" ;
+  triage:description "Plan says 'SQLite Write-Worker / MessageAppendQueue Planning', sprint doc says 'Sprint S.15 — SQLite Write-Worker Plan'. Align titles." ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:rule "ATM-QA-DOC-CONSISTENCY" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T01:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:mergeForwardNeeded false ;
+  triage:propagated false ;
+  triage:regressed false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-ATM-QA-002/integrate-phase-S/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/4118b27> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
+
+<urn:atm:triage:occurrence/INTG-ATM-QA-002/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-S.md" ;
+  triage:line 1 ;
+  triage:snippet "SQLite Write-Worker / MessageAppendQueue Planning" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "4118b27" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
+
+<urn:atm:triage:worktree/integrate-phase-S/4118b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "4118b27" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .

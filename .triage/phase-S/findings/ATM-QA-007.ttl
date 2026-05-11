@@ -4,175 +4,36 @@
 <urn:atm:triage:finding/ATM-QA-007>
   a triage:Finding ;
   triage:findingId "ATM-QA-007" ;
-  triage:title "handle_connection partition mixed with server runtime, not noted as deferred in boundaries.md" ;
-  triage:description "handle_connection partition mixed with server runtime; pre-existing debt (R.20) but not noted in boundaries.md as deferred." ;
+  triage:title "rollback_partially_started_lanes() swallows rollback errors" ;
+  triage:description "crates/atm-daemon/src/composition.rs:457-488 — rollback_partially_started_lanes() ignores/swallows errors returned during rollback; partial rollback failures are invisible to caller. Fix: propagate or log rollback errors so failures surface to the caller." ;
   triage:phaseId "phase-S" ;
   triage:triageMode "initial_pass" ;
   triage:category "ATM-QA" ;
   triage:severity "important" ;
-  triage:repeatable false ;
-  triage:sweepScope "file" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
-  triage:triagedAt "2026-05-08T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/pS-s1/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/pS-s1/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/pS-s2/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/pS-s2/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/pS-s3/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/pS-s3/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/pS-s4/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/pS-s4/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/integrate-phase-S/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-007/integrate-phase-S/2> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s2-windows-ipc/689a48f> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s3-runtime-control/689a48f> ;
-  triage:openOn <urn:atm:triage:worktree/pS-s4-hardening/689a48f> ;
-  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> ;
-  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:notes "Defect described in finding does not exist on any supplied branch. The function body at lines 457-487 uses tracing::warn! to surface rollback errors on both watch_event_source and notification_sink shutdown paths. Errors are not swallowed. Finding is absent across all three branches (s13, s14, s15). No dispatch required." .
 
-<urn:atm:triage:occurrence/ATM-QA-007/pS-s1/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
-  triage:line 318 ;
-  triage:snippet "if let Err(error) = handle_connection(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> .
-
-<urn:atm:triage:occurrence/ATM-QA-007/pS-s1/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
-  triage:line 510 ;
-  triage:snippet "fn handle_connection(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1> .
-
-<urn:atm:triage:occurrence/ATM-QA-007/pS-s2/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
-  triage:line 259 ;
-  triage:snippet "if let Err(error) = handle_connection(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s2-windows-ipc/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-007/pS-s2/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
-  triage:line 444 ;
-  triage:snippet "fn handle_connection(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s2-windows-ipc/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-007/pS-s3/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/lib.rs" ;
-  triage:line 546 ;
-  triage:snippet "if let Err(error) = handle_connection(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-007/pS-s3/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/lib.rs" ;
-  triage:line 697 ;
-  triage:snippet "fn handle_connection(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s3-runtime-control/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-007/pS-s4/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/lib.rs" ;
-  triage:line 546 ;
-  triage:snippet "if let Err(error) = handle_connection(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s4-hardening/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-007/pS-s4/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/lib.rs" ;
-  triage:line 697 ;
-  triage:snippet "fn handle_connection(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:occursIn <urn:atm:triage:worktree/pS-s4-hardening/689a48f> .
-
-<urn:atm:triage:occurrence/ATM-QA-007/integrate-phase-S/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/lib.rs" ;
-  triage:line 546 ;
-  triage:snippet "if let Err(error) = handle_connection(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
-
-<urn:atm:triage:occurrence/ATM-QA-007/integrate-phase-S/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/lib.rs" ;
-  triage:line 697 ;
-  triage:snippet "fn handle_connection(" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c> .
-
-<urn:atm:triage:worktree/pS-s1-boundary-extraction/ab12ea1>
+<urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s1-boundary-extraction" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
-  triage:headSha "ab12ea1" ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pS-s2-windows-ipc/689a48f>
+<urn:atm:triage:worktree/pS-s14-impl/cf57c48>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s2-windows-ipc" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
-  triage:headSha "689a48f" ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pS-s3-runtime-control/689a48f>
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9>
   a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s3-runtime-control" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
-  triage:headSha "689a48f" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
   triage:orderIndex 3 .
-
-<urn:atm:triage:worktree/pS-s4-hardening/689a48f>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pS-s4-hardening" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
-  triage:headSha "689a48f" ;
-  triage:orderIndex 4 .
-
-<urn:atm:triage:worktree/integrate-phase-S/689a48fec142d916a99d7d62dd841085731cb53c>
-  a triage:WorktreeSnapshot ;
-  triage:branch "integrate/phase-S" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
-  triage:headSha "689a48fec142d916a99d7d62dd841085731cb53c" ;
-  triage:orderIndex 5 .

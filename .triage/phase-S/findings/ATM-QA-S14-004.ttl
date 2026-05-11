@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S14-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S14-004" ;
+  triage:title "SHUTDOWN_FINALIZER_THREADS cap-exceeded path has no test coverage" ;
+  triage:description "runtime_health.rs defines MAX_SHUTDOWN_FINALIZER_THREADS = 16 and guards the push site. The cap-exceeded code path (when handles.len() >= MAX_SHUTDOWN_FINALIZER_THREADS and a new finalizer thread handle is dropped) has no test. The existing test finalize_shutdown_drains_test_tracked_finalizer_threads exercises the drain path but never fills the vec to capacity. Need a test that fills SHUTDOWN_FINALIZER_THREADS to capacity and verifies the cap-exceeded (warn + drop) behavior." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S14-004/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S14-004/pS-s15-rusqlite-hardening/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/ATM-QA-S14-004/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 395 ;
+  triage:snippet "if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS { handles.push(shutdown_handle); } else { tracing::warn!(...cap = MAX_SHUTDOWN_FINALIZER_THREADS, \"shutdown finalizer thread cap reached; dropping retained worker handle\"); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+<urn:atm:triage:occurrence/ATM-QA-S14-004/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 395 ;
+  triage:snippet "if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS { handles.push(shutdown_handle); } else { tracing::warn!(...cap = MAX_SHUTDOWN_FINALIZER_THREADS, \"shutdown finalizer thread cap reached; dropping retained worker handle\"); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+<urn:atm:triage:worktree/pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .

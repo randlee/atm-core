@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CI-S14-QA3-002>
+  a triage:Finding ;
+  triage:findingId "CI-S14-QA3-002" ;
+  triage:title "tests.rs:296 missing `use std::time::Instant` inside #[cfg(windows)] test block" ;
+  triage:description "A #[cfg(windows)] test block at tests.rs:262 uses Instant::now() at line 297 but only `use std::time::Duration` is present at module-level (line 37), not `use std::time::Instant`. Causes E0433 on cargo xwin check --tests. Fix: add `use std::time::Instant;` to the module-level imports." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-S14-QA3-002/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-S14-QA3-002/pS-s15-rusqlite-hardening/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/dcb5df9> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/0282982> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s14-impl/dcb5df9> .
+
+<urn:atm:triage:occurrence/CI-S14-QA3-002/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 297 ;
+  triage:snippet "let shutdown_started = Instant::now();" ;
+  triage:context "#[cfg(windows)] fn windows_local_ipc_runtime_terminate_finishes_within_deadline (line 262); module imports only use std::time::Duration (line 37), missing use std::time::Instant" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "dcb5df9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/dcb5df9> .
+
+<urn:atm:triage:occurrence/CI-S14-QA3-002/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 297 ;
+  triage:snippet "let shutdown_started = Instant::now();" ;
+  triage:context "#[cfg(windows)] fn windows_local_ipc_runtime_terminate_finishes_within_deadline (line 262); module imports only use std::time::Duration (line 37), missing use std::time::Instant; propagated via merge-forward from pS-s14-impl" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "0282982" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/0282982> .
+
+<urn:atm:triage:worktree/pS-s14-impl/dcb5df9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "dcb5df9" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/0282982>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "0282982" ;
+  triage:orderIndex 2 .

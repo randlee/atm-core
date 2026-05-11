@@ -328,9 +328,26 @@ Lifecycle state model:
 - any post-`Running` exit path, including listener/accept failures, must pass
   through `Running -> Draining -> Stopped` rather than silently forcing
   `Running -> Stopped`
+- Phase S currently models fatal accept failure as a conventional
+  `ServeEvent::AcceptError` control-plane event rather than as a dedicated typed
+  lifecycle-transition enum; that shape is accepted so long as the runtime
+  still transitions through `Running -> Draining -> Stopped` afterward
 - repeated lifecycle-control installs for one platform implementation must
   reuse the same process-wide control flags without clearing a pending
   terminate/reload bit between installs
+- the process-global lifecycle wake worker is still explicit runtime-owned
+  state:
+  - one worker instance may be reused across repeated installs while the daemon
+    keeps the same process-global lifecycle adapter alive
+  - runtime teardown must request worker stop, unregister the active signal
+    hooks, and join the worker within the documented `1s` bound
+- Windows keeps one accepted lifecycle polling exception:
+  - `signal_hook::flag` exposes no matching blocking wake primitive for the
+    console/service-control adapter
+  - the lifecycle wake worker may therefore poll at `25ms` intervals on Windows
+    only
+  - that polling loop must stay isolated to `lifecycle_control.rs` and remain
+    under the same explicit shutdown/join contract as the Unix wake worker
 
 Privacy boundary:
 - the lifecycle state type and transport/runtime adapter internals remain
@@ -479,6 +496,22 @@ Force-cancel rule:
 - failure to drain within the force deadline is reported as a typed runtime
   failure after interrupting active connections
 
+### Runtime SLOs
+
+| SLO | Target | Contract |
+|---|---|---|
+| Wedge recovery | `<= 1s` | fatal transport events or shutdown beacons must unblock the lifecycle waiter and serving path promptly |
+| Accept-error teardown | `<= 2s` | a fatal local-IPC accept failure must reach typed runtime exit after drain start and endpoint unpublication |
+| Clean shutdown | `<= 5s` | orderly daemon shutdown, including tracked request drain and background-lane stop, stays bounded |
+| Socket cleanup | `<= 100ms` | same-host endpoint unpublication completes promptly once serving stops |
+
+Exit-code expectations tied to these SLOs:
+- bind failure exits `70` and relies on supervisor restart/backoff rather than
+  in-process rebind
+- singleton or stale-owner admission failures exit `64` and must not hot-loop
+  restart
+- lifecycle-wedge detection exits `71`
+
 Required deadlines:
 - normal drain deadline: `5s`
 - force-cancel deadline after drain starts: `10s` total
@@ -529,6 +562,7 @@ Required caps:
 - bounded remote retry queue depth: `256`
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
+- reconcile notification fingerprint registry cap: `1024` keys
 - watch subscription cap: `256` active subscriptions
 - notification work queue depth: `256`
 
@@ -542,11 +576,15 @@ Required saturation behavior:
 - retry queue full: fail remote send attempt rather than enqueueing unbounded
 - watch subscription cap exceeded: reject the new subscription with typed
   over-capacity failure rather than retaining unbounded watcher state
+- reconcile notification fingerprint registry cap exceeded: evict the oldest
+  tracked key before inserting the new key so the daemon preserves the latest
+  active reconcile targets without retaining unbounded fingerprint state
 - notification queue full: fail the enqueue with typed degraded delivery status
   rather than silently buffering beyond the cap
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
-  from the live-member map so the retained map cardinality remains bounded, and
-  reflect the eviction as explicit `unknown` plus structured warning emission
+  from the live-member map so the retained map cardinality remains bounded;
+  removed entries project as explicit `unknown` on later snapshot/doctor reads
+  and still emit structured warning output
 
 ## 3.3 Status Ownership
 
@@ -589,6 +627,16 @@ Required timeout defaults:
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
+- lifecycle wake-worker join during runtime teardown: `1s` max
+- reconcile runtime drain during runtime teardown: `2s` max
+- watch runtime drain during runtime teardown: `2s` max
+- retained-log flush and sync during runtime teardown: `2s` best-effort max
+
+Shutdown sub-deadline rationale:
+- these per-component bounds sit under the existing daemon shutdown ceilings so
+  no single helper lane can consume the full runtime teardown budget alone
+- timeout expiry must return typed degraded shutdown state rather than silently
+  detaching helper ownership
 
 ## 3.5 Test Strategy
 
