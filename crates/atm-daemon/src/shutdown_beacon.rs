@@ -1,17 +1,44 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 #[cfg(test)]
-use std::time::{Duration, Instant};
+use std::sync::{Condvar, Mutex};
+#[cfg(test)]
+use std::time::Duration;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct ShutdownBeacon {
-    // This bit is polled by accept, lifecycle, and serve-loop threads. No shutdown-beacon waiter
-    // blocks on a companion condition variable, so an atomic flag is sufficient here.
+    // This bit is polled by accept, lifecycle, and serve-loop threads, so the hot path remains
+    // lock-free even though tests also mirror shutdown through a condvar-backed waiter.
     tripped: AtomicBool,
+    #[cfg(test)]
+    wait_state: Mutex<bool>,
+    #[cfg(test)]
+    wait_condvar: Condvar,
+}
+
+impl Default for ShutdownBeacon {
+    fn default() -> Self {
+        Self {
+            tripped: AtomicBool::new(false),
+            #[cfg(test)]
+            wait_state: Mutex::new(false),
+            #[cfg(test)]
+            wait_condvar: Condvar::new(),
+        }
+    }
 }
 
 impl ShutdownBeacon {
     pub(crate) fn trip(&self) {
         self.tripped.store(true, Ordering::SeqCst);
+        #[cfg(test)]
+        {
+            let mut guard = self
+                .wait_state
+                .lock()
+                .expect("lock shutdown beacon wait state");
+            *guard = true;
+            self.wait_condvar.notify_all();
+        }
     }
 
     pub(crate) fn is_tripped(&self) -> bool {
@@ -20,14 +47,18 @@ impl ShutdownBeacon {
 
     #[cfg(test)]
     pub(crate) fn wait_until_tripped(&self, timeout: Duration) -> bool {
-        let deadline = Instant::now() + timeout;
-        while Instant::now() < deadline {
-            if self.is_tripped() {
-                return true;
-            }
-            std::thread::park_timeout(Duration::from_millis(5));
+        if self.is_tripped() {
+            return true;
         }
-        self.is_tripped()
+        let guard = self
+            .wait_state
+            .lock()
+            .expect("lock shutdown beacon wait state");
+        let (guard, _) = self
+            .wait_condvar
+            .wait_timeout_while(guard, timeout, |tripped| !*tripped)
+            .expect("wait on shutdown beacon condvar");
+        *guard || self.is_tripped()
     }
 }
 
