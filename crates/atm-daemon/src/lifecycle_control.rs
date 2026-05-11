@@ -250,9 +250,12 @@ impl LifecycleControlSourceAdapter {
         let _ = self.state_change.notify();
 
         let (result_tx, result_rx) = std::sync::mpsc::channel();
-        let join_helper = std::thread::spawn(move || {
-            let _ = result_tx.send(worker.join_handle.join());
-        });
+        let join_helper = std::thread::Builder::new()
+            .name("atm-daemon-lifecycle-join-helper".to_string())
+            .spawn(move || {
+                let _ = result_tx.send(worker.join_handle.join());
+            })
+            .expect("failed to spawn lifecycle join helper");
         match result_rx.recv_timeout(LIFECYCLE_WORKER_JOIN_DEADLINE) {
             Ok(Ok(())) => {
                 let _ = join_helper.join();
