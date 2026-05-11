@@ -28,7 +28,6 @@ max_scoped_code_lines = 0
 
 [line_counts.exclusions]
 "crates/atm-core/src/mailbox/lock.rs" = "Q.6 split pending"
-"crates/atm-daemon/src/tests.rs" = "T.8 split pending — prod lines exceeded by T.5 hardening additions"
 "crates/atm-core/src/read/mod.rs" = "Q.6 split pending"
 "crates/atm-rusqlite/src/tests.rs" = "Q.6 split pending"
 

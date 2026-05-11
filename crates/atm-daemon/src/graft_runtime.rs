@@ -61,7 +61,7 @@ impl GraftRuntime {
     ) -> Result<GraftSessionRegistrationResponse, AtmError> {
         let mut state = self.lock_state_write()?;
         if state.sessions.contains_key(&request.session_id) {
-            return Err(AtmError::validation(format!(
+            return Err(AtmError::daemon_graft_session_already_registered(format!(
                 "graft session {} is already registered",
                 request.session_id
             ))

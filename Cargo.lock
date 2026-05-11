@@ -8,9 +8,9 @@ version = "1.2.0"
 dependencies = [
  "agent-team-mail-core",
  "anyhow",
+ "atm-daemon-client",
  "chrono",
  "clap",
- "fs2",
  "interprocess",
  "sc-observability",
  "sc-observability-types",
@@ -123,6 +123,26 @@ dependencies = [
  "serde_json",
  "serial_test",
  "signal-hook",
+ "tempfile",
+ "tracing",
+]
+
+[[package]]
+name = "atm-daemon-client"
+version = "1.2.0"
+dependencies = [
+ "agent-team-mail-core",
+ "fs2",
+]
+
+[[package]]
+name = "atm-graft"
+version = "1.2.0"
+dependencies = [
+ "agent-team-mail-core",
+ "atm-daemon-client",
+ "interprocess",
+ "serde_json",
  "tempfile",
  "tracing",
 ]

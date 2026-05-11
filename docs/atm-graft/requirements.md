@@ -92,6 +92,8 @@ Requirement IDs:
 Required rules:
 - if no `.atm.toml` is discovered, `atm-graft` remains inactive and performs no
   daemon registration or nudge work
+- the `atm-graft` crate must rely on ATM-owned config loading via
+  `atm_core::load_atm_config`; it must not privately reparse `.atm.toml`
 - if graft mode is active, runtime identity comes from `ATM_IDENTITY`; graft
   mode must not invent a separate identity source
 - graft mode is enabled by default when active and may be disabled only by
@@ -125,6 +127,11 @@ Required rules:
   - daemon client operations for `send`, `read`, and `ack`
   - graft-session lifecycle entrypoints
   - host-facing automatic nudge-delivery integration points
+- the concrete T.8 public surface must include:
+  - `GraftClient`
+  - `GraftSession`
+  - `HostNudgeInjector`
+  - `GraftObservability`
 - the T.6 `atm-core` public contract for that surface is:
   - `AtmGraftClient` for unary `send` / `read` / `ack`
   - `GraftSessionPort` for session registration and pending-nudge fetch/drain
@@ -177,6 +184,7 @@ Scope-simplification rule for the first implementation pass:
 
 - `REQ-GRAFT-CONFIG-001`
   - `[atm.graft].enabled` exists in ATM-owned config models and config loading
+  - `atm_core::load_atm_config` is the public loader consumed by `atm-graft`
   - `atm-graft` remains inert when `.atm.toml` is absent
 - `REQ-GRAFT-RUNTIME-001`
   - daemon-owned registration, unregistration, and typed queue fetch/drain
@@ -190,6 +198,7 @@ Scope-simplification rule for the first implementation pass:
   - the public embedded client surface supports `send`, `read`, and `ack`
   - the public session-facing surface supports graft registration,
     unregistration, and typed nudge fetch/drain requests
+  - the concrete exported types include `GraftClient` and `GraftSession`
   - `atm-graft` does not take a Rust dependency on `atm-daemon`
 - `REQ-GRAFT-NOTIFY-001`
 - daemon-originated nudge receipt is automatic in embedded mode
@@ -200,3 +209,5 @@ Scope-simplification rule for the first implementation pass:
 - `REQ-GRAFT-OBS-001`
   - graft activation/connectivity/registration/nudge paths emit through an
     injected ATM-owned observability boundary
+  - the concrete exported observability/injection seams include
+    `GraftObservability` and `HostNudgeInjector`

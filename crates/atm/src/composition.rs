@@ -1,14 +1,7 @@
 use std::fmt;
-use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::io::Write;
+use std::path::PathBuf;
 use std::sync::Arc;
-use std::time::Duration;
-use std::{
-    fs::{self, File, OpenOptions},
-    io::Write,
-    thread,
-    time::Instant,
-};
 
 use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::boundary;
@@ -29,15 +22,15 @@ use atm_core::protocol::{
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
-use fs2::FileExt;
+use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor};
+#[cfg(test)]
+use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
 use crate::observability::CliObservability;
 
 const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
-const AUTO_START_PUBLISH_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10);
-const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 
 #[allow(dead_code)]
 #[derive(Debug, Default)]
@@ -59,63 +52,10 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
-#[derive(Debug, Clone)]
-struct DaemonLocalIpcEndpoint(PathBuf);
-
-impl DaemonLocalIpcEndpoint {
-    fn new(path: PathBuf) -> Result<Self, AtmError> {
-        validate_daemon_path("daemon local IPC endpoint", &path)?;
-        Ok(Self(path))
-    }
-
-    fn display(&self) -> std::path::Display<'_> {
-        self.0.display()
-    }
-}
-
-impl AsRef<Path> for DaemonLocalIpcEndpoint {
-    fn as_ref(&self) -> &Path {
-        &self.0
-    }
-}
-
-#[derive(Debug, Clone)]
-struct DaemonBinaryPath(PathBuf);
-
-impl DaemonBinaryPath {
-    fn new(path: PathBuf) -> Result<Self, AtmError> {
-        validate_daemon_path("daemon binary path", &path)?;
-        Ok(Self(path))
-    }
-
-    fn display(&self) -> std::path::Display<'_> {
-        self.0.display()
-    }
-}
-
-impl AsRef<Path> for DaemonBinaryPath {
-    fn as_ref(&self) -> &Path {
-        &self.0
-    }
-}
-
-fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
-    if path.as_os_str().is_empty() {
-        return Err(AtmError::validation(format!("{label} must not be empty")).with_recovery(
-            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 daemon local IPC endpoint before invoking the daemon transport.",
-        ));
-    }
-    if path.to_str().is_none() {
-        return Err(AtmError::validation(format!(
-            "{label} must be valid UTF-8 at the ATM boundary"
-        ))
-        .with_recovery(
-            "Set ATM_DAEMON_SOCKET to a non-empty UTF-8 daemon local IPC endpoint before invoking the daemon transport.",
-        ));
-    }
-    Ok(())
-}
-
+// Parallel to `GraftLocalIpcClientTransport` in crates/atm-graft/src/lib.rs.
+// Kept separate: atm-graft must not depend on the atm crate; sharing via
+// atm-daemon-client would require exposing the IPC exchange internals as a
+// public API surface, which is out of scope for that boundary crate.
 #[derive(Debug)]
 struct LocalIpcClientTransportAdapter {
     endpoint: DaemonLocalIpcEndpoint,
@@ -196,196 +136,6 @@ impl boundary::sealed::Sealed for LocalIpcClientTransportAdapter {}
 impl ClientTransport for LocalIpcClientTransportAdapter {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         self.exchange(request)
-    }
-}
-
-#[derive(Debug)]
-struct DaemonSupervisor {
-    endpoint: DaemonLocalIpcEndpoint,
-    daemon_bin: DaemonBinaryPath,
-}
-
-impl DaemonSupervisor {
-    fn new(endpoint: DaemonLocalIpcEndpoint, daemon_bin: DaemonBinaryPath) -> Self {
-        Self {
-            endpoint,
-            daemon_bin,
-        }
-    }
-
-    fn ensure_daemon_available(
-        &self,
-        transport: &LocalIpcClientTransportAdapter,
-    ) -> Result<(), AtmError> {
-        self.ensure_daemon_available_with_timeout(
-            transport,
-            AUTO_START_PUBLISH_TIMEOUT,
-            Duration::from_millis(25),
-        )
-    }
-
-    fn ensure_daemon_available_with_timeout(
-        &self,
-        transport: &LocalIpcClientTransportAdapter,
-        publish_timeout: Duration,
-        poll_interval: Duration,
-    ) -> Result<(), AtmError> {
-        self.ensure_daemon_available_with_lock_path(
-            transport,
-            publish_timeout,
-            poll_interval,
-            atm_core::home::host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?,
-        )
-    }
-
-    fn ensure_daemon_available_with_lock_path(
-        &self,
-        transport: &LocalIpcClientTransportAdapter,
-        publish_timeout: Duration,
-        poll_interval: Duration,
-        launch_lock_path: PathBuf,
-    ) -> Result<(), AtmError> {
-        if transport.try_connect().is_ok() {
-            return Ok(());
-        }
-        let deadline = Instant::now() + publish_timeout;
-        loop {
-            if transport.try_connect().is_ok() {
-                return Ok(());
-            }
-            if let Some(_guard) = LaunchGateGuard::try_acquire_at(launch_lock_path.clone())? {
-                if transport.try_connect().is_ok() {
-                    return Ok(());
-                }
-                self.spawn_daemon()?;
-                while Instant::now() < deadline {
-                    if transport.try_connect().is_ok() {
-                        return Ok(());
-                    }
-                    // External daemon launch has no push-based readiness signal here, so the
-                    // client side keeps one bounded polling exception that Phase S documents in
-                    // plan-phase-S.md §4.1.
-                    thread::sleep(poll_interval);
-                }
-                return Err(AtmError::daemon_auto_start_failed(format!(
-                    "failed to connect to daemon local IPC endpoint at {} after auto-start",
-                    self.endpoint.display()
-                )));
-            }
-            if Instant::now() >= deadline {
-                return Err(LaunchGateGuard::rejected_error(&self.endpoint));
-            }
-            // Waiting for another process to publish the same-host endpoint is the second bounded
-            // auto-start polling exception recorded in plan-phase-S.md §4.1.
-            thread::sleep(poll_interval);
-        }
-    }
-
-    fn spawn_daemon(&self) -> Result<(), AtmError> {
-        if !self.daemon_bin.as_ref().is_file() {
-            return Err(
-                AtmError::daemon_unavailable(format!(
-                    "daemon binary is missing at {}",
-                    self.daemon_bin.display()
-                ))
-                .with_recovery(
-                    "Build or install atm-daemon, or set ATM_DAEMON_BIN to the correct executable before retrying.",
-                ),
-            );
-        }
-
-        let mut command = Command::new(self.daemon_bin.as_ref());
-        command
-            .stdin(Stdio::null())
-            .stdout(Stdio::null())
-            .stderr(Stdio::inherit())
-            .env("ATM_DAEMON_SOCKET", self.endpoint.as_ref());
-        command.spawn().map_err(|source| {
-            AtmError::daemon_auto_start_failed(format!(
-                "failed to spawn daemon binary at {}",
-                self.daemon_bin.display()
-            ))
-            .with_source(source)
-        })?;
-        Ok(())
-    }
-}
-
-#[derive(Debug)]
-struct LaunchGateGuard {
-    file: File,
-}
-
-impl LaunchGateGuard {
-    #[allow(dead_code)]
-    fn try_acquire() -> Result<Option<Self>, AtmError> {
-        let lock_path = atm_core::home::host_runtime_lock_path(HOST_RUNTIME_LAUNCH_LOCK_FILE)?;
-        Self::try_acquire_at(lock_path)
-    }
-
-    fn rejected_error(endpoint: &DaemonLocalIpcEndpoint) -> AtmError {
-        AtmError::daemon_launch_gate_rejected(format!(
-            "daemon launch gate remained owned while connecting to {}",
-            endpoint.display()
-        ))
-    }
-
-    fn try_acquire_at(lock_path: PathBuf) -> Result<Option<Self>, AtmError> {
-        if let Some(parent) = lock_path.parent() {
-            fs::create_dir_all(parent).map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to create daemon launch lock directory at {}",
-                    parent.display()
-                ))
-                .with_source(source)
-            })?;
-        }
-        let file = OpenOptions::new()
-            .create(true)
-            .read(true)
-            .write(true)
-            .truncate(false)
-            .open(&lock_path)
-            .map_err(|source| {
-                AtmError::daemon_unavailable(format!(
-                    "failed to open daemon launch gate at {}",
-                    lock_path.display()
-                ))
-                .with_source(source)
-            })?;
-        match file.try_lock_exclusive() {
-            Ok(()) => Ok(Some(Self { file })),
-            Err(source) if is_launch_gate_contention_error(&source) => Ok(None),
-            Err(source) => Err(AtmError::daemon_launch_gate_rejected(format!(
-                "failed to acquire daemon launch gate at {}",
-                lock_path.display()
-            ))
-            .with_source(source)),
-        }
-    }
-}
-
-fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
-    if error.kind() == std::io::ErrorKind::WouldBlock {
-        return true;
-    }
-
-    #[cfg(windows)]
-    {
-        // Windows file locking reports contention through raw Win32 lock/sharing
-        // violations instead of mapping them to WouldBlock consistently.
-        matches!(error.raw_os_error(), Some(32 | 33))
-    }
-
-    #[cfg(not(windows))]
-    {
-        false
-    }
-}
-
-impl Drop for LaunchGateGuard {
-    fn drop(&mut self) {
-        let _ = self.file.unlock();
     }
 }
 
@@ -619,7 +369,7 @@ impl<'a> CliComposition<'a> {
         let daemon_bin = resolve_daemon_bin()?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
-        supervisor.ensure_daemon_available(transport.as_ref())?;
+        supervisor.ensure_daemon_available(|| transport.try_connect().map(|_| ()))?;
         Ok(Self::from_transport(transport, observability))
     }
 }
@@ -1312,7 +1062,7 @@ mod tests {
 
         let error = supervisor
             .ensure_daemon_available_with_lock_path(
-                &transport,
+                || transport.try_connect().map(|_| ()),
                 Duration::from_millis(0),
                 Duration::from_millis(0),
                 launch_lock_path,
@@ -1328,10 +1078,10 @@ mod tests {
     #[cfg(windows)]
     #[test]
     fn launch_gate_treats_windows_lock_and_sharing_violations_as_contention() {
-        assert!(super::is_launch_gate_contention_error(
+        assert!(atm_daemon_client::is_launch_gate_contention_error(
             &std::io::Error::from_raw_os_error(32)
         ));
-        assert!(super::is_launch_gate_contention_error(
+        assert!(atm_daemon_client::is_launch_gate_contention_error(
             &std::io::Error::from_raw_os_error(33)
         ));
     }
@@ -1358,7 +1108,7 @@ mod tests {
 
         let error = supervisor
             .ensure_daemon_available_with_lock_path(
-                &transport,
+                || transport.try_connect().map(|_| ()),
                 Duration::from_millis(10),
                 Duration::from_millis(0),
                 launch_lock_path,

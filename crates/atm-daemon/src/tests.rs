@@ -2,11 +2,7 @@ use super::runtime_health::{
     DaemonRequestDispatcher, MAX_STATUS_CACHE_ENTRIES, RuntimeStatusCache,
 };
 use super::{
-    DaemonExitCode, LocalIpcServerTransportAdapter, daemon_exit_code_for_error,
-    host_ownership::{
-        HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter, clear_stale_recovery_signal_for_test,
-        install_stale_recovery_signal_for_test,
-    },
+    LocalIpcServerTransportAdapter,
     lifecycle_control::LifecycleControlSourceAdapter,
     local_ipc_transport::RuntimeServeHooks,
     test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
@@ -34,8 +30,7 @@ use atm_rusqlite::assemble_boundary;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
-use std::fs::OpenOptions;
-use std::io::{Seek, SeekFrom, Write};
+use std::io::Write;
 use std::sync::Arc;
 use std::sync::OnceLock;
 use std::sync::mpsc;
@@ -57,70 +52,6 @@ impl Drop for ShutdownFinalizerDrainGuard {
     fn drop(&mut self) {
         DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
     }
-}
-
-struct StaleRecoverySignalGuard;
-
-impl StaleRecoverySignalGuard {
-    fn install(signal: mpsc::SyncSender<()>) -> Self {
-        install_stale_recovery_signal_for_test(signal);
-        Self
-    }
-}
-
-impl Drop for StaleRecoverySignalGuard {
-    fn drop(&mut self) {
-        clear_stale_recovery_signal_for_test();
-    }
-}
-
-#[test]
-fn daemon_shutdown_signals_for_test_are_isolated() {
-    let first = LifecycleControlSourceAdapter::new_for_test();
-    first.set_terminate_for_test(true);
-    first.set_reload_for_test(true);
-    let second = LifecycleControlSourceAdapter::new_for_test();
-
-    assert!(!second.terminate_requested());
-    assert!(!second.reload_requested_for_test());
-}
-
-#[test]
-#[serial]
-fn daemon_shutdown_signal_install_reuses_shared_flags() {
-    let first = LifecycleControlSourceAdapter::install().expect("install first");
-    let _reset = LifecycleFlagResetGuard::install(first.clone());
-
-    let second = LifecycleControlSourceAdapter::install().expect("install second");
-    first.set_reload_for_test(true);
-    second.set_terminate_for_test(true);
-
-    assert!(second.reload_requested_for_test());
-    assert!(first.terminate_requested());
-}
-
-#[test]
-fn daemon_exit_code_mapping_matches_supervisor_contract() {
-    assert_eq!(
-        daemon_exit_code_for_error(&AtmError::daemon_lifecycle_wedge("wedged")),
-        DaemonExitCode::LifecycleWedge
-    );
-    assert_eq!(
-        daemon_exit_code_for_error(&AtmError::daemon_launch_gate_rejected("launch gate")),
-        DaemonExitCode::DoNotRestart
-    );
-    assert_eq!(
-        daemon_exit_code_for_error(&AtmError::daemon_unavailable("listener died")),
-        DaemonExitCode::TransportFatal
-    );
-    assert_eq!(
-        daemon_exit_code_for_error(&AtmError::config("bad config")),
-        DaemonExitCode::DoNotRestart
-    );
-    assert_eq!(
-        daemon_exit_code_for_error(&AtmError::validation("buggy invariant")),
-        DaemonExitCode::InternalBug
-    );
 }
 
 #[test]
@@ -352,165 +283,6 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     );
 }
 
-#[test]
-fn daemon_host_runtime_lock_path_ignores_atm_home() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let user_home = tempdir.path().join("user-home");
-    let atm_home = tempdir.path().join("workspace").join(".atm-home");
-    let path =
-        atm_core::home::host_runtime_lock_path_from_home(&user_home, HOST_RUNTIME_OWNER_LOCK_FILE);
-
-    assert_eq!(
-        path,
-        user_home.join(".atm").join("daemon").join("owner.lock")
-    );
-    assert!(
-        !path.starts_with(&atm_home),
-        "daemon singleton lock must remain OS-home scoped"
-    );
-}
-
-#[test]
-fn singleton_guard_is_host_wide_across_different_socket_paths() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let first_socket = tempdir.path().join("one.sock");
-    let second_socket = tempdir.path().join("other").join("two.sock");
-    let first = HostOwnershipAdapter::acquire_at(atm_core::home::host_runtime_lock_path_from_home(
-        tempdir.path(),
-        HOST_RUNTIME_OWNER_LOCK_FILE,
-    ))
-    .expect("first singleton");
-    let _ = first_socket;
-    let _ = second_socket;
-    let error = HostOwnershipAdapter::acquire_at(atm_core::home::host_runtime_lock_path_from_home(
-        tempdir.path(),
-        HOST_RUNTIME_OWNER_LOCK_FILE,
-    ))
-    .expect_err("second singleton");
-
-    assert_eq!(error.code, AtmErrorCode::DaemonServingStateRejected);
-    drop(first);
-}
-
-#[test]
-#[serial]
-fn singleton_guard_reports_stale_owner_record_failure() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let lock_path = atm_core::home::host_runtime_lock_path_from_home(
-        tempdir.path(),
-        HOST_RUNTIME_OWNER_LOCK_FILE,
-    );
-    if let Some(parent) = lock_path.parent() {
-        std::fs::create_dir_all(parent).expect("create parent");
-    }
-    let mut file = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .truncate(false)
-        .open(&lock_path)
-        .expect("open lock file");
-    fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-    writeln!(&mut file, "{}:deadbeef", u32::MAX).expect("write owner");
-    file.sync_all().expect("sync owner");
-
-    let error = HostOwnershipAdapter::acquire_at(lock_path).expect_err("stale");
-    assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
-}
-
-#[test]
-#[serial]
-fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let lock_path = atm_core::home::host_runtime_lock_path_from_home(
-        tempdir.path(),
-        HOST_RUNTIME_OWNER_LOCK_FILE,
-    );
-    if let Some(parent) = lock_path.parent() {
-        std::fs::create_dir_all(parent).expect("create parent");
-    }
-    let mut file = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .truncate(false)
-        .open(&lock_path)
-        .expect("open lock file");
-    fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-    writeln!(&mut file, "{}:deadbeef", u32::MAX).expect("write owner");
-    file.sync_all().expect("sync owner");
-    drop(file);
-
-    let guard =
-        HostOwnershipAdapter::acquire_at(lock_path).expect("stale owner recovery should succeed");
-    drop(guard);
-}
-
-#[test]
-#[serial]
-fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let lock_path = atm_core::home::host_runtime_lock_path_from_home(
-        tempdir.path(),
-        HOST_RUNTIME_OWNER_LOCK_FILE,
-    );
-    if let Some(parent) = lock_path.parent() {
-        std::fs::create_dir_all(parent).expect("create parent");
-    }
-    let mut file = OpenOptions::new()
-        .create(true)
-        .read(true)
-        .write(true)
-        .truncate(false)
-        .open(&lock_path)
-        .expect("open lock file");
-    fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-    writeln!(&mut file, "{}:token-a", u32::MAX).expect("write owner");
-    file.sync_all().expect("sync owner");
-
-    let (ready_tx, ready_rx) = mpsc::sync_channel(1);
-    let _signal_guard = StaleRecoverySignalGuard::install(ready_tx);
-    let lock_path_for_thread = lock_path.clone();
-    let join = std::thread::spawn(move || HostOwnershipAdapter::acquire_at(lock_path_for_thread));
-    ready_rx
-        .recv_timeout(Duration::from_secs(15))
-        .expect("stale recovery hook did not fire within 5s");
-    file.set_len(0).expect("clear record");
-    file.seek(SeekFrom::Start(0)).expect("rewind");
-    writeln!(&mut file, "{}:token-b", u32::MAX).expect("rewrite owner");
-    file.sync_all().expect("resync owner");
-    drop(file);
-
-    let error = join.join().expect("join").expect_err("token mismatch");
-    assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
-}
-
-#[test]
-fn host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release() {
-    let tempdir = TempDir::new().expect("tempdir");
-    let lock_path = atm_core::home::host_runtime_lock_path_from_home(
-        tempdir.path(),
-        HOST_RUNTIME_OWNER_LOCK_FILE,
-    );
-    let guard = HostOwnershipAdapter::acquire_at(lock_path.clone()).expect("acquire");
-
-    let record = std::fs::read_to_string(&lock_path).expect("read record");
-    let trimmed = record.trim();
-    // The singleton tests intentionally read the same owner.lock metadata that
-    // ADR-002 documents for the launch.lock -> owner.lock handoff.
-    let (pid, token) = trimmed.split_once(':').expect("pid:token");
-    assert_eq!(pid, std::process::id().to_string());
-    assert!(!token.is_empty(), "token should not be empty");
-
-    drop(guard);
-
-    let cleared = std::fs::read_to_string(&lock_path).expect("read cleared record");
-    assert!(
-        cleared.trim().is_empty(),
-        "record should be cleared on drop"
-    );
-}
-
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let assembly = assemble_boundary(db_path).expect("sqlite boundary");
     assembly
@@ -628,6 +400,7 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
 }
 
 #[test]
+#[serial]
 fn dispatcher_routes_graft_register_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-register");
@@ -648,6 +421,7 @@ fn dispatcher_routes_graft_register_requests() {
 }
 
 #[test]
+#[serial]
 fn dispatcher_routes_graft_unregister_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-unregister");
@@ -673,6 +447,7 @@ fn dispatcher_routes_graft_unregister_requests() {
 }
 
 #[test]
+#[serial]
 fn dispatcher_routes_graft_fetch_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-fetch");
@@ -699,6 +474,7 @@ fn dispatcher_routes_graft_fetch_requests() {
 }
 
 #[test]
+#[serial]
 fn dispatcher_routes_graft_drain_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-drain");

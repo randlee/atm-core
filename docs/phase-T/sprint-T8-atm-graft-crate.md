@@ -20,6 +20,9 @@ Add `atm-graft` as a thin embedded ATM client crate for Rust host agents.
 - add minimal `[atm.graft]` activation support in ATM-owned config loading
 - add `GraftSession` as the concrete implementation of the `atm_core`
   `GraftSessionPort` trait
+- add `GraftClient` as the thin daemon-backed same-host client implementation
+- add `HostNudgeInjector` as the automatic between-tool-call injection seam
+- add `GraftObservability` as the injected ATM-owned observability seam
 - expose a small public API limited to:
   - `send`
   - `read`
@@ -34,6 +37,7 @@ Add `atm-graft` as a thin embedded ATM client crate for Rust host agents.
 
 - `crates/atm-graft/*`
 - `crates/atm-core/src/config/*`
+- `crates/atm-core/src/lib.rs`
 - `docs/atm-graft/architecture.md`
 - `docs/atm-graft/requirements.md`
 - `docs/plan-atm-graft.md`
@@ -45,6 +49,8 @@ Add `atm-graft` as a thin embedded ATM client crate for Rust host agents.
 - graft mode is inert when `.atm.toml` is absent and active only through the
   ATM-owned config rules
 - `GraftSession` lifecycle is explicit and test-covered
+- `GraftClient`, `GraftSession`, `HostNudgeInjector`, and
+  `GraftObservability` all exist as concrete public T.8 surfaces
 - embedded mode automatically injects nudges into host context between tool
   calls via one live receive task/thread
 - the public API remains intentionally small and does not mirror the full CLI

@@ -91,6 +91,11 @@ Required change:
 - add minimal `[atm.graft]` activation
 - add `GraftSession`
 - add host-facing nudge fetch/drain bridging
+- add the concrete thin crate surfaces:
+  - `GraftClient`
+  - `GraftSession`
+  - `HostNudgeInjector`
+  - `GraftObservability`
 
 ## 5. Phase T Work Packages
 
@@ -144,6 +149,9 @@ Deliverables:
 - minimal `[atm.graft]` config activation
 - `GraftSession` as the concrete implementation of the `atm_core`
   `GraftSessionPort` trait
+- `GraftClient` as the thin daemon-backed same-host client implementation
+- `HostNudgeInjector` as the automatic between-tool-call injection seam
+- `GraftObservability` as the injected ATM-owned observability seam
 - public API limited to:
   - `send`
   - `read`
