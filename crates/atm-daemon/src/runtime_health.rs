@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
@@ -36,7 +35,7 @@ use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
 use crate::graft_runtime::GraftRuntime;
 
-const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
+pub(crate) const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
 const MAX_RELOAD_TEAMS: usize = 256;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
@@ -66,8 +65,10 @@ struct RuntimeMemberRecord {
 
 #[derive(Debug, Clone, Default)]
 struct RuntimeStatusCacheState {
-    // Request handlers and doctor/status readers update and snapshot the cache
-    // concurrently, so one mutex protects the whole live-status projection.
+    // Request handlers and doctor/status readers must observe one coherent
+    // live-status projection. One mutex covers the full cache state so member
+    // inserts/evictions and sqlite/degraded-ingest flips cannot interleave into
+    // torn doctor snapshots.
     members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
     sqlite_ready: bool,
     degraded_ingest: bool,
@@ -124,29 +125,7 @@ impl RuntimeStatusCache {
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        let is_new_key = !cache.members.contains_key(&key);
-        if is_new_key && cache.members.len() >= MAX_STATUS_CACHE_ENTRIES {
-            let eviction_candidate = cache
-                .members
-                .iter()
-                .filter(|(_, record)| record.state != RuntimeMemberState::IdentityConflict)
-                .min_by_key(|(_, record)| {
-                    (
-                        record.state == RuntimeMemberState::Unknown,
-                        record.last_active_at,
-                    )
-                })
-                .map(|(key, record)| (key.clone(), record.clone()));
-            if let Some((evicted_key, evicted_record)) = eviction_candidate {
-                cache.members.remove(&evicted_key);
-                tracing::warn!(
-                    team = %evicted_key.team,
-                    member = %evicted_key.member,
-                    pid = evicted_record.pid,
-                    "evicted daemon runtime status-cache entry after reaching the bounded cap"
-                );
-            }
-        }
+        evict_status_cache_entry_if_needed(&mut cache, &key);
         cache.members.insert(
             key,
             RuntimeMemberRecord {
@@ -179,6 +158,7 @@ impl RuntimeStatusCache {
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+        evict_status_cache_entry_if_needed(&mut cache, &key);
         let last_active_at = cache
             .members
             .get(&key)
@@ -236,6 +216,46 @@ impl RuntimeStatusCache {
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
         Ok(build_runtime_snapshot_scoped(&cache, members))
+    }
+}
+
+fn evict_status_cache_entry_if_needed(
+    cache: &mut RuntimeStatusCacheState,
+    incoming_key: &RuntimeMemberKey,
+) {
+    let is_new_key = !cache.members.contains_key(incoming_key);
+    if !is_new_key || cache.members.len() < MAX_STATUS_CACHE_ENTRIES {
+        return;
+    }
+    let eviction_candidate = cache
+        .members
+        .iter()
+        .filter(|(_, record)| record.state != RuntimeMemberState::IdentityConflict)
+        .min_by_key(|(_, record)| {
+            (
+                record.state != RuntimeMemberState::Unknown,
+                record.last_active_at,
+            )
+        })
+        .or_else(|| {
+            cache.members.iter().min_by_key(|(_, record)| {
+                (
+                    record.state != RuntimeMemberState::IdentityConflict,
+                    record.last_active_at,
+                )
+            })
+        })
+        .map(|(key, record)| (key.clone(), record.clone()));
+    if let Some((evicted_key, evicted_record)) = eviction_candidate {
+        cache.members.remove(&evicted_key);
+        tracing::warn!(
+            team = %evicted_key.team,
+            member = %evicted_key.member,
+            pid = evicted_record.pid,
+            state = ?evicted_record.state,
+            cap = MAX_STATUS_CACHE_ENTRIES,
+            "evicted daemon runtime status-cache entry after reaching the bounded cap"
+        );
     }
 }
 
@@ -353,27 +373,85 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
 impl DaemonRequestDispatcher {
     #[cfg(test)]
     pub(crate) fn drain_shutdown_finalizer_threads_for_test() {
-        let handles = {
-            let mut handles = SHUTDOWN_FINALIZER_THREADS
-                .lock()
-                .expect("shutdown finalizer thread registry lock");
-            std::mem::take(&mut *handles)
-        };
-        for handle in handles {
-            let (result_tx, result_rx) = mpsc::sync_channel(1);
-            std::thread::spawn(move || {
-                let _ = result_tx.send(handle.join());
+        let mut deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let handle = with_shutdown_finalizer_registry(|handles| {
+                handles
+                    .iter()
+                    .position(std::thread::JoinHandle::is_finished)
+                    .map(|index| handles.swap_remove(index))
             });
-            match result_rx.recv_timeout(Duration::from_secs(5)) {
-                Ok(_) => {}
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    panic!("shutdown finalizer thread failed to join within 5s")
-                }
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    panic!("shutdown finalizer join helper exited before reporting completion")
-                }
+            if let Some(handle) = handle {
+                handle.join().expect("join shutdown finalizer thread");
+                deadline = std::time::Instant::now() + Duration::from_secs(5);
+                continue;
             }
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            let has_pending = with_shutdown_finalizer_registry(|handles| !handles.is_empty());
+            if !has_pending {
+                break;
+            }
+            assert!(
+                !remaining.is_zero(),
+                "shutdown finalizer thread failed to join within 5s"
+            );
+            std::thread::park_timeout(remaining.min(Duration::from_millis(10)));
         }
+        let still_pending = with_shutdown_finalizer_registry(|handles| handles.len());
+        assert_eq!(
+            still_pending, 0,
+            "shutdown finalizer join helper left retained worker handles behind"
+        );
+    }
+
+    fn spawn_shutdown_step(
+        label: &'static str,
+        step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
+    ) -> std::thread::JoinHandle<()> {
+        std::thread::Builder::new()
+            .name(format!("shutdown-finalizer-{label}"))
+            .spawn(move || {
+                step().unwrap_or_else(|error| {
+                    tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
+                });
+            })
+            .expect("spawn daemon shutdown finalizer step")
+    }
+
+    fn complete_shutdown_step(label: &'static str, shutdown_handle: std::thread::JoinHandle<()>) {
+        if shutdown_handle.join().is_err() {
+            tracing::warn!(
+                step = label,
+                "daemon shutdown finalizer step panicked before reporting completion"
+            );
+        }
+    }
+
+    fn retain_shutdown_step(
+        label: &'static str,
+        shutdown_handle: std::thread::JoinHandle<()>,
+        deadline: Duration,
+    ) {
+        let retained = with_shutdown_finalizer_registry(|handles| {
+            if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS {
+                handles.push(shutdown_handle);
+                true
+            } else {
+                false
+            }
+        });
+        if !retained {
+            tracing::warn!(
+                step = label,
+                cap = MAX_SHUTDOWN_FINALIZER_THREADS,
+                "shutdown finalizer thread cap reached; dropping retained worker handle"
+            );
+        }
+        tracing::warn!(
+            step = label,
+            timeout_ms = deadline.as_millis(),
+            "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
+        );
     }
 
     fn run_bounded_shutdown_step(
@@ -381,55 +459,22 @@ impl DaemonRequestDispatcher {
         deadline: Duration,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
     ) {
-        let (result_tx, result_rx) = mpsc::sync_channel(1);
-        let shutdown_handle = std::thread::spawn(move || {
-            let _ = result_tx.send(step());
-        });
-        match result_rx.recv_timeout(deadline) {
-            Ok(Ok(())) => {
-                let _ = shutdown_handle.join();
+        let shutdown_handle = Self::spawn_shutdown_step(label, step);
+        let started = std::time::Instant::now();
+        loop {
+            if shutdown_handle.is_finished() {
+                Self::complete_shutdown_step(label, shutdown_handle);
+                return;
             }
-            Ok(Err(error)) => {
-                let _ = shutdown_handle.join();
-                tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
+            if started.elapsed() >= deadline {
                 // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
                 // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
                 // than dropping it orphaned because tests and orderly process teardown can join it
                 // later once the blocking storage step finishes.
-                match SHUTDOWN_FINALIZER_THREADS.lock() {
-                    Ok(mut handles) => {
-                        if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS {
-                            handles.push(shutdown_handle);
-                        } else {
-                            tracing::warn!(
-                                step = label,
-                                cap = MAX_SHUTDOWN_FINALIZER_THREADS,
-                                "shutdown finalizer thread cap reached; dropping retained worker handle"
-                            );
-                        }
-                    }
-                    Err(_) => {
-                        tracing::warn!(
-                            step = label,
-                            "shutdown finalizer thread registry lock poisoned; dropping retained worker handle"
-                        );
-                    }
-                }
-                tracing::warn!(
-                    step = label,
-                    timeout_ms = deadline.as_millis(),
-                    "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
-                );
+                Self::retain_shutdown_step(label, shutdown_handle, deadline);
+                return;
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                let _ = shutdown_handle.join();
-                tracing::warn!(
-                    step = label,
-                    "daemon shutdown finalizer step exited before reporting a result"
-                );
-            }
+            std::thread::sleep(Duration::from_millis(10));
         }
     }
 
@@ -477,6 +522,23 @@ impl DaemonRequestDispatcher {
             .emit_runtime_event(action, outcome, message)
         {
             tracing::warn!(%error, action, outcome, "daemon runtime lifecycle emission failed");
+        }
+    }
+}
+
+fn with_shutdown_finalizer_registry<R>(
+    f: impl FnOnce(&mut Vec<std::thread::JoinHandle<()>>) -> R,
+) -> R {
+    match SHUTDOWN_FINALIZER_THREADS.lock() {
+        Ok(mut handles) => f(&mut handles),
+        Err(poisoned) => {
+            tracing::warn!(
+                "shutdown finalizer thread registry lock poisoned; recovering retained worker handles"
+            );
+            // The registry only owns JoinHandles for timed-out shutdown helpers; recovering the
+            // inner vector preserves later joins instead of dropping retained worker ownership.
+            let mut handles = poisoned.into_inner();
+            f(&mut handles)
         }
     }
 }
@@ -1049,6 +1111,74 @@ mod tests {
         let (released, wake) = &*retained_release;
         *released.lock().expect("retained release") = true;
         wake.notify_all();
+    }
+
+    #[test]
+    fn heartbeat_only_insert_evicts_oldest_member_when_cache_is_full() {
+        use atm_core::protocol::{
+            HeartbeatActivity, RuntimeMemberState, TeamMemberHeartbeatRequest,
+        };
+        use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+        use chrono::{Duration as ChronoDuration, Utc};
+
+        let status_cache = super::RuntimeStatusCache::new();
+        let team: TeamName = "test-team".parse().expect("team");
+        let oldest_member: AgentName = "heartbeat-oldest".parse().expect("member");
+        let trigger_member: AgentName = "heartbeat-trigger".parse().expect("member");
+        let base = Utc::now();
+
+        for index in 0..super::MAX_STATUS_CACHE_ENTRIES {
+            let member_name: AgentName = if index == 0 {
+                oldest_member.clone()
+            } else {
+                format!("heartbeat-{index}").parse().expect("member")
+            };
+            status_cache
+                .record_heartbeat_for_test(
+                    &TeamMemberHeartbeatRequest {
+                        team: team.clone(),
+                        member: member_name,
+                        pid: index as u32 + 1,
+                        observed_at: IsoTimestamp::from_datetime(
+                            base + ChronoDuration::seconds(index as i64),
+                        ),
+                        activity: HeartbeatActivity::Idle,
+                    },
+                    false,
+                )
+                .expect("seed heartbeat member");
+        }
+
+        let response = status_cache
+            .record_heartbeat_for_test(
+                &TeamMemberHeartbeatRequest {
+                    team: team.clone(),
+                    member: trigger_member.clone(),
+                    pid: std::process::id(),
+                    observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
+                    activity: HeartbeatActivity::ActiveToolUse,
+                },
+                false,
+            )
+            .expect("trigger heartbeat");
+        assert_eq!(response.state, RuntimeMemberState::Active);
+
+        assert_eq!(
+            status_cache.member_count_for_test().expect("member count"),
+            super::MAX_STATUS_CACHE_ENTRIES
+        );
+        assert_eq!(
+            status_cache
+                .member_state_for_test(&team, &oldest_member)
+                .expect("oldest member state"),
+            None
+        );
+        assert_eq!(
+            status_cache
+                .member_state_for_test(&team, &trigger_member)
+                .expect("trigger member state"),
+            Some(RuntimeMemberState::Active)
+        );
     }
 }
 

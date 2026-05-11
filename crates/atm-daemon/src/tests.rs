@@ -1,4 +1,6 @@
-use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
+use super::runtime_health::{
+    DaemonRequestDispatcher, MAX_STATUS_CACHE_ENTRIES, RuntimeStatusCache,
+};
 use super::{
     DaemonExitCode, LocalIpcServerTransportAdapter, daemon_exit_code_for_error,
     host_ownership::{
@@ -1071,6 +1073,63 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
         }
         other => panic!("expected heartbeat response, got {other:?}"),
     }
+}
+
+#[test]
+fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
+    use chrono::{Duration as ChronoDuration, Utc};
+
+    let status_cache = RuntimeStatusCache::new();
+    let team = test_team().clone();
+    let oldest_member: AgentName = "qa-oldest".parse().expect("member");
+    let base = Utc::now();
+
+    for index in 0..MAX_STATUS_CACHE_ENTRIES {
+        let member_name: AgentName = if index == 0 {
+            oldest_member.clone()
+        } else {
+            format!("conflict-{index}").parse().expect("member")
+        };
+        status_cache
+            .insert_member_for_test(
+                team.clone(),
+                member_name,
+                Some(index as u32 + 1),
+                RuntimeMemberState::IdentityConflict,
+                Some(IsoTimestamp::from_datetime(
+                    base + ChronoDuration::seconds(index as i64),
+                )),
+            )
+            .expect("seed conflict member");
+    }
+
+    let request = TeamMemberHeartbeatRequest {
+        team: team.clone(),
+        member: "qa-trigger".parse().expect("member"),
+        pid: std::process::id(),
+        observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
+        activity: HeartbeatActivity::ActiveToolUse,
+    };
+    status_cache
+        .record_identity_conflict_for_test(&request, u32::MAX)
+        .expect("record conflict");
+
+    assert_eq!(
+        status_cache.member_count_for_test().expect("member count"),
+        MAX_STATUS_CACHE_ENTRIES
+    );
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &oldest_member)
+            .expect("oldest member state"),
+        None
+    );
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &request.member)
+            .expect("trigger member state"),
+        Some(RuntimeMemberState::IdentityConflict)
+    );
 }
 
 #[test]

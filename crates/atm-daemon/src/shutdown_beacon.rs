@@ -1,4 +1,5 @@
 use std::sync::atomic::{AtomicBool, Ordering};
+#[cfg(test)]
 use std::time::{Duration, Instant};
 
 #[derive(Debug, Default)]
@@ -17,14 +18,14 @@ impl ShutdownBeacon {
         self.tripped.load(Ordering::SeqCst)
     }
 
-    #[cfg_attr(any(windows, not(test)), allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn wait_until_tripped(&self, timeout: Duration) -> bool {
         let deadline = Instant::now() + timeout;
         while Instant::now() < deadline {
             if self.is_tripped() {
                 return true;
             }
-            std::thread::sleep(Duration::from_millis(5));
+            std::thread::park_timeout(Duration::from_millis(5));
         }
         self.is_tripped()
     }

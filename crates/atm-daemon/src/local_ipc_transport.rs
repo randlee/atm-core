@@ -42,10 +42,15 @@ struct ServeLoopSignals {
 
 impl ServeLoopSignals {
     fn request_reload(&self) {
+        // SeqCst keeps the lifecycle waiter wakeup and the direct accept-loop
+        // reload observation in one total order, so a just-issued reload cannot
+        // be observed after a later accept-error/shutdown transition.
         self.reload_requested.store(true, Ordering::SeqCst);
     }
 
     fn take_reload(&self) -> bool {
+        // SeqCst pairs with request_reload() so the direct serve loop never
+        // reorders a consumed reload flag around accept-error/shutdown state.
         self.reload_requested.swap(false, Ordering::SeqCst)
     }
 
@@ -760,9 +765,18 @@ fn schedule_delayed_listener_wake(endpoint_path: PathBuf, delay: Duration) -> Re
 fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {
     let name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path)?;
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    std::thread::spawn(move || {
-        let _ = result_tx.send(LocalSocketStream::connect(name));
-    });
+    std::thread::Builder::new()
+        .name("listener-wake-connect".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(LocalSocketStream::connect(name));
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn daemon listener wake worker")
+                .with_recovery(
+                    "Restart the daemon; the same-host listener wake path could not create its bounded connect helper.",
+                )
+                .with_source(source)
+        })?;
     let mut stream = match result_rx.recv_timeout(LISTENER_WAKE_CONNECT_DEADLINE) {
         Ok(Ok(stream)) => stream,
         Ok(Err(source)) => {
@@ -924,11 +938,20 @@ fn handle_connection(
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
     let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
     let dispatch_registry = Arc::clone(&registry);
-    let dispatch_handle = std::thread::spawn(move || {
-        let _dispatch_work = dispatch_registry.register_dispatch_work();
-        let _ = result_tx.send(dispatcher.dispatch(request));
-        let _ = completion_tx.send(());
-    });
+    let dispatch_handle = std::thread::Builder::new()
+        .name("local-ipc-dispatch".to_string())
+        .spawn(move || {
+            let _dispatch_work = dispatch_registry.register_dispatch_work();
+            let _ = result_tx.send(dispatcher.dispatch(request));
+            let _ = completion_tx.send(());
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn daemon local IPC dispatch worker")
+                .with_recovery(
+                    "Retry the ATM command after atm-daemon restarts; the same-host request worker could not be created.",
+                )
+                .with_source(source)
+        })?;
     // The tracked-dispatch registry owns the eventual join. Timeouts can let a request worker run
     // past this socket exchange, but the direct accept loop and bounded shutdown sweep still reap
     // the handle before runtime teardown completes.

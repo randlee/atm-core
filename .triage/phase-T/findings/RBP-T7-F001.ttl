@@ -1,0 +1,178 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-T7-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-T7-F001" ;
+  triage:title "GraftQueueCommand::session_id() returns anyhow::Result losing AtmError.recovery" ;
+  triage:description "crates/atm/src/commands/graft.rs — bridging to anyhow at CLI layer drops the structured recovery hint from AtmError. Fix: return Result<_, AtmError> and map to anyhow only at the clap command entry point. Internal methods session_id(), limit(), fetch(), drain() all use anyhow::Result instead of AtmError." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F001/pT-t7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F001/pT-t7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F001/pT-t7/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F001/pT-t7/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F001/pT-t7/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F001/pT-t8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F001/pT-t8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F001/pT-t8/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F001/pT-t8/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T7-F001/pT-t8/5> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t7/afbd906> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t8/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+# T7 occurrences
+<urn:atm:triage:occurrence/RBP-T7-F001/pT-t7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/graft.rs" ;
+  triage:line 1 ;
+  triage:snippet "use anyhow::Result;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7/afbd906> .
+
+<urn:atm:triage:occurrence/RBP-T7-F001/pT-t7/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/graft.rs" ;
+  triage:line 54 ;
+  triage:snippet "fn session_id(&self) -> Result<GraftSessionId>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7/afbd906> .
+
+<urn:atm:triage:occurrence/RBP-T7-F001/pT-t7/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/graft.rs" ;
+  triage:line 58 ;
+  triage:snippet "fn limit(&self) -> Result<GraftBatchLimit>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7/afbd906> .
+
+<urn:atm:triage:occurrence/RBP-T7-F001/pT-t7/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/graft.rs" ;
+  triage:line 62 ;
+  triage:snippet "fn fetch(&self, composition: &CliComposition) -> Result<GraftNudgeFetchResponse>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7/afbd906> .
+
+<urn:atm:triage:occurrence/RBP-T7-F001/pT-t7/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/graft.rs" ;
+  triage:line 69 ;
+  triage:snippet "fn drain(&self, composition: &CliComposition) -> Result<GraftNudgeDrainResponse>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7/afbd906> .
+
+# T8 occurrences (same file, same content - merge-forward not yet applied)
+<urn:atm:triage:occurrence/RBP-T7-F001/pT-t8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/graft.rs" ;
+  triage:line 1 ;
+  triage:snippet "use anyhow::Result;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+<urn:atm:triage:occurrence/RBP-T7-F001/pT-t8/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/graft.rs" ;
+  triage:line 54 ;
+  triage:snippet "fn session_id(&self) -> Result<GraftSessionId>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+<urn:atm:triage:occurrence/RBP-T7-F001/pT-t8/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/graft.rs" ;
+  triage:line 58 ;
+  triage:snippet "fn limit(&self) -> Result<GraftBatchLimit>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+<urn:atm:triage:occurrence/RBP-T7-F001/pT-t8/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/graft.rs" ;
+  triage:line 62 ;
+  triage:snippet "fn fetch(&self, composition: &CliComposition) -> Result<GraftNudgeFetchResponse>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+<urn:atm:triage:occurrence/RBP-T7-F001/pT-t8/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/graft.rs" ;
+  triage:line 69 ;
+  triage:snippet "fn drain(&self, composition: &CliComposition) -> Result<GraftNudgeDrainResponse>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+# WorktreeSnapshots
+<urn:atm:triage:worktree/pT-t4/36b4868>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "36b4868" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/30082e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pT-t6/d57cf81>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "d57cf81" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pT-t7/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pT-t8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .
