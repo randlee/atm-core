@@ -24,7 +24,6 @@ use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
-#[cfg(unix)]
 use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
 use std::fs::OpenOptions;
