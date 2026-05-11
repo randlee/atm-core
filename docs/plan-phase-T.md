@@ -13,6 +13,8 @@ round of runtime hardening, but the final integrated review still found:
   IPC behavior
 - remaining daemon bounded-state and shutdown-contract gaps
 - an integration-gate cleanup bucket on `integrate/phase-S`
+- no thin embedded host-agent client line yet for the now-complete daemon/IPC
+  baseline
 
 Phase T turns those residuals into explicit follow-up sprints with narrower
 acceptance gates than the overloaded S.14 / S.15 hardening branches.
@@ -33,6 +35,8 @@ Phase T is limited to:
 - proving real Windows same-host runtime parity for daemon singleton and local
   IPC behavior
 - finishing the remaining daemon bounded-state and shutdown-contract hardening
+- planning and landing the thin `atm-graft` embedded-client follow-on once the
+  daemon/runtime baseline is stable
 
 Out of scope:
 - new CLI features
@@ -52,13 +56,18 @@ The final Phase S review and integration gate exposed a process problem:
 
 Phase T therefore splits the residual work into:
 - one `integrate/phase-S` cleanup sprint (`T.1`)
-- four focused follow-up sprints on `integrate/phase-T` (`T.2`–`T.5`)
+- four focused production-readiness sprints on `integrate/phase-T`
+  (`T.2`–`T.5`)
+- three additive embedded-client sprints on `integrate/phase-T`
+  (`T.6`–`T.8`)
 
 Forward-integration rule:
-- all T sprints (`T.1`–`T.5`) land directly on `integrate/phase-T`
+- all T sprints (`T.1`–`T.8`) land directly on `integrate/phase-T`
 - `integrate/phase-T` already incorporates `integrate/phase-S` at `c6847d1`
   via the develop forward-merge at `1232244`
 - `T.2`–`T.5` may start after `T.1` merges to `integrate/phase-T`
+- `T.6`–`T.8` build on the daemon/runtime baseline established by `T.2`–`T.5`
+  and should not destabilize those sprints' acceptance contracts
 
 ## 4. Dependency Graph
 
@@ -69,6 +78,9 @@ Forward-integration rule:
 | `T.3` | Immutable message rows + probe removal | `integrate/phase-T @ 1232244` | `T.2` merge | `T.4`, `T.5` |
 | `T.4` | Windows same-host runtime parity | `integrate/phase-T @ 1232244` | none | `T.2`, `T.5` |
 | `T.5` | Remaining daemon hardening | `integrate/phase-T @ 1232244` | none | `T.2`, `T.4` |
+| `T.6` | Embeddable graft client surface | `integrate/phase-T @ 1232244` | `T.2`–`T.5` merge | `T.7`, `T.8` planning only |
+| `T.7` | Graft runtime in daemon | `integrate/phase-T @ 1232244` | `T.6` merge | `T.8` planning only |
+| `T.8` | `atm-graft` crate | `integrate/phase-T @ 1232244` | `T.6`, `T.7` merge | none |
 
 Execution rule:
 - `T.1` closes the integration-gate residuals already tracked on
@@ -77,6 +89,9 @@ Execution rule:
   production-ready until both land
 - `T.4` and `T.5` may execute independently, but both must land before daemon
   runtime promotion is considered complete
+- `T.6` through `T.8` are intentionally thin follow-ons: treat them as “embed
+  the existing ATM client/runtime line in an agent,” not as a second runtime
+  architecture effort
 
 ## 5. Planned Sprint Sequence
 
@@ -125,6 +140,36 @@ Goal:
 Artifacts:
 - [`docs/phase-T/sprint-T5-hardening.md`](./phase-T/sprint-T5-hardening.md)
 
+### T.6 Graft Client Surface
+
+Goal:
+- define the small embeddable daemon-client surface needed by `atm-graft`
+
+Artifacts:
+- [`docs/phase-T/sprint-T6-graft-client-surface.md`](./phase-T/sprint-T6-graft-client-surface.md)
+- [`docs/atm-graft/requirements.md`](./atm-graft/requirements.md)
+- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
+- [`docs/plan-atm-graft.md`](./plan-atm-graft.md)
+
+### T.7 Graft Runtime
+
+Goal:
+- add daemon-side registration and daemon-owned bounded nudge queue/drain
+  behavior for embedded and hook/poll consumers
+
+Artifacts:
+- [`docs/phase-T/sprint-T7-graft-runtime.md`](./phase-T/sprint-T7-graft-runtime.md)
+- [`docs/plan-atm-graft.md`](./plan-atm-graft.md)
+
+### T.8 ATM-Graft Crate
+
+Goal:
+- land `atm-graft` as a thin ATM client embedded inside a Rust host agent
+
+Artifacts:
+- [`docs/phase-T/sprint-T8-atm-graft-crate.md`](./phase-T/sprint-T8-atm-graft-crate.md)
+- [`docs/plan-atm-graft.md`](./plan-atm-graft.md)
+
 ## 6. Cross-Sprint Acceptance
 
 Phase T is complete only when:
@@ -136,11 +181,16 @@ Phase T is complete only when:
   only `xwin` compile checks
 - `T.5` closes the remaining bounded-state and shutdown-contract gaps and
   aligns docs with code
+- `T.6` lands the embeddable client-facing daemon surface in `atm-core`
+- `T.7` lands daemon-owned graft registration and bounded nudge drain behavior
+- `T.8` lands `atm-graft` as a thin embedded client crate with no direct
+  daemon-crate, SQLite, or inbox-JSONL dependency
 
 ## 7. Additional Follow-Up Watchlist
 
 These items are expected to be resolved inside the named T sprints rather than
-as a separate `T.6`, but they must still be tracked explicitly during QA:
+as ad hoc follow-up hardening, but they must still be tracked explicitly during
+QA:
 - `NotificationRuntime::shutdown()` bounded join semantics
 - pre-connect terminate checks in peer transport shutdown windows
 - orphaned shutdown-helper observability

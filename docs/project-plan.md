@@ -2979,6 +2979,8 @@ Goal:
 - deliver the architectural work deferred from Phase S: SQLite single-writer
   lane, immutable message-row semantics, Windows same-host runtime parity
   tests, and remaining daemon/runtime hardening
+- add the thin embedded `atm-graft` follow-on on top of the now-complete
+  daemon/IPC baseline
 
 Sprints:
 - T.1 (integrate/phase-S): fix 16 open INTG-* findings to clear Phase S gate
@@ -2993,9 +2995,18 @@ Sprints:
 - T.5 (integrate/phase-T): close RuntimeStatusCache all-conflict overflow edge,
   bound reconcile fingerprint sets per mailbox key, reconcile shutdown deadline
   contract between code (2s/3s) and architecture doc (5s/10s)
+- T.6 (integrate/phase-T): define the embeddable graft-facing daemon client
+  surface in `atm-core` so a host agent can embed ATM as a thin client rather
+  than re-implementing transport/runtime logic
+- T.7 (integrate/phase-T): add daemon-side graft registration plus bounded
+  nudge queue/drain behavior for embedded and hook/poll consumers
+- T.8 (integrate/phase-T): add the `atm-graft` crate as a thin ATM client
+  embedded in a Rust host agent
 
 Integration branch: `integrate/phase-T`
 
 Cross-reference:
 - The authoritative sprint-by-sprint Phase T plan lives in
   [`docs/plan-phase-T.md`](./plan-phase-T.md).
+- The dedicated `atm-graft` implementation plan lives in
+  [`docs/plan-atm-graft.md`](./plan-atm-graft.md).
