@@ -12,9 +12,11 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-core/tests/" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-11T00:00:00Z"^^xsd:dateTime ;
+  triage:closureReason "FTQ expert reviewer traced full call chain: send_mail → send_mail_with_runtime → notify_team_lead_missing_config → append_mailbox_message_and_seed_workflow → commit_workflow_state. No thread spawn, no deferred task anywhere in the chain. Notice inbox write completes inside commit_workflow_state before send_mail_with_runtime returns. Barrier+mpsc synchronization is sufficient. Race definitively resolved by synchronous implementation." ;
 
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t3-immutable-rows/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T3-001/pT-t3-immutable-rows/2> ;
