@@ -1,30 +1,29 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<urn:atm:triage:finding/RSH-001>
+<urn:atm:triage:finding/T3-ATM-QA-003>
   a triage:Finding ;
-  triage:findingId "RSH-001" ;
-  triage:title "Unbounded join in Drop — writer thread can block caller indefinitely" ;
-  triage:description "let _ = handle.join() in Drop (writer/mod.rs:91) has no deadline. If the writer thread is blocked on a slow SQLite write or WAL fsync at drop time, the calling thread blocks indefinitely. Fix: bound the join with a deadline (e.g., 5s via sync_channel observer thread + recv_timeout); log and abandon on timeout." ;
-  triage:category "RSH" ;
+  triage:findingId "T3-ATM-QA-003" ;
+  triage:title "T.3 batch isolation test only covers message_key prefix rejection, not single-successor invariant" ;
+  triage:description "crates/atm-rusqlite/src/writer/mod.rs:350 — Batch isolation test only exercises message_key prefix rejection path. No test for single-successor invariant violation inside process_batch savepoint path. Sprint AC requires isolation proof for all invariant types fired by validate_message_record." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
   triage:phaseId "phase-T" ;
-  triage:triageMode "followup_pass" ;
   triage:severity "important" ;
   triage:repeatable false ;
   triage:sweepScope "crate" ;
-  triage:status "fixed_partial" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/pT-t3-immutable-rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/T3-ATM-QA-003/pT-t3-immutable-rows/1> ;
   triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> ;
-  triage:fixedOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c> ;
   triage:promoteTo <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
 
-<urn:atm:triage:occurrence/RSH-001/pT-t3-immutable-rows/1>
+<urn:atm:triage:occurrence/T3-ATM-QA-003/pT-t3-immutable-rows/1>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 91 ;
-  triage:snippet "let _ = handle.join();" ;
+  triage:line 350 ;
+  triage:snippet "fn invalid_message_row_does_not_poison_other_rows_in_same_batch() — triggers only prefix rejection path (\\\"bad-key\\\"), no single-successor invariant violation exercised in savepoint path" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
@@ -66,7 +65,7 @@
   triage:headSha "fbf64cc" ;
   triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/phase-T-integrate/f96abd0>
+<urn:atm:triage:worktree/integrate-phase-T/f96abd0>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;

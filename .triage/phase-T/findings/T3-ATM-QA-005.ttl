@@ -1,42 +1,29 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<urn:atm:triage:finding/QA-003>
+<urn:atm:triage:finding/T3-ATM-QA-005>
   a triage:Finding ;
-  triage:findingId "QA-003" ;
-  triage:title "No test for batch time-budget deadline flush (BATCH_TIME_BUDGET = 2ms path)" ;
-  triage:description "crates/atm-rusqlite/src/writer/mod.rs — No test for batch time-budget deadline flush. The collect_batch function has a BATCH_TIME_BUDGET = 2ms path that is not covered by any test. T.3 QA-1 confirms this is still unresolved. Prior QA-003.ttl covered a different finding (Shutdown/DaemonUnavailable, now recorded separately); this record supersedes it for the BATCH_TIME_BUDGET coverage gap." ;
+  triage:findingId "T3-ATM-QA-005" ;
+  triage:title "atm-rusqlite requirements.md missing explicit IDs for T.3 immutable-row semantics" ;
+  triage:description "docs/atm-rusqlite/requirements.md — Missing explicit requirement IDs for T.3 immutable-row semantics (insert-or-ignore, no-payload-update, no pre-write probe). These semantics need traceable requirement IDs in the REQ-RUSQLITE-* namespace." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
   triage:phaseId "phase-T" ;
-  triage:triageMode "followup_pass" ;
-  triage:category "QA" ;
   triage:severity "minor" ;
   triage:repeatable false ;
-  triage:sweepScope "crate" ;
+  triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-10T21:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/QA-003/pT-t2/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/QA-003/pT-t3/1> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t2/5275b3c> ;
+  triage:triagedAt "2026-05-10T20:17:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/T3-ATM-QA-005/pT-t3/1> ;
   triage:openOn <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
   triage:promoteTo <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
 
-<urn:atm:triage:occurrence/QA-003/pT-t2/1>
+<urn:atm:triage:occurrence/T3-ATM-QA-005/pT-t3/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 286 ;
-  triage:snippet "let deadline = Instant::now() + BATCH_TIME_BUDGET;" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
-
-<urn:atm:triage:occurrence/QA-003/pT-t3/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 138 ;
-  triage:snippet "let deadline = Instant::now() + BATCH_TIME_BUDGET;" ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 94 ;
+  triage:snippet "Phase T hot mailbox writes must use one crate-private SQLite writer lane instead of ad-hoc per-operation write transactions [prose rules at lines 94-137 lack traceable REQ-RUSQLITE-* IDs for T.3 immutable-row semantics]" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
@@ -78,7 +65,7 @@
   triage:headSha "fbf64cc" ;
   triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/integrate-T/f96abd0>
+<urn:atm:triage:worktree/integrate-phase-T/f96abd0>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
