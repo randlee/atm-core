@@ -9,6 +9,9 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
+/// Keep one permanent writer handle plus at most three concurrent reader handles so the
+/// same-process SQLite budget stays explicit under WAL mode without turning read bursts into an
+/// unbounded connection fan-out.
 const MAX_SQLITE_READER_CONNECTIONS: usize = 3;
 #[cfg(test)]
 static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
