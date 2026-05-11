@@ -39,8 +39,9 @@ const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
 const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 
 // Timed-out shutdown workers are retained in one process-wide registry instead of being dropped
-// orphaned; tests drain the registry explicitly and production keeps the handles reachable until
-// process shutdown completes.
+// orphaned; this must be static because the bounded finalizer helper can outlive any one
+// dispatcher instance after timeout, while orderly shutdown and serial tests still need one place
+// to recover and join those retained workers later.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
 
@@ -389,17 +390,24 @@ impl DaemonRequestDispatcher {
                 // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
                 // than dropping it orphaned because tests and orderly process teardown can join it
                 // later once the blocking storage step finishes.
-                let mut handles = SHUTDOWN_FINALIZER_THREADS
-                    .lock()
-                    .expect("shutdown finalizer thread registry lock");
-                if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS {
-                    handles.push(shutdown_handle);
-                } else {
-                    tracing::warn!(
-                        step = label,
-                        cap = MAX_SHUTDOWN_FINALIZER_THREADS,
-                        "shutdown finalizer thread cap reached; dropping retained worker handle"
-                    );
+                match SHUTDOWN_FINALIZER_THREADS.lock() {
+                    Ok(mut handles) => {
+                        if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS {
+                            handles.push(shutdown_handle);
+                        } else {
+                            tracing::warn!(
+                                step = label,
+                                cap = MAX_SHUTDOWN_FINALIZER_THREADS,
+                                "shutdown finalizer thread cap reached; dropping retained worker handle"
+                            );
+                        }
+                    }
+                    Err(_) => {
+                        tracing::warn!(
+                            step = label,
+                            "shutdown finalizer thread registry lock poisoned; dropping retained worker handle"
+                        );
+                    }
                 }
                 tracing::warn!(
                     step = label,
@@ -449,7 +457,7 @@ impl DaemonRequestDispatcher {
         }
     }
 
-    pub(crate) fn emit_runtime_event(
+    pub(crate) fn record_runtime_event(
         &self,
         action: &'static str,
         outcome: &'static str,
@@ -883,9 +891,18 @@ mod tests {
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
 
+    struct ShutdownFinalizerDrainGuard;
+
+    impl Drop for ShutdownFinalizerDrainGuard {
+        fn drop(&mut self) {
+            DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+        }
+    }
+
     #[test]
     #[serial]
     fn bounded_shutdown_step_returns_after_deadline() {
+        let _drain_guard = ShutdownFinalizerDrainGuard;
         let release = Arc::new((Mutex::new(false), Condvar::new()));
         let blocker = Arc::clone(&release);
         let started = Instant::now();
@@ -913,12 +930,12 @@ mod tests {
         let (released, wake) = &*release;
         *released.lock().expect("released") = true;
         wake.notify_all();
-        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
     }
 
     #[test]
     #[serial]
     fn bounded_shutdown_step_does_not_exceed_retained_finalizer_cap() {
+        let _drain_guard = ShutdownFinalizerDrainGuard;
         DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
 
         let retained_release = Arc::new((Mutex::new(false), Condvar::new()));
@@ -976,7 +993,6 @@ mod tests {
         let (released, wake) = &*retained_release;
         *released.lock().expect("retained release") = true;
         wake.notify_all();
-        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
     }
 }
 

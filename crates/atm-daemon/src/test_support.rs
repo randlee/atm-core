@@ -76,18 +76,13 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
 
 pub(crate) fn connect_daemon_local_ipc_until_ready(
     endpoint_path: &std::path::Path,
+    ready_rx: std::sync::mpsc::Receiver<()>,
 ) -> LocalSocketStream {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
-    loop {
-        match LocalSocketStream::connect(
-            atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name"),
-        ) {
-            Ok(stream) => return stream,
-            Err(error) if std::time::Instant::now() < deadline => {
-                let _ = error;
-                std::thread::sleep(std::time::Duration::from_millis(5));
-            }
-            Err(error) => panic!("connect daemon local ipc: {error}"),
-        }
-    }
+    ready_rx
+        .recv_timeout(std::time::Duration::from_secs(3))
+        .expect("daemon local ipc ready signal");
+    LocalSocketStream::connect(
+        atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name"),
+    )
+    .unwrap_or_else(|error| panic!("connect daemon local ipc after ready signal: {error}"))
 }

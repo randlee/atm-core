@@ -50,6 +50,8 @@ Phase-S planning note:
 - Phase S implementation details must come either from `docs/plan-phase-S.md`
   or from the governing requirements, architecture, ADR, and ICD documents it
   names; the project plan does not override those lower-level sources of truth
+- Phase S was extended through `S.15` (SQLite write-worker / rusqlite
+  hardening); see `docs/plan-phase-S.md` §5
 - the planning baseline is `integrate/phase-R` at `6a072c1`
 - S.5 is the follow-on planning slice that tightens the no-flaky-test policy,
   defines which anti-flake guardrails belong in the default lint path, and
@@ -2966,6 +2968,8 @@ Summary:
   hardening, policy lint, SQLite write-worker planning and implementation,
   JSONL log compatibility, logging defaults, retained log bootstrap, and
   integration gate cleanup
+- Phase S was originally scoped through S.14, then explicitly extended through
+  S.15 for the SQLite write-worker planning and hardening line
 - S.13–S.15 delivered the local IPC transport, Windows same-host runtime, and
   SQLite write-worker foundation
 - Integration branch `integrate/phase-S` carries all merged sprint work

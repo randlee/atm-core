@@ -68,10 +68,9 @@ impl TestDaemonObservability {
             .with_source(source)
         })?;
         let (recorded, wake) = &self.recorded_messages;
-        recorded
-            .lock()
-            .expect("test observability messages")
-            .push(message);
+        let mut recorded = recorded.lock().expect("test observability messages");
+        recorded.push(message);
+        drop(recorded);
         wake.notify_all();
         Ok(())
     }
@@ -80,7 +79,7 @@ impl TestDaemonObservability {
         &self,
         needle: &str,
         timeout: Duration,
-    ) -> Result<(), String> {
+    ) -> Result<(), AtmError> {
         let deadline = Instant::now() + timeout;
         let (recorded, wake) = &self.recorded_messages;
         let mut recorded = recorded.lock().expect("test observability messages");
@@ -90,9 +89,14 @@ impl TestDaemonObservability {
             }
             let now = Instant::now();
             if now >= deadline {
-                return Err(format!(
-                    "timed out waiting for retained test log message containing {needle:?}"
-                ));
+                return Err(
+                    AtmError::observability_health(format!(
+                        "timed out waiting for retained test log message containing {needle:?}"
+                    ))
+                    .with_recovery(
+                        "Retry the daemon observability test after verifying the retained-log adapter emitted the expected startup event.",
+                    ),
+                );
             }
             let wait = wake
                 .wait_timeout(recorded, deadline.saturating_duration_since(now))
