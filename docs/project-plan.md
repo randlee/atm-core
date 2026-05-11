@@ -129,6 +129,7 @@ The abandoned Phase Q target implementation was split across:
 - `crates/atm-core`
 - `crates/atm`
 - `crates/atm-daemon`
+- `crates/atm-graft`
 - `crates/atm-rusqlite`
 
 Crate-local scope detail is owned by:
@@ -142,6 +143,9 @@ Crate-local scope detail is owned by:
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
+- [`docs/atm-graft/requirements.md`](./atm-graft/requirements.md)
+- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
+- [`docs/atm-graft/boundaries.md`](./atm-graft/boundaries.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
