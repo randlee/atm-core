@@ -67,10 +67,14 @@ Initial crate requirement IDs:
   writes must preserve the original envelope/payload fields and keep mutable
   live state in the projection tables instead of rewriting the immutable row.
   Satisfies: `REQ-RUNTIME-002`.
-- `REQ-RUSQLITE-IMMUT-003` the hot mailbox write path must not issue a
-  pre-write probe before submitting message inserts to the writer lane; queue
-  semantics and row-count detection own duplicate handling. Satisfies:
-  `REQ-RUNTIME-002`.
+- `REQ-RUSQLITE-IMMUT-003` the hot mailbox write path must not issue an
+  existence probe before submitting message inserts to the writer lane, such
+  as `SELECT 1` or `COUNT(*)` used only to decide whether a duplicate key
+  should be written. Queue semantics and row-count detection own duplicate
+  handling. This ban does not apply to crate-owned invariant validation queries
+  that must run before `INSERT` (for example single-successor or legacy
+  identity checks), as documented in [`architecture.md`](./architecture.md).
+  Satisfies: `REQ-RUNTIME-002`.
 
 ## 4. Required References
 
@@ -83,6 +87,7 @@ The `atm-rusqlite` crate docs must remain aligned with:
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../phase-T/sprint-T2-sqlite-writer.md`](../phase-T/sprint-T2-sqlite-writer.md)
+- [`../phase-T/sprint-T3-immutable-rows.md`](../phase-T/sprint-T3-immutable-rows.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
