@@ -3,9 +3,7 @@ use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, 
 use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 
-#[cfg(unix)]
 use interprocess::local_socket::Stream as LocalSocketStream;
-#[cfg(unix)]
 use interprocess::local_socket::traits::Stream as _;
 
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
@@ -76,7 +74,6 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
     }
 }
 
-#[cfg(unix)]
 pub(crate) fn connect_daemon_local_ipc_until_ready(
     endpoint_path: &std::path::Path,
 ) -> LocalSocketStream {
