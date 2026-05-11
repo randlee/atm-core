@@ -5,21 +5,22 @@
   a triage:Finding ;
   triage:findingId "QA-003" ;
   triage:title "No test for batch time-budget deadline flush (BATCH_TIME_BUDGET = 2ms path)" ;
-  triage:description "crates/atm-rusqlite/src/writer/mod.rs — No test for batch time-budget deadline flush. The collect_batch function has a BATCH_TIME_BUDGET = 2ms path that is not covered by any test. T.3 QA-1 confirms this is still unresolved. Prior QA-003.ttl covered a different finding (Shutdown/DaemonUnavailable, now recorded separately); this record supersedes it for the BATCH_TIME_BUDGET coverage gap." ;
+  triage:description "crates/atm-rusqlite/src/writer/mod.rs — No test for batch time-budget deadline flush. The collect_batch function has a BATCH_TIME_BUDGET = 2ms path that is not covered by any test. T.3 FIX-R3 (6668842) added deadline_flush_commits_messages_without_waiting_for_batch_capacity which exercises this path. Fix has propagated to T.4 and T.5 but T.2 (d6f89e3) is still open and requires a merge-forward from T.3." ;
   triage:phaseId "phase-T" ;
   triage:triageMode "followup_pass" ;
   triage:category "QA" ;
   triage:severity "minor" ;
   triage:repeatable false ;
-  triage:sweepScope "crate" ;
-  triage:status "open" ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-10T21:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-05-10T22:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/QA-003/pT-t2/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/QA-003/pT-t3/1> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t2/5275b3c> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
-  triage:promoteTo <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+  triage:openOn <urn:atm:triage:worktree/pT-t2/d6f89e3> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t3/6668842> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t4/d180818> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t5/6450bb5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t2/d6f89e3> .
 
 <urn:atm:triage:occurrence/QA-003/pT-t2/1>
   a triage:Occurrence ;
@@ -29,58 +30,47 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+  triage:headSha "d6f89e3" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/d6f89e3> .
 
-<urn:atm:triage:occurrence/QA-003/pT-t3/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 138 ;
-  triage:snippet "let deadline = Instant::now() + BATCH_TIME_BUDGET;" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
-
-<urn:atm:triage:worktree/pT-t1/bdc8ce1>
+<urn:atm:triage:worktree/pT-t1/0e6b024>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t1-integration-gate" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
-  triage:headSha "bdc8ce1" ;
+  triage:headSha "0e6b024" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/pT-t2/5275b3c>
+<urn:atm:triage:worktree/pT-t2/d6f89e3>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
+  triage:headSha "d6f89e3" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pT-t3/f9f1e3f>
+<urn:atm:triage:worktree/pT-t3/6668842>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t3-immutable-rows" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
+  triage:headSha "6668842" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/pT-t4/b71366f>
+<urn:atm:triage:worktree/pT-t4/d180818>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t4-windows-runtime" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
-  triage:headSha "b71366f" ;
+  triage:headSha "d180818" ;
   triage:orderIndex 4 .
 
-<urn:atm:triage:worktree/pT-t5/fbf64cc>
+<urn:atm:triage:worktree/pT-t5/6450bb5>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t5-hardening" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
-  triage:headSha "fbf64cc" ;
+  triage:headSha "6450bb5" ;
   triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/integrate-T/f96abd0>
+<urn:atm:triage:worktree/integrate-T/fa92dc5>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
-  triage:headSha "f96abd0" ;
+  triage:headSha "fa92dc5" ;
   triage:orderIndex 9 .

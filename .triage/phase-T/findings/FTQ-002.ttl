@@ -1,0 +1,151 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/FTQ-002>
+  a triage:Finding ;
+  triage:findingId "FTQ-002" ;
+  triage:title "windows_local_ipc_runtime_terminate_finishes_within_deadline has no readiness gate before terminate signal" ;
+  triage:description "cfg(windows) test windows_local_ipc_runtime_terminate_finishes_within_deadline spawns serve_with_runtime_hooks on a thread then immediately calls set_terminate_for_test(true) with no readiness gate. publish_ready is a no-op closure (|| Ok(())), so there is no handshake ensuring the accept-loop has entered before terminate fires. The runtime may miss shutdown entirely. Companion tests use a ready_tx/ready_rx sync_channel and wait on ready_rx.recv() before signalling terminate; this test must adopt the same pattern." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:pattern "race_condition_test" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+
+  # occurrences — one per open branch
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/pT-t1-integration-gate/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/pT-t2-sqlite-writer/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/pT-t3-immutable-rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/pT-t4-windows-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/pT-t5-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/integrate-phase-T/1> ;
+
+  # branch state edges
+  triage:openOn <urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/d6f89e3> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/d180818> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-T/177b30e> ;
+
+  # promote to highest open branch (integrate/phase-T is the merge target; fix on t1 first)
+  triage:promoteTo <urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024> .
+
+# ── Occurrences ────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/FTQ-002/pT-t1-integration-gate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 336 ;
+  triage:snippet "lifecycle.set_terminate_for_test(true); // no ready_rx.recv() gate; publish_ready: || Ok(()) is a no-op" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024> .
+
+<urn:atm:triage:occurrence/FTQ-002/pT-t2-sqlite-writer/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 336 ;
+  triage:snippet "lifecycle.set_terminate_for_test(true); // no ready_rx.recv() gate; publish_ready: || Ok(()) is a no-op" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "d6f89e3" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/d6f89e3> .
+
+<urn:atm:triage:occurrence/FTQ-002/pT-t3-immutable-rows/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 336 ;
+  triage:snippet "lifecycle.set_terminate_for_test(true); // no ready_rx.recv() gate; publish_ready: || Ok(()) is a no-op" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> .
+
+<urn:atm:triage:occurrence/FTQ-002/pT-t4-windows-runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 331 ;
+  triage:snippet "lifecycle.set_terminate_for_test(true); // no ready_rx.recv() gate; publish_ready: || Ok(()) is a no-op" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "d180818" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/d180818> .
+
+<urn:atm:triage:occurrence/FTQ-002/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 329 ;
+  triage:snippet "lifecycle.set_terminate_for_test(true); // no ready_rx.recv() gate; publish_ready: || Ok(()) is a no-op" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
+
+<urn:atm:triage:occurrence/FTQ-002/integrate-phase-T/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 336 ;
+  triage:snippet "lifecycle.set_terminate_for_test(true); // no ready_rx.recv() gate; publish_ready: || Ok(()) is a no-op" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "177b30e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/177b30e> .
+
+# ── WorktreeSnapshots ──────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/d6f89e3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "d6f89e3" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/d180818>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "d180818" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5-hardening/6450bb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-T/177b30e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "177b30e" ;
+  triage:orderIndex 6 .
