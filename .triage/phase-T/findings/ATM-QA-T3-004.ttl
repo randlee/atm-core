@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: ATM-QA-T3-004
+# Title: roster_store.rs caller audit not verifiable from review targets
+# Phase: phase-T
+# Triage mode: initial_pass
+# Triagedatestamp: 2026-05-10T00:00:00Z
+#
+# Verification result: replace_roster (line 12, with_transaction line 25) and
+# record_heartbeat (line 149, with_transaction line 154) both use with_transaction
+# on all six worktrees.  No direct connection access detected.  Finding is absent
+# across the entire phase — no open branch, no fix required.
+
+<urn:atm:triage:finding/ATM-QA-T3-004>
+    a triage:Finding ;
+    triage:findingId "ATM-QA-T3-004" ;
+    triage:title "roster_store.rs caller audit not verifiable from review targets" ;
+    triage:description "architecture.md T.2 caller audit table lists roster_store.rs callers (replace_roster, record_heartbeat) as cold-path; the file was not in T.3 review targets. Advisory: verify crates/atm-rusqlite/src/roster_store.rs replace_roster and record_heartbeat still use with_transaction and have not regressed to direct connection access." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "audit_gap" ;
+    triage:phaseId "phase-T" ;
+    triage:severity "minor" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "absent" ;
+    triage:dispatchReady false ;
+    triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+    triage:openOn <urn:atm:triage:worktree/none> ;
+    triage:promoteTo <urn:atm:triage:worktree/none> .
+
+# WorktreeSnapshots — all branches verified absent (with_transaction confirmed)
+
+<urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pT-t1-integration-gate" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+    triage:headSha "0e6b024" ;
+    triage:orderIndex 1 ;
+    triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pT-t2-sqlite-writer" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+    triage:headSha "8fde385" ;
+    triage:orderIndex 2 ;
+    triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pT-t3-immutable-rows" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+    triage:headSha "06b28a4" ;
+    triage:orderIndex 3 ;
+    triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pT-t4-windows-runtime" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+    triage:headSha "8baee53" ;
+    triage:orderIndex 4 ;
+    triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pT-t5-hardening/6450bb5>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pT-t5-hardening" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+    triage:headSha "6450bb5" ;
+    triage:orderIndex 5 ;
+    triage:branchState "absent" .
+
+<urn:atm:triage:worktree/integrate-phase-T/47a3681>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-T" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+    triage:headSha "47a3681" ;
+    triage:orderIndex 6 ;
+    triage:branchState "absent" .
