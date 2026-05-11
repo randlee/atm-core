@@ -2964,8 +2964,7 @@ Summary:
 - S.13–S.15 delivered the local IPC transport, Windows same-host runtime, and
   SQLite write-worker foundation
 - Integration branch `integrate/phase-S` carries all merged sprint work
-- PR #231 (`integrate/phase-S → develop`) is currently blocked by 16 open
-  INTG-* gate findings (2B+6I+8m); fixes are Sprint T.1 scope
+- PR #231 (`integrate/phase-S → develop`) merged at c6847d1; fixes are Sprint T.1 scope landing on `integrate/phase-T`
 
 Cross-reference:
 - The authoritative sprint-by-sprint Phase S plan lives in

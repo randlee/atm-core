@@ -2,7 +2,7 @@
 
 **Branch**: `integrate/phase-T`
 **Base**: `integrate/phase-T @ 1232244`
-**PR target**: `develop`
+**PR target**: `integrate/phase-T`
 **Status**: Planning
 
 ## Goal
