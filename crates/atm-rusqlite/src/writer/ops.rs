@@ -4,6 +4,8 @@ use atm_core::boundary;
 use atm_core::error::AtmError;
 use rusqlite::{Connection, OptionalExtension, params};
 
+pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
+
 #[derive(Debug, Clone)]
 pub(crate) enum WriteOp {
     UpsertMessage(boundary::MailStoreUpsertMessageRequest),
@@ -30,6 +32,21 @@ pub(crate) fn execute(
             execute_upsert_visibility_state(request, connection, cache, target)
         }
     }
+}
+
+pub(crate) fn validate_upsert_message_request(
+    request: &boundary::MailStoreUpsertMessageRequest,
+) -> Result<(), AtmError> {
+    let envelope_json = serialize_json(&request.record.envelope, "mail-store envelope")?;
+    if envelope_json.len() > MAX_ENVELOPE_JSON_BYTES {
+        return Err(AtmError::validation(format!(
+            "mail-store envelope JSON exceeded the writer lane limit of {MAX_ENVELOPE_JSON_BYTES} bytes"
+        ))
+        .with_recovery(
+            "Reduce the message envelope payload before retrying or raise the documented writer-lane size ceiling intentionally.",
+        ));
+    }
+    Ok(())
 }
 
 fn execute_upsert_message(

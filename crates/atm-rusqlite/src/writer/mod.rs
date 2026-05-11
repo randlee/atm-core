@@ -1,7 +1,7 @@
 mod ops;
 mod stmt_cache;
 
-pub(crate) use ops::{WriteOp, WriteOpResult};
+pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 
 use crate::shared_db::{
     SharedDbTarget, SqliteConnection, ensure_schema, open_connection_for_target, sqlite_error,
@@ -9,14 +9,16 @@ use crate::shared_db::{
 use atm_core::error::{AtmError, AtmErrorCode};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
-use std::sync::Mutex;
-use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError};
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, SyncSender, TryRecvError, TrySendError};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 pub(crate) const CHANNEL_CAPACITY: usize = 256;
 pub(crate) const BATCH_SIZE_MAX: usize = 64;
 pub(crate) const BATCH_TIME_BUDGET: Duration = Duration::from_millis(2);
+const WRITE_OP_DEADLINE: Duration = Duration::from_secs(10);
+const WRITER_SHUTDOWN_JOIN_DEADLINE: Duration = Duration::from_secs(5);
+const SUBMIT_RETRY_INTERVAL: Duration = Duration::from_millis(5);
 
 type ReplyTx = SyncSender<Result<WriteOpResult, AtmError>>;
 
@@ -32,16 +34,32 @@ struct QueuedWrite {
 
 #[derive(Debug)]
 pub(crate) struct SqliteWriter {
-    sender: SyncSender<WriterMessage>,
-    worker: Mutex<Option<JoinHandle<()>>>,
+    sender: Option<SyncSender<WriterMessage>>,
+    worker: Option<JoinHandle<()>>,
+    write_op_deadline: Duration,
+    shutdown_join_deadline: Duration,
 }
 
 impl SqliteWriter {
     pub(crate) fn start(target: Arc<SharedDbTarget>) -> Result<Self, AtmError> {
+        Self::start_with_settings(
+            target,
+            CHANNEL_CAPACITY,
+            WRITE_OP_DEADLINE,
+            WRITER_SHUTDOWN_JOIN_DEADLINE,
+        )
+    }
+
+    fn start_with_settings(
+        target: Arc<SharedDbTarget>,
+        channel_capacity: usize,
+        write_op_deadline: Duration,
+        shutdown_join_deadline: Duration,
+    ) -> Result<Self, AtmError> {
         let mut connection = open_connection_for_target(target.as_ref())?;
         ensure_schema(&mut connection, target.as_ref())?;
 
-        let (sender, receiver) = mpsc::sync_channel(CHANNEL_CAPACITY);
+        let (sender, receiver) = mpsc::sync_channel(channel_capacity);
         let worker = thread::Builder::new()
             .name("atm-sqlite-writer".to_string())
             .spawn(move || writer_loop(target, connection, receiver))
@@ -55,41 +73,163 @@ impl SqliteWriter {
                 .with_source(error)
             })?;
         Ok(Self {
-            sender,
-            worker: Mutex::new(Some(worker)),
+            sender: Some(sender),
+            worker: Some(worker),
+            write_op_deadline,
+            shutdown_join_deadline,
         })
     }
 
     pub(crate) fn submit(&self, op: WriteOp) -> Result<WriteOpResult, AtmError> {
+        let sender = self.sender.as_ref().ok_or_else(|| {
+            AtmError::daemon_unavailable("sqlite writer submission channel closed").with_recovery(
+                "Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.",
+            )
+        })?;
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
-        self.sender
-            .send(WriterMessage::Submit {
-                op: Box::new(op),
-                reply: reply_tx,
-            })
-            .map_err(|_| {
-                AtmError::daemon_unavailable("sqlite writer submission channel closed")
-                    .with_recovery(
-                        "Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.",
-                    )
-            })?;
-        reply_rx.recv().map_err(|_| {
-            AtmError::daemon_unavailable("sqlite writer reply channel closed")
+        let deadline = Instant::now() + self.write_op_deadline;
+        let mut message = WriterMessage::Submit {
+            op: Box::new(op),
+            reply: reply_tx,
+        };
+        loop {
+            match sender.try_send(message) {
+                Ok(()) => break,
+                Err(TrySendError::Full(returned)) => {
+                    if Instant::now() >= deadline {
+                        return Err(AtmError::daemon_unavailable(format!(
+                    "sqlite writer submission queue did not accept a write within {:?}",
+                    self.write_op_deadline
+                ))
                 .with_recovery(
-                    "Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.",
-                )
-        })?
+                    "Retry after the sqlite writer backlog drains or restart the ATM daemon if the writer lane is stalled.",
+                ));
+                    }
+                    message = returned;
+                    thread::park_timeout(SUBMIT_RETRY_INTERVAL);
+                }
+                Err(TrySendError::Disconnected(_)) => {
+                    return Err(
+                        AtmError::daemon_unavailable("sqlite writer submission channel closed")
+                            .with_recovery(
+                                "Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.",
+                            ),
+                    );
+                }
+            }
+        }
+        reply_rx
+            .recv_timeout(self.write_op_deadline)
+            .map_err(|error| match error {
+                RecvTimeoutError::Timeout => AtmError::daemon_unavailable(format!(
+                    "sqlite writer reply did not arrive within {:?}",
+                    self.write_op_deadline
+                ))
+                .with_recovery(
+                    "Retry after the sqlite writer backlog drains or restart the ATM daemon if the writer lane is stalled.",
+                ),
+                RecvTimeoutError::Disconnected => {
+                    AtmError::daemon_unavailable("sqlite writer reply channel closed")
+                        .with_recovery(
+                            "Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.",
+                        )
+                }
+            })?
+    }
+
+    #[cfg(test)]
+    fn start_for_test(
+        target: Arc<SharedDbTarget>,
+        channel_capacity: usize,
+        write_op_deadline: Duration,
+        shutdown_join_deadline: Duration,
+    ) -> Result<Self, AtmError> {
+        Self::start_with_settings(
+            target,
+            channel_capacity,
+            write_op_deadline,
+            shutdown_join_deadline,
+        )
     }
 }
 
 impl Drop for SqliteWriter {
     fn drop(&mut self) {
-        let _ = self.sender.send(WriterMessage::Shutdown);
-        if let Ok(mut worker) = self.worker.lock()
-            && let Some(handle) = worker.take()
-        {
-            let _ = handle.join();
+        let sender = self.sender.take();
+        let worker = self.worker.take();
+
+        if let Some(sender) = sender {
+            match sender.try_send(WriterMessage::Shutdown) {
+                Ok(()) | Err(TrySendError::Disconnected(_)) => {}
+                Err(TrySendError::Full(_)) => eprintln!(
+                    "warn: sqlite writer shutdown signal skipped because the bounded queue was full; relying on channel disconnect to let the writer exit once in-flight work drains"
+                ),
+            }
+            drop(sender);
         }
+
+        if let Some(handle) = worker {
+            let (result_tx, result_rx) = mpsc::sync_channel(1);
+            let join_helper = thread::spawn(move || {
+                let _ = result_tx.send(handle.join());
+            });
+            match result_rx.recv_timeout(self.shutdown_join_deadline) {
+                Ok(Ok(())) => {
+                    let _ = join_helper.join();
+                }
+                Ok(Err(_)) => {
+                    let _ = join_helper.join();
+                    eprintln!(
+                        "error: sqlite writer thread panicked while shutting down; the durable write lane may have exited mid-drain"
+                    );
+                }
+                Err(RecvTimeoutError::Timeout) => {
+                    drop(join_helper);
+                    eprintln!(
+                        "warn: sqlite writer shutdown exceeded the bounded join deadline of {}ms; detaching join helper",
+                        self.shutdown_join_deadline.as_millis()
+                    );
+                }
+                Err(RecvTimeoutError::Disconnected) => {
+                    let _ = join_helper.join();
+                    eprintln!(
+                        "warn: sqlite writer join helper disconnected before reporting the worker shutdown result"
+                    );
+                }
+            }
+        }
+    }
+}
+
+fn writer_unavailable_reply() -> AtmError {
+    AtmError::daemon_unavailable("sqlite writer is unavailable during shutdown").with_recovery(
+        "Retry after the sqlite boundary assembly is restarted and the writer lane is accepting submissions again.",
+    )
+}
+
+fn drain_submit_replies(receiver: &Receiver<WriterMessage>) {
+    loop {
+        match receiver.try_recv() {
+            Ok(WriterMessage::Submit { reply, .. }) => {
+                let _ = reply.send(Err(writer_unavailable_reply()));
+            }
+            Ok(WriterMessage::Shutdown) => continue,
+            Err(TryRecvError::Empty | TryRecvError::Disconnected) => break,
+        }
+    }
+}
+
+fn checkpoint_writer_connection(target: &SharedDbTarget, connection: &mut SqliteConnection) {
+    #[cfg(test)]
+    if matches!(target, SharedDbTarget::InMemory { .. }) {
+        return;
+    }
+
+    if let Err(error) = connection.query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(())) {
+        eprintln!(
+            "warn: sqlite writer final wal checkpoint failed after draining the write lane for {}: {error}",
+            target.display()
+        );
     }
 }
 
@@ -110,6 +250,7 @@ fn writer_loop(
         }
         process_batch(&target, &mut connection, &mut cache, batch);
     }
+    checkpoint_writer_connection(target.as_ref(), &mut connection);
 }
 
 fn receive_first_message(
@@ -119,13 +260,20 @@ fn receive_first_message(
     if shutting_down {
         match receiver.try_recv() {
             Ok(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
-            Ok(WriterMessage::Shutdown) => None,
+            Ok(WriterMessage::Shutdown) => {
+                drain_submit_replies(receiver);
+                None
+            }
             Err(TryRecvError::Empty | TryRecvError::Disconnected) => None,
         }
     } else {
         match receiver.recv() {
             Ok(WriterMessage::Submit { op, reply }) => Some(QueuedWrite { op, reply }),
-            Ok(WriterMessage::Shutdown) | Err(_) => None,
+            Ok(WriterMessage::Shutdown) => {
+                drain_submit_replies(receiver);
+                None
+            }
+            Err(_) => None,
         }
     }
 }
@@ -276,4 +424,202 @@ fn copy_error(error: &AtmError) -> AtmError {
     copied.code = error.code;
     copied.recovery = error.recovery.clone();
     copied
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atm_core::MessageKey;
+    use atm_core::boundary;
+    use atm_core::schema::MessageEnvelope;
+    use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+    use tempfile::TempDir;
+
+    fn temp_disk_target() -> (TempDir, Arc<SharedDbTarget>) {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("writer.sqlite3");
+        (tempdir, Arc::new(SharedDbTarget::Path(path)))
+    }
+
+    fn team() -> TeamName {
+        "test-team".parse().expect("team")
+    }
+
+    fn agent() -> AgentName {
+        "test-agent".parse().expect("agent")
+    }
+
+    fn actor() -> AgentName {
+        "test-actor".parse().expect("actor")
+    }
+
+    fn task_id() -> TaskId {
+        "task-123".parse().expect("task")
+    }
+
+    fn message_key(value: &str) -> MessageKey {
+        MessageKey::new(value).expect("message key")
+    }
+
+    fn envelope(text: &str) -> MessageEnvelope {
+        MessageEnvelope {
+            from: actor(),
+            text: text.to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(team()),
+            summary: Some(format!("summary: {text}")),
+            message_id: None,
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            stale_at: None,
+            task_id: Some(task_id()),
+            extra: serde_json::Map::new(),
+        }
+    }
+
+    fn upsert_message_request(index: usize) -> WriteOp {
+        WriteOp::UpsertMessage(boundary::MailStoreUpsertMessageRequest {
+            record: boundary::MailStoreMessageRecord {
+                team: team(),
+                agent: agent(),
+                message_key: message_key(&format!("atm:writer-{index}")),
+                envelope: envelope(&format!("writer message {index}")),
+                imported_from: Some("writer-test".to_string()),
+                recorded_at: Some(IsoTimestamp::now()),
+            },
+        })
+    }
+
+    fn message_count(target: &SharedDbTarget) -> i64 {
+        let connection = open_connection_for_target(target).expect("open verifier connection");
+        connection
+            .query_row("SELECT COUNT(1) FROM mail_messages;", [], |row| row.get(0))
+            .expect("count rows")
+    }
+
+    #[test]
+    fn writer_drop_drains_queued_messages_before_exit() {
+        let (_tempdir, target) = temp_disk_target();
+        let writer = SqliteWriter::start_for_test(
+            Arc::clone(&target),
+            CHANNEL_CAPACITY,
+            Duration::from_millis(50),
+            Duration::from_secs(1),
+        )
+        .expect("writer");
+
+        let mut replies = Vec::new();
+        for index in 0..8 {
+            let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+            writer
+                .sender
+                .as_ref()
+                .expect("sender")
+                .send(WriterMessage::Submit {
+                    op: Box::new(upsert_message_request(index)),
+                    reply: reply_tx,
+                })
+                .expect("queue submit");
+            replies.push(reply_rx);
+        }
+
+        drop(writer);
+
+        for reply in replies {
+            assert!(reply.recv().expect("reply").is_ok());
+        }
+        assert_eq!(message_count(target.as_ref()), 8);
+    }
+
+    #[test]
+    fn writer_commits_more_than_one_batch_boundary_of_messages() {
+        let (_tempdir, target) = temp_disk_target();
+        let writer = SqliteWriter::start_for_test(
+            Arc::clone(&target),
+            CHANNEL_CAPACITY,
+            Duration::from_millis(50),
+            Duration::from_secs(1),
+        )
+        .expect("writer");
+
+        let mut replies = Vec::new();
+        for index in 0..(BATCH_SIZE_MAX + 6) {
+            let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+            writer
+                .sender
+                .as_ref()
+                .expect("sender")
+                .send(WriterMessage::Submit {
+                    op: Box::new(upsert_message_request(index)),
+                    reply: reply_tx,
+                })
+                .expect("queue submit");
+            replies.push(reply_rx);
+        }
+
+        drop(writer);
+
+        for reply in replies {
+            assert!(reply.recv().expect("reply").is_ok());
+        }
+        assert_eq!(message_count(target.as_ref()), (BATCH_SIZE_MAX + 6) as i64);
+    }
+
+    #[test]
+    fn shutdown_first_drains_pending_submitters_with_daemon_unavailable() {
+        let (sender, receiver) = mpsc::sync_channel(4);
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+
+        sender
+            .send(WriterMessage::Shutdown)
+            .expect("queue shutdown");
+        sender
+            .send(WriterMessage::Submit {
+                op: Box::new(upsert_message_request(0)),
+                reply: reply_tx,
+            })
+            .expect("queue submit");
+        drop(sender);
+
+        assert!(receive_first_message(&receiver, false).is_none());
+        let error = reply_rx
+            .recv()
+            .expect("reply")
+            .expect_err("daemon unavailable");
+        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+    }
+
+    #[test]
+    fn submit_times_out_when_the_queue_is_full() {
+        let (sender, receiver) = mpsc::sync_channel(1);
+        let (reply_tx, _reply_rx) = mpsc::sync_channel(1);
+        sender
+            .send(WriterMessage::Submit {
+                op: Box::new(upsert_message_request(0)),
+                reply: reply_tx,
+            })
+            .expect("prefill queue");
+
+        let writer = SqliteWriter {
+            sender: Some(sender),
+            worker: None,
+            write_op_deadline: Duration::from_millis(10),
+            shutdown_join_deadline: Duration::from_millis(10),
+        };
+        let error = writer
+            .submit(upsert_message_request(1))
+            .expect_err("queue full should time out");
+        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert!(
+            error
+                .message
+                .contains("sqlite writer submission queue did not accept a write")
+        );
+
+        drop(receiver);
+    }
 }

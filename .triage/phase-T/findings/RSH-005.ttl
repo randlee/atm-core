@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-005>
+  a triage:Finding ;
+  triage:findingId "RSH-005" ;
+  triage:title "No WAL checkpoint after writer loop drain before thread exit" ;
+  triage:description "crates/atm-rusqlite/src/writer/mod.rs:115 no WAL checkpoint after writer loop drain, before thread exit. Minor durability gap (checkpoint not guaranteed before process exit). Fix: add PRAGMA wal_checkpoint(PASSIVE) after drain loop exits in writer_loop." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2/5275b3c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t2/5275b3c> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 96 ;
+  triage:snippet "fn writer_loop(...) { ... loop { ... } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "5275b3c" ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+
+<urn:atm:triage:worktree/pT-t1/bfb6511>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "bfb6511" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2/5275b3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3/4b04c20>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "4b04c20" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4/4b04c20>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "4b04c20" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .

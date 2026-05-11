@@ -69,6 +69,7 @@ The `atm-rusqlite` crate docs must remain aligned with:
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)
+- [`../phase-T/sprint-T2-sqlite-writer.md`](../phase-T/sprint-T2-sqlite-writer.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)

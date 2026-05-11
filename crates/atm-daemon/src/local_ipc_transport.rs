@@ -1,4 +1,5 @@
 use std::io::Write;
+use std::num::NonZeroU64;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -16,6 +17,7 @@ use interprocess::local_socket::{
 use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
+use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 use crate::shutdown_beacon::ShutdownBeacon;
 
 #[cfg(unix)]
@@ -27,6 +29,7 @@ const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const TRACKED_DISPATCH_JOIN_DEADLINE: Duration = Duration::from_millis(250);
 const LISTENER_WAKE_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const TERMINATE_REJECTION_GRACE_DEADLINE: Duration = Duration::from_millis(100);
+const TERMINATE_REJECTION_REQUEST_ID: u64 = NonZeroU64::MIN.get();
 
 #[derive(Debug, Default)]
 struct ServeLoopSignals {
@@ -428,10 +431,18 @@ impl PreparedRuntimeServer {
                         ShutdownResponseOutcome::NoFrame if terminate_probe_pending => break,
                         ShutdownResponseOutcome::NoFrame => {
                             terminate_probe_pending = true;
-                            schedule_delayed_listener_wake(
+                            if let Err(error) = schedule_delayed_listener_wake(
                                 endpoint_path.clone(),
                                 TERMINATE_REJECTION_GRACE_DEADLINE,
-                            );
+                            ) {
+                                tracing::warn!(
+                                    %error,
+                                    path = %endpoint_path.display(),
+                                    "failed to schedule delayed listener wake during shutdown probe"
+                                );
+                                let _ = wake_listener(&endpoint_path);
+                                break;
+                            }
                             continue;
                         }
                     }
@@ -447,7 +458,7 @@ impl PreparedRuntimeServer {
                         ),
                     ));
                     let frame = codec.response_to_frame(
-                        atm_core::protocol::RequestId::new(1).expect("non-zero request id"),
+                        atm_core::protocol::RequestId::new(TERMINATE_REJECTION_REQUEST_ID)?,
                         response,
                     )?;
                     let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
@@ -502,6 +513,7 @@ impl PreparedRuntimeServer {
                 graceful_drain_deadline,
                 force_cancel_deadline,
                 shutdown_started,
+                TRACKED_DISPATCH_JOIN_DEADLINE,
             ) {
                 if let Some(existing) = shutdown_error.as_ref() {
                     tracing::warn!(
@@ -705,7 +717,7 @@ fn write_shutdown_response(
     Ok(ShutdownResponseOutcome::RejectedRequest)
 }
 
-fn schedule_delayed_listener_wake(endpoint_path: PathBuf, delay: Duration) {
+fn schedule_delayed_listener_wake(endpoint_path: PathBuf, delay: Duration) -> Result<(), AtmError> {
     // Fire-and-forget: this helper only opens one local connection to unblock accept(), so
     // shutdown does not need to retain or join the wake thread after it has been scheduled.
     // The `_wake_handle` binding makes that intentional detach explicit at the call site.
@@ -715,7 +727,14 @@ fn schedule_delayed_listener_wake(endpoint_path: PathBuf, delay: Duration) {
             thread::sleep(delay);
             let _ = wake_listener(&endpoint_path);
         })
-        .expect("delayed-listener-wake thread");
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn delayed listener wake helper")
+                .with_recovery(
+                    "Retry the ATM command after atm-daemon restarts; the shutdown wake helper could not be scheduled.",
+                )
+                .with_source(source)
+        })?;
+    Ok(())
 }
 
 fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {
@@ -832,53 +851,6 @@ fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
             )
             .with_source(source)
     })?;
-    Ok(())
-}
-
-fn drain_active_connections_for_shutdown(
-    registry: &ActiveConnectionRegistry,
-    force_shutdown: &AtomicBool,
-    graceful_drain_deadline: Duration,
-    force_cancel_deadline: Duration,
-    shutdown_started: Instant,
-) -> Result<(), AtmError> {
-    tracing::info!(
-        active_connections = registry.active_connections(),
-        active_work_items = registry.active_work_items(),
-        "daemon shutdown signal received; starting graceful drain"
-    );
-    let graceful_deadline = shutdown_started + graceful_drain_deadline;
-    let force_cancel_deadline = shutdown_started + force_cancel_deadline;
-    while registry.active_work_items() > 0 && Instant::now() < graceful_deadline {
-        registry.wait_for_connection_change(
-            graceful_deadline.saturating_duration_since(Instant::now()),
-        )?;
-    }
-    if registry.active_work_items() > 0 {
-        tracing::info!(
-            active_work_items = registry.active_work_items(),
-            "daemon graceful drain hit deadline; continuing toward forced cancel"
-        );
-        force_shutdown.store(true, Ordering::SeqCst);
-        registry.interrupt_all();
-    } else {
-        tracing::info!("daemon graceful drain completed cleanly");
-    }
-    while registry.active_work_items() > 0 && Instant::now() < force_cancel_deadline {
-        registry.wait_for_connection_change(
-            force_cancel_deadline.saturating_duration_since(Instant::now()),
-        )?;
-    }
-    registry.join_tracked_dispatches(TRACKED_DISPATCH_JOIN_DEADLINE)?;
-    let remaining_work_items = registry.active_work_items();
-    if remaining_work_items > 0 {
-        return Err(AtmError::daemon_unavailable(format!(
-            "forced cancel deadline elapsed with {remaining_work_items} active daemon work item(s)"
-        ))
-        .with_recovery(
-            "Restart the daemon after the wedged request workers are no longer holding the same-host runtime open.",
-        ));
-    }
     Ok(())
 }
 
@@ -1295,6 +1267,7 @@ mod tests {
             Duration::from_millis(10),
             Duration::from_millis(20),
             Instant::now(),
+            TRACKED_DISPATCH_JOIN_DEADLINE,
         )
         .expect_err("bounded drain should fail once the forced-cancel deadline elapses");
         assert!(
