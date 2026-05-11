@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/rust-qa-T7-002>
+  a triage:Finding ;
+  triage:findingId "rust-qa-T7-002" ;
+  triage:title "hydrate_member_for_test declared pub(crate) but never called; #[allow(dead_code)] masks it" ;
+  triage:description "runtime_health_test_support.rs line 24 declares pub(crate) fn hydrate_member_for_test() annotated with #[allow(dead_code)]. A workspace-wide grep confirms this function is never called anywhere in the codebase — not in test modules, not in integration tests. The #[allow(dead_code)] was added to silence the compiler warning rather than removing the function. The sibling functions member_state_for_test (line 5) and insert_member_for_test (line 43) are used in tests; hydrate_member_for_test was likely superseded by insert_member_for_test. Confirmed open on T.4, T.5, T.6, T.7, and T.8; the dead function predates graft additions." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "rust-qa" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/rust-qa-T7-002/T4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/rust-qa-T7-002/T5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/rust-qa-T7-002/T6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/rust-qa-T7-002/T7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/rust-qa-T7-002/T8/1> ;
+  triage:openOn <urn:atm:triage:worktree/T4/68a83ea> ;
+  triage:openOn <urn:atm:triage:worktree/T5/1939b55> ;
+  triage:openOn <urn:atm:triage:worktree/T6/500315d> ;
+  triage:openOn <urn:atm:triage:worktree/T7/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/T8/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/T8/afbd906> .
+
+<urn:atm:triage:occurrence/rust-qa-T7-002/T4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health_test_support.rs" ;
+  triage:line 23 ;
+  triage:snippet "#[allow(dead_code)]\n    pub(crate) fn hydrate_member_for_test(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.4" ;
+  triage:headSha "68a83ea" ;
+  triage:occursIn <urn:atm:triage:worktree/T4/68a83ea> .
+
+<urn:atm:triage:occurrence/rust-qa-T7-002/T5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health_test_support.rs" ;
+  triage:line 23 ;
+  triage:snippet "#[allow(dead_code)]\n    pub(crate) fn hydrate_member_for_test(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.5" ;
+  triage:headSha "1939b55" ;
+  triage:occursIn <urn:atm:triage:worktree/T5/1939b55> .
+
+<urn:atm:triage:occurrence/rust-qa-T7-002/T6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health_test_support.rs" ;
+  triage:line 23 ;
+  triage:snippet "#[allow(dead_code)]\n    pub(crate) fn hydrate_member_for_test(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.6" ;
+  triage:headSha "500315d" ;
+  triage:occursIn <urn:atm:triage:worktree/T6/500315d> .
+
+<urn:atm:triage:occurrence/rust-qa-T7-002/T7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health_test_support.rs" ;
+  triage:line 23 ;
+  triage:snippet "#[allow(dead_code)]\n    pub(crate) fn hydrate_member_for_test(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.7" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/T7/6986027> .
+
+<urn:atm:triage:occurrence/rust-qa-T7-002/T8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health_test_support.rs" ;
+  triage:line 23 ;
+  triage:snippet "#[allow(dead_code)]\n    pub(crate) fn hydrate_member_for_test(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.8" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/T8/afbd906> .
+
+<urn:atm:triage:worktree/T4/68a83ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.4" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "68a83ea" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/T5/1939b55>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.5" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "1939b55" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/T6/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.6" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/T7/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.7" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/T8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.8" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .

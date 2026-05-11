@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T7-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T7-001" ;
+  triage:title "Graft dispatch not test-covered through DaemonRequestDispatcher" ;
+  triage:description "crates/atm-daemon/src/tests.rs has zero tests dispatching RequestEnvelope::GraftRegister/Unregister/Fetch/Drain through DaemonRequestDispatcher::dispatch(). Sprint acceptance criterion: registration and unregistration paths exist and are test-covered. Fix: add at least one integration test per graft packet kind in tests.rs mirroring the heartbeat/doctor dispatch test pattern." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-001/pT-t7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-001/pT-t8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t7-graft-runtime/afbd906> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t7-graft-runtime/afbd906> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-001/pT-t7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 0 ;
+  triage:snippet "No GraftRegister/GraftUnregister/GraftFetch/GraftDrain dispatch tests found; implementation exists in runtime_health.rs lines 517-526" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7-graft-runtime/afbd906> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-001/pT-t8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 0 ;
+  triage:snippet "No GraftRegister/GraftUnregister/GraftFetch/GraftDrain dispatch tests found; implementation inherited from t7 in runtime_health.rs lines 517-526" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/36b4868>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "36b4868" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5-hardening/30082e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/d57cf81>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "d57cf81" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pT-t7-graft-runtime/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .
