@@ -141,6 +141,9 @@ Responsibilities:
 - shut down cleanly and unregister when appropriate
 
 Architectural rules:
+- Sprint `T.7` owns only the daemon-side registration / queue / fetch / drain
+  runtime needed by `GraftSession`; the concrete `GraftSession` lifecycle type
+  itself lands in `T.8`
 - `GraftSession` registration is automatic by default when graft mode is active
 - disconnect / reconnect behavior belongs to `atm-graft`, not to the host
   executable's business logic
@@ -178,6 +181,9 @@ Architectural rules:
 - the host-facing payload is structured and contains at least:
   - `from`
   - `message`
+- Sprint `T.7` adds the daemon-side queue ownership plus typed fetch/drain
+  control; Sprint `T.8` adds the embedded receive loop that consumes that
+  surface automatically
 - nudge receipt and injection must be automatic in embedded mode; manual
   polling alone is insufficient for `atm-graft`
 - delivered nudge order must preserve daemon queue order from the perspective
@@ -209,6 +215,8 @@ Current T.6 contract shape:
   surface reused by the retained CLI
 - `GraftSessionPort` owns session registration, unregistration, and daemon
   pending-nudge fetch/drain control
+- the concrete `GraftSession` lifecycle type that drives the embedded receive
+  loop remains an `atm-graft` crate responsibility in `T.8`
 
 Boundary rule:
 - a hook-facing command that prints insertion-ready nudge text is an `atm`

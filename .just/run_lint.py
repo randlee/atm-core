@@ -209,10 +209,10 @@ def build_transcript(task: LintTask, result: LintResult, repo_root: Path) -> lis
     transcript.extend(
         [
             "stdout:",
-            result.stdout.rstrip(),
+            (result.stdout or "").rstrip(),
             "",
             "stderr:",
-            result.stderr.rstrip(),
+            (result.stderr or "").rstrip(),
         ]
     )
     return transcript
@@ -227,6 +227,7 @@ def run_task(task: LintTask, repo_root: Path) -> LintResult:
         capture_output=True,
         text=True,
         encoding="utf-8",
+        errors="replace",
     )
     duration_seconds = time.perf_counter() - start_time
     log_path = make_log_path(repo_root, task.name, started_at)
@@ -247,7 +248,7 @@ def print_result(result: LintResult, repo_root: Path) -> None:
         print(f"{result.task.name} passed [{format_duration(result.duration_seconds)}]")
         return
 
-    lines = preview_lines_for_task(result.task.name, interesting_lines("\n".join((result.stdout, result.stderr))))
+    lines = preview_lines_for_task(result.task.name, interesting_lines("\n".join((result.stdout or "", result.stderr or ""))))
     log_display = relative_log_path(repo_root, result.log_path)
     print(f"{result.task.name} failed")
     if result.task.name in HIGH_VOLUME_LINTS:

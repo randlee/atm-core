@@ -179,10 +179,13 @@ Scope-simplification rule for the first implementation pass:
   - `[atm.graft].enabled` exists in ATM-owned config models and config loading
   - `atm-graft` remains inert when `.atm.toml` is absent
 - `REQ-GRAFT-RUNTIME-001`
-  - a documented `GraftSession` lifecycle type exists
+  - daemon-owned registration, unregistration, and typed queue fetch/drain
+    surfaces exist before the `atm-graft` crate tries to consume them
+  - the concrete `GraftSession` lifecycle type exists once `T.8` lands
   - embedded mode includes one live receive task/thread per active
-    `GraftSession`
-  - registration and clean shutdown/unregistration are test-covered
+    `GraftSession` once `T.8` lands
+  - registration plus clean shutdown/unregistration are test-covered at the
+    daemon/runtime and crate-consumer layers
 - `REQ-GRAFT-CLIENT-001`
   - the public embedded client surface supports `send`, `read`, and `ack`
   - the public session-facing surface supports graft registration,

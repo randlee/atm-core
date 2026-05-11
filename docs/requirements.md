@@ -193,6 +193,10 @@ Satisfied by:
     release
   - partial lane failure must not leave the runtime in ambiguous ownership
     state
+  - `GAP-T5-001`: current code uses a `2s` graceful-drain budget and `3s`
+    force-cancel budget; older operator docs still referenced `5s` / `10s`,
+    so the authoritative shutdown contract must be accepted explicitly rather
+    than inferred from stale prose
 
 - `REQ-P-PLATFORM-001` ATM `1.0` supports macOS, Linux, and Windows as
   first-class operating systems for the retained product surface.

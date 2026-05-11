@@ -16,7 +16,12 @@ use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
-use atm_core::graft::AtmGraftClient;
+use atm_core::graft::{
+    AtmGraftClient, GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
+    GraftNudgeFetchResponse, GraftSessionPort, GraftSessionRegistrationRequest,
+    GraftSessionRegistrationResponse, GraftSessionUnregistrationRequest,
+    GraftSessionUnregistrationResponse,
+};
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort};
 use atm_core::protocol::{
@@ -569,6 +574,46 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    pub(crate) fn register_graft_session(
+        &self,
+        request: GraftSessionRegistrationRequest,
+    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
+        match self.send_request(RequestEnvelope::GraftRegister(request))? {
+            ResponseEnvelope::GraftRegister(response) => Ok(response),
+            other => Err(unexpected_response("graft register", other)),
+        }
+    }
+
+    pub(crate) fn unregister_graft_session(
+        &self,
+        request: GraftSessionUnregistrationRequest,
+    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
+        match self.send_request(RequestEnvelope::GraftUnregister(request))? {
+            ResponseEnvelope::GraftUnregister(response) => Ok(response),
+            other => Err(unexpected_response("graft unregister", other)),
+        }
+    }
+
+    pub(crate) fn fetch_graft_nudges(
+        &self,
+        request: GraftNudgeFetchRequest,
+    ) -> Result<GraftNudgeFetchResponse, AtmError> {
+        match self.send_request(RequestEnvelope::GraftFetch(request))? {
+            ResponseEnvelope::GraftFetch(response) => Ok(response),
+            other => Err(unexpected_response("graft fetch", other)),
+        }
+    }
+
+    pub(crate) fn drain_graft_nudges(
+        &self,
+        request: GraftNudgeDrainRequest,
+    ) -> Result<GraftNudgeDrainResponse, AtmError> {
+        match self.send_request(RequestEnvelope::GraftDrain(request))? {
+            ResponseEnvelope::GraftDrain(response) => Ok(response),
+            other => Err(unexpected_response("graft drain", other)),
+        }
+    }
+
     pub(crate) fn bootstrap(observability: &'a CliObservability) -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
         let daemon_bin = resolve_daemon_bin()?;
@@ -616,6 +661,36 @@ impl AtmGraftClient for CliComposition<'_> {
 
     fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
         CliComposition::ack(self, request)
+    }
+}
+
+impl GraftSessionPort for CliComposition<'_> {
+    fn register_session(
+        &self,
+        request: GraftSessionRegistrationRequest,
+    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
+        CliComposition::register_graft_session(self, request)
+    }
+
+    fn unregister_session(
+        &self,
+        request: GraftSessionUnregistrationRequest,
+    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
+        CliComposition::unregister_graft_session(self, request)
+    }
+
+    fn fetch_nudges(
+        &self,
+        request: GraftNudgeFetchRequest,
+    ) -> Result<GraftNudgeFetchResponse, AtmError> {
+        CliComposition::fetch_graft_nudges(self, request)
+    }
+
+    fn drain_nudges(
+        &self,
+        request: GraftNudgeDrainRequest,
+    ) -> Result<GraftNudgeDrainResponse, AtmError> {
+        CliComposition::drain_graft_nudges(self, request)
     }
 }
 

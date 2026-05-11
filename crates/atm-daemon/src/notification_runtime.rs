@@ -108,26 +108,61 @@ impl NotificationRuntime {
             state.worker.take()
         };
         if let Some(handle) = handle {
+            let worker_thread_id = handle.thread().id();
             let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-            std::thread::spawn(move || {
-                let _ = result_tx.send(handle.join());
-            });
+            let join_helper = std::thread::Builder::new()
+                .name("atm-daemon-notifier-join".to_string())
+                .spawn(move || {
+                    let _ = result_tx.send(handle.join());
+                })
+                .map_err(|source| {
+                    AtmError::daemon_unavailable(
+                        "failed to spawn notification runtime join helper during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; notification shutdown could not create its bounded join helper.",
+                    )
+                    .with_source(source)
+                })?;
             match result_rx.recv_timeout(NOTIFICATION_SHUTDOWN_DEADLINE) {
-                Ok(Ok(())) => {}
+                Ok(Ok(())) => {
+                    let _ = join_helper.join();
+                }
                 Ok(Err(_)) => {
+                    let _ = join_helper.join();
                     return Err(AtmError::daemon_unavailable(
                         "notification runtime worker panicked during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; the notification background lane crashed while shutting down.",
                     ));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    drop(join_helper);
+                    tracing::warn!(
+                        thread_id = ?worker_thread_id,
+                        timeout_ms = NOTIFICATION_SHUTDOWN_DEADLINE.as_millis(),
+                        "notification runtime worker exceeded shutdown deadline; detaching join helper"
+                    );
                     return Err(AtmError::daemon_unavailable(format!(
                         "notification runtime shutdown exceeded the {:?} deadline",
                         NOTIFICATION_SHUTDOWN_DEADLINE
-                    )));
+                    ))
+                    .with_recovery(
+                        "Restart atm-daemon after the notification background lane becomes responsive again.",
+                    ));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    let _ = join_helper.join();
+                    tracing::warn!(
+                        thread_id = ?worker_thread_id,
+                        "notification runtime join helper exited before reporting shutdown status"
+                    );
                     return Err(AtmError::daemon_unavailable(
                         "notification runtime join helper disconnected during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; the notification background lane did not report bounded shutdown status cleanly.",
                     ));
                 }
             }
@@ -273,7 +308,9 @@ mod tests {
                 agent: None,
             })
             .expect("deliver");
-        runtime.shutdown().expect("shutdown");
+        runtime
+            .shutdown()
+            .unwrap_or_else(|error| panic!("shutdown failed: {error}"));
 
         let output = std::fs::read_to_string(output_path).expect("output");
         assert!(output.contains("\"kind\":\"delivery\""));
@@ -296,7 +333,9 @@ mod tests {
                 agent: None,
             })
             .expect("first deliver queues");
-        runtime.shutdown().expect("shutdown");
+        runtime
+            .shutdown()
+            .unwrap_or_else(|error| panic!("shutdown failed: {error}"));
 
         let error = runtime
             .deliver(NotificationEvent {

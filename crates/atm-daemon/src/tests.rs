@@ -1,4 +1,6 @@
-use super::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
+use super::runtime_health::{
+    DaemonRequestDispatcher, MAX_STATUS_CACHE_ENTRIES, RuntimeStatusCache,
+};
 use super::{
     DaemonExitCode, LocalIpcServerTransportAdapter, daemon_exit_code_for_error,
     host_ownership::{
@@ -14,6 +16,10 @@ use atm_core::doctor::DoctorQuery;
 use atm_core::doctor::DoctorStatus;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
+use atm_core::graft::{
+    GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeFetchRequest, GraftSessionId,
+    GraftSessionRegistrationRequest, GraftSessionUnregistrationRequest,
+};
 use atm_core::observability::AtmObservabilityHealthState;
 use atm_core::protocol::{
     HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState,
@@ -540,6 +546,28 @@ fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
     .expect("write team config");
 }
 
+fn graft_registration_request(session_id: &str) -> GraftSessionRegistrationRequest {
+    GraftSessionRegistrationRequest {
+        team: test_team().clone(),
+        agent: ROLE_TEAM_LEAD.parse().expect("agent"),
+        session_id: GraftSessionId::new(session_id).expect("session id"),
+        pid: std::process::id(),
+        started_at: IsoTimestamp::now(),
+    }
+}
+
+fn graft_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {
+    let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let db_path = tempdir.path().join("mail.db");
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+    let dispatcher =
+        DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
+    (tempdir, dispatcher)
+}
+
 #[test]
 fn heartbeat_updates_status_cache_and_doctor_projection() {
     let tempdir = TempDir::new().expect("tempdir");
@@ -596,6 +624,103 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
             assert_eq!(runtime_status.member_counts.unknown_members, 1);
         }
         other => panic!("expected doctor response, got {other:?}"),
+    }
+}
+
+#[test]
+fn dispatcher_routes_graft_register_requests() {
+    let (_tempdir, dispatcher) = graft_test_dispatcher();
+    let request = graft_registration_request("session-register");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .expect("register response");
+
+    match response {
+        ResponseEnvelope::GraftRegister(registered) => {
+            assert_eq!(registered.team, request.team);
+            assert_eq!(registered.agent, request.agent);
+            assert_eq!(registered.session_id, request.session_id);
+            assert_eq!(registered.queue_capacity, 256);
+        }
+        other => panic!("expected graft register response, got {other:?}"),
+    }
+}
+
+#[test]
+fn dispatcher_routes_graft_unregister_requests() {
+    let (_tempdir, dispatcher) = graft_test_dispatcher();
+    let request = graft_registration_request("session-unregister");
+    dispatcher
+        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .expect("register response");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::GraftUnregister(
+            GraftSessionUnregistrationRequest {
+                session_id: request.session_id.clone(),
+            },
+        ))
+        .expect("unregister response");
+
+    match response {
+        ResponseEnvelope::GraftUnregister(unregistered) => {
+            assert_eq!(unregistered.session_id, request.session_id);
+            assert!(unregistered.closed);
+        }
+        other => panic!("expected graft unregister response, got {other:?}"),
+    }
+}
+
+#[test]
+fn dispatcher_routes_graft_fetch_requests() {
+    let (_tempdir, dispatcher) = graft_test_dispatcher();
+    let request = graft_registration_request("session-fetch");
+    dispatcher
+        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .expect("register response");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::GraftFetch(GraftNudgeFetchRequest {
+            session_id: request.session_id.clone(),
+            limit: GraftBatchLimit::new(8).expect("limit"),
+        }))
+        .expect("fetch response");
+
+    match response {
+        ResponseEnvelope::GraftFetch(fetch) => {
+            assert_eq!(fetch.session_id, request.session_id);
+            assert!(fetch.nudges.is_empty());
+            assert_eq!(fetch.remaining, 0);
+            assert_eq!(fetch.dropped_count, 0);
+        }
+        other => panic!("expected graft fetch response, got {other:?}"),
+    }
+}
+
+#[test]
+fn dispatcher_routes_graft_drain_requests() {
+    let (_tempdir, dispatcher) = graft_test_dispatcher();
+    let request = graft_registration_request("session-drain");
+    dispatcher
+        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .expect("register response");
+
+    let response = dispatcher
+        .dispatch(RequestEnvelope::GraftDrain(GraftNudgeDrainRequest {
+            session_id: request.session_id.clone(),
+            limit: GraftBatchLimit::new(8).expect("limit"),
+        }))
+        .expect("drain response");
+
+    match response {
+        ResponseEnvelope::GraftDrain(drain) => {
+            assert_eq!(drain.session_id, request.session_id);
+            assert!(drain.nudges.is_empty());
+            assert_eq!(drain.remaining, 0);
+            assert_eq!(drain.dropped_count, 0);
+        }
+        other => panic!("expected graft drain response, got {other:?}"),
     }
 }
 
@@ -948,6 +1073,63 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
         }
         other => panic!("expected heartbeat response, got {other:?}"),
     }
+}
+
+#[test]
+fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
+    use chrono::{Duration as ChronoDuration, Utc};
+
+    let status_cache = RuntimeStatusCache::new();
+    let team = test_team().clone();
+    let oldest_member: AgentName = "qa-oldest".parse().expect("member");
+    let base = Utc::now();
+
+    for index in 0..MAX_STATUS_CACHE_ENTRIES {
+        let member_name: AgentName = if index == 0 {
+            oldest_member.clone()
+        } else {
+            format!("conflict-{index}").parse().expect("member")
+        };
+        status_cache
+            .insert_member_for_test(
+                team.clone(),
+                member_name,
+                Some(index as u32 + 1),
+                RuntimeMemberState::IdentityConflict,
+                Some(IsoTimestamp::from_datetime(
+                    base + ChronoDuration::seconds(index as i64),
+                )),
+            )
+            .expect("seed conflict member");
+    }
+
+    let request = TeamMemberHeartbeatRequest {
+        team: team.clone(),
+        member: "qa-trigger".parse().expect("member"),
+        pid: std::process::id(),
+        observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
+        activity: HeartbeatActivity::ActiveToolUse,
+    };
+    status_cache
+        .record_identity_conflict_for_test(&request, u32::MAX)
+        .expect("record conflict");
+
+    assert_eq!(
+        status_cache.member_count_for_test().expect("member count"),
+        MAX_STATUS_CACHE_ENTRIES
+    );
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &oldest_member)
+            .expect("oldest member state"),
+        None
+    );
+    assert_eq!(
+        status_cache
+            .member_state_for_test(&team, &request.member)
+            .expect("trigger member state"),
+        Some(RuntimeMemberState::IdentityConflict)
+    );
 }
 
 #[test]
