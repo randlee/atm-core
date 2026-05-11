@@ -12,7 +12,7 @@
   triage:phaseId "phase-S" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
   triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
@@ -25,8 +25,8 @@
   triage:file "crates/atm-core/src/config/discovery.rs" ;
   triage:line 1 ;
   triage:snippet "No '// Issue #219' or '#219' reference present anywhere in discovery.rs, mod.rs, or types.rs" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:headSha "237c0ce" ;
   triage:branch "feature/pS-s8-jsonl-compat" ;
   triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
