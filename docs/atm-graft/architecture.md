@@ -126,6 +126,8 @@ Architectural rules:
 Architectural consequence:
 - `atm-core` config loading must own the `[atm.graft]` model before
   `atm-graft` activation logic can be implemented cleanly
+- the concrete `atm-graft` crate consumes the public `atm_core::load_atm_config`
+  helper rather than reparsing `.atm.toml` privately
 
 ## 2.5 Graft Session
 
@@ -144,6 +146,11 @@ Architectural rules:
 - Sprint `T.7` owns only the daemon-side registration / queue / fetch / drain
   runtime needed by `GraftSession`; the concrete `GraftSession` lifecycle type
   itself lands in `T.8`
+- the concrete `T.8` surface is:
+  - `GraftClient` for the thin daemon-backed same-host client
+  - `GraftSession` for the concrete lifecycle runtime
+  - `HostNudgeInjector` for automatic between-tool-call host insertion
+  - `GraftObservability` for the injected ATM-owned observability boundary
 - `GraftSession` registration is automatic by default when graft mode is active
 - disconnect / reconnect behavior belongs to `atm-graft`, not to the host
   executable's business logic
@@ -218,6 +225,13 @@ Current T.6 contract shape:
 - the concrete `GraftSession` lifecycle type that drives the embedded receive
   loop remains an `atm-graft` crate responsibility in `T.8`
 
+Current T.8 crate shape:
+- `GraftClient` implements both `AtmGraftClient` and `GraftSessionPort`
+- `GraftSession` delegates `send` / `read` / `ack` through `GraftClient` while
+  also owning the live receive loop
+- `GraftSession` may expose fetch/drain helpers for debugging and host
+  integration, but production delivery still depends on automatic injection
+
 Boundary rule:
 - a hook-facing command that prints insertion-ready nudge text is an `atm`
   command built on the same daemon API, not a CLI owned by the `atm-graft`
@@ -260,3 +274,5 @@ not true:
   external terminal automation
 - the public `atm-graft` API remains limited to the documented thin embedded
   client surface rather than mirroring the full CLI
+- the concrete crate exports `GraftClient`, `GraftSession`,
+  `HostNudgeInjector`, and `GraftObservability`
