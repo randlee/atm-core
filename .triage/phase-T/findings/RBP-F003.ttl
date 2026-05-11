@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F003>
+  a triage:Finding ;
+  triage:findingId "RBP-F003" ;
+  triage:title "lock-poison path missing .with_recovery(...) in shared_db.rs" ;
+  triage:description "crates/atm-rusqlite/src/shared_db.rs acquire_connection_guard — lock-poison error path (AtmError::daemon_unavailable) missing .with_recovery(). T.1 (bdc8ce1) fixed this; T.2, T.3, T.4, T.5, and integrate/phase-T remain open. Merge-forward needed." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/1> ;
+  triage:fixedOn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/bdc8ce1> ;
+  triage:openOn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/5275b3c> ;
+  triage:openOn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f> ;
+  triage:openOn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/b71366f> ;
+  triage:openOn <urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc> ;
+  triage:openOn <urn:atm:triage:worktree/integrate_phase_T/f96abd0> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/5275b3c> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/feature_pT_t1_integration_gate/bdc8ce1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "bdc8ce1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/5275b3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/feature_pT_t4_windows_runtime/b71366f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate_phase_T/f96abd0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "f96abd0" ;
+  triage:orderIndex 9 .
+
+# --- Occurrences ---
+
+# T.1: FIXED — .with_recovery() present at line 299 (bdc8ce1)
+# No open occurrence node for T.1.
+
+# T.2: OPEN — lock-poison path at line 329 missing .with_recovery()
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 329 ;
+  triage:snippet "AtmError::daemon_unavailable(\"sqlite connection budget state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/5275b3c> .
+
+# T.3: OPEN — lock-poison path at line 329 missing .with_recovery()
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 329 ;
+  triage:snippet "AtmError::daemon_unavailable(\"sqlite connection budget state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f> .
+
+# T.4: OPEN — lock-poison path at line 290 missing .with_recovery()
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 290 ;
+  triage:snippet "AtmError::daemon_unavailable(\"sqlite connection budget state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/b71366f> .
+
+# T.5: OPEN — lock-poison path at line 290 missing .with_recovery()
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 290 ;
+  triage:snippet "AtmError::daemon_unavailable(\"sqlite connection budget state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc> .
+
+# integrate/phase-T: OPEN — lock-poison path at line 290 missing .with_recovery()
+<urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 290 ;
+  triage:snippet "AtmError::daemon_unavailable(\"sqlite connection budget state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "f96abd0" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_T/f96abd0> .

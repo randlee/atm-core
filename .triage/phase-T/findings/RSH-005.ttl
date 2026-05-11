@@ -1,0 +1,134 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-005>
+  a triage:Finding ;
+  triage:findingId "RSH-005" ;
+  triage:title "MAX_SQLITE_READER_CONNECTIONS hardcoded with no startup log or observable signal" ;
+  triage:description "crates/atm-rusqlite/src/shared_db.rs:12 — MAX_SQLITE_READER_CONNECTIONS = 3 hardcoded with no startup log or observable signal. T.3 QA-1 confirms still open." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t2/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t3/3> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2/8fde385> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 12 ;
+  triage:snippet "const MAX_SQLITE_READER_CONNECTIONS: usize = 3;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "8fde385" ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 340 ;
+  triage:snippet "if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "8fde385" ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 342 ;
+  triage:snippet "\"sqlite connection budget exceeded (max {MAX_SQLITE_READER_CONNECTIONS} concurrent reader handles with one permanent writer handle)\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "8fde385" ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/8fde385> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 12 ;
+  triage:snippet "const MAX_SQLITE_READER_CONNECTIONS: usize = 3;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "f9f1e3f" ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 331 ;
+  triage:snippet "if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "f9f1e3f" ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 333 ;
+  triage:snippet "\"sqlite connection budget exceeded (max {MAX_SQLITE_READER_CONNECTIONS} concurrent reader handles with one permanent writer handle)\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "f9f1e3f" ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+<urn:atm:triage:worktree/pT-t1/82133d2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "82133d2" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2/8fde385>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3/f9f1e3f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4/b71366f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pT-integrate/f96abd0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "f96abd0" ;
+  triage:orderIndex 9 .
