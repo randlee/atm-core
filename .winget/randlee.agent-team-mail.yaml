@@ -24,4 +24,4 @@ Installers:
     InstallerUrl: https://github.com/randlee/atm-core/releases/download/v1.2.0/atm_1.2.0_x86_64-pc-windows-msvc.zip
     InstallerSha256: <SHA256_HASH_TO_BE_FILLED_AFTER_RELEASE>
 ManifestType: installer
-ManifestVersion: 1.1.2
+ManifestVersion: 1.2.0
