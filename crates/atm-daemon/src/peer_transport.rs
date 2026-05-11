@@ -248,12 +248,11 @@ impl PeerClientTransport {
         let started = Instant::now();
         let deadline = started + self.config.remote_retry_budget;
         let terminate = daemon_terminate_flag()?;
-        let terminate_before_first_attempt = terminate.load(Ordering::SeqCst);
         let mut backoff = INITIAL_RETRY_BACKOFF;
         let mut attempt = 0u32;
 
         loop {
-            if attempt == 0 && terminate_before_first_attempt {
+            if terminate.load(Ordering::SeqCst) {
                 return Err(
                     AtmError::daemon_unavailable(
                         "daemon shutdown interrupted remote peer delivery before the next network attempt",
@@ -796,6 +795,43 @@ mod tests {
             }
             other => panic!("unexpected response: {other:?}"),
         }
+    }
+
+    #[test]
+    #[serial]
+    fn peer_transport_aborts_before_connect_when_terminate_is_requested() {
+        const TEST_TEAM: &str = "test-team";
+        const TEST_MEMBER: &str = "test-sender";
+
+        let _reset = install_shared_lifecycle_reset_guard();
+        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+        lifecycle.set_terminate_for_test(true);
+
+        let tempdir = TempDir::new().expect("tempdir");
+        let transport = PeerTransportRuntime::new_for_test(
+            SocketAddr::from((Ipv4Addr::LOCALHOST, 9)),
+            PeerTransportConfig {
+                remote_retry_budget: Duration::from_secs(1),
+            },
+            tempdir.path().join("replay.db"),
+        );
+
+        let error = transport
+            .client_transport()
+            .send(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: TEST_TEAM.parse().expect("team"),
+                member: TEST_MEMBER.parse().expect("member"),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }))
+            .expect_err("terminate should short-circuit before connect");
+        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert!(
+            error.message.contains("before the next network attempt"),
+            "unexpected error message: {}",
+            error.message
+        );
     }
 
     #[test]

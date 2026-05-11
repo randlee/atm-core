@@ -109,23 +109,38 @@ impl NotificationRuntime {
         };
         if let Some(handle) = handle {
             let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-            std::thread::spawn(move || {
+            let join_helper = std::thread::spawn(move || {
                 let _ = result_tx.send(handle.join());
             });
             match result_rx.recv_timeout(NOTIFICATION_SHUTDOWN_DEADLINE) {
-                Ok(Ok(())) => {}
+                Ok(Ok(())) => {
+                    let _ = join_helper.join();
+                }
                 Ok(Err(_)) => {
+                    let _ = join_helper.join();
                     return Err(AtmError::daemon_unavailable(
                         "notification runtime worker panicked during shutdown",
                     ));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    drop(join_helper);
+                    tracing::warn!(
+                        timeout_ms = NOTIFICATION_SHUTDOWN_DEADLINE.as_millis(),
+                        "notification runtime worker exceeded shutdown deadline; detaching join helper"
+                    );
                     return Err(AtmError::daemon_unavailable(format!(
                         "notification runtime shutdown exceeded the {:?} deadline",
                         NOTIFICATION_SHUTDOWN_DEADLINE
-                    )));
+                    ))
+                    .with_recovery(
+                        "Restart atm-daemon after the notification background lane becomes responsive again.",
+                    ));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    let _ = join_helper.join();
+                    tracing::warn!(
+                        "notification runtime join helper exited before reporting shutdown status"
+                    );
                     return Err(AtmError::daemon_unavailable(
                         "notification runtime join helper disconnected during shutdown",
                     ));

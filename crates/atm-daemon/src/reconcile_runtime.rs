@@ -15,6 +15,7 @@ const DEFAULT_RECONCILE_COMPLETION_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_RECONCILE_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
 const MAX_RECONCILE_FINGERPRINT_KEYS: usize = 1024;
+const MAX_RECONCILE_FINGERPRINTS_PER_KEY: usize = 256;
 #[cfg(not(test))]
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
 #[cfg(test)]
@@ -508,6 +509,22 @@ fn should_emit_reconcile_notification(
     }
 
     let key = ReconcileKey::from_request(request);
+    if current_fingerprints.len() > MAX_RECONCILE_FINGERPRINTS_PER_KEY {
+        let mut ordered = current_fingerprints.drain().collect::<Vec<_>>();
+        ordered.sort();
+        let dropped = ordered
+            .len()
+            .saturating_sub(MAX_RECONCILE_FINGERPRINTS_PER_KEY);
+        ordered.truncate(MAX_RECONCILE_FINGERPRINTS_PER_KEY);
+        current_fingerprints.extend(ordered);
+        tracing::warn!(
+            team = %key.team,
+            agent = %key.agent,
+            retained = MAX_RECONCILE_FINGERPRINTS_PER_KEY,
+            dropped,
+            "reconcile notification fingerprint set exceeded the per-key bounded cap; truncating deterministically"
+        );
+    }
     let mut fingerprints = notification_fingerprints.lock().map_err(|_| {
         AtmError::daemon_unavailable("reconcile notification fingerprint state lock poisoned")
     })?;
@@ -621,7 +638,10 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_RECONCILE_FINGERPRINT_KEYS, ReconcileRuntime};
+    use super::{
+        MAX_RECONCILE_FINGERPRINT_KEYS, MAX_RECONCILE_FINGERPRINTS_PER_KEY, ReconcileKey,
+        ReconcileRuntime,
+    };
     use atm_core::boundary::{
         self, InboxIngress, InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
         InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
@@ -1004,6 +1024,43 @@ mod tests {
 
         let delivered = delivered.lock().expect("delivered");
         assert_eq!(delivered.len(), MAX_RECONCILE_FINGERPRINT_KEYS + 2);
+
+        runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn reconcile_runtime_bounds_per_key_fingerprint_sets() {
+        let runtime = ReconcileRuntime::new(
+            Arc::new(FakeWatchSource),
+            Arc::new(FakeInboxIngress::new(vec![InboxIngressImportResponse {
+                source_files: (0..=MAX_RECONCILE_FINGERPRINTS_PER_KEY)
+                    .map(|index| {
+                        inbox_source_with_message(sample_message(&format!("message-{index}")))
+                    })
+                    .collect(),
+            }])),
+            Arc::new(FakeNotificationSink {
+                delivered: Arc::new(Mutex::new(Vec::new())),
+            }),
+        );
+        runtime.start().expect("start");
+        let request = request();
+        runtime.reconcile(request.clone()).expect("reconcile");
+
+        let fingerprints = runtime
+            .inner
+            .notification_fingerprints
+            .lock()
+            .expect("fingerprints");
+        assert_eq!(
+            fingerprints
+                .entries
+                .get(&ReconcileKey::from_request(&request))
+                .expect("entry")
+                .len(),
+            MAX_RECONCILE_FINGERPRINTS_PER_KEY
+        );
+        drop(fingerprints);
 
         runtime.shutdown().expect("shutdown");
     }
