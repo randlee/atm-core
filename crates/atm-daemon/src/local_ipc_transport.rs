@@ -138,13 +138,19 @@ pub(crate) struct PreparedRuntimeServer {
     endpoint_guard: Option<SocketEndpointGuard>,
 }
 
-pub(crate) struct RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown> {
+pub(crate) struct RuntimeServeHooks<
+    BeginShutdown,
+    ReloadRuntimeView,
+    FinalizeShutdown,
+    PublishReady,
+> {
     pub(crate) endpoint_guard: SocketEndpointGuard,
     pub(crate) graceful_drain_deadline: Duration,
     pub(crate) force_cancel_deadline: Duration,
     pub(crate) begin_shutdown: BeginShutdown,
     pub(crate) reload_runtime_view: ReloadRuntimeView,
     pub(crate) finalize_shutdown: FinalizeShutdown,
+    pub(crate) publish_ready: PublishReady,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -220,28 +226,40 @@ impl PreparedRuntimeServer {
         })
     }
 
-    pub(crate) fn serve_with_runtime_hooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>(
+    pub(crate) fn serve_with_runtime_hooks<
+        BeginShutdown,
+        ReloadRuntimeView,
+        FinalizeShutdown,
+        PublishReady,
+    >(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>,
+        hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown, PublishReady>,
     ) -> Result<(), AtmError>
     where
         BeginShutdown: Fn() -> Result<(), AtmError>,
         ReloadRuntimeView: Fn() -> Result<(), AtmError>,
         FinalizeShutdown: Fn(),
+        PublishReady: Fn() -> Result<(), AtmError>,
     {
         self.serve_with_deadlines_and_accept_probe(dispatcher, hooks)
     }
 
-    fn serve_with_deadlines_and_accept_probe<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>(
+    fn serve_with_deadlines_and_accept_probe<
+        BeginShutdown,
+        ReloadRuntimeView,
+        FinalizeShutdown,
+        PublishReady,
+    >(
         self,
         dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-        hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown>,
+        hooks: RuntimeServeHooks<BeginShutdown, ReloadRuntimeView, FinalizeShutdown, PublishReady>,
     ) -> Result<(), AtmError>
     where
         BeginShutdown: Fn() -> Result<(), AtmError>,
         ReloadRuntimeView: Fn() -> Result<(), AtmError>,
         FinalizeShutdown: Fn(),
+        PublishReady: Fn() -> Result<(), AtmError>,
     {
         let RuntimeServeHooks {
             endpoint_guard,
@@ -250,6 +268,7 @@ impl PreparedRuntimeServer {
             begin_shutdown,
             reload_runtime_view,
             finalize_shutdown,
+            publish_ready,
         } = hooks;
         let Self {
             host_ownership_guard: _host_ownership_guard,
@@ -327,6 +346,7 @@ impl PreparedRuntimeServer {
                     }
                 })
             };
+            publish_ready()?;
             loop {
                 // Direct accept-loop target: lifecycle wakeups interrupt accept(), then this loop
                 // drains reload/error state inline so same-host serving stays in one place.
@@ -368,7 +388,7 @@ impl PreparedRuntimeServer {
                     }
                     continue;
                 }
-                #[cfg(all(test, unix))]
+                #[cfg(test)]
                 if let Some(error) = take_injected_accept_error_for_test() {
                     shutdown_beacon.trip();
                     let _ = lifecycle_control.notify_state_change();
@@ -793,11 +813,12 @@ fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 static INJECTED_ACCEPT_ERROR_FOR_TEST: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>> =
     std::sync::Mutex::new(None);
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
+#[cfg_attr(not(unix), allow(dead_code))]
 pub(crate) fn install_injected_accept_error_for_test(
     signal: std::sync::mpsc::SyncSender<()>,
 ) -> InjectAcceptErrorGuard {
@@ -807,10 +828,11 @@ pub(crate) fn install_injected_accept_error_for_test(
     InjectAcceptErrorGuard
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
+#[cfg_attr(not(unix), allow(dead_code))]
 pub(crate) struct InjectAcceptErrorGuard;
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 impl Drop for InjectAcceptErrorGuard {
     fn drop(&mut self) {
         *INJECTED_ACCEPT_ERROR_FOR_TEST
@@ -819,7 +841,7 @@ impl Drop for InjectAcceptErrorGuard {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 fn take_injected_accept_error_for_test() -> Option<AtmError> {
     let sender = INJECTED_ACCEPT_ERROR_FOR_TEST
         .lock()
@@ -1063,6 +1085,7 @@ mod tests {
                     begin_shutdown: || Ok(()),
                     reload_runtime_view: || Ok(()),
                     finalize_shutdown: || {},
+                    publish_ready: || Ok(()),
                 },
             );
             serve_result_tx.send(result).expect("send serve result");
@@ -1105,6 +1128,7 @@ mod tests {
         let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
         let (serve_result_tx, serve_result_rx) = mpsc::channel();
+        let (ready_tx, ready_rx) = mpsc::sync_channel(1);
 
         let join = std::thread::spawn(move || {
             // These shortened deadlines validate immediate shutdown-beacon wake correctness, not
@@ -1118,13 +1142,23 @@ mod tests {
                     begin_shutdown: || Ok(()),
                     reload_runtime_view: || Ok(()),
                     finalize_shutdown: || {},
+                    publish_ready: move || {
+                        ready_tx.send(()).map_err(|_| {
+                            AtmError::daemon_unavailable(
+                                "shutdown rejection test failed to observe the daemon ready signal",
+                            )
+                            .with_recovery(
+                                "Restore the bounded ready-signal handshake before retrying the same-host daemon shutdown rejection test.",
+                            )
+                        })
+                    },
                 },
             );
             serve_result_tx.send(result).expect("send serve result");
         });
 
         lifecycle.terminate_flag().store(true, Ordering::SeqCst);
-        let mut stream = connect_daemon_local_ipc_until_ready(&socket_path);
+        let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
         stream
             .set_send_timeout(Some(Duration::from_secs(5)))
             .expect("set send timeout");
@@ -1180,6 +1214,7 @@ mod tests {
         let _reset = LifecycleFlagResetGuard::install(lifecycle.clone());
         let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(PanicDispatcher);
         let (serve_result_tx, serve_result_rx) = mpsc::channel();
+        let (ready_tx, ready_rx) = mpsc::sync_channel(1);
 
         let join = std::thread::spawn(move || {
             let result = runtime.serve_with_runtime_hooks(
@@ -1191,12 +1226,22 @@ mod tests {
                     begin_shutdown: || Ok(()),
                     reload_runtime_view: || Ok(()),
                     finalize_shutdown: || {},
+                    publish_ready: move || {
+                        ready_tx.send(()).map_err(|_| {
+                            AtmError::daemon_unavailable(
+                                "panic recovery test failed to observe the daemon ready signal",
+                            )
+                            .with_recovery(
+                                "Restore the bounded ready-signal handshake before retrying the same-host panic recovery test.",
+                            )
+                        })
+                    },
                 },
             );
             serve_result_tx.send(result).expect("send serve result");
         });
 
-        let mut stream = connect_daemon_local_ipc_until_ready(&socket_path);
+        let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
         stream
             .set_send_timeout(Some(Duration::from_secs(5)))
             .expect("set send timeout");

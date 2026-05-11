@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ───────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/T3-ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "T3-ATM-QA-004" ;
+  triage:title "ADR-ATM-RUSQLITE-002 Follow-Up section still in future tense after T.3 delivered" ;
+  triage:description "docs/adr/ADR-ATM-RUSQLITE-002.md lines 76-87 — Follow-Up section still in future tense; T.3 work has landed. Update to past tense with delivery date." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-11T03:17:23Z"^^xsd:dateTime ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> ;
+  triage:openOn <urn:atm:triage:worktree/NONE> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pT-t1-integration-gate/bdc8ce1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "bdc8ce1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/b71366f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5-hardening/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-T/f96abd0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "f96abd0" ;
+  triage:orderIndex 9 .
+
+# ── Branch state annotations ──────────────────────────────────────────────────
+# t1: T.3 addendum absent from file (68 lines, no Follow-Up T.3 bullet)  → absent
+# t2: T.3 addendum absent from file (68 lines, no Follow-Up T.3 bullet)  → absent
+# t3: T.3 addendum present (lines 76-83); language is past/present tense  → fixed
+#     Pattern will|shall|should be implemented: 0 matches
+#     Remaining imperative bullets ("benchmark", "review WAL") are open
+#     action items, not future-tense descriptions of T.3 work; no violation
+# t4: T.3 addendum absent from file (68 lines, no Follow-Up T.3 bullet)  → absent
+# t5: T.3 addendum absent from file (68 lines, no Follow-Up T.3 bullet)  → absent
+# integrate/phase-T: T.3 addendum absent (68 lines)                       → absent
+#
+# Finding is fully fixed on t3. No open branch. dispatch_ready=false.

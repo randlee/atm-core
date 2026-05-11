@@ -1,41 +1,40 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<urn:atm:triage:finding/RSH-001>
+<urn:atm:triage:finding/ATM-QA-006>
   a triage:Finding ;
-  triage:findingId "RSH-001" ;
-  triage:title "Unbounded join in Drop — writer thread can block caller indefinitely" ;
-  triage:description "let _ = handle.join() in Drop (writer/mod.rs:91) has no deadline. If the writer thread is blocked on a slow SQLite write or WAL fsync at drop time, the calling thread blocks indefinitely. Fix: bound the join with a deadline (e.g., 5s via sync_channel observer thread + recv_timeout); log and abandon on timeout." ;
-  triage:category "RSH" ;
+  triage:findingId "ATM-QA-006" ;
+  triage:title "Sprint T.4 doc status field still shows Planning" ;
+  triage:description "docs/phase-T/sprint-T4-windows-runtime.md:6 — Status field still shows Planning after implementation delivered. Update to Implementation Complete." ;
   triage:phaseId "phase-T" ;
-  triage:triageMode "followup_pass" ;
-  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
   triage:repeatable false ;
-  triage:sweepScope "crate" ;
-  triage:status "fixed_partial" ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001/pT-t3-immutable-rows/1> ;
-  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> ;
-  triage:fixedOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c> ;
-  triage:promoteTo <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/pT-t4-windows-runtime/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/b71366f> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t4-windows-runtime/b71366f> .
 
-<urn:atm:triage:occurrence/RSH-001/pT-t3-immutable-rows/1>
+<urn:atm:triage:occurrence/ATM-QA-006/pT-t4-windows-runtime/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
-  triage:line 91 ;
-  triage:snippet "let _ = handle.join();" ;
+  triage:file "docs/phase-T/sprint-T4-windows-runtime.md" ;
+  triage:line 6 ;
+  triage:snippet "**Status**: Planning" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "f9f1e3f" ;
-  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/b71366f> .
 
-<urn:atm:triage:worktree/pT-t1-integration-gate/bdc8ce1>
+<urn:atm:triage:worktree/pT-t1-integration-gate/bfb6511>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t1-integration-gate" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
-  triage:headSha "bdc8ce1" ;
+  triage:headSha "bfb6511" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c>
@@ -66,9 +65,9 @@
   triage:headSha "fbf64cc" ;
   triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/phase-T-integrate/f96abd0>
+<urn:atm:triage:worktree/integrate-phase-T/4b04c20>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
-  triage:headSha "f96abd0" ;
+  triage:headSha "4b04c20" ;
   triage:orderIndex 9 .

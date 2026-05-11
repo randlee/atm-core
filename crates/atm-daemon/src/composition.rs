@@ -313,6 +313,7 @@ impl RuntimeComposition {
                 begin_shutdown: || self.begin_shutdown(),
                 reload_runtime_view: move || request_dispatcher.reload_runtime_view(),
                 finalize_shutdown: || self.finalize_shutdown(),
+                publish_ready: || Ok(()),
             },
         );
         self.finish_runtime(result)
@@ -323,6 +324,7 @@ impl RuntimeComposition {
     pub(crate) fn start_with_socket_path_for_test(
         &self,
         socket_path: PathBuf,
+        ready_signal: Option<std::sync::mpsc::SyncSender<()>>,
     ) -> Result<(), AtmError> {
         self.request_dispatcher.record_runtime_event(
             "start_requested",
@@ -401,6 +403,19 @@ impl RuntimeComposition {
                 begin_shutdown: || self.begin_shutdown(),
                 reload_runtime_view: move || request_dispatcher.reload_runtime_view(),
                 finalize_shutdown: || self.finalize_shutdown(),
+                publish_ready: move || {
+                    if let Some(signal) = ready_signal.as_ref() {
+                        signal.send(()).map_err(|_| {
+                            AtmError::daemon_unavailable(
+                                "test runtime failed to publish the daemon ready signal",
+                            )
+                            .with_recovery(
+                                "Restore the bounded ready-signal handshake before retrying the same-host daemon runtime test.",
+                            )
+                        })?;
+                    }
+                    Ok(())
+                },
             },
         );
         self.finish_runtime(result)
@@ -752,7 +767,7 @@ mod tests {
         let runtime = RuntimeComposition::new(tempdir.path().to_path_buf()).expect("runtime");
 
         let error = runtime
-            .start_with_socket_path_for_test(socket_path)
+            .start_with_socket_path_for_test(socket_path, None)
             .expect_err("startup should fail");
 
         assert!(error.is_daemon_unavailable());

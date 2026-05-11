@@ -1,49 +1,143 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
+# RBP-F003 — followup_pass
+# Scope expanded from shared_db.rs (initial_pass) to also cover
+# notification_runtime.rs and watch_runtime.rs, following T.1 QA-3 report
+# at 7a0a928. Prior record incorrectly marked T.1 as fixed for this finding.
+# T.1 shared_db.rs fix (bdc8ce1) is confirmed still present; new occurrences
+# in notification_runtime.rs:63,138 and watch_runtime.rs:179,275,339 are open
+# on T.1 (7a0a928) and have not propagated down via merge-forward to T.2–T.5
+# or integrate/phase-T.
+
 <urn:atm:triage:finding/RBP-F003>
   a triage:Finding ;
   triage:findingId "RBP-F003" ;
-  triage:title "Lock-poison daemon_unavailable missing .with_recovery()" ;
-  triage:description "crates/atm-rusqlite/src/shared_db.rs:329 lock-poison daemon_unavailable error missing .with_recovery(). All other daemon_unavailable calls carry recovery guidance." ;
+  triage:title "lock-poison recovery (.with_recovery()) missing — expanded scope to notification_runtime.rs and watch_runtime.rs" ;
+  triage:description "Prior triage (initial_pass) covered shared_db.rs only. T.1 QA-3 (7a0a928) found .with_recovery() also missing in crates/atm-daemon/src/notification_runtime.rs at lines 63 and 138, and crates/atm-daemon/src/watch_runtime.rs at lines 179, 275, and 339. These lock-poison paths return bare daemon_unavailable errors without the mandatory .with_recovery() chain. The shared_db.rs fix from bdc8ce1 is confirmed present on T.1. All branches T.1 through integrate/phase-T carry the expanded occurrences; merge-forward has not distributed the existing partial fix set." ;
   triage:phaseId "phase-T" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:repeatable true ;
   triage:sweepScope "crate" ;
   triage:category "RBP" ;
-  triage:severity "minor" ;
+  triage:severity "blocking" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-11T02:45:28Z"^^xsd:dateTime ;
-  triage:openOn <urn:atm:triage:worktree/integrate_phase_T/4b04c20> ;
-  triage:promoteTo <urn:atm:triage:worktree/integrate_phase_T> .
+  triage:triagedAt "2026-05-10T12:00:00Z"^^xsd:dateTime ;
 
-<urn:atm:triage:worktree/feature_pT_t1_integration_gate/bfb6511>
+  # --- T.1: notification_runtime.rs occurrences (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t1_integration_gate/notif-63> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t1_integration_gate/notif-138> ;
+
+  # --- T.1: watch_runtime.rs occurrences (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t1_integration_gate/watch-179> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t1_integration_gate/watch-275> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t1_integration_gate/watch-339> ;
+
+  # --- T.2: shared_db.rs (OPEN — no merge-forward from T.1) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/shared-329> ;
+
+  # --- T.2: notification_runtime.rs occurrences (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/notif-63> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/notif-138> ;
+
+  # --- T.2: watch_runtime.rs occurrences (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/watch-179> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/watch-275> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/watch-339> ;
+
+  # --- T.3: shared_db.rs (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/shared-329> ;
+
+  # --- T.3: notification_runtime.rs occurrences (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/notif-63> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/notif-138> ;
+
+  # --- T.3: watch_runtime.rs occurrences (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/watch-179> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/watch-275> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/watch-339> ;
+
+  # --- T.4: shared_db.rs (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/shared-290> ;
+
+  # --- T.4: notification_runtime.rs occurrences (OPEN — shifted line nums post-refactor) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/notif-60> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/notif-114> ;
+
+  # --- T.4: watch_runtime.rs occurrences (OPEN — shifted line nums post-refactor) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/watch-180> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/watch-277> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/watch-341> ;
+
+  # --- T.5: shared_db.rs (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/shared-290> ;
+
+  # --- T.5: notification_runtime.rs occurrences (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/notif-60> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/notif-114> ;
+
+  # --- T.5: watch_runtime.rs occurrences (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/watch-180> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/watch-277> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/watch-341> ;
+
+  # --- integrate/phase-T: shared_db.rs (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/shared-290> ;
+
+  # --- integrate/phase-T: notification_runtime.rs occurrences (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/notif-60> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/notif-114> ;
+
+  # --- integrate/phase-T: watch_runtime.rs occurrences (OPEN) ---
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/watch-180> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/watch-277> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/watch-341> ;
+
+  # T.1 shared_db.rs is the only confirmed fixed site
+  triage:fixedOn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/7a0a928> ;
+
+  # All six worktrees have open occurrences (T.1 shared_db fixed but other files open)
+  triage:openOn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/7a0a928> ;
+  triage:openOn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/8fde385> ;
+  triage:openOn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f> ;
+  triage:openOn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/8baee53> ;
+  triage:openOn <urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc> ;
+  triage:openOn <urn:atm:triage:worktree/integrate_phase_T/d4b43f5> ;
+
+  # Fix must land on T.1 first; merge-forward carries it down
+  triage:promoteTo <urn:atm:triage:worktree/feature_pT_t1_integration_gate/7a0a928> .
+
+# =============================================================================
+# WorktreeSnapshots
+# =============================================================================
+
+<urn:atm:triage:worktree/feature_pT_t1_integration_gate/7a0a928>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t1-integration-gate" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
+  triage:headSha "7a0a928" ;
   triage:orderIndex 1 .
 
-<urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/5275b3c>
+<urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/8fde385>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
+  triage:headSha "8fde385" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/feature_pT_t3_immutable_rows/4b04c20>
+<urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t3-immutable-rows" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "f9f1e3f" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/feature_pT_t4_windows_runtime/4b04c20>
+<urn:atm:triage:worktree/feature_pT_t4_windows_runtime/8baee53>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pT-t4-windows-runtime" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "8baee53" ;
   triage:orderIndex 4 .
 
 <urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc>
@@ -53,219 +147,456 @@
   triage:headSha "fbf64cc" ;
   triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/integrate_phase_T/4b04c20>
+<urn:atm:triage:worktree/integrate_phase_T/d4b43f5>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-T" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
+  triage:headSha "d4b43f5" ;
   triage:orderIndex 9 .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t1-integration-gate/1>
+# =============================================================================
+# Occurrences — T.1 (feature/pT-t1-integration-gate @ 7a0a928)
+# shared_db.rs fix confirmed present; notification_runtime + watch_runtime OPEN
+# =============================================================================
+
+# T.1 / notification_runtime.rs:63 — start() lock acquire, no .with_recovery()
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t1_integration_gate/notif-63>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 227 ;
-  triage:snippet "                AtmError" ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 63 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/bfb6511> .
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/7a0a928> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t1-integration-gate/2>
+# T.1 / notification_runtime.rs:138 — deliver() lock acquire, no .with_recovery()
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t1_integration_gate/notif-138>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 290 ;
-  triage:snippet "            AtmError" ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 138 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/bfb6511> .
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/7a0a928> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t1-integration-gate/3>
+# T.1 / watch_runtime.rs:179 — start() lock acquire, no .with_recovery()
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t1_integration_gate/watch-179>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 293 ;
-  triage:snippet "            return Err(AtmError" ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 179 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t1-integration-gate" ;
-  triage:headSha "bfb6511" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/bfb6511> .
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/7a0a928> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t2-sqlite-writer/4>
+# T.1 / watch_runtime.rs:275 — poll() initial lock acquire, no .with_recovery()
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t1_integration_gate/watch-275>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 270 ;
-  triage:snippet "            other => Err(AtmError" ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 275 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/5275b3c> .
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/7a0a928> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t2-sqlite-writer/5>
+# T.1 / watch_runtime.rs:339 — poll() wait_timeout re-lock, no .with_recovery()
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t1_integration_gate/watch-339>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 291 ;
-  triage:snippet "            other => Err(AtmError" ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 339 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/5275b3c> .
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t1_integration_gate/7a0a928> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t2-sqlite-writer/6>
+# =============================================================================
+# Occurrences — T.2 (feature/pT-t2-sqlite-writer @ 8fde385)
+# shared_db.rs still open; notification_runtime + watch_runtime OPEN
+# =============================================================================
+
+# T.2 / shared_db.rs:329 — lock-poison, no .with_recovery() (no merge-forward from T.1)
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/shared-329>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
   triage:line 329 ;
-  triage:snippet "            AtmError" ;
+  triage:snippet "AtmError::daemon_unavailable(\"sqlite connection budget state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/8fde385> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t2-sqlite-writer/7>
+# T.2 / notification_runtime.rs:63
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/notif-63>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 332 ;
-  triage:snippet "            return Err(AtmError" ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 63 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t2-sqlite-writer" ;
-  triage:headSha "5275b3c" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/5275b3c> .
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/8fde385> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t3-immutable-rows/8>
+# T.2 / notification_runtime.rs:138
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/notif-138>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 138 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/8fde385> .
+
+# T.2 / watch_runtime.rs:179
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/watch-179>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 179 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/8fde385> .
+
+# T.2 / watch_runtime.rs:275
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/watch-275>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 275 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/8fde385> .
+
+# T.2 / watch_runtime.rs:339
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t2_sqlite_writer/watch-339>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 339 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t2_sqlite_writer/8fde385> .
+
+# =============================================================================
+# Occurrences — T.3 (feature/pT-t3-immutable-rows @ f9f1e3f)
+# =============================================================================
+
+# T.3 / shared_db.rs:329
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/shared-329>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 227 ;
-  triage:snippet "                AtmError" ;
+  triage:line 329 ;
+  triage:snippet "AtmError::daemon_unavailable(\"sqlite connection budget state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/4b04c20> .
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t3-immutable-rows/9>
+# T.3 / notification_runtime.rs:63
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/notif-63>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 63 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f> .
+
+# T.3 / notification_runtime.rs:138
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/notif-138>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 138 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f> .
+
+# T.3 / watch_runtime.rs:179
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/watch-179>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 179 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f> .
+
+# T.3 / watch_runtime.rs:275
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/watch-275>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 275 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f> .
+
+# T.3 / watch_runtime.rs:339
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t3_immutable_rows/watch-339>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 339 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/f9f1e3f> .
+
+# =============================================================================
+# Occurrences — T.4 (feature/pT-t4-windows-runtime @ 8baee53)
+# Line numbers shifted due to T.4 refactoring of shutdown path
+# =============================================================================
+
+# T.4 / shared_db.rs:290
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/shared-290>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
   triage:line 290 ;
-  triage:snippet "            AtmError" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/4b04c20> .
-
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t3-immutable-rows/10>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 293 ;
-  triage:snippet "            return Err(AtmError" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t3-immutable-rows" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t3_immutable_rows/4b04c20> .
-
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t4-windows-runtime/11>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 227 ;
-  triage:snippet "                AtmError" ;
+  triage:snippet "AtmError::daemon_unavailable(\"sqlite connection budget state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/4b04c20> .
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/8baee53> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t4-windows-runtime/12>
+# T.4 / notification_runtime.rs:60
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/notif-60>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 60 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/8baee53> .
+
+# T.4 / notification_runtime.rs:114
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/notif-114>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 114 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/8baee53> .
+
+# T.4 / watch_runtime.rs:180
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/watch-180>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 180 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/8baee53> .
+
+# T.4 / watch_runtime.rs:277
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/watch-277>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 277 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/8baee53> .
+
+# T.4 / watch_runtime.rs:341
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t4_windows_runtime/watch-341>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 341 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/8baee53> .
+
+# =============================================================================
+# Occurrences — T.5 (feature/pT-t5-hardening @ fbf64cc)
+# =============================================================================
+
+# T.5 / shared_db.rs:290
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/shared-290>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
   triage:line 290 ;
-  triage:snippet "            AtmError" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/4b04c20> .
-
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t4-windows-runtime/13>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 293 ;
-  triage:snippet "            return Err(AtmError" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pT-t4-windows-runtime" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/feature_pT_t4_windows_runtime/4b04c20> .
-
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t5-hardening/14>
-  a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 227 ;
-  triage:snippet "                AtmError" ;
+  triage:snippet "AtmError::daemon_unavailable(\"sqlite connection budget state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t5-hardening" ;
   triage:headSha "fbf64cc" ;
   triage:occursIn <urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t5-hardening/15>
+# T.5 / notification_runtime.rs:60
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/notif-60>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 290 ;
-  triage:snippet "            AtmError" ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 60 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t5-hardening" ;
   triage:headSha "fbf64cc" ;
   triage:occursIn <urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc> .
 
-<urn:atm:triage:occurrence/RBP-F003/feature/pT-t5-hardening/16>
+# T.5 / notification_runtime.rs:114
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/notif-114>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 293 ;
-  triage:snippet "            return Err(AtmError" ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 114 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pT-t5-hardening" ;
   triage:headSha "fbf64cc" ;
   triage:occursIn <urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc> .
 
-<urn:atm:triage:occurrence/RBP-F003/integrate/phase-T/17>
+# T.5 / watch_runtime.rs:180
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/watch-180>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 227 ;
-  triage:snippet "                AtmError" ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 180 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate_phase_T/4b04c20> .
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc> .
 
-<urn:atm:triage:occurrence/RBP-F003/integrate/phase-T/18>
+# T.5 / watch_runtime.rs:277
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/watch-277>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 277 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc> .
+
+# T.5 / watch_runtime.rs:341
+<urn:atm:triage:occurrence/RBP-F003/feature_pT_t5_hardening/watch-341>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 341 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature_pT_t5_hardening/fbf64cc> .
+
+# =============================================================================
+# Occurrences — integrate/phase-T (@ d4b43f5)
+# =============================================================================
+
+# integrate / shared_db.rs:290
+<urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/shared-290>
   a triage:Occurrence ;
   triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
   triage:line 290 ;
-  triage:snippet "            AtmError" ;
+  triage:snippet "AtmError::daemon_unavailable(\"sqlite connection budget state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate_phase_T/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_T/d4b43f5> .
 
-<urn:atm:triage:occurrence/RBP-F003/integrate/phase-T/19>
+# integrate / notification_runtime.rs:60
+<urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/notif-60>
   a triage:Occurrence ;
-  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
-  triage:line 293 ;
-  triage:snippet "            return Err(AtmError" ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 60 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-T" ;
-  triage:headSha "4b04c20" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate_phase_T/4b04c20> .
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_T/d4b43f5> .
 
+# integrate / notification_runtime.rs:114
+<urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/notif-114>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 114 ;
+  triage:snippet "AtmError::daemon_unavailable(\"notification runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_T/d4b43f5> .
+
+# integrate / watch_runtime.rs:180
+<urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/watch-180>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 180 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_T/d4b43f5> .
+
+# integrate / watch_runtime.rs:277
+<urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/watch-277>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 277 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_T/d4b43f5> .
+
+# integrate / watch_runtime.rs:341
+<urn:atm:triage:occurrence/RBP-F003/integrate_phase_T/watch-341>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 341 ;
+  triage:snippet "AtmError::daemon_unavailable(\"watch runtime state lock poisoned\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate_phase_T/d4b43f5> .
