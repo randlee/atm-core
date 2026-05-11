@@ -535,11 +535,11 @@ mod tests {
     }
 
     fn message_count(target: &SharedDbTarget) -> i64 {
-        let connection = open_connection_for_target(target).expect("open verifier connection");
-        message_count_in_connection(&connection)
+        message_count_in_connection(target)
     }
 
-    fn message_count_in_connection(connection: &rusqlite::Connection) -> i64 {
+    fn message_count_in_connection(target: &SharedDbTarget) -> i64 {
+        let connection = open_connection_for_target(target).expect("open verifier connection");
         connection
             .query_row("SELECT COUNT(1) FROM mail_messages;", [], |row| row.get(0))
             .expect("count rows")
@@ -555,7 +555,7 @@ mod tests {
             Duration::from_secs(1),
         )
         .expect("writer");
-        let verifier = open_connection_for_target(target.as_ref()).expect("open verifier");
+        let _verifier = open_connection_for_target(target.as_ref()).expect("open verifier");
 
         let mut replies = Vec::new();
         for index in 0..8 {
@@ -577,7 +577,7 @@ mod tests {
         for reply in replies {
             assert!(reply.recv().expect("reply").is_ok());
         }
-        assert_eq!(message_count_in_connection(&verifier), 8);
+        assert_eq!(message_count_in_connection(target.as_ref()), 8);
     }
 
     #[test]
@@ -590,7 +590,7 @@ mod tests {
             Duration::from_secs(1),
         )
         .expect("writer");
-        let verifier = open_connection_for_target(target.as_ref()).expect("open verifier");
+        let _verifier = open_connection_for_target(target.as_ref()).expect("open verifier");
 
         let mut replies = Vec::new();
         for index in 0..(BATCH_SIZE_MAX + 6) {
@@ -613,7 +613,7 @@ mod tests {
             assert!(reply.recv().expect("reply").is_ok());
         }
         assert_eq!(
-            message_count_in_connection(&verifier),
+            message_count_in_connection(target.as_ref()),
             (BATCH_SIZE_MAX + 6) as i64
         );
     }
