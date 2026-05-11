@@ -431,14 +431,18 @@ mod tests {
     use super::*;
     use atm_core::MessageKey;
     use atm_core::boundary;
-    use atm_core::schema::MessageEnvelope;
+    use atm_core::schema::{LegacyMessageId, MessageEnvelope};
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+    use rusqlite::OptionalExtension;
+    use std::path::PathBuf;
+    use std::sync::mpsc;
+    use std::thread;
     use tempfile::TempDir;
 
-    fn temp_disk_target() -> (TempDir, Arc<SharedDbTarget>) {
+    fn temp_disk_target() -> (TempDir, Arc<SharedDbTarget>, PathBuf) {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("writer.sqlite3");
-        (tempdir, Arc::new(SharedDbTarget::Path(path)))
+        (tempdir, Arc::new(SharedDbTarget::Path(path.clone())), path)
     }
 
     fn team() -> TeamName {
@@ -481,6 +485,17 @@ mod tests {
         }
     }
 
+    fn message_record(key: &str, text: &str) -> boundary::MailStoreMessageRecord {
+        boundary::MailStoreMessageRecord {
+            team: team(),
+            agent: agent(),
+            message_key: message_key(key),
+            envelope: envelope(text),
+            imported_from: None,
+            recorded_at: Some(IsoTimestamp::now()),
+        }
+    }
+
     fn upsert_message_request(index: usize) -> WriteOp {
         WriteOp::UpsertMessage(boundary::MailStoreUpsertMessageRequest {
             record: boundary::MailStoreMessageRecord {
@@ -503,7 +518,7 @@ mod tests {
 
     #[test]
     fn writer_drop_drains_queued_messages_before_exit() {
-        let (_tempdir, target) = temp_disk_target();
+        let (_tempdir, target, _db_path) = temp_disk_target();
         let writer = SqliteWriter::start_for_test(
             Arc::clone(&target),
             CHANNEL_CAPACITY,
@@ -537,7 +552,7 @@ mod tests {
 
     #[test]
     fn writer_commits_more_than_one_batch_boundary_of_messages() {
-        let (_tempdir, target) = temp_disk_target();
+        let (_tempdir, target, _db_path) = temp_disk_target();
         let writer = SqliteWriter::start_for_test(
             Arc::clone(&target),
             CHANNEL_CAPACITY,
@@ -621,5 +636,206 @@ mod tests {
         );
 
         drop(receiver);
+    }
+
+    #[test]
+    fn invalid_message_row_does_not_poison_other_rows_in_same_batch() {
+        let (_tempdir, target, db_path) = temp_disk_target();
+        let mut connection = open_connection_for_target(target.as_ref()).expect("open connection");
+        ensure_schema(&mut connection, target.as_ref()).expect("ensure schema");
+        let mut cache = stmt_cache::WriterStatementCache;
+
+        let (invalid_tx, invalid_rx) = mpsc::sync_channel(1);
+        let (valid_tx, valid_rx) = mpsc::sync_channel(1);
+        process_batch(
+            target.as_ref(),
+            &mut connection,
+            &mut cache,
+            vec![
+                QueuedWrite {
+                    op: Box::new(WriteOp::UpsertMessage(
+                        boundary::MailStoreUpsertMessageRequest {
+                            record: message_record("bad-key", "invalid"),
+                        },
+                    )),
+                    reply: invalid_tx,
+                },
+                QueuedWrite {
+                    op: Box::new(WriteOp::UpsertMessage(
+                        boundary::MailStoreUpsertMessageRequest {
+                            record: message_record("atm:valid", "valid"),
+                        },
+                    )),
+                    reply: valid_tx,
+                },
+            ],
+        );
+
+        let invalid = invalid_rx.recv().expect("invalid reply");
+        let valid = valid_rx.recv().expect("valid reply");
+        assert!(
+            invalid
+                .expect_err("invalid row should fail")
+                .is_validation()
+        );
+        assert_eq!(
+            valid.expect("valid row should survive same batch"),
+            WriteOpResult::UpsertMessage { inserted: true }
+        );
+
+        drop(connection);
+        let verify = open_connection_for_target(target.as_ref()).expect("reopen");
+        let stored: String = verify
+            .query_row(
+                "SELECT message_text FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                rusqlite::params![team().as_str(), agent().as_str(), "atm:valid"],
+                |row| row.get(0),
+            )
+            .expect("stored valid row");
+        assert_eq!(stored, "valid");
+        let missing: Option<String> = verify
+            .query_row(
+                "SELECT message_text FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                rusqlite::params![team().as_str(), agent().as_str(), "bad-key"],
+                |row| row.get(0),
+            )
+            .optional()
+            .expect("query invalid row");
+        assert!(missing.is_none(), "invalid row must not be written");
+        assert!(
+            db_path.exists(),
+            "writer batch should persist to the target database"
+        );
+    }
+
+    #[test]
+    fn single_successor_violation_does_not_poison_other_rows_in_same_batch() {
+        let (_tempdir, target, db_path) = temp_disk_target();
+        let mut connection = open_connection_for_target(target.as_ref()).expect("open connection");
+        ensure_schema(&mut connection, target.as_ref()).expect("ensure schema");
+        let mut cache = stmt_cache::WriterStatementCache;
+
+        let parent_message_id = LegacyMessageId::new();
+        let mut existing_successor = message_record("atm:existing-successor", "existing");
+        existing_successor.envelope.parent_message_id = Some(parent_message_id);
+
+        let (seed_tx, seed_rx) = mpsc::sync_channel(1);
+        process_batch(
+            target.as_ref(),
+            &mut connection,
+            &mut cache,
+            vec![QueuedWrite {
+                op: Box::new(WriteOp::UpsertMessage(
+                    boundary::MailStoreUpsertMessageRequest {
+                        record: existing_successor,
+                    },
+                )),
+                reply: seed_tx,
+            }],
+        );
+        assert_eq!(
+            seed_rx.recv().expect("seed reply").expect("seed insert"),
+            WriteOpResult::UpsertMessage { inserted: true }
+        );
+
+        let mut conflicting_successor = message_record("atm:conflicting-successor", "conflict");
+        conflicting_successor.envelope.parent_message_id = Some(parent_message_id);
+
+        let (root_tx, root_rx) = mpsc::sync_channel(1);
+        let (conflict_tx, conflict_rx) = mpsc::sync_channel(1);
+        process_batch(
+            target.as_ref(),
+            &mut connection,
+            &mut cache,
+            vec![
+                QueuedWrite {
+                    op: Box::new(WriteOp::UpsertMessage(
+                        boundary::MailStoreUpsertMessageRequest {
+                            record: message_record("atm:root", "root"),
+                        },
+                    )),
+                    reply: root_tx,
+                },
+                QueuedWrite {
+                    op: Box::new(WriteOp::UpsertMessage(
+                        boundary::MailStoreUpsertMessageRequest {
+                            record: conflicting_successor,
+                        },
+                    )),
+                    reply: conflict_tx,
+                },
+            ],
+        );
+
+        assert_eq!(
+            root_rx.recv().expect("root reply").expect("root insert"),
+            WriteOpResult::UpsertMessage { inserted: true }
+        );
+        assert!(
+            conflict_rx
+                .recv()
+                .expect("conflict reply")
+                .expect_err("single-successor violation")
+                .is_validation()
+        );
+
+        drop(connection);
+        let verify = open_connection_for_target(target.as_ref()).expect("reopen");
+        let stored_root: String = verify
+            .query_row(
+                "SELECT message_text FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                rusqlite::params![team().as_str(), agent().as_str(), "atm:root"],
+                |row| row.get(0),
+            )
+            .expect("stored root row");
+        assert_eq!(stored_root, "root");
+        let conflicting: Option<String> = verify
+            .query_row(
+                "SELECT message_text FROM mail_messages WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                rusqlite::params![team().as_str(), agent().as_str(), "atm:conflicting-successor"],
+                |row| row.get(0),
+            )
+            .optional()
+            .expect("query conflicting row");
+        assert!(conflicting.is_none(), "conflicting row must not be written");
+        assert!(
+            db_path.exists(),
+            "writer batch should persist to the target database"
+        );
+    }
+
+    #[test]
+    fn deadline_flush_commits_messages_without_waiting_for_batch_capacity() {
+        let (_tempdir, target, _db_path) = temp_disk_target();
+        let writer = SqliteWriter::start_for_test(
+            Arc::clone(&target),
+            CHANNEL_CAPACITY,
+            Duration::from_millis(50),
+            Duration::from_secs(1),
+        )
+        .expect("writer");
+
+        let mut replies = Vec::new();
+        for index in 0..3 {
+            let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+            writer
+                .sender
+                .as_ref()
+                .expect("sender")
+                .send(WriterMessage::Submit {
+                    op: Box::new(upsert_message_request(index)),
+                    reply: reply_tx,
+                })
+                .expect("queue submit");
+            replies.push(reply_rx);
+            thread::park_timeout(BATCH_TIME_BUDGET + Duration::from_millis(1));
+        }
+
+        for reply in replies {
+            assert!(reply.recv().expect("reply").is_ok());
+        }
+        assert_eq!(message_count(target.as_ref()), 3);
+
+        drop(writer);
     }
 }

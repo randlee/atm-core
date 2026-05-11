@@ -3,7 +3,7 @@
 **Branch**: `integrate/phase-T`
 **Base**: `integrate/phase-T @ 1232244`
 **PR target**: `develop`
-**Status**: Planning
+**Status**: Active
 
 ## Goal
 
@@ -39,7 +39,7 @@ Pre-QA dependency:
 
 - `crates/atm-rusqlite/src/lib.rs`
 - `crates/atm-rusqlite/src/writer/ops.rs`
-- `crates/atm-rusqlite/src/tests.rs`
+- `crates/atm-rusqlite/src/writer/mod.rs`
 - `docs/atm-rusqlite/architecture.md`
 - `docs/adr/ADR-ATM-RUSQLITE-002.md`
 
