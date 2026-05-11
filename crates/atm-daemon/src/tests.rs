@@ -10,24 +10,20 @@ use super::{
     test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
 };
 use atm_core::boundary::RequestDispatcher;
-#[cfg(unix)]
 use atm_core::doctor::DoctorQuery;
 use atm_core::doctor::DoctorStatus;
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
-#[cfg(unix)]
 use atm_core::observability::AtmObservabilityHealthState;
 use atm_core::protocol::{
     HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeLivenessState, RuntimeMemberState,
     RuntimeReadinessState, TeamMemberHeartbeatRequest,
 };
 use atm_core::schema::{AgentMember, TeamConfig};
-#[cfg(unix)]
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::assemble_boundary;
-#[cfg(unix)]
 use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
 use std::fs::OpenOptions;
@@ -40,7 +36,6 @@ use std::time::Duration;
 use std::time::Instant;
 use tempfile::TempDir;
 
-#[cfg(unix)]
 use crate::test_support::connect_daemon_local_ipc_until_ready;
 
 const TEST_TEAM: &str = "test-team";
@@ -124,7 +119,6 @@ fn daemon_exit_code_mapping_matches_supervisor_contract() {
 
 #[test]
 #[serial]
-#[cfg(unix)]
 fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     // TempDir uniqueness is process-local; #[serial] keeps this same-host transport smoke test
     // from racing other lifecycle-control and singleton-sensitive daemon tests.
@@ -217,7 +211,6 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
 
 #[test]
 #[serial]
-#[cfg(unix)]
 fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
     let _drain_guard = ShutdownFinalizerDrainGuard;
     let tempdir = TempDir::new().expect("tempdir");

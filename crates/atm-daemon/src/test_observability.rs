@@ -2,7 +2,6 @@ use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::PathBuf;
 use std::sync::{Condvar, Mutex};
-#[cfg(unix)]
 use std::time::{Duration, Instant};
 
 use atm_core::boundary;
@@ -76,7 +75,6 @@ impl TestDaemonObservability {
         Ok(())
     }
 
-    #[cfg(unix)]
     pub(crate) fn wait_for_message_contains(
         &self,
         needle: &str,
