@@ -1,7 +1,7 @@
 # Sprint T.1 Integration Gate Patch
 
-**Branch**: `integrate/phase-S`
-**Base**: `integrate/phase-S @ bdac03c`
+**Branch**: `integrate/phase-T`
+**Base**: `integrate/phase-T @ 1232244`
 **PR target**: `develop`
 **Status**: Planning
 

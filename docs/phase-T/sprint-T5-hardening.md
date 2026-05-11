@@ -1,7 +1,7 @@
 # Sprint T.5 Remaining Hardening
 
 **Branch**: `integrate/phase-T`
-**Base**: `integrate/phase-T @ bdac03c`
+**Base**: `integrate/phase-T @ 1232244`
 **PR target**: `develop`
 **Status**: Planning
 

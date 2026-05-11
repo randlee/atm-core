@@ -55,25 +55,24 @@ Phase T therefore splits the residual work into:
 - four focused follow-up sprints on `integrate/phase-T` (`T.2`–`T.5`)
 
 Forward-integration rule:
-- `integrate/phase-T` was branched from `integrate/phase-S` at `bdac03c`
-- `T.1` lands on `integrate/phase-S` and reaches `integrate/phase-T` only by
-  forward-merge from `develop` after the `integrate/phase-S` gate PR merges
-- `T.2`–`T.5` must not open implementation PRs until that forward-merge brings
-  the accepted `T.1` fixes into `integrate/phase-T`
+- all T sprints (`T.1`–`T.5`) land directly on `integrate/phase-T`
+- `integrate/phase-T` already incorporates `integrate/phase-S` at `c6847d1`
+  via the develop forward-merge at `1232244`
+- `T.2`–`T.5` may start after `T.1` merges to `integrate/phase-T`
 
 ## 4. Dependency Graph
 
 | Sprint | Purpose | Base | Depends on | Can run in parallel with |
 | --- | --- | --- | --- | --- |
-| `T.1` | integrate/phase-S gate patch cleanup | `integrate/phase-S @ bdac03c` | none | `T.2`–`T.5` planning only |
-| `T.2` | SQLite single-writer lane | `integrate/phase-T @ bdac03c` | none | `T.4`, `T.5` |
-| `T.3` | Immutable message rows + probe removal | `integrate/phase-T @ bdac03c` | `T.2` merge | `T.4`, `T.5` |
-| `T.4` | Windows same-host runtime parity | `integrate/phase-T @ bdac03c` | none | `T.2`, `T.5` |
-| `T.5` | Remaining daemon hardening | `integrate/phase-T @ bdac03c` | none | `T.2`, `T.4` |
+| `T.1` | integrate/phase-S gate patch cleanup | `integrate/phase-T @ 1232244` | none | `T.2`–`T.5` planning only |
+| `T.2` | SQLite single-writer lane | `integrate/phase-T @ 1232244` | none | `T.4`, `T.5` |
+| `T.3` | Immutable message rows + probe removal | `integrate/phase-T @ 1232244` | `T.2` merge | `T.4`, `T.5` |
+| `T.4` | Windows same-host runtime parity | `integrate/phase-T @ 1232244` | none | `T.2`, `T.5` |
+| `T.5` | Remaining daemon hardening | `integrate/phase-T @ 1232244` | none | `T.2`, `T.4` |
 
 Execution rule:
 - `T.1` closes the integration-gate residuals already tracked on
-  `integrate/phase-S`
+  `integrate/phase-S`; fixes land on `integrate/phase-T`
 - `T.2` and `T.3` are a correctness pair; do not mark the SQLite write path
   production-ready until both land
 - `T.4` and `T.5` may execute independently, but both must land before daemon
