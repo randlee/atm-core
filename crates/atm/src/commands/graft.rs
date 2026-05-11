@@ -1,4 +1,5 @@
 use anyhow::Result;
+use atm_core::error::AtmError;
 use atm_core::graft::{
     GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
     GraftNudgeFetchResponse, GraftSessionId,
@@ -35,6 +36,10 @@ struct GraftQueueCommand {
 
 impl GraftCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
+        self.run_internal(observability).map_err(Into::into)
+    }
+
+    fn run_internal(self, observability: &CliObservability) -> Result<(), AtmError> {
         let composition = CliComposition::bootstrap(observability)?;
         match self.mode {
             GraftMode::Fetch(command) => {
@@ -51,33 +56,33 @@ impl GraftCommand {
 }
 
 impl GraftQueueCommand {
-    fn session_id(&self) -> Result<GraftSessionId> {
-        Ok(GraftSessionId::new(self.session_id.clone())?)
+    fn session_id(&self) -> Result<GraftSessionId, AtmError> {
+        GraftSessionId::new(self.session_id.clone())
     }
 
-    fn limit(&self) -> Result<GraftBatchLimit> {
-        Ok(GraftBatchLimit::new(self.limit)?)
+    fn limit(&self) -> Result<GraftBatchLimit, AtmError> {
+        GraftBatchLimit::new(self.limit)
     }
 
-    fn fetch(&self, composition: &CliComposition) -> Result<GraftNudgeFetchResponse> {
-        Ok(composition.fetch_graft_nudges(GraftNudgeFetchRequest {
+    fn fetch(&self, composition: &CliComposition) -> Result<GraftNudgeFetchResponse, AtmError> {
+        composition.fetch_graft_nudges(GraftNudgeFetchRequest {
             session_id: self.session_id()?,
             limit: self.limit()?,
-        })?)
+        })
     }
 
-    fn drain(&self, composition: &CliComposition) -> Result<GraftNudgeDrainResponse> {
-        Ok(composition.drain_graft_nudges(GraftNudgeDrainRequest {
+    fn drain(&self, composition: &CliComposition) -> Result<GraftNudgeDrainResponse, AtmError> {
+        composition.drain_graft_nudges(GraftNudgeDrainRequest {
             session_id: self.session_id()?,
             limit: self.limit()?,
-        })?)
+        })
     }
 }
 
 fn print_response(
     response: impl serde::Serialize + GraftQueueResponseView,
     json: bool,
-) -> Result<()> {
+) -> Result<(), AtmError> {
     if json {
         println!("{}", serde_json::to_string_pretty(&response)?);
         return Ok(());

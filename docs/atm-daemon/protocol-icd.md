@@ -82,9 +82,14 @@ Daemon packet families that this ICD must cover:
 - clear
 - doctor
 - heartbeat
+- graft registration
+- graft unregistration
+- pending-nudge fetch
+- pending-nudge drain
+- daemon-originated graft nudge payloads
 
 Retained product workflows that are not daemon request/response packets in the
-current Phase S line:
+current Phase S / Phase T line:
 - `atm log`
   - uses the shared observability boundary directly
 - `atm teams`
@@ -92,25 +97,7 @@ current Phase S line:
 - `atm members`
   - uses team-admin/config/store surfaces directly
 
-Rule:
-- the ICD must fully specify the daemon packet families that exist today
-- it must not imply that `log`, `teams`, or `members` are daemon packets when
-  the current implementation does not route them through the daemon protocol
-
-## 3.2 Phase T Graft Semantic Surface
-
-Sprint T.6 introduces the typed graft-facing semantic DTO family in
-`atm-core`; Sprint T.7 adds the concrete daemon packet kinds that carry that
-family over the same framed request/response transport.
-
-The new semantic surface covers:
-- graft registration
-- graft unregistration
-- pending-nudge fetch
-- pending-nudge drain
-- daemon-originated graft nudge payloads
-
-Rules:
+Graft-specific rules:
 - these DTOs live in `atm-core`, not in `atm-daemon`
 - embedded consumers must not invent alternate raw payload shapes outside this
   semantic family
@@ -118,6 +105,11 @@ Rules:
   registration, unregistration, fetch, and drain are all typed ATM packets
 - the daemon remains the sole owner of queued nudge state; the protocol
   exposes snapshot/drain projections rather than transferring queue ownership
+
+Rule:
+- the ICD must fully specify the daemon packet families that exist today
+- it must not imply that `log`, `teams`, or `members` are daemon packets when
+  the current implementation does not route them through the daemon protocol
 
 ## 4. Transport Model
 
@@ -383,12 +375,20 @@ The current packet payload DTO definitions live in:
   - `ReadQuery`
   - `ClearQuery`
   - `DoctorQuery`
+  - `GraftSessionRegistrationRequest`
+  - `GraftSessionUnregistrationRequest`
+  - `GraftNudgeFetchRequest`
+  - `GraftNudgeDrainRequest`
   - `SendOutcome`
   - `AckOutcome`
   - `TeamMemberHeartbeatResponse`
   - `ReadOutcome`
   - `ClearOutcome`
   - `DoctorReport`
+  - `GraftSessionRegistrationResponse`
+  - `GraftSessionUnregistrationResponse`
+  - `GraftNudgeFetchResponse`
+  - `GraftNudgeDrainResponse`
   - `ProtocolErrorEnvelope`
 
 ### 7.2 Current Shared Envelope Mapping
@@ -409,6 +409,14 @@ The current protocol-layer envelope mapping is:
   - `clear_request`
 - `RequestEnvelope::Doctor(...)`
   - `doctor_request`
+- `RequestEnvelope::GraftRegister(...)`
+  - `graft_register_request`
+- `RequestEnvelope::GraftUnregister(...)`
+  - `graft_unregister_request`
+- `RequestEnvelope::GraftFetch(...)`
+  - `graft_fetch_request`
+- `RequestEnvelope::GraftDrain(...)`
+  - `graft_drain_request`
 
 - `ResponseEnvelope::Send(SendResponseEnvelope::Sent(...))`
   - `send_sent_response`
@@ -424,6 +432,14 @@ The current protocol-layer envelope mapping is:
   - `clear_response`
 - `ResponseEnvelope::Doctor(...)`
   - `doctor_response`
+- `ResponseEnvelope::GraftRegister(...)`
+  - `graft_register_response`
+- `ResponseEnvelope::GraftUnregister(...)`
+  - `graft_unregister_response`
+- `ResponseEnvelope::GraftFetch(...)`
+  - `graft_fetch_response`
+- `ResponseEnvelope::GraftDrain(...)`
+  - `graft_drain_response`
 - `ResponseEnvelope::Error(...)`
   - `error_response`
 
@@ -474,6 +490,10 @@ Success-family pairing rules:
 - `receive_request -> receive_response | error_response`
 - `clear_request -> clear_response | error_response`
 - `doctor_request -> doctor_response | error_response`
+- `graft_register_request -> graft_register_response | error_response`
+- `graft_unregister_request -> graft_unregister_response | error_response`
+- `graft_fetch_request -> graft_fetch_response | error_response`
+- `graft_drain_request -> graft_drain_response | error_response`
 
 ### 8.1.1 One-Request-Per-Connection Rule
 

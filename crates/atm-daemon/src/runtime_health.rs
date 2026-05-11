@@ -488,7 +488,14 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
                 let outcome = send_mail(request, self.observability.as_ref())?;
-                self.graft_runtime.enqueue_nudge_for_recipient(&outcome)?;
+                if let Err(error) = self.graft_runtime.enqueue_nudge_for_recipient(&outcome) {
+                    self.record_runtime_event(
+                        "graft_nudge_enqueue",
+                        "degraded",
+                        "graft nudge queue overflowed",
+                    );
+                    return Err(error);
+                }
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {

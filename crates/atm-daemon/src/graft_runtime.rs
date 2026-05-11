@@ -1,5 +1,5 @@
 use std::collections::{HashMap, VecDeque};
-use std::sync::Mutex;
+use std::sync::{RwLock, RwLockReadGuard, RwLockWriteGuard};
 
 use atm_core::error::AtmError;
 use atm_core::graft::{
@@ -16,7 +16,7 @@ const MAX_GRAFT_NUDGES_PER_SESSION: usize = 256;
 
 #[derive(Debug, Default)]
 pub(crate) struct GraftRuntime {
-    state: Mutex<GraftRuntimeState>,
+    state: RwLock<GraftRuntimeState>,
     max_sessions: usize,
     max_nudges_per_session: usize,
 }
@@ -40,7 +40,7 @@ struct RegisteredGraftSession {
 impl GraftRuntime {
     pub(crate) fn new() -> Self {
         Self {
-            state: Mutex::new(GraftRuntimeState::default()),
+            state: RwLock::new(GraftRuntimeState::default()),
             max_sessions: MAX_GRAFT_SESSIONS,
             max_nudges_per_session: MAX_GRAFT_NUDGES_PER_SESSION,
         }
@@ -49,7 +49,7 @@ impl GraftRuntime {
     #[cfg(test)]
     fn with_limits_for_test(max_sessions: usize, max_nudges_per_session: usize) -> Self {
         Self {
-            state: Mutex::new(GraftRuntimeState::default()),
+            state: RwLock::new(GraftRuntimeState::default()),
             max_sessions,
             max_nudges_per_session,
         }
@@ -59,7 +59,7 @@ impl GraftRuntime {
         &self,
         request: GraftSessionRegistrationRequest,
     ) -> Result<GraftSessionRegistrationResponse, AtmError> {
-        let mut state = self.lock_state()?;
+        let mut state = self.lock_state_write()?;
         if state.sessions.contains_key(&request.session_id) {
             return Err(AtmError::validation(format!(
                 "graft session {} is already registered",
@@ -106,7 +106,7 @@ impl GraftRuntime {
         &self,
         request: GraftSessionUnregistrationRequest,
     ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
-        let mut state = self.lock_state()?;
+        let mut state = self.lock_state_write()?;
         let closed = state.sessions.remove(&request.session_id).is_some();
         Ok(GraftSessionUnregistrationResponse {
             session_id: request.session_id,
@@ -118,7 +118,7 @@ impl GraftRuntime {
         &self,
         request: GraftNudgeFetchRequest,
     ) -> Result<GraftNudgeFetchResponse, AtmError> {
-        let state = self.lock_state()?;
+        let state = self.lock_state_read()?;
         let session = state.sessions.get(&request.session_id).ok_or_else(|| {
             AtmError::validation(format!(
                 "graft session {} is not registered",
@@ -146,7 +146,7 @@ impl GraftRuntime {
         &self,
         request: GraftNudgeDrainRequest,
     ) -> Result<GraftNudgeDrainResponse, AtmError> {
-        let mut state = self.lock_state()?;
+        let mut state = self.lock_state_write()?;
         let session = state.sessions.get_mut(&request.session_id).ok_or_else(|| {
             AtmError::validation(format!(
                 "graft session {} is not registered",
@@ -175,7 +175,7 @@ impl GraftRuntime {
         &self,
         outcome: &SendOutcome,
     ) -> Result<(), AtmError> {
-        let mut state = self.lock_state()?;
+        let mut state = self.lock_state_write()?;
         let message = outcome
             .message
             .clone()
@@ -189,20 +189,22 @@ impl GraftRuntime {
             task_id: outcome.task_id.clone(),
         };
         let mut matched = false;
+        let mut overflowed = false;
         for (session_id, session) in state.sessions.iter_mut() {
             if session.team == outcome.team && session.agent == outcome.agent {
                 matched = true;
                 if session.nudges.len() >= self.max_nudges_per_session {
-                    session.nudges.pop_front();
                     session.dropped_count = session.dropped_count.saturating_add(1);
-                    tracing::warn!(
+                    overflowed = true;
+                    tracing::debug!(
                         session_id = %session_id,
                         team = %outcome.team,
                         agent = %outcome.agent,
                         cap = self.max_nudges_per_session,
                         dropped_count = session.dropped_count,
-                        "graft nudge queue overflowed; oldest nudge dropped"
+                        "graft nudge queue rejected a nudge because the bounded session queue is full"
                     );
+                    continue;
                 }
                 session.nudges.push_back(nudge.clone());
             }
@@ -215,13 +217,39 @@ impl GraftRuntime {
                 "queued graft nudge for registered session"
             );
         }
+        if overflowed {
+            return Err(
+                AtmError::daemon_unavailable(
+                    "graft nudge queue is full; at least one registered session did not receive the nudge",
+                )
+                .with_recovery(
+                    "Drain or fetch graft nudges from the active graft session before retrying the send operation.",
+                ),
+            );
+        }
         Ok(())
     }
 
-    fn lock_state(&self) -> Result<std::sync::MutexGuard<'_, GraftRuntimeState>, AtmError> {
+    fn lock_state_read(&self) -> Result<RwLockReadGuard<'_, GraftRuntimeState>, AtmError> {
         self.state
-            .lock()
+            .read()
             .map_err(|_| AtmError::daemon_unavailable("graft session state lock poisoned"))
+            .map_err(|error| {
+                error.with_recovery(
+                    "Restart atm-daemon; graft session state can no longer be trusted after the poisoned lock.",
+                )
+            })
+    }
+
+    fn lock_state_write(&self) -> Result<RwLockWriteGuard<'_, GraftRuntimeState>, AtmError> {
+        self.state
+            .write()
+            .map_err(|_| AtmError::daemon_unavailable("graft session state lock poisoned"))
+            .map_err(|error| {
+                error.with_recovery(
+                    "Restart atm-daemon; graft session state can no longer be trusted after the poisoned lock.",
+                )
+            })
     }
 }
 
@@ -325,7 +353,7 @@ mod tests {
     }
 
     #[test]
-    fn overflow_drops_oldest_and_reports_dropped_count() {
+    fn overflow_rejects_new_nudge_and_reports_dropped_count() {
         let runtime = GraftRuntime::with_limits_for_test(2, 2);
         let request = registration_request();
         runtime
@@ -337,9 +365,13 @@ mod tests {
         runtime
             .enqueue_nudge_for_recipient(&send_outcome("second"))
             .expect("enqueue second");
-        runtime
+        let error = runtime
             .enqueue_nudge_for_recipient(&send_outcome("third"))
-            .expect("enqueue third");
+            .expect_err("overflow should reject new nudge");
+        assert_eq!(
+            error.message,
+            "graft nudge queue is full; at least one registered session did not receive the nudge"
+        );
 
         let drain = runtime
             .drain_nudges(GraftNudgeDrainRequest {
@@ -349,7 +381,7 @@ mod tests {
             .expect("drain");
         assert_eq!(drain.dropped_count, 1);
         assert_eq!(drain.nudges.len(), 2);
-        assert_eq!(drain.nudges[0].message, "second");
-        assert_eq!(drain.nudges[1].message, "third");
+        assert_eq!(drain.nudges[0].message, "first");
+        assert_eq!(drain.nudges[1].message, "second");
     }
 }
