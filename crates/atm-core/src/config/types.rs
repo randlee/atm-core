@@ -46,6 +46,17 @@ impl Default for DaemonConfig {
     }
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraftConfig {
+    pub enabled: bool,
+}
+
+impl Default for GraftConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AtmConfig {
     /// Deprecated compatibility-only field for legacy `.atm.toml` parsing.
@@ -67,6 +78,7 @@ pub struct AtmConfig {
     pub post_send_hooks: Vec<PostSendHookRule>,
     pub claude_jsonl_body_export_max_bytes: ByteCount,
     pub daemon: DaemonConfig,
+    pub graft: GraftConfig,
     pub config_root: PathBuf,
     pub(crate) obsolete_identity_present: bool,
 }
@@ -83,6 +95,7 @@ impl Default for AtmConfig {
                 DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES,
             ),
             daemon: DaemonConfig::default(),
+            graft: GraftConfig::default(),
             config_root: PathBuf::new(),
             obsolete_identity_present: false,
         }
