@@ -1,32 +1,64 @@
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::time::{Duration, Instant};
+#[cfg(test)]
+use std::sync::{Condvar, Mutex};
+#[cfg(test)]
+use std::time::Duration;
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct ShutdownBeacon {
-    // This bit is polled by accept, lifecycle, and serve-loop threads. No shutdown-beacon waiter
-    // blocks on a companion condition variable, so an atomic flag is sufficient here.
+    // This bit is polled by accept, lifecycle, and serve-loop threads, so the hot path remains
+    // lock-free even though tests also mirror shutdown through a condvar-backed waiter.
     tripped: AtomicBool,
+    #[cfg(test)]
+    wait_state: Mutex<bool>,
+    #[cfg(test)]
+    wait_condvar: Condvar,
+}
+
+impl Default for ShutdownBeacon {
+    fn default() -> Self {
+        Self {
+            tripped: AtomicBool::new(false),
+            #[cfg(test)]
+            wait_state: Mutex::new(false),
+            #[cfg(test)]
+            wait_condvar: Condvar::new(),
+        }
+    }
 }
 
 impl ShutdownBeacon {
     pub(crate) fn trip(&self) {
         self.tripped.store(true, Ordering::SeqCst);
+        #[cfg(test)]
+        {
+            let mut guard = self
+                .wait_state
+                .lock()
+                .expect("lock shutdown beacon wait state");
+            *guard = true;
+            self.wait_condvar.notify_all();
+        }
     }
 
     pub(crate) fn is_tripped(&self) -> bool {
         self.tripped.load(Ordering::SeqCst)
     }
 
-    #[cfg_attr(any(windows, not(test)), allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn wait_until_tripped(&self, timeout: Duration) -> bool {
-        let deadline = Instant::now() + timeout;
-        while Instant::now() < deadline {
-            if self.is_tripped() {
-                return true;
-            }
-            std::thread::sleep(Duration::from_millis(5));
+        if self.is_tripped() {
+            return true;
         }
-        self.is_tripped()
+        let guard = self
+            .wait_state
+            .lock()
+            .expect("lock shutdown beacon wait state");
+        let (guard, _) = self
+            .wait_condvar
+            .wait_timeout_while(guard, timeout, |tripped| !*tripped)
+            .expect("wait on shutdown beacon condvar");
+        *guard || self.is_tripped()
     }
 }
 
@@ -34,17 +66,24 @@ impl ShutdownBeacon {
 mod tests {
     use super::ShutdownBeacon;
     use std::sync::Arc;
+    use std::sync::mpsc;
     use std::time::Duration;
 
     #[test]
     fn wait_until_tripped_returns_true_after_trip() {
         let beacon = Arc::new(ShutdownBeacon::default());
         let waiter = Arc::clone(&beacon);
+        let (entered_tx, entered_rx) = mpsc::sync_channel(1);
         let join = std::thread::spawn(move || {
+            entered_tx
+                .send(())
+                .expect("notify waiter entered polling loop");
             assert!(waiter.wait_until_tripped(Duration::from_secs(1)));
         });
 
-        std::thread::yield_now();
+        entered_rx
+            .recv_timeout(Duration::from_secs(5))
+            .expect("waiter entered polling loop");
         beacon.trip();
 
         join.join().expect("join shutdown beacon waiter");

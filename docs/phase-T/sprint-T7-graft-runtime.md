@@ -7,9 +7,9 @@
 
 ## Goal
 
-Add the small daemon-side runtime features embedded and hook/poll graft
-consumers actually need: registration, bounded nudge queueing, one live
-embedded-session receive path, and drain/fetch access.
+Add the daemon-side runtime features embedded and hook/poll graft consumers
+need before the concrete `atm-graft` crate can exist: registration, bounded
+nudge queueing, and drain/fetch access.
 
 ## Preconditions
 
@@ -20,7 +20,8 @@ embedded-session receive path, and drain/fetch access.
 
 - add graft registration / unregistration handling in the daemon/runtime line
 - add a daemon-owned bounded pending-nudge queue
-- add one live embedded-session receive path for daemon-originated nudges
+- add the daemon-owned registration/queue/drain surface consumed by the live
+  embedded-session receive path implemented later by `T.8`
 - add a typed drain/fetch API for embedded and hook/poll consumers
 - add explicit backpressure and queue-overflow behavior with structured error
   identity and observability
@@ -47,8 +48,8 @@ embedded-session receive path, and drain/fetch access.
 
 - registration and unregistration paths exist and are test-covered
 - pending nudge queue ownership is daemon-side, not graft-side
-- embedded sessions automatically receive nudges through one live receive
-  task/thread per active session
+- the daemon-owned registration/queue/drain surface is present for the one
+  live embedded-session receive task/thread that `T.8` must implement
 - the queue is bounded and its overflow/backpressure behavior is explicit
 - embedded consumers and hook/poll consumers use the same daemon-owned drain
   contract

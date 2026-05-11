@@ -91,6 +91,11 @@ Required change:
 - add minimal `[atm.graft]` activation
 - add `GraftSession`
 - add host-facing nudge fetch/drain bridging
+- add the concrete thin crate surfaces:
+  - `GraftClient`
+  - `GraftSession`
+  - `HostNudgeInjector`
+  - `GraftObservability`
 
 ## 5. Phase T Work Packages
 
@@ -122,7 +127,8 @@ Deliverables:
 - graft registration / unregistration protocol
 - daemon-owned bounded pending-nudge queue
 - daemon-owned drain/fetch API
-- automatic embedded-session nudge receive/injection path
+- daemon-side support consumed by the automatic embedded-session
+  nudge receive/injection path implemented in `T.8`
 - typed backpressure and queue-overflow behavior
 - hook-facing `atm` command surface for nudge drain on the same daemon API
 
@@ -143,6 +149,9 @@ Deliverables:
 - minimal `[atm.graft]` config activation
 - `GraftSession` as the concrete implementation of the `atm_core`
   `GraftSessionPort` trait
+- `GraftClient` as the thin daemon-backed same-host client implementation
+- `HostNudgeInjector` as the automatic between-tool-call injection seam
+- `GraftObservability` as the injected ATM-owned observability seam
 - public API limited to:
   - `send`
   - `read`
@@ -179,9 +188,10 @@ To keep the first implementation tractable:
 
 Embedded session mode:
 - a custom host CLI links `atm-graft` in-process
-- `GraftSession` registers with the daemon
+- `GraftSession` registers with the daemon through the `T.7` session/runtime
+  protocol
 - nudges are delivered through the daemon session path
-- one live receive task/thread runs for the active session
+- one live receive task/thread runs for the active session inside `atm-graft`
 - the host receives automatic between-tool-call injection through the graft
   bridge
 

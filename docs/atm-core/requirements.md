@@ -59,6 +59,7 @@ Initial allocation:
 - `REQ-CORE-COMPAT-*`
 - `REQ-CORE-INGEST-*`
 - `REQ-CORE-BOUNDARY-*`
+- `REQ-CORE-GRAFT-*`
 - `REQ-CORE-TRANSPORT-*`
 - `REQ-CORE-DAEMON-*`
 - `REQ-CORE-LOCK-*`
@@ -175,6 +176,11 @@ Initial crate requirement IDs:
   when absent, and fail with a typed daemon-unavailable error rather than
   silently falling back to direct SQLite or inbox-file access. Satisfies:
   `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-GRAFT-001` `atm-core` owns the thin graft-facing client/session
+  contract shared by the retained CLI and future `atm-graft` crate, including
+  the open `AtmGraftClient` / `GraftSessionPort` traits plus the typed graft
+  registration, unregistration, and nudge fetch/drain DTO families. Satisfies:
+  `REQ-P-GRAFT-001`, `REQ-P-CONTRACT-001`.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
@@ -297,8 +303,16 @@ Required `atm-core` crate rules:
   - production remote daemon peer transport
   - fake in-process transport doubles
   - loopback in-process transport
+  - thin graft-facing daemon clients built outside `atm-daemon`
 - `ClientTransport` must be strong enough for shared ownership and concurrent
   request execution without downstream callers restating `Send + Sync`
+- `REQ-CORE-GRAFT-001` keeps the graft-facing public API intentionally small:
+  - `SendRequest` / `SendOutcome`
+  - `ReadQuery` / `ReadOutcome`
+  - `AckRequest` / `AckOutcome`
+  - `AtmGraftClient`
+  - `GraftSessionPort`
+  - typed graft registration and nudge DTOs
 - `atm-core` owns one ATM frame contract for local IPC and remote daemon
   request/response transport, as defined by
   `docs/atm-daemon/protocol-icd.md`
@@ -319,7 +333,11 @@ Required `atm-core` crate rules:
 - `atm-core` must not let watcher/reconcile logic bypass the owned ingress or
   store boundaries
 - `atm-core` boundary traits are sealed by default; any boundary that must
-  remain externally implementable requires an explicit ADR and crate-doc note
+  remain externally implementable requires an explicit crate-doc note and
+  architecture justification
+- the graft-facing `AtmGraftClient` and `GraftSessionPort` traits are
+  intentionally open because `atm-graft` must implement them in a separate
+  crate without taking a Rust dependency on `atm-daemon`
 - `atm-core` must keep concrete adapter implementations and constructors
   private unless public exposure is required by a documented boundary contract
 - `atm-core` must keep business logic testable in-process without daemon

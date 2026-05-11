@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-T7-003>
+  a triage:Finding ;
+  triage:findingId "RSH-T7-003" ;
+  triage:title "tracing::warn! in overflow path missing dropped_count and session_id fields" ;
+  triage:description "QA finding claimed the tracing::warn! at graft_runtime.rs:198 was missing dropped_count and session_id structured fields. Sweep of T.7 and T.8 shows both fields ARE present in the warn! call at lines 199-203: session_id = %session_id and dropped_count = session.dropped_count. This finding is a false positive. The overflow warn! is correctly structured. No fix required." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:worktree/T4/68a83ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.4" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "68a83ea" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/T5/1939b55>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.5" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "1939b55" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/T6/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.6" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/T7/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.7" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/T8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.8" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .

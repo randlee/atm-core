@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T6-007>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T6-007" ;
+  triage:title "T.2-T.5 merge preconditions not verifiable from T.6 worktree" ;
+  triage:description "docs/phase-T/sprint-T6-graft-client-surface.md:14 — T.2-T.5 merge preconditions listed but not verifiable; PR description should list merge SHAs." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-007/pT-t6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6/37eee04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:occurrence/ATM-QA-T6-007/pT-t6/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-T/sprint-T6-graft-client-surface.md" ;
+  triage:line 16 ;
+  triage:snippet "- `T.2` through `T.5` must be merged first so the daemon/runtime baseline is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:worktree/pT-t6/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .

@@ -1,0 +1,76 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/QA-003>
+  a triage:Finding ;
+  triage:findingId "QA-003" ;
+  triage:title "No test for batch time-budget deadline flush (BATCH_TIME_BUDGET = 2ms path)" ;
+  triage:description "crates/atm-rusqlite/src/writer/mod.rs — No test for batch time-budget deadline flush. The collect_batch function has a BATCH_TIME_BUDGET = 2ms path that is not covered by any test. T.3 FIX-R3 (6668842) added deadline_flush_commits_messages_without_waiting_for_batch_capacity which exercises this path. Fix has propagated to T.4 and T.5 but T.2 (d6f89e3) is still open and requires a merge-forward from T.3." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T22:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-003/pT-t2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2/d6f89e3> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t3/6668842> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t4/d180818> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t5/6450bb5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t2/d6f89e3> .
+
+<urn:atm:triage:occurrence/QA-003/pT-t2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 286 ;
+  triage:snippet "let deadline = Instant::now() + BATCH_TIME_BUDGET;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "d6f89e3" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/d6f89e3> .
+
+<urn:atm:triage:worktree/pT-t1/0e6b024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2/d6f89e3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "d6f89e3" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3/6668842>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "6668842" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4/d180818>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "d180818" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/6450bb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-T/fa92dc5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "fa92dc5" ;
+  triage:orderIndex 9 .

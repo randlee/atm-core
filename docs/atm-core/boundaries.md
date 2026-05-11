@@ -47,6 +47,26 @@ Purpose:
 Notes:
 - The public workflow surface above this boundary should stay centered on send
   and receive.
+- Thin graft-facing clients should layer typed workflow/session DTOs above this
+  transport rather than publishing daemon-shaped transport details directly.
+- Shared same-host daemon bootstrap helpers used by transport consumers now
+  live in `atm-daemon-client`; this boundary still owns the request/response
+  transport contract itself.
+
+## AtmGraftClient / GraftSessionPort
+
+Purpose:
+- Own the thin embedded ATM client surface that `atm-graft` consumes without a
+  Rust dependency on `atm-daemon`.
+
+Notes:
+- These are intentionally open traits, not sealed boundary traits.
+- `AtmGraftClient` owns the unary `send` / `read` / `ack` daemon request
+  surface for embedded consumers.
+- `GraftSessionPort` owns graft-session registration plus nudge fetch/drain
+  session contracts.
+- The graft-facing public API must stay small and typed rather than exposing
+  raw `RequestEnvelope` / `ResponseEnvelope` values.
 
 ## WatchEventSource
 
@@ -96,7 +116,7 @@ Purpose:
 Notes:
 - Transport-specific listeners should not embed request-family logic.
 
-## MailStore
+## BOUNDARY-MailStore-Sqlite
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/mail-store.toml](../../boundaries/atm-core/mail-store.toml)
@@ -108,7 +128,7 @@ Purpose:
 Notes:
 - This stays the canonical durable truth behind send and receive workflows.
 
-## TaskStore
+## BOUNDARY-TaskStore-Sqlite
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/task-store.toml](../../boundaries/atm-core/task-store.toml)
@@ -120,7 +140,7 @@ Purpose:
 Notes:
 - `ack` is not a top-level public method, but it still mutates task state.
 
-## RosterStore
+## BOUNDARY-RosterStore-Sqlite
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/roster-store.toml](../../boundaries/atm-core/roster-store.toml)

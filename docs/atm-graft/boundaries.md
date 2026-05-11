@@ -15,6 +15,9 @@ Purpose:
 
 Rules:
 - `atm-graft` must not take a Rust dependency on `atm-daemon`
+- `atm-graft` may depend on `atm-daemon-client` only for shared same-host
+  daemon bootstrap helpers; transport and session contracts remain `atm-core`
+  owned
 - `atm-graft` must not re-mint a parallel public client trait duplicating
   `atm_core::AtmGraftClient`
 

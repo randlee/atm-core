@@ -1,7 +1,5 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::{
@@ -13,25 +11,30 @@ use atm_core::{
         self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::AtmError,
+    graft::{
+        GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
+        GraftNudgeFetchResponse, GraftSessionRegistrationRequest, GraftSessionRegistrationResponse,
+        GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
+    },
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        HeartbeatActivity, RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState,
-        RuntimeStatusCounts, RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope,
+        RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope,
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::read_mail,
-    schema::TeamConfig,
     send::send_mail,
-    types::{AgentName, IsoTimestamp, TeamName},
 };
 use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
 use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
+use crate::graft_runtime::GraftRuntime;
+#[cfg(test)]
+pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
+pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
+use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
 
-const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
-const MAX_RELOAD_TEAMS: usize = 256;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -39,288 +42,11 @@ const SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE: Duration = Duration::from_secs(2);
 const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 
 // Timed-out shutdown workers are retained in one process-wide registry instead of being dropped
-// orphaned; tests drain the registry explicitly and production keeps the handles reachable until
-// process shutdown completes.
+// orphaned; this must be static because the bounded finalizer helper can outlive any one
+// dispatcher instance after timeout, while orderly shutdown and serial tests still need one place
+// to recover and join those retained workers later.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct RuntimeMemberKey {
-    team: TeamName,
-    member: AgentName,
-}
-
-#[derive(Debug, Clone)]
-struct RuntimeMemberRecord {
-    pid: Option<u32>,
-    state: RuntimeMemberState,
-    last_active_at: Option<IsoTimestamp>,
-}
-
-#[derive(Debug, Clone, Default)]
-struct RuntimeStatusCacheState {
-    // Request handlers and doctor/status readers update and snapshot the cache
-    // concurrently, so one mutex protects the whole live-status projection.
-    members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
-    sqlite_ready: bool,
-    degraded_ingest: bool,
-}
-
-#[derive(Debug, Clone, Default)]
-pub(crate) struct RuntimeStatusCache {
-    state: Arc<Mutex<RuntimeStatusCacheState>>,
-}
-
-impl RuntimeStatusCache {
-    pub(crate) fn new() -> Self {
-        Self {
-            state: Arc::new(Mutex::new(RuntimeStatusCacheState {
-                members: HashMap::new(),
-                sqlite_ready: true,
-                degraded_ingest: false,
-            })),
-        }
-    }
-
-    fn clone_state(&self) -> Result<RuntimeStatusCacheState, AtmError> {
-        self.state
-            .lock()
-            .map(|cache| cache.clone())
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))
-    }
-
-    fn replace_state(&self, next: RuntimeStatusCacheState) -> Result<(), AtmError> {
-        let mut cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        *cache = next;
-        Ok(())
-    }
-
-    fn record_heartbeat(
-        &self,
-        request: &TeamMemberHeartbeatRequest,
-        pid_changed: bool,
-    ) -> Result<TeamMemberHeartbeatResponse, AtmError> {
-        let state = match request.activity {
-            HeartbeatActivity::ActiveToolUse => RuntimeMemberState::Active,
-            HeartbeatActivity::Idle => RuntimeMemberState::Idle,
-            HeartbeatActivity::SessionEnded => RuntimeMemberState::Offline,
-        };
-        let key = RuntimeMemberKey {
-            team: request.team.clone(),
-            member: request.member.clone(),
-        };
-        let last_active_at = Some(request.observed_at);
-        let mut cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        let is_new_key = !cache.members.contains_key(&key);
-        if is_new_key && cache.members.len() >= MAX_STATUS_CACHE_ENTRIES {
-            let eviction_candidate = cache
-                .members
-                .iter()
-                .filter(|(_, record)| record.state != RuntimeMemberState::IdentityConflict)
-                .min_by_key(|(_, record)| {
-                    (
-                        record.state == RuntimeMemberState::Unknown,
-                        record.last_active_at,
-                    )
-                })
-                .map(|(key, record)| (key.clone(), record.clone()));
-            if let Some((evicted_key, evicted_record)) = eviction_candidate {
-                cache.members.remove(&evicted_key);
-                tracing::warn!(
-                    team = %evicted_key.team,
-                    member = %evicted_key.member,
-                    pid = evicted_record.pid,
-                    "evicted daemon runtime status-cache entry after reaching the bounded cap"
-                );
-            }
-        }
-        cache.members.insert(
-            key,
-            RuntimeMemberRecord {
-                pid: Some(request.pid),
-                state,
-                last_active_at,
-            },
-        );
-        cache.sqlite_ready = true;
-        Ok(TeamMemberHeartbeatResponse {
-            team: request.team.clone(),
-            member: request.member.clone(),
-            pid: request.pid,
-            pid_changed,
-            state,
-            last_active_at,
-        })
-    }
-
-    fn record_identity_conflict(
-        &self,
-        request: &TeamMemberHeartbeatRequest,
-        existing_pid: u32,
-    ) -> Result<(), AtmError> {
-        let key = RuntimeMemberKey {
-            team: request.team.clone(),
-            member: request.member.clone(),
-        };
-        let mut cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        let last_active_at = cache
-            .members
-            .get(&key)
-            .and_then(|record| record.last_active_at);
-        cache.members.insert(
-            key,
-            RuntimeMemberRecord {
-                pid: Some(existing_pid),
-                state: RuntimeMemberState::IdentityConflict,
-                last_active_at,
-            },
-        );
-        Ok(())
-    }
-
-    fn cached_pid(&self, team: &TeamName, member: &AgentName) -> Result<Option<u32>, AtmError> {
-        let cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        Ok(cache
-            .members
-            .get(&RuntimeMemberKey {
-                team: team.clone(),
-                member: member.clone(),
-            })
-            .and_then(|record| record.pid))
-    }
-
-    pub(crate) fn mark_sqlite_unavailable(&self) {
-        match self.state.lock() {
-            Ok(mut cache) => cache.sqlite_ready = false,
-            Err(_) => {
-                tracing::error!(
-                    "runtime status cache lock poisoned while marking sqlite unavailable"
-                );
-            }
-        }
-    }
-
-    pub(crate) fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
-        let cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        Ok(build_runtime_snapshot_all(&cache))
-    }
-
-    fn snapshot_for_members(
-        &self,
-        members: impl IntoIterator<Item = (TeamName, AgentName)>,
-    ) -> Result<RuntimeStatusSnapshot, AtmError> {
-        let cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        Ok(build_runtime_snapshot_scoped(&cache, members))
-    }
-}
-
-fn build_runtime_snapshot_all(cache: &RuntimeStatusCacheState) -> RuntimeStatusSnapshot {
-    let mut counts = RuntimeStatusCounts::default();
-    for record in cache.members.values() {
-        match record.state {
-            RuntimeMemberState::Active => counts.active_members += 1,
-            RuntimeMemberState::Idle => counts.idle_members += 1,
-            RuntimeMemberState::Offline => counts.offline_members += 1,
-            RuntimeMemberState::Unknown | RuntimeMemberState::IdentityConflict => {
-                counts.unknown_members += 1
-            }
-        }
-    }
-    finish_runtime_snapshot(cache, counts)
-}
-
-fn build_runtime_snapshot_scoped(
-    cache: &RuntimeStatusCacheState,
-    scope: impl IntoIterator<Item = (TeamName, AgentName)>,
-) -> RuntimeStatusSnapshot {
-    let mut counts = RuntimeStatusCounts::default();
-    for (team, member) in scope {
-        let key = RuntimeMemberKey { team, member };
-        match cache.members.get(&key).map(|record| record.state) {
-            Some(RuntimeMemberState::Active) => counts.active_members += 1,
-            Some(RuntimeMemberState::Idle) => counts.idle_members += 1,
-            Some(RuntimeMemberState::Offline) => counts.offline_members += 1,
-            Some(RuntimeMemberState::Unknown) | Some(RuntimeMemberState::IdentityConflict) => {
-                counts.unknown_members += 1
-            }
-            None => counts.unknown_members += 1,
-        }
-    }
-    finish_runtime_snapshot(cache, counts)
-}
-
-fn finish_runtime_snapshot(
-    cache: &RuntimeStatusCacheState,
-    counts: RuntimeStatusCounts,
-) -> RuntimeStatusSnapshot {
-    let conflict_count = cache
-        .members
-        .values()
-        .filter(|record| record.state == RuntimeMemberState::IdentityConflict)
-        .count();
-    let tracked_members = counts.active_members
-        + counts.idle_members
-        + counts.offline_members
-        + counts.unknown_members;
-    let all_tracked_members_offline = tracked_members > 0
-        && counts.active_members == 0
-        && counts.idle_members == 0
-        && counts.unknown_members == 0
-        && counts.offline_members > 0;
-    let readiness = if all_tracked_members_offline {
-        RuntimeReadinessState::Unavailable
-    } else if !cache.sqlite_ready || cache.degraded_ingest || conflict_count > 0 {
-        RuntimeReadinessState::Degraded
-    } else {
-        RuntimeReadinessState::Ready
-    };
-    let mut details = Vec::new();
-    if !cache.sqlite_ready {
-        details.push(
-            "sqlite-backed durable pid continuity is unavailable; runtime cache updates are degraded"
-                .to_string(),
-        );
-    }
-    if cache.degraded_ingest {
-        details.push("runtime heartbeat ingest is degraded".to_string());
-    }
-    if conflict_count > 0 {
-        details.push(format!(
-            "{conflict_count} runtime member identity conflict(s) require admin takeover or dead-pid retry"
-        ));
-    }
-    if all_tracked_members_offline {
-        details.push("all tracked daemon members are offline".to_string());
-    }
-    let detail = (!details.is_empty()).then(|| details.join("; "));
-    RuntimeStatusSnapshot {
-        liveness: RuntimeLivenessState::Running,
-        readiness,
-        detail,
-        singleton_owner_pid: Some(std::process::id()),
-        sqlite_ready: cache.sqlite_ready,
-        degraded_ingest: cache.degraded_ingest,
-        member_counts: counts,
-    }
-}
 
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,
@@ -329,6 +55,7 @@ pub(crate) struct DaemonRequestDispatcher {
     observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
     sqlite_boundary: Option<SqliteBoundaryAssembly>,
+    graft_runtime: GraftRuntime,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -337,6 +64,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("home_dir", &self.home_dir)
             .field("status_cache", &self.status_cache)
             .field("sqlite_boundary_present", &self.sqlite_boundary.is_some())
+            .field("graft_runtime", &"GraftRuntime")
             .finish()
     }
 }
@@ -344,27 +72,85 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
 impl DaemonRequestDispatcher {
     #[cfg(test)]
     pub(crate) fn drain_shutdown_finalizer_threads_for_test() {
-        let handles = {
-            let mut handles = SHUTDOWN_FINALIZER_THREADS
-                .lock()
-                .expect("shutdown finalizer thread registry lock");
-            std::mem::take(&mut *handles)
-        };
-        for handle in handles {
-            let (result_tx, result_rx) = mpsc::sync_channel(1);
-            std::thread::spawn(move || {
-                let _ = result_tx.send(handle.join());
+        let mut deadline = std::time::Instant::now() + Duration::from_secs(5);
+        loop {
+            let handle = with_shutdown_finalizer_registry(|handles| {
+                handles
+                    .iter()
+                    .position(std::thread::JoinHandle::is_finished)
+                    .map(|index| handles.swap_remove(index))
             });
-            match result_rx.recv_timeout(Duration::from_secs(5)) {
-                Ok(_) => {}
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    panic!("shutdown finalizer thread failed to join within 5s")
-                }
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    panic!("shutdown finalizer join helper exited before reporting completion")
-                }
+            if let Some(handle) = handle {
+                handle.join().expect("join shutdown finalizer thread");
+                deadline = std::time::Instant::now() + Duration::from_secs(5);
+                continue;
             }
+            let remaining = deadline.saturating_duration_since(std::time::Instant::now());
+            let has_pending = with_shutdown_finalizer_registry(|handles| !handles.is_empty());
+            if !has_pending {
+                break;
+            }
+            assert!(
+                !remaining.is_zero(),
+                "shutdown finalizer thread failed to join within 5s"
+            );
+            std::thread::park_timeout(remaining.min(Duration::from_millis(10)));
         }
+        let still_pending = with_shutdown_finalizer_registry(|handles| handles.len());
+        assert_eq!(
+            still_pending, 0,
+            "shutdown finalizer join helper left retained worker handles behind"
+        );
+    }
+
+    fn spawn_shutdown_step(
+        label: &'static str,
+        step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
+    ) -> std::thread::JoinHandle<()> {
+        std::thread::Builder::new()
+            .name(format!("shutdown-finalizer-{label}"))
+            .spawn(move || {
+                step().unwrap_or_else(|error| {
+                    tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
+                });
+            })
+            .expect("spawn daemon shutdown finalizer step")
+    }
+
+    fn complete_shutdown_step(label: &'static str, shutdown_handle: std::thread::JoinHandle<()>) {
+        if shutdown_handle.join().is_err() {
+            tracing::warn!(
+                step = label,
+                "daemon shutdown finalizer step panicked before reporting completion"
+            );
+        }
+    }
+
+    fn retain_shutdown_step(
+        label: &'static str,
+        shutdown_handle: std::thread::JoinHandle<()>,
+        deadline: Duration,
+    ) {
+        let retained = with_shutdown_finalizer_registry(|handles| {
+            if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS {
+                handles.push(shutdown_handle);
+                true
+            } else {
+                false
+            }
+        });
+        if !retained {
+            tracing::warn!(
+                step = label,
+                cap = MAX_SHUTDOWN_FINALIZER_THREADS,
+                "shutdown finalizer thread cap reached; dropping retained worker handle"
+            );
+        }
+        tracing::warn!(
+            step = label,
+            timeout_ms = deadline.as_millis(),
+            "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
+        );
     }
 
     fn run_bounded_shutdown_step(
@@ -372,48 +158,22 @@ impl DaemonRequestDispatcher {
         deadline: Duration,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
     ) {
-        let (result_tx, result_rx) = mpsc::sync_channel(1);
-        let shutdown_handle = std::thread::spawn(move || {
-            let _ = result_tx.send(step());
-        });
-        match result_rx.recv_timeout(deadline) {
-            Ok(Ok(())) => {
-                let _ = shutdown_handle.join();
+        let shutdown_handle = Self::spawn_shutdown_step(label, step);
+        let started = std::time::Instant::now();
+        loop {
+            if shutdown_handle.is_finished() {
+                Self::complete_shutdown_step(label, shutdown_handle);
+                return;
             }
-            Ok(Err(error)) => {
-                let _ = shutdown_handle.join();
-                tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
-            }
-            Err(mpsc::RecvTimeoutError::Timeout) => {
+            if started.elapsed() >= deadline {
                 // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
                 // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
                 // than dropping it orphaned because tests and orderly process teardown can join it
                 // later once the blocking storage step finishes.
-                let mut handles = SHUTDOWN_FINALIZER_THREADS
-                    .lock()
-                    .expect("shutdown finalizer thread registry lock");
-                if handles.len() < MAX_SHUTDOWN_FINALIZER_THREADS {
-                    handles.push(shutdown_handle);
-                } else {
-                    tracing::warn!(
-                        step = label,
-                        cap = MAX_SHUTDOWN_FINALIZER_THREADS,
-                        "shutdown finalizer thread cap reached; dropping retained worker handle"
-                    );
-                }
-                tracing::warn!(
-                    step = label,
-                    timeout_ms = deadline.as_millis(),
-                    "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
-                );
+                Self::retain_shutdown_step(label, shutdown_handle, deadline);
+                return;
             }
-            Err(mpsc::RecvTimeoutError::Disconnected) => {
-                let _ = shutdown_handle.join();
-                tracing::warn!(
-                    step = label,
-                    "daemon shutdown finalizer step exited before reporting a result"
-                );
-            }
+            std::thread::sleep(Duration::from_millis(10));
         }
     }
 
@@ -446,10 +206,11 @@ impl DaemonRequestDispatcher {
             observability,
             status_cache,
             sqlite_boundary,
+            graft_runtime: GraftRuntime::new(),
         }
     }
 
-    pub(crate) fn emit_runtime_event(
+    pub(crate) fn record_runtime_event(
         &self,
         action: &'static str,
         outcome: &'static str,
@@ -464,15 +225,39 @@ impl DaemonRequestDispatcher {
     }
 }
 
+fn with_shutdown_finalizer_registry<R>(
+    f: impl FnOnce(&mut Vec<std::thread::JoinHandle<()>>) -> R,
+) -> R {
+    match SHUTDOWN_FINALIZER_THREADS.lock() {
+        Ok(mut handles) => f(&mut handles),
+        Err(poisoned) => {
+            tracing::warn!(
+                "shutdown finalizer thread registry lock poisoned; recovering retained worker handles"
+            );
+            // The registry only owns JoinHandles for timed-out shutdown helpers; recovering the
+            // inner vector preserves later joins instead of dropping retained worker ownership.
+            let mut handles = poisoned.into_inner();
+            f(&mut handles)
+        }
+    }
+}
+
 impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 impl boundary::RequestDispatcher for DaemonRequestDispatcher {
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(
-                    send_mail(request, self.observability.as_ref())?,
-                )))
+                let outcome = send_mail(request, self.observability.as_ref())?;
+                if let Err(error) = self.graft_runtime.enqueue_nudge_for_recipient(&outcome) {
+                    self.record_runtime_event(
+                        "graft_nudge_enqueue",
+                        "degraded",
+                        "graft nudge queue overflowed",
+                    );
+                    return Err(error);
+                }
+                Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
@@ -497,6 +282,18 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => {
                 Ok(ResponseEnvelope::Doctor(self.project_doctor_report(query)?))
             }
+            RequestEnvelope::GraftRegister(request) => Ok(ResponseEnvelope::GraftRegister(
+                self.register_graft_session(request)?,
+            )),
+            RequestEnvelope::GraftUnregister(request) => Ok(ResponseEnvelope::GraftUnregister(
+                self.unregister_graft_session(request)?,
+            )),
+            RequestEnvelope::GraftFetch(request) => Ok(ResponseEnvelope::GraftFetch(
+                self.fetch_graft_nudges(request)?,
+            )),
+            RequestEnvelope::GraftDrain(request) => Ok(ResponseEnvelope::GraftDrain(
+                self.drain_graft_nudges(request)?,
+            )),
         }
     }
 }
@@ -519,7 +316,7 @@ impl DaemonRequestDispatcher {
         let current_state = self.status_cache.clone_state()?;
         let next_state =
             build_runtime_status_cache_state(Some(&current_state), &self.home_dir, roster_store)?;
-        let reloaded_members = next_state.members.len();
+        let reloaded_members = next_state.member_count();
         self.status_cache.replace_state(next_state)?;
         tracing::info!(
             reloaded_members,
@@ -600,6 +397,34 @@ impl DaemonRequestDispatcher {
             .record_heartbeat(&request, durable.pid_changed)
     }
 
+    fn register_graft_session(
+        &self,
+        request: GraftSessionRegistrationRequest,
+    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
+        self.graft_runtime.register_session(request)
+    }
+
+    fn unregister_graft_session(
+        &self,
+        request: GraftSessionUnregistrationRequest,
+    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
+        self.graft_runtime.unregister_session(request)
+    }
+
+    fn fetch_graft_nudges(
+        &self,
+        request: GraftNudgeFetchRequest,
+    ) -> Result<GraftNudgeFetchResponse, AtmError> {
+        self.graft_runtime.fetch_nudges(request)
+    }
+
+    fn drain_graft_nudges(
+        &self,
+        request: GraftNudgeDrainRequest,
+    ) -> Result<GraftNudgeDrainResponse, AtmError> {
+        self.graft_runtime.drain_nudges(request)
+    }
+
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
         let mut report = doctor::run_doctor(query, self.observability.as_ref())?;
         let daemon_observability_finding = match self.observability.health() {
@@ -647,164 +472,6 @@ impl DaemonRequestDispatcher {
         };
         report.runtime_status = Some(runtime_status);
         Ok(report)
-    }
-}
-
-fn build_runtime_status_cache_state(
-    current_state: Option<&RuntimeStatusCacheState>,
-    home_dir: &std::path::Path,
-    roster_store: &dyn boundary::RosterStore,
-) -> Result<RuntimeStatusCacheState, AtmError> {
-    let mut next_state = RuntimeStatusCacheState {
-        members: HashMap::new(),
-        sqlite_ready: true,
-        degraded_ingest: current_state.is_some_and(|state| state.degraded_ingest),
-    };
-    let teams_root = home_dir.join(".claude").join("teams");
-    if !teams_root.is_dir() {
-        return Ok(next_state);
-    }
-    let entries = std::fs::read_dir(&teams_root).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to enumerate daemon team configs under {}",
-            teams_root.display()
-        ))
-        .with_recovery(
-            "Restore read access to the daemon team configuration tree under ATM_HOME before retrying atm-daemon startup.",
-        )
-        .with_source(error)
-    })?;
-    for (index, entry) in entries.enumerate() {
-        if index >= MAX_RELOAD_TEAMS {
-            return Err(AtmError::config(format!(
-                "daemon runtime reload rejected because {} contains more than {MAX_RELOAD_TEAMS} team configs",
-                teams_root.display()
-            ))
-            .with_recovery(
-                "Reduce the number of configured ATM teams or raise the documented reload cap before retrying SIGHUP.",
-            ));
-        }
-        let entry = entry.map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to read daemon team-config entry under {}",
-                teams_root.display()
-            ))
-            .with_recovery(
-                "Repair the daemon team configuration directory entries under ATM_HOME before retrying atm-daemon startup.",
-            )
-            .with_source(error)
-        })?;
-        let team_name = entry.file_name().to_string_lossy().into_owned();
-        let team: TeamName = team_name.parse().map_err(|error| {
-            AtmError::config(format!(
-                "runtime_health: invalid team name from storage under {}: {team_name}",
-                teams_root.display()
-            ))
-            .with_recovery(
-                "Remove or rename the malformed team directory under the ATM teams root before retrying.",
-            )
-            .with_source(error)
-        })?;
-        let config_path = entry.path().join("config.json");
-        if !config_path.is_file() {
-            continue;
-        }
-        let raw = std::fs::read(&config_path).map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to read daemon team config {}",
-                config_path.display()
-            ))
-            .with_recovery(
-                "Restore the daemon team config file or fix its read permissions before retrying atm-daemon startup.",
-            )
-            .with_source(error)
-        })?;
-        let config: TeamConfig = serde_json::from_slice(&raw).map_err(|error| {
-            AtmError::config(format!(
-                "failed to parse daemon team config {}: {error}",
-                config_path.display()
-            ))
-            .with_recovery(
-                "Repair or remove the malformed team config file and restart atm-daemon or send SIGHUP.",
-            )
-            .with_source(error)
-        })?;
-        for member in config.members {
-            if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
-                return Err(AtmError::config(format!(
-                    "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while reading {}",
-                    config_path.display()
-                ))
-                .with_recovery(
-                    "Reduce configured roster size or increase the documented status-cache budget before retrying SIGHUP.",
-                ));
-            }
-            let member_name = member.name;
-            let membership = roster_store.query_membership(
-                atm_core::boundary::RosterStoreQueryMembershipRequest {
-                    team: team.clone(),
-                    member: member_name.clone(),
-                },
-            )?;
-            let key = RuntimeMemberKey {
-                team: team.clone(),
-                member: member_name,
-            };
-            let existing = current_state.and_then(|state| state.members.get(&key));
-            next_state.members.insert(
-                key,
-                RuntimeMemberRecord {
-                    pid: membership.pid,
-                    state: existing
-                        .map(|record| record.state)
-                        .unwrap_or(RuntimeMemberState::Unknown),
-                    last_active_at: existing.and_then(|record| record.last_active_at),
-                },
-            );
-        }
-    }
-    Ok(next_state)
-}
-
-fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {
-    let summary = format!(
-        "daemon runtime liveness is {:?}; readiness is {:?}; owner_pid={:?}; sqlite_ready={}; degraded_ingest={}; active={}, idle={}, offline={}, unknown={}",
-        snapshot.liveness,
-        snapshot.readiness,
-        snapshot.singleton_owner_pid,
-        snapshot.sqlite_ready,
-        snapshot.degraded_ingest,
-        snapshot.member_counts.active_members,
-        snapshot.member_counts.idle_members,
-        snapshot.member_counts.offline_members,
-        snapshot.member_counts.unknown_members,
-    );
-    match snapshot.readiness {
-        RuntimeReadinessState::Ready => DoctorFinding {
-            severity: DoctorSeverity::Info,
-            code: atm_core::error_codes::AtmErrorCode::ObservabilityHealthOk,
-            message: summary,
-            remediation: None,
-        },
-        RuntimeReadinessState::Degraded => DoctorFinding {
-            severity: DoctorSeverity::Warning,
-            // Runtime degradation intentionally reuses the warning observability-health code so
-            // doctor output keeps one degraded-warning bucket until a daemon-specific code is
-            // added across the shared ATM diagnostic taxonomy.
-            code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded,
-            message: summary,
-            remediation: snapshot.detail.clone().or(Some(
-                "Restore daemon runtime backing services and rerun `atm doctor`.".to_string(),
-            )),
-        },
-        RuntimeReadinessState::Unavailable => DoctorFinding {
-            severity: DoctorSeverity::Error,
-            code: atm_core::error_codes::AtmErrorCode::DaemonUnavailable,
-            message: summary,
-            remediation: snapshot.detail.clone().or(Some(
-                "Restore daemon runtime availability and rerun `atm doctor`.".to_string(),
-            )),
-        },
     }
 }
 
@@ -883,9 +550,18 @@ mod tests {
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
 
+    struct ShutdownFinalizerDrainGuard;
+
+    impl Drop for ShutdownFinalizerDrainGuard {
+        fn drop(&mut self) {
+            DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+        }
+    }
+
     #[test]
     #[serial]
     fn bounded_shutdown_step_returns_after_deadline() {
+        let _drain_guard = ShutdownFinalizerDrainGuard;
         let release = Arc::new((Mutex::new(false), Condvar::new()));
         let blocker = Arc::clone(&release);
         let started = Instant::now();
@@ -913,12 +589,12 @@ mod tests {
         let (released, wake) = &*release;
         *released.lock().expect("released") = true;
         wake.notify_all();
-        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
     }
 
     #[test]
     #[serial]
     fn bounded_shutdown_step_does_not_exceed_retained_finalizer_cap() {
+        let _drain_guard = ShutdownFinalizerDrainGuard;
         DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
 
         let retained_release = Arc::new((Mutex::new(false), Condvar::new()));
@@ -976,7 +652,74 @@ mod tests {
         let (released, wake) = &*retained_release;
         *released.lock().expect("retained release") = true;
         wake.notify_all();
-        DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
+    }
+
+    #[test]
+    fn heartbeat_only_insert_evicts_oldest_member_when_cache_is_full() {
+        use atm_core::protocol::{
+            HeartbeatActivity, RuntimeMemberState, TeamMemberHeartbeatRequest,
+        };
+        use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+        use chrono::{Duration as ChronoDuration, Utc};
+
+        let status_cache = super::RuntimeStatusCache::new();
+        let team: TeamName = "test-team".parse().expect("team");
+        let oldest_member: AgentName = "heartbeat-oldest".parse().expect("member");
+        let trigger_member: AgentName = "heartbeat-trigger".parse().expect("member");
+        let base = Utc::now();
+
+        for index in 0..super::MAX_STATUS_CACHE_ENTRIES {
+            let member_name: AgentName = if index == 0 {
+                oldest_member.clone()
+            } else {
+                format!("heartbeat-{index}").parse().expect("member")
+            };
+            status_cache
+                .record_heartbeat_for_test(
+                    &TeamMemberHeartbeatRequest {
+                        team: team.clone(),
+                        member: member_name,
+                        pid: index as u32 + 1,
+                        observed_at: IsoTimestamp::from_datetime(
+                            base + ChronoDuration::seconds(index as i64),
+                        ),
+                        activity: HeartbeatActivity::Idle,
+                    },
+                    false,
+                )
+                .expect("seed heartbeat member");
+        }
+
+        let response = status_cache
+            .record_heartbeat_for_test(
+                &TeamMemberHeartbeatRequest {
+                    team: team.clone(),
+                    member: trigger_member.clone(),
+                    pid: std::process::id(),
+                    observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
+                    activity: HeartbeatActivity::ActiveToolUse,
+                },
+                false,
+            )
+            .expect("trigger heartbeat");
+        assert_eq!(response.state, RuntimeMemberState::Active);
+
+        assert_eq!(
+            status_cache.member_count_for_test().expect("member count"),
+            super::MAX_STATUS_CACHE_ENTRIES
+        );
+        assert_eq!(
+            status_cache
+                .member_state_for_test(&team, &oldest_member)
+                .expect("oldest member state"),
+            None
+        );
+        assert_eq!(
+            status_cache
+                .member_state_for_test(&team, &trigger_member)
+                .expect("trigger member state"),
+            Some(RuntimeMemberState::Active)
+        );
     }
 }
 

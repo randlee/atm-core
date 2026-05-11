@@ -2,7 +2,6 @@ use std::fs::{self, OpenOptions};
 use std::io::{ErrorKind, Write};
 use std::path::PathBuf;
 use std::sync::{Condvar, Mutex};
-#[cfg(unix)]
 use std::time::{Duration, Instant};
 
 use atm_core::boundary;
@@ -69,20 +68,18 @@ impl TestDaemonObservability {
             .with_source(source)
         })?;
         let (recorded, wake) = &self.recorded_messages;
-        recorded
-            .lock()
-            .expect("test observability messages")
-            .push(message);
+        let mut recorded = recorded.lock().expect("test observability messages");
+        recorded.push(message);
+        drop(recorded);
         wake.notify_all();
         Ok(())
     }
 
-    #[cfg(unix)]
     pub(crate) fn wait_for_message_contains(
         &self,
         needle: &str,
         timeout: Duration,
-    ) -> Result<(), String> {
+    ) -> Result<(), AtmError> {
         let deadline = Instant::now() + timeout;
         let (recorded, wake) = &self.recorded_messages;
         let mut recorded = recorded.lock().expect("test observability messages");
@@ -92,9 +89,25 @@ impl TestDaemonObservability {
             }
             let now = Instant::now();
             if now >= deadline {
-                return Err(format!(
-                    "timed out waiting for retained test log message containing {needle:?}"
-                ));
+                let last_seen = if recorded.is_empty() {
+                    "<no retained test messages recorded>".to_string()
+                } else {
+                    recorded
+                        .iter()
+                        .rev()
+                        .take(3)
+                        .cloned()
+                        .collect::<Vec<_>>()
+                        .join(" | ")
+                };
+                return Err(
+                    AtmError::observability_health(format!(
+                        "timed out waiting for retained test log message containing {needle:?}; last_seen={last_seen}"
+                    ))
+                    .with_recovery(
+                        "Retry the daemon observability test after verifying the retained-log adapter emitted the expected startup event.",
+                    ),
+                );
             }
             let wait = wake
                 .wait_timeout(recorded, deadline.saturating_duration_since(now))

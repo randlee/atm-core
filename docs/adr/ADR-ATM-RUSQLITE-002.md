@@ -4,7 +4,7 @@
 adr_id: ADR-ATM-RUSQLITE-002
 crate: atm-rusqlite
 title: Single in-process SQLite write worker
-status: proposed
+status: accepted
 date: 2026-05-10
 deciders:
   - team-lead
@@ -20,6 +20,9 @@ related_boundaries:
 code_references:
   - crates/atm-rusqlite/src/shared_db.rs
   - crates/atm-rusqlite/src/lib.rs
+  - crates/atm-rusqlite/src/writer/mod.rs
+  - crates/atm-rusqlite/src/writer/ops.rs
+  - crates/atm-rusqlite/src/writer/stmt_cache.rs
   - docs/phase-S/sprint-S15-rusqlite-plan.md
 ```
 
@@ -42,10 +45,18 @@ Introduce one crate-private in-process SQLite write worker that:
 - drains queued writes in bounded batches
 - preserves the current `atm-core` store trait contracts
 - remains private to `atm-rusqlite`
+- migrates the Phase T hot write path first:
+  - `MailStore::upsert_message`
+  - `MailStore::upsert_visibility_state`
+- leaves surviving cold-path `SharedDb::with_transaction(...)` callers in place
+  only when the T.2 caller audit explicitly records them as non-hot-path
+  writes
 
 ## Consequences
 
 - write-path serialization becomes explicit at the crate boundary
+- the connection budget becomes explicit as `1` permanent writer handle plus up
+  to `3` transient reader handles
 - the hot mailbox append path can remove its pre-write probe and use
   row-count-based insertion detection when message-row immutability holds
 - reader concurrency remains available through separate read handles
@@ -62,6 +73,11 @@ Introduce one crate-private in-process SQLite write worker that:
 
 - use `docs/phase-S/sprint-S15-rusqlite-plan.md` as the canonical design for
   the S.15 implementation shape and any follow-on QA reconciliation
+- the `T.3` immutable-row addendum completes the hot mailbox contract by:
+  - removing the pre-write message existence probe
+  - making `mail_messages` insert-only with duplicate-key `DO NOTHING`
+  - rejecting crate-owned logical invariants before SQL submission where the
+    crate already owns the rule
 - benchmark the resulting hot-path throughput and latency
 - review WAL autocheckpoint tuning separately if sustained write load requires
   it

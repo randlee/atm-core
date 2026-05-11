@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T6-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T6-004" ;
+  triage:title "Missing serde round-trip tests for typed DTOs and GraftSessionPort mock test" ;
+  triage:description "crates/atm-core/src/graft.rs:223 — no serde round-trip tests for Registration/Unregistration/Fetch/Drain request+response + GraftNudge. No GraftSessionPort mock test." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/graft.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-004/pT-t6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-004/pT-t6/2> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:occurrence/ATM-QA-T6-004/pT-t6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 223 ;
+  triage:snippet "#[cfg(test)] mod tests { use super::{GraftBatchLimit, GraftSessionId}; — only two validation tests present; serde round-trip tests absent for GraftSessionRegistrationRequest, GraftSessionRegistrationResponse, GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse, GraftNudgeFetchRequest, GraftNudgeFetchResponse, GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudge" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:occurrence/ATM-QA-T6-004/pT-t6/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 51 ;
+  triage:snippet "pub trait GraftSessionPort: Send + Sync { fn register_session(...); fn unregister_session(...); fn fetch_nudges(...); fn drain_nudges(...); } — no mock implementation or #[cfg(test)] test exercising GraftSessionPort dispatch found anywhere in crates/" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .

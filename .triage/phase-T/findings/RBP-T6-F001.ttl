@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-T6-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-T6-F001" ;
+  triage:title "GraftSessionId derives Deserialize via serde(transparent) bypassing validated constructor" ;
+  triage:description "crates/atm-core/src/graft.rs:97 — GraftSessionId derives Deserialize via #[serde(transparent)] which accepts blank strings. Other domain types (AgentName, TaskId) route serde through validated FromStr. GraftSessionId must follow the same pattern." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-T6-F001/pT-t6-graft-client-surface/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:occurrence/RBP-T6-F001/pT-t6-graft-client-surface/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 97 ;
+  triage:snippet "#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]\\n#[serde(transparent)]\\npub struct GraftSessionId(String);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04> .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .

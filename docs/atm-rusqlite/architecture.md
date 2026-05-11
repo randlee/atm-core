@@ -107,6 +107,60 @@ Architectural rule:
 - transport/runtime retry policy
 - daemon lifecycle/shutdown behavior
 
+## 4.1 Phase T writer-lane contract
+
+Phase T adds one crate-private SQLite writer lane owned by `SharedDb`.
+
+Rules:
+- `SqliteWriter` stays crate-private and must not be re-exported outside
+  `atm-rusqlite`
+- the writer owns one long-lived write `Connection`
+- hot-path writes submit typed operations to the writer instead of opening
+  ad-hoc write transactions directly
+- the initial T.2 writer migration covers only:
+  - `MailStore::upsert_message`
+  - `MailStore::upsert_visibility_state`
+- the writer queue is bounded and blocking by design; a full queue applies
+  backpressure to submitters instead of silently dropping writes
+- async daemon callers must continue to submit through `spawn_blocking(...)`
+  or another dedicated blocking thread because the writer submission path is
+  synchronous
+- the SQLite connection budget is explicit:
+  - `1` permanent writer handle
+  - up to `3` concurrent reader handles
+- writer shutdown must be explicit and draining: the channel closes, already
+  queued work drains, then the worker thread joins on drop
+- `T.3` completes the message-row semantic contract on top of the T.2 lane:
+  - `mail_messages` is immutable after the first successful insert
+  - duplicate primary-key writes use insert-first `DO NOTHING` semantics
+  - ack and visibility state remain mutable in their dedicated state tables
+  - crate-owned logical invariants such as single-successor and legacy-message
+    ownership are validated before SQL submission
+
+## 4.2 T.2 `with_transaction(...)` caller audit
+
+Every surviving `SharedDb::with_transaction(...)` caller after T.2 is
+classified here.
+
+| Location | Classification | T.2 disposition |
+| --- | --- | --- |
+| `crates/atm-rusqlite/src/lib.rs` `SqliteBoundaryAssembly::record_remote_replay_state` | cold-path write | stays on legacy transaction helper |
+| `crates/atm-rusqlite/src/lib.rs` `SqliteBoundaryAssembly::delete_remote_replay_state` | cold-path write | stays on legacy transaction helper |
+| `crates/atm-rusqlite/src/lib.rs` `SqliteBoundaryAssembly::purge_expired_remote_replay_states` | cold-path write | stays on legacy transaction helper |
+| `crates/atm-rusqlite/src/lib.rs` `SqliteMailStore::run_transaction` | not a migration target | remains a typed no-op stub until the generic transaction payload is specified |
+| `crates/atm-rusqlite/src/lib.rs` `SqliteMailStore::record_ingest_replay_state` | cold-path write | stays on legacy transaction helper |
+| `crates/atm-rusqlite/src/lib.rs` `SqliteTaskStore::create_task` | cold-path write | stays on legacy transaction helper |
+| `crates/atm-rusqlite/src/lib.rs` `SqliteTaskStore::update_task` | cold-path write | stays on legacy transaction helper |
+| `crates/atm-rusqlite/src/lib.rs` `SqliteTaskStore::attach_message_link` | cold-path write | stays on legacy transaction helper |
+| `crates/atm-rusqlite/src/lib.rs` `SqliteTaskStore::detach_message_link` | cold-path write | stays on legacy transaction helper |
+| `crates/atm-rusqlite/src/lib.rs` `SqliteTaskStore::record_ack_transition` | cold-path write | stays on legacy transaction helper |
+| `crates/atm-rusqlite/src/roster_store.rs` `SqliteRosterStore::replace_roster` | cold-path write | stays on legacy transaction helper |
+| `crates/atm-rusqlite/src/roster_store.rs` `SqliteRosterStore::record_heartbeat` | cold-path write | stays on legacy transaction helper |
+
+Calls removed from the legacy path in T.2:
+- `SqliteMailStore::upsert_message`
+- `SqliteMailStore::upsert_visibility_state`
+
 ## 5. Error Translation Boundary
 
 `atm-rusqlite` must translate raw SQLite failures into typed ATM store errors.

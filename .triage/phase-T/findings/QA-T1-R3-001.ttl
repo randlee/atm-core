@@ -1,0 +1,604 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: QA-T1-R3-001
+# peer_transport.rs tests not annotated #[serial] — process-global terminate flag race
+# Triaged: 2026-05-10T00:00:00Z
+# Mode: initial_pass
+
+<urn:atm:triage:finding/QA-T1-R3-001>
+  a triage:Finding ;
+  triage:findingId "QA-T1-R3-001" ;
+  triage:title "peer_transport.rs tests not annotated #[serial] — process-global terminate flag race" ;
+  triage:description "bdc8ce1 changed timing in accept_after_terminate_returns_typed_shutdown_error (now waits for publish_ready hook before storing terminate=true), widening the window during which the process-global SHARED_LIFECYCLE terminate flag is true. Concurrent non-serial peer_transport tests call daemon_terminate_flag() inside that window -> terminate_before_first_attempt=true -> DaemonUnavailable instead of OutcomeUnknown -> assert_eq panics. Fix: add #[serial] to 7 tests at peer_transport.rs." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/7> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/7> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/7> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/7> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/7> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/7> ;
+
+  triage:openOn <urn:atm:triage:worktree/pT-t1-integration-gate/7a0a928> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/fbf64cc> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-T/d4b43f5> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-T/d4b43f5> .
+
+# ── WorktreeSnapshots ────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pT-t1-integration-gate/7a0a928>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "7a0a928" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5-hardening/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-T/d4b43f5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:orderIndex 9 .
+
+# ── Occurrences: feature/pT-t1-integration-gate (7a0a928) ──────────────────
+# File: crates/atm-daemon/src/peer_transport.rs
+# Lines (t1): 752, 799, 862, 895, 935, 988, 1029
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 752 ;
+  triage:snippet "#[test] fn peer_transport_round_trips_one_heartbeat_request()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1-integration-gate/7a0a928> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 799 ;
+  triage:snippet "#[test] fn peer_transport_uses_port_zero_listener_handoff_without_rebind_race()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1-integration-gate/7a0a928> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 862 ;
+  triage:snippet "#[test] fn peer_transport_reports_outcome_unknown_after_send_without_response()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1-integration-gate/7a0a928> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 895 ;
+  triage:snippet "#[test] fn peer_transport_treats_remote_error_envelope_as_non_retryable()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1-integration-gate/7a0a928> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 935 ;
+  triage:snippet "#[test] fn replay_resume_replays_and_deletes_delivered_rows()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1-integration-gate/7a0a928> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 988 ;
+  triage:snippet "#[test] fn outcome_unknown_persists_replay_request_for_restart_resume()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1-integration-gate/7a0a928> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t1-integration-gate/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1029 ;
+  triage:snippet "#[test] fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "7a0a928" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1-integration-gate/7a0a928> .
+
+# ── Occurrences: feature/pT-t2-sqlite-writer (8fde385) ────────────────────
+# Lines same as t1: 752, 799, 862, 895, 935, 988, 1029
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 752 ;
+  triage:snippet "#[test] fn peer_transport_round_trips_one_heartbeat_request()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 799 ;
+  triage:snippet "#[test] fn peer_transport_uses_port_zero_listener_handoff_without_rebind_race()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 862 ;
+  triage:snippet "#[test] fn peer_transport_reports_outcome_unknown_after_send_without_response()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 895 ;
+  triage:snippet "#[test] fn peer_transport_treats_remote_error_envelope_as_non_retryable()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 935 ;
+  triage:snippet "#[test] fn replay_resume_replays_and_deletes_delivered_rows()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 988 ;
+  triage:snippet "#[test] fn outcome_unknown_persists_replay_request_for_restart_resume()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t2-sqlite-writer/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1029 ;
+  triage:snippet "#[test] fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
+
+# ── Occurrences: feature/pT-t3-immutable-rows (f9f1e3f) ───────────────────
+# Lines same as t1/t2: 752, 799, 862, 895, 935, 988, 1029
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 752 ;
+  triage:snippet "#[test] fn peer_transport_round_trips_one_heartbeat_request()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 799 ;
+  triage:snippet "#[test] fn peer_transport_uses_port_zero_listener_handoff_without_rebind_race()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 862 ;
+  triage:snippet "#[test] fn peer_transport_reports_outcome_unknown_after_send_without_response()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 895 ;
+  triage:snippet "#[test] fn peer_transport_treats_remote_error_envelope_as_non_retryable()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 935 ;
+  triage:snippet "#[test] fn replay_resume_replays_and_deletes_delivered_rows()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 988 ;
+  triage:snippet "#[test] fn outcome_unknown_persists_replay_request_for_restart_resume()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t3-immutable-rows/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1029 ;
+  triage:snippet "#[test] fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/f9f1e3f> .
+
+# ── Occurrences: feature/pT-t4-windows-runtime (8baee53) ──────────────────
+# Lines shifted: 734, 780, 842, 874, 913, 965, 1005
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 734 ;
+  triage:snippet "#[test] fn peer_transport_round_trips_one_heartbeat_request()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 780 ;
+  triage:snippet "#[test] fn peer_transport_uses_port_zero_listener_handoff_without_rebind_race()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 842 ;
+  triage:snippet "#[test] fn peer_transport_reports_outcome_unknown_after_send_without_response()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 874 ;
+  triage:snippet "#[test] fn peer_transport_treats_remote_error_envelope_as_non_retryable()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 913 ;
+  triage:snippet "#[test] fn replay_resume_replays_and_deletes_delivered_rows()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 965 ;
+  triage:snippet "#[test] fn outcome_unknown_persists_replay_request_for_restart_resume()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t4-windows-runtime/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1005 ;
+  triage:snippet "#[test] fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+
+# ── Occurrences: feature/pT-t5-hardening (fbf64cc) ────────────────────────
+# Lines same as t4: 734, 780, 842, 874, 913, 965, 1005
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 734 ;
+  triage:snippet "#[test] fn peer_transport_round_trips_one_heartbeat_request()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/fbf64cc> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 780 ;
+  triage:snippet "#[test] fn peer_transport_uses_port_zero_listener_handoff_without_rebind_race()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/fbf64cc> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 842 ;
+  triage:snippet "#[test] fn peer_transport_reports_outcome_unknown_after_send_without_response()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/fbf64cc> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 874 ;
+  triage:snippet "#[test] fn peer_transport_treats_remote_error_envelope_as_non_retryable()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/fbf64cc> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 913 ;
+  triage:snippet "#[test] fn replay_resume_replays_and_deletes_delivered_rows()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/fbf64cc> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 965 ;
+  triage:snippet "#[test] fn outcome_unknown_persists_replay_request_for_restart_resume()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/fbf64cc> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/pT-t5-hardening/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1005 ;
+  triage:snippet "#[test] fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/fbf64cc> .
+
+# ── Occurrences: integrate/phase-T (d4b43f5) ──────────────────────────────
+# Lines same as t4/t5: 734, 780, 842, 874, 913, 965, 1005
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 734 ;
+  triage:snippet "#[test] fn peer_transport_round_trips_one_heartbeat_request()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/d4b43f5> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 780 ;
+  triage:snippet "#[test] fn peer_transport_uses_port_zero_listener_handoff_without_rebind_race()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/d4b43f5> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 842 ;
+  triage:snippet "#[test] fn peer_transport_reports_outcome_unknown_after_send_without_response()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/d4b43f5> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 874 ;
+  triage:snippet "#[test] fn peer_transport_treats_remote_error_envelope_as_non_retryable()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/d4b43f5> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 913 ;
+  triage:snippet "#[test] fn replay_resume_replays_and_deletes_delivered_rows()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/d4b43f5> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 965 ;
+  triage:snippet "#[test] fn outcome_unknown_persists_replay_request_for_restart_resume()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/d4b43f5> .
+
+<urn:atm:triage:occurrence/QA-T1-R3-001/integrate-phase-T/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1005 ;
+  triage:snippet "#[test] fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "d4b43f5" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/d4b43f5> .

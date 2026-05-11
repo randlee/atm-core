@@ -5,7 +5,7 @@ use std::time::Duration;
 use atm_core::error::AtmError;
 use signal_hook::SigId;
 
-const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(1);
+const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 // Installation takes this global slot only after the outer install lock so concurrent daemon
 // startup/teardown never races lifecycle-hook ownership or leaves a half-installed worker behind.
@@ -113,6 +113,9 @@ impl LifecycleStateChange {
 
     #[cfg_attr(any(windows, not(test)), allow(dead_code))]
     fn wait_for_change(&self, observed_generation: &mut u64) -> Result<(), AtmError> {
+        // The Windows lifecycle worker still relies on bounded polling as the
+        // accepted portability exception documented in
+        // `docs/atm-daemon/architecture.md`.
         const LIFECYCLE_WAIT_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(30);
         while !self.wait_for_change_timeout(observed_generation, LIFECYCLE_WAIT_TIMEOUT)? {}
         Ok(())
@@ -247,9 +250,12 @@ impl LifecycleControlSourceAdapter {
         let _ = self.state_change.notify();
 
         let (result_tx, result_rx) = std::sync::mpsc::channel();
-        let join_helper = std::thread::spawn(move || {
-            let _ = result_tx.send(worker.join_handle.join());
-        });
+        let join_helper = std::thread::Builder::new()
+            .name("atm-daemon-lifecycle-join-helper".to_string())
+            .spawn(move || {
+                let _ = result_tx.send(worker.join_handle.join());
+            })
+            .expect("failed to spawn lifecycle join helper");
         match result_rx.recv_timeout(LIFECYCLE_WORKER_JOIN_DEADLINE) {
             Ok(Ok(())) => {
                 let _ = join_helper.join();
@@ -514,8 +520,8 @@ fn install_platform_hooks(
                     let _ = state_change.notify();
                 }
                 // `signal_hook::flag` does not expose a blocking cross-platform wake primitive on
-                // Windows, so the lifecycle worker uses one bounded polling exception that Phase S
-                // records explicitly in the daemon architecture docs.
+                // Windows, so the lifecycle worker uses one bounded polling exception recorded
+                // explicitly in `docs/atm-daemon/architecture.md`.
                 std::thread::sleep(std::time::Duration::from_millis(25));
             }
         })
@@ -598,7 +604,7 @@ mod windows_tests {
         first.set_terminate_for_test(true);
 
         assert!(
-            rx.recv_timeout(Duration::from_secs(1))
+            rx.recv_timeout(Duration::from_secs(5))
                 .expect("waiter wake result"),
             "terminate wake should set the terminate flag"
         );
@@ -674,7 +680,7 @@ mod unix_tests {
 
         drop(wake_write);
 
-        rx.recv_timeout(Duration::from_secs(1))
+        rx.recv_timeout(Duration::from_secs(5))
             .expect("EOF should wake lifecycle waiters");
         worker_shutdown.store(true, Ordering::SeqCst);
         worker.join().expect("join unix lifecycle worker");

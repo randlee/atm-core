@@ -11,6 +11,7 @@ use std::time::Duration;
 
 const DEFAULT_NOTIFICATION_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
+const NOTIFICATION_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
 
 #[derive(Clone)]
 pub(crate) struct NotificationRuntime {
@@ -20,9 +21,11 @@ pub(crate) struct NotificationRuntime {
 type NotificationPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
 
 struct NotificationRuntimeInner {
+    // State transitions, degradation, and the bounded queue must be updated
+    // atomically with respect to wakeups, so the queue and lifecycle flags live
+    // behind one mutex paired with the condvar below.
     state: Mutex<NotificationState>,
     wake: Condvar,
-    worker: Mutex<Option<JoinHandle<()>>>,
     path_factory: NotificationPathFactory,
     queue_capacity: usize,
 }
@@ -33,6 +36,7 @@ struct NotificationState {
     shutdown: bool,
     degraded_message: Option<String>,
     queue: VecDeque<NotificationEvent>,
+    worker: Option<JoinHandle<()>>,
 }
 
 impl NotificationRuntime {
@@ -48,7 +52,6 @@ impl NotificationRuntime {
             inner: Arc::new(NotificationRuntimeInner {
                 state: Mutex::new(NotificationState::default()),
                 wake: Condvar::new(),
-                worker: Mutex::new(None),
                 path_factory,
                 queue_capacity,
             }),
@@ -57,7 +60,9 @@ impl NotificationRuntime {
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         let mut state = self.inner.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("notification runtime state lock poisoned")
+            AtmError::daemon_unavailable("notification runtime state lock poisoned").with_recovery(
+                "Restart the daemon; notification lifecycle state can no longer be trusted.",
+            )
         })?;
         if state.started {
             return Ok(());
@@ -74,44 +79,102 @@ impl NotificationRuntime {
                 AtmError::daemon_unavailable("failed to spawn notification runtime worker")
                     .with_source(source)
             })?;
-        let mut worker = match self.inner.worker.lock() {
-            Ok(worker) => worker,
+        let mut state = match self.inner.state.lock() {
+            Ok(state) => state,
             Err(_) => {
                 let _ = handle.join();
                 return Err(AtmError::daemon_unavailable(
-                    "notification runtime worker lock poisoned",
+                    "notification runtime state lock poisoned",
+                )
+                .with_recovery(
+                    "Restart the daemon; notification lifecycle state can no longer be trusted.",
                 ));
             }
         };
-        *worker = Some(handle);
+        state.worker = Some(handle);
         Ok(())
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
-        {
+        let handle = {
             let mut state = self.inner.state.lock().map_err(|_| {
                 AtmError::daemon_unavailable("notification runtime state lock poisoned")
+                    .with_recovery(
+                        "Restart the daemon; notification lifecycle state can no longer be trusted.",
+                    )
             })?;
             state.shutdown = true;
             self.inner.wake.notify_all();
-        }
-        if let Some(handle) = self
-            .inner
-            .worker
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("notification runtime worker lock poisoned"))?
-            .take()
-        {
-            handle.join().map_err(|_| {
-                AtmError::daemon_unavailable("notification runtime worker panicked during shutdown")
-            })?;
+            state.worker.take()
+        };
+        if let Some(handle) = handle {
+            let worker_thread_id = handle.thread().id();
+            let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+            let join_helper = std::thread::Builder::new()
+                .name("atm-daemon-notifier-join".to_string())
+                .spawn(move || {
+                    let _ = result_tx.send(handle.join());
+                })
+                .map_err(|source| {
+                    AtmError::daemon_unavailable(
+                        "failed to spawn notification runtime join helper during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; notification shutdown could not create its bounded join helper.",
+                    )
+                    .with_source(source)
+                })?;
+            match result_rx.recv_timeout(NOTIFICATION_SHUTDOWN_DEADLINE) {
+                Ok(Ok(())) => {
+                    let _ = join_helper.join();
+                }
+                Ok(Err(_)) => {
+                    let _ = join_helper.join();
+                    return Err(AtmError::daemon_unavailable(
+                        "notification runtime worker panicked during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; the notification background lane crashed while shutting down.",
+                    ));
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    drop(join_helper);
+                    tracing::warn!(
+                        thread_id = ?worker_thread_id,
+                        timeout_ms = NOTIFICATION_SHUTDOWN_DEADLINE.as_millis(),
+                        "notification runtime worker exceeded shutdown deadline; detaching join helper"
+                    );
+                    return Err(AtmError::daemon_unavailable(format!(
+                        "notification runtime shutdown exceeded the {:?} deadline",
+                        NOTIFICATION_SHUTDOWN_DEADLINE
+                    ))
+                    .with_recovery(
+                        "Restart atm-daemon after the notification background lane becomes responsive again.",
+                    ));
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    let _ = join_helper.join();
+                    tracing::warn!(
+                        thread_id = ?worker_thread_id,
+                        "notification runtime join helper exited before reporting shutdown status"
+                    );
+                    return Err(AtmError::daemon_unavailable(
+                        "notification runtime join helper disconnected during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; the notification background lane did not report bounded shutdown status cleanly.",
+                    ));
+                }
+            }
         }
         Ok(())
     }
 
     pub(crate) fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
         let mut state = self.inner.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("notification runtime state lock poisoned")
+            AtmError::daemon_unavailable("notification runtime state lock poisoned").with_recovery(
+                "Restart the daemon; notification lifecycle state can no longer be trusted.",
+            )
         })?;
         if !state.started {
             return Err(AtmError::daemon_unavailable(
@@ -124,7 +187,7 @@ impl NotificationRuntime {
             ));
         }
         if let Some(message) = &state.degraded_message {
-            return Err(AtmError::daemon_unavailable(message.clone()));
+            return Err(AtmError::daemon_unavailable(message.as_str()));
         }
         if state.queue.len() >= self.inner.queue_capacity {
             return Err(AtmError::daemon_unavailable(
@@ -245,7 +308,9 @@ mod tests {
                 agent: None,
             })
             .expect("deliver");
-        runtime.shutdown().expect("shutdown");
+        runtime
+            .shutdown()
+            .unwrap_or_else(|error| panic!("shutdown failed: {error}"));
 
         let output = std::fs::read_to_string(output_path).expect("output");
         assert!(output.contains("\"kind\":\"delivery\""));
@@ -268,7 +333,9 @@ mod tests {
                 agent: None,
             })
             .expect("first deliver queues");
-        runtime.shutdown().expect("shutdown");
+        runtime
+            .shutdown()
+            .unwrap_or_else(|error| panic!("shutdown failed: {error}"));
 
         let error = runtime
             .deliver(NotificationEvent {

@@ -106,10 +106,17 @@ impl PeerClientTransport {
         let endpoint = daemon_peer_endpoint_from_env();
         let config = std::env::current_dir()
             .ok()
-            .and_then(|current_dir| {
-                atm_core::boundary_support::load_workspace_config(ConfigLoadRequest { current_dir })
-                    .ok()
-                    .and_then(|response| response.config)
+            .and_then(|current_dir| match atm_core::boundary_support::load_workspace_config(
+                ConfigLoadRequest { current_dir },
+            ) {
+                Ok(response) => response.config,
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        "failed to load workspace config while constructing peer transport; using default remote retry budget"
+                    );
+                    None
+                }
             })
             .map(|config| PeerTransportConfig::from_config(Some(&config)))
             .unwrap_or_default();
@@ -252,6 +259,16 @@ impl PeerClientTransport {
         let mut attempt = 0u32;
 
         loop {
+            if terminate.load(Ordering::SeqCst) {
+                return Err(
+                    AtmError::daemon_unavailable(
+                        "daemon shutdown interrupted remote peer delivery before the next network attempt",
+                    )
+                    .with_recovery(
+                        "Retry the daemon operation after atm-daemon restarts and resumes pending remote replay work.",
+                    ),
+                );
+            }
             match self.send_once(endpoint, &frame) {
                 Ok(response) => {
                     tracing::info!(
@@ -627,6 +644,8 @@ mod tests {
         AttemptFailureKind, PeerTransportConfig, PeerTransportRuntime, classify_io_error,
         jittered_backoff,
     };
+    use crate::lifecycle_control::LifecycleControlSourceAdapter;
+    use crate::test_support::LifecycleFlagResetGuard;
     use atm_core::boundary::{AtmProtocol, ClientTransport, MessageKey};
     use atm_core::error::AtmErrorCode;
     use atm_core::protocol::{
@@ -634,6 +653,7 @@ mod tests {
         RuntimeMemberState, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     };
     use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+    use serial_test::serial;
     use std::io::{self, Read, Write};
     use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
     use std::sync::mpsc;
@@ -671,6 +691,11 @@ mod tests {
             .expect("response frame");
         atm_core::protocol::write_frame(stream, &frame, "write response").expect("write response");
         stream.flush().expect("flush response");
+    }
+
+    fn install_shared_lifecycle_reset_guard() -> LifecycleFlagResetGuard {
+        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+        LifecycleFlagResetGuard::install(lifecycle)
     }
 
     #[test]
@@ -732,7 +757,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn peer_transport_round_trips_one_heartbeat_request() {
+        let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
         let endpoint = listener.local_addr().expect("addr");
@@ -778,7 +805,52 @@ mod tests {
     }
 
     #[test]
+    #[serial]
+    fn peer_transport_aborts_before_connect_when_terminate_is_requested() {
+        const TEST_TEAM: &str = "test-team";
+        const TEST_MEMBER: &str = "test-sender";
+
+        let _reset = install_shared_lifecycle_reset_guard();
+        let lifecycle = LifecycleControlSourceAdapter::install().expect("install lifecycle");
+        lifecycle.set_terminate_for_test(true);
+
+        let tempdir = TempDir::new().expect("tempdir");
+        let endpoint = {
+            let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+            let endpoint = listener.local_addr().expect("addr");
+            drop(listener);
+            endpoint
+        };
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig {
+                remote_retry_budget: Duration::from_secs(1),
+            },
+            tempdir.path().join("replay.db"),
+        );
+
+        let error = transport
+            .client_transport()
+            .send(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                team: TEST_TEAM.parse().expect("team"),
+                member: TEST_MEMBER.parse().expect("member"),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            }))
+            .expect_err("terminate should short-circuit before connect");
+        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert!(
+            error.message.contains("before the next network attempt"),
+            "unexpected error message: {}",
+            error.message
+        );
+    }
+
+    #[test]
+    #[serial]
     fn peer_transport_uses_port_zero_listener_handoff_without_rebind_race() {
+        let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
         let (endpoint_tx, endpoint_rx) = mpsc::channel();
         let team: TeamName = "test-team".parse().expect("team");
@@ -833,14 +905,16 @@ mod tests {
 
         send_started_rx.recv().expect("send started");
         let response = response_rx
-            .recv()
-            .expect("response delivered")
-            .expect("response");
+            .recv_timeout(Duration::from_secs(5))
+            .expect("response wait")
+            .expect("response delivered");
         assert!(matches!(response, ResponseEnvelope::Heartbeat(_)));
     }
 
     #[test]
+    #[serial]
     fn peer_transport_reports_outcome_unknown_after_send_without_response() {
+        let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
         let endpoint = listener.local_addr().expect("addr");
@@ -872,7 +946,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn peer_transport_treats_remote_error_envelope_as_non_retryable() {
+        let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
         let endpoint = listener.local_addr().expect("addr");
@@ -911,7 +987,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn replay_resume_replays_and_deletes_delivered_rows() {
+        let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
         let endpoint = listener.local_addr().expect("addr");
@@ -963,7 +1041,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn outcome_unknown_persists_replay_request_for_restart_resume() {
+        let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
         let endpoint = listener.local_addr().expect("addr");
@@ -1003,7 +1083,9 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery() {
+        let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
         let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
         let endpoint = listener.local_addr().expect("addr");

@@ -15,7 +15,13 @@ pub(crate) const HOST_RUNTIME_OWNER_LOCK_FILE: &str = "owner.lock";
 const OWNER_RECOVERY_RETRY_INTERVAL: Duration = Duration::from_millis(25);
 
 #[cfg(test)]
-static STALE_RECOVERY_OBSERVED_SIGNAL: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>> =
+struct StaleRecoverySignal {
+    observed_tx: std::sync::mpsc::SyncSender<()>,
+    continue_rx: std::sync::mpsc::Receiver<()>,
+}
+
+#[cfg(test)]
+static STALE_RECOVERY_OBSERVED_SIGNAL: std::sync::Mutex<Option<StaleRecoverySignal>> =
     std::sync::Mutex::new(None);
 
 #[cfg_attr(windows, allow(dead_code))]
@@ -260,10 +266,16 @@ fn clear_owner_record(lock_file: &mut File) -> Result<(), AtmError> {
 }
 
 #[cfg(test)]
-pub(crate) fn install_stale_recovery_signal_for_test(signal: std::sync::mpsc::SyncSender<()>) {
+pub(crate) fn install_stale_recovery_signal_for_test(
+    observed_tx: std::sync::mpsc::SyncSender<()>,
+    continue_rx: std::sync::mpsc::Receiver<()>,
+) {
     *STALE_RECOVERY_OBSERVED_SIGNAL
         .lock()
-        .expect("stale recovery signal lock") = Some(signal);
+        .expect("stale recovery signal lock") = Some(StaleRecoverySignal {
+        observed_tx,
+        continue_rx,
+    });
 }
 
 #[cfg(test)]
@@ -277,9 +289,9 @@ pub(crate) fn clear_stale_recovery_signal_for_test() {
 fn notify_stale_recovery_signal_for_test() {
     let signal = STALE_RECOVERY_OBSERVED_SIGNAL
         .lock()
-        .expect("stale recovery signal lock")
-        .clone();
-    if let Some(signal) = signal {
-        let _ = signal.send(());
+        .expect("stale recovery signal lock");
+    if let Some(signal) = signal.as_ref() {
+        let _ = signal.observed_tx.send(());
+        let _ = signal.continue_rx.recv_timeout(Duration::from_secs(5));
     }
 }

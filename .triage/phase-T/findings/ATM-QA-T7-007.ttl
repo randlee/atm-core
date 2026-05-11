@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T7-007>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T7-007" ;
+  triage:title "ICD §3.1 graft additions appear as appendage not first-class in unified surface table" ;
+  triage:description "docs/atm-daemon/protocol-icd.md has a §3.1 section titled 'Phase S Supported Packet Surface' and a separate §3.2 section titled 'Phase T Graft Semantic Surface'. The graft packet opcodes (0x0008-0x000b, 0x1008-0x100b) appear in the unified opcode tables in §4+ but the §3 surface declaration splits graft additions into a second subsection rather than merging them into the single §3.1 surface table. The split was introduced at T.6 and carries forward to T.7 and T.8 unchanged. T.4 and T.5 predate graft additions and have only §3.1." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-007/T6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-007/T7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-007/T8/1> ;
+  triage:openOn <urn:atm:triage:worktree/T6/500315d> ;
+  triage:openOn <urn:atm:triage:worktree/T7/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/T8/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/T8/afbd906> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-007/T6/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 100 ;
+  triage:snippet "## 3.2 Phase T Graft Semantic Surface" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.6" ;
+  triage:headSha "500315d" ;
+  triage:occursIn <urn:atm:triage:worktree/T6/500315d> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-007/T7/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 100 ;
+  triage:snippet "## 3.2 Phase T Graft Semantic Surface" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.7" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/T7/6986027> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-007/T8/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 100 ;
+  triage:snippet "## 3.2 Phase T Graft Semantic Surface" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "T.8" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/T8/afbd906> .
+
+<urn:atm:triage:worktree/T4/68a83ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.4" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "68a83ea" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/T5/1939b55>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.5" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "1939b55" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/T6/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.6" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/T7/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.7" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/T8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "T.8" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .

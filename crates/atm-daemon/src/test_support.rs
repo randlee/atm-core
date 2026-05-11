@@ -3,9 +3,7 @@ use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, 
 use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 
-#[cfg(unix)]
 use interprocess::local_socket::Stream as LocalSocketStream;
-#[cfg(unix)]
 use interprocess::local_socket::traits::Stream as _;
 
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
@@ -76,21 +74,32 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
     }
 }
 
-#[cfg(unix)]
 pub(crate) fn connect_daemon_local_ipc_until_ready(
     endpoint_path: &std::path::Path,
+    ready_rx: std::sync::mpsc::Receiver<()>,
 ) -> LocalSocketStream {
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(3);
-    loop {
-        match LocalSocketStream::connect(
-            atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name"),
-        ) {
+    ready_rx
+        .recv_timeout(std::time::Duration::from_secs(3))
+        .expect("daemon local ipc ready signal");
+    let ipc_name =
+        atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let mut attempts = 0usize;
+    let mut last_error = None;
+    while std::time::Instant::now() < deadline {
+        match LocalSocketStream::connect(ipc_name.clone()) {
             Ok(stream) => return stream,
-            Err(error) if std::time::Instant::now() < deadline => {
-                let _ = error;
-                std::thread::sleep(std::time::Duration::from_millis(5));
+            Err(error) => {
+                attempts += 1;
+                last_error = Some(error);
+                std::thread::sleep(std::time::Duration::from_millis(10));
             }
-            Err(error) => panic!("connect daemon local ipc: {error}"),
         }
     }
+    panic!(
+        "connect daemon local ipc after ready signal failed after {attempts} attempts: {}",
+        last_error
+            .map(|error| error.to_string())
+            .unwrap_or_else(|| "unknown connect error".to_string())
+    )
 }

@@ -1,0 +1,109 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T7-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T7-003" ;
+  triage:title "ICD §7.2 envelope mapping missing 8 graft entries" ;
+  triage:description "docs/atm-daemon/protocol-icd.md §7.2 Current Shared Envelope Mapping lists only the original 7 request + 7 response mappings. Missing: GraftRegister/Unregister/Fetch/Drain for both request and response envelopes (8 total). Fix: extend §7.2 with all 8 graft envelope mappings." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-003/pT-t7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-003/pT-t7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-003/pT-t8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-003/pT-t8/2> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t7/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t8/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+# --- Occurrences on feature/pT-t7-graft-runtime ---
+
+<urn:atm:triage:occurrence/ATM-QA-T7-003/pT-t7/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 394 ;
+  triage:snippet "### 7.2 Current Shared Envelope Mapping (missing GraftRegister/Unregister/Fetch/Drain request entries)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7/6986027> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-003/pT-t7/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 413 ;
+  triage:snippet "### 7.2 Current Shared Envelope Mapping (missing GraftRegister/Unregister/Fetch/Drain response entries)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7/6986027> .
+
+# --- Occurrences on feature/pT-t8-atm-graft-crate ---
+
+<urn:atm:triage:occurrence/ATM-QA-T7-003/pT-t8/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 394 ;
+  triage:snippet "### 7.2 Current Shared Envelope Mapping (missing GraftRegister/Unregister/Fetch/Drain request entries)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-003/pT-t8/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 413 ;
+  triage:snippet "### 7.2 Current Shared Envelope Mapping (missing GraftRegister/Unregister/Fetch/Drain response entries)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/pT-t4/68a83ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "68a83ea" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/1939b55>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "1939b55" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pT-t6/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pT-t7/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pT-t8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .

@@ -30,7 +30,6 @@ struct WatchRuntimeInner {
     // registry.
     state: Mutex<WatchState>,
     wake: Condvar,
-    worker: Mutex<Option<JoinHandle<()>>>,
     poller: WatchPoller,
     poll_interval: Duration,
 }
@@ -39,6 +38,7 @@ struct WatchRuntimeInner {
 struct WatchState {
     started: bool,
     shutdown: bool,
+    worker: Option<JoinHandle<()>>,
     subscriptions: HashMap<WatchKey, WatchSnapshot>,
 }
 
@@ -165,7 +165,6 @@ impl WatchRuntime {
             inner: Arc::new(WatchRuntimeInner {
                 state: Mutex::new(WatchState::default()),
                 wake: Condvar::new(),
-                worker: Mutex::new(None),
                 poller,
                 poll_interval,
             }),
@@ -173,11 +172,11 @@ impl WatchRuntime {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        let mut state = self
-            .inner
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("watch runtime state lock poisoned"))?;
+        let mut state = self.inner.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("watch runtime state lock poisoned").with_recovery(
+                "Restart the daemon; watch lifecycle state can no longer be trusted.",
+            )
+        })?;
         if state.started {
             return Ok(());
         }
@@ -193,39 +192,41 @@ impl WatchRuntime {
                 AtmError::daemon_unavailable("failed to spawn watch runtime worker")
                     .with_source(source)
             })?;
-        let mut worker = match self.inner.worker.lock() {
-            Ok(worker) => worker,
+        let mut state = match self.inner.state.lock() {
+            Ok(state) => state,
             Err(_) => {
                 let _ = handle.join();
-                return Err(AtmError::daemon_unavailable(
-                    "watch runtime worker lock poisoned",
-                ));
+                return Err(
+                    AtmError::daemon_unavailable("watch runtime state lock poisoned")
+                        .with_recovery(
+                            "Restart the daemon; watch lifecycle state can no longer be trusted.",
+                        ),
+                );
             }
         };
-        *worker = Some(handle);
+        state.worker = Some(handle);
         Ok(())
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
-        {
-            let mut state =
-                self.inner.state.lock().map_err(|_| {
-                    AtmError::daemon_unavailable("watch runtime state lock poisoned")
-                })?;
+        let handle = {
+            let mut state = self.inner.state.lock().map_err(|_| {
+                AtmError::daemon_unavailable("watch runtime state lock poisoned").with_recovery(
+                    "Restart the daemon; watch lifecycle state can no longer be trusted.",
+                )
+            })?;
             state.shutdown = true;
             self.inner.wake.notify_all();
-        }
-        if let Some(handle) = self
-            .inner
-            .worker
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("watch runtime worker lock poisoned"))?
-            .take()
-        {
+            state.worker.take()
+        };
+        if let Some(handle) = handle {
             let (result_tx, result_rx) = mpsc::sync_channel(1);
-            let join_helper = thread::spawn(move || {
-                let _ = result_tx.send(handle.join());
-            });
+            let join_helper = thread::Builder::new()
+                .name("atm-daemon-watch-join".to_string())
+                .spawn(move || {
+                    let _ = result_tx.send(handle.join());
+                })
+                .expect("failed to spawn watch join helper");
             match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
@@ -270,11 +271,11 @@ impl WatchRuntime {
         request: WatchSubscriptionRequest,
     ) -> Result<WatchEventBatch, AtmError> {
         let key = WatchKey::from_request(&request);
-        let mut state = self
-            .inner
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("watch runtime state lock poisoned"))?;
+        let mut state = self.inner.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("watch runtime state lock poisoned").with_recovery(
+                "Restart the daemon; watch lifecycle state can no longer be trusted.",
+            )
+        })?;
         if !state.started {
             return Err(AtmError::daemon_unavailable(
                 "watch runtime is unavailable before daemon startup",
@@ -338,7 +339,11 @@ impl WatchRuntime {
                 .inner
                 .wake
                 .wait_timeout(state, wait_timeout)
-                .map_err(|_| AtmError::daemon_unavailable("watch runtime state lock poisoned"))?;
+                .map_err(|_| {
+                    AtmError::daemon_unavailable("watch runtime state lock poisoned").with_recovery(
+                        "Restart the daemon; watch lifecycle state can no longer be trusted.",
+                    )
+                })?;
             state = wait.0;
             if wait.1.timed_out() {
                 return Err(

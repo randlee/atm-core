@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/T3-ATM-QA-005>
+  a triage:Finding ;
+  triage:findingId "T3-ATM-QA-005" ;
+  triage:title "atm-rusqlite requirements.md missing explicit IDs for T.3 immutable-row semantics" ;
+  triage:description "docs/atm-rusqlite/requirements.md — Missing explicit requirement IDs for T.3 immutable-row semantics (insert-or-ignore, no-payload-update, no pre-write probe). These semantics need traceable requirement IDs in the REQ-RUSQLITE-* namespace." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T20:17:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/T3-ATM-QA-005/pT-t3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+<urn:atm:triage:occurrence/T3-ATM-QA-005/pT-t3/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 94 ;
+  triage:snippet "Phase T hot mailbox writes must use one crate-private SQLite writer lane instead of ad-hoc per-operation write transactions [prose rules at lines 94-137 lack traceable REQ-RUSQLITE-* IDs for T.3 immutable-row semantics]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+<urn:atm:triage:worktree/pT-t1/bdc8ce1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "bdc8ce1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2/5275b3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3/f9f1e3f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4/b71366f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-T/f96abd0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "f96abd0" ;
+  triage:orderIndex 9 .

@@ -1,91 +1,8 @@
-use super::*;
+use std::path::PathBuf;
 use std::sync::Arc;
 
-impl RuntimeStatusCache {
-    pub(crate) fn member_state_for_test(
-        &self,
-        team: &TeamName,
-        member: &AgentName,
-    ) -> Result<Option<RuntimeMemberState>, AtmError> {
-        let cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        Ok(cache
-            .members
-            .get(&RuntimeMemberKey {
-                team: team.clone(),
-                member: member.clone(),
-            })
-            .map(|record| record.state))
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn hydrate_member_for_test(
-        &self,
-        team: TeamName,
-        member: AgentName,
-        pid: Option<u32>,
-    ) -> Result<(), AtmError> {
-        let mut cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        let key = RuntimeMemberKey { team, member };
-        cache.members.entry(key).or_insert(RuntimeMemberRecord {
-            pid,
-            state: RuntimeMemberState::Unknown,
-            last_active_at: None,
-        });
-        Ok(())
-    }
-
-    pub(crate) fn insert_member_for_test(
-        &self,
-        team: TeamName,
-        member: AgentName,
-        pid: Option<u32>,
-        state: RuntimeMemberState,
-        last_active_at: Option<IsoTimestamp>,
-    ) -> Result<(), AtmError> {
-        let mut cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        cache.members.insert(
-            RuntimeMemberKey { team, member },
-            RuntimeMemberRecord {
-                pid,
-                state,
-                last_active_at,
-            },
-        );
-        Ok(())
-    }
-
-    pub(crate) fn member_count_for_test(&self) -> Result<usize, AtmError> {
-        let cache = self
-            .state
-            .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        Ok(cache.members.len())
-    }
-
-    pub(crate) fn snapshot_for_members_for_test(
-        &self,
-        members: impl IntoIterator<Item = (TeamName, AgentName)>,
-    ) -> Result<RuntimeStatusSnapshot, AtmError> {
-        self.snapshot_for_members(members)
-    }
-
-    pub(crate) fn record_heartbeat_for_test(
-        &self,
-        request: &TeamMemberHeartbeatRequest,
-        pid_changed: bool,
-    ) -> Result<TeamMemberHeartbeatResponse, AtmError> {
-        self.record_heartbeat(request, pid_changed)
-    }
-}
+use super::DaemonRequestDispatcher;
+use crate::runtime_status_cache::{RuntimeStatusCache, build_runtime_status_cache_state};
 
 impl DaemonRequestDispatcher {
     pub(crate) fn new_for_test(
@@ -128,6 +45,7 @@ impl DaemonRequestDispatcher {
             observability,
             status_cache,
             sqlite_boundary,
+            graft_runtime: crate::graft_runtime::GraftRuntime::new(),
         }
     }
 }
