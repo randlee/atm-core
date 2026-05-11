@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T6-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T6-003" ;
+  triage:title "GraftNudge type named incorrectly — architecture.md:95 requires NudgeEvent" ;
+  triage:description "crates/atm-core/src/graft.rs:184 defines type GraftNudge but architecture.md:95 names it NudgeEvent. Naming must align before T.7 allocates packet kinds." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-003/pT-t6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-003/pT-t6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-003/pT-t6/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T6-003/pT-t6/4> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6/37eee04> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+# Occurrence 1: struct GraftNudge definition (primary finding)
+<urn:atm:triage:occurrence/ATM-QA-T6-003/pT-t6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 184 ;
+  triage:snippet "pub struct GraftNudge {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+# Occurrence 2: NudgeEvent name in architecture.md (conflicting canonical name)
+<urn:atm:triage:occurrence/ATM-QA-T6-003/pT-t6/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-graft/architecture.md" ;
+  triage:line 94 ;
+  triage:snippet "  - `NudgeEvent`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+# Occurrence 3: GraftNudgeFetchResponse.nudges uses GraftNudge (secondary reference)
+<urn:atm:triage:occurrence/ATM-QA-T6-003/pT-t6/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 204 ;
+  triage:snippet "    pub nudges: Vec<GraftNudge>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+# Occurrence 4: GraftNudge in lib.rs re-export
+<urn:atm:triage:occurrence/ATM-QA-T6-003/pT-t6/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/lib.rs" ;
+  triage:line 109 ;
+  triage:snippet "    AtmGraftClient, GraftBatchLimit, GraftNudge, GraftNudgeDrainRequest, GraftNudgeDrainResponse," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/37eee04> .
+
+<urn:atm:triage:worktree/pT-t6/37eee04>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "37eee04" ;
+  triage:orderIndex 6 .
