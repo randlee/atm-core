@@ -224,7 +224,7 @@ impl LaunchGateGuard {
 
         match file.try_lock_exclusive() {
             Ok(()) => Ok(Some(Self { file })),
-            Err(error) if error.kind() == std::io::ErrorKind::WouldBlock => Ok(None),
+            Err(error) if is_launch_gate_contention_error(&error) => Ok(None),
             Err(source) => Err(AtmError::daemon_unavailable(format!(
                 "failed to acquire daemon launch gate at {}",
                 lock_path.display()
