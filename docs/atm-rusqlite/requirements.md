@@ -69,6 +69,7 @@ The `atm-rusqlite` crate docs must remain aligned with:
 - [`../plan-phase-Q.md`](../plan-phase-Q.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)
+- [`../phase-T/sprint-T2-sqlite-writer.md`](../phase-T/sprint-T2-sqlite-writer.md)
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
@@ -91,6 +92,8 @@ Required rules:
 - the host-scoped SQLite database is one shared durable store keyed by team
   and agent, not one database per team
 - the daemon is the only ATM-owned writer to the production database
+- Phase T hot mailbox writes must use one crate-private SQLite writer lane
+  instead of ad-hoc per-operation write transactions
 - read-only consumers may query SQLite directly as a supported integration
   surface, but ATM-owned writes must still go through the documented runtime
   and store boundaries
@@ -100,6 +103,12 @@ Required rules:
 - schema bootstrap must run once per database root before normal store
   operations, not on every connection acquisition
 - WAL / foreign-key / explicit-transaction policy must be enforced here
+- the crate-private writer lane must keep the connection budget explicit:
+  `1` permanent writer handle plus at most `3` concurrent reader handles
+- the writer lane queue must be bounded and blocking; full-queue behavior is
+  backpressure, not silent drop
+- async daemon callers must not block Tokio worker threads directly when
+  submitting to the writer lane
 - `MailStore`, `TaskStore`, and `RosterStore` may share one internal SQLite
   root object, but they must not collapse into one public god-interface
 - the durable schema must expose:
@@ -125,6 +134,8 @@ Required rules:
   - support a hard SQL `LIMIT`
   - expose queue counts separately from row fetch
   - preserve durable `taskId` lookup for metadata rows
+- the T.2 caller audit for surviving `SharedDb::with_transaction(...)` writes
+  must stay explicit in `docs/atm-rusqlite/architecture.md`
 - most SQLite tests should use dedicated in-memory fixtures with explicit
   setup/cleanup
 - only a small deliberate suite may use on-disk temporary databases for
