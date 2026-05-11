@@ -1,0 +1,102 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-T5-002>
+  a triage:Finding ;
+  triage:findingId "FTQ-T5-002" ;
+  triage:title "drain_shutdown_finalizer_threads_for_test inner thread detaches after recv_timeout" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs: inner std::thread::spawn inside drain_shutdown_finalizer_threads_for_test is detached after recv_timeout. If 5s budget fires and panics mid-join, mutex may poison for next serial test. Fix: recover with into_inner() on poison in drain helper; assert registry length = 0 after drain." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T5-002/pT-t5-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T5-002/pT-t6-graft-client-surface/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T5-002/pT-t7-graft-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T5-002/pT-t8-atm-graft-crate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/a99dde9> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t7-graft-runtime/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t5-hardening/a99dde9> .
+
+<urn:atm:triage:occurrence/FTQ-T5-002/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 370 ;
+  triage:snippet "std::thread::spawn(move || { let _ = result_tx.send(handle.join()); });" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/a99dde9> .
+
+<urn:atm:triage:occurrence/FTQ-T5-002/pT-t6-graft-client-surface/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 356 ;
+  triage:snippet "std::thread::spawn(move || { let _ = result_tx.send(handle.join()); });" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d> .
+
+<urn:atm:triage:occurrence/FTQ-T5-002/pT-t7-graft-runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 364 ;
+  triage:snippet "std::thread::spawn(move || { let _ = result_tx.send(handle.join()); });" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7-graft-runtime/6986027> .
+
+<urn:atm:triage:occurrence/FTQ-T5-002/pT-t8-atm-graft-crate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 364 ;
+  triage:snippet "std::thread::spawn(move || { let _ = result_tx.send(handle.join()); });" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> .
+
+<urn:atm:triage:worktree/pT-t5-hardening/a99dde9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:orderIndex 5 ;
+  triage:branchStatus "open" .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 ;
+  triage:branchStatus "open" .
+
+<urn:atm:triage:worktree/pT-t7-graft-runtime/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 ;
+  triage:branchStatus "open" .
+
+<urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 ;
+  triage:branchStatus "open" .

@@ -1,0 +1,99 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T5-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T5-006" ;
+  triage:title "MAX_RECONCILE_FINGERPRINTS_PER_KEY=256 absent from docs resource-cap matrix" ;
+  triage:description "The constant MAX_RECONCILE_FINGERPRINTS_PER_KEY=256 is defined in reconcile_runtime.rs and referenced in docs/atm-daemon/architecture.md by value, but neither docs/atm-daemon/requirements.md nor docs/architecture.md cite the constant name in their resource-cap tables (§21.6.4 equivalent)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-006/pT-t5-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-006/pT-t6-graft-client-surface/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-006/pT-t7-graft-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-006/pT-t8-atm-graft-crate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/a99dde9> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t7-graft-runtime/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-006/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "MAX_RECONCILE_FINGERPRINTS_PER_KEY constant name absent from resource-cap section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/a99dde9> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-006/pT-t6-graft-client-surface/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "MAX_RECONCILE_FINGERPRINTS_PER_KEY constant name absent from resource-cap section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-006/pT-t7-graft-runtime/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "MAX_RECONCILE_FINGERPRINTS_PER_KEY constant name absent from resource-cap section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7-graft-runtime/6986027> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-006/pT-t8-atm-graft-crate/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 0 ;
+  triage:snippet "MAX_RECONCILE_FINGERPRINTS_PER_KEY constant name absent from resource-cap section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> .
+
+<urn:atm:triage:worktree/pT-t5-hardening/a99dde9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pT-t7-graft-runtime/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .

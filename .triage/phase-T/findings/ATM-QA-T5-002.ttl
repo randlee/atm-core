@@ -1,0 +1,168 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T5-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T5-002" ;
+  triage:title "GAP-T5-001 shutdown budget annotation present but no explicit ruling recorded in docs" ;
+  triage:description "crates/atm-daemon/src/lib.rs defines GRACEFUL_DRAIN_DEADLINE=2s and FORCE_CANCEL_DEADLINE=3s. docs/architecture.md notes GAP-T5-001 as a tracked contract gap without a ruling. Team-lead ruling: accept 2s/3s as production values (5s/10s was aspirational, never implemented). Record explicit ruling in both docs/architecture.md (shutdown budget section) and docs/atm-daemon/requirements.md section 5. Ruling absent in all branches." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T06:09:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-002/t5/lib-rs-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-002/t5/lib-rs-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-002/t5/arch-gap-annotation> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-002/t6/lib-rs-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-002/t6/lib-rs-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-002/t7/lib-rs-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-002/t7/lib-rs-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-002/t8/lib-rs-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-002/t8/lib-rs-2> ;
+  triage:openOn <urn:atm:triage:worktree/t5/a99dde9> ;
+  triage:openOn <urn:atm:triage:worktree/t6/500315d> ;
+  triage:openOn <urn:atm:triage:worktree/t7/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/t8/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/t5/a99dde9> .
+
+# --- t5-hardening occurrences ---
+
+<urn:atm:triage:occurrence/ATM-QA-T5-002/t5/lib-rs-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 40 ;
+  triage:snippet "pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:occursIn <urn:atm:triage:worktree/t5/a99dde9> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-002/t5/lib-rs-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 41 ;
+  triage:snippet "pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:occursIn <urn:atm:triage:worktree/t5/a99dde9> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-002/t5/arch-gap-annotation>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2714 ;
+  triage:snippet "- `GAP-T5-001`: historical operator docs still referenced `5s` / `10s`; that older pair remains a tracked contract gap until product/ops accepts or revises the current daemon shutdown budget explicitly" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:occursIn <urn:atm:triage:worktree/t5/a99dde9> .
+
+# --- t6-graft-client-surface occurrences ---
+
+<urn:atm:triage:occurrence/ATM-QA-T5-002/t6/lib-rs-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 40 ;
+  triage:snippet "pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:occursIn <urn:atm:triage:worktree/t6/500315d> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-002/t6/lib-rs-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 41 ;
+  triage:snippet "pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:occursIn <urn:atm:triage:worktree/t6/500315d> .
+
+# --- t7-graft-runtime occurrences ---
+
+<urn:atm:triage:occurrence/ATM-QA-T5-002/t7/lib-rs-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 41 ;
+  triage:snippet "pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/t7/6986027> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-002/t7/lib-rs-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/t7/6986027> .
+
+# --- t8-atm-graft-crate occurrences ---
+
+<urn:atm:triage:occurrence/ATM-QA-T5-002/t8/lib-rs-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 41 ;
+  triage:snippet "pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/t8/afbd906> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-002/t8/lib-rs-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/t8/afbd906> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/t5/a99dde9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/t6/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/t7/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/t8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .

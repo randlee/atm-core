@@ -1,0 +1,99 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-T5-009>
+  a triage:Finding ;
+  triage:findingId "RSH-T5-009" ;
+  triage:title "MAX_DAEMON_FRAME_BYTES enforced in atm_core::protocol but not referenced by constant name in daemon crate docs" ;
+  triage:description "local_ipc_transport.rs references atm_core::protocol::MAX_DAEMON_FRAME_BYTES in tracing fields (lines 208, 919). The daemon docs (docs/atm-daemon/protocol-icd.md) document the 1_048_576 byte limit by prose/value as 'n' but do not cite the constant name MAX_DAEMON_FRAME_BYTES, making the docs and code link non-obvious." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-T5-009/pT-t5-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-T5-009/pT-t6-graft-client-surface/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-T5-009/pT-t7-graft-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-T5-009/pT-t8-atm-graft-crate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/a99dde9> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t7-graft-runtime/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> .
+
+<urn:atm:triage:occurrence/RSH-T5-009/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 0 ;
+  triage:snippet "MAX_DAEMON_FRAME_BYTES constant name absent from docs; only prose value 'n = 1_048_576' documented" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/a99dde9> .
+
+<urn:atm:triage:occurrence/RSH-T5-009/pT-t6-graft-client-surface/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 0 ;
+  triage:snippet "MAX_DAEMON_FRAME_BYTES constant name absent from docs; only prose value 'n = 1_048_576' documented" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d> .
+
+<urn:atm:triage:occurrence/RSH-T5-009/pT-t7-graft-runtime/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 0 ;
+  triage:snippet "MAX_DAEMON_FRAME_BYTES constant name absent from docs; only prose value 'n = 1_048_576' documented" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7-graft-runtime/6986027> .
+
+<urn:atm:triage:occurrence/RSH-T5-009/pT-t8-atm-graft-crate/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/protocol-icd.md" ;
+  triage:line 0 ;
+  triage:snippet "MAX_DAEMON_FRAME_BYTES constant name absent from docs; only prose value 'n = 1_048_576' documented" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> .
+
+<urn:atm:triage:worktree/pT-t5-hardening/a99dde9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pT-t7-graft-runtime/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .
