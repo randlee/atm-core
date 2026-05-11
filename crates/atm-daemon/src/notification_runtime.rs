@@ -60,7 +60,9 @@ impl NotificationRuntime {
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
         let mut state = self.inner.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("notification runtime state lock poisoned")
+            AtmError::daemon_unavailable("notification runtime state lock poisoned").with_recovery(
+                "Restart the daemon; notification lifecycle state can no longer be trusted.",
+            )
         })?;
         if state.started {
             return Ok(());
@@ -135,7 +137,9 @@ impl NotificationRuntime {
 
     pub(crate) fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
         let mut state = self.inner.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("notification runtime state lock poisoned")
+            AtmError::daemon_unavailable("notification runtime state lock poisoned").with_recovery(
+                "Restart the daemon; notification lifecycle state can no longer be trusted.",
+            )
         })?;
         if !state.started {
             return Err(AtmError::daemon_unavailable(
