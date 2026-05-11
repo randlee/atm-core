@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T2-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T2-003" ;
+  triage:title "Sprint doc status field shows Planning — should be Implementation Complete" ;
+  triage:description "docs/phase-T/sprint-T2-sqlite-writer.md:6 status field still shows Planning; implementation is complete. Update to Implementation Complete." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T2-003/pT-t2-sqlite-writer/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c> ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/ATM-QA-T2-003/pT-t2-sqlite-writer/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-T/sprint-T2-sqlite-writer.md" ;
+  triage:line 6 ;
+  triage:snippet "**Status**: Planning" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c> .
+
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/5275b3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t1-integration-gate/bfb6511>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "bfb6511" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/4b04c20>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "4b04c20" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/4b04c20>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "4b04c20" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5-hardening/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-T/4b04c20>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "4b04c20" ;
+  triage:orderIndex 9 .

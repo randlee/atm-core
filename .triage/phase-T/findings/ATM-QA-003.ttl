@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003" ;
+  triage:title "Allowed OS Difference Inventory not updated in daemon architecture docs" ;
+  triage:description "docs/atm-daemon/architecture.md — Sprint acceptance criterion: remaining platform exceptions documented with explicit rationale in daemon architecture docs. The Allowed OS Difference Inventory (section 3.0.1) was not updated. Unix-only test-inject-accept-error hooks have no rationale entry." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pT-t1-integration-gate/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pT-t2-sqlite-writer/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pT-t3-immutable-rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pT-t4-windows-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pT-t5-hardening/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t1/bfb6511> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2/5275b3c> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4/b71366f> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5/fbf64cc> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t5/fbf64cc> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/pT-t1-integration-gate/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 211 ;
+  triage:snippet "## 3.0.1 Allowed Operating-System Difference Inventory" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "bfb6511" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1/bfb6511> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/pT-t2-sqlite-writer/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 211 ;
+  triage:snippet "## 3.0.1 Allowed Operating-System Difference Inventory" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/pT-t3-immutable-rows/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 211 ;
+  triage:snippet "## 3.0.1 Allowed Operating-System Difference Inventory" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/pT-t4-windows-runtime/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 211 ;
+  triage:snippet "## 3.0.1 Allowed Operating-System Difference Inventory" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 211 ;
+  triage:snippet "## 3.0.1 Allowed Operating-System Difference Inventory" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/fbf64cc> .
+
+<urn:atm:triage:worktree/pT-t1/bfb6511>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "bfb6511" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2/5275b3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3/f9f1e3f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4/b71366f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .

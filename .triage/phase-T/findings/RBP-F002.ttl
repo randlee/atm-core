@@ -1,0 +1,131 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-F002" ;
+  triage:title "connection_count: Arc<Mutex<usize>> has no rationale comment explaining Mutex vs AtomicUsize" ;
+  triage:description "crates/atm-rusqlite/src/shared_db.rs:162 — connection_count: Arc<Mutex<usize>> has no rationale comment explaining Mutex vs AtomicUsize. T.1-FIX-R3 (bdc8ce1) FIXED this on T.1 and was merged forward to T.2. Still open on T.3, T.4, T.5, and integrate/phase-T." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:mergeForwardNeeded true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pT-t3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pT-t3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pT-t4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pT-t4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pT-t5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pT-t5/2> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4/b71366f> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5/fbf64cc> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t1/82133d2> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t2/8fde385> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+<urn:atm:triage:occurrence/RBP-F002/pT-t3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 162 ;
+  triage:snippet "    connection_count: Arc<Mutex<usize>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+<urn:atm:triage:occurrence/RBP-F002/pT-t3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 166 ;
+  triage:snippet "    connection_count: Arc<Mutex<usize>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+<urn:atm:triage:occurrence/RBP-F002/pT-t4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 152 ;
+  triage:snippet "    connection_count: Arc<Mutex<usize>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+
+<urn:atm:triage:occurrence/RBP-F002/pT-t4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 160 ;
+  triage:snippet "    connection_count: Arc<Mutex<usize>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/b71366f> .
+
+<urn:atm:triage:occurrence/RBP-F002/pT-t5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 152 ;
+  triage:snippet "    connection_count: Arc<Mutex<usize>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/fbf64cc> .
+
+<urn:atm:triage:occurrence/RBP-F002/pT-t5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 160 ;
+  triage:snippet "    connection_count: Arc<Mutex<usize>>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/fbf64cc> .
+
+<urn:atm:triage:worktree/pT-t1/82133d2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "82133d2" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2/8fde385>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3/f9f1e3f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4/b71366f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .

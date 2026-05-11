@@ -1,0 +1,95 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-002>
+  a triage:Finding ;
+  triage:findingId "RSH-002" ;
+  triage:title "Blocking send(Shutdown) in Drop — can block indefinitely under high write load" ;
+  triage:description "self.sender.send(WriterMessage::Shutdown) in Drop (mod.rs:87) blocks if the 256-slot channel is full. Drop caller can block indefinitely under high write load before Shutdown is even enqueued. Fix: use try_send; on Full, log a warning and rely on channel disconnect to wake the writer loop instead." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-002/pT-t3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3/f9f1e3f> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t2/8fde385> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+# Open occurrence on pT-t3 — fix was applied on pT-t2 but not merged forward
+<urn:atm:triage:occurrence/RSH-002/pT-t3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 87 ;
+  triage:snippet "let _ = self.sender.send(WriterMessage::Shutdown);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/f9f1e3f> .
+
+# Prior occurrence on pT-t2 now fixed (try_send used at lines 96 and 162)
+<urn:atm:triage:occurrence/RSH-002/pT-t2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 87 ;
+  triage:snippet "let _ = self.sender.send(WriterMessage::Shutdown);" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/5275b3c> .
+
+# WorktreeSnapshot nodes for all surveyed branches
+<urn:atm:triage:worktree/pT-t1/bdc8ce1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "bdc8ce1" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2/5275b3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "5275b3c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t2/8fde385>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3/f9f1e3f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "f9f1e3f" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4/b71366f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "b71366f" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/fbf64cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "fbf64cc" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/phase-T-integrate/f96abd0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "f96abd0" ;
+  triage:orderIndex 9 .
