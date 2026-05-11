@@ -219,7 +219,7 @@ impl RuntimeComposition {
     }
 
     fn begin_shutdown(&self) -> Result<(), AtmError> {
-        self.request_dispatcher.emit_runtime_event(
+        self.request_dispatcher.record_runtime_event(
             "shutdown_requested",
             "ok",
             "daemon shutdown requested",
@@ -237,7 +237,7 @@ impl RuntimeComposition {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        self.request_dispatcher.emit_runtime_event(
+        self.request_dispatcher.record_runtime_event(
             "start_requested",
             "ok",
             "daemon start requested",
@@ -248,7 +248,7 @@ impl RuntimeComposition {
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
-                self.request_dispatcher.emit_runtime_event(
+                self.request_dispatcher.record_runtime_event(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -269,7 +269,7 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
-            self.request_dispatcher.emit_runtime_event(
+            self.request_dispatcher.record_runtime_event(
                 "startup_failed",
                 "failed",
                 "daemon startup failed",
@@ -286,7 +286,7 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during runtime preparation rollback"
                     );
                 }
-                self.request_dispatcher.emit_runtime_event(
+                self.request_dispatcher.record_runtime_event(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -297,7 +297,7 @@ impl RuntimeComposition {
         };
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        self.request_dispatcher.emit_runtime_event(
+        self.request_dispatcher.record_runtime_event(
             "startup_completed",
             "ok",
             "daemon startup completed",
@@ -324,7 +324,7 @@ impl RuntimeComposition {
         &self,
         socket_path: PathBuf,
     ) -> Result<(), AtmError> {
-        self.request_dispatcher.emit_runtime_event(
+        self.request_dispatcher.record_runtime_event(
             "start_requested",
             "ok",
             "daemon start requested",
@@ -333,7 +333,7 @@ impl RuntimeComposition {
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
-                self.request_dispatcher.emit_runtime_event(
+                self.request_dispatcher.record_runtime_event(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -354,7 +354,7 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
-            self.request_dispatcher.emit_runtime_event(
+            self.request_dispatcher.record_runtime_event(
                 "startup_failed",
                 "failed",
                 "daemon startup failed",
@@ -374,7 +374,7 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during test runtime preparation rollback"
                     );
                 }
-                self.request_dispatcher.emit_runtime_event(
+                self.request_dispatcher.record_runtime_event(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -385,7 +385,7 @@ impl RuntimeComposition {
         };
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        self.request_dispatcher.emit_runtime_event(
+        self.request_dispatcher.record_runtime_event(
             "startup_completed",
             "ok",
             "daemon startup completed",
@@ -432,12 +432,12 @@ impl RuntimeComposition {
             };
         }
         match result.as_ref() {
-            Ok(()) => self.request_dispatcher.emit_runtime_event(
+            Ok(()) => self.request_dispatcher.record_runtime_event(
                 "shutdown_completed",
                 "ok",
                 "daemon shutdown completed",
             ),
-            Err(_) => self.request_dispatcher.emit_runtime_event(
+            Err(_) => self.request_dispatcher.record_runtime_event(
                 "shutdown_failed",
                 "failed",
                 "daemon shutdown failed",
@@ -563,6 +563,7 @@ where
     let shutdown_handle = std::thread::spawn(move || {
         let _ = result_tx.send(shutdown(lane));
     });
+    let shutdown_thread_id = shutdown_handle.thread().id();
     match result_rx.recv_timeout(deadline) {
         Ok(result) => {
             shutdown_handle.join().map_err(|_| {
@@ -572,9 +573,17 @@ where
             })?;
             result
         }
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(
-            format!("daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"),
-        )),
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            tracing::debug!(
+                lane = lane_name,
+                timeout_ms = deadline.as_millis(),
+                thread_id = ?shutdown_thread_id,
+                "daemon shutdown lane timed out; join worker left detached after deadline"
+            );
+            Err(AtmError::daemon_unavailable(format!(
+                "daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"
+            )))
+        }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => shutdown_handle.join().map_or_else(
             |_| {
                 Err(AtmError::daemon_unavailable(format!(

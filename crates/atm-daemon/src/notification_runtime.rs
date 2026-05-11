@@ -11,6 +11,7 @@ use std::time::Duration;
 
 const DEFAULT_NOTIFICATION_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
+const NOTIFICATION_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
 
 #[derive(Clone)]
 pub(crate) struct NotificationRuntime {
@@ -102,9 +103,29 @@ impl NotificationRuntime {
             .map_err(|_| AtmError::daemon_unavailable("notification runtime worker lock poisoned"))?
             .take()
         {
-            handle.join().map_err(|_| {
-                AtmError::daemon_unavailable("notification runtime worker panicked during shutdown")
-            })?;
+            let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+            std::thread::spawn(move || {
+                let _ = result_tx.send(handle.join());
+            });
+            match result_rx.recv_timeout(NOTIFICATION_SHUTDOWN_DEADLINE) {
+                Ok(Ok(())) => {}
+                Ok(Err(_)) => {
+                    return Err(AtmError::daemon_unavailable(
+                        "notification runtime worker panicked during shutdown",
+                    ));
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                    return Err(AtmError::daemon_unavailable(format!(
+                        "notification runtime shutdown exceeded the {:?} deadline",
+                        NOTIFICATION_SHUTDOWN_DEADLINE
+                    )));
+                }
+                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                    return Err(AtmError::daemon_unavailable(
+                        "notification runtime join helper disconnected during shutdown",
+                    ));
+                }
+            }
         }
         Ok(())
     }

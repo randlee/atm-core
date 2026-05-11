@@ -428,10 +428,18 @@ impl PreparedRuntimeServer {
                         ShutdownResponseOutcome::NoFrame if terminate_probe_pending => break,
                         ShutdownResponseOutcome::NoFrame => {
                             terminate_probe_pending = true;
-                            schedule_delayed_listener_wake(
+                            if let Err(error) = schedule_delayed_listener_wake(
                                 endpoint_path.clone(),
                                 TERMINATE_REJECTION_GRACE_DEADLINE,
-                            );
+                            ) {
+                                tracing::warn!(
+                                    %error,
+                                    path = %endpoint_path.display(),
+                                    "failed to schedule delayed listener wake during shutdown probe"
+                                );
+                                let _ = wake_listener(&endpoint_path);
+                                break;
+                            }
                             continue;
                         }
                     }
@@ -705,7 +713,7 @@ fn write_shutdown_response(
     Ok(ShutdownResponseOutcome::RejectedRequest)
 }
 
-fn schedule_delayed_listener_wake(endpoint_path: PathBuf, delay: Duration) {
+fn schedule_delayed_listener_wake(endpoint_path: PathBuf, delay: Duration) -> Result<(), AtmError> {
     // Fire-and-forget: this helper only opens one local connection to unblock accept(), so
     // shutdown does not need to retain or join the wake thread after it has been scheduled.
     // The `_wake_handle` binding makes that intentional detach explicit at the call site.
@@ -715,7 +723,14 @@ fn schedule_delayed_listener_wake(endpoint_path: PathBuf, delay: Duration) {
             thread::sleep(delay);
             let _ = wake_listener(&endpoint_path);
         })
-        .expect("delayed-listener-wake thread");
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn delayed listener wake helper")
+                .with_recovery(
+                    "Retry the ATM command after atm-daemon restarts; the shutdown wake helper could not be scheduled.",
+                )
+                .with_source(source)
+        })?;
+    Ok(())
 }
 
 fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {

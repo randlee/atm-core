@@ -2966,6 +2966,8 @@ Summary:
   hardening, policy lint, SQLite write-worker planning and implementation,
   JSONL log compatibility, logging defaults, retained log bootstrap, and
   integration gate cleanup
+- Phase S was originally scoped through S.14, then explicitly extended through
+  S.15 for the SQLite write-worker planning and hardening line
 - S.13–S.15 delivered the local IPC transport, Windows same-host runtime, and
   SQLite write-worker foundation
 - Integration branch `integrate/phase-S` carries all merged sprint work
