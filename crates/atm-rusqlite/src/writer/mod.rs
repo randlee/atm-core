@@ -455,11 +455,9 @@ mod tests {
     use atm_core::schema::{LegacyMessageId, MessageEnvelope};
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
     use rusqlite::OptionalExtension;
-    use std::path::PathBuf;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::mpsc;
     use std::thread;
-    use tempfile::TempDir;
 
     static NEXT_TEST_DB_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -470,12 +468,6 @@ mod tests {
                 NEXT_TEST_DB_ID.fetch_add(1, Ordering::Relaxed)
             ),
         })
-    }
-
-    fn temp_disk_target() -> (TempDir, Arc<SharedDbTarget>, PathBuf) {
-        let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("writer.sqlite3");
-        (tempdir, Arc::new(SharedDbTarget::Path(path.clone())), path)
     }
 
     fn team() -> TeamName {
