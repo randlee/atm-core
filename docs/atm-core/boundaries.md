@@ -47,6 +47,23 @@ Purpose:
 Notes:
 - The public workflow surface above this boundary should stay centered on send
   and receive.
+- Thin graft-facing clients should layer typed workflow/session DTOs above this
+  transport rather than publishing daemon-shaped transport details directly.
+
+## AtmGraftClient / GraftSessionPort
+
+Purpose:
+- Own the thin embedded ATM client surface that `atm-graft` consumes without a
+  Rust dependency on `atm-daemon`.
+
+Notes:
+- These are intentionally open traits, not sealed boundary traits.
+- `AtmGraftClient` owns the unary `send` / `read` / `ack` daemon request
+  surface for embedded consumers.
+- `GraftSessionPort` owns graft-session registration plus nudge fetch/drain
+  session contracts.
+- The graft-facing public API must stay small and typed rather than exposing
+  raw `RequestEnvelope` / `ResponseEnvelope` values.
 
 ## WatchEventSource
 

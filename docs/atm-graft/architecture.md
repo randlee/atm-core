@@ -105,6 +105,8 @@ Rust boundary rules:
   types
 - new public client or session traits must make an explicit sealed/open
   decision up front; default posture is sealed
+- `AtmGraftClient` and `GraftSessionPort` are the explicit exception here:
+  they remain open because `atm-graft` must implement them in a separate crate
 - stream-oriented traits intended for dynamic dispatch must remain object-safe
 
 ## 2.4 Activation And Config Boundary
@@ -201,6 +203,12 @@ Required public capability groups:
   - `read`
   - `ack`
 - host-facing automatic nudge injection integration
+
+Current T.6 contract shape:
+- `AtmGraftClient` owns the unary `send` / `read` / `ack` daemon request
+  surface reused by the retained CLI
+- `GraftSessionPort` owns session registration, unregistration, and daemon
+  pending-nudge fetch/drain control
 
 Boundary rule:
 - a hook-facing command that prints insertion-ready nudge text is an `atm`

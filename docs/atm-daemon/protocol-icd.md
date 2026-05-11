@@ -97,6 +97,25 @@ Rule:
 - it must not imply that `log`, `teams`, or `members` are daemon packets when
   the current implementation does not route them through the daemon protocol
 
+## 3.2 Phase T Graft Semantic Surface
+
+Sprint T.6 introduces the typed graft-facing semantic DTO family in
+`atm-core` without yet adding new daemon packet kinds.
+
+The new semantic surface covers:
+- graft registration
+- graft unregistration
+- pending-nudge fetch
+- pending-nudge drain
+- daemon-originated graft nudge payloads
+
+Rules:
+- these DTOs live in `atm-core`, not in `atm-daemon`
+- embedded consumers must not invent alternate raw payload shapes outside this
+  semantic family
+- concrete packet-kind allocation for the graft runtime is deferred to Sprint
+  T.7 when the daemon-side registration and nudge queue runtime lands
+
 ## 4. Transport Model
 
 ATM daemon transport is a framed, connection-oriented, request/response
