@@ -6,6 +6,9 @@ This document is the crate-local boundary inventory for `atm-graft`.
 `atm-core` and must remain a thin embedded client crate rather than a second
 runtime or business-logic layer.
 
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-graft/shared-client-consumer.toml](../../boundaries/atm-graft/shared-client-consumer.toml)
+
 ## Shared Client Transport Consumer
 
 Purpose:

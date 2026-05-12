@@ -48,6 +48,9 @@ Notes:
   and receive.
 - Thin clients must use this shared boundary and must not take a dependency on
   `atm-daemon` internals.
+- `atm-graft` now lands as one such thin client crate and is expected to stay
+  on this boundary plus the shared ATM envelopes rather than on any daemon-
+  private request family.
 - If long-lived advisory notification or registration traffic is added for thin
   clients, it must stay in this shared boundary family rather than creating a
   plugin-private daemon API.

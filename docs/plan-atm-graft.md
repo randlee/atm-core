@@ -90,16 +90,14 @@ Planning consequence:
 Current state:
 - same-host daemon IPC already exists
 - `atm` already proves the retained daemon-client path
-- there is not yet one small, explicit `atm-core` client surface tailored for
-  embedded host-agent consumers
+- `U.8` lands one small explicit thin-client surface for embedded host-agent
+  consumers: shared unary `send` / `read` / `ack` over `ClientTransport`
 
 Required change:
-- define the public client-side request/response/session-facing models needed
-  by `atm-graft`
-- keep those models in `atm-core`
 - keep concrete runtime/socket behavior out of the public `atm-core` surface
-- update the protocol/interface docs that describe those client-facing request
-  and response boundaries
+- extend the shared client-side contract only where `U.9` / `U.10` prove that
+  session/advisory behavior needs additive shared DTOs
+- keep the protocol/interface docs aligned with that shared client boundary
 
 ### G.2 Session/nudge runtime gap
 
@@ -129,12 +127,12 @@ Required change:
 ### G.3 Thin crate gap
 
 Current state:
-- there is no `atm-graft` crate yet
-- host binaries therefore cannot consume a stable embedded ATM client surface
+- `U.8` lands the `atm-graft` crate as a thin unary client over the shared
+  ATM transport contract
+- host binaries still do not have the `U.9` session runtime or the `U.10`
+  generic advisory stream yet
 
 Required change:
-- add the `atm-graft` crate as a thin wrapper over the `atm-core` client
-  contract
 - add minimal `[atm.graft]` activation
 - add `GraftSession`
 - replace the current poll/drain runtime with host-facing automatic advisory
@@ -155,9 +153,10 @@ Implementation scope:
 - `atm-daemon`
 
 Deliverables:
-- typed `atm-core` client/request/response/session models used by embedded
+- shared unary `atm-core` client/request/response models used by embedded
   consumers
-- explicit `atm-core` ownership of any public graft-facing protocol types
+- explicit `atm-core` ownership of the generic thin-client naming line,
+  including `ClientSessionId`
 - `atm` CLI continues to use the same shared ICD family rather than a separate
   client-specific protocol line
 - no `atm-daemon` crate dependency required for external graft consumers
@@ -169,7 +168,6 @@ Implementation scope:
 - `atm-core`
 
 Deliverables:
-- `atm-graft` crate
 - `GraftSession` as the concrete lifecycle runtime
 - one persistent receive thread per active session holding the open daemon
   socket used for advisory nudge delivery

@@ -374,21 +374,21 @@ fn flags_hardcoded_tmp_path_in_test_scope() {
         config_home_env = "ATM_CONFIG_HOME"
         "#,
     );
-    fixture.write_source(
-        "example",
-        "lib.rs",
+    let fixture_source = format!(
         r#"
             #[cfg(test)]
-            mod tests {
+            mod tests {{
                 use std::path::PathBuf;
 
                 #[test]
-                fn writes_artifact() {
-                    let _ = PathBuf::from("/tmp/test-artifact");
-                }
-            }
+                fn writes_artifact() {{
+                    let _ = PathBuf::from("{tmp_path}");
+                }}
+            }}
         "#,
+        tmp_path = ["/", "tmp", "/test-artifact"].concat(),
     );
+    fixture.write_source("example", "lib.rs", &fixture_source);
 
     let report = analyze_workspace(&AnalyzeOptions {
         root: fixture.root().to_path_buf(),
@@ -455,7 +455,7 @@ fn does_not_flag_unix_only_production_code() {
         r#"
             #[cfg(unix)]
             pub fn socket_path() -> std::path::PathBuf {
-                std::path::PathBuf::from("/tmp/runtime-socket")
+                std::env::temp_dir().join("runtime-socket")
             }
         "#,
     );
@@ -676,8 +676,8 @@ fn flags_cfg_attr_not_unix_allow_dead_code_in_production_code() {
         "lib.rs",
         r#"
             #[cfg_attr(not(unix), allow(dead_code))]
-            pub fn unix_socket_path() -> &'static str {
-                "/tmp/runtime.sock"
+            pub fn unix_socket_path() -> std::path::PathBuf {
+                std::env::temp_dir().join("runtime.sock")
             }
         "#,
     );

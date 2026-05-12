@@ -2240,7 +2240,12 @@ mod tests {
                 recipient_pane_id: Some("%1".to_string()),
                 metadata_json: serde_json::Map::from_iter([(
                     "cwd".to_string(),
-                    serde_json::Value::String("/tmp/alpha".to_string()),
+                    serde_json::Value::String(
+                        std::env::temp_dir()
+                            .join("alpha")
+                            .to_string_lossy()
+                            .into_owned(),
+                    ),
                 )]),
             },
             boundary::RosterMemberRecord {
@@ -2287,7 +2292,7 @@ mod tests {
             .replace_roster(boundary::RosterStoreReplaceRosterRequest {
                 team: team(),
                 members: members.clone(),
-                source: Some("config.json".to_string()),
+                source: Some(boundary::ReplaySource::new("config.json").expect("replay source")),
             })
             .expect("replace");
         assert!(replaced.replaced);
