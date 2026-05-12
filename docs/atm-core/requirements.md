@@ -99,12 +99,20 @@ Initial crate requirement IDs:
   `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`,
   `REQ-P-ACK-001`, `REQ-P-CLEAR-001`, `REQ-P-RELIABILITY-001`,
   `REQ-P-IDLE-001`.
+  Phase-U note: active compatibility reads no longer depend on `metadata.atm`;
+  inbound shared-inbox records strip that namespace through
+  `strip_metadata_atm_namespace()` in
+  `crates/atm-core/src/schema/inbox_message.rs`.
 - `REQ-CORE-COMPAT-001` `atm-core` owns the Claude JSONL compatibility
   projection contract for ATM-authored exports and inbound compatibility
   ingestion, including the bounded export cap, retrieval-stub rule, and
   idempotent watcher/reconcile projection handling for the same logical
   message. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
+  Phase-U note: the active compatibility contract strips inbound
+  `metadata.atm` rather than preserving it as a live schema surface; the
+  production enforcement point is `strip_metadata_atm_namespace()` in
+  `crates/atm-core/src/schema/inbox_message.rs`.
 - `REQ-CORE-WORKFLOW-001` `atm-core` owns the two-axis workflow model and legal
   transitions. Satisfies the state-classification and legal-transition aspects
   of:
@@ -251,6 +259,8 @@ The `atm-core` crate docs must remain aligned with:
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-message-schema.md`](../atm-message-schema.md)
 - [`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)
+  (historical only; its `metadata.atm` coverage was superseded and removed
+  from the active compatibility design in Phase U)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)

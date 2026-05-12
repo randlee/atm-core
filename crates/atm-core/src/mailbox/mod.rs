@@ -11,7 +11,7 @@ use std::borrow::Cow;
 use std::fs;
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use tracing::warn;
 
@@ -246,23 +246,7 @@ fn parse_mailbox_summary_array(
 
     Ok(records
         .into_iter()
-        .enumerate()
-        .filter_map(
-            |(index, record)| match summarize_mailbox_record(record, contains_filter) {
-                Ok(Some(message)) => Some(message),
-                Ok(None) => None,
-                Err(error) => {
-                    warn!(
-                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
-                        line = index + 1,
-                        mailbox_path = %path.display(),
-                        %error,
-                        "skipping malformed mailbox record during bounded list projection"
-                    );
-                    None
-                }
-            },
-        )
+        .map(|record| summarize_mailbox_record(record, contains_filter))
         .collect())
 }
 
@@ -317,10 +301,9 @@ fn parse_mailbox_summary_jsonl(
                     )
                     .with_source(error)
                 })
-                .and_then(|record| summarize_mailbox_record(record, contains_filter))
+                .map(|record| summarize_mailbox_record(record, contains_filter))
             {
-                Ok(Some(message)) => Some(message),
-                Ok(None) => None,
+                Ok(message) => Some(message),
                 Err(error) => {
                     warn!(
                         code = %AtmErrorCode::WarningMailboxRecordSkipped,
@@ -393,16 +376,28 @@ struct SummaryMailboxRecord<'a> {
     source_team: Option<TeamName>,
     #[serde(default)]
     summary: Option<String>,
-    #[serde(rename = "message_id", default)]
-    message_id: Option<String>,
+    #[serde(
+        rename = "message_id",
+        default,
+        deserialize_with = "deserialize_optional_legacy_message_id"
+    )]
+    message_id: Option<LegacyMessageId>,
     #[serde(rename = "pendingAckAt", default)]
     pending_ack_at: Option<IsoTimestamp>,
     #[serde(rename = "acknowledgedAt", default)]
     acknowledged_at: Option<IsoTimestamp>,
-    #[serde(rename = "acknowledgesMessageId", default)]
-    acknowledges_message_id: Option<String>,
-    #[serde(rename = "parentMessageId", default)]
-    parent_message_id: Option<String>,
+    #[serde(
+        rename = "acknowledgesMessageId",
+        default,
+        deserialize_with = "deserialize_optional_legacy_message_id"
+    )]
+    acknowledges_message_id: Option<LegacyMessageId>,
+    #[serde(
+        rename = "parentMessageId",
+        default,
+        deserialize_with = "deserialize_optional_legacy_message_id"
+    )]
+    parent_message_id: Option<LegacyMessageId>,
     #[serde(rename = "threadMode", default)]
     thread_mode: Option<ThreadMode>,
     #[serde(rename = "staleAt", default)]
@@ -414,10 +409,7 @@ struct SummaryMailboxRecord<'a> {
 fn summarize_mailbox_record(
     record: SummaryMailboxRecord<'_>,
     contains_filter: Option<&str>,
-) -> Result<Option<SummaryMessage>, AtmError> {
-    let message_id = parse_legacy_id(record.message_id.as_deref());
-    let acknowledges_message_id = parse_legacy_id(record.acknowledges_message_id.as_deref());
-    let parent_message_id = parse_legacy_id(record.parent_message_id.as_deref());
+) -> SummaryMessage {
     let summary_preview = summarize_text(record.summary.as_deref(), record.text.as_ref());
     let body_contains_match = contains_filter
         .map(str::trim)
@@ -425,7 +417,7 @@ fn summarize_mailbox_record(
         .is_some_and(|needle| ascii_case_insensitive_contains(record.text.as_ref(), needle));
     let idle_notification_sender = idle_notification_sender_from_text(record.text.as_ref());
 
-    Ok(Some(SummaryMessage {
+    SummaryMessage {
         envelope: MessageEnvelope {
             from: record.from,
             text: String::new(),
@@ -433,11 +425,11 @@ fn summarize_mailbox_record(
             read: record.read,
             source_team: record.source_team,
             summary: record.summary,
-            message_id,
+            message_id: record.message_id,
             pending_ack_at: record.pending_ack_at,
             acknowledged_at: record.acknowledged_at,
-            acknowledges_message_id,
-            parent_message_id,
+            acknowledges_message_id: record.acknowledges_message_id,
+            parent_message_id: record.parent_message_id,
             thread_mode: record.thread_mode,
             stale_at: record.stale_at,
             task_id: record.task_id,
@@ -446,11 +438,23 @@ fn summarize_mailbox_record(
         summary_preview,
         body_contains_match,
         idle_notification_sender,
-    }))
+    }
 }
 
-fn parse_legacy_id(value: Option<&str>) -> Option<LegacyMessageId> {
-    value.and_then(|value| value.parse::<LegacyMessageId>().ok())
+fn deserialize_optional_legacy_message_id<'de, D>(
+    deserializer: D,
+) -> Result<Option<LegacyMessageId>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    Ok(raw.and_then(|value| {
+        if value.is_null() {
+            None
+        } else {
+            serde_json::from_value::<LegacyMessageId>(value).ok()
+        }
+    }))
 }
 
 fn summarize_text(summary: Option<&str>, text: &str) -> String {
@@ -729,6 +733,45 @@ mod tests {
         assert_eq!(
             messages[0].task_id.as_ref().map(|task_id| task_id.as_str()),
             Some("TASK-123")
+        );
+    }
+
+    #[test]
+    fn read_messages_preserves_metadata_atm_as_opaque_extra() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("metadata-atm-pass-through.jsonl");
+        let contents = serde_json::json!({
+            "from": ROLE_TEAM_LEAD,
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": false,
+            "metadata": {
+                "atm": {
+                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+                    "sourceTeam": TEST_TEAM
+                },
+                "foreign": {
+                    "keep": true
+                }
+            }
+        });
+        fs::write(&path, serde_json::to_vec(&contents).expect("json")).expect("write");
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].message_id.is_none());
+        assert!(messages[0].source_team.is_none());
+        assert_eq!(
+            messages[0].extra.get("metadata"),
+            Some(&serde_json::json!({
+                "atm": {
+                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+                    "sourceTeam": TEST_TEAM
+                },
+                "foreign": {
+                    "keep": true
+                }
+            }))
         );
     }
 

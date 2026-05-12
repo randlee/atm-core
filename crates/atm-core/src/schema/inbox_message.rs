@@ -1,4 +1,4 @@
-//! Shared inbox compatibility schema for Claude-native envelopes plus ATM metadata.
+//! Shared inbox compatibility schema for Claude-native envelopes with ATM additive compatibility fields.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
