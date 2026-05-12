@@ -121,6 +121,8 @@ Product-level boundary rules:
 - direct read-only SQLite consumers are an allowed integration surface, but
   ATM-owned command/runtime writes must not bypass the documented daemon/store
   boundaries
+- mailbox row provenance/timing convenience fields are not part of the public
+  message contract unless one clear product requirement explicitly keeps them
 
 Lint and tooling boundary rules:
 - `atm-core` owns repository-local lint orchestration through `just`,
@@ -2120,7 +2122,7 @@ ATM moves to a split state model:
 - SQLite is the authoritative durable store for:
   - messages
   - ack/task state
-  - read/clear visibility state
+  - read/clear/delete message state
   - team roster
 - daemon memory is the authoritative live runtime view for:
   - current agent status
@@ -2377,12 +2379,12 @@ Minimum method set:
 - open/bootstrap store
 - run transaction
 - upsert/load message rows
-- upsert/load ack/visibility state
+- upsert/load unified message state
 - record/load ingest replay state
 - return health/readiness snapshot
 
 Scope rule:
-- `MailStore` owns message rows plus read/ack/visibility state tied directly to
+- `MailStore` owns message rows plus unified read/ack/delete/expiry state tied directly to
   message lifecycle
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains
@@ -2415,9 +2417,14 @@ Object-safety rule:
   SQLite types
 
 Minimum method set:
-- replace/load roster rows
+- replace/load canonical roster member rows
 - query roster membership for routing/validation
 - return roster health/readiness snapshot
+
+Ownership rule:
+- runtime `pid` continuity is transient daemon-owned state and must not become
+  part of durable roster truth
+- `config.json` remains an ingress document, not a general runtime-read truth
 
 #### InboxIngress
 

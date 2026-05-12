@@ -6,7 +6,7 @@ flowchart TD
     A[send compose request] --> B[Validate actor target and payload]
     B -->|validation error| E1[ValidationFailed]
     B --> C["Build MailStoreMessageRecord
-team, agent, message_key, envelope, imported_from?, recorded_at?"]
+team, agent, message_key, envelope"]
     C --> D["MailStore::upsert_message(
 MailStoreUpsertMessageRequest { record }
 )

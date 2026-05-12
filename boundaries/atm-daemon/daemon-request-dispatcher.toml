@@ -43,4 +43,4 @@ review_gates = ["no_socket_specific_business_logic"]
 
 [status]
 state = "active"
-notes = ["dispatcher remains thin and runtime-owned", "runtime composition lands through atm_daemon::composition", "dispatcher now routes heartbeat requests and projects daemon-backed doctor health", "direct atm-rusqlite access is limited to runtime-owned boundary assembly for durable pid continuity and SQLite readiness checks"]
+notes = ["dispatcher remains thin and runtime-owned", "runtime composition lands through atm_daemon::composition", "dispatcher now routes heartbeat requests and projects daemon-backed doctor health", "direct atm-rusqlite access is limited to runtime-owned boundary assembly for roster truth and SQLite readiness checks"]

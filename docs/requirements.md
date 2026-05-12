@@ -2730,7 +2730,7 @@ mail correctness.
     - message records
     - read/unread state
     - ack-required / acknowledged state
-    - clear/visibility state
+    - clear/delete/message state
     - task linkage and task metadata
     - team roster
   - Claude-owned inbox JSONL files are compatibility ingress/export surfaces,

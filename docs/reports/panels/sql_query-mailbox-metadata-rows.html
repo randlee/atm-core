@@ -87,7 +87,6 @@ This SQL path returns bounded mailbox header rows. It joins immutable message ro
     message_id TEXT NULL,
     parent_message_id TEXT NULL,
     thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN (&#x27;add-details&#x27;, &#x27;supersede&#x27;)),
-    imported_from TEXT,
     recorded_at TEXT,
     CHECK(message_key GLOB &#x27;atm:*&#x27; OR message_key GLOB &#x27;ext:*&#x27;),
     PRIMARY KEY (team, agent, message_key)

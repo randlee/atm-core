@@ -32,7 +32,7 @@ This sprint hardens:
 ## Closeout Requirements
 
 - keep `SqliteWriter` crate-private and avoid widening `MailStore`, `TaskStore`, or `RosterStore`
-- migrate `MailStore::upsert_message` and `MailStore::upsert_visibility_state` through the writer
+- migrate `MailStore::upsert_message` and `MailStore::upsert_message_state` through the writer
 - preserve `SharedDb::with_transaction(...)` for remaining cold-path callers during incremental migration
 - remove the mailbox append pre-write `SELECT` probe and derive insertion from row-count semantics
 - ensure one invalid queued write row does not fail unrelated rows in the same batch

@@ -18,8 +18,12 @@ part of the enduring mailbox contract.
 ## Scope Summary
 
 This sprint reviews and simplifies weakly justified mailbox-row fields,
-starting with `imported_from` and `recorded_at`, and deletes fields that exist
-only for convenience round-tripping.
+starting with `imported_from` and `recorded_at`.
+
+Target direction:
+- delete weak round-trip provenance fields such as `imported_from`
+- if `recorded_at` remains, treat it as store-owned ingest timing for
+  health/reporting rather than caller-supplied message data
 
 ## Governing Requirements
 

@@ -2,11 +2,20 @@ use super::SqliteRosterStore;
 use super::{deserialize_json, serialize_json};
 use atm_core::boundary;
 use atm_core::error::AtmError;
-use atm_core::schema::TeamConfig;
 use atm_core::types::IsoTimestamp;
 use rusqlite::{OptionalExtension, params};
+use serde_json::{Map, Value};
 
 impl boundary::sealed::Sealed for SqliteRosterStore {}
+
+struct StoredRosterMemberRow {
+    member_kind: String,
+    harness: String,
+    agent_type: String,
+    model: String,
+    recipient_pane_id: Option<String>,
+    metadata_json: String,
+}
 
 impl boundary::RosterStore for SqliteRosterStore {
     fn replace_roster(
@@ -18,54 +27,50 @@ impl boundary::RosterStore for SqliteRosterStore {
                 team: request.team.clone(),
             })
             .ok()
-            .map(|response| response.roster.members.len() as u64)
+            .map(|response| response.members.len() as u64)
             .unwrap_or(0);
-        let roster_json = serialize_json(&request.roster, "roster-store snapshot")?;
         let updated_at = chrono::Utc::now().to_rfc3339();
         self.db.with_transaction(|transaction| {
             transaction
                 .execute(
-                    "INSERT INTO rosters(team, roster_json, source, updated_at)
-                     VALUES (?1, ?2, ?3, ?4)
-                     ON CONFLICT(team) DO UPDATE SET
-                       roster_json = excluded.roster_json,
-                       source = excluded.source,
-                       updated_at = excluded.updated_at;",
-                    params![
-                        request.team.as_str(),
-                        roster_json,
-                        request.source.clone(),
-                        updated_at.clone(),
-                    ],
-                )
-                .map_err(|error| {
-                    self.db
-                        .error("failed to replace roster-store snapshot", error)
-                })?;
-            transaction
-                .execute(
                     "DELETE FROM team_roster WHERE team_name = ?1;",
                     params![request.team.as_str()],
-                )
-                .map_err(|error| self.db.error("failed to clear team-roster projection", error))?;
-            for member in &request.roster.members {
-                let member_json = serialize_json(member, "team-roster member")?;
-                let pane_id = (!member.tmux_pane_id.is_empty()).then(|| member.tmux_pane_id.clone());
+                ).map_err(|error| self.db.error("failed to clear canonical team roster", error))?;
+            for member in &request.members {
+                if member.team_name != request.team {
+                    return Err(AtmError::validation(format!(
+                        "roster-store replace rejected member {} because team_name {} did not match request team {}",
+                        member.agent_name, member.team_name, request.team
+                    )));
+                }
+                let metadata_json = serialize_json(&member.metadata_json, "team-roster metadata")?;
                 transaction
                     .execute(
-                        "INSERT INTO team_roster(team_name, agent_name, member_json, source, recipient_pane_id, pid, updated_at)
-                         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);",
+                        "INSERT INTO team_roster(
+                            team_name,
+                            agent_name,
+                            member_kind,
+                            harness,
+                            agent_type,
+                            model,
+                            metadata_json,
+                            source,
+                            recipient_pane_id,
+                            updated_at
+                         ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10);",
                         params![
                             request.team.as_str(),
-                            member.name.as_str(),
-                            member_json,
+                            member.agent_name.as_str(),
+                            roster_member_kind_value(member.member_kind),
+                            roster_harness_value(member.harness),
+                            member.agent_type.clone(),
+                            member.model.clone(),
+                            metadata_json,
                             request.source.clone(),
-                            pane_id,
-                            Option::<i64>::None,
+                            member.recipient_pane_id.clone(),
                             updated_at.clone(),
                         ],
-                    )
-                    .map_err(|error| self.db.error("failed to replace team-roster member projection", error))?;
+                    ).map_err(|error| self.db.error("failed to replace canonical team-roster member", error))?;
             }
             Ok(())
         })?;
@@ -73,7 +78,7 @@ impl boundary::RosterStore for SqliteRosterStore {
         Ok(boundary::RosterStoreReplaceRosterResponse {
             team: request.team,
             previous_member_count,
-            current_member_count: request.roster.members.len() as u64,
+            current_member_count: request.members.len() as u64,
             replaced: true,
         })
     }
@@ -82,31 +87,64 @@ impl boundary::RosterStore for SqliteRosterStore {
         &self,
         request: boundary::RosterStoreLoadRosterRequest,
     ) -> Result<boundary::RosterStoreLoadRosterResponse, AtmError> {
-        let roster_json = self.db.with_connection(|connection| {
-            connection
-                .query_row(
-                    "SELECT roster_json FROM rosters WHERE team = ?1;",
-                    params![request.team.as_str()],
-                    |row| row.get::<_, String>(0),
-                )
-                .optional()
-                .map_err(|error| self.db.error("failed to load roster-store snapshot", error))
+        let members = self.db.with_connection(|connection| {
+            let mut statement = connection.prepare(
+                "SELECT agent_name, member_kind, harness, agent_type, model, recipient_pane_id, metadata_json
+                 FROM team_roster
+                 WHERE team_name = ?1
+                 ORDER BY agent_name ASC;",
+            ).map_err(|error| self.db.error("failed to prepare canonical team-roster load", error))?;
+            let rows = statement.query_map(params![request.team.as_str()], |row| {
+                Ok((
+                    row.get::<_, String>(0)?,
+                    row.get::<_, String>(1)?,
+                    row.get::<_, String>(2)?,
+                    row.get::<_, String>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, String>(6)?,
+                ))
+            }).map_err(|error| self.db.error("failed to load canonical team-roster rows", error))?;
+            let mut members = Vec::new();
+            for row in rows {
+                let (
+                    agent_name,
+                    member_kind,
+                    harness,
+                    agent_type,
+                    model,
+                    recipient_pane_id,
+                    metadata_json,
+                ) = row
+                    .map_err(|error| self.db.error("failed to decode canonical team-roster row", error))?;
+                members.push(build_roster_member(
+                    &request.team,
+                    agent_name,
+                    StoredRosterMemberRow {
+                        member_kind,
+                        harness,
+                        agent_type,
+                        model,
+                        recipient_pane_id,
+                        metadata_json,
+                    },
+                )?);
+            }
+            Ok(members)
         })?;
 
-        let roster_json = roster_json.ok_or_else(|| {
-            AtmError::validation(format!(
-                "roster-store load failed because team {} has no persisted roster snapshot",
+        if members.is_empty() {
+            return Err(AtmError::validation(format!(
+                "roster-store load failed because team {} has no persisted roster members",
                 request.team
             ))
             .with_recovery(
                 "Replace the roster through RosterStore::replace_roster before loading it.",
-            )
-        })?;
-        let roster: TeamConfig = deserialize_json(&roster_json, "roster-store snapshot")?;
-
+            ));
+        }
         Ok(boundary::RosterStoreLoadRosterResponse {
             team: request.team,
-            roster,
+            members,
         })
     }
 
@@ -117,24 +155,44 @@ impl boundary::RosterStore for SqliteRosterStore {
         let membership = self.db.with_connection(|connection| {
             connection
                 .query_row(
-                    "SELECT member_json, pid
+                    "SELECT member_kind, harness, agent_type, model, recipient_pane_id, metadata_json
                      FROM team_roster
                      WHERE team_name = ?1 AND agent_name = ?2;",
                     params![request.team.as_str(), request.member.as_str()],
-                    |row| Ok((row.get::<_, String>(0)?, row.get::<_, Option<u32>>(1)?)),
+                    |row| {
+                        Ok((
+                            row.get::<_, String>(0)?,
+                            row.get::<_, String>(1)?,
+                            row.get::<_, String>(2)?,
+                            row.get::<_, String>(3)?,
+                            row.get::<_, Option<String>>(4)?,
+                            row.get::<_, String>(5)?,
+                        ))
+                    },
                 )
                 .optional()
                 .map_err(|error| {
                     self.db
-                        .error("failed to query team-roster membership", error)
+                        .error("failed to query canonical team-roster membership", error)
                 })
         })?;
-        let (member_json, pid) = membership
-            .map(|(member_json, pid)| (Some(member_json), pid))
-            .unwrap_or((None, None));
-        let member = member_json
-            .as_deref()
-            .map(|value| deserialize_json(value, "team-roster member"))
+        let member = membership
+            .map(
+                |(member_kind, harness, agent_type, model, recipient_pane_id, metadata_json)| {
+                    build_roster_member(
+                        &request.team,
+                        request.member.as_str().to_string(),
+                        StoredRosterMemberRow {
+                            member_kind,
+                            harness,
+                            agent_type,
+                            model,
+                            recipient_pane_id,
+                            metadata_json,
+                        },
+                    )
+                },
+            )
             .transpose()?;
         let is_member = member.is_some();
 
@@ -142,52 +200,6 @@ impl boundary::RosterStore for SqliteRosterStore {
             team: request.team,
             member,
             is_member,
-            pid,
-        })
-    }
-
-    fn record_heartbeat(
-        &self,
-        request: boundary::RosterStoreRecordHeartbeatRequest,
-    ) -> Result<boundary::RosterStoreRecordHeartbeatResponse, AtmError> {
-        let updated_at = request.observed_at.into_inner().to_rfc3339();
-        self.db.with_transaction(|transaction| {
-            let previous_pid_row = transaction
-                .query_row(
-                    "SELECT pid
-                     FROM team_roster
-                     WHERE team_name = ?1 AND agent_name = ?2;",
-                    params![request.team.as_str(), request.member.as_str()],
-                    |row| row.get::<_, Option<u32>>(0),
-                )
-                .optional()
-                .map_err(|error| self.db.error("failed to query durable roster pid", error))?;
-            let Some(previous_pid) = previous_pid_row else {
-                return Err(AtmError::agent_not_found(
-                    request.member.as_str(),
-                    request.team.as_str(),
-                ));
-            };
-            transaction
-                .execute(
-                    "UPDATE team_roster
-                     SET pid = ?3, updated_at = ?4
-                     WHERE team_name = ?1 AND agent_name = ?2;",
-                    params![
-                        request.team.as_str(),
-                        request.member.as_str(),
-                        request.pid,
-                        updated_at,
-                    ],
-                )
-                .map_err(|error| self.db.error("failed to persist durable roster pid", error))?;
-            Ok(boundary::RosterStoreRecordHeartbeatResponse {
-                team: request.team.clone(),
-                member: request.member.clone(),
-                previous_pid,
-                current_pid: request.pid,
-                pid_changed: previous_pid != Some(request.pid),
-            })
         })
     }
 
@@ -211,7 +223,7 @@ impl boundary::RosterStore for SqliteRosterStore {
         })?;
         let updated_at = updated_at.ok_or_else(|| {
             AtmError::validation(format!(
-                "roster-store health failed because team {} has no persisted roster snapshot",
+                "roster-store health failed because team {} has no persisted roster members",
                 request.team
             ))
             .with_recovery(
@@ -240,4 +252,66 @@ impl boundary::RosterStore for SqliteRosterStore {
             },
         })
     }
+}
+
+fn roster_member_kind_value(value: boundary::RosterMemberKind) -> &'static str {
+    match value {
+        boundary::RosterMemberKind::Permanent => "permanent",
+        boundary::RosterMemberKind::Ephemeral => "ephemeral",
+    }
+}
+
+fn roster_harness_value(value: boundary::RosterHarness) -> &'static str {
+    match value {
+        boundary::RosterHarness::ClaudeCode => "claude-code",
+        boundary::RosterHarness::CodexCli => "codex-cli",
+        boundary::RosterHarness::GeminiCli => "gemini-cli",
+        boundary::RosterHarness::Opencode => "opencode",
+    }
+}
+
+fn build_roster_member(
+    team: &atm_core::types::TeamName,
+    agent_name: String,
+    stored: StoredRosterMemberRow,
+) -> Result<boundary::RosterMemberRecord, AtmError> {
+    let member_kind = match stored.member_kind.as_str() {
+        "permanent" => boundary::RosterMemberKind::Permanent,
+        "ephemeral" => boundary::RosterMemberKind::Ephemeral,
+        other => {
+            return Err(AtmError::validation(format!(
+                "failed to decode roster member_kind {other} for {}/{}",
+                team, agent_name
+            )));
+        }
+    };
+    let harness = match stored.harness.as_str() {
+        "claude-code" => boundary::RosterHarness::ClaudeCode,
+        "codex-cli" => boundary::RosterHarness::CodexCli,
+        "gemini-cli" => boundary::RosterHarness::GeminiCli,
+        "opencode" => boundary::RosterHarness::Opencode,
+        other => {
+            return Err(AtmError::validation(format!(
+                "failed to decode roster harness {other} for {}/{}",
+                team, agent_name
+            )));
+        }
+    };
+    let metadata_json: Map<String, Value> =
+        deserialize_json(&stored.metadata_json, "team-roster metadata")?;
+    Ok(boundary::RosterMemberRecord {
+        team_name: team.clone(),
+        agent_name: agent_name.parse().map_err(|error| {
+            AtmError::validation(format!(
+                "failed to decode roster agent_name {agent_name} for {team}: {error}"
+            ))
+            .with_source(error)
+        })?,
+        member_kind,
+        harness,
+        agent_type: stored.agent_type,
+        model: stored.model,
+        recipient_pane_id: stored.recipient_pane_id,
+        metadata_json,
+    })
 }
