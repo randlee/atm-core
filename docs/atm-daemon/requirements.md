@@ -471,6 +471,9 @@ Required runtime rules:
   host-integration logic belong in the client plugin crate, not in `atm-daemon`;
   the daemon's responsibility is request serving, post-commit notification, and
   generic runtime composition only (REQ-CORE-DAEMON-003)
+- Phase U.8 keeps the shared daemon packet family limited to the existing CLI-
+  shaped unary envelopes; `atm-graft` must consume that shared family rather
+  than reopening graft-private request/response packets in the daemon crate
 - any violation of these daemon boundary rules is a direct QA failure
 - daemon tests must not become the normal mechanism for validating core ATM
   correctness

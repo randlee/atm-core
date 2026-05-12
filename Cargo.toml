@@ -3,6 +3,7 @@ members = [
     "crates/atm-core",
     "crates/atm",
     "crates/atm-daemon-client",
+    "crates/atm-graft",
     "crates/sc-lint-attributes",
     "crates/sc-lint-boundary",
     "crates/sc-lint-directives",

@@ -251,9 +251,76 @@ impl fmt::Display for TaskId {
     }
 }
 
+/// Shared identifier for one active thin-client session.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct ClientSessionId(String);
+
+impl ClientSessionId {
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl FromStr for ClientSessionId {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(
+                AtmError::validation("client session id must not be blank").with_recovery(
+                    "Populate a stable non-empty thin-client session id before activating the shared daemon client surface.",
+                ),
+            );
+        }
+        Ok(Self(trimmed.to_string()))
+    }
+}
+
+impl<'de> Deserialize<'de> for ClientSessionId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl From<ClientSessionId> for String {
+    fn from(value: ClientSessionId) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for ClientSessionId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for ClientSessionId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for ClientSessionId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{AgentName, TaskId, TeamName};
+    use super::{AgentName, ClientSessionId, TaskId, TeamName};
 
     #[test]
     fn task_id_rejects_blank_deserialization() {
@@ -274,6 +341,18 @@ mod tests {
         let error = serde_json::from_str::<TeamName>("\"   \"").expect_err("blank team name");
 
         assert!(error.to_string().contains("team"));
+    }
+
+    #[test]
+    fn client_session_id_rejects_blank_deserialization() {
+        let error =
+            serde_json::from_str::<ClientSessionId>("\"   \"").expect_err("blank session id");
+
+        assert!(
+            error
+                .to_string()
+                .contains("client session id must not be blank")
+        );
     }
 }
 

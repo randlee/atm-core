@@ -71,6 +71,8 @@ Thin-client extension rule:
 - if long-lived registration or advisory-notification traffic is added for
   embedded/plugin clients, it must remain part of this shared ICD family
   rather than forming a daemon-private plugin protocol.
+- Phase U.8 lands `atm-graft` on the existing shared unary packet family only;
+  there are no graft-private packet kinds in the accepted U.8 transport line.
 
 UDP is not an accepted transport for ATM daemon request/response messaging in
 the retained product surface.

@@ -51,6 +51,8 @@ Sprint summary:
     `recorded_at` when health/reporting requires it
 - `U.7` roster simplification and explicit member model
 - `U.8` shared thin-client ICD for CLI and graft
+  - lands `atm-graft` as a thin shared-ICD client over the existing unary
+    `send` / `read` / `ack` envelope family
 - `U.9` client-owned graft runtime with one persistent receive thread, one
   open dedicated daemon advisory-stream connection, one minimal client-side
   pending queue until host consumption, and one host wake/event path

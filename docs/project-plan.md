@@ -2892,6 +2892,8 @@ Acceptance:
   contracts
 - any extra request/response shapes needed for graft remain part of the shared
   ICD family rather than a daemon-private API
+- `U.8` lands the `atm-graft` crate on the existing shared unary
+  request/response family rather than on graft-private daemon packets
 - U.8 owns shared ICD family and naming/DTO planning only; the follow-on
   runtime and advisory cutover ownership is fixed in
   `docs/phase-U/removal-inventory.md`
