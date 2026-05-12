@@ -2814,8 +2814,9 @@ mail correctness.
 
   Required behavior:
   - live status is runtime-owned daemon state
-  - SQLite stores the current durable `pid` for each member as roster truth,
-    and daemon memory caches it as the primary liveness field
+  - SQLite stores canonical roster membership and optional routing metadata,
+    but not the current process `pid`
+  - daemon memory caches the current `pid` as the primary liveness field
   - daemon runtime state must include `last_active_at` for each known active
     agent/member entry
   - the shared protocol must expose typed heartbeat request/response DTOs for
@@ -2823,9 +2824,8 @@ mail correctness.
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
   - roster truth and live-status truth must remain distinct
-  - `pid` is not a diagnostic snapshot or advisory hint; it is the durable
-    roster-owned process identity until replaced by the documented heartbeat or
-    admin-takeover path
+- `pid` is transient daemon-owned runtime state rather than durable roster
+  truth and must not be persisted in SQLite
 
 ### 21.2 Singleton Daemon Runtime
 

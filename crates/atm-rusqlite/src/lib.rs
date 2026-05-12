@@ -1985,17 +1985,60 @@ mod tests {
     fn roster_store_round_trips_roster_membership_and_health() {
         let assembly = in_memory_assembly();
         let store = assembly.roster_store();
-
-        let roster = TeamConfig {
-            members: vec![AgentMember::with_name(agent())],
-            extra: serde_json::Map::new(),
-        };
-        let members = roster
-            .members
-            .clone()
-            .into_iter()
-            .map(|member| boundary::RosterMemberRecord::from_claude_code_member(team(), member))
-            .collect::<Vec<_>>();
+        let members = vec![
+            boundary::RosterMemberRecord {
+                team_name: team(),
+                agent_name: "alpha".parse().expect("agent name"),
+                member_kind: boundary::RosterMemberKind::Permanent,
+                harness: boundary::RosterHarness::ClaudeCode,
+                agent_type: "planner".to_string(),
+                model: "claude-sonnet".to_string(),
+                recipient_pane_id: Some("%1".to_string()),
+                metadata_json: serde_json::Map::from_iter([(
+                    "cwd".to_string(),
+                    serde_json::Value::String("/tmp/alpha".to_string()),
+                )]),
+            },
+            boundary::RosterMemberRecord {
+                team_name: team(),
+                agent_name: "bravo".parse().expect("agent name"),
+                member_kind: boundary::RosterMemberKind::Ephemeral,
+                harness: boundary::RosterHarness::CodexCli,
+                agent_type: "worker".to_string(),
+                model: "gpt-5-codex".to_string(),
+                recipient_pane_id: None,
+                metadata_json: serde_json::Map::from_iter([(
+                    "session".to_string(),
+                    serde_json::Value::String("codex".to_string()),
+                )]),
+            },
+            boundary::RosterMemberRecord {
+                team_name: team(),
+                agent_name: "charlie".parse().expect("agent name"),
+                member_kind: boundary::RosterMemberKind::Permanent,
+                harness: boundary::RosterHarness::GeminiCli,
+                agent_type: "review".to_string(),
+                model: "gemini-2.5-pro".to_string(),
+                recipient_pane_id: None,
+                metadata_json: serde_json::Map::from_iter([(
+                    "region".to_string(),
+                    serde_json::Value::String("us".to_string()),
+                )]),
+            },
+            boundary::RosterMemberRecord {
+                team_name: team(),
+                agent_name: "delta".parse().expect("agent name"),
+                member_kind: boundary::RosterMemberKind::Permanent,
+                harness: boundary::RosterHarness::Opencode,
+                agent_type: "ops".to_string(),
+                model: "open-router".to_string(),
+                recipient_pane_id: None,
+                metadata_json: serde_json::Map::from_iter([(
+                    "provider".to_string(),
+                    serde_json::Value::String("opencode".to_string()),
+                )]),
+            },
+        ];
         let replaced = store
             .replace_roster(boundary::RosterStoreReplaceRosterRequest {
                 team: team(),
@@ -2013,7 +2056,7 @@ mod tests {
         let membership = store
             .query_membership(boundary::RosterStoreQueryMembershipRequest {
                 team: team(),
-                member: agent(),
+                member: "alpha".parse().expect("agent name"),
             })
             .expect("membership");
         assert!(membership.is_member);
@@ -2022,7 +2065,19 @@ mod tests {
         let health = store
             .health_snapshot(boundary::RosterStoreHealthSnapshotRequest { team: team() })
             .expect("health");
-        assert_eq!(health.snapshot.member_count, 1);
+        assert_eq!(health.snapshot.member_count, members.len() as u64);
+    }
+
+    #[test]
+    fn roster_store_load_roster_returns_empty_for_new_team() {
+        let assembly = in_memory_assembly();
+        let store = assembly.roster_store();
+
+        let loaded = store
+            .load_roster(boundary::RosterStoreLoadRosterRequest { team: team() })
+            .expect("load empty roster");
+
+        assert!(loaded.members.is_empty());
     }
 
     #[test]

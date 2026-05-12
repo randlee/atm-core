@@ -2137,7 +2137,7 @@ ATM moves to a split state model:
   - team roster
 - daemon memory is the authoritative live runtime view for:
   - current agent status
-  - `pid`: durable SQLite truth cached in daemon memory as the primary
+  - `pid`: transient daemon-owned process identity cached as the primary
     liveness field
   - `last_active_at`: daemon-memory-only runtime state used for live overlays
 
@@ -2194,8 +2194,9 @@ Minimum canonical roster-member durable fields:
 - `metadata_json`
 - `recipient_pane_id TEXT NULL`
   - authoritative post-send-hook pane mapping when known
-- `pid INTEGER NULL`
-  - durable roster truth for the current owning process identity
+
+`pid` is not part of the canonical roster-member durable schema. It remains
+transient daemon-owned runtime state only.
 
 Schema-governance rule:
 - any SQLite schema change is a contract change

@@ -8,6 +8,9 @@ use serde_json::{Map, Value};
 
 impl boundary::sealed::Sealed for SqliteRosterStore {}
 
+const MAX_CANONICAL_ROSTER_MEMBERS: usize = 4096;
+const MAX_ROSTER_TEXT_FIELD_BYTES: usize = 1024;
+
 struct StoredRosterMemberRow {
     member_kind: String,
     harness: String,
@@ -22,6 +25,17 @@ impl boundary::RosterStore for SqliteRosterStore {
         &self,
         request: boundary::RosterStoreReplaceRosterRequest,
     ) -> Result<boundary::RosterStoreReplaceRosterResponse, AtmError> {
+        if request.members.len() > MAX_CANONICAL_ROSTER_MEMBERS {
+            return Err(AtmError::validation(format!(
+                "roster-store replace rejected team {} because {} members exceeds the canonical roster cap of {}",
+                request.team,
+                request.members.len(),
+                MAX_CANONICAL_ROSTER_MEMBERS
+            ))
+            .with_recovery(
+                "Reduce the roster payload size or raise the documented canonical roster cap before retrying replace_roster.",
+            ));
+        }
         let previous_member_count = self
             .load_roster(boundary::RosterStoreLoadRosterRequest {
                 team: request.team.clone(),
@@ -41,7 +55,10 @@ impl boundary::RosterStore for SqliteRosterStore {
                     return Err(AtmError::validation(format!(
                         "roster-store replace rejected member {} because team_name {} did not match request team {}",
                         member.agent_name, member.team_name, request.team
-                    )));
+                    ))
+                    .with_recovery(
+                        "Repair the incoming roster payload so every member row uses the same team_name as the replace_roster request before retrying.",
+                    ));
                 }
                 let metadata_json = serialize_json(&member.metadata_json, "team-roster metadata")?;
                 transaction
@@ -92,19 +109,27 @@ impl boundary::RosterStore for SqliteRosterStore {
                 "SELECT agent_name, member_kind, harness, agent_type, model, recipient_pane_id, metadata_json
                  FROM team_roster
                  WHERE team_name = ?1
-                 ORDER BY agent_name ASC;",
+                 ORDER BY agent_name ASC
+                 LIMIT ?2;",
             ).map_err(|error| self.db.error("failed to prepare canonical team-roster load", error))?;
-            let rows = statement.query_map(params![request.team.as_str()], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, String>(1)?,
-                    row.get::<_, String>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, String>(4)?,
-                    row.get::<_, Option<String>>(5)?,
-                    row.get::<_, String>(6)?,
-                ))
-            }).map_err(|error| self.db.error("failed to load canonical team-roster rows", error))?;
+            let rows = statement.query_map(
+                params![
+                    request.team.as_str(),
+                    (MAX_CANONICAL_ROSTER_MEMBERS as i64) + 1
+                ],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, String>(4)?,
+                        row.get::<_, Option<String>>(5)?,
+                        row.get::<_, String>(6)?,
+                    ))
+                },
+            )
+            .map_err(|error| self.db.error("failed to load canonical team-roster rows", error))?;
             let mut members = Vec::new();
             for row in rows {
                 let (
@@ -130,18 +155,17 @@ impl boundary::RosterStore for SqliteRosterStore {
                     },
                 )?);
             }
+            if members.len() > MAX_CANONICAL_ROSTER_MEMBERS {
+                return Err(AtmError::validation(format!(
+                    "roster-store load rejected team {} because persisted roster rows exceeded the canonical cap of {}",
+                    request.team, MAX_CANONICAL_ROSTER_MEMBERS
+                ))
+                .with_recovery(
+                    "Reduce the canonical team_roster rows for that team or raise the documented roster cap before retrying load_roster.",
+                ));
+            }
             Ok(members)
         })?;
-
-        if members.is_empty() {
-            return Err(AtmError::validation(format!(
-                "roster-store load failed because team {} has no persisted roster members",
-                request.team
-            ))
-            .with_recovery(
-                "Replace the roster through RosterStore::replace_roster before loading it.",
-            ));
-        }
         Ok(boundary::RosterStoreLoadRosterResponse {
             team: request.team,
             members,
@@ -282,7 +306,10 @@ fn build_roster_member(
             return Err(AtmError::validation(format!(
                 "failed to decode roster member_kind {other} for {}/{}",
                 team, agent_name
-            )));
+            ))
+            .with_recovery(
+                "Repair the canonical team_roster row or rewrite the roster through the owning boundary before retrying roster load.",
+            ));
         }
     };
     let harness = match stored.harness.as_str() {
@@ -294,7 +321,10 @@ fn build_roster_member(
             return Err(AtmError::validation(format!(
                 "failed to decode roster harness {other} for {}/{}",
                 team, agent_name
-            )));
+            ))
+            .with_recovery(
+                "Repair the canonical team_roster row or rewrite the roster through the owning boundary before retrying roster load.",
+            ));
         }
     };
     let metadata_json: Map<String, Value> =
@@ -305,13 +335,37 @@ fn build_roster_member(
             AtmError::validation(format!(
                 "failed to decode roster agent_name {agent_name} for {team}: {error}"
             ))
+            .with_recovery(
+                "Repair the canonical team_roster row or rewrite the roster through the owning boundary before retrying roster load.",
+            )
             .with_source(error)
         })?,
         member_kind,
         harness,
-        agent_type: stored.agent_type,
-        model: stored.model,
+        agent_type: validate_roster_text_field("agent_type", stored.agent_type, team, &agent_name)?,
+        model: validate_roster_text_field("model", stored.model, team, &agent_name)?,
         recipient_pane_id: stored.recipient_pane_id,
         metadata_json,
     })
+}
+
+fn validate_roster_text_field(
+    field_name: &'static str,
+    value: String,
+    team: &atm_core::types::TeamName,
+    agent_name: &str,
+) -> Result<String, AtmError> {
+    if value.len() > MAX_ROSTER_TEXT_FIELD_BYTES {
+        return Err(AtmError::validation(format!(
+            "failed to decode roster {field_name} for {}/{} because {} bytes exceeded the {} byte cap",
+            team,
+            agent_name,
+            value.len(),
+            MAX_ROSTER_TEXT_FIELD_BYTES
+        ))
+        .with_recovery(
+            "Repair the canonical team_roster row or rewrite the roster through the owning boundary before retrying roster load.",
+        ));
+    }
+    Ok(value)
 }
