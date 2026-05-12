@@ -111,6 +111,10 @@ Required rules:
     split `ack_state` / `mail_visibility_states` storage is not permitted
   - one canonical roster/member store with explicit behavioral fields such as
     `member_kind` and `harness`
+- weak provenance round-trip fields such as `imported_from` must not be part
+  of the enduring `MailStoreMessageRecord` contract
+- if ingest timing is retained for health/reporting, it must be store-owned
+  internal data rather than caller-supplied message metadata
 - routine SQLite failures must return typed errors, not panic/unwrap
 - constraint failures must map to validation-class ATM errors rather than
   generic store write failures

@@ -121,6 +121,8 @@ Product-level boundary rules:
 - direct read-only SQLite consumers are an allowed integration surface, but
   ATM-owned command/runtime writes must not bypass the documented daemon/store
   boundaries
+- mailbox row provenance/timing convenience fields are not part of the public
+  message contract unless one clear product requirement explicitly keeps them
 
 Lint and tooling boundary rules:
 - `atm-core` owns repository-local lint orchestration through `just`,

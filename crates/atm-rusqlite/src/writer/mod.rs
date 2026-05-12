@@ -517,8 +517,6 @@ mod tests {
             agent: agent(),
             message_key: message_key(key),
             envelope: envelope(text),
-            imported_from: None,
-            recorded_at: Some(IsoTimestamp::now()),
         }
     }
 
@@ -529,8 +527,6 @@ mod tests {
                 agent: agent(),
                 message_key: message_key(&format!("atm:writer-{index}")),
                 envelope: envelope(&format!("writer message {index}")),
-                imported_from: Some("writer-test".to_string()),
-                recorded_at: Some(IsoTimestamp::now()),
             },
         }))
     }

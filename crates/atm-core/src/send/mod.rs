@@ -528,8 +528,6 @@ fn mirror_message_to_store(
         agent: agent.clone(),
         message_key: message_key.clone(),
         envelope: envelope.clone(),
-        imported_from: None,
-        recorded_at: None,
     })?;
     runtime.persist_message_state(boundary::MailMessageState {
         team: team.clone(),
