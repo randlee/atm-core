@@ -128,6 +128,8 @@ The abandoned early SQLite/daemon target implementation was split across:
 - `crates/atm-core`
 - `crates/atm`
 - `crates/atm-daemon`
+- `crates/atm-daemon-client`
+- `crates/atm-graft`
 - `crates/atm-rusqlite`
 
 Crate-local scope detail is owned by:
