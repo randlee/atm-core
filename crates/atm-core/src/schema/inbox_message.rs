@@ -1,4 +1,4 @@
-//! Shared inbox compatibility schema for Claude-native envelopes plus ATM metadata.
+//! Shared inbox compatibility schema for Claude-native envelopes with ATM additive compatibility fields.
 
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
@@ -544,6 +544,15 @@ mod tests {
         let (message_id, _) = AtmMessageId::new_with_timestamp();
         let parsed: AtmMessageId = message_id.to_string().parse().expect("parse atm id");
         assert_eq!(parsed, message_id);
+    }
+
+    #[test]
+    fn atm_message_id_uuid_wire_round_trip_preserves_identity() {
+        let message_id: AtmMessageId = "01KRFK5QTF2R6NRS3Q0F8Z9K0S".parse().expect("parse atm id");
+
+        let round_trip = AtmMessageId::from_uuid_wire(message_id.into_uuid_wire());
+
+        assert_eq!(round_trip, message_id);
     }
 
     #[test]

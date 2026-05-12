@@ -93,3 +93,5 @@ Rules:
 - ATM must not add or preserve machine-state fields under `metadata.atm`.
 - ATM must not rely on `metadata.atm` reads for normal mailbox behavior.
 - The active implementation must expose zero surviving `metadata.atm` fields.
+- inbound shared-inbox records that still carry `metadata.atm` for backward
+  compatibility are silently stripped, not rejected

@@ -6,7 +6,7 @@ phase: U
 sprint: "U.2"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity
 branch: feature/pU-u2-one-message-identity
-status: planned
+status: complete
 estimated_scope: M
 ```
 

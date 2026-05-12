@@ -8,7 +8,6 @@ use std::sync::{Arc, Barrier, mpsc};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
-#[cfg(unix)]
 use std::time::Instant;
 
 use atm_core::ack::{AckRequest, ack_mail};
@@ -241,7 +240,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     );
     let arch_workflow = ack_fixture.workflow_state_contents(PRIMARY_AGENT);
     assert!(
-        arch_workflow["messages"][format!("legacy:{pending_message_id}")]["acknowledgedAt"]
+        arch_workflow["messages"][format!("atm:{pending_message_id}")]["acknowledgedAt"]
             .as_str()
             .is_some(),
         "pending message was not acknowledged in workflow state: {arch_workflow:?}"
@@ -332,11 +331,12 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
 fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
     let fixture = Fixture::new();
     let observability = Arc::new(NullObservability);
+    let preseeded_workflow_key = "atm:01KRFK5QTF2R6NRS3Q0F8Z9K0S";
     fixture.write_workflow_state(
         PRIMARY_AGENT,
         serde_json::json!({
             "messages": {
-                "legacy:existing": {
+                preseeded_workflow_key: {
                     "read": true,
                     "pendingAckAt": null,
                     "acknowledgedAt": null
@@ -385,7 +385,7 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
     let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
 
     assert!(
-        workflow["messages"]["legacy:existing"]
+        workflow["messages"][preseeded_workflow_key]
             .as_object()
             .is_some(),
         "preseeded workflow entry was dropped: {workflow:?}"
@@ -423,13 +423,12 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
     )
     .expect("missing-config send");
 
-    let notices = fixture.inbox_contents_for_team("broken-dev", TEAM_LEAD);
-    let notice = notices.first().expect("missing-config notice");
+    let notice = fixture.wait_for_missing_config_notice("broken-dev");
     assert_eq!(notice.from, "atm-identity-missing");
     assert_eq!(notice.source_team.as_deref(), Some("broken-dev"));
-    let workflow = fixture.workflow_state_contents_for_team("broken-dev", TEAM_LEAD);
+    let workflow = fixture.wait_for_workflow_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
-        workflow["messages"][message_workflow_key(notice)]
+        workflow["messages"][message_workflow_key(&notice)]
             .as_object()
             .is_some(),
         "missing-config workflow entry missing: {workflow:?}"
@@ -490,11 +489,10 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
             .any(|message| message.text == "broken send"),
         "missing-config recipient send was not persisted"
     );
-    let notices = fixture.inbox_contents_for_team("broken-dev", TEAM_LEAD);
-    let notice = notices.first().expect("missing-config notice");
-    let workflow = fixture.workflow_state_contents_for_team("broken-dev", TEAM_LEAD);
+    let notice = fixture.wait_for_missing_config_notice("broken-dev");
+    let workflow = fixture.wait_for_workflow_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
-        workflow["messages"][message_workflow_key(notice)]["pendingAckAt"].is_null(),
+        workflow["messages"][message_workflow_key(&notice)]["pendingAckAt"].is_null(),
         "missing-config notice workflow state missing after concurrent send: {workflow:?}"
     );
 }
@@ -768,7 +766,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 
     let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
     assert_eq!(
-        workflow["messages"][format!("legacy:{logical_message_id}")]["read"],
+        workflow["messages"][format!("atm:{logical_message_id}")]["read"],
         true
     );
 }
@@ -1022,6 +1020,57 @@ impl Fixture {
         serde_json::from_str(&raw).expect("workflow json")
     }
 
+    fn wait_for_missing_config_notice(&self, team: &str) -> MessageEnvelope {
+        let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
+        loop {
+            if let Some(notice) = self
+                .inbox_contents_for_team(team, TEAM_LEAD)
+                .into_iter()
+                .find(|message| {
+                    message.from.as_str() == "atm-identity-missing"
+                        && message.source_team.as_deref() == Some(team)
+                })
+            {
+                return notice;
+            }
+            if Instant::now() >= deadline {
+                let notices = self.inbox_contents_for_team(team, TEAM_LEAD);
+                panic!("missing-config notice not observed before timeout: {notices:?}");
+            }
+            thread::yield_now();
+        }
+    }
+
+    fn wait_for_workflow_state_for_message(
+        &self,
+        team: &str,
+        agent: &str,
+        message: &MessageEnvelope,
+    ) -> serde_json::Value {
+        let workflow_path = self.workflow_state_path_for_team(team, agent);
+        let message_key = message_workflow_key(message);
+        let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
+        loop {
+            if workflow_path.exists() {
+                let workflow = self.workflow_state_contents_for_team(team, agent);
+                if workflow["messages"][&message_key].as_object().is_some() {
+                    return workflow;
+                }
+            }
+            if Instant::now() >= deadline {
+                let workflow = if workflow_path.exists() {
+                    self.workflow_state_contents_for_team(team, agent)
+                } else {
+                    serde_json::json!({})
+                };
+                panic!(
+                    "workflow state for missing-config notice not observed before timeout: {workflow:?}"
+                );
+            }
+            thread::yield_now();
+        }
+    }
+
     fn write_workflow_state(&self, agent: &str, value: serde_json::Value) {
         let path = self.workflow_state_path(agent);
         if let Some(parent) = path.parent() {
@@ -1103,7 +1152,7 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
 fn message_workflow_key(message: &MessageEnvelope) -> String {
     message
         .message_id
-        .map(|message_id| format!("legacy:{message_id}"))
+        .map(|message_id| format!("atm:{message_id}"))
         .as_deref()
         .expect("message id")
         .to_string()

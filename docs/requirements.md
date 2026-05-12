@@ -44,13 +44,16 @@ Schema ownership references:
   [`atm-message-schema.md`](./atm-message-schema.md)
 - legacy ATM read-compatibility schema:
   [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+  (historical only; Phase U removed its `metadata.atm` coverage from the
+  active compatibility design)
 - `sc-observability` schema ownership pointer:
   [`sc-observability-schema.md`](./sc-observability-schema.md)
 - ATM-owned error-code registry:
   [`atm-error-codes.md`](./atm-error-codes.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
-  `tools/schema_models/atm_message_schema.py` and
+  `tools/schema_models/atm_message_schema.py`
+- historical/read-compatibility schema record only:
   `tools/schema_models/legacy_atm_message_schema.py`
 
 ## 1.1 Documentation Structure
@@ -120,6 +123,10 @@ Phase-S portability note:
 - the thin-client extension surface should center on `send` and `receive`
   over the shared ATM protocol, while the retained CLI may continue to expose
   `ack` as a user-facing workflow
+- Phase U removed the active `metadata.atm` namespace from the approved
+  compatibility schema; the authoritative schema is
+  [`atm-message-schema.md`](./atm-message-schema.md) and the planning record is
+  [`plan-phase-U.md`](./plan-phase-U.md)
 
 ## 2. Scope
 
@@ -430,6 +437,8 @@ Required rules:
 - [`claude-code-message-schema.md`](./claude-code-message-schema.md)
 - [`atm-message-schema.md`](./atm-message-schema.md)
 - [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+  (historical only; its `metadata.atm` coverage was superseded and removed
+  from the active compatibility design in Phase U)
 - [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
   §2.2 and §3.3 for forward ATM alert-field placement and sender-side dedup
   semantics

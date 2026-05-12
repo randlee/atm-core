@@ -246,23 +246,7 @@ fn parse_mailbox_summary_array(
 
     Ok(records
         .into_iter()
-        .enumerate()
-        .filter_map(
-            |(index, record)| match summarize_mailbox_record(record, contains_filter) {
-                Ok(Some(message)) => Some(message),
-                Ok(None) => None,
-                Err(error) => {
-                    warn!(
-                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
-                        line = index + 1,
-                        mailbox_path = %path.display(),
-                        %error,
-                        "skipping malformed mailbox record during bounded list projection"
-                    );
-                    None
-                }
-            },
-        )
+        .map(|record| summarize_mailbox_record(record, contains_filter))
         .collect())
 }
 
@@ -317,10 +301,9 @@ fn parse_mailbox_summary_jsonl(
                     )
                     .with_source(error)
                 })
-                .and_then(|record| summarize_mailbox_record(record, contains_filter))
+                .map(|record| summarize_mailbox_record(record, contains_filter))
             {
-                Ok(Some(message)) => Some(message),
-                Ok(None) => None,
+                Ok(message) => Some(message),
                 Err(error) => {
                     warn!(
                         code = %AtmErrorCode::WarningMailboxRecordSkipped,
@@ -419,7 +402,7 @@ struct SummaryMailboxRecord<'a> {
 fn summarize_mailbox_record(
     record: SummaryMailboxRecord<'_>,
     contains_filter: Option<&str>,
-) -> Result<Option<SummaryMessage>, AtmError> {
+) -> SummaryMessage {
     let message_id = parse_message_id(record.message_id.as_deref());
     let acknowledges_message_id = parse_message_id(record.acknowledges_message_id.as_deref());
     let parent_message_id = parse_message_id(record.parent_message_id.as_deref());
@@ -430,7 +413,7 @@ fn summarize_mailbox_record(
         .is_some_and(|needle| ascii_case_insensitive_contains(record.text.as_ref(), needle));
     let idle_notification_sender = idle_notification_sender_from_text(record.text.as_ref());
 
-    Ok(Some(SummaryMessage {
+    SummaryMessage {
         envelope: MessageEnvelope {
             from: record.from,
             text: String::new(),
@@ -451,7 +434,7 @@ fn summarize_mailbox_record(
         summary_preview,
         body_contains_match,
         idle_notification_sender,
-    }))
+    }
 }
 
 fn parse_message_id(value: Option<&str>) -> Option<AtmMessageId> {
@@ -734,6 +717,45 @@ mod tests {
         assert_eq!(
             messages[0].task_id.as_ref().map(|task_id| task_id.as_str()),
             Some("TASK-123")
+        );
+    }
+
+    #[test]
+    fn read_messages_preserves_metadata_atm_as_opaque_extra() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("metadata-atm-pass-through.jsonl");
+        let contents = serde_json::json!({
+            "from": ROLE_TEAM_LEAD,
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": false,
+            "metadata": {
+                "atm": {
+                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+                    "sourceTeam": TEST_TEAM
+                },
+                "foreign": {
+                    "keep": true
+                }
+            }
+        });
+        fs::write(&path, serde_json::to_vec(&contents).expect("json")).expect("write");
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].message_id.is_none());
+        assert!(messages[0].source_team.is_none());
+        assert_eq!(
+            messages[0].extra.get("metadata"),
+            Some(&serde_json::json!({
+                "atm": {
+                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+                    "sourceTeam": TEST_TEAM
+                },
+                "foreign": {
+                    "keep": true
+                }
+            }))
         );
     }
 

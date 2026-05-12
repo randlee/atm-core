@@ -528,11 +528,14 @@ fn append_reply_message(
 mod tests {
     use std::path::PathBuf;
 
-    use super::{canonical_sender_identity, reject_non_terminal_ack, resolve_reply_target};
+    use super::{
+        canonical_sender_identity, find_source_message, reject_non_terminal_ack,
+        resolve_reply_target,
+    };
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
-    use crate::test_support::TEST_TEAM;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use crate::workflow;
 
@@ -625,5 +628,32 @@ mod tests {
         .expect_err("stale parent ack");
 
         assert!(error.message.contains("current terminal message"));
+    }
+
+    #[test]
+    fn find_source_message_accepts_uuid_wire_form_for_ack_lookup() {
+        let message_id: AtmMessageId = "01KRFK5QTF2R6NRS3Q0F8Z9K0S"
+            .parse()
+            .expect("atm message id");
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![thread_message(message_id, None, None)],
+        }];
+        let parsed_from_uuid: AtmMessageId = message_id
+            .into_uuid_wire()
+            .to_string()
+            .parse()
+            .expect("uuid wire parse");
+
+        let found = find_source_message(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            parsed_from_uuid,
+            &AgentName::from_validated(TEST_SENDER),
+            &TeamName::from_validated(TEST_TEAM),
+        )
+        .expect("source message");
+
+        assert_eq!(found.envelope.message_id, Some(message_id));
     }
 }

@@ -1352,7 +1352,7 @@ mod tests {
             "duplicate successor should be rejected by crate-owned validation before sqlite constraint handling"
         );
 
-        let duplicate_legacy_identity = store
+        let duplicate_message_identity = store
             .upsert_message(boundary::MailStoreUpsertMessageRequest {
                 record: boundary::MailStoreMessageRecord {
                     team: team(),
@@ -1367,9 +1367,9 @@ mod tests {
                 },
             })
             .expect_err("duplicate message identity");
-        assert!(duplicate_legacy_identity.is_validation());
+        assert!(duplicate_message_identity.is_validation());
         assert!(
-            duplicate_legacy_identity
+            duplicate_message_identity
                 .message
                 .contains("already owned by"),
             "message identity collision should be rejected by crate-owned validation before sqlite constraint handling"
