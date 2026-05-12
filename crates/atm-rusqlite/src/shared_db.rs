@@ -229,6 +229,10 @@ impl SharedDb {
 
     /// Call only from blocking code paths; async callers must enter
     /// `spawn_blocking` before borrowing a sqlite connection.
+    ///
+    /// Accepted risk: this is enforced as a crate-internal contract rather
+    /// than a runtime assert because `SharedDb` is only called from owned
+    /// blocking code paths inside `atm-rusqlite`.
     pub(crate) fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
@@ -240,6 +244,10 @@ impl SharedDb {
 
     /// Call only from blocking code paths; async callers must enter
     /// `spawn_blocking` before opening a sqlite transaction.
+    ///
+    /// Accepted risk: this is enforced as a crate-internal contract rather
+    /// than a runtime assert because `SharedDb` is only called from owned
+    /// blocking code paths inside `atm-rusqlite`.
     pub(crate) fn with_transaction<T>(
         &self,
         operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>,

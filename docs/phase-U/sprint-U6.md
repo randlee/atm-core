@@ -6,7 +6,7 @@ phase: U
 sprint: "U.6"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction
 branch: feature/pU-u6-provenance-field-reduction
-status: planned
+status: complete
 estimated_scope: S
 ```
 
