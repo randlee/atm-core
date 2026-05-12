@@ -8,7 +8,6 @@ use std::sync::{Arc, Barrier, mpsc};
 use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
-#[cfg(unix)]
 use std::time::Instant;
 
 use atm_core::ack::{AckRequest, ack_mail};
@@ -423,13 +422,12 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
     )
     .expect("missing-config send");
 
-    let notices = fixture.inbox_contents_for_team("broken-dev", TEAM_LEAD);
-    let notice = notices.first().expect("missing-config notice");
+    let notice = fixture.wait_for_missing_config_notice("broken-dev");
     assert_eq!(notice.from, "atm-identity-missing");
     assert_eq!(notice.source_team.as_deref(), Some("broken-dev"));
-    let workflow = fixture.workflow_state_contents_for_team("broken-dev", TEAM_LEAD);
+    let workflow = fixture.wait_for_workflow_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
-        workflow["messages"][message_workflow_key(notice)]
+        workflow["messages"][message_workflow_key(&notice)]
             .as_object()
             .is_some(),
         "missing-config workflow entry missing: {workflow:?}"
@@ -490,11 +488,10 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
             .any(|message| message.text == "broken send"),
         "missing-config recipient send was not persisted"
     );
-    let notices = fixture.inbox_contents_for_team("broken-dev", TEAM_LEAD);
-    let notice = notices.first().expect("missing-config notice");
-    let workflow = fixture.workflow_state_contents_for_team("broken-dev", TEAM_LEAD);
+    let notice = fixture.wait_for_missing_config_notice("broken-dev");
+    let workflow = fixture.wait_for_workflow_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
-        workflow["messages"][message_workflow_key(notice)]["pendingAckAt"].is_null(),
+        workflow["messages"][message_workflow_key(&notice)]["pendingAckAt"].is_null(),
         "missing-config notice workflow state missing after concurrent send: {workflow:?}"
     );
 }
@@ -1022,6 +1019,57 @@ impl Fixture {
         let raw = fs::read_to_string(self.workflow_state_path_for_team(team, agent))
             .expect("workflow contents");
         serde_json::from_str(&raw).expect("workflow json")
+    }
+
+    fn wait_for_missing_config_notice(&self, team: &str) -> MessageEnvelope {
+        let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
+        loop {
+            if let Some(notice) = self
+                .inbox_contents_for_team(team, TEAM_LEAD)
+                .into_iter()
+                .find(|message| {
+                    message.from.as_str() == "atm-identity-missing"
+                        && message.source_team.as_deref() == Some(team)
+                })
+            {
+                return notice;
+            }
+            if Instant::now() >= deadline {
+                let notices = self.inbox_contents_for_team(team, TEAM_LEAD);
+                panic!("missing-config notice not observed before timeout: {notices:?}");
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
+    }
+
+    fn wait_for_workflow_state_for_message(
+        &self,
+        team: &str,
+        agent: &str,
+        message: &MessageEnvelope,
+    ) -> serde_json::Value {
+        let workflow_path = self.workflow_state_path_for_team(team, agent);
+        let message_key = message_workflow_key(message);
+        let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
+        loop {
+            if workflow_path.exists() {
+                let workflow = self.workflow_state_contents_for_team(team, agent);
+                if workflow["messages"][&message_key].as_object().is_some() {
+                    return workflow;
+                }
+            }
+            if Instant::now() >= deadline {
+                let workflow = if workflow_path.exists() {
+                    self.workflow_state_contents_for_team(team, agent)
+                } else {
+                    serde_json::json!({})
+                };
+                panic!(
+                    "workflow state for missing-config notice not observed before timeout: {workflow:?}"
+                );
+            }
+            thread::sleep(Duration::from_millis(10));
+        }
     }
 
     fn write_workflow_state(&self, agent: &str, value: serde_json::Value) {
