@@ -274,7 +274,15 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
                     "advisory_stream",
                     &error,
                 );
-                thread::sleep(ctx.reconnect_backoff);
+                let _ = ctx.stop_rx.recv_timeout(ctx.reconnect_backoff);
+                if stop_requested(&ctx.stop_rx) {
+                    return unregister_session_and_close(
+                        &*ctx.client,
+                        &ctx.registration_request.session_id,
+                        &ctx.snapshot,
+                        ctx.observability.as_ref(),
+                    );
+                }
                 match ctx
                     .client
                     .register_session(ctx.registration_request.clone())

@@ -70,9 +70,10 @@ fn advisory_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {
     let db_path = tempdir.path().join("mail.db");
     install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
-    // TempDir paths are process-local, but the daemon dispatcher still uses
-    // global lifecycle/runtime state in test mode, so the advisory dispatcher
-    // helpers remain #[serial] until the full runtime harness is de-globalized.
+    // TempDir keeps filesystem state process-local across platforms, but this
+    // helper still exercises the same POSIX-style local IPC/runtime globals as
+    // the rest of the advisory dispatcher tests, so the helper remains
+    // #[serial] until the test harness stops sharing that process-wide state.
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
     (tempdir, dispatcher)
