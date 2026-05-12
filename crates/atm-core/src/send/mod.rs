@@ -7,6 +7,7 @@ use serde_json::Map;
 use tracing::warn;
 
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::config;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::identity;
@@ -14,7 +15,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::RetainedMailboxRuntime;
+use crate::service_runtime_store::{RetainedMailboxRuntime, legacy_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
@@ -149,11 +150,19 @@ pub fn send_mail(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
-    let runtime = LocalServiceRuntime::default();
+    let runtime = legacy_runtime();
     send_mail_with_runtime(request, observability, &runtime)
 }
 
-fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+pub fn send_mail_with_runtime(
+    request: SendRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<SendOutcome, AtmError> {
+    send_mail_with_runtime_impl(request, observability, runtime)
+}
+
+fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -468,7 +477,7 @@ fn notify_team_lead_missing_config(
     }
 }
 
-fn append_mailbox_message_and_seed_workflow(
+pub(crate) fn append_mailbox_message_and_seed_workflow(
     runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     team: &TeamName,
@@ -495,12 +504,45 @@ fn append_mailbox_message_and_seed_workflow(
             prepare_threaded_message(&mut prepared, &inbox_messages)?;
             inbox_messages.push(prepared.clone());
             runtime.commit_mailbox_state(inbox_path, &inbox_messages)?;
+            mirror_message_to_store(runtime, team, agent, &prepared)?;
             Ok((
                 (),
                 workflow::remember_initial_state(workflow_state, &prepared),
             ))
         },
     )
+}
+
+fn mirror_message_to_store(
+    runtime: &(impl RetainedMailboxRuntime + ?Sized),
+    team: &TeamName,
+    agent: &AgentName,
+    envelope: &MessageEnvelope,
+) -> Result<(), AtmError> {
+    let Some(message_id) = envelope.message_id else {
+        return Ok(());
+    };
+    let message_key = boundary::MessageKey::new(format!("atm:{message_id}"))?;
+    runtime.persist_message_record(boundary::MailStoreMessageRecord {
+        team: team.clone(),
+        agent: agent.clone(),
+        message_key: message_key.clone(),
+        envelope: envelope.clone(),
+        imported_from: None,
+        recorded_at: None,
+    })?;
+    runtime.persist_message_state(boundary::MailMessageState {
+        team: team.clone(),
+        agent: agent.clone(),
+        actor: agent.clone(),
+        message_key,
+        read: envelope.read,
+        pending_ack_at: envelope.pending_ack_at,
+        acknowledged_at: envelope.acknowledged_at,
+        expires_at: envelope.expires_at,
+        deleted_at: None,
+        updated_at: Some(IsoTimestamp::now()),
+    })
 }
 
 fn prepare_threaded_message(

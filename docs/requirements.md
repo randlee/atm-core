@@ -1327,7 +1327,7 @@ Phase R continuation semantics:
 
   Required behavior:
   - ephemeral messages expire by time only, using SQLite-owned `expires_at`
-  - compatibility/export payloads carry ephemeral expiry with `staleAt`
+  - compatibility/export payloads carry ephemeral expiry with `expiresAt`
   - no product behavior may depend on first-read deletion semantics
   - periodic daemon cleanup deletes expired ephemeral rows
   - ephemeral messages are not updatable

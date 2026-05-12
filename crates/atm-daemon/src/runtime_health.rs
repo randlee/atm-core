@@ -3,22 +3,22 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::{
-    RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail,
+    LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
+    ack::ack_mail_with_runtime,
     boundary,
-    clear::clear_mail,
+    clear::clear_mail_with_runtime,
     doctor::{
         self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::AtmError,
-    list::list_mail,
+    list::list_mail_with_runtime,
     process::process_is_alive,
     protocol::{
         RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope,
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
-    read::read_mail,
-    send::send_mail,
+    read::read_mail_with_runtime,
+    send::send_mail_with_runtime,
 };
 use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
@@ -268,30 +268,33 @@ impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 impl boundary::RequestDispatcher for DaemonRequestDispatcher {
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+        let runtime = self.sqlite_runtime()?;
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                let outcome = send_mail(request, self.observability.as_ref())?;
+                let outcome =
+                    send_mail_with_runtime(request, self.observability.as_ref(), &runtime)?;
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail(request, self.observability.as_ref())?,
+                    ack_mail_with_runtime(request, self.observability.as_ref(), &runtime)?,
                 )))
             }
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
-            RequestEnvelope::List(query) => Ok(ResponseEnvelope::List(list_mail(
+            RequestEnvelope::List(query) => Ok(ResponseEnvelope::List(list_mail_with_runtime(
                 query,
                 self.observability.as_ref(),
+                &runtime,
             )?)),
-            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(read_mail(
+            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(
+                read_mail_with_runtime(query, self.observability.as_ref(), &runtime)?,
+            )),
+            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail_with_runtime(
                 query,
                 self.observability.as_ref(),
-            )?)),
-            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail(
-                query,
-                self.observability.as_ref(),
+                &runtime,
             )?)),
             RequestEnvelope::Doctor(query) => {
                 Ok(ResponseEnvelope::Doctor(self.project_doctor_report(query)?))
@@ -301,6 +304,23 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
 }
 
 impl DaemonRequestDispatcher {
+    fn sqlite_runtime(&self) -> Result<LocalServiceRuntime, AtmError> {
+        let boundary = self.sqlite_boundary.as_ref().ok_or_else(|| {
+            self.status_cache.mark_sqlite_unavailable();
+            AtmError::daemon_unavailable(
+                "sqlite-backed daemon request handling is unavailable because the sqlite boundary is not assembled",
+            )
+            .with_recovery(
+                "Restore the host-scoped ATM SQLite durable-state database and restart atm-daemon before retrying the command.",
+            )
+        })?;
+        Ok(LocalServiceRuntime::new(
+            boundary.mail_store_arc(),
+            boundary.task_store_arc(),
+            boundary.roster_store_arc(),
+        ))
+    }
+
     pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
         let roster_store = self
             .sqlite_boundary
@@ -400,7 +420,9 @@ impl DaemonRequestDispatcher {
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
-        let mut report = doctor::run_doctor(query, self.observability.as_ref())?;
+        let runtime = self.sqlite_runtime()?;
+        let mut report =
+            doctor::run_doctor_with_runtime(query, self.observability.as_ref(), &runtime)?;
         let daemon_observability_finding = match self.observability.health() {
             Ok(health) => daemon_observability_finding(&health),
             Err(error) => doctor::health::observability_finding_from_error(&error),

@@ -268,7 +268,7 @@ pub struct MessageEnvelope {
     #[serde(rename = "threadMode", skip_serializing_if = "Option::is_none")]
     pub thread_mode: Option<ThreadMode>,
 
-    #[serde(rename = "staleAt", skip_serializing_if = "Option::is_none")]
+    #[serde(rename = "expiresAt", skip_serializing_if = "Option::is_none")]
     pub expires_at: Option<IsoTimestamp>,
 
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]

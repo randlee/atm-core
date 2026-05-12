@@ -81,7 +81,10 @@ pub use boundary::{
     MailStoreBootstrapResponse, MailStoreHealthSnapshot, MailStoreHealthSnapshotRequest,
     MailStoreHealthSnapshotResponse, MailStoreIngestReplayState,
     MailStoreLoadIngestReplayStateRequest, MailStoreLoadIngestReplayStateResponse,
-    MailStoreLoadMessageRequest, MailStoreLoadMessageResponse, MailStoreMessageRecord,
+    MailStoreLoadMessageRequest, MailStoreLoadMessageResponse, MailStoreMailboxMetadataCounts,
+    MailStoreMailboxMetadataRow, MailStoreMessageRecord,
+    MailStoreQueryMailboxMetadataCountsRequest, MailStoreQueryMailboxMetadataCountsResponse,
+    MailStoreQueryMailboxMetadataRequest, MailStoreQueryMailboxMetadataResponse,
     MailStoreRecordIngestReplayStateRequest, MailStoreRecordIngestReplayStateResponse,
     MailStoreRequest, MailStoreResponse, MailStoreTransactionRequest, MailStoreTransactionResponse,
     MailStoreUpsertMessageRequest, MailStoreUpsertMessageResponse, MessageKey, NotificationEvent,
@@ -104,3 +107,6 @@ pub use boundary::{
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
+pub use service_runtime::LocalServiceRuntime;
+#[doc(hidden)]
+pub use service_runtime_store::install_default_runtime_factory;
