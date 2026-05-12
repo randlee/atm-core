@@ -1038,7 +1038,7 @@ impl Fixture {
                 let notices = self.inbox_contents_for_team(team, TEAM_LEAD);
                 panic!("missing-config notice not observed before timeout: {notices:?}");
             }
-            thread::sleep(Duration::from_millis(10));
+            thread::yield_now();
         }
     }
 
@@ -1068,7 +1068,7 @@ impl Fixture {
                     "workflow state for missing-config notice not observed before timeout: {workflow:?}"
                 );
             }
-            thread::sleep(Duration::from_millis(10));
+            thread::yield_now();
         }
     }
 
