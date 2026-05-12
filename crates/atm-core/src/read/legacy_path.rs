@@ -220,15 +220,18 @@ pub(crate) fn selection_state_for_source_files(
         ),
         workflow_state,
     );
-    let logical_current = logical_current_messages(classified_all.clone());
-    let bucket_counts = bucket_counts_for(&logical_current);
     if let Some(message_id) = query.message_id_filter {
         let selected = classified_all
-            .into_iter()
+            .iter()
             .filter(|message| message.envelope.message_id == Some(message_id))
+            .cloned()
             .collect();
+        let logical_current = logical_current_messages(classified_all);
+        let bucket_counts = bucket_counts_for(&logical_current);
         return (bucket_counts, selected);
     }
+    let logical_current = logical_current_messages(classified_all);
+    let bucket_counts = bucket_counts_for(&logical_current);
     let filtered = apply_filters(
         logical_current,
         query.sender_filter.as_ref(),

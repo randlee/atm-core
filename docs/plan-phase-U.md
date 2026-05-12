@@ -42,6 +42,9 @@ Sprint summary:
   - `supersede` exposes only the replacement body
 - `U.4` unified mutable message state (`mail_message_states`)
 - `U.5` SQLite query cutover and query simplification
+  - this sprint cuts over `atm list` and `atm read`
+  - `atm ack` and `atm clear` remain on their existing runtime path until a
+    later dedicated rewrite
 - `U.6` provenance/timing field reduction
 - `U.7` roster simplification and explicit member model
 - `U.8` shared thin-client ICD for CLI and graft

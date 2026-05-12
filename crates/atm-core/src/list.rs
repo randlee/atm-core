@@ -240,7 +240,12 @@ fn apply_list_filters(
 fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
     ListRow {
         message_id: message.envelope.message_id,
-        summary: message.envelope.summary.clone().unwrap_or_default(),
+        summary: message
+            .envelope
+            .summary
+            .as_deref()
+            .unwrap_or_default()
+            .to_string(),
         from: message.envelope.from.clone(),
         timestamp: message.envelope.timestamp,
         read: message.envelope.read,
