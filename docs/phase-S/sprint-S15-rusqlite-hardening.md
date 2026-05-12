@@ -38,7 +38,6 @@ This sprint hardens:
 - ensure one invalid queued write row does not fail unrelated rows in the same batch
 - reject known ATM-owned logical/schema invariant violations before SQL rather than on the hot path
 - preserve `REQ-P-RUNTIME-002` by keeping the daemon singleton as the only writer-process invariant
-- preserve `REQ-P-RUNTIME-003` by keeping the writer lane subordinate to the full multi-guard daemon-singleton enforcement contract
 - drain pending queued writes on writer shutdown before returning
 
 ## Validation

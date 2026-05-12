@@ -2,7 +2,7 @@
 
 ## 1. Goal
 
-Repeat the Phase Q line properly:
+Repeat the abandoned early SQLite/daemon line properly, under enforced boundaries:
 - start from the architecture skeleton
 - lock the boundary contracts in crate-local documents
 - build the lint/parser gates before substantive implementation

@@ -7,7 +7,7 @@
 | Date | 2026-05-07 |
 | Deciders | Rand Lee |
 | Relates to | REQ-P-RUNTIME-002, REQ-CORE-RUNTIME-001, REQ-RUSQLITE-STORE-001, ADR-002 |
-| Supersedes | Per-team SQLite path assumption in earlier Phase Q / Phase R planning prose |
+| Supersedes | Per-team SQLite path assumption in earlier planning prose |
 
 ---
 

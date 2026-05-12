@@ -1,0 +1,9 @@
+%% title: `atm members`
+%% summary: Team roster query path.
+%% commentary: This flow should read deterministic roster state through the team-admin boundary and surface query failures clearly.
+%% sets: cli
+flowchart TD
+    A[atm members request] --> B[Team admin roster query]
+    B --> C1[Read team config or roster store]
+    C1 -->|config or store error| E1[MembersQueryFailed]
+    C1 --> O1[Return deterministic member list]

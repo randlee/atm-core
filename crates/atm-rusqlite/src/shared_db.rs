@@ -1,20 +1,12 @@
-use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 use atm_core::error::AtmError;
 use atm_core::home;
 #[cfg(test)]
 use rusqlite::OpenFlags;
 use rusqlite::{Connection, Error as RusqliteError};
 use std::path::{Path, PathBuf};
-#[cfg(test)]
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 
-/// Keep one permanent writer handle plus at most three concurrent reader handles so the
-/// same-process SQLite budget stays explicit under WAL mode without turning read bursts into an
-/// unbounded connection fan-out.
-const MAX_SQLITE_READER_CONNECTIONS: usize = 3;
-#[cfg(test)]
-static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
+const MAX_SQLITE_CONNECTIONS: usize = 4;
 
 pub(crate) const DB_MIGRATIONS: &str = r#"
 CREATE TABLE IF NOT EXISTS mail_messages (
@@ -73,21 +65,6 @@ CREATE TABLE IF NOT EXISTS daemon_remote_replay_states (
     PRIMARY KEY (team, agent, message_key)
 );
 
-CREATE TABLE IF NOT EXISTS tasks (
-    team TEXT NOT NULL,
-    task_id TEXT NOT NULL,
-    record_json TEXT NOT NULL,
-    PRIMARY KEY (team, task_id)
-);
-
-CREATE TABLE IF NOT EXISTS task_ack_transitions (
-    team TEXT NOT NULL,
-    task_id TEXT NOT NULL,
-    transition_index INTEGER NOT NULL,
-    transition_json TEXT NOT NULL,
-    PRIMARY KEY (team, task_id, transition_index)
-);
-
 CREATE TABLE IF NOT EXISTS rosters (
     team TEXT PRIMARY KEY,
     roster_json TEXT NOT NULL,
@@ -128,24 +105,17 @@ CREATE INDEX IF NOT EXISTS idx_mail_ingest_mailbox
 CREATE INDEX IF NOT EXISTS idx_daemon_remote_replay_mailbox
     ON daemon_remote_replay_states(team, agent);
 
-CREATE INDEX IF NOT EXISTS idx_task_records_lookup
-    ON tasks(team, task_id);
-
 CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
     ON team_roster(team_name);
 "#;
 // `rosters` remains the canonical per-team `TeamConfig` snapshot, while
 // `team_roster` is the per-member durable projection that runtime lookup uses.
 
-pub(crate) type SqliteConnection = Connection;
-
 #[derive(Debug, Clone)]
 pub(crate) enum SharedDbTarget {
     Path(PathBuf),
     #[cfg(test)]
-    InMemory {
-        uri: String,
-    },
+    InMemory,
 }
 
 impl SharedDbTarget {
@@ -153,7 +123,7 @@ impl SharedDbTarget {
         match self {
             Self::Path(path) => path.display().to_string(),
             #[cfg(test)]
-            Self::InMemory { uri } => uri.clone(),
+            Self::InMemory => ":memory:".to_string(),
         }
     }
 }
@@ -161,16 +131,14 @@ impl SharedDbTarget {
 #[derive(Clone)]
 pub(crate) struct SharedDb {
     target: Arc<SharedDbTarget>,
-    writer: Arc<SqliteWriter>,
-    // Reader handles are budgeted across cloned SharedDb adapters, so the
-    // counter must be shared and synchronized independently of any one
-    // connection instance.
     connection_count: Arc<Mutex<usize>>,
+    #[cfg(test)]
+    // In-memory test fixtures must share one retained connection so each
+    // operation sees the same transient schema and rows across store calls.
+    test_connection: Option<Arc<Mutex<Connection>>>,
 }
 
 struct SharedDbConnectionGuard {
-    // Connection release can happen on whichever clone drops the guard, so the
-    // shared counter uses the same synchronized ownership model as SharedDb.
     connection_count: Arc<Mutex<usize>>,
 }
 
@@ -194,17 +162,14 @@ impl SharedDb {
 
     #[cfg(test)]
     pub(crate) fn open_in_memory() -> Result<Self, AtmError> {
-        let target = Arc::new(SharedDbTarget::InMemory {
-            uri: format!(
-                "file:atm-rusqlite-{}?mode=memory&cache=shared",
-                NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
-            ),
-        });
-        let writer = Arc::new(SqliteWriter::start(Arc::clone(&target))?);
+        let mut connection = Connection::open_in_memory()
+            .map_err(|error| sqlite_open_error(&SharedDbTarget::InMemory, error))?;
+        configure_connection(&mut connection, &SharedDbTarget::InMemory)?;
+        ensure_schema(&mut connection, &SharedDbTarget::InMemory)?;
         Ok(Self {
-            target,
-            writer,
+            target: Arc::new(SharedDbTarget::InMemory),
             connection_count: Arc::new(Mutex::new(0)),
+            test_connection: Some(Arc::new(Mutex::new(connection))),
         })
     }
 
@@ -223,25 +188,29 @@ impl SharedDb {
             })?;
         }
 
-        let target = Arc::new(SharedDbTarget::Path(path));
-        let writer = Arc::new(SqliteWriter::start(Arc::clone(&target))?);
-        tracing::debug!(
-            writer_handles = 1,
-            reader_budget = MAX_SQLITE_READER_CONNECTIONS,
-            path = %target.display(),
-            "sqlite boundary assembly opened"
-        );
-        Ok(Self {
-            target,
-            writer,
+        let db = Self {
+            target: Arc::new(SharedDbTarget::Path(path)),
             connection_count: Arc::new(Mutex::new(0)),
-        })
+            #[cfg(test)]
+            test_connection: None,
+        };
+        let mut connection = db.open_connection()?;
+        ensure_schema(&mut connection, db.target.as_ref())?;
+        Ok(db)
     }
 
     pub(crate) fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
+        #[cfg(test)]
+        if let Some(connection) = &self.test_connection {
+            let mut connection = connection.lock().map_err(|_| {
+                AtmError::daemon_unavailable("sqlite test connection lock poisoned")
+            })?;
+            return operation(&mut connection);
+        }
+
         let _connection_guard = self.acquire_connection_guard()?;
         let mut connection = self.open_connection()?;
         operation(&mut connection)
@@ -271,47 +240,6 @@ impl SharedDb {
         })
     }
 
-    pub(crate) fn submit_upsert_message(
-        &self,
-        request: atm_core::boundary::MailStoreUpsertMessageRequest,
-    ) -> Result<atm_core::boundary::MailStoreUpsertMessageResponse, AtmError> {
-        validate_upsert_message_request(&request)?;
-        let record = request.record.clone();
-        let result = self.writer.submit(WriteOp::UpsertMessage(request))?;
-        match result {
-            WriteOpResult::UpsertMessage { inserted } => {
-                Ok(atm_core::boundary::MailStoreUpsertMessageResponse { record, inserted })
-            }
-            other => Err(AtmError::daemon_unavailable(format!(
-                "sqlite writer returned unexpected result for upsert_message: {other:?}"
-            ))
-            .with_recovery(
-                "Inspect the sqlite writer operation routing and retry after correcting the mismatched result contract.",
-            )),
-        }
-    }
-
-    pub(crate) fn submit_upsert_visibility_state(
-        &self,
-        request: atm_core::boundary::MailStoreUpsertVisibilityStateRequest,
-    ) -> Result<atm_core::boundary::MailStoreUpsertVisibilityStateResponse, AtmError> {
-        let state = request.state.clone();
-        let result = self
-            .writer
-            .submit(WriteOp::UpsertVisibilityState(request))?;
-        match result {
-            WriteOpResult::Unit => Ok(atm_core::boundary::MailStoreUpsertVisibilityStateResponse {
-                state,
-            }),
-            other => Err(AtmError::daemon_unavailable(format!(
-                "sqlite writer returned unexpected result for upsert_visibility_state: {other:?}"
-            ))
-            .with_recovery(
-                "Inspect the sqlite writer operation routing and retry after correcting the mismatched result contract.",
-            )),
-        }
-    }
-
     pub(crate) fn error(&self, message: impl Into<String>, source: RusqliteError) -> AtmError {
         sqlite_error(self.target.as_ref(), message, source)
     }
@@ -322,7 +250,7 @@ impl SharedDb {
 
     pub(crate) fn checkpoint_wal(&self) -> Result<(), AtmError> {
         #[cfg(test)]
-        if matches!(self.target.as_ref(), SharedDbTarget::InMemory { .. }) {
+        if matches!(self.target.as_ref(), SharedDbTarget::InMemory) {
             return Ok(());
         }
 
@@ -342,18 +270,10 @@ impl SharedDb {
     fn acquire_connection_guard(&self) -> Result<SharedDbConnectionGuard, AtmError> {
         let mut connection_count = self.connection_count.lock().map_err(|_| {
             AtmError::daemon_unavailable("sqlite connection budget state lock poisoned")
-                .with_recovery(
-                    "Restart the daemon or recreate the sqlite boundary assembly before retrying the shared connection budget path.",
-                )
         })?;
-        if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {
-            tracing::warn!(
-                limit = MAX_SQLITE_READER_CONNECTIONS,
-                current = %connection_count,
-                "sqlite reader connection budget exhausted"
-            );
+        if *connection_count >= MAX_SQLITE_CONNECTIONS {
             return Err(AtmError::daemon_unavailable(format!(
-                "sqlite connection budget exceeded (max {MAX_SQLITE_READER_CONNECTIONS} concurrent reader handles with one permanent writer handle)"
+                "sqlite connection budget exceeded (max {MAX_SQLITE_CONNECTIONS} concurrent handles)"
             ))
             .with_recovery(
                 "Reduce concurrent daemon SQLite work or raise the documented SQLite handle budget before retrying.",
@@ -366,7 +286,18 @@ impl SharedDb {
     }
 
     fn open_connection(&self) -> Result<Connection, AtmError> {
-        open_connection_for_target(self.target.as_ref())
+        let mut connection = match self.target.as_ref() {
+            SharedDbTarget::Path(path) => Connection::open(path)
+                .map_err(|error| sqlite_open_error(self.target.as_ref(), error))?,
+            #[cfg(test)]
+            SharedDbTarget::InMemory => Connection::open_with_flags(
+                "file:atm-rusqlite?mode=memory&cache=shared",
+                OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
+            )
+            .map_err(|error| sqlite_open_error(self.target.as_ref(), error))?,
+        };
+        configure_connection(&mut connection, self.target.as_ref())?;
+        Ok(connection)
     }
 }
 
@@ -389,7 +320,7 @@ pub(crate) fn configure_connection(
         .pragma_update(None, "foreign_keys", "ON")
         .map_err(|error| sqlite_error(target, "failed to enable sqlite foreign keys", error))?;
     #[cfg(test)]
-    let enable_wal = !matches!(target, SharedDbTarget::InMemory { .. });
+    let enable_wal = !matches!(target, SharedDbTarget::InMemory);
     #[cfg(not(test))]
     let enable_wal = true;
     if enable_wal {
@@ -400,22 +331,6 @@ pub(crate) fn configure_connection(
             })?;
     }
     Ok(())
-}
-
-pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Connection, AtmError> {
-    let mut connection = match target {
-        SharedDbTarget::Path(path) => {
-            Connection::open(path).map_err(|error| sqlite_open_error(target, error))?
-        }
-        #[cfg(test)]
-        SharedDbTarget::InMemory { uri } => Connection::open_with_flags(
-            uri,
-            OpenFlags::SQLITE_OPEN_READ_WRITE | OpenFlags::SQLITE_OPEN_CREATE,
-        )
-        .map_err(|error| sqlite_open_error(target, error))?,
-    };
-    configure_connection(&mut connection, target)?;
-    Ok(connection)
 }
 
 pub(crate) fn ensure_schema(
@@ -547,7 +462,7 @@ pub(crate) fn sqlite_error(
             | rusqlite::ffi::ErrorCode::DatabaseLocked => match target {
                 SharedDbTarget::Path(path) => AtmError::mailbox_lock_timeout(path),
                 #[cfg(test)]
-                SharedDbTarget::InMemory { .. } => AtmError::mailbox_lock(format!(
+                SharedDbTarget::InMemory => AtmError::mailbox_lock(format!(
                     "timed out waiting for sqlite database lock on {}",
                     target.display()
                 )),

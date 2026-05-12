@@ -8,8 +8,8 @@ It complements the product architecture in
 [`../architecture.md`](../architecture.md) and owns only embedded Rust
 host-agent integration decisions.
 
-This crate is introduced by the Phase T follow-on line. It is not part of the
-pre-daemon workspace.
+This crate is introduced by the Phase U graft restack line. It is not part of
+the pre-daemon workspace.
 
 ## 2. Architectural Rules
 
@@ -43,11 +43,11 @@ Current Phase T realities that this architecture must target:
 - the daemon/runtime baseline already exists and is no longer speculative
 - same-host client/server IPC is already a real product path, not a future
   architectural placeholder
-- the remaining Phase T work should therefore treat `atm-graft` as a thin
+- the remaining work should therefore treat `atm-graft` as a thin
   embedded client extension rather than a second runtime system
 - the unresolved work is now mostly about:
-  - stabilizing the embeddable public client surface
-  - adding session registration and nudge drain behavior
+  - stabilizing the shared embeddable client surface
+  - adding generic session registration and advisory-notification behavior
   - adding the minimal config and crate packaging around that surface
 
 Architectural consequence:
@@ -60,10 +60,14 @@ Architectural consequence:
 The current runtime uses this split for embedded host-agent integration:
 
 - `atm-core` owns the semantic client protocol contract
-- `atm-daemon` owns request handling, registration/nudge runtime, and daemon
-  queue state
+- `atm-daemon` owns generic request handling plus generic post-commit nudge
+  routing/queue state; it must not own `atm-graft` as a named internal
+  subsystem
 - `atm-graft` owns the concrete same-host daemon client, graft-session
   lifecycle, and host bridge
+
+Shared command and client-message diagrams live in:
+- [`../atm/flow-diagrams.md`](../atm/flow-diagrams.md)
 
 Architectural rules:
 - first-party Rust host agents must not invent a parallel transport or
@@ -80,33 +84,33 @@ The required `atm-core` ownership here is intentionally narrow.
 
 Required follow-on ownership in `atm-core`:
 - typed embeddable client request / response structs for the retained graft
-  operations:
+  operations using the same shared message family as CLI:
   - `send`
   - `read`
   - `ack`
-  - graft registration / unregistration
-  - nudge drain / fetch
-- typed same-host client traits for request execution and session-facing
-  control, with an explicit sealed/open decision:
-  - `AtmGraftClient`
-  - `GraftSessionPort`
+  - generic consumer registration / unregistration
+  - advisory nudge subscription and optional drain / fetch
 - typed daemon-originated event payloads needed by `atm-graft`, at minimum:
   - `NudgeEvent`
   - registration rejection / shutdown notices if surfaced to the client
 - typed config models for `[atm.graft]`
 - protocol/interface documentation updates in
   `docs/atm-daemon/protocol-icd.md` for every graft-facing request, response,
-  and daemon-originated event boundary added by T.6/T.7
+  and daemon-originated event boundary added by `U.8` / `U.10`
+
+Boundary correction note:
+- any graft-specific protocol or runtime naming from the abandoned earlier line
+  is not part of the target architecture
+- follow-up refactor work must keep daemon-owned protocol and runtime naming
+  generic so `atm-graft` is only an external client crate
 
 Rust boundary rules:
 - semantic request / response / event types must not remain raw
   `serde_json::Value` payloads for the published `atm-graft` boundary
 - transport correlation ids and ATM mail ids must remain distinct semantic
   types
-- new public client or session traits must make an explicit sealed/open
-  decision up front; default posture is sealed
-- `AtmGraftClient` and `GraftSessionPort` are the explicit exception here:
-  they remain open because `atm-graft` must implement them in a separate crate
+- do not add a dedicated graft-specific public trait family if the existing
+  shared `ClientTransport` and protocol DTOs are sufficient
 - stream-oriented traits intended for dynamic dispatch must remain object-safe
 
 ## 2.4 Activation And Config Boundary
@@ -136,17 +140,20 @@ The active runtime object is `GraftSession`.
 Responsibilities:
 - connect to the same-host daemon API
 - register the current host-agent identity and process context
-- run one live receive task/thread for daemon-originated nudge events while the
-  session is active
+- run one persistent receive task/thread for daemon-originated nudge events
+  while the session is active and keep the daemon socket connection open
 - expose daemon-originated nudges to the embedding host executable
+- queue received nudges until the embedding host consumes them
+- fire a host wake/event callback when a new nudge arrives so inactive hosts
+  take action promptly
 - drive automatic between-tool-call injection through the host bridge
 - shut down cleanly and unregister when appropriate
 
 Architectural rules:
-- Sprint `T.7` owns only the daemon-side registration / queue / fetch / drain
-  runtime needed by `GraftSession`; the concrete `GraftSession` lifecycle type
-  itself lands in `T.8`
-- the concrete `T.8` surface is:
+- `U.10` owns only the daemon-side generic registration / queue / fetch /
+  drain or advisory-stream runtime needed by `GraftSession`; the concrete
+  `GraftSession` lifecycle type itself lands in `U.9`
+- the concrete `U.9` surface is:
   - `GraftClient` for the thin daemon-backed same-host client
   - `GraftSession` for the concrete lifecycle runtime
   - `HostNudgeInjector` for automatic between-tool-call host insertion
@@ -164,7 +171,8 @@ Architectural rules:
 Queue-ownership rule:
 - bounded pending-nudge state belongs in the daemon
 - `atm-graft` may keep only transient fetched state needed to hand nudges to
-  the embedding host
+  the embedding host, plus the minimal pending client-side queue needed until
+  the host consumes the nudges
 - any daemon-queue overflow/backpressure behavior must emit structured
   observability and must not affect durable ATM mail truth
 
@@ -180,21 +188,41 @@ State-model rule:
 
 Nudges originate from the daemon, not from local shell hooks.
 
+Concrete runtime shape:
+
+```mermaid
+flowchart LR
+    D[atm-daemon] --> TX[Commit mailbox change to SQLite]
+    TX --> SQ[(SQLite SSOT)]
+    TX --> NQ[Post-commit daemon advisory-nudge queue]
+    NQ --> RL[One persistent receive loop per active GraftSession]
+    RL --> CQ[Client-side pending nudge queue]
+    CQ --> EV[Host wake or event callback]
+    CQ --> HI[HostNudgeInjector]
+    HI --> HC[Between-tool-call host context injection]
+```
+
 Architectural rules:
 - the daemon emits one internal post-send runtime event after authoritative
   message commit
 - daemon-owned notifier logic may transform that event into one or more nudge
-  payloads for registered graft sessions
+  payloads for matching registered consumers; `atm-graft` is one such
+  external consumer
 - the host-facing payload is structured and contains at least:
   - `from`
   - `message`
-- Sprint `T.7` adds the daemon-side queue ownership plus typed fetch/drain
-  control; Sprint `T.8` adds the embedded receive loop that consumes that
-  surface automatically
+- `U.10` adds the daemon-side queue ownership plus typed drain/fetch or
+  subscription control; `U.9` adds the embedded receive loop that consumes
+  that surface automatically
 - nudge receipt and injection must be automatic in embedded mode; manual
   polling alone is insufficient for `atm-graft`
 - delivered nudge order must preserve daemon queue order from the perspective
   of the embedding agent loop
+- the open receive connection must remain active even while the host is idle so
+  nudges are observed promptly
+- new nudges must enqueue client-side until host consumption and must trigger a
+  host wake/event signal carrying enough information for the host to force
+  follow-on action
 - nudges are advisory delivery signals, not durable mail truth; authoritative
   message state remains behind daemon-backed `read` calls
 
@@ -211,26 +239,16 @@ Non-production companion rule:
 
 Required public capability groups:
 - graft-session lifecycle
-- same-host daemon client calls for:
-  - `send`
-  - `read`
-  - `ack`
+- same-host daemon client calls for `send`, `read`, and `ack`
 - host-facing automatic nudge injection integration
 
-Current T.6 contract shape:
-- `AtmGraftClient` owns the unary `send` / `read` / `ack` daemon request
-  surface reused by the retained CLI
-- `GraftSessionPort` owns session registration, unregistration, and daemon
-  pending-nudge fetch/drain control
-- the concrete `GraftSession` lifecycle type that drives the embedded receive
-  loop remains an `atm-graft` crate responsibility in `T.8`
-
-Current T.8 crate shape:
-- `GraftClient` implements both `AtmGraftClient` and `GraftSessionPort`
-- `GraftSession` delegates `send` / `read` / `ack` through `GraftClient` while
-  also owning the live receive loop
-- `GraftSession` may expose fetch/drain helpers for debugging and host
-  integration, but production delivery still depends on automatic injection
+Lean contract shape:
+- `GraftClient` reuses the shared `atm-core` transport and protocol DTOs for
+  unary `send` / `read` / `ack`
+- `GraftSession` owns registration, the persistent receive loop, the minimal
+  client-side pending queue, and host wake/injection behavior
+- any optional drain/fetch helpers exist only as thin wrappers over the same
+  shared daemon API surface; they do not become a second public runtime model
 
 Boundary rule:
 - a hook-facing command that prints insertion-ready nudge text is an `atm`
@@ -270,6 +288,8 @@ not true:
   session path
 - embedded mode includes one required receive task/thread and automatic
   between-tool-call nudge injection
+- embedded mode keeps one persistent daemon connection for nudges and signals
+  the host when new nudges arrive while it is idle
 - production graft delivery does not rely on `tmux send-keys` or equivalent
   external terminal automation
 - the public `atm-graft` API remains limited to the documented thin embedded

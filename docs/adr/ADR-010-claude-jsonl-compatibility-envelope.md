@@ -64,7 +64,8 @@ When an ATM-authored message body exceeds the configured JSONL export limit:
 - the Claude JSONL `text` field is replaced with exactly:
   - `atm read --message-id <id>`
 - the message summary remains populated
-- ATM machine metadata remains under `metadata.atm`
+- ATM must not use this projection rule to smuggle new ATM-owned machine state
+  into shared Claude JSON
 
 This projection rule applies only to ATM-authored exports. ATM must not rewrite
 Claude-native inbound messages into stub form.

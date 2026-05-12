@@ -1,0 +1,9 @@
+%% title: `atm teams`
+%% summary: Team-admin mutation and recovery path.
+%% commentary: This flow should stay in the retained team-admin surface and report config or store failures without bypassing the boundary.
+%% sets: cli
+flowchart TD
+    A[atm teams request] --> B[Team admin service]
+    B --> C1[Read or mutate team config and roster store]
+    C1 -->|config or store error| E1[TeamAdminFailed]
+    C1 --> O1[Return team operation outcome]

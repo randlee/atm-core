@@ -242,9 +242,9 @@ Error codes should describe the failure class, not a specific prose message.
       Remount or move the ATM home to a writable filesystem, then retry the ATM command.
       ```
 
-### 5.10 Phase Q Runtime Families
+### 5.10 Runtime Families
 
-The following families are part of the Phase Q runtime line. Store codes are
+The following families are part of the current runtime line. Store codes are
 already materialized in `crates/atm-core/src/error_codes.rs`; the remaining
 families stay documented here as the shared contract for the later runtime
 surface.
