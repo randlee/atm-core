@@ -11,11 +11,13 @@ pub(crate) fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName 
 }
 
 pub(crate) fn is_ephemeral(message: &MessageEnvelope) -> bool {
-    message.stale_at.is_some()
+    message.expires_at.is_some()
 }
 
 pub(crate) fn is_expired_ephemeral(message: &MessageEnvelope, now: IsoTimestamp) -> bool {
-    message.stale_at.is_some_and(|stale_at| stale_at <= now)
+    message
+        .expires_at
+        .is_some_and(|expires_at| expires_at <= now)
 }
 
 pub(crate) struct ThreadIndex<'a> {
@@ -202,7 +204,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id,
             thread_mode,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         }
@@ -334,12 +336,12 @@ mod tests {
     }
 
     #[test]
-    fn ephemeral_helpers_use_stale_at() {
+    fn ephemeral_helpers_use_expires_at() {
         let mut message = message(TEST_SENDER, AtmMessageId::new(), None, None);
-        let stale_at = IsoTimestamp::now();
-        message.stale_at = Some(stale_at);
+        let expires_at = IsoTimestamp::now();
+        message.expires_at = Some(expires_at);
 
         assert!(is_ephemeral(&message));
-        assert!(is_expired_ephemeral(&message, stale_at));
+        assert!(is_expired_ephemeral(&message, expires_at));
     }
 }

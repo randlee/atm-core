@@ -16,9 +16,9 @@ Diagrams:
   [sql_save-message.mmd](./sql_save-message.mmd)
 - load message:
   [sql_load-message.mmd](./sql_load-message.mmd)
-- save visibility state:
+- save message state:
   [sql_save-visibility-state.mmd](./sql_save-visibility-state.mmd)
-- load visibility state:
+- load message state:
   [sql_load-visibility-state.mmd](./sql_load-visibility-state.mmd)
 - query mailbox metadata rows:
   [sql_query-mailbox-metadata-rows.mmd](./sql_query-mailbox-metadata-rows.mmd)

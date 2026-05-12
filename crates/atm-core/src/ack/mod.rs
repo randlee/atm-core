@@ -13,9 +13,12 @@ use crate::mailbox::surface::dedupe_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{AtmMessageId, MessageEnvelope};
-use crate::send::{PostSendHookContext, ResolvedRecipient, input, summary};
+use crate::send::{
+    PostSendHookContext, ResolvedRecipient, append_mailbox_message_and_seed_workflow, input,
+    summary,
+};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::RetainedMailboxRuntime;
+use crate::service_runtime_store::{RetainedMailboxRuntime, legacy_runtime};
 use crate::threading::ThreadIndex;
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
@@ -112,7 +115,7 @@ pub fn ack_mail(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<AckOutcome, AtmError> {
-    let runtime = LocalServiceRuntime::default();
+    let runtime = legacy_runtime();
     ack_mail_with_runtime(request, observability, &runtime)
 }
 
@@ -146,6 +149,17 @@ fn ack_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime
         .any(|member| member.name == actor.as_str())
     {
         return Err(AtmError::agent_not_found(&actor, &team));
+    }
+
+    if !runtime.allows_legacy_mailbox_files() {
+        return ack_mail_with_runtime_sqlite(
+            request,
+            observability,
+            runtime,
+            config.as_ref(),
+            actor,
+            team,
+        );
     }
 
     let source_workflow_path = runtime.workflow_state_path(&request.home_dir, &team, &actor)?;
@@ -221,7 +235,7 @@ fn ack_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime
         acknowledges_message_id: Some(request.message_id),
         parent_message_id: None,
         thread_mode: None,
-        stale_at: None,
+        expires_at: None,
         task_id: None,
         extra: Map::new(),
     };
@@ -335,6 +349,196 @@ fn ack_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime
     runtime.maybe_run_post_send_hook(
         &mut hook_warnings,
         config.as_ref(),
+        PostSendHookContext {
+            sender: &actor,
+            sender_team: Some(&team),
+            recipient: &hook_reply_recipient,
+            recipient_pane_id: None,
+            message_id: reply_message_id,
+            requires_ack: false,
+            is_ack: true,
+            task_id: outcome.task_id.as_ref(),
+        },
+    );
+    outcome.warnings = hook_warnings
+        .into_iter()
+        .map(|warning| warning.render())
+        .collect();
+
+    let _ = observability.emit(CommandEvent {
+        command: "ack",
+        action: "ack",
+        outcome: "ok",
+        team,
+        agent: actor.clone(),
+        sender: actor,
+        message_id: Some(request.message_id),
+        requires_ack: false,
+        dry_run: false,
+        task_id: source_task_id,
+        error_code: None,
+        error_message: None,
+    });
+
+    Ok(outcome)
+}
+
+fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    request: AckRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+    config: Option<&crate::config::AtmConfig>,
+    actor: AgentName,
+    team: TeamName,
+) -> Result<AckOutcome, AtmError> {
+    let metadata_rows =
+        runtime.query_mailbox_metadata_rows(&request.home_dir, &team, &actor, None)?;
+    let source_row = metadata_rows
+        .iter()
+        .find(|row| row.message_id == Some(request.message_id))
+        .ok_or_else(|| {
+            AtmError::validation(format!(
+                "message {} was not found in {}@{}",
+                request.message_id, actor, team
+            ))
+            .with_recovery(
+                "Refresh the mailbox with `atm read` and choose a message that is still present in the pending-ack surface.",
+            )
+        })?;
+
+    if metadata_rows
+        .iter()
+        .any(|row| row.parent_message_id == Some(request.message_id))
+    {
+        return Err(AtmError::validation(format!(
+            "message {} has been updated; acknowledge the current terminal message instead",
+            request.message_id
+        ))
+        .with_recovery(
+            "Refresh the mailbox with `atm read` and acknowledge the latest message in the thread instead of an older parent message.",
+        ));
+    }
+
+    let source_record = runtime
+        .load_message_record(&request.home_dir, &team, &actor, &source_row.message_key)?
+        .ok_or_else(|| {
+            AtmError::validation(format!(
+                "message {} metadata could not be reloaded from sqlite",
+                request.message_id
+            ))
+            .with_recovery(
+                "Repair or remove the malformed sqlite mailbox row before retrying `atm ack`.",
+            )
+        })?;
+
+    match (
+        state::derive_read_state(&source_record.envelope),
+        state::derive_ack_state(&source_record.envelope),
+    ) {
+        (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
+        (_, crate::types::AckState::Acknowledged) => {
+            return Err(AtmError::validation(format!(
+                "message {} is already acknowledged",
+                request.message_id
+            ))
+            .with_recovery(
+                "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
+            ));
+        }
+        _ => {
+            return Err(AtmError::validation(format!(
+                "message {} is not in the (read, pending_ack) state",
+                request.message_id
+            ))
+            .with_recovery(
+                "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
+            ));
+        }
+    }
+
+    let (reply_agent, reply_team) = resolve_reply_target(&source_record.envelope, &team)?;
+    let reply_team_dir = runtime.team_dir(&request.home_dir, &reply_team)?;
+    if !reply_team_dir.exists() {
+        return Err(AtmError::team_not_found(&reply_team));
+    }
+
+    let reply_team_config = runtime.load_team_config(&reply_team_dir)?;
+    if !reply_team_config
+        .members
+        .iter()
+        .any(|member| member.name == reply_agent.as_str())
+    {
+        return Err(AtmError::agent_not_found(&reply_agent, &reply_team));
+    }
+
+    let ack_timestamp = IsoTimestamp::now();
+    let reply_text = input::validate_message_text(request.reply_body)?;
+    let reply_message_id = AtmMessageId::new();
+    let source_task_id = source_record.envelope.task_id.clone();
+    let reply_message = MessageEnvelope {
+        from: actor.clone(),
+        text: reply_text.clone(),
+        timestamp: ack_timestamp,
+        read: false,
+        source_team: Some(team.clone()),
+        summary: Some(summary::build_summary(&reply_text, None)),
+        message_id: Some(reply_message_id),
+        pending_ack_at: None,
+        acknowledged_at: None,
+        acknowledges_message_id: Some(request.message_id),
+        parent_message_id: None,
+        thread_mode: None,
+        expires_at: None,
+        task_id: None,
+        extra: Map::new(),
+    };
+
+    runtime.persist_message_state(boundary::MailMessageState {
+        team: team.clone(),
+        agent: actor.clone(),
+        actor: actor.clone(),
+        message_key: source_row.message_key.clone(),
+        read: true,
+        pending_ack_at: None,
+        acknowledged_at: Some(ack_timestamp),
+        expires_at: source_record.envelope.expires_at,
+        deleted_at: None,
+        updated_at: Some(ack_timestamp),
+    })?;
+
+    let reply_inbox_path = runtime.inbox_path(&request.home_dir, &reply_team, &reply_agent)?;
+    append_mailbox_message_and_seed_workflow(
+        runtime,
+        &request.home_dir,
+        &reply_team,
+        &reply_agent,
+        &reply_inbox_path,
+        &reply_message,
+        false,
+    )?;
+
+    let hook_reply_agent = reply_agent.clone();
+    let hook_reply_team = reply_team.clone();
+    let mut outcome = AckOutcome {
+        action: CommandAction::Ack,
+        team: team.clone(),
+        agent: actor.clone(),
+        message_id: request.message_id,
+        task_id: source_task_id.clone(),
+        reply_target: ReplyTarget::new(reply_agent, reply_team),
+        reply_message_id,
+        reply_text: reply_text.clone(),
+        warnings: Vec::new(),
+    };
+
+    let hook_reply_recipient = ResolvedRecipient {
+        agent: hook_reply_agent,
+        team: hook_reply_team,
+    };
+    let mut hook_warnings = Vec::new();
+    runtime.maybe_run_post_send_hook(
+        &mut hook_warnings,
+        config,
         PostSendHookContext {
             sender: &actor,
             sender_team: Some(&team),
@@ -518,7 +722,7 @@ fn mirror_acknowledged_source_to_store(
     let Some(message_id) = source_message.envelope.message_id else {
         return Ok(());
     };
-    runtime.persist_visibility_state(boundary::MailStoreVisibilityState {
+    runtime.persist_message_state(boundary::MailMessageState {
         team: team.clone(),
         agent: agent.clone(),
         actor: agent.clone(),
@@ -526,7 +730,7 @@ fn mirror_acknowledged_source_to_store(
         read: true,
         pending_ack_at: None,
         acknowledged_at: Some(acknowledged_at),
-        expires_at: source_message.envelope.stale_at,
+        expires_at: source_message.envelope.expires_at,
         deleted_at: None,
         updated_at: Some(acknowledged_at),
     })
@@ -550,7 +754,7 @@ fn mirror_reply_to_store(
         imported_from: None,
         recorded_at: None,
     })?;
-    runtime.persist_visibility_state(boundary::MailStoreVisibilityState {
+    runtime.persist_message_state(boundary::MailMessageState {
         team: team.clone(),
         agent: agent.clone(),
         actor: agent.clone(),
@@ -558,7 +762,7 @@ fn mirror_reply_to_store(
         read: reply_message.read,
         pending_ack_at: reply_message.pending_ack_at,
         acknowledged_at: reply_message.acknowledged_at,
-        expires_at: reply_message.stale_at,
+        expires_at: reply_message.expires_at,
         deleted_at: None,
         updated_at: Some(reply_message.timestamp),
     })
@@ -623,7 +827,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: serde_json::Map::new(),
         }
@@ -647,7 +851,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id,
             thread_mode,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: serde_json::Map::new(),
         }

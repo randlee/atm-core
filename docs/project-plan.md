@@ -2788,7 +2788,7 @@ Scope:
   - ack state
   - expiration
   - delete/hide state
-- rename `stale_at` to `expires_at`
+- rename `expires_at` to `expires_at`
 
 Acceptance:
 - ATM no longer splits mutable per-message state across visibility JSON and a

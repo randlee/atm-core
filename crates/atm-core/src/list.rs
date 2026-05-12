@@ -13,7 +13,7 @@ use crate::read::{
 };
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::RetainedMailboxRuntime;
+use crate::service_runtime_store::{RetainedMailboxRuntime, legacy_runtime};
 use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, ReadSelection, TaskId, TeamName};
 
@@ -119,7 +119,7 @@ pub fn list_mail(
     query: ListQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ListOutcome, AtmError> {
-    let runtime = LocalServiceRuntime::default();
+    let runtime = legacy_runtime();
     list_mail_with_runtime(query, observability, &runtime)
 }
 
@@ -173,6 +173,18 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
 
     let metadata_rows =
         runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
+    if !runtime.allows_legacy_mailbox_files()
+        && metadata_rows
+            .iter()
+            .any(|row| row.message_key.as_ref().starts_with("legacy:"))
+    {
+        return Err(AtmError::validation(
+            "sqlite mailbox metadata returned legacy-prefixed message keys in non-legacy runtime mode",
+        )
+        .with_recovery(
+            "Repair or remove the malformed mailbox rows before retrying `atm list`; production runtimes must not downgrade back to file-backed mailbox metadata reads.",
+        ));
+    }
     let classified_all = classify_mailbox_metadata_rows(&metadata_rows);
     let logical_current = logical_current_messages(classified_all);
     let bucket_counts = bucket_counts_for(&logical_current);
@@ -224,11 +236,11 @@ fn classify_mailbox_metadata_rows(
                 summary: row.summary.clone(),
                 message_id: row.message_id,
                 pending_ack_at: row.pending_ack.then_some(row.message_at),
-                acknowledged_at: None,
+                acknowledged_at: row.acknowledged_at,
                 acknowledges_message_id: None,
                 parent_message_id: row.parent_message_id,
                 thread_mode: row.thread_mode,
-                stale_at: None,
+                expires_at: None,
                 task_id: row.task_id.clone(),
                 extra: serde_json::Map::new(),
             },
@@ -422,7 +434,7 @@ mod tests {
                 acknowledges_message_id: None,
                 parent_message_id,
                 thread_mode,
-                stale_at: None,
+                expires_at: None,
                 task_id: None::<TaskId>,
                 extra: Map::new(),
             },

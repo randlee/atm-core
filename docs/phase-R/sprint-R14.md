@@ -85,7 +85,7 @@ This sprint finalizes the storage and workflow contract that later runtime sprin
    Development work:
    - keep `atm ack` as one visible reply with `requires_ack = false`
    - implement chain-level ack clearing/reopening semantics
-   - make ephemeral retention time-based only with `stale_at`, no read-triggered deletion
+   - make ephemeral retention time-based only with `expires_at`, no read-triggered deletion
    - hide read ephemeral messages from normal views while preserving `--view-all` until expiry
    Required tests:
    - ack-on-ack prevention test
@@ -116,7 +116,7 @@ Prefer one sprint because the host-scoped DB root, message-thread rules, and ack
 - the daemon remains the only ATM-owned writer to that database; direct read-only consumers are documented and no hidden ATM write fallback bypass exists
 - successor chains are strictly linear and only the original sender may append them
 - one ack clears the chain through the current terminal node; a later successor on an ack-required thread makes the chain pending again
-- ephemeral retention depends only on `stale_at` plus periodic cleanup, never on first-read deletion
+- ephemeral retention depends only on `expires_at` plus periodic cleanup, never on first-read deletion
 - `sqlite_error(...)` no longer collapses all failures into `ATM_MESSAGE_VALIDATION_FAILED`
 
 ## Required Validation

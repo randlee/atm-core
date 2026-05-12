@@ -1237,7 +1237,7 @@ fn pending_ack_message_at(
         acknowledges_message_id: None,
         parent_message_id: None,
         thread_mode: None,
-        stale_at: None,
+        expires_at: None,
         task_id: None,
         extra: serde_json::Map::new(),
     }
@@ -1266,7 +1266,7 @@ fn read_message_at(
         acknowledges_message_id: None,
         parent_message_id: None,
         thread_mode: None,
-        stale_at: None,
+        expires_at: None,
         task_id: None,
         extra: serde_json::Map::new(),
     }
@@ -1286,7 +1286,7 @@ fn unread_message(from: &str, text: &str, message_id: AtmMessageId) -> MessageEn
         acknowledges_message_id: None,
         parent_message_id: None,
         thread_mode: None,
-        stale_at: None,
+        expires_at: None,
         task_id: None,
         extra: serde_json::Map::new(),
     }

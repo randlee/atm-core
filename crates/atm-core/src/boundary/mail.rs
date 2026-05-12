@@ -60,7 +60,7 @@ pub struct MailStoreMessageRecord {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreVisibilityState {
+pub struct MailMessageState {
     pub team: TeamName,
     pub agent: AgentName,
     pub actor: AgentName,
@@ -120,6 +120,8 @@ pub struct MailStoreMailboxMetadataRow {
     pub message_at: IsoTimestamp,
     pub read: bool,
     pub pending_ack: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledged_at: Option<IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
 }
@@ -219,22 +221,22 @@ pub struct MailStoreLoadMessageResponse {
 
 /// Stub mail-store upsert-visibility request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreUpsertVisibilityStateRequest {
+pub struct UpsertMailMessageStateRequest {
     pub team: TeamName,
     pub agent: AgentName,
     pub actor: AgentName,
-    pub state: MailStoreVisibilityState,
+    pub state: MailMessageState,
 }
 
 /// Stub mail-store upsert-visibility response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreUpsertVisibilityStateResponse {
-    pub state: MailStoreVisibilityState,
+pub struct UpsertMailMessageStateResponse {
+    pub state: MailMessageState,
 }
 
 /// Stub mail-store load-visibility request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreLoadVisibilityStateRequest {
+pub struct LoadMailMessageStateRequest {
     pub team: TeamName,
     pub agent: AgentName,
     pub actor: AgentName,
@@ -243,9 +245,9 @@ pub struct MailStoreLoadVisibilityStateRequest {
 
 /// Stub mail-store load-visibility response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreLoadVisibilityStateResponse {
+pub struct LoadMailMessageStateResponse {
     #[serde(default)]
-    pub state: Option<MailStoreVisibilityState>,
+    pub state: Option<MailMessageState>,
 }
 
 /// Stub mail-store record-ingest-replay request for the Phase R skeleton.
@@ -367,18 +369,18 @@ pub trait MailStore: sealed::Sealed {
     /// # Errors
     ///
     /// Returns `AtmError` when visibility state persistence fails.
-    fn upsert_visibility_state(
+    fn upsert_message_state(
         &self,
-        request: MailStoreUpsertVisibilityStateRequest,
-    ) -> Result<MailStoreUpsertVisibilityStateResponse, AtmError>;
+        request: UpsertMailMessageStateRequest,
+    ) -> Result<UpsertMailMessageStateResponse, AtmError>;
 
     /// # Errors
     ///
     /// Returns `AtmError` when visibility state cannot be loaded.
-    fn load_visibility_state(
+    fn load_message_state(
         &self,
-        request: MailStoreLoadVisibilityStateRequest,
-    ) -> Result<MailStoreLoadVisibilityStateResponse, AtmError>;
+        request: LoadMailMessageStateRequest,
+    ) -> Result<LoadMailMessageStateResponse, AtmError>;
 
     /// # Errors
     ///
