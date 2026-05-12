@@ -1335,6 +1335,26 @@ Phase R continuation semantics:
   - once read, an ephemeral message becomes hidden from normal reads but
     remains visible through `--view-all` until `expires_at`
 
+- `REQ-CORE-MAILBOX-UNIFIED` Mutable mailbox/runtime state must be owned by one
+  canonical SQLite table, `mail_message_states`.
+
+  Required behavior:
+  - `mail_messages` remains the immutable message-content table
+  - `mail_message_states` is the only canonical owner for mutable mailbox
+    state:
+    - `read`
+    - `pending_ack_at`
+    - `acknowledged_at`
+    - `expires_at`
+    - `deleted_at`
+    - `updated_at`
+  - the retired split-state model (`mail_visibility_states` plus `ack_state`)
+    must not be reintroduced under old or new names
+  - normal mailbox queries must hide rows with `deleted_at`
+  - deleted rows may surface only through explicit admin/diagnostic paths
+  - time-bounded ephemeral retention uses `expires_at` from
+    `mail_message_states`, not a field on `mail_messages`
+
 ### 8.5 Output Contract
 
 JSON output must include:

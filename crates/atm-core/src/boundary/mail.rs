@@ -167,7 +167,7 @@ pub struct MailStoreLoadMessageResponse {
     pub record: Option<MailStoreMessageRecord>,
 }
 
-/// Stub mail-store upsert-visibility request for the Phase R skeleton.
+/// Stub mail-store upsert-message-state request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UpsertMailMessageStateRequest {
     pub team: TeamName,
@@ -176,13 +176,13 @@ pub struct UpsertMailMessageStateRequest {
     pub state: MailMessageState,
 }
 
-/// Stub mail-store upsert-visibility response for the Phase R skeleton.
+/// Stub mail-store upsert-message-state response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UpsertMailMessageStateResponse {
     pub state: MailMessageState,
 }
 
-/// Stub mail-store load-visibility request for the Phase R skeleton.
+/// Stub mail-store load-message-state request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LoadMailMessageStateRequest {
     pub team: TeamName,
@@ -191,7 +191,7 @@ pub struct LoadMailMessageStateRequest {
     pub message_key: MessageKey,
 }
 
-/// Stub mail-store load-visibility response for the Phase R skeleton.
+/// Stub mail-store load-message-state response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct LoadMailMessageStateResponse {
     #[serde(default)]
@@ -300,7 +300,7 @@ pub trait MailStore: sealed::Sealed {
 
     /// # Errors
     ///
-    /// Returns `AtmError` when visibility state persistence fails.
+    /// Returns `AtmError` when message-state persistence fails.
     fn upsert_message_state(
         &self,
         request: UpsertMailMessageStateRequest,
@@ -308,7 +308,7 @@ pub trait MailStore: sealed::Sealed {
 
     /// # Errors
     ///
-    /// Returns `AtmError` when visibility state cannot be loaded.
+    /// Returns `AtmError` when message state cannot be loaded.
     fn load_message_state(
         &self,
         request: LoadMailMessageStateRequest,
