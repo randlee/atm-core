@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp};
 
 pub(crate) fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
@@ -86,6 +86,37 @@ impl<'a> ThreadIndex<'a> {
 
     pub(crate) fn is_terminal(&self, message_id: AtmMessageId) -> bool {
         self.terminal_id(message_id) == Some(message_id)
+    }
+
+    pub(crate) fn logical_current_envelope(
+        &self,
+        message_id: AtmMessageId,
+    ) -> Option<MessageEnvelope> {
+        let terminal_id = self.terminal_id(message_id)?;
+        let terminal = self.message(terminal_id)?.clone();
+        if terminal.thread_mode != Some(ThreadMode::AddDetails) {
+            return Some(terminal);
+        }
+
+        let chain = self.chain_messages(terminal_id);
+        let start_index = chain
+            .iter()
+            .rposition(|message| message.thread_mode == Some(ThreadMode::Supersede))
+            .unwrap_or(0);
+        let composed_text = chain[start_index..]
+            .iter()
+            .filter_map(|message| {
+                let trimmed = message.text.trim();
+                (!trimmed.is_empty()).then_some(trimmed)
+            })
+            .collect::<Vec<_>>()
+            .join("\n\n");
+
+        let mut logical = terminal;
+        if !composed_text.is_empty() {
+            logical.text = composed_text;
+        }
+        Some(logical)
     }
 
     pub(crate) fn thread_requires_ack(&self, message_id: AtmMessageId) -> bool {
@@ -187,6 +218,74 @@ mod tests {
         assert_eq!(index.root_id(terminal_id), Some(root_id));
         assert_eq!(index.terminal_id(root_id), Some(terminal_id));
         assert!(index.thread_requires_ack(terminal_id));
+    }
+
+    #[test]
+    fn logical_current_envelope_appends_add_details_context() {
+        let root_id = AtmMessageId::new();
+        let detail_id = AtmMessageId::new();
+        let messages = vec![
+            MessageEnvelope {
+                text: "root context".to_string(),
+                ..message(TEST_SENDER, root_id, None, None)
+            },
+            MessageEnvelope {
+                text: "follow-up detail".to_string(),
+                ..message(
+                    TEST_SENDER,
+                    detail_id,
+                    Some(root_id),
+                    Some(ThreadMode::AddDetails),
+                )
+            },
+        ];
+        let index = ThreadIndex::new(&messages);
+
+        let logical = index
+            .logical_current_envelope(root_id)
+            .expect("logical current envelope");
+
+        assert_eq!(logical.message_id, Some(detail_id));
+        assert_eq!(logical.text, "root context\n\nfollow-up detail");
+    }
+
+    #[test]
+    fn logical_current_envelope_resets_context_after_supersede() {
+        let root_id = AtmMessageId::new();
+        let supersede_id = AtmMessageId::new();
+        let detail_id = AtmMessageId::new();
+        let messages = vec![
+            MessageEnvelope {
+                text: "root context".to_string(),
+                ..message(TEST_SENDER, root_id, None, None)
+            },
+            MessageEnvelope {
+                text: "replacement instruction".to_string(),
+                ..message(
+                    TEST_SENDER,
+                    supersede_id,
+                    Some(root_id),
+                    Some(ThreadMode::Supersede),
+                )
+            },
+            MessageEnvelope {
+                text: "follow-up detail".to_string(),
+                ..message(
+                    TEST_SENDER,
+                    detail_id,
+                    Some(supersede_id),
+                    Some(ThreadMode::AddDetails),
+                )
+            },
+        ];
+        let index = ThreadIndex::new(&messages);
+
+        let logical = index
+            .logical_current_envelope(root_id)
+            .expect("logical current envelope");
+
+        assert_eq!(logical.message_id, Some(detail_id));
+        assert_eq!(logical.text, "replacement instruction\n\nfollow-up detail");
     }
 
     #[test]

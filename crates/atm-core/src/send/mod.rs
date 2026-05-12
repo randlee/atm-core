@@ -779,6 +779,24 @@ mod tests {
     }
 
     #[test]
+    fn prepare_threaded_message_reopens_ack_for_ack_required_supersede_thread() {
+        let root_id = AtmMessageId::new();
+        let mut root = message(TEST_SENDER, root_id, None, None);
+        root.acknowledged_at = Some(IsoTimestamp::now());
+        let mut update = message(
+            TEST_SENDER,
+            AtmMessageId::new(),
+            Some(root_id),
+            Some(ThreadMode::Supersede),
+        );
+
+        prepare_threaded_message(&mut update, &[root]).expect("prepare update");
+
+        assert!(update.pending_ack_at.is_some());
+        assert!(update.acknowledged_at.is_none());
+    }
+
+    #[test]
     fn prepare_threaded_message_rejects_non_originating_sender() {
         let root_id = AtmMessageId::new();
         let root = message(TEST_SENDER, root_id, None, None);

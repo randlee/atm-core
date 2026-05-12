@@ -82,10 +82,9 @@ pub(crate) fn observe_summary_source_files(
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
-    contains_filter: Option<&str>,
 ) -> Result<Vec<SummarySourceFile>, AtmError> {
     let source_paths = discover_source_paths(home_dir, team, agent)?;
-    load_summary_source_files(&source_paths, contains_filter)
+    load_summary_source_files(&source_paths)
 }
 
 /// Reload one mailbox source set under the deterministic mailbox lock plan

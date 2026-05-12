@@ -107,6 +107,10 @@ Consequences:
   the caller is creating a successor-thread message.
 - Update/correction threads are modeled as one linear successor chain whose
   terminal node is the effective current instruction.
+- The effective current instruction is mode-aware:
+  - terminal `add-details` keeps the terminal id but composes the still-valid
+    predecessor context into the current body
+  - terminal `supersede` exposes only the replacement body
 - Only the original sender may append chain successors.
 - Ack is evaluated at the chain level rather than per-node toggle churn, with
   the root message establishing whether the thread is ack-required.

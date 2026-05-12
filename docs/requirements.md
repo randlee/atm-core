@@ -1301,6 +1301,11 @@ Phase R continuation semantics:
     valid historical context
   - `supersede` replaces the prior message as the effective current
     instruction
+  - logical-current selection keeps the terminal message id for both modes
+  - terminal `add-details` preserves still-valid predecessor context in the
+    effective current body used for matching and display
+  - terminal `supersede` uses only the replacement body as the effective
+    current instruction
   - if a successor arrives after the predecessor was already read, the
     successor still produces a new nudge so the current effective instruction
     is visible

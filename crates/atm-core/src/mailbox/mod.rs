@@ -125,10 +125,7 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     parse_mailbox_contents(&raw, path)
 }
 
-pub(crate) fn read_message_summaries(
-    path: &Path,
-    contains_filter: Option<&str>,
-) -> Result<Vec<SummaryMessage>, AtmError> {
+pub(crate) fn read_message_summaries(path: &Path) -> Result<Vec<SummaryMessage>, AtmError> {
     if !path.exists() {
         return Ok(Vec::new());
     }
@@ -170,7 +167,7 @@ pub(crate) fn read_message_summaries(
         .with_source(error)
     })?;
 
-    parse_mailbox_summary_contents(&raw, path, contains_filter)
+    parse_mailbox_summary_contents(&raw, path)
 }
 
 fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
@@ -181,15 +178,11 @@ fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>
     }
 }
 
-fn parse_mailbox_summary_contents(
-    raw: &str,
-    path: &Path,
-    contains_filter: Option<&str>,
-) -> Result<Vec<SummaryMessage>, AtmError> {
+fn parse_mailbox_summary_contents(raw: &str, path: &Path) -> Result<Vec<SummaryMessage>, AtmError> {
     match raw.chars().find(|ch| !ch.is_whitespace()) {
         None => Ok(Vec::new()),
-        Some('[') => parse_mailbox_summary_array(raw, path, contains_filter),
-        Some(_) => Ok(parse_mailbox_summary_jsonl(raw, path, contains_filter)),
+        Some('[') => parse_mailbox_summary_array(raw, path),
+        Some(_) => Ok(parse_mailbox_summary_jsonl(raw, path)),
     }
 }
 
@@ -228,11 +221,7 @@ fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, A
         .collect())
 }
 
-fn parse_mailbox_summary_array(
-    raw: &str,
-    path: &Path,
-    contains_filter: Option<&str>,
-) -> Result<Vec<SummaryMessage>, AtmError> {
+fn parse_mailbox_summary_array(raw: &str, path: &Path) -> Result<Vec<SummaryMessage>, AtmError> {
     let records = serde_json::from_str::<Vec<SummaryMailboxRecord<'_>>>(raw).map_err(|error| {
         AtmError::new(
             AtmErrorKind::MailboxRead,
@@ -244,10 +233,7 @@ fn parse_mailbox_summary_array(
         .with_source(error)
     })?;
 
-    Ok(records
-        .into_iter()
-        .map(|record| summarize_mailbox_record(record, contains_filter))
-        .collect())
+    Ok(records.into_iter().map(summarize_mailbox_record).collect())
 }
 
 fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<MessageEnvelope> {
@@ -277,11 +263,7 @@ fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<MessageEnvelope> {
         .collect()
 }
 
-fn parse_mailbox_summary_jsonl(
-    raw: &str,
-    path: &Path,
-    contains_filter: Option<&str>,
-) -> Vec<SummaryMessage> {
+fn parse_mailbox_summary_jsonl(raw: &str, path: &Path) -> Vec<SummaryMessage> {
     raw.lines()
         .enumerate()
         .filter_map(|(index, line)| {
@@ -301,7 +283,7 @@ fn parse_mailbox_summary_jsonl(
                     )
                     .with_source(error)
                 })
-                .map(|record| summarize_mailbox_record(record, contains_filter))
+                .map(summarize_mailbox_record)
             {
                 Ok(message) => Some(message),
                 Err(error) => {
@@ -411,15 +393,8 @@ struct SummaryMailboxRecord<'a> {
     task_id: Option<TaskId>,
 }
 
-fn summarize_mailbox_record(
-    record: SummaryMailboxRecord<'_>,
-    contains_filter: Option<&str>,
-) -> SummaryMessage {
+fn summarize_mailbox_record(record: SummaryMailboxRecord<'_>) -> SummaryMessage {
     let summary_preview = summarize_text(record.summary.as_deref(), record.text.as_ref());
-    let body_contains_match = contains_filter
-        .map(str::trim)
-        .filter(|value| !value.is_empty())
-        .is_some_and(|needle| ascii_case_insensitive_contains(record.text.as_ref(), needle));
     let idle_notification_sender = idle_notification_sender_from_text(record.text.as_ref());
 
     SummaryMessage {
@@ -441,7 +416,6 @@ fn summarize_mailbox_record(
             extra: serde_json::Map::new(),
         },
         summary_preview,
-        body_contains_match,
         idle_notification_sender,
     }
 }
@@ -478,19 +452,6 @@ fn summarize_text(summary: Option<&str>, text: &str) -> String {
         summary.push_str("...");
     }
     summary
-}
-
-fn ascii_case_insensitive_contains(haystack: &str, needle: &str) -> bool {
-    let needle = needle.as_bytes();
-    if needle.is_empty() {
-        return true;
-    }
-    haystack.as_bytes().windows(needle.len()).any(|window| {
-        window
-            .iter()
-            .zip(needle.iter())
-            .all(|(left, right)| left.eq_ignore_ascii_case(right))
-    })
 }
 
 fn idle_notification_sender_from_text(text: &str) -> Option<AgentName> {

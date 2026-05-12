@@ -626,4 +626,29 @@ mod tests {
 
         assert!(error.message.contains("current terminal message"));
     }
+
+    #[test]
+    fn reject_non_terminal_ack_requires_latest_thread_message_for_add_details() {
+        let root_id = AtmMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                thread_message(root_id, None, None),
+                thread_message(
+                    AtmMessageId::new(),
+                    Some(root_id),
+                    Some(ThreadMode::AddDetails),
+                ),
+            ],
+        }];
+
+        let error = reject_non_terminal_ack(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            root_id,
+        )
+        .expect_err("stale parent ack");
+
+        assert!(error.message.contains("current terminal message"));
+    }
 }

@@ -974,6 +974,10 @@ Phase R continuation rules:
 - message update chains are linear and terminal-node driven:
   - `add-details` appends context
   - `supersede` replaces the prior message as the effective current one
+- the logical-current projection is mode-aware:
+  - terminal `add-details` keeps the terminal id but composes the still-valid
+    predecessor context into the current body
+  - terminal `supersede` keeps only the replacement body
 - only the original sender may append successors to the chain
 - one acknowledgement clears the chain through the current terminal node
 - the root message establishes whether the chain is ack-required and

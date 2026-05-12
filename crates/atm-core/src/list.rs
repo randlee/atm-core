@@ -129,7 +129,6 @@ pub fn list_mail(
 #[derive(Debug, Clone)]
 struct SummaryProjection {
     summary_preview: String,
-    body_contains_match: bool,
     idle_notification_sender: Option<AgentName>,
 }
 
@@ -183,12 +182,8 @@ fn list_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
     let workflow_state =
         runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
-    let source_files = runtime.observe_summary_source_files(
-        &query.home_dir,
-        &target.team,
-        &target.agent,
-        query.contains_filter.as_deref(),
-    )?;
+    let source_files =
+        runtime.observe_summary_source_files(&query.home_dir, &target.team, &target.agent)?;
     let projection_index = projection_index(&source_files);
     let classified_all = classify_summary_source_files(&source_files, &workflow_state);
     let logical_current = logical_current_messages(classified_all);
@@ -238,7 +233,6 @@ fn projection_index(
                         (source.path.clone(), index),
                         SummaryProjection {
                             summary_preview: message.summary_preview,
-                            body_contains_match: message.body_contains_match,
                             idle_notification_sender: message.idle_notification_sender,
                         },
                     )
@@ -293,7 +287,6 @@ fn merged_summary_surface(source_files: &[SummarySourceFile]) -> Vec<SummarySour
                 .map(|(source_index, message)| SummarySourcedMessage {
                     projection: SummaryProjection {
                         summary_preview: message.summary_preview,
-                        body_contains_match: message.body_contains_match,
                         idle_notification_sender: message.idle_notification_sender,
                     },
                     envelope: message.envelope,
@@ -346,12 +339,20 @@ fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedM
                 .message_id
                 .is_none_or(|message_id| thread_index.is_terminal(message_id))
         })
+        .map(|mut message| {
+            if let Some(message_id) = message.envelope.message_id
+                && let Some(logical) = thread_index.logical_current_envelope(message_id)
+            {
+                message.envelope = logical;
+            }
+            message
+        })
         .collect()
 }
 
 fn apply_list_filters(
     messages: Vec<ClassifiedMessage>,
-    projection_index: &HashMap<(PathBuf, usize), SummaryProjection>,
+    _projection_index: &HashMap<(PathBuf, usize), SummaryProjection>,
     sender_filter: Option<&AgentName>,
     timestamp_filter: Option<IsoTimestamp>,
     task_filter: Option<&TaskId>,
@@ -365,28 +366,7 @@ fn apply_list_filters(
         task_filter,
     );
 
-    match contains_filter {
-        Some(needle) => filtered
-            .into_iter()
-            .filter(|message| contains_projection_match(message, projection_index, needle))
-            .collect(),
-        None => filtered,
-    }
-}
-
-fn contains_projection_match(
-    message: &ClassifiedMessage,
-    projection_index: &HashMap<(PathBuf, usize), SummaryProjection>,
-    needle: &str,
-) -> bool {
-    let Some(projection) =
-        projection_index.get(&(message.source_path.clone(), message.source_index.get()))
-    else {
-        return false;
-    };
-
-    projection.body_contains_match
-        || ascii_case_insensitive_contains(&projection.summary_preview, needle)
+    filters::apply_contains_filter(filtered, contains_filter)
 }
 
 fn select_messages(
@@ -481,15 +461,94 @@ fn list_row_from_message(
     }
 }
 
-fn ascii_case_insensitive_contains(haystack: &str, needle: &str) -> bool {
-    let needle = needle.as_bytes();
-    if needle.is_empty() {
-        return true;
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use serde_json::Map;
+
+    use super::{SummaryProjection, apply_list_filters, logical_current_messages};
+    use crate::read::ClassifiedMessage;
+    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::types::{AgentName, DisplayBucket, IsoTimestamp, MessageClass, TaskId, TeamName};
+
+    fn classified_message(
+        text: &str,
+        message_id: AtmMessageId,
+        parent_message_id: Option<AtmMessageId>,
+        thread_mode: Option<ThreadMode>,
+        source_index: usize,
+    ) -> ClassifiedMessage {
+        ClassifiedMessage {
+            source_index: source_index.into(),
+            source_path: PathBuf::from("recipient.json"),
+            bucket: DisplayBucket::Unread,
+            class: MessageClass::Unread,
+            envelope: MessageEnvelope {
+                from: TEST_SENDER.parse::<AgentName>().expect("agent"),
+                text: text.to_string(),
+                timestamp: IsoTimestamp::now(),
+                read: false,
+                source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+                summary: None,
+                message_id: Some(message_id),
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id,
+                thread_mode,
+                stale_at: None,
+                task_id: None::<TaskId>,
+                extra: Map::new(),
+            },
+        }
     }
-    haystack.as_bytes().windows(needle.len()).any(|window| {
-        window
-            .iter()
-            .zip(needle.iter())
-            .all(|(left, right)| left.eq_ignore_ascii_case(right))
-    })
+
+    #[test]
+    fn logical_current_messages_preserves_parent_context_for_add_details() {
+        let root_id = AtmMessageId::new();
+        let detail_id = AtmMessageId::new();
+        let current = logical_current_messages(vec![
+            classified_message("root context", root_id, None, None, 0),
+            classified_message(
+                "follow-up detail",
+                detail_id,
+                Some(root_id),
+                Some(ThreadMode::AddDetails),
+                1,
+            ),
+        ]);
+
+        assert_eq!(current.len(), 1);
+        assert_eq!(current[0].envelope.message_id, Some(detail_id));
+        assert_eq!(current[0].envelope.text, "root context\n\nfollow-up detail");
+    }
+
+    #[test]
+    fn list_contains_filter_drops_superseded_parent_context() {
+        let root_id = AtmMessageId::new();
+        let supersede_id = AtmMessageId::new();
+        let current = logical_current_messages(vec![
+            classified_message("root context", root_id, None, None, 0),
+            classified_message(
+                "replacement instruction",
+                supersede_id,
+                Some(root_id),
+                Some(ThreadMode::Supersede),
+                1,
+            ),
+        ]);
+
+        let filtered = apply_list_filters(
+            current,
+            &std::collections::HashMap::<(PathBuf, usize), SummaryProjection>::new(),
+            None,
+            None,
+            None,
+            Some("root context"),
+        );
+
+        assert!(filtered.is_empty());
+    }
 }

@@ -2761,6 +2761,10 @@ Scope:
   validation, selection, ack, and nudge behavior
 - remove any shortcut where generic successor-chain collapse hides missing
   per-mode semantics
+- terminal `add-details` must preserve predecessor context in the effective
+  current body used for matching and display
+- terminal `supersede` must expose only the replacement body as the effective
+  current instruction
 
 Acceptance:
 - mode-specific tests exist for both `add-details` and `supersede`

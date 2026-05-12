@@ -53,7 +53,6 @@ pub(crate) trait RetainedMailboxRuntime {
         home_dir: &Path,
         team: &TeamName,
         agent: &AgentName,
-        contains_filter: Option<&str>,
     ) -> Result<Vec<SummarySourceFile>, AtmError>;
     fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError>;
     fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError>;
@@ -88,9 +87,8 @@ pub(crate) fn observe_summary_source_files(
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
-    contains_filter: Option<&str>,
 ) -> Result<Vec<SummarySourceFile>, AtmError> {
-    mailbox::store::observe_summary_source_files(home_dir, team, agent, contains_filter)
+    mailbox::store::observe_summary_source_files(home_dir, team, agent)
 }
 
 pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
@@ -145,10 +143,9 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         home_dir: &Path,
         team: &TeamName,
         agent: &AgentName,
-        contains_filter: Option<&str>,
     ) -> Result<Vec<SummarySourceFile>, AtmError> {
         let _ = self.mail_store.as_ref();
-        observe_summary_source_files(home_dir, team, agent, contains_filter)
+        observe_summary_source_files(home_dir, team, agent)
     }
 
     fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError> {
