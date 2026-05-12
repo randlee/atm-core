@@ -229,6 +229,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)
+- [`../plan-phase-U.md`](../plan-phase-U.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`../team-member-state.md`](../team-member-state.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)

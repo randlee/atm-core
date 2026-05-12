@@ -37,7 +37,7 @@ Lean-design rule:
 
 ## Governing ADRs
 
-- `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
+- `ADR-005` — host-scoped SQLite state root (`docs/adr/ADR-005-host-scoped-sqlite-state-root.md`)
 - `ADR-ATM-CORE-001` (in `docs/atm-core/architecture.md`) — thin-client boundary model
 - `ADR-ATM-CORE-002` (in `docs/atm-core/architecture.md`) — shared transport/protocol contract
 
