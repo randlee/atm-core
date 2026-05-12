@@ -52,12 +52,12 @@ U.7 does not depend on U.2 (one-message-identity). Roster member identity
 (`agent_name`, `team_name`) is independent of mailbox message identity
 (`AtmMessageId`). Roster cleanup can proceed without waiting for U.2.
 
-`recipient_pane_id` and `pid` fields (present in `atm-core/architecture.md`
-roster-member schema) are in scope for U.7. They are runtime-only harness
-fields — `recipient_pane_id` belongs in the `harness` behavioral enum context
-and `pid` is an ephemeral member lifecycle field. U.7 must either fold them
-into the canonical member model or explicitly document them as out-of-scope
-with a concrete rationale.
+`recipient_pane_id` remains in scope for U.7 only as a runtime/routing
+candidate. It is retained only if justified by the U.7 roster review.
+
+`pid` is not part of the canonical roster-member model. It is transient
+daemon-owned runtime state and must stay outside the U.7 canonical member row
+and outside SQLite roster truth.
 
 ## Non-Goals
 
@@ -84,6 +84,7 @@ Required shape for every sub-task:
      - `agent_type`
      - `model`
      - `metadata_json`
+     - optional `recipient_pane_id` only if justified by the U.7 review
    Required tests:
    - schema and roster-store tests for the approved member model
    Required doc or boundary updates:
@@ -139,6 +140,9 @@ and `config.json` sync rules together.
 - `harness` is a first-class behavioral enum with the approved initial set
 - `agent_type` and `model` remain plain strings
 - `metadata_json` is the only generic extension bucket
+- `recipient_pane_id` receives an explicit U.7 decision: either it is included
+  in the canonical member model with justification recorded in
+  `docs/phase-U/removal-inventory.md`, or it is excluded with rationale
 - Claude Code `config.json` roster changes are ingested through the private
   watcher/import boundary rather than treated as general runtime truth
 
@@ -159,6 +163,7 @@ and `config.json` sync rules together.
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/boundaries.md`
+- `docs/atm-rusqlite/architecture.md` (update roster schema ownership/shape)
 - `docs/atm-rusqlite/requirements.md` (update clauses for roster table changes)
 
 ## Risks And Watchouts

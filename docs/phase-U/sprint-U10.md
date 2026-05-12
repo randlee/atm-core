@@ -66,6 +66,12 @@ Lean-design rule:
    Development work:
    - describe the daemon-owned post-commit advisory event flow
    - keep hook execution and advisory delivery behind generic boundaries
+   - own the generic replacement of the remaining graft-named advisory/session
+     daemon surfaces:
+     - `GraftSessionPort`
+     - `NudgeEvent`
+     - `GraftNudgeFetchRequest`
+     - `GraftNudgeDrainRequest`
    - keep the daemon contract production-simple: registration, notification
      delivery, bounded pending state, one live advisory stream per active
      session, and typed backpressure only
@@ -108,6 +114,11 @@ Lean-design rule:
   shared ICD used by CLI/thin clients
 - the daemon-side shape stays lean: one generic advisory surface rather than a
   stack of client-specific runtime abstractions
+- `docs/atm-core/requirements.md` and `docs/atm-daemon/requirements.md`
+  finalize retirement of graft-named packet-family language in favor of the
+  shared ICD plus generic advisory-surface wording
+- U.10 owns daemon-side generic replacement of `GraftSessionPort`,
+  `NudgeEvent`, `GraftNudgeFetchRequest`, and `GraftNudgeDrainRequest`
 - production embedded delivery is one live advisory stream per active session;
   fetch/drain may remain only as companion debug or CLI surfaces
 - the plugin crate remains isolated from daemon implementation crates by lint
@@ -125,8 +136,10 @@ Lean-design rule:
 
 - `docs/plan-phase-U.md`
 - `docs/project-plan.md`
+- `docs/atm-core/requirements.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/protocol-icd.md`
 - `docs/phase-U/removal-inventory.md`
 

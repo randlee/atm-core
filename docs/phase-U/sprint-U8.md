@@ -38,7 +38,8 @@ Lean-design rule:
 ## Governing ADRs
 
 - `ADR-005` — host-scoped SQLite state root (`docs/adr/ADR-005-host-scoped-sqlite-state-root.md`)
-- `ADR-ATM-CORE-001` (in `docs/atm-core/architecture.md`) — thin-client boundary model
+- `ADR-ATM-CORE-001` (in `docs/atm-core/architecture.md`) — shared ATM
+  protocol lives in `atm-core`
 - `ADR-ATM-CORE-002` (in `docs/atm-core/architecture.md`) — shared transport/protocol contract
 
 ## Governing Boundaries
@@ -127,16 +128,23 @@ only on the identity, query, and member-addressing surfaces above.
 - no graft-specific daemon API surface is introduced
 - no extra graft-specific public trait family is introduced unless the shared
   transport/protocol contract proves insufficient
+- historical `REQ-CORE-GRAFT-001` is explicitly retired or superseded in
+  `docs/atm-core/requirements.md` by the shared `AtmProtocol` /
+  `ClientTransport` family
 - `atm-graft` has no Rust-crate dependency on `atm-daemon`, and that rule is
   lint-enforced rather than documented only
-- the following types from `docs/phase-U/removal-inventory.md` are removed or
-  renamed generically by end of U.8:
+- U.8 owns protocol/DTO family ownership and rename planning only
+- U.8 owns generic replacement of `GraftSessionId`
+- actual removal or generic replacement of the following
+  `docs/phase-U/removal-inventory.md` items is split across U.8 through U.10:
   - `GraftSessionPort`
   - `GraftSessionState`
   - `GraftSessionId`
   - `NudgeEvent`
   - `GraftNudgeFetchRequest`
   - `GraftNudgeDrainRequest`
+- by end of U.8, the plan includes an explicit ownership matrix showing which
+  sprint removes or generifies each item
 
 ## Required Validation
 
@@ -152,6 +160,8 @@ only on the identity, query, and member-addressing surfaces above.
 - `docs/project-plan.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-core/architecture.md`
+- `docs/atm-core/requirements.md`
+- `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/protocol-icd.md`
 - `docs/phase-U/removal-inventory.md`
 

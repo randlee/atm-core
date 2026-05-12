@@ -409,12 +409,10 @@ Required runtime rules:
 - daemon memory is the live truth for agent status
 - daemon memory must also retain `last_active_at` for each known active agent
 - daemon memory must retain the current agent `pid` as a first-class liveness
-  field, cached from SQLite; `pid` is durable roster truth rather than
-  advisory metadata
+  field, but `pid` is transient runtime state rather than durable roster truth
 - `pid` is a semantic newtype candidate and must not remain an unvalidated raw
   integer at the daemon boundary once the runtime API hardening slice lands
-- SQLite must not own live `last_active_at`; it owns durable roster state and
-  the current per-member `pid`
+- SQLite must not own live `last_active_at` or the current process `pid`
 - the daemon-managed member fields (`pid`, `last_active_at`, `state`) must
   update only through one documented heartbeat socket handler shared by ATM CLI
   and hook/runtime producers; see `docs/team-member-state.md`
@@ -432,7 +430,7 @@ Required runtime rules:
 - if a heartbeat reports a different pid while the stored pid is still alive,
   the daemon must reject the update unless the explicit admin takeover path
   documented in `docs/team-member-state.md` is active
-- accepted pid changes must update SQLite and emit `AgentPidChanged`
+- accepted pid changes must update daemon memory and emit `AgentPidChanged`
 - crash recovery must preserve the ordering rule `SQLite commit -> export`
   and any retry/re-export state needed after daemon crash must be durable rather
   than RAM-only

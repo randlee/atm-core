@@ -2846,7 +2846,9 @@ Target member fields:
 - `model` string
 - `metadata_json`
 - runtime/routing fields that remain justified after review (for example
-  `recipient_pane_id`, `pid`, `updated_at`)
+  `recipient_pane_id`, `updated_at`)
+- `pid` remains transient daemon-owned runtime state rather than part of the
+  canonical roster-member row or SQLite roster truth
 
 Acceptance:
 - ATM has one canonical roster truth, not both whole-team JSON and per-member
@@ -2861,6 +2863,8 @@ Acceptance:
 - `agent_type` and `model` remain plain strings for utility/informational use
 - custom harness/member extensions flow through `metadata_json` instead of
   forcing new roster document shapes
+- `recipient_pane_id` receives an explicit U.7 decision: either included in
+  the canonical member model with justification, or excluded with rationale
 
 ### U.8 — Shared Thin-Client ICD For CLI And Graft
 
@@ -2874,6 +2878,9 @@ Acceptance:
   contracts
 - any extra request/response shapes needed for graft remain part of the shared
   ICD family rather than a daemon-private API
+- U.8 owns shared ICD family and naming/DTO planning only; the follow-on
+  runtime and advisory cutover ownership is fixed in
+  `docs/phase-U/removal-inventory.md`
 
 ### U.9 — Client-Owned Graft Runtime
 
@@ -2889,6 +2896,8 @@ Acceptance:
 - the client runtime stays lean and production-complete:
   one persistent receive thread, one open dedicated daemon advisory-stream
   connection, one minimal pending queue, and one host wake/event path
+- U.9 owns client-runtime cutover only; daemon advisory-surface generification
+  stays in U.10
 
 ### U.10 — Generic Daemon Advisory-Notification Surface
 
@@ -2904,6 +2913,8 @@ Acceptance:
   shared ICD used by CLI and thin clients
 - the daemon-side design stays lean and does not grow a client-specific
   notifier framework
+- U.10 owns the daemon-side generic replacement for the remaining graft-named
+  advisory-session surfaces listed in `docs/phase-U/removal-inventory.md`
 
 Phase U inventory note:
 - the authoritative current file/line removal inventory for U.0 through U.10
