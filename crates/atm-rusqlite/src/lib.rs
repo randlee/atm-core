@@ -1068,8 +1068,6 @@ mod tests {
             agent: agent(),
             message_key: message_key("atm:active"),
             envelope: active_envelope,
-            imported_from: None,
-            recorded_at: None,
         };
         let mut expired_envelope = envelope();
         expired_envelope.text = "expired".to_string();
@@ -1086,8 +1084,6 @@ mod tests {
             agent: agent(),
             message_key: message_key("atm:expired"),
             envelope: expired_envelope,
-            imported_from: None,
-            recorded_at: None,
         };
         assembly
             .mail_store()
@@ -1142,8 +1138,6 @@ mod tests {
             agent: agent(),
             message_key: message_key("atm:readable"),
             envelope: readable_envelope,
-            imported_from: None,
-            recorded_at: None,
         };
         assembly
             .mail_store()
