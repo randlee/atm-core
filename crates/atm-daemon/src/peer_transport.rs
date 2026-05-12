@@ -224,7 +224,7 @@ impl PeerClientTransport {
             team,
             agent,
             message_key,
-            peer_addr: persisted_peer_addr(endpoint),
+            peer_addr: endpoint,
             request,
             recorded_at,
             expires_at,
@@ -632,10 +632,6 @@ fn parse_peer_endpoint(raw: &str) -> Option<SocketAddr> {
             None
         }
     }
-}
-
-fn persisted_peer_addr(endpoint: SocketAddr) -> SocketAddr {
-    endpoint
 }
 
 #[cfg(test)]

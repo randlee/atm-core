@@ -7,7 +7,7 @@ use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::{AckTransition, MessageKey, TaskState, sealed};
+use super::{AckTransition, MessageKey, ReplaySource, TaskState, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct TaskStoreTaskMetadata {
@@ -238,7 +238,7 @@ pub struct RosterStoreReplaceRosterRequest {
     /// Invariant: when present, source names one concrete roster-ingest origin
     /// and must not be synthesized from an empty or whitespace-only string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
+    pub source: Option<ReplaySource>,
 }
 
 /// Stub roster-store response for the Phase R skeleton.
@@ -300,7 +300,7 @@ pub struct RosterStoreRequest {
     /// Invariant: when present, source names one concrete roster-ingest origin
     /// and must not be synthesized from an empty or whitespace-only string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
+    pub source: Option<ReplaySource>,
 }
 
 /// Canonical Phase R roster-store response entrypoint payload.
