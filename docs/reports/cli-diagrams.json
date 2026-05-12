@@ -1,6 +1,6 @@
 {
   "title": "CLI Interface",
-  "generated_at": "2026-05-12T11:15:49.164450+00:00",
+  "generated_at": "2026-05-12T14:13:11.355722+00:00",
   "set": "cli",
   "output_path": "docs/reports/cli-diagrams.html",
   "sections": [
@@ -36,7 +36,7 @@
       "key": "atm-list",
       "title": "atm list",
       "summary": "Bounded metadata-only mailbox query.",
-      "commentary": "This query should start from message-status, exclude deleted rows, collapse superseded rows in normal mode, and fetch only header fields for selected keys.",
+      "commentary": "This path queries bounded mailbox metadata rows from SQLite, joins immutable message rows with unified mutable state, excludes deleted and expired rows, then collapses logical-current rows in ATM before returning list output.",
       "notes": [],
       "read_tables": [],
       "write_tables": [],
@@ -78,7 +78,7 @@
       "key": "atm-read",
       "title": "atm read",
       "summary": "Single-message read with status-first selection.",
-      "commentary": "This read path should select from message-status first, hide deleted rows in normal mode, and fetch full content only for the chosen key.",
+      "commentary": "This read path selects a candidate row from SQLite mailbox metadata, loads full content only for the chosen message, and writes back read/ack state through unified message-state persistence when display mutations are required.",
       "notes": [],
       "read_tables": [],
       "write_tables": [],

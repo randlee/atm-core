@@ -2807,10 +2807,14 @@ Scope:
   that are actually needed
 - remove any remaining JSON-backed summary/source read path outside the private
   watcher/import/export boundary
+- keep `atm ack` and `atm clear` out of scope for this sprint; they stay on
+  their existing runtime path until a later dedicated rewrite
 
 Acceptance:
 - normal mailbox queries do not read Claude JSON directly
 - `atm list` and `atm read` are auditable as SQLite-backed query paths
+- `atm ack` and `atm clear` are not claimed as SQLite-cutover deliverables in
+  `U.5`
 - query diagrams and tests show the actual boundary methods, tables read, and
   error exits for all non-trivial mailbox queries
 

@@ -1,6 +1,6 @@
 {
   "title": "Client Interface",
-  "generated_at": "2026-05-12T11:15:55.492436+00:00",
+  "generated_at": "2026-05-12T14:13:18.030702+00:00",
   "set": "client",
   "output_path": "docs/reports/client-interface-diagrams.html",
   "sections": [
@@ -64,7 +64,7 @@
       "key": "atm-read",
       "title": "atm read",
       "summary": "Single-message read with status-first selection.",
-      "commentary": "This read path should select from message-status first, hide deleted rows in normal mode, and fetch full content only for the chosen key.",
+      "commentary": "This read path selects a candidate row from SQLite mailbox metadata, loads full content only for the chosen message, and writes back read/ack state through unified message-state persistence when display mutations are required.",
       "notes": [],
       "read_tables": [],
       "write_tables": [],

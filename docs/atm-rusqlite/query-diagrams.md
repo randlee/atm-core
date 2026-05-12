@@ -3,11 +3,11 @@
 The diagrams here describe the simplified target query model.
 
 Query rules:
-- every ATM-owned mailbox read starts from mutable message-status state
+- every ATM-owned mailbox read uses SQLite mailbox rows plus unified message
+  state
 - one explicit `mail_message_states` table owns mutable mailbox state
 - deleted rows remain hidden from normal queries
-- logical-current queries exclude superseded rows unless an admin-only
-  diagnostic surface explicitly asks for them
+- expired rows remain hidden from normal queries
 - full message content is fetched only for selected keys that must be rendered
 - no ATM-owned mailbox query reads inbox JSON or summary files
 - weak provenance round-trip fields are not part of the message load/save
@@ -20,9 +20,9 @@ Diagrams:
 - load message:
   [sql_load-message.mmd](./sql_load-message.mmd)
 - save message state:
-  [sql_save-visibility-state.mmd](./sql_save-visibility-state.mmd)
+  [sql_save-message-state.mmd](./sql_save-message-state.mmd)
 - load message state:
-  [sql_load-visibility-state.mmd](./sql_load-visibility-state.mmd)
+  [sql_load-message-state.mmd](./sql_load-message-state.mmd)
 - query mailbox metadata rows:
   [sql_query-mailbox-metadata-rows.mmd](./sql_query-mailbox-metadata-rows.mmd)
 - query mailbox metadata counts:
@@ -32,8 +32,9 @@ Static HTML viewer:
 - [query-diagrams.html](../reports/query-diagrams.html)
 
 Optimization target:
-- `atm list` should use one status-rooted candidate/count query and one
-  limited header projection query
-- `atm read` should use one status-rooted selection query and one content fetch
-  for the chosen row, plus one optional status mutation query when read/ack
-  state changes
+- `atm list` currently uses `query_mailbox_metadata_rows` and computes
+  logical-current collapse plus bucket counts in ATM code
+- `query_mailbox_metadata_counts` exists as a dedicated SQL aggregate method,
+  but `atm list` does not call it yet
+- `atm read` currently uses one metadata query, one content fetch for the
+  selected row, and one optional message-state write when display state changes
