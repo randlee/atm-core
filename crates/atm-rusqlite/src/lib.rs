@@ -930,13 +930,20 @@ impl boundary::TaskStore for SqliteTaskStore {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use atm_core::LocalServiceRuntime;
     use atm_core::MessageKey;
     use atm_core::boundary::MailStore as _;
     use atm_core::doctor::DoctorQuery;
+    use atm_core::home::team_dir_from_home;
+    use atm_core::list::{ListQuery, list_mail_with_runtime};
+    use atm_core::observability::NullObservability;
     use atm_core::protocol::RequestEnvelope;
+    use atm_core::read::{ReadQuery, read_mail_with_runtime};
     use atm_core::schema::TeamConfig;
     use atm_core::schema::{AgentMember, MessageEnvelope};
-    use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+    use atm_core::types::{
+        AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TaskId, TeamName,
+    };
     use tempfile::TempDir;
 
     fn temp_disk_db() -> (TempDir, PathBuf) {
@@ -967,6 +974,28 @@ mod tests {
 
     fn message_key(value: &str) -> MessageKey {
         MessageKey::new(value).expect("message key")
+    }
+
+    fn write_team_config(home_dir: &Path, team_name: &TeamName, members: &[AgentMember]) {
+        let team_dir = team_dir_from_home(home_dir, team_name).expect("team dir");
+        std::fs::create_dir_all(&team_dir).expect("create team dir");
+        let config = TeamConfig {
+            members: members.to_vec(),
+            extra: serde_json::Map::new(),
+        };
+        std::fs::write(
+            team_dir.join("config.json"),
+            serde_json::to_vec_pretty(&config).expect("encode team config"),
+        )
+        .expect("write config.json");
+    }
+
+    fn sqlite_runtime(assembly: &SqliteBoundaryAssembly) -> LocalServiceRuntime {
+        LocalServiceRuntime::new(
+            assembly.mail_store_arc(),
+            assembly.task_store_arc(),
+            assembly.roster_store_arc(),
+        )
     }
 
     fn envelope() -> MessageEnvelope {
@@ -1013,6 +1042,138 @@ mod tests {
             task_id: task_id_value,
             extra: serde_json::Map::new(),
         }
+    }
+
+    #[test]
+    fn list_mail_with_runtime_uses_sqlite_metadata_without_inbox_files() {
+        let assembly = in_memory_assembly();
+        assembly
+            .mail_store()
+            .bootstrap(boundary::MailStoreBootstrapRequest {
+                team_dir: std::env::temp_dir(),
+                team: team(),
+                team_config: None,
+            })
+            .expect("bootstrap");
+
+        let now = chrono::Utc::now();
+        let mut active_envelope = envelope();
+        active_envelope.text = "active".to_string();
+        active_envelope.summary = Some("summary: active".to_string());
+        active_envelope.timestamp = IsoTimestamp::from_datetime(now);
+        active_envelope.pending_ack_at = Some(IsoTimestamp::from_datetime(now));
+        active_envelope.task_id = Some(task_id());
+        let active = boundary::MailStoreMessageRecord {
+            team: team(),
+            agent: agent(),
+            message_key: message_key("atm:active"),
+            envelope: active_envelope,
+        };
+        let mut expired_envelope = envelope();
+        expired_envelope.text = "expired".to_string();
+        expired_envelope.summary = Some("summary: expired".to_string());
+        expired_envelope.timestamp =
+            IsoTimestamp::from_datetime(now - chrono::Duration::minutes(5));
+        expired_envelope.pending_ack_at = None;
+        expired_envelope.task_id = None;
+        expired_envelope.expires_at = Some(IsoTimestamp::from_datetime(
+            now - chrono::Duration::minutes(1),
+        ));
+        let expired = boundary::MailStoreMessageRecord {
+            team: team(),
+            agent: agent(),
+            message_key: message_key("atm:expired"),
+            envelope: expired_envelope,
+        };
+        assembly
+            .mail_store()
+            .upsert_message(boundary::MailStoreUpsertMessageRequest { record: active })
+            .expect("upsert active");
+        assembly
+            .mail_store()
+            .upsert_message(boundary::MailStoreUpsertMessageRequest { record: expired })
+            .expect("upsert expired");
+
+        let tempdir = TempDir::new().expect("tempdir");
+        write_team_config(tempdir.path(), &team(), &[AgentMember::with_name(agent())]);
+        let runtime = sqlite_runtime(&assembly);
+        let query = ListQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some(actor().as_str()),
+            Some(&format!("{}@{}", agent(), team())),
+            None,
+            ReadSelection::Actionable,
+            false,
+            Some(50),
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+
+        let outcome =
+            list_mail_with_runtime(query, &NullObservability, &runtime).expect("sqlite list");
+        assert_eq!(outcome.count, 1);
+        assert_eq!(outcome.rows[0].summary, "summary: active");
+    }
+
+    #[test]
+    fn read_mail_with_runtime_loads_message_body_from_sqlite_without_source_files() {
+        let assembly = in_memory_assembly();
+        assembly
+            .mail_store()
+            .bootstrap(boundary::MailStoreBootstrapRequest {
+                team_dir: std::env::temp_dir(),
+                team: team(),
+                team_config: None,
+            })
+            .expect("bootstrap");
+        let mut readable_envelope = envelope();
+        readable_envelope.text = "sqlite body".to_string();
+        readable_envelope.summary = Some("summary: sqlite body".to_string());
+        let record = boundary::MailStoreMessageRecord {
+            team: team(),
+            agent: agent(),
+            message_key: message_key("atm:readable"),
+            envelope: readable_envelope,
+        };
+        assembly
+            .mail_store()
+            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+            .expect("upsert message");
+
+        let tempdir = TempDir::new().expect("tempdir");
+        write_team_config(tempdir.path(), &team(), &[AgentMember::with_name(agent())]);
+        let runtime = sqlite_runtime(&assembly);
+        let query = ReadQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some(actor().as_str()),
+            Some(&format!("{}@{}", agent(), team())),
+            None,
+            ReadSelection::Actionable,
+            false,
+            false,
+            AckActivationMode::ReadOnly,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+
+        let outcome =
+            read_mail_with_runtime(query, &NullObservability, &runtime).expect("sqlite read");
+        let message = outcome.message.expect("message");
+        assert_eq!(message.envelope.text, "sqlite body");
+        assert_eq!(
+            message.envelope.summary.as_deref(),
+            Some("summary: sqlite body")
+        );
     }
 
     #[test]
@@ -1395,7 +1556,7 @@ mod tests {
                     )),
                     deleted_at: None,
                     updated_at: Some(IsoTimestamp::from_datetime(
-                        now + chrono::Duration::minutes(1),
+                        now - chrono::Duration::minutes(2),
                     )),
                 },
             })

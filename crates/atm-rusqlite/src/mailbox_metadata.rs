@@ -5,6 +5,21 @@ use atm_core::schema::{AtmMessageId, ThreadMode};
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use rusqlite::params;
 
+type MetadataQueryRow = (
+    String,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    String,
+    Option<String>,
+    String,
+    i64,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+    Option<String>,
+);
+
 fn parse_optional_timestamp(
     raw: Option<String>,
     field_name: &str,
@@ -22,6 +37,23 @@ fn parse_optional_timestamp(
         .map(|value| value.map(IsoTimestamp::from_datetime))
 }
 
+fn decode_metadata_query_row(row: &rusqlite::Row<'_>) -> rusqlite::Result<MetadataQueryRow> {
+    Ok((
+        row.get::<_, String>(0)?,
+        row.get::<_, Option<String>>(1)?,
+        row.get::<_, Option<String>>(2)?,
+        row.get::<_, Option<String>>(3)?,
+        row.get::<_, String>(4)?,
+        row.get::<_, Option<String>>(5)?,
+        row.get::<_, String>(6)?,
+        row.get::<_, i64>(7)?,
+        row.get::<_, Option<String>>(8)?,
+        row.get::<_, Option<String>>(9)?,
+        row.get::<_, Option<String>>(10)?,
+        row.get::<_, Option<String>>(11)?,
+    ))
+}
+
 pub fn query_mailbox_metadata_rows(
     db: &SharedDb,
     team: &TeamName,
@@ -29,58 +61,95 @@ pub fn query_mailbox_metadata_rows(
     limit: Option<usize>,
 ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
     db.with_connection(|connection| {
+        let limit_i64 = limit
+            .map(i64::try_from)
+            .transpose()
+            .map_err(|_| {
+                AtmError::validation("mailbox metadata limit exceeds sqlite i64 range".to_string())
+                    .with_recovery("Use a smaller mailbox metadata limit before retrying the query.")
+            })?;
+        let sql = if limit_i64.is_some() {
+            "SELECT
+                 mail_messages.message_key,
+                 mail_messages.message_id,
+                 mail_messages.parent_message_id,
+                 mail_messages.thread_mode,
+                 mail_messages.from_agent,
+                 mail_messages.summary,
+                 mail_messages.message_at,
+                 COALESCE(
+                     mail_message_states.read,
+                     json_extract(mail_messages.envelope_json, '$.read'),
+                     0
+                 ),
+                 mail_message_states.pending_ack_at,
+                 mail_message_states.acknowledged_at,
+                 mail_message_states.expires_at,
+                 json_extract(mail_messages.envelope_json, '$.taskId')
+             FROM mail_messages
+             LEFT JOIN mail_message_states
+               ON mail_message_states.team = mail_messages.team
+              AND mail_message_states.agent = mail_messages.agent
+              AND mail_message_states.message_key = mail_messages.message_key
+             WHERE mail_messages.team = ?1
+               AND mail_messages.agent = ?2
+               AND mail_message_states.deleted_at IS NULL
+               AND (
+                    mail_message_states.expires_at IS NULL
+                    OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+               )
+             ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC
+             LIMIT ?3;"
+        } else {
+            "SELECT
+                 mail_messages.message_key,
+                 mail_messages.message_id,
+                 mail_messages.parent_message_id,
+                 mail_messages.thread_mode,
+                 mail_messages.from_agent,
+                 mail_messages.summary,
+                 mail_messages.message_at,
+                 COALESCE(
+                     mail_message_states.read,
+                     json_extract(mail_messages.envelope_json, '$.read'),
+                     0
+                 ),
+                 mail_message_states.pending_ack_at,
+                 mail_message_states.acknowledged_at,
+                 mail_message_states.expires_at,
+                 json_extract(mail_messages.envelope_json, '$.taskId')
+             FROM mail_messages
+             LEFT JOIN mail_message_states
+               ON mail_message_states.team = mail_messages.team
+              AND mail_message_states.agent = mail_messages.agent
+              AND mail_message_states.message_key = mail_messages.message_key
+             WHERE mail_messages.team = ?1
+               AND mail_messages.agent = ?2
+               AND mail_message_states.deleted_at IS NULL
+               AND (
+                    mail_message_states.expires_at IS NULL
+                    OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+               )
+             ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC;"
+        };
         let mut statement = connection
-            .prepare(
-                "SELECT
-                     mail_messages.message_key,
-                     mail_messages.message_id,
-                     mail_messages.parent_message_id,
-                     mail_messages.thread_mode,
-                     mail_messages.from_agent,
-                     mail_messages.summary,
-                     mail_messages.message_at,
-                     COALESCE(
-                         mail_message_states.read,
-                         json_extract(mail_messages.envelope_json, '$.read'),
-                         0
-                     ),
-                     mail_message_states.pending_ack_at,
-                     mail_message_states.acknowledged_at,
-                     json_extract(mail_messages.envelope_json, '$.taskId')
-                 FROM mail_messages
-                 LEFT JOIN mail_message_states
-                   ON mail_message_states.team = mail_messages.team
-                  AND mail_message_states.agent = mail_messages.agent
-                  AND mail_message_states.message_key = mail_messages.message_key
-                 WHERE mail_messages.team = ?1
-                   AND mail_messages.agent = ?2
-                   AND mail_message_states.deleted_at IS NULL
-                   AND (
-                        mail_message_states.expires_at IS NULL
-                        OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
-                   )
-                 ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC;",
-            )
+            .prepare(sql)
             .map_err(|error| db.error("failed to prepare bounded mailbox metadata query", error))?;
-        let rows = statement
-            .query_map(params![team.as_str(), agent.as_str()], |row| {
-                Ok((
-                    row.get::<_, String>(0)?,
-                    row.get::<_, Option<String>>(1)?,
-                    row.get::<_, Option<String>>(2)?,
-                    row.get::<_, Option<String>>(3)?,
-                    row.get::<_, String>(4)?,
-                    row.get::<_, Option<String>>(5)?,
-                    row.get::<_, String>(6)?,
-                    row.get::<_, i64>(7)?,
-                    row.get::<_, Option<String>>(8)?,
-                    row.get::<_, Option<String>>(9)?,
-                    row.get::<_, Option<String>>(10)?,
-                ))
-            })
-            .map_err(|error| db.error("failed to execute bounded mailbox metadata query", error))?;
+        let rows = match limit_i64 {
+            Some(limit) => statement.query_map(
+                params![team.as_str(), agent.as_str(), limit],
+                decode_metadata_query_row,
+            ),
+            None => statement.query_map(
+                params![team.as_str(), agent.as_str()],
+                decode_metadata_query_row,
+            ),
+        }
+        .map_err(|error| db.error("failed to execute bounded mailbox metadata query", error))?;
         let mut collected = Vec::new();
         for row in rows {
+            let row: MetadataQueryRow = row
+                .map_err(|error| db.error("failed to decode bounded mailbox metadata row", error))?;
             let (
                 message_key,
                 message_id,
@@ -92,17 +161,19 @@ pub fn query_mailbox_metadata_rows(
                 read,
                 pending_ack_at,
                 acknowledged_at,
+                expires_at,
                 task_id,
-            ) = row.map_err(|error| db.error("failed to decode bounded mailbox metadata row", error))?;
+            ) = row;
+            let parsed_message_key = MessageKey::new(message_key.clone()).map_err(|error| {
+                AtmError::validation(format!(
+                    "failed to parse bounded mailbox metadata message key: {error}"
+                ))
+                .with_recovery(
+                    "Repair or remove the malformed message-key row before retrying the bounded mailbox metadata query.",
+                )
+            })?;
             collected.push(MailStoreMailboxMetadataRow {
-                message_key: MessageKey::new(message_key).map_err(|error| {
-                    AtmError::validation(format!(
-                        "failed to parse bounded mailbox metadata message key: {error}"
-                    ))
-                    .with_recovery(
-                        "Repair or remove the malformed message-key row before retrying the bounded mailbox metadata query.",
-                    )
-                })?,
+                message_key: parsed_message_key,
                 message_id: message_id
                     .map(|value| {
                         value.parse::<AtmMessageId>().map_err(|error| {
@@ -141,7 +212,14 @@ pub fn query_mailbox_metadata_rows(
                         )
                     })
                     .transpose()?,
-                from_agent: from_agent.parse()?,
+                from_agent: from_agent.parse().map_err(|error| {
+                    AtmError::validation(format!(
+                        "failed to parse bounded mailbox metadata from_agent for {message_key}: {error}"
+                    ))
+                    .with_recovery(
+                        "Repair or remove the malformed from_agent row before retrying the bounded mailbox metadata query.",
+                    )
+                })?,
                 summary,
                 message_at: message_at
                     .parse::<chrono::DateTime<chrono::Utc>>()
@@ -160,13 +238,20 @@ pub fn query_mailbox_metadata_rows(
                     acknowledged_at,
                     "acknowledged_at timestamp",
                 )?,
-                task_id: task_id.map(|value| value.parse::<TaskId>()).transpose()?,
+                expires_at: parse_optional_timestamp(expires_at, "expires_at timestamp")?,
+                task_id: task_id
+                    .map(|value| {
+                        value.parse::<TaskId>().map_err(|error| {
+                            AtmError::validation(format!(
+                                "failed to parse bounded mailbox metadata task_id for {message_key}: {error}"
+                            ))
+                            .with_recovery(
+                                "Repair or remove the malformed task_id row before retrying the bounded mailbox metadata query.",
+                            )
+                        })
+                    })
+                    .transpose()?,
             });
-            if let Some(limit) = limit
-                && collected.len() >= limit
-            {
-                break;
-            }
         }
         Ok(collected)
     })

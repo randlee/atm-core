@@ -1,21 +1,21 @@
 %% title: `atm list`
 %% summary: Bounded metadata-only mailbox query.
-%% commentary: This query should start from message-status, exclude deleted rows, collapse superseded rows in normal mode, and fetch only header fields for selected keys.
+%% commentary: This path queries bounded mailbox metadata rows from SQLite, joins immutable message rows with unified mutable state, excludes deleted and expired rows, then collapses logical-current rows in ATM before returning list output.
 %% sets: cli
 flowchart TD
     A[atm list request] --> B[Daemon list handler]
-    B --> C1["SQL 1: scan message_status
-filter team/agent/query flags
-exclude deleted
-exclude superseded in normal mode
-compute queue counts
-select top N message_keys"]
+    B --> C1["SQL: query_mailbox_metadata_rows
+LEFT JOIN mail_messages + mail_message_states
+filter team/agent
+exclude deleted_at
+exclude expired expires_at
+ORDER BY newest first
+LIMIT bounded row set"]
     C1 -->|sql error| E1[Typed MailboxReadFailed or MailboxLockTimeout]
-    C1 -->|no candidate rows| O0[Return empty metadata rows plus counts]
-    C1 --> C2["SQL 2: project headers only
-join selected keys to mail_messages
-read summary/from/timestamp/task_id
-do not fetch full body"]
-    C2 -->|sql error| E2[Typed MailboxReadFailed]
-    C2 --> O1[Return bounded metadata rows plus counts]
+    C1 --> C2["ATM selection and collapse
+classify unread/pending/history
+collapse logical-current thread view
+apply sender/task/since/contains filters
+compute bucket counts in ATM"]
+    C2 --> O1[Return bounded list rows plus counts]
     B -. forbidden .-> F1[inbox JSON or summary file read]

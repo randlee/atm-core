@@ -12,14 +12,19 @@ estimated_scope: L
 
 ## Goal
 
-Move normal mailbox queries fully onto SQLite and simplify them to start from
-mutable state, only reading content rows that are actually needed.
+Move normal mailbox query selection for `atm list` and `atm read` fully onto
+SQLite and simplify it to start from mutable state, only reading content rows
+that are actually needed.
 
 ## Scope Summary
 
-This sprint removes file-backed normal mailbox reads, makes `atm list` and
-`atm read` auditable as SQLite-backed flows, and aligns the SQL diagrams with
-the real boundary methods and queries.
+This sprint removes file-backed normal mailbox query selection for `atm list`
+and `atm read`, makes those flows auditable as SQLite-backed paths, and aligns
+the SQL diagrams with the real boundary methods and queries.
+
+`atm ack` and `atm clear` are not part of this sprint's cutover. They remain
+on their existing runtime path until a later sprint rewrites those command
+families explicitly.
 
 ## Governing Requirements
 
@@ -76,7 +81,8 @@ Required shape for every sub-task:
 2. Cut `atm read` onto SQLite
    Development work:
    - replace file-backed normal read selection with SQLite-backed selection
-   - preserve thread/update/ack semantics from earlier sprints
+   - preserve thread/update semantics and the existing read-side ack visibility
+     semantics from earlier sprints
    Required tests:
    - read selection tests, including thread/ephemeral/deleted cases
    Required doc or boundary updates:
@@ -84,7 +90,8 @@ Required shape for every sub-task:
 
 3. Remove forbidden JSON read paths
    Development work:
-   - delete or isolate remaining normal-runtime JSON summary/source reads
+   - delete or isolate remaining normal-runtime JSON summary/source reads used
+     by `atm list` and `atm read`
    - leave JSON reads only in the private watcher/import/export boundary
    Required tests:
    - targeted tests proving normal runtime behavior no longer depends on source
@@ -101,6 +108,8 @@ state decision. `atm list` and `atm read` should move together.
 
 - normal mailbox queries do not read Claude JSON directly
 - `atm list` and `atm read` are auditable as SQLite-backed query paths
+- `atm ack` and `atm clear` remain explicitly out of scope for `U.5`; no
+  acceptance claim in this sprint depends on cutting them over
 - query diagrams show the actual boundary methods, tables read, and error exits
   for every non-trivial mailbox query
 

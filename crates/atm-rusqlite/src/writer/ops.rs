@@ -237,6 +237,20 @@ fn execute_upsert_message_state(
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
+    let state_timestamp = request.state.updated_at.unwrap_or_else(IsoTimestamp::now);
+    if request
+        .state
+        .expires_at
+        .is_some_and(|expires_at| expires_at <= state_timestamp)
+    {
+        return Err(AtmError::validation(
+            "expires_at must be later than the persisted message-state timestamp".to_string(),
+        )
+        .with_recovery(
+            "Persist a future expiration timestamp or clear the expiration before retrying the message-state update.",
+        ));
+    }
+
     cache
         .upsert_message_state(
             connection,
