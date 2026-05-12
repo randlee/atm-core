@@ -42,8 +42,8 @@ Sprint summary:
 - `U.7` roster simplification and explicit member model
 - `U.8` shared thin-client ICD for CLI and graft
 - `U.9` client-owned graft runtime with one persistent receive thread, one
-  open dedicated daemon advisory-stream connection, and one host wake/event
-  path
+  open dedicated daemon advisory-stream connection, one minimal client-side
+  pending queue until host consumption, and one host wake/event path
 - `U.10` generic daemon advisory-notification surface kept intentionally lean
 
 Graft ownership split:

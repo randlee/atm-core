@@ -175,6 +175,11 @@ Initial crate requirement IDs:
   when absent, and fail with a typed daemon-unavailable error rather than
   silently falling back to direct SQLite or inbox-file access. Satisfies:
   `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
+- historical `REQ-CORE-GRAFT-001` is retired by the Phase U graft restack.
+  Any earlier graft-specific contract intent is superseded by
+  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared
+  `AtmProtocol` / `ClientTransport` family rather than by a graft-private core
+  requirement.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.

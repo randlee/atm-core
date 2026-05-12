@@ -62,6 +62,10 @@ Follow-up work:
 - Keep crate-local boundary records aligned with this ownership rule.
 - Enforce daemon-shaped protocol naming as a lint failure.
 
+Convention note:
+- crate-local `atm-core` ADRs may remain embedded in this architecture document
+  until they are extracted into standalone `docs/adr/` files
+
 ## Ack is folded into send-shaped thin-client requests
 
 ```yaml
@@ -336,8 +340,8 @@ Identity-specific policy:
 - `requires_ack`
 - `is_ack`
 - optional `task_id` when present
-- optional `recipient_pane_id` when ATM already knows the authoritative pane
-  mapping for the recipient
+- optional `recipient_pane_id` when authoritative roster truth includes a
+  pane mapping for the recipient
 - hook stdout may optionally carry one structured result object that ATM parses
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
@@ -450,7 +454,7 @@ Migration implication:
 
 ## 4. ADR Namespace
 
-The `atm-core` crate uses the `ADR-CORE-*` namespace.
+The `atm-core` crate uses the `ADR-ATM-CORE-*` namespace.
 
 Initial use cases:
 

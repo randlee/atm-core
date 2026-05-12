@@ -3,8 +3,8 @@
 | Field | Value |
 | --- | --- |
 | ID | ADR-012 |
-| Status | Stub — written by sprint U.2 |
-| Date | TBD (U.2 sprint) |
+| Status | proposed |
+| Date | 2026-05-12 |
 | Deciders | arch-ctm, team-lead |
 | Relates-to | ADR-005, ADR-010 |
 | Supersedes | — |
@@ -36,14 +36,45 @@ The Phase U cleanup decisions establish:
 
 ## Decision
 
-_This ADR stub reserves the ID. The full decision record, rationale, consequences, and implementation notes are written during sprint U.2._
+ATM keeps one logical message identity: `AtmMessageId`, represented in code as
+ULID.
 
-Required content for the full ADR:
-- formal definition of the one-message-identity rule
-- the approved UUID→ULID boundary cast at ingestion
-- the prohibited patterns (dual id storage, `legacy_*` persistence, `metadata.atm.messageId` write)
-- migration notes for any host with existing `legacy_message_id` rows
+The Claude Code `message_id` field is the required UUID wire encoding at the
+Claude boundary only. ATM may cast that UUID payload to `AtmMessageId` at
+ingress and cast `AtmMessageId` back to UUID at the Claude export boundary, but
+the UUID form is not a second ATM-owned durable identity.
+
+`LegacyMessageId` is removed from the target design as an independently owned
+identity concept. The current SQLite `legacy_message_id` compatibility column
+is transitional removal work under Phase U and must not survive as a second
+durable ATM identity after U.2 lands.
+
+`metadata.atm.messageId` is also removed from the target design. ATM must not
+persist or query a second ATM-owned message-id field inside the Claude
+compatibility envelope.
+
+Approved rule set:
+- one logical ATM message identity: `AtmMessageId`
+- UUID <-> ULID reinterpretation occurs only at the Claude compatibility
+  boundary
+- no dual-id query paths
+- no dual-id durable storage
+- no ATM-owned fallback or repair logic that reintroduces a second message-id
+  field
 
 ## Consequences
 
-_Written by sprint U.2._
+Required implementation consequences:
+- dual-id code paths are removed from send/read/ack/threading and SQLite query
+  logic
+- `legacy_*` identity persistence is removed or reduced to bounded migration
+  handling only
+- Claude compatibility ingest/export remains supported through the approved
+  UUID/ULID boundary cast
+- future ATM features must use `AtmMessageId` as the only ATM-owned message
+  identity
+
+Migration consequence:
+- any host carrying pre-U.2 `legacy_message_id` rows must migrate or rebuild
+  those rows as part of the U.2 cleanup line rather than preserving the split
+  identity model indefinitely

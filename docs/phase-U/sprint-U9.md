@@ -32,9 +32,8 @@ Lean-design rule:
 
 - `REQ-CORE-BOUNDARY-001`
 - `REQ-CORE-DAEMON-002`
-- `REQ-CORE-DAEMON-003` — daemon must not own client-specific runtime behavior;
-  client plugin crates own their receive loops and host-integration paths
-  (defined in `docs/atm-daemon/requirements.md`)
+- `REQ-DAEMON-RUNTIME-002` — `atm-daemon` owns runtime composition only and
+  must remain a thin wrapper over `atm-core` service boundaries
 - `REQ-P-CONTRACT-001`
 
 ## Governing ADRs

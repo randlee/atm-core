@@ -2863,6 +2863,8 @@ Acceptance:
 - `agent_type` and `model` remain plain strings for utility/informational use
 - custom harness/member extensions flow through `metadata_json` instead of
   forcing new roster document shapes
+- `recipient_pane_id` receives an explicit U.7 decision: either included in
+  the canonical member model with justification, or excluded with rationale
 
 ### U.8 — Shared Thin-Client ICD For CLI And Graft
 

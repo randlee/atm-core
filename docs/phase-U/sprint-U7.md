@@ -140,6 +140,9 @@ and `config.json` sync rules together.
 - `harness` is a first-class behavioral enum with the approved initial set
 - `agent_type` and `model` remain plain strings
 - `metadata_json` is the only generic extension bucket
+- `recipient_pane_id` receives an explicit U.7 decision: either it is included
+  in the canonical member model with justification recorded in
+  `docs/phase-U/removal-inventory.md`, or it is excluded with rationale
 - Claude Code `config.json` roster changes are ingested through the private
   watcher/import boundary rather than treated as general runtime truth
 
@@ -160,6 +163,7 @@ and `config.json` sync rules together.
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/boundaries.md`
+- `docs/atm-rusqlite/architecture.md` (update roster schema ownership/shape)
 - `docs/atm-rusqlite/requirements.md` (update clauses for roster table changes)
 
 ## Risks And Watchouts

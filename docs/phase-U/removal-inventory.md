@@ -160,6 +160,12 @@ Required restack rule:
 
 U.8-U.10 ownership matrix for current graft-named surfaces:
 
+Matrix scope note:
+- this matrix covers shared protocol/session-contract items only
+- the `atm-graft` library-owned runtime items below (`GraftClient`,
+  `GraftSessionOptions`, `HostNudgeInjector`, `GraftObservability`, and poll /
+  drain receive-loop machinery) are solely U.9-owned
+
 | Current surface | Primary cutover sprint | Reason |
 | --- | --- | --- |
 | `GraftSessionId` | `U.8` | shared identifier naming and DTO-family ownership belongs to the shared ICD sprint |
