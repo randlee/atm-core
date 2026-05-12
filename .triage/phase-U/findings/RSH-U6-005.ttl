@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-U6-005>
+  a triage:Finding ;
+  triage:findingId "RSH-U6-005" ;
+  triage:title "SqliteWriter shutdown timeout logs timeout_ms but not db path" ;
+  triage:description "crates/atm-rusqlite/src/writer/mod.rs:188 — the shutdown timeout log message includes timeout_ms but not the db path, making the leaked join helper unidentifiable in logs when multiple SqliteWriter instances coexist." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U6-005/pU-u6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u6/22dfffa> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u6/22dfffa> .
+
+<urn:atm:triage:occurrence/RSH-U6-005/pU-u6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 188 ;
+  triage:snippet "tracing::warn!(timeout_ms = self.shutdown_join_deadline.as_millis(), \"sqlite writer shutdown exceeded the bounded join deadline; detaching join helper\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u6/22dfffa> .
+
+<urn:atm:triage:worktree/pU-u6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 6 .
