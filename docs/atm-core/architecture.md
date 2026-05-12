@@ -50,6 +50,8 @@ Decision:
 Consequences:
 - Thin callers do not need daemon-shaped API types.
 - Client and server transports share one contract family.
+- The `atm-graft` crate is allowed only as a thin consumer of that shared
+  contract family; it must not introduce a second daemon-specific client API.
 - Thin plugin crates must stay on the shared contract family; if advisory
   registration or notification streaming is added later, it must extend this
   shared line rather than introducing a graft-private daemon API.

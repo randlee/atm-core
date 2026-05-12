@@ -160,6 +160,15 @@ Required restack rule:
 - additive registration or advisory-delivery messages must be renamed
   generically rather than preserving `Graft*` packet naming
 
+U.8 implementation note:
+- the accepted U.8 line lands `crates/atm-graft` as a thin shared-ICD client
+  over `ClientTransport` and the existing unary `RequestEnvelope` /
+  `ResponseEnvelope` family
+- `GraftSessionId` is replaced in the shared naming inventory by
+  `ClientSessionId`
+- runtime/session/advisory surfaces remain intentionally deferred to `U.9`
+  and `U.10`
+
 U.8-U.10 ownership matrix for current graft-named surfaces:
 
 Matrix scope note:
@@ -170,7 +179,7 @@ Matrix scope note:
 
 | Current surface | Primary cutover sprint | Reason |
 | --- | --- | --- |
-| `GraftSessionId` | `U.8` | shared identifier naming and DTO-family ownership belongs to the shared ICD sprint |
+| `GraftSessionId` | `U.8` | replaced in the shared naming line by `ClientSessionId`; DTO-family ownership belongs to the shared ICD sprint |
 | `GraftSessionState` | `U.9` | session lifecycle interpretation is client-runtime ownership |
 | `GraftSessionPort` | `U.10` | session registration/fetch/drain contract is finalized with the generic daemon advisory surface |
 | `NudgeEvent` | `U.10` | daemon-originated advisory event payload is finalized with the generic daemon advisory surface |
