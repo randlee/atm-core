@@ -11,7 +11,7 @@ use std::borrow::Cow;
 use std::fs;
 use std::path::Path;
 
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use serde_json::Value;
 use tracing::warn;
 
@@ -306,8 +306,9 @@ fn parse_mailbox_record(
     raw_record: &str,
     path: &Path,
     line_number: usize,
-) -> Result<Option<MessageEnvelope>, serde_json::Error> {
-    let mut value = serde_json::from_str::<Value>(raw_record)?;
+) -> Result<Option<MessageEnvelope>, AtmError> {
+    let mut value = serde_json::from_str::<Value>(raw_record)
+        .map_err(|error| mailbox_record_parse_error(path, line_number, error))?;
     parse_mailbox_value(&mut value, path, line_number)
 }
 
@@ -315,9 +316,11 @@ fn parse_mailbox_value(
     value: &mut Value,
     path: &Path,
     line_number: usize,
-) -> Result<Option<MessageEnvelope>, serde_json::Error> {
+) -> Result<Option<MessageEnvelope>, AtmError> {
     sanitize_message_id(value, path, line_number);
-    serde_json::from_value::<MessageEnvelope>(value.take()).map(Some)
+    serde_json::from_value::<MessageEnvelope>(value.take())
+        .map(Some)
+        .map_err(|error| mailbox_record_parse_error(path, line_number, error))
 }
 
 fn sanitize_message_id(value: &mut Value, path: &Path, line_number: usize) {
@@ -352,6 +355,22 @@ fn sanitize_message_id(value: &mut Value, path: &Path, line_number: usize) {
     }
 }
 
+fn mailbox_record_parse_error(
+    path: &Path,
+    line_number: usize,
+    error: serde_json::Error,
+) -> AtmError {
+    AtmError::new(
+        AtmErrorKind::MailboxRead,
+        format!(
+            "failed to parse mailbox JSONL record {}:{}: {error}",
+            path.display(),
+            line_number
+        ),
+    )
+    .with_source(error)
+}
+
 #[derive(Debug, Deserialize)]
 struct SummaryMailboxRecord<'a> {
     from: AgentName,
@@ -363,28 +382,16 @@ struct SummaryMailboxRecord<'a> {
     source_team: Option<TeamName>,
     #[serde(default)]
     summary: Option<String>,
-    #[serde(
-        rename = "message_id",
-        default,
-        deserialize_with = "deserialize_optional_message_id"
-    )]
-    message_id: Option<AtmMessageId>,
+    #[serde(rename = "message_id", default)]
+    message_id: Option<String>,
     #[serde(rename = "pendingAckAt", default)]
     pending_ack_at: Option<IsoTimestamp>,
     #[serde(rename = "acknowledgedAt", default)]
     acknowledged_at: Option<IsoTimestamp>,
-    #[serde(
-        rename = "acknowledgesMessageId",
-        default,
-        deserialize_with = "deserialize_optional_message_id"
-    )]
-    acknowledges_message_id: Option<AtmMessageId>,
-    #[serde(
-        rename = "parentMessageId",
-        default,
-        deserialize_with = "deserialize_optional_message_id"
-    )]
-    parent_message_id: Option<AtmMessageId>,
+    #[serde(rename = "acknowledgesMessageId", default)]
+    acknowledges_message_id: Option<String>,
+    #[serde(rename = "parentMessageId", default)]
+    parent_message_id: Option<String>,
     #[serde(rename = "threadMode", default)]
     thread_mode: Option<ThreadMode>,
     #[serde(rename = "staleAt", default)]
@@ -394,6 +401,9 @@ struct SummaryMailboxRecord<'a> {
 }
 
 fn summarize_mailbox_record(record: SummaryMailboxRecord<'_>) -> SummaryMessage {
+    let message_id = parse_message_id(record.message_id.as_deref());
+    let acknowledges_message_id = parse_message_id(record.acknowledges_message_id.as_deref());
+    let parent_message_id = parse_message_id(record.parent_message_id.as_deref());
     let summary_preview = summarize_text(record.summary.as_deref(), record.text.as_ref());
     let idle_notification_sender = idle_notification_sender_from_text(record.text.as_ref());
 
@@ -405,11 +415,11 @@ fn summarize_mailbox_record(record: SummaryMailboxRecord<'_>) -> SummaryMessage 
             read: record.read,
             source_team: record.source_team,
             summary: record.summary,
-            message_id: record.message_id,
+            message_id,
             pending_ack_at: record.pending_ack_at,
             acknowledged_at: record.acknowledged_at,
-            acknowledges_message_id: record.acknowledges_message_id,
-            parent_message_id: record.parent_message_id,
+            acknowledges_message_id,
+            parent_message_id,
             thread_mode: record.thread_mode,
             stale_at: record.stale_at,
             task_id: record.task_id,
@@ -420,20 +430,8 @@ fn summarize_mailbox_record(record: SummaryMailboxRecord<'_>) -> SummaryMessage 
     }
 }
 
-fn deserialize_optional_message_id<'de, D>(
-    deserializer: D,
-) -> Result<Option<AtmMessageId>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    Ok(raw.and_then(|value| {
-        if value.is_null() {
-            None
-        } else {
-            serde_json::from_value::<AtmMessageId>(value).ok()
-        }
-    }))
+fn parse_message_id(value: Option<&str>) -> Option<AtmMessageId> {
+    value.and_then(|value| value.parse::<AtmMessageId>().ok())
 }
 
 fn summarize_text(summary: Option<&str>, text: &str) -> String {

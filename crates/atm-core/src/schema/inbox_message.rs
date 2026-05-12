@@ -547,6 +547,15 @@ mod tests {
     }
 
     #[test]
+    fn atm_message_id_uuid_wire_round_trip_preserves_identity() {
+        let message_id: AtmMessageId = "01KRFK5QTF2R6NRS3Q0F8Z9K0S".parse().expect("parse atm id");
+
+        let round_trip = AtmMessageId::from_uuid_wire(message_id.into_uuid_wire());
+
+        assert_eq!(round_trip, message_id);
+    }
+
+    #[test]
     fn shared_inbox_write_keeps_machine_fields_top_level() {
         let envelope = MessageEnvelope {
             from: TEST_SENDER.parse().expect("agent"),

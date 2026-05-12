@@ -378,13 +378,15 @@ fn resolve_message_body(
     match source {
         SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),
         SendMessageSource::Stdin => input::read_message_from_stdin(),
-        SendMessageSource::File { path, message } => file_policy::process_file_reference(
-            path,
-            message.as_deref(),
-            team_name,
-            current_dir,
-            home_dir,
-        ),
+        SendMessageSource::File { path, message } => {
+            input::validate_message_text(file_policy::process_file_reference(
+                path,
+                message.as_deref(),
+                team_name,
+                current_dir,
+                home_dir,
+            )?)
+        }
     }
 }
 
@@ -399,6 +401,9 @@ fn notify_team_lead_missing_config(
     team: &TeamName,
     recipient: &AgentName,
 ) {
+    // Accepted risk: this fallback notice is best-effort only. ATM may race a fast
+    // shutdown and skip persistence rather than threading a shutdown token through
+    // this compatibility-only warning path.
     let alert_key = alert_state::missing_team_config_alert_key(team_dir);
     if !alert_state::register_missing_team_config_alert(home_dir, &alert_key) {
         return;
@@ -482,6 +487,9 @@ fn append_mailbox_message_and_seed_workflow(
             if require_existing_inbox && !inbox_path.exists() {
                 return Ok(((), false));
             }
+            // Accepted risk: mailbox lock acquisition is time-bounded, but the
+            // subsequent file read is synchronous and may still stall on a bad
+            // filesystem while the lock is held.
             let mut inbox_messages = runtime.read_messages(inbox_path)?;
             let mut prepared = envelope.clone();
             prepare_threaded_message(&mut prepared, &inbox_messages)?;

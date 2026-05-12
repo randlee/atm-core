@@ -1,0 +1,150 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-F002" ;
+  triage:title "SummaryMailboxRecord uses Option<String> instead of Option<LegacyMessageId> for id fields" ;
+  triage:description "crates/atm-core/src/mailbox/mod.rs — SummaryMailboxRecord and SummaryAtmMetadata store message_id, acknowledges_message_id, parent_message_id as Option<String>, requiring parse_legacy_id re-parse at every use. LegacyMessageId newtype exists and is used elsewhere (RBP-004). Fix: change fields to Option<LegacyMessageId> with serde deserializer using sanitize_legacy_message_id logic." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pU-u1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/pU-u1/3> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/e45dc48> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+# --- integrate/phase-U occurrences (SummaryMailboxRecord) ---
+
+<urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 399 ;
+  triage:snippet "message_id: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 405 ;
+  triage:snippet "acknowledges_message_id: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 407 ;
+  triage:snippet "parent_message_id: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+# --- integrate/phase-U occurrences (SummaryAtmMetadata — new struct on this branch) ---
+
+<urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 427 ;
+  triage:snippet "message_id: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 435 ;
+  triage:snippet "acknowledges_message_id: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/RBP-F002/integrate-phase-U/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 437 ;
+  triage:snippet "parent_message_id: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+# --- feature/pU-u1-metadata-atm-read-cleanup occurrences (SummaryMailboxRecord only) ---
+
+<urn:atm:triage:occurrence/RBP-F002/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 397 ;
+  triage:snippet "message_id: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+<urn:atm:triage:occurrence/RBP-F002/pU-u1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 403 ;
+  triage:snippet "acknowledges_message_id: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+<urn:atm:triage:occurrence/RBP-F002/pU-u1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 405 ;
+  triage:snippet "parent_message_id: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/integrate-phase-U/8aa2aed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u1/e45dc48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:orderIndex 1 .

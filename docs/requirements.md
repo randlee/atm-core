@@ -52,7 +52,8 @@ Schema ownership references:
   [`atm-error-codes.md`](./atm-error-codes.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
-  `tools/schema_models/atm_message_schema.py` and
+  `tools/schema_models/atm_message_schema.py`
+- historical/read-compatibility schema record only:
   `tools/schema_models/legacy_atm_message_schema.py`
 
 ## 1.1 Documentation Structure
@@ -1325,13 +1326,14 @@ Phase R continuation semantics:
 - `REQ-P-THREAD-005` Ephemeral messages are standalone, time-bounded records.
 
   Required behavior:
-  - ephemeral messages expire by time only, using `expires_at`
+  - ephemeral messages expire by time only, using `stale_at`
+  - compatibility/export payloads carry ephemeral expiry with `staleAt`
   - no product behavior may depend on first-read deletion semantics
   - periodic daemon cleanup deletes expired ephemeral rows
   - ephemeral messages are not updatable
   - ephemeral messages may not be parents or children in successor chains
   - once read, an ephemeral message becomes hidden from normal reads but
-    remains visible through `--view-all` until `expires_at`
+    remains visible through `--view-all` until `stale_at`
 
 ### 8.5 Output Contract
 

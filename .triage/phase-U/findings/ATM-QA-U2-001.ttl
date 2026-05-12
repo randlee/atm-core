@@ -1,0 +1,158 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U2-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U2-001" ;
+  triage:title "Test function uses prohibited legacy_* naming without justified compatibility role" ;
+  triage:description "crates/atm-rusqlite/src/lib.rs:1355 — Local variable `duplicate_legacy_identity` inside test `mail_store_enforces_message_key_prefix_and_single_successor` uses the prohibited `legacy_*` naming with no justified compatibility role. Sprint U.2 AC-4 and ADR-012 both require `legacy_*` naming removed or narrowed to one justified role. This test verifies message identity uniqueness enforcement — not a legacy compatibility concern. Fix: rename to `duplicate_message_identity` or `message_id_uniqueness_rejection`." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-001/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-001/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-001/integrate-phase-U/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u1/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u2/3> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/d6390795> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/a4285c7f> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1fb49d02> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u2/1fb49d02> .
+
+# --- integrate/phase-U occurrences ---
+
+<urn:atm:triage:occurrence/ATM-QA-U2-001/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1355 ;
+  triage:snippet "let duplicate_legacy_identity = store" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/d6390795> .
+
+<urn:atm:triage:occurrence/ATM-QA-U2-001/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1370 ;
+  triage:snippet "assert!(duplicate_legacy_identity.is_validation());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/d6390795> .
+
+<urn:atm:triage:occurrence/ATM-QA-U2-001/integrate-phase-U/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1372 ;
+  triage:snippet "duplicate_legacy_identity" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/d6390795> .
+
+# --- feature/pU-u1-metadata-atm-read-cleanup occurrences ---
+
+<urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1355 ;
+  triage:snippet "let duplicate_legacy_identity = store" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/a4285c7f> .
+
+<urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1370 ;
+  triage:snippet "assert!(duplicate_legacy_identity.is_validation());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/a4285c7f> .
+
+<urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1372 ;
+  triage:snippet "duplicate_legacy_identity" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/a4285c7f> .
+
+# --- feature/pU-u2-one-message-identity occurrences ---
+
+<urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1355 ;
+  triage:snippet "let duplicate_legacy_identity = store" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d02> .
+
+<urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1370 ;
+  triage:snippet "assert!(duplicate_legacy_identity.is_validation());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d02> .
+
+<urn:atm:triage:occurrence/ATM-QA-U2-001/pU-u2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1372 ;
+  triage:snippet "duplicate_legacy_identity" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d02> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/integrate-phase-U/d6390795>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u1/a4285c7f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d02>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:orderIndex 2 .

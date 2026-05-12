@@ -3,6 +3,9 @@ use std::collections::{HashMap, HashSet};
 use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp};
 
+const MAX_LOGICAL_THREAD_TEXT_BYTES: usize = 256 * 1024;
+const TRUNCATED_THREAD_CONTEXT_SENTINEL: &str = "\n\n[ATM thread context truncated]";
+
 pub(crate) fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
     message.from.clone()
 }
@@ -103,7 +106,7 @@ impl<'a> ThreadIndex<'a> {
             .iter()
             .rposition(|message| message.thread_mode == Some(ThreadMode::Supersede))
             .unwrap_or(0);
-        let composed_text = chain[start_index..]
+        let mut composed_text = chain[start_index..]
             .iter()
             .filter_map(|message| {
                 let trimmed = message.text.trim();
@@ -111,6 +114,15 @@ impl<'a> ThreadIndex<'a> {
             })
             .collect::<Vec<_>>()
             .join("\n\n");
+        if composed_text.len() > MAX_LOGICAL_THREAD_TEXT_BYTES {
+            let mut truncate_at = MAX_LOGICAL_THREAD_TEXT_BYTES
+                .saturating_sub(TRUNCATED_THREAD_CONTEXT_SENTINEL.len());
+            while truncate_at > 0 && !composed_text.is_char_boundary(truncate_at) {
+                truncate_at -= 1;
+            }
+            composed_text.truncate(truncate_at);
+            composed_text.push_str(TRUNCATED_THREAD_CONTEXT_SENTINEL);
+        }
 
         let mut logical = terminal;
         if !composed_text.is_empty() {
@@ -163,7 +175,10 @@ impl<'a> ThreadIndex<'a> {
 mod tests {
     use serde_json::Map;
 
-    use super::{ThreadIndex, canonical_sender_identity, is_ephemeral, is_expired_ephemeral};
+    use super::{
+        MAX_LOGICAL_THREAD_TEXT_BYTES, TRUNCATED_THREAD_CONTEXT_SENTINEL, ThreadIndex,
+        canonical_sender_identity, is_ephemeral, is_expired_ephemeral,
+    };
     use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -286,6 +301,36 @@ mod tests {
 
         assert_eq!(logical.message_id, Some(detail_id));
         assert_eq!(logical.text, "replacement instruction\n\nfollow-up detail");
+    }
+
+    #[test]
+    fn logical_current_envelope_truncates_oversized_add_details_chain() {
+        let root_id = AtmMessageId::new();
+        let detail_id = AtmMessageId::new();
+        let messages = vec![
+            MessageEnvelope {
+                text: "a".repeat(200_000),
+                ..message(TEST_SENDER, root_id, None, None)
+            },
+            MessageEnvelope {
+                text: "b".repeat(200_000),
+                ..message(
+                    TEST_SENDER,
+                    detail_id,
+                    Some(root_id),
+                    Some(ThreadMode::AddDetails),
+                )
+            },
+        ];
+        let index = ThreadIndex::new(&messages);
+
+        let logical = index
+            .logical_current_envelope(root_id)
+            .expect("logical current envelope");
+
+        assert_eq!(logical.message_id, Some(detail_id));
+        assert!(logical.text.len() <= MAX_LOGICAL_THREAD_TEXT_BYTES);
+        assert!(logical.text.ends_with(TRUNCATED_THREAD_CONTEXT_SENTINEL));
     }
 
     #[test]
