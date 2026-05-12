@@ -27,7 +27,6 @@ clap = { version = "4", features = ["derive"] }
 interprocess = "2.4.2"
 sc-observability = "1.0.0"
 sc-observability-types = "1.0.0"
-serde.workspace = true
 serde_json.workspace = true
 time = "0.3"
 tracing.workspace = true

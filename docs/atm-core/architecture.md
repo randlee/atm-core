@@ -40,7 +40,7 @@ code_references:
 
 Context:
 - The protocol is shared by CLI clients, daemon server/runtime, in-process
-  transport tests, and thin extension clients.
+  transport tests, and thin extension crates.
 
 Decision:
 - `AtmProtocol` is owned by `atm-core`, not by `atm-daemon`.
@@ -94,7 +94,7 @@ Decision:
   top-level protocol family.
 
 Consequences:
-- Thin extension clients expose a smaller public surface.
+- Thin extensions expose a smaller public surface.
 - Task-state rules still remain explicit in store and workflow boundaries.
 - The reply emitted by that workflow must hardcode `requires_ack = false`.
 - Send-shaped request data may carry `parentMessageId` and `threadMode` when

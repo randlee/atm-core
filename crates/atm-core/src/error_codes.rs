@@ -39,8 +39,6 @@ pub enum AtmErrorCode {
     DaemonStaleOwnerRecoveryFailed,
     /// Daemon auto-start exhausted the publish/startup budget.
     DaemonAutoStartFailed,
-    /// A graft session id collided with an already-registered daemon session.
-    DaemonGraftSessionAlreadyRegistered,
     /// The remote daemon connection dropped after send and acceptance is unknown.
     RemoteDeliveryOutcomeUnknown,
     /// Address parsing failed.
@@ -134,9 +132,6 @@ impl AtmErrorCode {
             Self::DaemonServingStateRejected => "ATM_DAEMON_SERVING_STATE_REJECTED",
             Self::DaemonStaleOwnerRecoveryFailed => "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED",
             Self::DaemonAutoStartFailed => "ATM_DAEMON_AUTO_START_FAILED",
-            Self::DaemonGraftSessionAlreadyRegistered => {
-                "ATM_DAEMON_GRAFT_SESSION_ALREADY_REGISTERED"
-            }
             Self::RemoteDeliveryOutcomeUnknown => "ATM_REMOTE_OUTCOME_UNKNOWN",
             Self::AddressParseFailed => "ATM_ADDRESS_PARSE_FAILED",
             Self::TeamUnavailable => "ATM_TEAM_UNAVAILABLE",
@@ -197,9 +192,6 @@ impl FromStr for AtmErrorCode {
             "ATM_DAEMON_SERVING_STATE_REJECTED" => Ok(Self::DaemonServingStateRejected),
             "ATM_DAEMON_STALE_OWNER_RECOVERY_FAILED" => Ok(Self::DaemonStaleOwnerRecoveryFailed),
             "ATM_DAEMON_AUTO_START_FAILED" => Ok(Self::DaemonAutoStartFailed),
-            "ATM_DAEMON_GRAFT_SESSION_ALREADY_REGISTERED" => {
-                Ok(Self::DaemonGraftSessionAlreadyRegistered)
-            }
             "ATM_REMOTE_OUTCOME_UNKNOWN" => Ok(Self::RemoteDeliveryOutcomeUnknown),
             "ATM_ADDRESS_PARSE_FAILED" => Ok(Self::AddressParseFailed),
             "ATM_TEAM_UNAVAILABLE" => Ok(Self::TeamUnavailable),

@@ -52,8 +52,9 @@ Phase-R redesign note:
   work
 - the Phase R redesign starts from crate-local boundary inventories and ADRs,
   then rebuilds the implementation under lint/visibility guardrails
-- Phase R treats thin-client extension pressure, including `atm-graft`, as a
-  first-class architectural input
+- Phase R treats thin-client extension pressure as a first-class architectural
+  input (`atm-graft` was implemented in T.6–T.8 and removed in pU-s0 as
+  out-of-scope for the 1.0 surface)
 - for the boundary / adapter model, Phase R supersedes any earlier
   pre-Phase-R architecture statements in this document that conflict with the
   crate-local boundary inventories, ADRs, or `docs/plan-phase-R.md`
@@ -107,6 +108,8 @@ Product-level boundary rules:
   machine-readable contract used to drive architectural linting and review
 - thin-client workflow surfaces should be modeled around `send` and `receive`
   rather than a broad command inventory
+- Phase T added `atm-graft` as a thin-client line (T.6–T.8); removed in pU-s0
+  as out-of-scope for the 1.0 surface
 - `ack` may remain a retained CLI/user workflow, but thin-client protocol
   surfaces should carry it through send-shaped request data rather than a
   separate top-level method family

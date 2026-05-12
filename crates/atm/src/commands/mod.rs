@@ -4,7 +4,6 @@ use clap::{Parser, Subcommand};
 pub mod ack;
 pub mod clear;
 pub mod doctor;
-pub mod graft;
 pub mod list;
 pub mod log;
 pub mod members;
@@ -16,7 +15,6 @@ pub(crate) mod util;
 pub use ack::AckCommand;
 pub use clear::ClearCommand;
 pub use doctor::DoctorCommand;
-pub use graft::GraftCommand;
 pub use list::ListCommand;
 pub use log::LogCommand;
 pub use members::MembersCommand;
@@ -67,7 +65,6 @@ enum Command {
     Clear(ClearCommand),
     Log(LogCommand),
     Doctor(DoctorCommand),
-    Graft(GraftCommand),
     Teams(TeamsCommand),
     Members(MembersCommand),
 }
@@ -82,7 +79,6 @@ impl Command {
             Self::Clear(command) => command.run(observability),
             Self::Log(command) => command.run(observability),
             Self::Doctor(command) => command.run(observability),
-            Self::Graft(command) => command.run(observability),
             Self::Teams(command) => command.run(observability),
             Self::Members(command) => command.run(observability),
         }

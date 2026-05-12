@@ -216,17 +216,6 @@ impl AtmError {
         )
     }
 
-    pub fn daemon_graft_session_already_registered(message: impl Into<String>) -> Self {
-        Self::new_with_code(
-            AtmErrorCode::DaemonGraftSessionAlreadyRegistered,
-            AtmErrorKind::DaemonUnavailable,
-            message,
-        )
-        .with_recovery(
-            "Unregister the existing graft session or choose a fresh session id before retrying embedded graft activation.",
-        )
-    }
-
     pub fn daemon_launch_gate_rejected(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonLaunchGateRejected,
