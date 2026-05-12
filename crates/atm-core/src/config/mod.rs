@@ -29,7 +29,7 @@ use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::schema::{AgentMember, TeamConfig};
 use crate::types::{AgentName, TeamName};
 use discovery::normalize_post_send_hooks;
-use types::{ByteCount, GraftConfig, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_POST_SEND_HOOKS};
+use types::{ByteCount, MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES, MAX_POST_SEND_HOOKS};
 
 /// Load `.atm.toml` by walking upward from `start_dir`.
 ///
@@ -113,7 +113,6 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
             .transpose()?
             .map(|remote_retry_budget| types::DaemonConfig { remote_retry_budget })
             .unwrap_or_default(),
-        graft: normalize_graft_config(parsed.atm.graft),
         config_root,
         obsolete_identity_present,
     }))
@@ -224,20 +223,12 @@ struct RawAtmSection {
     post_send_hooks: Vec<RawPostSendHookRule>,
     #[serde(default)]
     claude_jsonl_body_export_max_bytes: Option<u64>,
-    #[serde(default)]
-    graft: Option<RawGraftSection>,
 }
 
 #[derive(Debug, Default, Deserialize)]
 struct RawDaemonSection {
     #[serde(default)]
     remote_retry_budget: Option<String>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct RawGraftSection {
-    #[serde(default)]
-    enabled: Option<bool>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -326,12 +317,6 @@ fn validate_post_send_hook_count(
         .with_recovery("Reduce [[atm.post_send_hooks]] entries to 64 or fewer before retrying."));
     }
     Ok(())
-}
-
-fn normalize_graft_config(raw: Option<RawGraftSection>) -> GraftConfig {
-    GraftConfig {
-        enabled: raw.and_then(|section| section.enabled).unwrap_or(true),
-    }
 }
 
 fn parse_duration_literal(
@@ -690,29 +675,6 @@ blank = ""
         let config = load_config(root.path()).expect("config").expect("present");
 
         assert_eq!(config.claude_jsonl_body_export_max_bytes, ByteCount::new(0));
-    }
-
-    #[test]
-    fn load_config_reads_graft_enabled_and_defaults_true() {
-        let disabled_root = unique_temp_dir("atm-config-graft-disabled");
-        fs::write(
-            disabled_root.path().join(".atm.toml"),
-            "[atm.graft]\nenabled = false\n",
-        )
-        .expect("config");
-
-        let disabled = load_config(disabled_root.path())
-            .expect("config")
-            .expect("present");
-        assert!(!disabled.graft.enabled);
-
-        let default_root = unique_temp_dir("atm-config-graft-default");
-        fs::write(default_root.path().join(".atm.toml"), "[atm]\n").expect("config");
-
-        let default_config = load_config(default_root.path())
-            .expect("config")
-            .expect("present");
-        assert!(default_config.graft.enabled);
     }
 
     #[test]

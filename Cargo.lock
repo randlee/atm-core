@@ -14,7 +14,6 @@ dependencies = [
  "interprocess",
  "sc-observability",
  "sc-observability-types",
- "serde",
  "serde_json",
  "serial_test",
  "tempfile",
@@ -133,18 +132,6 @@ version = "1.2.0"
 dependencies = [
  "agent-team-mail-core",
  "fs2",
-]
-
-[[package]]
-name = "atm-graft"
-version = "1.2.0"
-dependencies = [
- "agent-team-mail-core",
- "atm-daemon-client",
- "interprocess",
- "serde_json",
- "tempfile",
- "tracing",
 ]
 
 [[package]]

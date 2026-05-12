@@ -11,11 +11,6 @@ use atm_core::{
         self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::AtmError,
-    graft::{
-        GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
-        GraftNudgeFetchResponse, GraftSessionRegistrationRequest, GraftSessionRegistrationResponse,
-        GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
-    },
     list::list_mail,
     process::process_is_alive,
     protocol::{
@@ -29,7 +24,6 @@ use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
 use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
-use crate::graft_runtime::GraftRuntime;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -55,7 +49,6 @@ pub(crate) struct DaemonRequestDispatcher {
     observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
     sqlite_boundary: Option<SqliteBoundaryAssembly>,
-    graft_runtime: GraftRuntime,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -64,7 +57,6 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("home_dir", &self.home_dir)
             .field("status_cache", &self.status_cache)
             .field("sqlite_boundary_present", &self.sqlite_boundary.is_some())
-            .field("graft_runtime", &"GraftRuntime")
             .finish()
     }
 }
@@ -106,23 +98,19 @@ impl DaemonRequestDispatcher {
     fn spawn_shutdown_step(
         label: &'static str,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
-    ) -> std::thread::JoinHandle<()> {
-        std::thread::Builder::new()
+    ) -> Option<std::thread::JoinHandle<()>> {
+        match std::thread::Builder::new()
             .name(format!("shutdown-finalizer-{label}"))
             .spawn(move || {
                 step().unwrap_or_else(|error| {
                     tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
                 });
-            })
-            .expect("spawn daemon shutdown finalizer step")
-    }
-
-    fn complete_shutdown_step(label: &'static str, shutdown_handle: std::thread::JoinHandle<()>) {
-        if shutdown_handle.join().is_err() {
-            tracing::warn!(
-                step = label,
-                "daemon shutdown finalizer step panicked before reporting completion"
-            );
+            }) {
+            Ok(handle) => Some(handle),
+            Err(error) => {
+                tracing::warn!(%error, step = label, "failed to spawn daemon shutdown finalizer step; skipping");
+                None
+            }
         }
     }
 
@@ -158,22 +146,57 @@ impl DaemonRequestDispatcher {
         deadline: Duration,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
     ) {
-        let shutdown_handle = Self::spawn_shutdown_step(label, step);
-        let started = std::time::Instant::now();
-        loop {
-            if shutdown_handle.is_finished() {
-                Self::complete_shutdown_step(label, shutdown_handle);
-                return;
+        let Some(shutdown_handle) = Self::spawn_shutdown_step(label, step) else {
+            return;
+        };
+
+        // Join the worker with a bounded timeout using a watcher thread + Condvar so we avoid
+        // a busy-sleep poll loop. The watcher joins the worker and signals the condvar; the
+        // caller waits on the condvar for up to `deadline`.
+        let pair = std::sync::Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
+        let pair_watcher = std::sync::Arc::clone(&pair);
+        let watcher = std::thread::Builder::new()
+            .name(format!("shutdown-watcher-{label}"))
+            .spawn(move || {
+                if shutdown_handle.join().is_err() {
+                    tracing::warn!(step = label, "daemon shutdown finalizer step panicked");
+                }
+                let (done, cvar) = &*pair_watcher;
+                if let Ok(mut guard) = done.lock() {
+                    *guard = true;
+                    cvar.notify_one();
+                }
+            });
+
+        let Ok(watcher) = watcher else {
+            // Watcher spawn failed; we cannot bound the wait, so skip the step.
+            tracing::warn!(
+                step = label,
+                "failed to spawn shutdown watcher thread; shutdown step result is unobserved"
+            );
+            return;
+        };
+
+        let (done, cvar) = &*pair;
+        let finished = done.lock().is_ok_and(|guard| {
+            cvar.wait_timeout_while(guard, deadline, |finished| !*finished)
+                .is_ok_and(|(_, timeout_result)| !timeout_result.timed_out())
+        });
+
+        if finished {
+            // Watcher has already joined the worker handle; join the watcher itself to clean up.
+            if watcher.join().is_err() {
+                tracing::warn!(step = label, "daemon shutdown watcher thread panicked");
             }
-            if started.elapsed() >= deadline {
-                // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
-                // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
-                // than dropping it orphaned because tests and orderly process teardown can join it
-                // later once the blocking storage step finishes.
-                Self::retain_shutdown_step(label, shutdown_handle, deadline);
-                return;
-            }
-            std::thread::sleep(Duration::from_millis(10));
+        } else {
+            // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
+            // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
+            // than dropping it orphaned because tests and orderly process teardown can join it
+            // later once the blocking storage step finishes.
+            //
+            // Note: The watcher thread still holds the original worker JoinHandle. We retain the
+            // watcher instead so that both the worker and the watcher can be cleaned up together.
+            Self::retain_shutdown_step(label, watcher, deadline);
         }
     }
 
@@ -206,7 +229,6 @@ impl DaemonRequestDispatcher {
             observability,
             status_cache,
             sqlite_boundary,
-            graft_runtime: GraftRuntime::new(),
         }
     }
 
@@ -249,14 +271,6 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
                 let outcome = send_mail(request, self.observability.as_ref())?;
-                if let Err(error) = self.graft_runtime.enqueue_nudge_for_recipient(&outcome) {
-                    self.record_runtime_event(
-                        "graft_nudge_enqueue",
-                        "degraded",
-                        "graft nudge queue overflowed",
-                    );
-                    return Err(error);
-                }
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
@@ -282,18 +296,6 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => {
                 Ok(ResponseEnvelope::Doctor(self.project_doctor_report(query)?))
             }
-            RequestEnvelope::GraftRegister(request) => Ok(ResponseEnvelope::GraftRegister(
-                self.register_graft_session(request)?,
-            )),
-            RequestEnvelope::GraftUnregister(request) => Ok(ResponseEnvelope::GraftUnregister(
-                self.unregister_graft_session(request)?,
-            )),
-            RequestEnvelope::GraftFetch(request) => Ok(ResponseEnvelope::GraftFetch(
-                self.fetch_graft_nudges(request)?,
-            )),
-            RequestEnvelope::GraftDrain(request) => Ok(ResponseEnvelope::GraftDrain(
-                self.drain_graft_nudges(request)?,
-            )),
         }
     }
 }
@@ -395,34 +397,6 @@ impl DaemonRequestDispatcher {
         )?;
         self.status_cache
             .record_heartbeat(&request, durable.pid_changed)
-    }
-
-    fn register_graft_session(
-        &self,
-        request: GraftSessionRegistrationRequest,
-    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
-        self.graft_runtime.register_session(request)
-    }
-
-    fn unregister_graft_session(
-        &self,
-        request: GraftSessionUnregistrationRequest,
-    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
-        self.graft_runtime.unregister_session(request)
-    }
-
-    fn fetch_graft_nudges(
-        &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError> {
-        self.graft_runtime.fetch_nudges(request)
-    }
-
-    fn drain_graft_nudges(
-        &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError> {
-        self.graft_runtime.drain_nudges(request)
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
