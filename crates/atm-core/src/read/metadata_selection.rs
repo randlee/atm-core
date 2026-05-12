@@ -13,15 +13,18 @@ pub(crate) fn selection_state_for_mailbox_metadata_rows(
     seen_watermark: Option<IsoTimestamp>,
 ) -> (BucketCounts, Vec<ClassifiedMessage>) {
     let classified_all = classify_mailbox_metadata_rows(rows);
-    let logical_current = logical_current_messages(classified_all.clone());
-    let bucket_counts = bucket_counts_for(&logical_current);
     if let Some(message_id) = query.message_id_filter {
         let selected = classified_all
-            .into_iter()
+            .iter()
             .filter(|message| message.envelope.message_id == Some(message_id))
+            .cloned()
             .collect();
+        let logical_current = logical_current_messages(classified_all);
+        let bucket_counts = bucket_counts_for(&logical_current);
         return (bucket_counts, selected);
     }
+    let logical_current = logical_current_messages(classified_all);
+    let bucket_counts = bucket_counts_for(&logical_current);
     let filtered = apply_filters(
         logical_current,
         query.sender_filter.as_ref(),
@@ -46,7 +49,7 @@ pub(crate) fn classify_mailbox_metadata_rows(
             class: MessageClass::Unread,
             envelope: MessageEnvelope {
                 from: row.from_agent.clone(),
-                text: row.summary.clone().unwrap_or_default(),
+                text: row.summary.as_deref().unwrap_or_default().to_string(),
                 timestamp: row.message_at,
                 read: row.read,
                 source_team: None,

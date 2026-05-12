@@ -17,7 +17,7 @@ use crate::read::{
 };
 use crate::schema::AtmMessageId;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::{RetainedMailboxRuntime, legacy_runtime};
+use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, ReadSelection, TaskId, TeamName};
 
 const DEFAULT_LIST_LIMIT: usize = 200;
@@ -122,7 +122,7 @@ pub fn list_mail(
     query: ListQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ListOutcome, AtmError> {
-    let runtime = legacy_runtime();
+    let runtime = default_runtime()?;
     list_mail_with_runtime_impl(query, observability, &runtime)
 }
 
@@ -240,7 +240,12 @@ fn apply_list_filters(
 fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
     ListRow {
         message_id: message.envelope.message_id,
-        summary: message.envelope.summary.clone().unwrap_or_default(),
+        summary: message
+            .envelope
+            .summary
+            .as_deref()
+            .unwrap_or_default()
+            .to_string(),
         from: message.envelope.from.clone(),
         timestamp: message.envelope.timestamp,
         read: message.envelope.read,
