@@ -939,7 +939,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id,
             thread_mode,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         }
@@ -1315,11 +1315,11 @@ mod tests {
     #[test]
     fn read_ephemeral_message_is_hidden_outside_view_all() {
         let message_id = AtmMessageId::new();
-        let stale_at =
+        let expires_at =
             IsoTimestamp::from_datetime(chrono::Utc::now() + chrono::Duration::minutes(30));
         let messages = vec![SourcedMessage {
             envelope: MessageEnvelope {
-                stale_at: Some(stale_at),
+                expires_at: Some(expires_at),
                 ..message("ephemeral", message_id, None, None, true)
             },
             source_path: PathBuf::from("recipient.json"),
@@ -1358,11 +1358,11 @@ mod tests {
     #[test]
     fn expired_ephemeral_message_is_cleaned_from_all_views() {
         let message_id = AtmMessageId::new();
-        let stale_at =
+        let expires_at =
             IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::minutes(1));
         let messages = vec![SourcedMessage {
             envelope: MessageEnvelope {
-                stale_at: Some(stale_at),
+                expires_at: Some(expires_at),
                 ..message("expired ephemeral", message_id, None, None, false)
             },
             source_path: PathBuf::from("recipient.json"),

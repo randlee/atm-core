@@ -2120,7 +2120,7 @@ ATM moves to a split state model:
 - SQLite is the authoritative durable store for:
   - messages
   - ack/task state
-  - read/clear visibility state
+  - read/clear/delete message state
   - team roster
 - daemon memory is the authoritative live runtime view for:
   - current agent status
@@ -2377,12 +2377,12 @@ Minimum method set:
 - open/bootstrap store
 - run transaction
 - upsert/load message rows
-- upsert/load ack/visibility state
+- upsert/load unified message state
 - record/load ingest replay state
 - return health/readiness snapshot
 
 Scope rule:
-- `MailStore` owns message rows plus read/ack/visibility state tied directly to
+- `MailStore` owns message rows plus unified read/ack/delete/expiry state tied directly to
   message lifecycle
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains

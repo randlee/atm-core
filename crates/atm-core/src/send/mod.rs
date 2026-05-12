@@ -48,7 +48,7 @@ pub struct SendRequest {
     pub task_id: Option<TaskId>,
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
-    pub stale_at: Option<crate::types::IsoTimestamp>,
+    pub expires_at: Option<crate::types::IsoTimestamp>,
     pub dry_run: bool,
 }
 
@@ -78,7 +78,7 @@ impl SendRequest {
             task_id,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             dry_run,
         })
     }
@@ -264,7 +264,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             acknowledges_message_id: None,
             parent_message_id: request.parent_message_id,
             thread_mode: request.thread_mode,
-            stale_at: request.stale_at,
+            expires_at: request.expires_at,
             task_id: task_id.clone(),
             extra: Map::new(),
         };
@@ -444,7 +444,7 @@ fn notify_team_lead_missing_config(
         acknowledges_message_id: None,
         parent_message_id: None,
         thread_mode: None,
-        stale_at: None,
+        expires_at: None,
         task_id: None,
         extra: Map::new(),
     };
@@ -510,7 +510,7 @@ fn prepare_threaded_message(
     match (
         envelope.parent_message_id,
         envelope.thread_mode,
-        envelope.stale_at,
+        envelope.expires_at,
     ) {
         (None, None, _) => Ok(()),
         (Some(_), Some(_), Some(_)) => Err(AtmError::validation(
@@ -671,7 +671,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id,
             thread_mode,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         }

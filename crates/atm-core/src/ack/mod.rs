@@ -212,7 +212,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         acknowledges_message_id: Some(request.message_id),
         parent_message_id: None,
         thread_mode: None,
-        stale_at: None,
+        expires_at: None,
         task_id: None,
         extra: Map::new(),
     };
@@ -556,7 +556,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: serde_json::Map::new(),
         }
@@ -580,7 +580,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id,
             thread_mode,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: serde_json::Map::new(),
         }

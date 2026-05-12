@@ -236,20 +236,20 @@ impl boundary::MailStore for LegacyMailStoreAdapter {
         Err(unsupported("MailStore::load_message"))
     }
 
-    fn upsert_visibility_state(
+    fn upsert_message_state(
         &self,
-        request: boundary::MailStoreUpsertVisibilityStateRequest,
-    ) -> Result<boundary::MailStoreUpsertVisibilityStateResponse, AtmError> {
-        Ok(boundary::MailStoreUpsertVisibilityStateResponse {
+        request: boundary::UpsertMailMessageStateRequest,
+    ) -> Result<boundary::UpsertMailMessageStateResponse, AtmError> {
+        Ok(boundary::UpsertMailMessageStateResponse {
             state: request.state,
         })
     }
 
-    fn load_visibility_state(
+    fn load_message_state(
         &self,
-        _request: boundary::MailStoreLoadVisibilityStateRequest,
-    ) -> Result<boundary::MailStoreLoadVisibilityStateResponse, AtmError> {
-        Ok(boundary::MailStoreLoadVisibilityStateResponse { state: None })
+        _request: boundary::LoadMailMessageStateRequest,
+    ) -> Result<boundary::LoadMailMessageStateResponse, AtmError> {
+        Ok(boundary::LoadMailMessageStateResponse { state: None })
     }
 
     fn record_ingest_replay_state(

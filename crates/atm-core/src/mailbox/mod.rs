@@ -395,7 +395,7 @@ struct SummaryMailboxRecord<'a> {
     #[serde(rename = "threadMode", default)]
     thread_mode: Option<ThreadMode>,
     #[serde(rename = "staleAt", default)]
-    stale_at: Option<IsoTimestamp>,
+    expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", default)]
     task_id: Option<TaskId>,
 }
@@ -421,7 +421,7 @@ fn summarize_mailbox_record(record: SummaryMailboxRecord<'_>) -> SummaryMessage 
             acknowledges_message_id,
             parent_message_id,
             thread_mode: record.thread_mode,
-            stale_at: record.stale_at,
+            expires_at: record.expires_at,
             task_id: record.task_id,
             extra: serde_json::Map::new(),
         },
@@ -787,7 +787,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: serde_json::Map::new(),
         }
