@@ -115,11 +115,12 @@ pub use config::types::GraftConfig;
 /// boundary. External consumers, including `atm-graft`, should import these
 /// types from `atm_core::...` rather than reaching into the module path.
 pub use graft::{
-    AtmGraftClient, GraftAdvisoryStreamRequest, GraftAdvisoryStreamResponse, GraftBatchLimit,
-    GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
-    GraftNudgeFetchResponse, GraftSession, GraftSessionId, GraftSessionPort,
-    GraftSessionRegistrationRequest, GraftSessionRegistrationResponse, GraftSessionState,
-    GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse, NudgeEvent,
+    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
+    AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySession, AdvisorySessionId,
+    AdvisorySessionPort, AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+    AdvisorySessionState, AdvisorySessionUnregistrationRequest,
+    AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AdvisoryStreamResponse,
+    AtmGraftClient,
 };
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
 pub use service_runtime::LocalServiceRuntime;

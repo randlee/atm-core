@@ -73,9 +73,9 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
         }
     }
 
-    fn dispatch_graft_advisory_stream(
+    fn dispatch_advisory_stream(
         &self,
-        _request: atm_core::graft::GraftAdvisoryStreamRequest,
+        _request: atm_core::graft::AdvisoryStreamRequest,
         _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
     ) -> Result<(), atm_core::error::AtmError> {
         panic!("unexpected advisory stream request in DoctorOnlyDispatcher");

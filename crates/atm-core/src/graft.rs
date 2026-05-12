@@ -13,9 +13,9 @@ use crate::schema::AtmMessageId;
 use crate::send::{SendOutcome, SendRequest};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
-pub const MAX_GRAFT_SESSION_ID_BYTES: usize = 128;
-pub const MAX_GRAFT_BATCH_LIMIT: usize = 256;
-pub const MAX_GRAFT_NUDGE_MESSAGE_BYTES: usize = 4096;
+pub const MAX_ADVISORY_SESSION_ID_BYTES: usize = 128;
+pub const MAX_ADVISORY_BATCH_LIMIT: usize = 256;
+pub const MAX_ADVISORY_MESSAGE_BYTES: usize = 4096;
 
 /// Open unary client surface for embedded ATM consumers.
 ///
@@ -49,12 +49,12 @@ pub trait AtmGraftClient: Send + Sync {
     fn acknowledge_message(&self, request: AckRequest) -> Result<AckOutcome, AtmError>;
 }
 
-/// Open session-facing contract for embedded graft runtimes.
+/// Open session-facing contract for embedded advisory consumers.
 ///
 /// This trait is intentionally not sealed. `atm-graft` must be able to own
-/// the concrete `GraftSession` implementation in a separate crate.
-pub trait GraftSessionPort: Send + Sync {
-    /// Register one active embedded graft session with the daemon runtime.
+/// the concrete client runtime implementation in a separate crate.
+pub trait AdvisorySessionPort: Send + Sync {
+    /// Register one active embedded advisory session with the daemon runtime.
     ///
     /// # Errors
     ///
@@ -62,20 +62,20 @@ pub trait GraftSessionPort: Send + Sync {
     /// session registration.
     fn register_session(
         &self,
-        request: GraftSessionRegistrationRequest,
-    ) -> Result<GraftSessionRegistrationResponse, AtmError>;
+        request: AdvisorySessionRegistrationRequest,
+    ) -> Result<AdvisorySessionRegistrationResponse, AtmError>;
 
-    /// Unregister one active embedded graft session from the daemon runtime.
+    /// Unregister one active embedded advisory session from the daemon runtime.
     ///
     /// # Errors
     ///
     /// Returns [`AtmError`] when the daemon cannot safely close the session.
     fn unregister_session(
         &self,
-        request: GraftSessionUnregistrationRequest,
-    ) -> Result<GraftSessionUnregistrationResponse, AtmError>;
+        request: AdvisorySessionUnregistrationRequest,
+    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError>;
 
-    /// Fetch pending daemon-owned graft nudges without draining them.
+    /// Fetch pending daemon-owned advisory events without draining them.
     ///
     /// # Errors
     ///
@@ -83,10 +83,10 @@ pub trait GraftSessionPort: Send + Sync {
     /// queue state for the active session.
     fn fetch_nudges(
         &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError>;
+        request: AdvisoryFetchRequest,
+    ) -> Result<AdvisoryFetchResponse, AtmError>;
 
-    /// Drain pending daemon-owned graft nudges for one active session.
+    /// Drain pending daemon-owned advisory events for one active session.
     ///
     /// # Errors
     ///
@@ -94,14 +94,14 @@ pub trait GraftSessionPort: Send + Sync {
     /// the queued nudge state for the active session.
     fn drain_nudges(
         &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError>;
+        request: AdvisoryDrainRequest,
+    ) -> Result<AdvisoryDrainResponse, AtmError>;
 }
 
-/// Explicit lifecycle states for one graft session.
+/// Explicit lifecycle states for one advisory session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
-pub enum GraftSessionState {
+pub enum AdvisorySessionState {
     Inactive,
     Connecting,
     Registered,
@@ -110,40 +110,42 @@ pub enum GraftSessionState {
     CloseFailed,
 }
 
-/// Public lifecycle projection for one graft session.
+/// Public lifecycle projection for one advisory session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftSession {
+pub struct AdvisorySession {
     pub team: TeamName,
     pub agent: AgentName,
-    pub session_id: GraftSessionId,
-    pub state: GraftSessionState,
+    pub session_id: AdvisorySessionId,
+    pub state: AdvisorySessionState,
 }
 
-/// Stable identifier for one active graft session.
+/// Stable identifier for one active advisory session.
 #[derive(Debug, Clone, Serialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
-pub struct GraftSessionId(String);
+pub struct AdvisorySessionId(String);
 
-impl GraftSessionId {
+impl AdvisorySessionId {
     /// # Errors
     ///
     /// Returns [`AtmError`] when the supplied session id is blank, only
-    /// whitespace, or exceeds [`MAX_GRAFT_SESSION_ID_BYTES`].
+    /// whitespace, or exceeds [`MAX_ADVISORY_SESSION_ID_BYTES`].
     pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
         let value = value.into();
         if value.trim().is_empty() {
             // AtmError::validation uses MessageValidationFailed, the shared boundary-validation
             // error code across all ATM subsystems; no graft-specific code is needed.
-            return Err(AtmError::validation("graft session id must not be blank").with_recovery(
-                "Populate a stable non-empty graft session id before calling the graft session runtime.",
-            ));
+            return Err(
+                AtmError::validation("advisory session id must not be blank").with_recovery(
+                    "Populate a stable non-empty advisory session id before calling the advisory session runtime.",
+                ),
+            );
         }
-        if value.len() > MAX_GRAFT_SESSION_ID_BYTES {
+        if value.len() > MAX_ADVISORY_SESSION_ID_BYTES {
             return Err(AtmError::validation(format!(
-                "graft session id must be at most {MAX_GRAFT_SESSION_ID_BYTES} bytes"
+                "advisory session id must be at most {MAX_ADVISORY_SESSION_ID_BYTES} bytes"
             ))
             .with_recovery(
-                "Shorten the graft session id before calling the graft session runtime.",
+                "Shorten the advisory session id before calling the advisory session runtime.",
             ));
         }
         Ok(Self(value))
@@ -154,7 +156,7 @@ impl GraftSessionId {
     }
 }
 
-impl FromStr for GraftSessionId {
+impl FromStr for AdvisorySessionId {
     type Err = AtmError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
@@ -162,7 +164,7 @@ impl FromStr for GraftSessionId {
     }
 }
 
-impl<'de> Deserialize<'de> for GraftSessionId {
+impl<'de> Deserialize<'de> for AdvisorySessionId {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: Deserializer<'de>,
@@ -172,36 +174,36 @@ impl<'de> Deserialize<'de> for GraftSessionId {
     }
 }
 
-impl fmt::Display for GraftSessionId {
+impl fmt::Display for AdvisorySessionId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(self.as_str())
     }
 }
 
-/// Bounded nudge batch size requested by an embedded graft consumer.
+/// Bounded advisory batch size requested by an embedded consumer.
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]
 #[serde(transparent)]
-pub struct GraftBatchLimit(NonZeroUsize);
+pub struct AdvisoryBatchLimit(NonZeroUsize);
 
-impl GraftBatchLimit {
+impl AdvisoryBatchLimit {
     /// # Errors
     ///
     /// Returns [`AtmError`] when the limit is zero or exceeds
-    /// [`MAX_GRAFT_BATCH_LIMIT`].
+    /// [`MAX_ADVISORY_BATCH_LIMIT`].
     pub fn new(value: usize) -> Result<Self, AtmError> {
         let value = NonZeroUsize::new(value).ok_or_else(|| {
             // AtmError::validation uses MessageValidationFailed, the shared boundary-validation
             // error code across all ATM subsystems; no graft-specific code is needed.
-            AtmError::validation("graft batch limit must be greater than zero").with_recovery(
-                "Use a positive graft nudge batch limit before calling the daemon graft queue surface.",
+            AtmError::validation("advisory batch limit must be greater than zero").with_recovery(
+                "Use a positive advisory batch limit before calling the daemon advisory queue surface.",
             )
         })?;
-        if value.get() > MAX_GRAFT_BATCH_LIMIT {
+        if value.get() > MAX_ADVISORY_BATCH_LIMIT {
             return Err(AtmError::validation(format!(
-                "graft batch limit must not exceed {MAX_GRAFT_BATCH_LIMIT}"
+                "advisory batch limit must not exceed {MAX_ADVISORY_BATCH_LIMIT}"
             ))
             .with_recovery(
-                "Lower the graft nudge batch limit to the documented daemon queue ceiling before calling the graft queue surface.",
+                "Lower the advisory batch limit to the documented daemon queue ceiling before calling the advisory queue surface.",
             ));
         }
         Ok(Self(value))
@@ -212,65 +214,65 @@ impl GraftBatchLimit {
     }
 }
 
-/// Daemon registration request for one embedded graft session.
+/// Daemon registration request for one embedded advisory session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftSessionRegistrationRequest {
+pub struct AdvisorySessionRegistrationRequest {
     pub team: TeamName,
     pub agent: AgentName,
-    pub session_id: GraftSessionId,
+    pub session_id: AdvisorySessionId,
     pub pid: u32,
     pub started_at: IsoTimestamp,
 }
 
-/// Daemon response after accepting one embedded graft session registration.
+/// Daemon response after accepting one embedded advisory session registration.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftSessionRegistrationResponse {
+pub struct AdvisorySessionRegistrationResponse {
     pub team: TeamName,
     pub agent: AgentName,
-    pub session_id: GraftSessionId,
+    pub session_id: AdvisorySessionId,
     pub registered_at: IsoTimestamp,
     pub queue_capacity: usize,
 }
 
-/// Dedicated advisory-stream request for one active embedded graft session.
+/// Dedicated advisory-stream request for one active embedded advisory session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftAdvisoryStreamRequest {
-    pub registration: GraftSessionRegistrationRequest,
-    pub limit: GraftBatchLimit,
+pub struct AdvisoryStreamRequest {
+    pub registration: AdvisorySessionRegistrationRequest,
+    pub limit: AdvisoryBatchLimit,
 }
 
 /// One emitted advisory-stream batch projected to an embedded host.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftAdvisoryStreamResponse {
-    pub session_id: GraftSessionId,
-    pub nudges: Vec<NudgeEvent>,
+pub struct AdvisoryStreamResponse {
+    pub session_id: AdvisorySessionId,
+    pub nudges: Vec<AdvisoryEvent>,
     pub remaining: usize,
     #[serde(default)]
     pub dropped_count: usize,
 }
 
-/// Daemon unregistration request for one embedded graft session.
+/// Daemon unregistration request for one embedded advisory session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftSessionUnregistrationRequest {
-    pub session_id: GraftSessionId,
+pub struct AdvisorySessionUnregistrationRequest {
+    pub session_id: AdvisorySessionId,
 }
 
-/// Daemon response after closing one embedded graft session.
+/// Daemon response after closing one embedded advisory session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftSessionUnregistrationResponse {
-    pub session_id: GraftSessionId,
+pub struct AdvisorySessionUnregistrationResponse {
+    pub session_id: AdvisorySessionId,
     pub closed: bool,
 }
 
 /// One daemon-originated nudge event projected to an embedded host.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct NudgeEvent {
+pub struct AdvisoryEvent {
     pub message_id: AtmMessageId,
     pub from: AgentName,
     /// Advisory graft payload text.
     ///
-    /// Implementations producing `NudgeEvent` values must bound this field to
-    /// at most [`MAX_GRAFT_NUDGE_MESSAGE_BYTES`] UTF-8 bytes before crossing
+    /// Implementations producing `AdvisoryEvent` values must bound this field to
+    /// at most [`MAX_ADVISORY_MESSAGE_BYTES`] UTF-8 bytes before crossing
     /// the public ATM graft boundary.
     pub message: String,
     pub received_at: IsoTimestamp,
@@ -280,33 +282,33 @@ pub struct NudgeEvent {
 
 /// Fetch request for the current daemon-owned pending-nudge snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftNudgeFetchRequest {
-    pub session_id: GraftSessionId,
-    pub limit: GraftBatchLimit,
+pub struct AdvisoryFetchRequest {
+    pub session_id: AdvisorySessionId,
+    pub limit: AdvisoryBatchLimit,
 }
 
 /// Fetch response for the current daemon-owned pending-nudge snapshot.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftNudgeFetchResponse {
-    pub session_id: GraftSessionId,
-    pub nudges: Vec<NudgeEvent>,
+pub struct AdvisoryFetchResponse {
+    pub session_id: AdvisorySessionId,
+    pub nudges: Vec<AdvisoryEvent>,
     pub remaining: usize,
     #[serde(default)]
     pub dropped_count: usize,
 }
 
-/// Drain request for one active embedded graft session.
+/// Drain request for one active embedded advisory session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftNudgeDrainRequest {
-    pub session_id: GraftSessionId,
-    pub limit: GraftBatchLimit,
+pub struct AdvisoryDrainRequest {
+    pub session_id: AdvisorySessionId,
+    pub limit: AdvisoryBatchLimit,
 }
 
-/// Drain response for one active embedded graft session.
+/// Drain response for one active embedded advisory session.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct GraftNudgeDrainResponse {
-    pub session_id: GraftSessionId,
-    pub nudges: Vec<NudgeEvent>,
+pub struct AdvisoryDrainResponse {
+    pub session_id: AdvisorySessionId,
+    pub nudges: Vec<AdvisoryEvent>,
     pub remaining: usize,
     #[serde(default)]
     pub dropped_count: usize,
@@ -319,12 +321,12 @@ mod tests {
     use serde::{Deserialize, Serialize};
 
     use super::{
-        GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
-        GraftNudgeFetchResponse, GraftSession, GraftSessionId, GraftSessionPort,
-        GraftSessionRegistrationRequest, GraftSessionRegistrationResponse, GraftSessionState,
-        GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
-        MAX_GRAFT_BATCH_LIMIT, MAX_GRAFT_NUDGE_MESSAGE_BYTES, MAX_GRAFT_SESSION_ID_BYTES,
-        NudgeEvent,
+        AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
+        AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySession, AdvisorySessionId,
+        AdvisorySessionPort, AdvisorySessionRegistrationRequest,
+        AdvisorySessionRegistrationResponse, AdvisorySessionState,
+        AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
+        MAX_ADVISORY_BATCH_LIMIT, MAX_ADVISORY_MESSAGE_BYTES, MAX_ADVISORY_SESSION_ID_BYTES,
     };
     use crate::error::AtmError;
     use crate::schema::AtmMessageId;
@@ -332,59 +334,60 @@ mod tests {
 
     #[test]
     fn graft_session_id_rejects_blank_values() {
-        let error = GraftSessionId::new("   ").expect_err("blank graft session id should fail");
+        let error =
+            AdvisorySessionId::new("   ").expect_err("blank advisory session id should fail");
         assert!(
             error
                 .to_string()
-                .contains("graft session id must not be blank")
+                .contains("advisory session id must not be blank")
         );
     }
 
     #[test]
     fn graft_batch_limit_rejects_zero() {
-        let error = GraftBatchLimit::new(0).expect_err("zero graft batch limit should fail");
+        let error = AdvisoryBatchLimit::new(0).expect_err("zero graft batch limit should fail");
         assert!(
             error
                 .to_string()
-                .contains("graft batch limit must be greater than zero")
+                .contains("advisory batch limit must be greater than zero")
         );
     }
 
     #[test]
     fn graft_session_id_rejects_overlong_values() {
-        let overlong = "a".repeat(MAX_GRAFT_SESSION_ID_BYTES + 1);
-        let error = GraftSessionId::new(overlong).expect_err("overlong session id should fail");
+        let overlong = "a".repeat(MAX_ADVISORY_SESSION_ID_BYTES + 1);
+        let error = AdvisorySessionId::new(overlong).expect_err("overlong session id should fail");
         assert!(
             error
                 .to_string()
-                .contains("graft session id must be at most")
+                .contains("advisory session id must be at most")
         );
     }
 
     #[test]
     fn graft_batch_limit_rejects_values_above_documented_ceiling() {
-        let error = GraftBatchLimit::new(MAX_GRAFT_BATCH_LIMIT + 1)
+        let error = AdvisoryBatchLimit::new(MAX_ADVISORY_BATCH_LIMIT + 1)
             .expect_err("oversized graft batch limit should fail");
         assert!(
             error
                 .to_string()
-                .contains("graft batch limit must not exceed")
+                .contains("advisory batch limit must not exceed")
         );
     }
 
-    fn registration_request() -> GraftSessionRegistrationRequest {
-        GraftSessionRegistrationRequest {
+    fn registration_request() -> AdvisorySessionRegistrationRequest {
+        AdvisorySessionRegistrationRequest {
             team: "test-team".parse().expect("team"),
             agent: "test-agent".parse().expect("agent"),
-            session_id: GraftSessionId::new("session-1").expect("session"),
+            session_id: AdvisorySessionId::new("session-1").expect("session"),
             pid: 42,
             started_at: IsoTimestamp::now(),
         }
     }
 
-    fn registration_response() -> GraftSessionRegistrationResponse {
+    fn registration_response() -> AdvisorySessionRegistrationResponse {
         let request = registration_request();
-        GraftSessionRegistrationResponse {
+        AdvisorySessionRegistrationResponse {
             team: request.team,
             agent: request.agent,
             session_id: request.session_id,
@@ -393,28 +396,28 @@ mod tests {
         }
     }
 
-    fn unregister_request() -> GraftSessionUnregistrationRequest {
-        GraftSessionUnregistrationRequest {
-            session_id: GraftSessionId::new("session-1").expect("session"),
+    fn unregister_request() -> AdvisorySessionUnregistrationRequest {
+        AdvisorySessionUnregistrationRequest {
+            session_id: AdvisorySessionId::new("session-1").expect("session"),
         }
     }
 
-    fn unregister_response() -> GraftSessionUnregistrationResponse {
-        GraftSessionUnregistrationResponse {
-            session_id: GraftSessionId::new("session-1").expect("session"),
+    fn unregister_response() -> AdvisorySessionUnregistrationResponse {
+        AdvisorySessionUnregistrationResponse {
+            session_id: AdvisorySessionId::new("session-1").expect("session"),
             closed: true,
         }
     }
 
-    fn fetch_request() -> GraftNudgeFetchRequest {
-        GraftNudgeFetchRequest {
-            session_id: GraftSessionId::new("session-1").expect("session"),
-            limit: GraftBatchLimit::new(8).expect("limit"),
+    fn fetch_request() -> AdvisoryFetchRequest {
+        AdvisoryFetchRequest {
+            session_id: AdvisorySessionId::new("session-1").expect("session"),
+            limit: AdvisoryBatchLimit::new(8).expect("limit"),
         }
     }
 
-    fn nudge_event() -> NudgeEvent {
-        NudgeEvent {
+    fn nudge_event() -> AdvisoryEvent {
+        AdvisoryEvent {
             message_id: AtmMessageId::new(),
             from: "sender".parse().expect("sender"),
             message: "hello".to_string(),
@@ -423,25 +426,25 @@ mod tests {
         }
     }
 
-    fn fetch_response() -> GraftNudgeFetchResponse {
-        GraftNudgeFetchResponse {
-            session_id: GraftSessionId::new("session-1").expect("session"),
+    fn fetch_response() -> AdvisoryFetchResponse {
+        AdvisoryFetchResponse {
+            session_id: AdvisorySessionId::new("session-1").expect("session"),
             nudges: vec![nudge_event()],
             remaining: 0,
             dropped_count: 0,
         }
     }
 
-    fn drain_request() -> GraftNudgeDrainRequest {
-        GraftNudgeDrainRequest {
-            session_id: GraftSessionId::new("session-1").expect("session"),
-            limit: GraftBatchLimit::new(4).expect("limit"),
+    fn drain_request() -> AdvisoryDrainRequest {
+        AdvisoryDrainRequest {
+            session_id: AdvisorySessionId::new("session-1").expect("session"),
+            limit: AdvisoryBatchLimit::new(4).expect("limit"),
         }
     }
 
-    fn drain_response() -> GraftNudgeDrainResponse {
-        GraftNudgeDrainResponse {
-            session_id: GraftSessionId::new("session-1").expect("session"),
+    fn drain_response() -> AdvisoryDrainResponse {
+        AdvisoryDrainResponse {
+            session_id: AdvisorySessionId::new("session-1").expect("session"),
             nudges: vec![nudge_event()],
             remaining: 1,
             dropped_count: 0,
@@ -459,12 +462,12 @@ mod tests {
 
     #[test]
     fn graft_session_id_deserialize_rejects_blank_values() {
-        let error = serde_json::from_str::<GraftSessionId>("\"   \"")
-            .expect_err("blank graft session id should fail");
+        let error = serde_json::from_str::<AdvisorySessionId>("\"   \"")
+            .expect_err("blank advisory session id should fail");
         assert!(
             error
                 .to_string()
-                .contains("graft session id must not be blank")
+                .contains("advisory session id must not be blank")
         );
     }
 
@@ -472,18 +475,18 @@ mod tests {
     fn graft_session_type_carries_all_documented_states() {
         let team: TeamName = "test-team".parse().expect("team");
         let agent: AgentName = "test-agent".parse().expect("agent");
-        let session_id = GraftSessionId::new("session-1").expect("session");
+        let session_id = AdvisorySessionId::new("session-1").expect("session");
         let states = [
-            GraftSessionState::Inactive,
-            GraftSessionState::Connecting,
-            GraftSessionState::Registered,
-            GraftSessionState::Disconnected,
-            GraftSessionState::Closed,
-            GraftSessionState::CloseFailed,
+            AdvisorySessionState::Inactive,
+            AdvisorySessionState::Connecting,
+            AdvisorySessionState::Registered,
+            AdvisorySessionState::Disconnected,
+            AdvisorySessionState::Closed,
+            AdvisorySessionState::CloseFailed,
         ];
 
         for state in states {
-            let session = GraftSession {
+            let session = AdvisorySession {
                 team: team.clone(),
                 agent: agent.clone(),
                 session_id: session_id.clone(),
@@ -531,7 +534,7 @@ mod tests {
 
     #[test]
     fn nudge_message_contract_exposes_documented_max_bytes() {
-        assert_eq!(MAX_GRAFT_NUDGE_MESSAGE_BYTES, 4096);
+        assert_eq!(MAX_ADVISORY_MESSAGE_BYTES, 4096);
     }
 
     #[test]
@@ -544,14 +547,14 @@ mod tests {
         assert_json_round_trip(&drain_response());
     }
 
-    struct MockGraftSessionPort;
+    struct MockAdvisorySessionPort;
 
-    impl GraftSessionPort for MockGraftSessionPort {
+    impl AdvisorySessionPort for MockAdvisorySessionPort {
         fn register_session(
             &self,
-            request: GraftSessionRegistrationRequest,
-        ) -> Result<GraftSessionRegistrationResponse, AtmError> {
-            Ok(GraftSessionRegistrationResponse {
+            request: AdvisorySessionRegistrationRequest,
+        ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+            Ok(AdvisorySessionRegistrationResponse {
                 team: request.team,
                 agent: request.agent,
                 session_id: request.session_id,
@@ -562,9 +565,9 @@ mod tests {
 
         fn unregister_session(
             &self,
-            request: GraftSessionUnregistrationRequest,
-        ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
-            Ok(GraftSessionUnregistrationResponse {
+            request: AdvisorySessionUnregistrationRequest,
+        ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
+            Ok(AdvisorySessionUnregistrationResponse {
                 session_id: request.session_id,
                 closed: true,
             })
@@ -572,9 +575,9 @@ mod tests {
 
         fn fetch_nudges(
             &self,
-            request: GraftNudgeFetchRequest,
-        ) -> Result<GraftNudgeFetchResponse, AtmError> {
-            Ok(GraftNudgeFetchResponse {
+            request: AdvisoryFetchRequest,
+        ) -> Result<AdvisoryFetchResponse, AtmError> {
+            Ok(AdvisoryFetchResponse {
                 session_id: request.session_id,
                 nudges: vec![nudge_event()],
                 remaining: 0,
@@ -584,9 +587,9 @@ mod tests {
 
         fn drain_nudges(
             &self,
-            request: GraftNudgeDrainRequest,
-        ) -> Result<GraftNudgeDrainResponse, AtmError> {
-            Ok(GraftNudgeDrainResponse {
+            request: AdvisoryDrainRequest,
+        ) -> Result<AdvisoryDrainResponse, AtmError> {
+            Ok(AdvisoryDrainResponse {
                 session_id: request.session_id,
                 nudges: vec![nudge_event()],
                 remaining: 0,
@@ -597,7 +600,7 @@ mod tests {
 
     #[test]
     fn graft_session_port_mock_is_object_safe_and_typed() {
-        let port: &dyn GraftSessionPort = &MockGraftSessionPort;
+        let port: &dyn AdvisorySessionPort = &MockAdvisorySessionPort;
         let registration = port
             .register_session(registration_request())
             .expect("register");

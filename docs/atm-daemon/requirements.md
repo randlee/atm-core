@@ -47,6 +47,11 @@ Current request/response packet families owned by the daemon transport line:
 - clear
 - doctor
 - heartbeat
+- advisory register
+- advisory unregister
+- advisory fetch
+- advisory drain
+- advisory stream
 
 Current retained ATM surfaces not modeled as daemon request/response packets:
 - `atm log`

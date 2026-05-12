@@ -1,8 +1,8 @@
 use atm_core::boundary::ReplaySource;
 use atm_core::boundary::RequestDispatcher;
 use atm_core::graft::{
-    GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeFetchRequest, GraftSessionId,
-    GraftSessionRegistrationRequest, GraftSessionUnregistrationRequest,
+    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryFetchRequest, AdvisorySessionId,
+    AdvisorySessionRegistrationRequest, AdvisorySessionUnregistrationRequest,
 };
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::schema::{AgentMember, TeamConfig};
@@ -53,11 +53,11 @@ fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
     .expect("write team config");
 }
 
-fn graft_registration_request(session_id: &str) -> GraftSessionRegistrationRequest {
-    GraftSessionRegistrationRequest {
+fn graft_registration_request(session_id: &str) -> AdvisorySessionRegistrationRequest {
+    AdvisorySessionRegistrationRequest {
         team: TEST_TEAM.parse().expect("team"),
         agent: ROLE_TEAM_LEAD.parse().expect("agent"),
-        session_id: GraftSessionId::new(session_id).expect("session id"),
+        session_id: AdvisorySessionId::new(session_id).expect("session id"),
         pid: std::process::id(),
         started_at: IsoTimestamp::now(),
     }
@@ -82,11 +82,11 @@ fn dispatcher_routes_graft_register_requests() {
     let request = graft_registration_request("session-register");
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .dispatch(RequestEnvelope::AdvisoryRegister(request.clone()))
         .expect("register response");
 
     match response {
-        ResponseEnvelope::GraftRegister(registered) => {
+        ResponseEnvelope::AdvisoryRegister(registered) => {
             assert_eq!(registered.team, request.team);
             assert_eq!(registered.agent, request.agent);
             assert_eq!(registered.session_id, request.session_id);
@@ -102,19 +102,19 @@ fn dispatcher_routes_graft_unregister_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-unregister");
     dispatcher
-        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .dispatch(RequestEnvelope::AdvisoryRegister(request.clone()))
         .expect("register response");
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::GraftUnregister(
-            GraftSessionUnregistrationRequest {
+        .dispatch(RequestEnvelope::AdvisoryUnregister(
+            AdvisorySessionUnregistrationRequest {
                 session_id: request.session_id.clone(),
             },
         ))
         .expect("unregister response");
 
     match response {
-        ResponseEnvelope::GraftUnregister(unregistered) => {
+        ResponseEnvelope::AdvisoryUnregister(unregistered) => {
             assert_eq!(unregistered.session_id, request.session_id);
             assert!(unregistered.closed);
         }
@@ -128,18 +128,18 @@ fn dispatcher_routes_graft_fetch_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-fetch");
     dispatcher
-        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .dispatch(RequestEnvelope::AdvisoryRegister(request.clone()))
         .expect("register response");
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::GraftFetch(GraftNudgeFetchRequest {
+        .dispatch(RequestEnvelope::AdvisoryFetch(AdvisoryFetchRequest {
             session_id: request.session_id.clone(),
-            limit: GraftBatchLimit::new(8).expect("limit"),
+            limit: AdvisoryBatchLimit::new(8).expect("limit"),
         }))
         .expect("fetch response");
 
     match response {
-        ResponseEnvelope::GraftFetch(fetch) => {
+        ResponseEnvelope::AdvisoryFetch(fetch) => {
             assert_eq!(fetch.session_id, request.session_id);
             assert!(fetch.nudges.is_empty());
             assert_eq!(fetch.remaining, 0);
@@ -155,18 +155,18 @@ fn dispatcher_routes_graft_drain_requests() {
     let (_tempdir, dispatcher) = graft_test_dispatcher();
     let request = graft_registration_request("session-drain");
     dispatcher
-        .dispatch(RequestEnvelope::GraftRegister(request.clone()))
+        .dispatch(RequestEnvelope::AdvisoryRegister(request.clone()))
         .expect("register response");
 
     let response = dispatcher
-        .dispatch(RequestEnvelope::GraftDrain(GraftNudgeDrainRequest {
+        .dispatch(RequestEnvelope::AdvisoryDrain(AdvisoryDrainRequest {
             session_id: request.session_id.clone(),
-            limit: GraftBatchLimit::new(8).expect("limit"),
+            limit: AdvisoryBatchLimit::new(8).expect("limit"),
         }))
         .expect("drain response");
 
     match response {
-        ResponseEnvelope::GraftDrain(drain) => {
+        ResponseEnvelope::AdvisoryDrain(drain) => {
             assert_eq!(drain.session_id, request.session_id);
             assert!(drain.nudges.is_empty());
             assert_eq!(drain.remaining, 0);

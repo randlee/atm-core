@@ -89,6 +89,11 @@ Daemon packet families that this ICD must cover:
 - clear
 - doctor
 - heartbeat
+- advisory register
+- advisory unregister
+- advisory fetch
+- advisory drain
+- advisory stream
 
 Retained product workflows that are not daemon request/response packets in the
 current Phase S line:
@@ -237,6 +242,11 @@ Phase S packet families:
 - `0x0005` `receive_request`
 - `0x0006` `clear_request`
 - `0x0007` `doctor_request`
+- `0x0008` `advisory_register_request`
+- `0x0009` `advisory_unregister_request`
+- `0x000a` `advisory_fetch_request`
+- `0x000b` `advisory_drain_request`
+- `0x000c` `advisory_stream_request`
 
 ### 6.2 Success Response Packet Kinds
 
@@ -247,6 +257,11 @@ Phase S packet families:
 - `0x1005` `receive_response`
 - `0x1006` `clear_response`
 - `0x1007` `doctor_response`
+- `0x1008` `advisory_register_response`
+- `0x1009` `advisory_unregister_response`
+- `0x100a` `advisory_fetch_response`
+- `0x100b` `advisory_drain_response`
+- `0x100c` `advisory_stream_response`
 
 ### 6.3 Error Packet Kind
 
@@ -274,6 +289,11 @@ Error responses are ATM protocol packets, not out-of-band transport exceptions.
 | `0x0005` | `receive_request` | `atm read` | retained single-message read workflow |
 | `0x0006` | `clear_request` | `atm clear` | retained clear workflow |
 | `0x0007` | `doctor_request` | `atm doctor` | retained doctor runtime query surface |
+| `0x0008` | `advisory_register_request` | embedded host session registration | shared advisory-session registration |
+| `0x0009` | `advisory_unregister_request` | embedded host session shutdown | shared advisory-session unregistration |
+| `0x000a` | `advisory_fetch_request` | companion debug/CLI advisory inspection | optional bounded advisory fetch |
+| `0x000b` | `advisory_drain_request` | companion debug/CLI advisory inspection | optional bounded advisory drain |
+| `0x000c` | `advisory_stream_request` | embedded host live advisory delivery | dedicated same-host advisory stream |
 | `0x1001` | `send_sent_response` | response to `atm send` | success response |
 | `0x1002` | `send_acknowledged_response` | response to `atm ack` | success response |
 | `0x1003` | `heartbeat_response` | response to heartbeat | success response |
@@ -281,6 +301,11 @@ Error responses are ATM protocol packets, not out-of-band transport exceptions.
 | `0x1005` | `receive_response` | response to `atm read` | success response |
 | `0x1006` | `clear_response` | response to `atm clear` | success response |
 | `0x1007` | `doctor_response` | response to `atm doctor` | success response |
+| `0x1008` | `advisory_register_response` | response to advisory register | success response |
+| `0x1009` | `advisory_unregister_response` | response to advisory unregister | success response |
+| `0x100a` | `advisory_fetch_response` | response to advisory fetch | success response |
+| `0x100b` | `advisory_drain_response` | response to advisory drain | success response |
+| `0x100c` | `advisory_stream_response` | response to advisory stream | success response |
 | `0x1fff` | `error_response` | typed service failure | may answer any request kind |
 
 Current non-packet retained workflows:
@@ -325,6 +350,11 @@ Field-authority rule:
 | `receive_request` | `ReadQuery` | `RequestEnvelope::Receive(...)` |
 | `clear_request` | `ClearQuery` | `RequestEnvelope::Clear(...)` |
 | `doctor_request` | `DoctorQuery` | `RequestEnvelope::Doctor(...)` |
+| `advisory_register_request` | `AdvisorySessionRegistrationRequest` | `RequestEnvelope::AdvisoryRegister(...)` |
+| `advisory_unregister_request` | `AdvisorySessionUnregistrationRequest` | `RequestEnvelope::AdvisoryUnregister(...)` |
+| `advisory_fetch_request` | `AdvisoryFetchRequest` | `RequestEnvelope::AdvisoryFetch(...)` |
+| `advisory_drain_request` | `AdvisoryDrainRequest` | `RequestEnvelope::AdvisoryDrain(...)` |
+| `advisory_stream_request` | `AdvisoryStreamRequest` | `RequestEnvelope::AdvisoryStream(...)` |
 | `send_sent_response` | `SendOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Sent(...))` |
 | `send_acknowledged_response` | `AckOutcome` | `ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(...))` |
 | `heartbeat_response` | `TeamMemberHeartbeatResponse` | `ResponseEnvelope::Heartbeat(...)` |
@@ -332,6 +362,11 @@ Field-authority rule:
 | `receive_response` | `ReadOutcome` | `ResponseEnvelope::Receive(...)` |
 | `clear_response` | `ClearOutcome` | `ResponseEnvelope::Clear(...)` |
 | `doctor_response` | `DoctorReport` | `ResponseEnvelope::Doctor(...)` |
+| `advisory_register_response` | `AdvisorySessionRegistrationResponse` | `ResponseEnvelope::AdvisoryRegister(...)` |
+| `advisory_unregister_response` | `AdvisorySessionUnregistrationResponse` | `ResponseEnvelope::AdvisoryUnregister(...)` |
+| `advisory_fetch_response` | `AdvisoryFetchResponse` | `ResponseEnvelope::AdvisoryFetch(...)` |
+| `advisory_drain_response` | `AdvisoryDrainResponse` | `ResponseEnvelope::AdvisoryDrain(...)` |
+| `advisory_stream_response` | `AdvisoryStreamResponse` | `ResponseEnvelope::AdvisoryStream(...)` |
 | `error_response` | `ProtocolErrorEnvelope` | `ResponseEnvelope::Error(...)` |
 
 ### 7.1.1 DTO Definition References
@@ -344,12 +379,22 @@ The current packet payload DTO definitions live in:
   - `ReadQuery`
   - `ClearQuery`
   - `DoctorQuery`
+  - `AdvisorySessionRegistrationRequest`
+  - `AdvisorySessionUnregistrationRequest`
+  - `AdvisoryFetchRequest`
+  - `AdvisoryDrainRequest`
+  - `AdvisoryStreamRequest`
   - `SendOutcome`
   - `AckOutcome`
   - `TeamMemberHeartbeatResponse`
   - `ReadOutcome`
   - `ClearOutcome`
   - `DoctorReport`
+  - `AdvisorySessionRegistrationResponse`
+  - `AdvisorySessionUnregistrationResponse`
+  - `AdvisoryFetchResponse`
+  - `AdvisoryDrainResponse`
+  - `AdvisoryStreamResponse`
   - `ProtocolErrorEnvelope`
 
 ### 7.2 Current Shared Envelope Mapping
@@ -370,6 +415,16 @@ The current protocol-layer envelope mapping is:
   - `clear_request`
 - `RequestEnvelope::Doctor(...)`
   - `doctor_request`
+- `RequestEnvelope::AdvisoryRegister(...)`
+  - `advisory_register_request`
+- `RequestEnvelope::AdvisoryUnregister(...)`
+  - `advisory_unregister_request`
+- `RequestEnvelope::AdvisoryFetch(...)`
+  - `advisory_fetch_request`
+- `RequestEnvelope::AdvisoryDrain(...)`
+  - `advisory_drain_request`
+- `RequestEnvelope::AdvisoryStream(...)`
+  - `advisory_stream_request`
 
 - `ResponseEnvelope::Send(SendResponseEnvelope::Sent(...))`
   - `send_sent_response`
@@ -385,6 +440,16 @@ The current protocol-layer envelope mapping is:
   - `clear_response`
 - `ResponseEnvelope::Doctor(...)`
   - `doctor_response`
+- `ResponseEnvelope::AdvisoryRegister(...)`
+  - `advisory_register_response`
+- `ResponseEnvelope::AdvisoryUnregister(...)`
+  - `advisory_unregister_response`
+- `ResponseEnvelope::AdvisoryFetch(...)`
+  - `advisory_fetch_response`
+- `ResponseEnvelope::AdvisoryDrain(...)`
+  - `advisory_drain_response`
+- `ResponseEnvelope::AdvisoryStream(...)`
+  - `advisory_stream_response`
 - `ResponseEnvelope::Error(...)`
   - `error_response`
 
@@ -435,6 +500,18 @@ Success-family pairing rules:
 - `receive_request -> receive_response | error_response`
 - `clear_request -> clear_response | error_response`
 - `doctor_request -> doctor_response | error_response`
+- `advisory_register_request -> advisory_register_response | error_response`
+- `advisory_unregister_request -> advisory_unregister_response | error_response`
+- `advisory_fetch_request -> advisory_fetch_response | error_response`
+- `advisory_drain_request -> advisory_drain_response | error_response`
+- `advisory_stream_request -> advisory_stream_response* | error_response`
+
+`advisory_stream_request` special rule:
+- it opens a dedicated same-host streaming connection
+- that connection may emit multiple `advisory_stream_response` frames over its
+  lifetime
+- the stream still uses the shared ATM frame and packet-kind registry
+- unary transports must reject `advisory_stream_request` with a typed error
 
 ### 8.1.1 One-Request-Per-Connection Rule
 

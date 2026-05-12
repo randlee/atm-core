@@ -223,7 +223,7 @@ impl AtmError {
             message,
         )
         .with_recovery(
-            "Unregister the existing graft session or choose a fresh session id before retrying embedded graft activation.",
+            "Unregister the existing advisory session or choose a fresh session id before retrying embedded advisory activation.",
         )
     }
 

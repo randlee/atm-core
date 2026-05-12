@@ -165,7 +165,7 @@ U.8 implementation note:
   over `ClientTransport` and the existing unary `RequestEnvelope` /
   `ResponseEnvelope` family
 - `GraftSessionId` is replaced in the shared naming inventory by
-  `ClientSessionId`
+  `AdvisorySessionId`
 - runtime/session/advisory surfaces remain intentionally deferred to `U.9`
   and `U.10`
 
@@ -179,7 +179,7 @@ Matrix scope note:
 
 | Current surface | Primary cutover sprint | Reason |
 | --- | --- | --- |
-| `GraftSessionId` | `U.8` | replaced in the shared naming line by `ClientSessionId`; DTO-family ownership belongs to the shared ICD sprint |
+| `GraftSessionId` | `U.8` | replaced in the shared naming line by `AdvisorySessionId`; DTO-family ownership belongs to the shared ICD sprint |
 | `GraftSessionState` | `U.9` | session lifecycle interpretation is client-runtime ownership |
 | `GraftSessionPort` | `U.10` | session registration/fetch/drain contract is finalized with the generic daemon advisory surface |
 | `NudgeEvent` | `U.10` | daemon-originated advisory event payload is finalized with the generic daemon advisory surface |
@@ -213,7 +213,7 @@ Required restack rule:
 ## U.10 — Generic Daemon Advisory-Notification Surface
 
 Primary current-develop code/doc targets:
-- `crates/atm-daemon/src/graft_runtime.rs:18-244,300-393`
+- `crates/atm-daemon/src/advisory_runtime.rs:18-244,300-393`
   - daemon graft runtime ownership
   - bounded queue semantics
   - fetch/drain behavior

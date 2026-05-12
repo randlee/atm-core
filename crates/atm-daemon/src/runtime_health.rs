@@ -12,10 +12,10 @@ use atm_core::{
     },
     error::AtmError,
     graft::{
-        GraftAdvisoryStreamRequest, GraftNudgeDrainRequest, GraftNudgeDrainResponse,
-        GraftNudgeFetchRequest, GraftNudgeFetchResponse, GraftSessionRegistrationRequest,
-        GraftSessionRegistrationResponse, GraftSessionUnregistrationRequest,
-        GraftSessionUnregistrationResponse,
+        AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
+        AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+        AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
+        AdvisoryStreamRequest,
     },
     list::list_mail,
     process::process_is_alive,
@@ -29,8 +29,8 @@ use atm_core::{
 use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
 use crate::AtmHomeDir;
+use crate::advisory_runtime::AdvisoryRuntime;
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
-use crate::graft_runtime::GraftRuntime;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -56,7 +56,7 @@ pub(crate) struct DaemonRequestDispatcher {
     observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
     sqlite_boundary: Option<SqliteBoundaryAssembly>,
-    graft_runtime: GraftRuntime,
+    advisory_runtime: AdvisoryRuntime,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -65,7 +65,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("home_dir", &self.home_dir)
             .field("status_cache", &self.status_cache)
             .field("sqlite_boundary_present", &self.sqlite_boundary.is_some())
-            .field("graft_runtime", &"GraftRuntime")
+            .field("advisory_runtime", &"AdvisoryRuntime")
             .finish()
     }
 }
@@ -207,7 +207,7 @@ impl DaemonRequestDispatcher {
             observability,
             status_cache,
             sqlite_boundary,
-            graft_runtime: GraftRuntime::new(),
+            advisory_runtime: AdvisoryRuntime::new(),
         }
     }
 
@@ -250,11 +250,11 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
                 let outcome = send_mail(request, self.observability.as_ref())?;
-                if let Err(error) = self.graft_runtime.enqueue_nudge_for_recipient(&outcome) {
+                if let Err(error) = self.advisory_runtime.enqueue_nudge_for_recipient(&outcome) {
                     self.record_runtime_event(
-                        "graft_nudge_enqueue",
+                        "advisory_enqueue",
                         "degraded",
-                        "graft nudge queue overflowed",
+                        "advisory queue overflowed",
                     );
                     return Err(error);
                 }
@@ -283,20 +283,20 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             RequestEnvelope::Doctor(query) => {
                 Ok(ResponseEnvelope::Doctor(self.project_doctor_report(query)?))
             }
-            RequestEnvelope::GraftRegister(request) => Ok(ResponseEnvelope::GraftRegister(
-                self.register_graft_session(request)?,
+            RequestEnvelope::AdvisoryRegister(request) => Ok(ResponseEnvelope::AdvisoryRegister(
+                self.register_advisory_session(request)?,
             )),
-            RequestEnvelope::GraftUnregister(request) => Ok(ResponseEnvelope::GraftUnregister(
-                self.unregister_graft_session(request)?,
+            RequestEnvelope::AdvisoryUnregister(request) => Ok(ResponseEnvelope::AdvisoryUnregister(
+                self.unregister_advisory_session(request)?,
             )),
-            RequestEnvelope::GraftFetch(request) => Ok(ResponseEnvelope::GraftFetch(
-                self.fetch_graft_nudges(request)?,
+            RequestEnvelope::AdvisoryFetch(request) => Ok(ResponseEnvelope::AdvisoryFetch(
+                self.fetch_advisory_events(request)?,
             )),
-            RequestEnvelope::GraftDrain(request) => Ok(ResponseEnvelope::GraftDrain(
-                self.drain_graft_nudges(request)?,
+            RequestEnvelope::AdvisoryDrain(request) => Ok(ResponseEnvelope::AdvisoryDrain(
+                self.drain_advisory_events(request)?,
             )),
-            RequestEnvelope::GraftAdvisoryStream(_) => Err(AtmError::validation(
-                "graft advisory stream requests require the same-host streaming transport path",
+            RequestEnvelope::AdvisoryStream(_) => Err(AtmError::validation(
+                "advisory stream requests require the same-host streaming transport path",
             )
             .with_recovery(
                 "Open the dedicated same-host advisory stream connection instead of routing advisory delivery through unary request dispatch.",
@@ -304,12 +304,12 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
         }
     }
 
-    fn dispatch_graft_advisory_stream(
+    fn dispatch_advisory_stream(
         &self,
-        request: GraftAdvisoryStreamRequest,
+        request: AdvisoryStreamRequest,
         sink: &mut dyn boundary::AdvisoryStreamSink,
     ) -> Result<(), AtmError> {
-        self.graft_runtime.stream_nudges(request, sink)
+        self.advisory_runtime.stream_nudges(request, sink)
     }
 }
 
@@ -406,32 +406,32 @@ impl DaemonRequestDispatcher {
             .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid))
     }
 
-    fn register_graft_session(
+    fn register_advisory_session(
         &self,
-        request: GraftSessionRegistrationRequest,
-    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
-        self.graft_runtime.register_session(request)
+        request: AdvisorySessionRegistrationRequest,
+    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+        self.advisory_runtime.register_session(request)
     }
 
-    fn unregister_graft_session(
+    fn unregister_advisory_session(
         &self,
-        request: GraftSessionUnregistrationRequest,
-    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
-        self.graft_runtime.unregister_session(request)
+        request: AdvisorySessionUnregistrationRequest,
+    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
+        self.advisory_runtime.unregister_session(request)
     }
 
-    fn fetch_graft_nudges(
+    fn fetch_advisory_events(
         &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError> {
-        self.graft_runtime.fetch_nudges(request)
+        request: AdvisoryFetchRequest,
+    ) -> Result<AdvisoryFetchResponse, AtmError> {
+        self.advisory_runtime.fetch_nudges(request)
     }
 
-    fn drain_graft_nudges(
+    fn drain_advisory_events(
         &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError> {
-        self.graft_runtime.drain_nudges(request)
+        request: AdvisoryDrainRequest,
+    ) -> Result<AdvisoryDrainResponse, AtmError> {
+        self.advisory_runtime.drain_nudges(request)
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {

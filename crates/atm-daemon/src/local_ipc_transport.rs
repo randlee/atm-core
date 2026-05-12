@@ -869,7 +869,7 @@ fn handle_connection(
         "daemon request frame accepted under configured size cap"
     );
     let (request_id, request) = codec.request_from_frame(frame)?;
-    if let RequestEnvelope::GraftAdvisoryStream(request) = request {
+    if let RequestEnvelope::AdvisoryStream(request) = request {
         stream.set_send_timeout(None).map_err(|source| {
             AtmError::daemon_unavailable(
                 "failed to clear daemon advisory-stream write deadline",
@@ -884,7 +884,7 @@ fn handle_connection(
             codec: &codec,
             request_id,
         };
-        return dispatcher.dispatch_graft_advisory_stream(request, &mut sink);
+        return dispatcher.dispatch_advisory_stream(request, &mut sink);
     }
 
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
@@ -1020,9 +1020,9 @@ mod tests {
             panic!("intentional dispatcher panic for test: {request:?}");
         }
 
-        fn dispatch_graft_advisory_stream(
+        fn dispatch_advisory_stream(
             &self,
-            request: atm_core::graft::GraftAdvisoryStreamRequest,
+            request: atm_core::graft::AdvisoryStreamRequest,
             _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
         ) -> Result<(), atm_core::error::AtmError> {
             panic!("intentional dispatcher panic for advisory stream test: {request:?}");

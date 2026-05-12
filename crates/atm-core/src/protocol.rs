@@ -18,10 +18,10 @@ use crate::doctor::{DoctorQuery, DoctorReport};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::graft::{
-    GraftAdvisoryStreamRequest, GraftAdvisoryStreamResponse, GraftNudgeDrainRequest,
-    GraftNudgeDrainResponse, GraftNudgeFetchRequest, GraftNudgeFetchResponse,
-    GraftSessionRegistrationRequest, GraftSessionRegistrationResponse,
-    GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
+    AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
+    AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
+    AdvisoryStreamRequest, AdvisoryStreamResponse,
 };
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
@@ -52,11 +52,11 @@ pub enum RequestEnvelope {
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
-    GraftRegister(GraftSessionRegistrationRequest),
-    GraftUnregister(GraftSessionUnregistrationRequest),
-    GraftFetch(GraftNudgeFetchRequest),
-    GraftDrain(GraftNudgeDrainRequest),
-    GraftAdvisoryStream(GraftAdvisoryStreamRequest),
+    AdvisoryRegister(AdvisorySessionRegistrationRequest),
+    AdvisoryUnregister(AdvisorySessionUnregistrationRequest),
+    AdvisoryFetch(AdvisoryFetchRequest),
+    AdvisoryDrain(AdvisoryDrainRequest),
+    AdvisoryStream(AdvisoryStreamRequest),
 }
 
 /// Shared protocol response envelope.
@@ -68,11 +68,11 @@ pub enum ResponseEnvelope {
     Receive(ReadOutcome),
     Clear(ClearOutcome),
     Doctor(DoctorReport),
-    GraftRegister(GraftSessionRegistrationResponse),
-    GraftUnregister(GraftSessionUnregistrationResponse),
-    GraftFetch(GraftNudgeFetchResponse),
-    GraftDrain(GraftNudgeDrainResponse),
-    GraftAdvisoryStream(GraftAdvisoryStreamResponse),
+    AdvisoryRegister(AdvisorySessionRegistrationResponse),
+    AdvisoryUnregister(AdvisorySessionUnregistrationResponse),
+    AdvisoryFetch(AdvisoryFetchResponse),
+    AdvisoryDrain(AdvisoryDrainResponse),
+    AdvisoryStream(AdvisoryStreamResponse),
     Error(ProtocolErrorEnvelope),
 }
 
@@ -219,11 +219,11 @@ pub enum MessageKind {
     ReceiveRequest = 0x0005,
     ClearRequest = 0x0006,
     DoctorRequest = 0x0007,
-    GraftRegisterRequest = 0x0008,
-    GraftUnregisterRequest = 0x0009,
-    GraftFetchRequest = 0x000a,
-    GraftDrainRequest = 0x000b,
-    GraftAdvisoryStreamRequest = 0x000c,
+    AdvisoryRegisterRequest = 0x0008,
+    AdvisoryUnregisterRequest = 0x0009,
+    AdvisoryFetchRequest = 0x000a,
+    AdvisoryDrainRequest = 0x000b,
+    AdvisoryStreamRequest = 0x000c,
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
     HeartbeatResponse = 0x1003,
@@ -231,11 +231,11 @@ pub enum MessageKind {
     ReceiveResponse = 0x1005,
     ClearResponse = 0x1006,
     DoctorResponse = 0x1007,
-    GraftRegisterResponse = 0x1008,
-    GraftUnregisterResponse = 0x1009,
-    GraftFetchResponse = 0x100a,
-    GraftDrainResponse = 0x100b,
-    GraftAdvisoryStreamResponse = 0x100c,
+    AdvisoryRegisterResponse = 0x1008,
+    AdvisoryUnregisterResponse = 0x1009,
+    AdvisoryFetchResponse = 0x100a,
+    AdvisoryDrainResponse = 0x100b,
+    AdvisoryStreamResponse = 0x100c,
     ErrorResponse = 0x1fff,
 }
 
@@ -254,11 +254,11 @@ impl MessageKind {
                 | Self::ReceiveRequest
                 | Self::ClearRequest
                 | Self::DoctorRequest
-                | Self::GraftRegisterRequest
-                | Self::GraftUnregisterRequest
-                | Self::GraftFetchRequest
-                | Self::GraftDrainRequest
-                | Self::GraftAdvisoryStreamRequest
+                | Self::AdvisoryRegisterRequest
+                | Self::AdvisoryUnregisterRequest
+                | Self::AdvisoryFetchRequest
+                | Self::AdvisoryDrainRequest
+                | Self::AdvisoryStreamRequest
         )
     }
 
@@ -279,11 +279,11 @@ impl TryFrom<u16> for MessageKind {
             0x0005 => Self::ReceiveRequest,
             0x0006 => Self::ClearRequest,
             0x0007 => Self::DoctorRequest,
-            0x0008 => Self::GraftRegisterRequest,
-            0x0009 => Self::GraftUnregisterRequest,
-            0x000a => Self::GraftFetchRequest,
-            0x000b => Self::GraftDrainRequest,
-            0x000c => Self::GraftAdvisoryStreamRequest,
+            0x0008 => Self::AdvisoryRegisterRequest,
+            0x0009 => Self::AdvisoryUnregisterRequest,
+            0x000a => Self::AdvisoryFetchRequest,
+            0x000b => Self::AdvisoryDrainRequest,
+            0x000c => Self::AdvisoryStreamRequest,
             0x1001 => Self::SendSentResponse,
             0x1002 => Self::SendAcknowledgedResponse,
             0x1003 => Self::HeartbeatResponse,
@@ -291,11 +291,11 @@ impl TryFrom<u16> for MessageKind {
             0x1005 => Self::ReceiveResponse,
             0x1006 => Self::ClearResponse,
             0x1007 => Self::DoctorResponse,
-            0x1008 => Self::GraftRegisterResponse,
-            0x1009 => Self::GraftUnregisterResponse,
-            0x100a => Self::GraftFetchResponse,
-            0x100b => Self::GraftDrainResponse,
-            0x100c => Self::GraftAdvisoryStreamResponse,
+            0x1008 => Self::AdvisoryRegisterResponse,
+            0x1009 => Self::AdvisoryUnregisterResponse,
+            0x100a => Self::AdvisoryFetchResponse,
+            0x100b => Self::AdvisoryDrainResponse,
+            0x100c => Self::AdvisoryStreamResponse,
             0x1fff => Self::ErrorResponse,
             _ => {
                 return Err(AtmError::validation(format!(
@@ -537,11 +537,11 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
         RequestEnvelope::Receive(_) => MessageKind::ReceiveRequest,
         RequestEnvelope::Clear(_) => MessageKind::ClearRequest,
         RequestEnvelope::Doctor(_) => MessageKind::DoctorRequest,
-        RequestEnvelope::GraftRegister(_) => MessageKind::GraftRegisterRequest,
-        RequestEnvelope::GraftUnregister(_) => MessageKind::GraftUnregisterRequest,
-        RequestEnvelope::GraftFetch(_) => MessageKind::GraftFetchRequest,
-        RequestEnvelope::GraftDrain(_) => MessageKind::GraftDrainRequest,
-        RequestEnvelope::GraftAdvisoryStream(_) => MessageKind::GraftAdvisoryStreamRequest,
+        RequestEnvelope::AdvisoryRegister(_) => MessageKind::AdvisoryRegisterRequest,
+        RequestEnvelope::AdvisoryUnregister(_) => MessageKind::AdvisoryUnregisterRequest,
+        RequestEnvelope::AdvisoryFetch(_) => MessageKind::AdvisoryFetchRequest,
+        RequestEnvelope::AdvisoryDrain(_) => MessageKind::AdvisoryDrainRequest,
+        RequestEnvelope::AdvisoryStream(_) => MessageKind::AdvisoryStreamRequest,
     }
 }
 
@@ -556,11 +556,11 @@ fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
         ResponseEnvelope::Receive(_) => MessageKind::ReceiveResponse,
         ResponseEnvelope::Clear(_) => MessageKind::ClearResponse,
         ResponseEnvelope::Doctor(_) => MessageKind::DoctorResponse,
-        ResponseEnvelope::GraftRegister(_) => MessageKind::GraftRegisterResponse,
-        ResponseEnvelope::GraftUnregister(_) => MessageKind::GraftUnregisterResponse,
-        ResponseEnvelope::GraftFetch(_) => MessageKind::GraftFetchResponse,
-        ResponseEnvelope::GraftDrain(_) => MessageKind::GraftDrainResponse,
-        ResponseEnvelope::GraftAdvisoryStream(_) => MessageKind::GraftAdvisoryStreamResponse,
+        ResponseEnvelope::AdvisoryRegister(_) => MessageKind::AdvisoryRegisterResponse,
+        ResponseEnvelope::AdvisoryUnregister(_) => MessageKind::AdvisoryUnregisterResponse,
+        ResponseEnvelope::AdvisoryFetch(_) => MessageKind::AdvisoryFetchResponse,
+        ResponseEnvelope::AdvisoryDrain(_) => MessageKind::AdvisoryDrainResponse,
+        ResponseEnvelope::AdvisoryStream(_) => MessageKind::AdvisoryStreamResponse,
         ResponseEnvelope::Error(_) => MessageKind::ErrorResponse,
     }
 }

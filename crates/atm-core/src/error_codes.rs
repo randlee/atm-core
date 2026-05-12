@@ -39,7 +39,7 @@ pub enum AtmErrorCode {
     DaemonStaleOwnerRecoveryFailed,
     /// Daemon auto-start exhausted the publish/startup budget.
     DaemonAutoStartFailed,
-    /// A graft session id collided with an already-registered daemon session.
+    /// An advisory session id collided with an already-registered daemon session.
     DaemonGraftSessionAlreadyRegistered,
     /// The remote daemon connection dropped after send and acceptance is unknown.
     RemoteDeliveryOutcomeUnknown,

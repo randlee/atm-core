@@ -92,6 +92,11 @@ Current packet-supported daemon surface:
 - clear
 - doctor
 - heartbeat
+- advisory register
+- advisory unregister
+- advisory fetch
+- advisory drain
+- advisory stream
 
 Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm log`
