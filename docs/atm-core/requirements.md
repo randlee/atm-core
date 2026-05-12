@@ -306,6 +306,10 @@ Required `atm-core` crate rules:
   - one unified mutable message-state surface
   - one canonical roster/member surface
   - `inbox_ingest`
+- `atm-core` must keep daemon-owned live `pid` state out of the canonical
+  roster/member surface
+- `atm-core` must treat `config.json` / `TeamConfig` as config-ingress input
+  rather than the durable roster/store contract
 - `atm-core` owns the canonical `message_key` identity format and the required
   dedupe / lookup indexes above the store boundary
 - `atm-core` must model `message_key` as a semantic newtype at the service and

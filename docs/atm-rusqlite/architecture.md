@@ -91,6 +91,13 @@ Within `MailStore`, the current approved durable shape is:
 - `mail_message_states` for mutable mailbox state such as read, ack, expiry,
   and delete visibility
 
+Within `RosterStore`, the current approved durable shape is:
+- one canonical `team_roster` member table
+- explicit member fields for `member_kind`, `harness`, `agent_type`, `model`,
+  optional `recipient_pane_id`, and `metadata_json`
+- no whole-roster JSON snapshot table
+- no durable member `pid`
+
 Mail content/provenance rule:
 - weak provenance round-trip fields are not part of the `MailStoreMessageRecord`
   contract

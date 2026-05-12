@@ -96,3 +96,4 @@ Notes:
   - `agent_type`
   - `model`
   - `metadata_json`
+- Durable roster truth must not carry daemon-owned `pid` continuity.

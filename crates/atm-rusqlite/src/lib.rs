@@ -1532,8 +1532,22 @@ mod tests {
                 let collected = roster_columns
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|error| assembly.mail_store.db.error("failed to read roster column metadata", error))?;
+                assert!(collected.iter().any(|column| column == "member_kind"));
+                assert!(collected.iter().any(|column| column == "harness"));
+                assert!(collected.iter().any(|column| column == "agent_type"));
+                assert!(collected.iter().any(|column| column == "model"));
+                assert!(collected.iter().any(|column| column == "metadata_json"));
                 assert!(collected.iter().any(|column| column == "recipient_pane_id"));
-                assert!(collected.iter().any(|column| column == "pid"));
+                assert!(!collected.iter().any(|column| column == "pid"));
+
+                let roster_snapshot_table_exists: i64 = connection
+                    .query_row(
+                        "SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = 'rosters';",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| assembly.mail_store.db.error("failed to inspect rosters table", error))?;
+                assert_eq!(roster_snapshot_table_exists, 0);
 
                 let mut message_columns = connection
                     .prepare("PRAGMA table_info(mail_messages);")
@@ -1815,10 +1829,16 @@ mod tests {
             members: vec![AgentMember::with_name(agent())],
             extra: serde_json::Map::new(),
         };
+        let members = roster
+            .members
+            .clone()
+            .into_iter()
+            .map(|member| boundary::RosterMemberRecord::from_claude_code_member(team(), member))
+            .collect::<Vec<_>>();
         let replaced = store
             .replace_roster(boundary::RosterStoreReplaceRosterRequest {
                 team: team(),
-                roster: roster.clone(),
+                members: members.clone(),
                 source: Some("config.json".to_string()),
             })
             .expect("replace");
@@ -1827,7 +1847,7 @@ mod tests {
         let loaded = store
             .load_roster(boundary::RosterStoreLoadRosterRequest { team: team() })
             .expect("load roster");
-        assert_eq!(loaded.roster, roster);
+        assert_eq!(loaded.members, members);
 
         let membership = store
             .query_membership(boundary::RosterStoreQueryMembershipRequest {
@@ -1836,6 +1856,7 @@ mod tests {
             })
             .expect("membership");
         assert!(membership.is_member);
+        assert_eq!(membership.member, Some(members[0].clone()));
 
         let health = store
             .health_snapshot(boundary::RosterStoreHealthSnapshotRequest { team: team() })

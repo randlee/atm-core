@@ -2872,8 +2872,9 @@ Acceptance:
 - `agent_type` and `model` remain plain strings for utility/informational use
 - custom harness/member extensions flow through `metadata_json` instead of
   forcing new roster document shapes
-- `recipient_pane_id` receives an explicit U.7 decision: either included in
-  the canonical member model with justification, or excluded with rationale
+- `recipient_pane_id` remains an optional canonical member field because
+  Claude-code roster ingress may already know the authoritative pane mapping
+  needed by post-send hook routing
 
 ### U.8 — Shared Thin-Client ICD For CLI And Graft
 

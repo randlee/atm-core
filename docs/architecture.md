@@ -2417,9 +2417,14 @@ Object-safety rule:
   SQLite types
 
 Minimum method set:
-- replace/load roster rows
+- replace/load canonical roster member rows
 - query roster membership for routing/validation
 - return roster health/readiness snapshot
+
+Ownership rule:
+- runtime `pid` continuity is transient daemon-owned state and must not become
+  part of durable roster truth
+- `config.json` remains an ingress document, not a general runtime-read truth
 
 #### InboxIngress
 
