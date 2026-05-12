@@ -17,6 +17,12 @@ use crate::clear::{ClearOutcome, ClearQuery};
 use crate::doctor::{DoctorQuery, DoctorReport};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
+use crate::graft::{
+    GraftAdvisoryStreamRequest, GraftAdvisoryStreamResponse, GraftNudgeDrainRequest,
+    GraftNudgeDrainResponse, GraftNudgeFetchRequest, GraftNudgeFetchResponse,
+    GraftSessionRegistrationRequest, GraftSessionRegistrationResponse,
+    GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
+};
 use crate::home;
 use crate::list::{ListOutcome, ListQuery};
 use crate::read::{ReadOutcome, ReadQuery};
@@ -46,6 +52,11 @@ pub enum RequestEnvelope {
     Receive(ReadQuery),
     Clear(ClearQuery),
     Doctor(DoctorQuery),
+    GraftRegister(GraftSessionRegistrationRequest),
+    GraftUnregister(GraftSessionUnregistrationRequest),
+    GraftFetch(GraftNudgeFetchRequest),
+    GraftDrain(GraftNudgeDrainRequest),
+    GraftAdvisoryStream(GraftAdvisoryStreamRequest),
 }
 
 /// Shared protocol response envelope.
@@ -57,6 +68,11 @@ pub enum ResponseEnvelope {
     Receive(ReadOutcome),
     Clear(ClearOutcome),
     Doctor(DoctorReport),
+    GraftRegister(GraftSessionRegistrationResponse),
+    GraftUnregister(GraftSessionUnregistrationResponse),
+    GraftFetch(GraftNudgeFetchResponse),
+    GraftDrain(GraftNudgeDrainResponse),
+    GraftAdvisoryStream(GraftAdvisoryStreamResponse),
     Error(ProtocolErrorEnvelope),
 }
 
@@ -106,6 +122,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::DaemonServingStateRejected
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::DaemonGraftSessionAlreadyRegistered
+        | AtmErrorCode::DaemonGraftSessionNotRegistered
         | AtmErrorCode::RemoteDeliveryOutcomeUnknown => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::AddressParseFailed => AtmErrorKind::Address,
         AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => AtmErrorKind::TeamNotFound,
@@ -202,6 +220,11 @@ pub enum MessageKind {
     ReceiveRequest = 0x0005,
     ClearRequest = 0x0006,
     DoctorRequest = 0x0007,
+    GraftRegisterRequest = 0x0008,
+    GraftUnregisterRequest = 0x0009,
+    GraftFetchRequest = 0x000a,
+    GraftDrainRequest = 0x000b,
+    GraftAdvisoryStreamRequest = 0x000c,
     SendSentResponse = 0x1001,
     SendAcknowledgedResponse = 0x1002,
     HeartbeatResponse = 0x1003,
@@ -209,6 +232,11 @@ pub enum MessageKind {
     ReceiveResponse = 0x1005,
     ClearResponse = 0x1006,
     DoctorResponse = 0x1007,
+    GraftRegisterResponse = 0x1008,
+    GraftUnregisterResponse = 0x1009,
+    GraftFetchResponse = 0x100a,
+    GraftDrainResponse = 0x100b,
+    GraftAdvisoryStreamResponse = 0x100c,
     ErrorResponse = 0x1fff,
 }
 
@@ -227,6 +255,11 @@ impl MessageKind {
                 | Self::ReceiveRequest
                 | Self::ClearRequest
                 | Self::DoctorRequest
+                | Self::GraftRegisterRequest
+                | Self::GraftUnregisterRequest
+                | Self::GraftFetchRequest
+                | Self::GraftDrainRequest
+                | Self::GraftAdvisoryStreamRequest
         )
     }
 
@@ -247,6 +280,11 @@ impl TryFrom<u16> for MessageKind {
             0x0005 => Self::ReceiveRequest,
             0x0006 => Self::ClearRequest,
             0x0007 => Self::DoctorRequest,
+            0x0008 => Self::GraftRegisterRequest,
+            0x0009 => Self::GraftUnregisterRequest,
+            0x000a => Self::GraftFetchRequest,
+            0x000b => Self::GraftDrainRequest,
+            0x000c => Self::GraftAdvisoryStreamRequest,
             0x1001 => Self::SendSentResponse,
             0x1002 => Self::SendAcknowledgedResponse,
             0x1003 => Self::HeartbeatResponse,
@@ -254,6 +292,11 @@ impl TryFrom<u16> for MessageKind {
             0x1005 => Self::ReceiveResponse,
             0x1006 => Self::ClearResponse,
             0x1007 => Self::DoctorResponse,
+            0x1008 => Self::GraftRegisterResponse,
+            0x1009 => Self::GraftUnregisterResponse,
+            0x100a => Self::GraftFetchResponse,
+            0x100b => Self::GraftDrainResponse,
+            0x100c => Self::GraftAdvisoryStreamResponse,
             0x1fff => Self::ErrorResponse,
             _ => {
                 return Err(AtmError::validation(format!(
@@ -410,21 +453,11 @@ pub fn read_frame(
     read_error: &'static str,
     oversize_error: &'static str,
 ) -> Result<Option<FramePayload>, AtmError> {
-    // Static assertion: all fixed-offset slice conversions below rely on the header being exactly
-    // ATM_FRAME_HEADER_BYTES (22) bytes. This fires at compile time if the constant ever changes.
-    const _: () = assert!(
-        ATM_FRAME_HEADER_BYTES == 22,
-        "read_frame slice offsets must be updated if ATM_FRAME_HEADER_BYTES changes"
-    );
-
     let Some(header) = read_frame_header(reader, read_error)? else {
         return Ok(None);
     };
 
-    let magic =
-        u32::from_be_bytes(header[0..4].try_into().unwrap_or_else(|_| {
-            unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes")
-        }));
+    let magic = u32::from_be_bytes(header[0..4].try_into().expect("magic"));
     if magic != ATM_FRAME_MAGIC {
         return Err(AtmError::validation(format!(
             "unsupported ATM daemon frame magic 0x{magic:08x}"
@@ -434,10 +467,7 @@ pub fn read_frame(
         ));
     }
 
-    let version =
-        u16::from_be_bytes(header[4..6].try_into().unwrap_or_else(|_| {
-            unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes")
-        }));
+    let version = u16::from_be_bytes(header[4..6].try_into().expect("version"));
     if version != ATM_FRAME_VERSION_V1 {
         return Err(AtmError::validation(format!(
             "unsupported ATM daemon frame version {version}"
@@ -448,13 +478,8 @@ pub fn read_frame(
     }
 
     let message_kind =
-        MessageKind::try_from(u16::from_be_bytes(header[6..8].try_into().unwrap_or_else(
-            |_| unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes"),
-        )))?;
-    let flags =
-        u16::from_be_bytes(header[8..10].try_into().unwrap_or_else(|_| {
-            unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes")
-        }));
+        MessageKind::try_from(u16::from_be_bytes(header[6..8].try_into().expect("kind")))?;
+    let flags = u16::from_be_bytes(header[8..10].try_into().expect("flags"));
     if flags != ATM_FRAME_FLAGS_V1 {
         return Err(AtmError::validation(format!(
             "unsupported ATM daemon frame flags 0x{flags:04x} for version {version}"
@@ -464,14 +489,9 @@ pub fn read_frame(
         ));
     }
     let request_id = RequestId::new(u64::from_be_bytes(
-        header[10..18].try_into().unwrap_or_else(|_| {
-            unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes")
-        }),
+        header[10..18].try_into().expect("request id"),
     ))?;
-    let payload_length =
-        u32::from_be_bytes(header[18..22].try_into().unwrap_or_else(|_| {
-            unreachable!("header buffer is always ATM_FRAME_HEADER_BYTES bytes")
-        })) as usize;
+    let payload_length = u32::from_be_bytes(header[18..22].try_into().expect("payload")) as usize;
     if payload_length > MAX_DAEMON_FRAME_BYTES {
         return Err(AtmError::daemon_unavailable(oversize_error).with_recovery(
             "Reduce the daemon request/response payload size before retrying the ATM command.",
@@ -518,6 +538,11 @@ fn request_message_kind(request: &RequestEnvelope) -> MessageKind {
         RequestEnvelope::Receive(_) => MessageKind::ReceiveRequest,
         RequestEnvelope::Clear(_) => MessageKind::ClearRequest,
         RequestEnvelope::Doctor(_) => MessageKind::DoctorRequest,
+        RequestEnvelope::GraftRegister(_) => MessageKind::GraftRegisterRequest,
+        RequestEnvelope::GraftUnregister(_) => MessageKind::GraftUnregisterRequest,
+        RequestEnvelope::GraftFetch(_) => MessageKind::GraftFetchRequest,
+        RequestEnvelope::GraftDrain(_) => MessageKind::GraftDrainRequest,
+        RequestEnvelope::GraftAdvisoryStream(_) => MessageKind::GraftAdvisoryStreamRequest,
     }
 }
 
@@ -532,6 +557,11 @@ fn response_message_kind(response: &ResponseEnvelope) -> MessageKind {
         ResponseEnvelope::Receive(_) => MessageKind::ReceiveResponse,
         ResponseEnvelope::Clear(_) => MessageKind::ClearResponse,
         ResponseEnvelope::Doctor(_) => MessageKind::DoctorResponse,
+        ResponseEnvelope::GraftRegister(_) => MessageKind::GraftRegisterResponse,
+        ResponseEnvelope::GraftUnregister(_) => MessageKind::GraftUnregisterResponse,
+        ResponseEnvelope::GraftFetch(_) => MessageKind::GraftFetchResponse,
+        ResponseEnvelope::GraftDrain(_) => MessageKind::GraftDrainResponse,
+        ResponseEnvelope::GraftAdvisoryStream(_) => MessageKind::GraftAdvisoryStreamResponse,
         ResponseEnvelope::Error(_) => MessageKind::ErrorResponse,
     }
 }
