@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U8-R2-ARCH001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U8-R2-ARCH001" ;
+  triage:title "docs/architecture.md still describes atm-graft in pre-U.8 daemon-private terms" ;
+  triage:description "Top-level docs/architecture.md refers to atm-graft as \"removed in pU-s0 as out-of-scope for the 1.0 surface\" (lines 56 and 111) and contains no Phase-U supersession note reflecting that U.8 re-introduces atm-graft under a shared thin-client ICD / client-owned model. The file is NOT in the sprint-U8 required documentation update list. quality-mgr self-tagged this finding as informational. The file is identical across all three active feature branches (u8, u9, u10) because no sprint updated it. The integration branch has a divergent architecture.md (additional unified-state and roster-pid content merged from earlier sprints) but the same stale atm-graft language. Appropriate fix site is integrate/phase-U after all sprint PRs merge, not a feature branch." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-R2-ARCH001/integrate/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-R2-ARCH001/integrate/2> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/current> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-U/current> .
+
+# --- Occurrence 1: Phase-R redesign note still says atm-graft was removed ---
+
+<urn:atm:triage:occurrence/ATM-QA-U8-R2-ARCH001/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 56 ;
+  triage:snippet "`atm-graft` was implemented in T.6-T.8 and removed in pU-s0 as out-of-scope for the 1.0 surface" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "current" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/current> .
+
+# --- Occurrence 2: Crate boundaries section repeats the same stale claim ---
+
+<urn:atm:triage:occurrence/ATM-QA-U8-R2-ARCH001/integrate/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 111 ;
+  triage:snippet "Phase T added `atm-graft` as a thin-client line (T.6-T.8); removed in pU-s0 as out-of-scope for the 1.0 surface" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "current" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/current> .
+
+# --- Feature-branch branch states: absent (file not in sprint scope, identical stale content) ---
+
+<urn:atm:triage:worktree/pU-u8/b82ecf9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "b82ecf9" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pU-u9/3a36435>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "3a36435" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/7bc28ff>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "7bc28ff" ;
+  triage:orderIndex 10 .
+
+# --- Integration branch (canonical fix target) ---
+
+<urn:atm:triage:worktree/integrate-phase-U/current>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "current" ;
+  triage:orderIndex 99 .

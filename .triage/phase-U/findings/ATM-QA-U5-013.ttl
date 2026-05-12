@@ -1,0 +1,100 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U5-013>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U5-013" ;
+  triage:title "load_logical_current_record loops over load_message_record per chain member — downstream of ATM-QA-U5-005" ;
+  triage:description "crates/atm-core/src/read/mod.rs:1056-1106: load_logical_current_record builds chain_ids from row_by_id (metadata only) but then calls runtime.load_message_record(...) for every chain member in the loop at line 1084. This is a downstream file-read loop that must be verified after ATM-QA-U5-005 is fixed — once load_message_record is backed by SQLite, this loop also reads SQLite per chain member instead of JSON files. The loop itself is structural and remains after ATM-QA-U5-005 is resolved; verification is required." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:dependsOn <urn:atm:triage:finding/ATM-QA-U5-005> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-013/pU-u5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-013/pU-u5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-013/pU-u5/3> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5/ae75f1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# Occurrence 1: load_logical_current_record function definition
+<urn:atm:triage:occurrence/ATM-QA-U5-013/pU-u5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 1056 ;
+  triage:snippet "fn load_logical_current_record<R: RetainedMailboxRuntime>(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# Occurrence 2: load_message_record call inside the per-chain-member loop (line 1084)
+<urn:atm:triage:occurrence/ATM-QA-U5-013/pU-u5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 1084 ;
+  triage:snippet "let record = runtime.load_message_record(home_dir, team, agent, &row.message_key)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# Occurrence 3: outer load_message_record call at line 1026 (caller in output_messages_from_metadata_selection)
+<urn:atm:triage:occurrence/ATM-QA-U5-013/pU-u5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 1026 ;
+  triage:snippet "let Some(record) = runtime.load_message_record(home_dir, team, agent, &message_key)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# Worktree snapshots
+<urn:atm:triage:worktree/pU-u1/6a692b40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u5/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .

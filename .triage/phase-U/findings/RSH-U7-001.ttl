@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-U7-001>
+  a triage:Finding ;
+  triage:findingId "RSH-U7-001" ;
+  triage:title "load_roster SQL has no LIMIT clause; full team_roster result set buffered before MAX_STATUS_CACHE_ENTRIES cap" ;
+  triage:description "crates/atm-rusqlite/src/roster_store.rs:91 — SELECT ... FROM team_roster WHERE team_name = ?1 ORDER BY agent_name ASC has no LIMIT clause. The full result set is materialized into a Vec<RosterMember> before the MAX_STATUS_CACHE_ENTRIES cap is applied in the caller (runtime_status_cache.rs:388). U.4/U.5/U.6 use a different schema (roster_json blob, single row per team) and are absent for this finding. U.7 introduced the row-per-member team_roster schema without a query-level guard." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U7-001/pU-u7/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u7/8e37dd1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u7/8e37dd1> .
+
+<urn:atm:triage:occurrence/RSH-U7-001/pU-u7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/roster_store.rs" ;
+  triage:line 91 ;
+  triage:snippet "\"SELECT agent_name, member_kind, harness, agent_type, model, recipient_pane_id, metadata_json\\n                 FROM team_roster\\n                 WHERE team_name = ?1\\n                 ORDER BY agent_name ASC;\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u7/8e37dd1> .
+
+<urn:atm:triage:worktree/pU-u4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u5/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pU-u6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pU-u7/8e37dd1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:orderIndex 7 .

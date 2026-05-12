@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-U4-006>
+  a triage:Finding ;
+  triage:findingId "RSH-U4-006" ;
+  triage:title "SharedDb::open no timeout on create_dir_all or initial connection open" ;
+  triage:description "crates/atm-rusqlite/src/shared_db.rs:205 — SharedDb::open has no timeout on create_dir_all or the initial connection open." ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-006/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-006/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-006/pU-u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-006/pU-u4/2> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1b22524> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/c1e0e06> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4/335fe3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/RSH-U4-006/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 214 ;
+  triage:snippet "std::fs::create_dir_all(parent).map_err(|error| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+<urn:atm:triage:occurrence/RSH-U4-006/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 214 ;
+  triage:snippet "std::fs::create_dir_all(parent).map_err(|error| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+<urn:atm:triage:occurrence/RSH-U4-006/pU-u4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 208 ;
+  triage:snippet "std::fs::create_dir_all(parent).map_err(|error| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/RSH-U4-006/pU-u4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 404 ;
+  triage:snippet "Connection::open(path).map_err(|error| sqlite_open_error(target, error))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .

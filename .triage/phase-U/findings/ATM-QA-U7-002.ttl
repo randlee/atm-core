@@ -1,0 +1,156 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U7-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U7-002" ;
+  triage:title "docs/architecture.md Section 21.1/21.1.1 still lists pid as durable roster field; required U.7 doc update not applied" ;
+  triage:description "docs/architecture.md:2127-2130 lists pid in \"Authoritative State\" as \"durable SQLite truth\". docs/architecture.md:2183-2187 lists pid INTEGER NULL in \"Minimum canonical roster-member durable fields\". U.7 removed pid from durable SQLite truth entirely — both entries must be removed and a note added that pid is transient cache-only state." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T12:08:14Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u6/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u7/2> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4/039a552> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5/9bae271> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u6/22dfffa> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u7/8e37dd1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u7/8e37dd1> .
+
+# Occurrences on feature/pU-u4-unified-message-state (head=039a552)
+
+<urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u4/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2127 ;
+  triage:snippet "`pid`: durable SQLite truth cached in daemon memory as the primary liveness field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/039a552> .
+
+<urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u4/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2184 ;
+  triage:snippet "- `pid INTEGER NULL` — durable roster truth for the current owning process identity" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/039a552> .
+
+# Occurrences on feature/pU-u5-sqlite-query-cutover (head=9bae271)
+
+<urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u5/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2127 ;
+  triage:snippet "`pid`: durable SQLite truth cached in daemon memory as the primary liveness field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/9bae271> .
+
+<urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u5/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2184 ;
+  triage:snippet "- `pid INTEGER NULL` — durable roster truth for the current owning process identity" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/9bae271> .
+
+# Occurrences on feature/pU-u6-provenance-field-reduction (head=22dfffa)
+
+<urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u6/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2129 ;
+  triage:snippet "`pid`: durable SQLite truth cached in daemon memory as the primary liveness field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u6/22dfffa> .
+
+<urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u6/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2186 ;
+  triage:snippet "- `pid INTEGER NULL` — durable roster truth for the current owning process identity" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u6/22dfffa> .
+
+# Occurrences on feature/pU-u7-roster-simplification (head=8e37dd1)
+
+<urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u7/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2129 ;
+  triage:snippet "`pid`: durable SQLite truth cached in daemon memory as the primary liveness field" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u7/8e37dd1> .
+
+<urn:atm:triage:occurrence/ATM-QA-U7-002/pU-u7/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 2186 ;
+  triage:snippet "- `pid INTEGER NULL` — durable roster truth for the current owning process identity" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u7/8e37dd1> .
+
+# Worktree snapshots
+
+<urn:atm:triage:worktree/pU-u4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u5/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u7/8e37dd1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:orderIndex 4 .

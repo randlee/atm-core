@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-U5-004>
+  a triage:Finding ;
+  triage:findingId "ARCH-U5-004" ;
+  triage:title "sql_load-message.mmd diagram omits mail_message_states LEFT JOIN and apply_loaded_state step" ;
+  triage:description "docs/atm-rusqlite/sql_load-message.mmd: Diagram shows only mail_messages in read_tables; omits the mail_message_states LEFT JOIN and apply_loaded_state step that were added in U.4." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "directory" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-004/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-004/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-004/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-004/pU-u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-004/pU-u5/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/6a692b40> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1b22524> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/c1e0e06> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4/335fe3d> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5/ae75f1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+<urn:atm:triage:occurrence/ARCH-U5-004/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/sql_load-message.mmd" ;
+  triage:line 4 ;
+  triage:snippet "%% read_tables: mail_messages" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/6a692b40> .
+
+<urn:atm:triage:occurrence/ARCH-U5-004/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/sql_load-message.mmd" ;
+  triage:line 4 ;
+  triage:snippet "%% read_tables: mail_messages" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+<urn:atm:triage:occurrence/ARCH-U5-004/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/sql_load-message.mmd" ;
+  triage:line 4 ;
+  triage:snippet "%% read_tables: mail_messages" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+<urn:atm:triage:occurrence/ARCH-U5-004/pU-u4/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/sql_load-message.mmd" ;
+  triage:line 4 ;
+  triage:snippet "%% read_tables: mail_messages" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/ARCH-U5-004/pU-u5/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/sql_load-message.mmd" ;
+  triage:line 4 ;
+  triage:snippet "%% read_tables: mail_messages" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+<urn:atm:triage:worktree/pU-u1/6a692b40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u5/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 .

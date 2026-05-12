@@ -1,0 +1,76 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ATM-QA-U5-012 — docs/project-plan.md line count differs from develop baseline
+#
+# Investigation summary (2026-05-12):
+# develop baseline: 3020 lines (b6506eff)
+# All phase-U feature branches: 2920–2927 lines
+# integrate/phase-U: 2920 lines
+#
+# The ~100-line reduction is fully accounted for by intentional editorial changes
+# made in commit 5d7fa13 ("docs: finalize phase U planning and graft boundaries"):
+#   1. Section 21 (Phase Q) condensed from ~272 lines to a 7-line historical stub (-265)
+#   2. Section 25 (Phase S summary, 24 lines) removed — Phase S complete, detail in plan-phase-S.md (-24)
+#   3. Section 26 (Phase T summary, 38 lines) removed — Phase T complete, detail in plan-phase-T.md (-38)
+#   4. Section 25 replaced with Phase U Mailbox Simplification content (+235 lines)
+# Net: -(265+24+38) + 235 ≈ -92 lines ≈ observed 100-line reduction
+#
+# plan-phase-S.md and plan-phase-T.md both exist on all feature branches confirming
+# the removed summary sections were intentional editorial consolidation, not accidental loss.
+# No pre-Phase-U content was accidentally dropped.
+
+<urn:atm:triage:finding/ATM-QA-U5-012>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U5-012" ;
+  triage:title "docs/project-plan.md line count differs from develop baseline — possible content dropped" ;
+  triage:description "docs/project-plan.md line count on feature/pU-u5-sqlite-query-cutover (2927 lines) differs from develop baseline (3020 lines). Investigation confirmed all missing lines are accounted for by intentional editorial changes in the Phase U planning commit (5d7fa13): Section 21 Phase Q condensed from full stub to minimal historical marker (-265 lines), Phase S and Phase T summary sections removed as completed phases (-24, -38 lines), Phase U Mailbox Simplification section added (+235 lines). plan-phase-S.md and plan-phase-T.md exist on all branches. No accidental content loss." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:fixedOn <urn:atm:triage:worktree/pU-u1/6a692b40> ;
+  triage:fixedOn <urn:atm:triage:worktree/pU-u2/1b22524> ;
+  triage:fixedOn <urn:atm:triage:worktree/pU-u3/c1e0e06> ;
+  triage:fixedOn <urn:atm:triage:worktree/pU-u4/335fe3d> ;
+  triage:fixedOn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+<urn:atm:triage:worktree/pU-u1/6a692b40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u5/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 .

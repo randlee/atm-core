@@ -1,0 +1,185 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Carry-forward of RSH-U4-001.
+# Prior finding (RSH-U4-001) was: no spawn_blocking documentation at all.
+# Fix applied between U4@335fe3d and U4@039a552: doc comments added to
+# with_connection() and with_transaction() stating callers must use spawn_blocking.
+# RSH-U6-004 captures the residual: advisory doc comments exist on all four
+# in-scope branches (U4@039a552, U5@9bae271, U6@22dfffa, U7@8e37dd1), but
+# there is no compile-time or runtime enforcement of the blocking contract.
+# No enforcement mechanism (block_in_place, must_not_await, tokio::task gating,
+# #[must_use], debug_assert, or accepted-risk comment) was found in shared_db.rs
+# on any branch.
+#
+# Sweep results per branch:
+# U4@039a552: lines 237-239 (with_connection doc+fn), 248-250 (with_transaction doc+fn)
+#             — spawn_blocking advisory present; no enforcement.
+# U5@9bae271: lines 237-239, 248-250 — same as U4.
+# U6@22dfffa: lines 236-238, 247-249 — same advisory pattern.
+# U7@af056ae (prior): lines 230-232, 241-243 — same advisory pattern.
+# U7@8e37dd1 (current): lines 232-243 — followup_pass confirmed: advisory doc
+#   only; no debug_assert, accepted-risk comment, block_in_place, must_not_await,
+#   tokio::task gating, or #[must_use] added in pU-u7-roster-simplification sprint.
+#   TASK-1391 acceptance has NOT been applied. Finding remains open on all branches.
+
+<urn:atm:triage:finding/RSH-U6-004>
+  a triage:Finding ;
+  triage:findingId "RSH-U6-004" ;
+  triage:title "with_connection/with_transaction async/blocking contract is advisory-only; no runtime enforcement (carry-forward RSH-U4-001)" ;
+  triage:description "crates/atm-rusqlite/src/shared_db.rs — with_connection() and with_transaction() doc comments instruct callers to use spawn_blocking, but there is no compile-time or runtime enforcement. A caller from an async context can silently violate the contract and stall the executor under 5-second busy-timeout." ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T12:00:00Z"^^xsd:dateTime ;
+  triage:references "RSH-U4-001" , "PR #249" ;
+  triage:hasOccurrence
+    <urn:atm:triage:occurrence/RSH-U6-004/pU-u4-unified-message-state/1> ,
+    <urn:atm:triage:occurrence/RSH-U6-004/pU-u4-unified-message-state/2> ,
+    <urn:atm:triage:occurrence/RSH-U6-004/pU-u5-sqlite-query-cutover/1> ,
+    <urn:atm:triage:occurrence/RSH-U6-004/pU-u5-sqlite-query-cutover/2> ,
+    <urn:atm:triage:occurrence/RSH-U6-004/pU-u6-provenance-field-reduction/1> ,
+    <urn:atm:triage:occurrence/RSH-U6-004/pU-u6-provenance-field-reduction/2> ,
+    <urn:atm:triage:occurrence/RSH-U6-004/pU-u7-roster-simplification/1> ,
+    <urn:atm:triage:occurrence/RSH-U6-004/pU-u7-roster-simplification/2> ;
+  triage:openOn
+    <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> ,
+    <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/9bae271> ,
+    <urn:atm:triage:worktree/pU-u6-provenance-field-reduction/22dfffa> ,
+    <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> .
+
+# — U4 occurrences —
+
+<urn:atm:triage:occurrence/RSH-U6-004/pU-u4-unified-message-state/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 239 ;
+  triage:snippet "pub(crate) fn with_connection<T>( ... ) — advisory doc only, no enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> .
+
+<urn:atm:triage:occurrence/RSH-U6-004/pU-u4-unified-message-state/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 250 ;
+  triage:snippet "pub(crate) fn with_transaction<T>( ... ) — advisory doc only, no enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> .
+
+# — U5 occurrences —
+
+<urn:atm:triage:occurrence/RSH-U6-004/pU-u5-sqlite-query-cutover/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 239 ;
+  triage:snippet "pub(crate) fn with_connection<T>( ... ) — advisory doc only, no enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/9bae271> .
+
+<urn:atm:triage:occurrence/RSH-U6-004/pU-u5-sqlite-query-cutover/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 250 ;
+  triage:snippet "pub(crate) fn with_transaction<T>( ... ) — advisory doc only, no enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/9bae271> .
+
+# — U6 occurrences —
+
+<urn:atm:triage:occurrence/RSH-U6-004/pU-u6-provenance-field-reduction/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 238 ;
+  triage:snippet "pub(crate) fn with_connection<T>( ... ) — advisory doc only, no enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u6-provenance-field-reduction/22dfffa> .
+
+<urn:atm:triage:occurrence/RSH-U6-004/pU-u6-provenance-field-reduction/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 249 ;
+  triage:snippet "pub(crate) fn with_transaction<T>( ... ) — advisory doc only, no enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u6-provenance-field-reduction/22dfffa> .
+
+# — U7 occurrences (updated to 8e37dd1) —
+
+<urn:atm:triage:occurrence/RSH-U6-004/pU-u7-roster-simplification/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 232 ;
+  triage:snippet "pub(crate) fn with_connection<T>( ... ) — advisory doc only, no enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> .
+
+<urn:atm:triage:occurrence/RSH-U6-004/pU-u7-roster-simplification/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 243 ;
+  triage:snippet "pub(crate) fn with_transaction<T>( ... ) — advisory doc only, no enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> .
+
+# — WorktreeSnapshot nodes —
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u6-provenance-field-reduction/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 6 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:orderIndex 7 ;
+  triage:branchState "open" .

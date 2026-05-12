@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U4-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U4-005" ;
+  triage:title "Missing unified-state 5-field round-trip test for MailStoreVisibilityState" ;
+  triage:description "Sprint U.4 contract requires 'schema/serialization tests for the unified state shape.' No test proves all 5 unified state fields (read, pending_ack_at, acknowledged_at, expires_at, deleted_at) round-trip through MailStoreVisibilityState with non-None values. Fix: add dedicated round-trip test with all 5 fields set to non-None values." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-005/pU-u4-unified-message-state/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-005/pU-u4-unified-message-state/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1128 ;
+  triage:snippet "fn mail_store_round_trips_message_visibility_and_health() — sets acknowledged_at: None, deleted_at: None; no serde/JSON round-trip with all 5 fields non-None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchStatus "absent" .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchStatus "absent" .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 ;
+  triage:branchStatus "open" .

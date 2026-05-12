@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Finding: ARCH-U5-001
+# Title:   read/mod.rs exceeds 1000-line RULE-003 limit
+# Phase:   phase-U
+# Triaged: 2026-05-12
+# ──────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/ARCH-U5-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-U5-001" ;
+  triage:title "read/mod.rs exceeds 1000-line RULE-003 limit" ;
+  triage:description "crates/atm-core/src/read/mod.rs has 1305 non-test lines on feature/pU-u5-sqlite-query-cutover (test module starts at line 1306, total 1915 lines), exceeding the RULE-003 1000-line architectural limit by 305 lines. The u5 sprint added ~415 non-test lines (functions: logical_current_messages, bucket_counts_for, select_messages, selected_after_filters, message_key_for_classified, output_messages_from_metadata_selection, load_logical_current_record, apply_display_mutations_to_store, output_messages_from_selection, effective_display_envelope, hidden_from_normal_views, hidden_for_selection, DisplayMutationResult, displayed_messages_require_mutation, apply_display_mutations, transition_displayed_message). Must be split at a logical seam, e.g. extract metadata-row selection helpers into read/metadata_selection.rs." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-001/pU-u5/1> ;
+
+  triage:openOn   <urn:atm:triage:worktree/pU-u5/ae75f1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# ── Occurrence ────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-U5-001/pU-u5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 1001 ;
+  triage:snippet "fn message_key_for_classified(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:detail "Non-test line count = 1305 (test module starts at line 1306). Line 1001 is the first line exceeding the 1000-line RULE-003 limit." ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pU-u1/6a692b40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" ;
+  triage:nonTestLineCount 882 .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchState "absent" ;
+  triage:nonTestLineCount 882 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchState "absent" ;
+  triage:nonTestLineCount 890 .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 ;
+  triage:branchState "absent" ;
+  triage:nonTestLineCount 890 .
+
+<urn:atm:triage:worktree/pU-u5/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" ;
+  triage:nonTestLineCount 1305 .
