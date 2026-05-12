@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 
 use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
-use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
+use atm_core::protocol::{
+    JsonAtmProtocolCodec, ProtocolErrorEnvelope, RequestEnvelope, RequestId, ResponseEnvelope,
+};
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{
     Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
@@ -867,6 +869,23 @@ fn handle_connection(
         "daemon request frame accepted under configured size cap"
     );
     let (request_id, request) = codec.request_from_frame(frame)?;
+    if let RequestEnvelope::GraftAdvisoryStream(request) = request {
+        stream.set_send_timeout(None).map_err(|source| {
+            AtmError::daemon_unavailable(
+                "failed to clear daemon advisory-stream write deadline",
+            )
+            .with_recovery(
+                "Restart the daemon; the same-host advisory stream socket could not switch into long-lived streaming mode.",
+            )
+            .with_source(source)
+        })?;
+        let mut sink = LocalIpcAdvisoryStreamSink {
+            stream: &mut stream,
+            codec: &codec,
+            request_id,
+        };
+        return dispatcher.dispatch_graft_advisory_stream(request, &mut sink);
+    }
 
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
     let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
@@ -933,6 +952,30 @@ fn handle_connection(
     Ok(())
 }
 
+struct LocalIpcAdvisoryStreamSink<'a> {
+    stream: &'a mut LocalSocketStream,
+    codec: &'a JsonAtmProtocolCodec,
+    request_id: RequestId,
+}
+
+impl boundary::AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
+    fn emit(&mut self, response: ResponseEnvelope) -> Result<(), AtmError> {
+        let frame = self.codec.response_to_frame(self.request_id, response)?;
+        atm_core::protocol::write_frame(
+            self.stream,
+            &frame,
+            "failed to write daemon advisory-stream response frame",
+        )?;
+        self.stream.flush().map_err(|source| {
+            AtmError::daemon_unavailable("failed to flush daemon advisory-stream response frame")
+                .with_recovery(
+                    "Retry graft activation after atm-daemon returns to a healthy serving state.",
+                )
+                .with_source(source)
+        })
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -975,6 +1018,14 @@ mod tests {
             request: RequestEnvelope,
         ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
             panic!("intentional dispatcher panic for test: {request:?}");
+        }
+
+        fn dispatch_graft_advisory_stream(
+            &self,
+            request: atm_core::graft::GraftAdvisoryStreamRequest,
+            _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
+        ) -> Result<(), atm_core::error::AtmError> {
+            panic!("intentional dispatcher panic for advisory stream test: {request:?}");
         }
     }
 

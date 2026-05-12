@@ -142,6 +142,8 @@ dependencies = [
  "atm-daemon-client",
  "interprocess",
  "serde_json",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

@@ -72,6 +72,14 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
             other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
         }
     }
+
+    fn dispatch_graft_advisory_stream(
+        &self,
+        _request: atm_core::graft::GraftAdvisoryStreamRequest,
+        _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
+    ) -> Result<(), atm_core::error::AtmError> {
+        panic!("unexpected advisory stream request in DoctorOnlyDispatcher");
+    }
 }
 
 pub(crate) fn connect_daemon_local_ipc_until_ready(
