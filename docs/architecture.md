@@ -688,6 +688,12 @@ Schema ownership split:
 - ATM additive compatibility fields are documented in
   [`atm-message-schema.md`](./atm-message-schema.md)
 
+U.3 body projection rule:
+- terminal `add-details` composes predecessor context into the effective body
+- terminal `supersede` exposes only the replacement body
+- crate-local ownership for the exact projection algorithm lives in
+  [`atm-core/architecture.md`](./atm-core/architecture.md)
+
 Architectural rules:
 - Claude JSON is a compatibility surface, not ATM-owned durable truth.
 - No normal ATM runtime/query path may read machine state from Claude JSON.
@@ -974,6 +980,10 @@ Phase R continuation rules:
 - message update chains are linear and terminal-node driven:
   - `add-details` appends context
   - `supersede` replaces the prior message as the effective current one
+- the logical-current projection is mode-aware:
+  - terminal `add-details` keeps the terminal id but composes the still-valid
+    predecessor context into the current body
+  - terminal `supersede` keeps only the replacement body
 - only the original sender may append successors to the chain
 - one acknowledgement clears the chain through the current terminal node
 - the root message establishes whether the chain is ack-required and

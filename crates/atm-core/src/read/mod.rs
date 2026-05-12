@@ -636,6 +636,14 @@ fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedM
                 .message_id
                 .is_none_or(|message_id| thread_index.is_terminal(message_id))
         })
+        .map(|mut message| {
+            if let Some(message_id) = message.envelope.message_id
+                && let Some(logical) = thread_index.logical_current_envelope(message_id)
+            {
+                message.envelope = logical;
+            }
+            message
+        })
         .collect()
 }
 
@@ -1113,6 +1121,195 @@ mod tests {
 
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].envelope.message_id, Some(terminal_id));
+    }
+
+    #[test]
+    fn actionable_selection_preserves_parent_context_for_add_details() {
+        let root_id = AtmMessageId::new();
+        let detail_id = AtmMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                message("root context", root_id, None, None, false),
+                message(
+                    "follow-up detail",
+                    detail_id,
+                    Some(root_id),
+                    Some(ThreadMode::AddDetails),
+                    false,
+                ),
+            ],
+        }];
+        let query = ReadQuery {
+            home_dir: PathBuf::new(),
+            current_dir: PathBuf::new(),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            selection_mode: ReadSelection::Actionable,
+            seen_state_filter: false,
+            seen_state_update: false,
+            ack_activation_mode: AckActivationMode::ReadOnly,
+            message_id_filter: None,
+            sender_filter: None,
+            timestamp_filter: None,
+            task_filter: None,
+            contains_filter: Some("root context".to_string()),
+            timeout_secs: None,
+        };
+
+        let (_counts, selected) = selection_state_for_source_files(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            &query,
+            None,
+        );
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].envelope.message_id, Some(detail_id));
+        assert_eq!(
+            selected[0].envelope.text,
+            "root context\n\nfollow-up detail"
+        );
+    }
+
+    #[test]
+    fn actionable_selection_does_not_preserve_parent_context_for_supersede() {
+        let root_id = AtmMessageId::new();
+        let supersede_id = AtmMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                message("root context", root_id, None, None, false),
+                message(
+                    "replacement instruction",
+                    supersede_id,
+                    Some(root_id),
+                    Some(ThreadMode::Supersede),
+                    false,
+                ),
+            ],
+        }];
+        let query = ReadQuery {
+            home_dir: PathBuf::new(),
+            current_dir: PathBuf::new(),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            selection_mode: ReadSelection::Actionable,
+            seen_state_filter: false,
+            seen_state_update: false,
+            ack_activation_mode: AckActivationMode::ReadOnly,
+            message_id_filter: None,
+            sender_filter: None,
+            timestamp_filter: None,
+            task_filter: None,
+            contains_filter: Some("root context".to_string()),
+            timeout_secs: None,
+        };
+
+        let (_counts, selected) = selection_state_for_source_files(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            &query,
+            None,
+        );
+
+        assert!(selected.is_empty());
+    }
+
+    #[test]
+    fn successor_after_read_stays_actionable_for_add_details() {
+        let root_id = AtmMessageId::new();
+        let detail_id = AtmMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                message("root context", root_id, None, None, true),
+                message(
+                    "follow-up detail",
+                    detail_id,
+                    Some(root_id),
+                    Some(ThreadMode::AddDetails),
+                    false,
+                ),
+            ],
+        }];
+        let query = ReadQuery {
+            home_dir: PathBuf::new(),
+            current_dir: PathBuf::new(),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            selection_mode: ReadSelection::Actionable,
+            seen_state_filter: false,
+            seen_state_update: false,
+            ack_activation_mode: AckActivationMode::ReadOnly,
+            message_id_filter: None,
+            sender_filter: None,
+            timestamp_filter: None,
+            task_filter: None,
+            contains_filter: None,
+            timeout_secs: None,
+        };
+
+        let (_counts, selected) = selection_state_for_source_files(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            &query,
+            None,
+        );
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].envelope.message_id, Some(detail_id));
+        assert_eq!(selected[0].bucket, DisplayBucket::Unread);
+    }
+
+    #[test]
+    fn successor_after_read_stays_actionable_for_supersede() {
+        let root_id = AtmMessageId::new();
+        let supersede_id = AtmMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                message("root context", root_id, None, None, true),
+                message(
+                    "replacement instruction",
+                    supersede_id,
+                    Some(root_id),
+                    Some(ThreadMode::Supersede),
+                    false,
+                ),
+            ],
+        }];
+        let query = ReadQuery {
+            home_dir: PathBuf::new(),
+            current_dir: PathBuf::new(),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            selection_mode: ReadSelection::Actionable,
+            seen_state_filter: false,
+            seen_state_update: false,
+            ack_activation_mode: AckActivationMode::ReadOnly,
+            message_id_filter: None,
+            sender_filter: None,
+            timestamp_filter: None,
+            task_filter: None,
+            contains_filter: None,
+            timeout_secs: None,
+        };
+
+        let (_counts, selected) = selection_state_for_source_files(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            &query,
+            None,
+        );
+
+        assert_eq!(selected.len(), 1);
+        assert_eq!(selected[0].envelope.message_id, Some(supersede_id));
+        assert_eq!(selected[0].bucket, DisplayBucket::Unread);
     }
 
     #[test]

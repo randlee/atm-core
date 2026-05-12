@@ -1302,6 +1302,11 @@ Phase R continuation semantics:
     valid historical context
   - `supersede` replaces the prior message as the effective current
     instruction
+  - logical-current selection keeps the terminal message id for both modes
+  - terminal `add-details` preserves still-valid predecessor context in the
+    effective current body used for matching and display
+  - terminal `supersede` uses only the replacement body as the effective
+    current instruction
   - if a successor arrives after the predecessor was already read, the
     successor still produces a new nudge so the current effective instruction
     is visible
@@ -1321,13 +1326,14 @@ Phase R continuation semantics:
 - `REQ-P-THREAD-005` Ephemeral messages are standalone, time-bounded records.
 
   Required behavior:
-  - ephemeral messages expire by time only, using `expires_at`
+  - ephemeral messages expire by time only, using `stale_at`
+  - compatibility/export payloads carry ephemeral expiry with `staleAt`
   - no product behavior may depend on first-read deletion semantics
   - periodic daemon cleanup deletes expired ephemeral rows
   - ephemeral messages are not updatable
   - ephemeral messages may not be parents or children in successor chains
   - once read, an ephemeral message becomes hidden from normal reads but
-    remains visible through `--view-all` until `expires_at`
+    remains visible through `--view-all` until `stale_at`
 
 ### 8.5 Output Contract
 

@@ -513,6 +513,9 @@ fn append_reply_message(
 
     source_files.push(SourceFile {
         path: reply_inbox_path.to_path_buf(),
+        // Accepted risk: mailbox lock acquisition is time-bounded, but this
+        // compatibility read remains synchronous and may still stall on a bad
+        // filesystem while the lock is held.
         messages: runtime.read_messages(reply_inbox_path)?,
     });
     source_files
@@ -616,6 +619,31 @@ mod tests {
                     AtmMessageId::new(),
                     Some(root_id),
                     Some(ThreadMode::Supersede),
+                ),
+            ],
+        }];
+
+        let error = reject_non_terminal_ack(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            root_id,
+        )
+        .expect_err("stale parent ack");
+
+        assert!(error.message.contains("current terminal message"));
+    }
+
+    #[test]
+    fn reject_non_terminal_ack_requires_latest_thread_message_for_add_details() {
+        let root_id = AtmMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                thread_message(root_id, None, None),
+                thread_message(
+                    AtmMessageId::new(),
+                    Some(root_id),
+                    Some(ThreadMode::AddDetails),
                 ),
             ],
         }];

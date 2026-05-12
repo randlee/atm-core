@@ -123,6 +123,9 @@ Initial crate requirement IDs:
   query behavior, shared match filters, successor-chain terminal-node
   selection, and list-row shaping. Satisfies:
   `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-RELIABILITY-001`.
+  U.3 note: logical-current projection must remain mode-aware; terminal
+  `add-details` preserves predecessor context in the effective current body,
+  while terminal `supersede` does not.
 - `REQ-CORE-SEND-003` `atm-core` owns send-path message construction,
   classification, and compatibility-export behavior above the owned
   ingress/export boundaries. Satisfies the send-path service aspects of:
