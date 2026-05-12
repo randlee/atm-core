@@ -1,0 +1,20 @@
+%% title: `atm ack`
+%% summary: Ack-state mutation and optional reply creation.
+%% commentary: This path should mutate only status plus any explicit reply row, then run post-commit effects without changing durable truth on hook or nudge failure.
+%% sets: cli,client
+flowchart TD
+    A[ack request] --> B[Validate actor target and ack mode]
+    B -->|validation error| E1[ValidationFailed]
+    B --> C["SQL TX 1: update message_status ack fields
+SQL TX 2: insert reply content row only if ack produces reply message
+SQL TX 3: update reply message_status if needed"]
+    C -->|busy or write error| E2[MailboxWriteFailed or MailboxLockTimeout]
+    C --> D[Commit SQLite transaction]
+    D -->|commit error| E3[MailboxWriteFailed]
+    D --> N1[Post-commit notification subsystem]
+    N1 --> N2[Best-effort post-send hook path]
+    N1 --> N3[Generic advisory-nudge routing]
+    N2 -->|hook failure| W1[Warning only no rollback]
+    N3 -->|queue full or consumer error| W2[Degraded nudge delivery no rollback]
+    N2 --> O1[Return ack outcome]
+    N3 --> O1

@@ -21,13 +21,10 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 
 Phase-Q disposition note:
 - earlier daemon-free phases in this plan remain historical execution records
-- Phase Q is abandoned as an implementation line
-- `docs/plan-phase-Q.md` and Section 21 are retained as historical design and
+- The former early SQLite/daemon line is abandoned as an implementation line
+- `docs/plan-phase-Q.md` and Section 21 are retained as minimal historical
   execution records only
-- no new implementation work should target `integrate/phase-Q`
-- no Phase Q code should be merged into the active Phase R line
-- reuse from Phase Q is allowed only by selective cherry-pick or manual
-  reimplementation after review
+- any retained value from that abandoned line must be brought forward manually after review
 
 Phase-R redesign note:
 - the next execution line is the Phase R redesign and enforcement pass tracked
@@ -50,8 +47,6 @@ Phase-S planning note:
 - Phase S implementation details must come either from `docs/plan-phase-S.md`
   or from the governing requirements, architecture, ADR, and ICD documents it
   names; the project plan does not override those lower-level sources of truth
-- Phase S was extended through `S.15` (SQLite write-worker / rusqlite
-  hardening); see `docs/plan-phase-S.md` §5
 - the planning baseline is `integrate/phase-R` at `6a072c1`
 - S.5 is the follow-on planning slice that tightens the no-flaky-test policy,
   defines which anti-flake guardrails belong in the default lint path, and
@@ -95,7 +90,7 @@ Status:
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
-- Phase Q is retained only as an abandoned historical attempt at the SQLite
+- The former early SQLite/daemon line is retained only as an abandoned historical attempt at the SQLite
   source-of-truth and daemon-boundary redesign.
 - Phase R is the merged daemon baseline.
 - Phase S is the active planning line for Windows-complete daemon parity.
@@ -103,7 +98,6 @@ Status:
   - `crates/atm-core`
   - `crates/atm`
   - `crates/atm-daemon`
-  - `crates/atm-graft`
   - `crates/atm-rusqlite`
   - `crates/sc-lint-*` support crates
 
@@ -127,12 +121,11 @@ Status:
 
 ## 3. Crates
 
-The abandoned Phase Q target implementation was split across:
+The abandoned early SQLite/daemon target implementation was split across:
 
 - `crates/atm-core`
 - `crates/atm`
 - `crates/atm-daemon`
-- `crates/atm-graft`
 - `crates/atm-rusqlite`
 
 Crate-local scope detail is owned by:
@@ -146,9 +139,6 @@ Crate-local scope detail is owned by:
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
-- [`docs/atm-graft/requirements.md`](./atm-graft/requirements.md)
-- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
-- [`docs/atm-graft/boundaries.md`](./atm-graft/boundaries.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
@@ -411,7 +401,8 @@ Deliverables:
     payload in `text`
   - consolidation of ATM `message_id` surface canonicalization rules across
     read, ack, and clear
-  - migration plan for ATM-authored repair/alert dedup toward `metadata.atm`
+  - migration plan for ATM-authored repair/alert dedup toward SQLite-owned
+    state and typed diagnostics
 - next-version deferral note for a separate ATM-native inbox
 
 Completed sprints:
@@ -433,13 +424,13 @@ Completed sprints:
 - `J.3` Surface Canonicalization Consolidation
   - centralize `message_id` dedup logic used by read, ack, and clear
   - keep current legacy top-level `message_id` behavior read-compatible while
-    documenting the later move to `metadata.atm.messageId`
+    documenting the one-message-identity rule
   - acceptance: one shared dedup contract is used across operator-facing
     mailbox surfaces
 
 - `J.4` ATM Alert Metadata Migration Plan
   - migrate the design for ATM-authored repair notices from ad hoc top-level
-    fields toward `metadata.atm`
+    fields toward SQLite-owned state and typed diagnostics
   - explicitly preserve legacy top-level `atmAlertKind` and
     `missingConfigPath` as read-compatible until the runtime migration sprint
     lands
@@ -807,7 +798,7 @@ Planned sprints:
       - cross-team messages may project the sender alias in `from` for
         Claude-facing ergonomics
       - whenever alias-oriented `from` projection is used, canonical sender
-        identity must also be persisted in `metadata.atm.fromIdentity` and
+        identity must also be persisted in SQLite-owned state and
         must drive validation, self-send checks, routing, and audit behavior
     - define post-send-hook rules:
       - the hook runs only after a successful non-`dry-run` send
@@ -983,14 +974,14 @@ The rewrite is ready when:
 - `atm clear` works through the documented production runtime path
 - `atm log` works through shared observability APIs
 - `atm doctor` works as a local diagnostics command with daemon/runtime
-  visibility in the Phase Q target architecture
+  visibility in the current SQLite/daemon architecture
 - `atm teams` provides the retained local team recovery surface
 - `atm members` provides retained local roster verification
 - daemon auto-start-when-absent path is exercised in bounded integration
   testing
 - `ATM_POST_SEND.recipient_pane_id` is sourced from SQLite roster truth when
   known
-- retained command behavior is preserved, and any Phase Q runtime-shape changes
+- retained command behavior is preserved, and any current-runtime shape changes
   are intentionally documented
 - task-linked mail remains pending until acknowledged
 - the file-by-file migration plan is complete enough to implement directly
@@ -2513,278 +2504,12 @@ Phase P completion gate:
 - the remaining external-writer limitations, if any, are documented as accepted
   compatibility boundaries rather than hidden assumptions
 
-## 21. Phase Q — SQLite Mail SSOT And Runtime Boundary [ABANDONED]
+## 21. Former Phase Q [ABANDONED]
 
-Detailed design source:
-- [`docs/plan-phase-Q.md`](./plan-phase-Q.md)
-
-Disposition:
-- abandoned
-- retained for historical traceability only
-- not an active execution line
-- Phase Q code is reference-only and must not be merged into Phase R
-- any retained value from Phase Q must be brought forward only by selective
-  cherry-pick or manual port after review
-
-Goal:
-- replace filesystem JSON as ATM's mail source of truth with SQLite
-- reintroduce one tightly-bounded singleton daemon runtime
-- eliminate mailbox-lock dependence from ATM mail correctness
-
-Hard architectural constraints:
-- exactly one daemon per host
-- impossible for two active daemons to run at the same time
-- every subsystem is behind a strict trait boundary for all external I/O
-- daemon/runtime code stays thin and does not absorb business logic
-- daemon spawning is not the core test strategy
-- structured `sc-observability` remains first-class at both CLI and daemon
-  layers
-- production fallible paths use typed error unions / `Result` propagation
-  rather than panic/unwrap as the normal error strategy
-
-Core design decisions:
-- SQLite is the source of truth for:
-  - messages
-  - ack/task state
-  - read/clear visibility state
-  - team roster
-- daemon memory is the live truth for agent status
-- `atm doctor` remains a CLI command but must query daemon/runtime state in the
-  Phase Q target architecture
-- Claude inbox JSONL remains compatibility ingress/egress only
-- ATM-authored JSONL export is a bounded compatibility projection over the full
-  durable SQLite message body
-- native agent/plugin traffic does not use JSONL
-- one daemon API, two production transport implementations:
-  - cross-platform local IPC for same-host
-  - TCP/TLS for cross-host daemon-to-daemon traffic
-- one in-process `test-socket` transport for transport-boundary tests
-- remote address model expands to `agent@team.host`
-- bounded transient retry is allowed for remote delivery, but there is no
-  durable long-lived remote outbox
-- successful remote delivery requires remote daemon acceptance inside the
-  bounded retry window
-
-Planned sprint sequence:
-
-Integration branch:
-- `integrate/phase-Q`
-
-### Q.0 — Boundary Cleanup And Debt Retirement
-
-Status:
-- complete on `feature/pQ-s0-debt-retirement` at `01a252a`
-
-Scope:
-- align the existing codebase with the Phase Q target shape before store and
-  daemon work begin
-- remove technical debt and duplicated compatibility helpers that would
-  otherwise slow or distort Q.1+
-- keep this sprint strictly about current retained-path cleanup, not
-  speculative pre-implementation of later architecture
-
-Implementation focus:
-- one shared inbox write boundary
-
-- one shared inbox hydration boundary
-- one owned message-id compatibility bridge
-- explicit roster/member construction instead of hidden defaults
-- centralized hook payload and hook trigger seams
-- config-ingest validation parity between shorthand and object forms
-
-Code-review evidence:
-- `mailbox::atomic::write_messages()` already serves as the real inbox write
-  seam and should remain the only ATM-owned writer
-- `schema::to_shared_inbox_value()` and
-  `hydrate_legacy_fields_from_metadata()` already serve as the real schema
-  compatibility seams and should absorb duplicated helper logic
-- recent context-injection fixes showed that drift around these boundaries
-  creates immediate product failures
-- recent `AgentName` / `AgentMember` cleanup showed that hidden defaults and
-  duplicated hydrators create migration friction rather than helping
-
-Acceptance:
-- one ATM-owned inbox write boundary and one ATM-owned metadata hydration
-  boundary are explicit and covered by tests
-- duplicated compatibility helpers are removed from retained command/test code
-- hidden default construction for externally meaningful identity fields is
-  removed from retained runtime/test paths
-- hook/event shaping is auditable from one service boundary
-- shorthand and object-form `config.json` member parsing follow the same
-  validation expectations where both remain supported
-- the codebase is simpler to migrate after Q.0 than before Q.0
-
-### Q.1 — Store And Boundary Foundation
-
-Scope:
-- add the SQLite store boundary family:
-  - `MailStore`
-  - `TaskStore`
-  - `RosterStore`
-- add the first concrete SQLite implementation crate: `atm-rusqlite`
-- add the strict I/O trait boundaries for store, inbox ingress/export, config
-  ingress, watcher/reconcile, transport, dispatcher, and notification
-- keep service logic fully testable in-process
-
-Parallelization rule:
-- Q.0 must be complete before Q.1 is treated as the contract lock-in point
-- Q.1 is the convergence point
-- Unix/TCP/test-socket transport work, watcher/reconcile work, and
-  command-handler migration must not branch into parallel implementation until
-  the core boundary traits, dispatcher/handler seams, and request/result
-  contracts are defined and reviewed
-- once those contracts are stable, follow-on sprints may execute in parallel
-  against the shared boundary set
-
-Acceptance:
-- SQLite opens under one host-scoped ATM durable root at
-  `~/.atm/db/mail.db`, with team and agent partitioned as logical keys inside
-  the shared database
-- this host-scoped root supersedes the earlier per-team
-  `.claude/teams/<team>/.atm-state/mail.db` planning assumption
-- `atm-rusqlite` is the only crate that owns direct SQLite calls in the first
-  implementation line
-- message update/correction threads are strict one-successor chains whose
-  terminal node is the effective current message
-- thread acknowledgement is chain-level: one ack clears the current terminal
-  chain, and a later successor on an ack-required chain reopens that pending
-  state
-- ephemeral retention is time-based only through `staleAt`; read state affects
-  visibility but not deletion timing
-- core logic is reachable without daemon process spawning
-- no ATM-owned writes or hidden CLI/runtime fallbacks may bypass the owning
-  daemon/store boundaries; direct read-only SQLite consumers remain allowed
-- watcher/reconcile logic exists behind its own boundary and does not bypass
-  ingress/store/notifier ownership rules
-- transport-boundary tests can replace Unix/TCP with the in-process
-  `test-socket` transport
-- the core boundary traits and request/result contracts are explicit enough to
-  allow parallel follow-on implementation without transport/business-logic
-  drift
-- the dispatcher/handler contract is explicit enough that Unix, TCP/TLS, and
-  `test-socket` implementations can proceed without owning request-family
-  behavior
-
-### Q.2 — Compatibility Ingress And Export
-
-Scope:
-- import Claude/legacy inbox JSONL into SQLite
-- import roster updates from `config.json` into SQLite
-- keep ATM export Claude-native at the top level with `metadata.atm`
-
-Parallel execution after Q.1:
-- inbox ingress/export can proceed in parallel with:
-  - transport adapter work
-  - watcher/reconcile implementation
-  - handler/service migration
-  once the Q.1 boundary contracts are locked
-
-Acceptance:
-- external Claude writes become durable in SQLite through one owned ingress path
-- export compatibility remains intact
-- roster truth no longer depends on `config.json` as the durable source
-
-### Q.3 — Ack/Task Migration
-
-Scope:
-- move ack-required state and task state to SQLite-owned semantics
-- keep reply export behind SQLite commit success
-
-Parallel execution after Q.1:
-- ack/task migration can proceed in parallel with Q.2/Q.4 transport and
-  watcher work so long as it stays within the locked service/store/export
-  contracts
-
-Acceptance:
-- ack/task state is authoritative in SQLite
-- reply export remains compatible for Claude recipients
-
-### Q.4 — Read/Clear Cutover + Thin Daemon Runtime
-
-Scope:
-- move `read` and `clear` to SQLite-owned mail semantics
-- add the singleton daemon runtime
-- implement one protocol with Unix socket and TCP/TLS adapters
-- add the in-process `test-socket` transport for transport-boundary tests
-- keep live agent status in daemon memory
-- add daemon-query support needed by `atm doctor`
-
-Parallel execution after Q.1:
-- Unix transport, TCP/TLS transport, `test-socket`, watcher/reconcile, and
-  daemon-query plumbing may proceed in parallel as separate slices once the
-  shared dispatcher/handler and boundary contracts are stable
-
-Acceptance:
-- `read` and `clear` no longer require mailbox JSON rewrite correctness
-- second daemon startup fails deterministically
-- remote traffic is daemon-to-daemon only
-- remote send success depends on remote daemon acceptance
-- daemon-unavailable CLI/runtime calls first attempt one documented auto-start
-  and then fail clearly with no hidden fallback if the daemon still cannot run
-- daemon code remains a thin runtime wrapper over the service boundaries
-- handler behavior is testable through the in-process `test-socket` transport
-
-### Q.5 — Lock Retirement And Ops Cleanup
-
-Scope:
-- retire mailbox-lock dependence from ATM mail correctness
-- remove reliance on the 5-minute stale-lock sweep for normal mail flows
-- align doctor/restore/ops docs to SQLite ownership
-
-Acceptance:
-- mailbox locks are no longer part of the normal mail correctness contract
-- stale lock artifacts can no longer wedge ATM mail flows
-- requirements, architecture, and project plan all match the final design
-
-### Q.6 — Production-Readiness Gate And Release
-
-Scope:
-- prove the Phase Q implementation is production ready rather than merely
-  architecturally aligned
-- run the release gate, packaging gate, and final QA/documentation alignment
-- publish only after all prior sprint gates are green
-
-Acceptance:
-- version bump planning is complete
-- `cargo publish --dry-run` succeeds for the intended publish set
-- crates.io publish succeeds for the intended release line
-- GitHub release/tag/binary artifact steps are complete
-- `CHANGELOG.md` is updated
-- all Phase Q release-gate conditions pass on the release candidate
-
-Phase Q completion gate:
-- Q.0 through Q.6 are complete on `integrate/phase-Q`
-- SQLite is authoritative for messages, ack/task state, visibility state, and
-  roster truth
-- `send` and `ack` operate through the daemon production path
-- production CLI/runtime paths obey one-attempt daemon auto-start semantics
-  with typed failure on final daemon unavailability
-- `recipient_pane_id` is sourced from SQLite roster truth when known
-- mailbox-lock correctness dependence is retired from normal mail flows
-- release-gate and QA invariants for Phase Q are satisfied
-
-QA invariants for every Phase Q pass:
-- impossible to run two active daemons on one host
-- daemon unavailability fails clearly without hidden fallback to direct store or
-  inbox access
-- every subsystem performs I/O only through its owning trait boundary
-- any observed SQL, watcher, notifier, or socket-boundary bypass is an
-  immediate QA failure
-- daemon/runtime code remains thin
-- socket receive loops remain tiny dispatcher loops only
-- any socket loop that performs SQL, watcher, notifier, or workflow logic is
-  an immediate QA failure
-- any watcher/reconcile implementation that performs SQL, socket, or notifier
-  logic inline is an immediate QA failure
-- daemon spawning is not the core test strategy
-- typed errors are preserved across CLI, daemon, and core boundaries for
-  fallible runtime paths
-- `AtmErrorCode` remains a centralized read-only registry with no subsystem
-  local alternatives
-- structured `sc-observability` remains present at both CLI and daemon layers
-- SQLite remains the source of truth for mail and roster
-- live status remains daemon-memory truth
-- Claude compatibility remains Claude-native top-level plus `metadata.atm`
+Historical note:
+- the former Phase Q SQLite/daemon execution line was abandoned
+- `docs/plan-phase-Q.md` is retained only as a one-line historical marker
+- any still-useful ideas must be brought forward manually into the active Phase R / Phase U documents after review
 
 ## 22. Phase R — Boundary Establishment And Enforcement
 
@@ -2792,7 +2517,7 @@ Detailed execution source:
 - [`docs/plan-phase-R.md`](./plan-phase-R.md)
 
 Summary:
-- Phase R is the active redesign line that replaces the abandoned Phase Q
+- Phase R is the active redesign line that replaces the abandoned earlier SQLite/daemon
   implementation path.
 - Wave 1 establishes enforceable crate boundaries before substantive feature
   work resumes:
@@ -2956,65 +2681,230 @@ Acceptance:
 - the migration boundary between `atm-core` and `sc-lint` is explicit rather
   than implied
 
-## 25. Phase S — Windows-Complete Daemon Parity And SQLite Durability [IN PROGRESS]
+## 25. Phase U Mailbox Simplification And Identity Cleanup
+
+Integration branch: `integrate/phase-U`
 
 Goal:
-- deliver a production-ready daemon that works correctly on both Unix and Windows
-  through the same-host local IPC transport and singleton lifecycle
-- add SQLite durability for remote replay state via `atm-rusqlite`
+- remove the remaining confusing mailbox/identity carry-forward design from the
+  current ATM line
+- make SQLite the only ATM-owned mailbox state/query authority outside the
+  private Claude-compat watcher/import/export boundary
+- replace ambiguous or duplicated message identity, state, and thread-update
+  behavior with smaller auditable contracts
 
-Summary:
-- Sprints S.0–S.15 cover: Windows IPC transport, runtime control, daemon
-  hardening, policy lint, SQLite write-worker planning and implementation,
-  JSONL log compatibility, logging defaults, retained log bootstrap, and
-  integration gate cleanup
-- Phase S was originally scoped through S.14, then explicitly extended through
-  S.15 for the SQLite write-worker planning and hardening line
-- S.13–S.15 delivered the local IPC transport, Windows same-host runtime, and
-  SQLite write-worker foundation
-- Integration branch `integrate/phase-S` carries all merged sprint work
-- PR #231 (`integrate/phase-S → develop`) merged at c6847d1; fixes are Sprint T.1 scope landing on `integrate/phase-T`
+Execution shape:
+- Phase U is a sequential cleanup line; each sprint should leave the mailbox
+  model simpler than before and should not introduce new compatibility
+  side-channels
+- later sprints may assume earlier cleanup decisions are final; they should
+  delete redirected code rather than preserve fallback branches
+- `U.8` through `U.10` assume `U.0` is already complete
 
-Cross-reference:
-- The authoritative sprint-by-sprint Phase S plan lives in
-  [`docs/plan-phase-S.md`](./plan-phase-S.md).
-- Phase S gate findings: `.triage/phase-S/findings/INTG-*.ttl`
+Planned sprint sequence:
 
-## 26. Phase T — Integration Gate Closure And SQLite Writer-Lane Delivery [ACTIVE]
+### U.0 — Remove Old `atm-graft` Implementation Line [COMPLETED]
 
-Goal:
-- close the Phase S integration gate (PR #231) by fixing all 16 INTG-* findings
-- deliver the architectural work deferred from Phase S: SQLite single-writer
-  lane, immutable message-row semantics, Windows same-host runtime parity
-  tests, and remaining daemon/runtime hardening
-- add the thin embedded `atm-graft` follow-on on top of the now-complete
-  daemon/IPC baseline
+Status:
+- completed by `team-lead`
 
-Sprints:
-- T.1 (integrate/phase-S): fix 16 open INTG-* findings to clear Phase S gate
-- T.2 (integrate/phase-T): implement crate-private SQLite single-writer lane
-  (long-lived connection, bounded queue, drain/shutdown) per ADR-ATM-RUSQLITE-002
-- T.3 (integrate/phase-T): enforce immutable message-row semantics — remove
-  pre-write SELECT probe, insert-first writer-owned semantics, rows-changed
-  detection, reject known invariant violations before SQL
-- T.4 (integrate/phase-T): add real Windows same-host runtime parity tests for
-  local IPC request/response, lifecycle control, singleton admission/rejection,
-  and orderly shutdown
-- T.5 (integrate/phase-T): close RuntimeStatusCache all-conflict overflow edge,
-  bound reconcile fingerprint sets per mailbox key, reconcile shutdown deadline
-  contract between code (2s/3s) and architecture doc (5s/10s)
-- T.6 (integrate/phase-T): define the embeddable graft-facing daemon client
-  surface in `atm-core` so a host agent can embed ATM as a thin client rather
-  than re-implementing transport/runtime logic
-- T.7 (integrate/phase-T): add daemon-side graft registration plus bounded
-  nudge queue/drain behavior for embedded and hook/poll consumers
-- T.8 (integrate/phase-T): add the `atm-graft` crate as a thin ATM client
-  embedded in a Rust host agent
+Scope:
+- remove the old graft implementation line before the restacked thin-client
+  graft work begins
 
-Integration branch: `integrate/phase-T`
+Acceptance:
+- later Phase U graft sprints assume no legacy graft implementation line
+  remains to preserve
 
-Cross-reference:
-- The authoritative sprint-by-sprint Phase T plan lives in
-  [`docs/plan-phase-T.md`](./plan-phase-T.md).
-- The dedicated `atm-graft` implementation plan lives in
-  [`docs/plan-atm-graft.md`](./plan-atm-graft.md).
+### U.1 — Delete `metadata.atm` Read-Path Dependence
+
+Scope:
+- remove ATM-owned read-path dependence on `metadata.atm.*`
+- treat any ATM-owned machine state currently read from Claude JSON as either:
+  - SQLite-owned state that must move into the store/query layer, or
+  - dead code that should be deleted
+- keep Claude JSON handling private to the watcher/import/export boundary
+
+Acceptance:
+- no normal ATM read/query/runtime path depends on `metadata.atm.*`
+- any surviving `metadata.atm` write is explicitly justified as compatibility
+  output only, not an ATM-owned read source
+- dead compatibility helpers and tests that only exist to preserve
+  `metadata.atm` reads are removed
+
+### U.2 — ADR: One Message Identity
+
+Scope:
+- adopt one logical ATM message identity
+- remove duplicated ATM-owned message-id storage and plumbing
+- keep Claude inbox `message_id` only as the boundary wire encoding needed for
+  Claude interoperability
+- rename confusing `legacy_*` identity terms to names that describe the actual
+  surviving identifier role
+
+Acceptance:
+- `metadata.atm.messageId` is removed from the design and implementation line
+- duplicated UUID/ULID reinterpretation plumbing no longer persists two fields
+  for the same logical identity
+- the project docs include an ADR-level statement that ATM owns one logical
+  message identity and Claude `message_id` is only the compatible boundary
+  encoding of that identity
+
+### U.3 — Thread / Update / Supersede Hardening
+
+Scope:
+- keep explicit support for the two thread-update modes:
+  - `add-details`
+  - `supersede`
+- make the intended behavioral differences between those modes explicit across
+  validation, selection, ack, and nudge behavior
+- remove any shortcut where generic successor-chain collapse hides missing
+  per-mode semantics
+
+Acceptance:
+- mode-specific tests exist for both `add-details` and `supersede`
+- tests cover:
+  - send validation
+  - list/read current-vs-historical selection
+  - ack reopen behavior
+  - nudge behavior when a successor arrives after the predecessor was already
+    read
+- the resulting product behavior is documented clearly enough that the thread
+  mode is not just stored metadata with implied meaning
+
+### U.4 — Unified Mutable Message State
+
+Scope:
+- replace the split `mail_visibility_states` / `ack_state` model with one
+  mutable message-state owner
+- move mailbox/runtime state into that unified state surface, including:
+  - read state
+  - ack state
+  - expiration
+  - delete/hide state
+- rename `stale_at` to `expires_at`
+
+Acceptance:
+- ATM no longer splits mutable per-message state across visibility JSON and a
+  separate ack table
+- `expires_at` is the canonical expiration field name
+- delete/close remain state mutations; hard deletion stays cleanup-policy-only
+- deleted rows remain hidden from normal queries and only surface through
+  admin-only diagnostics
+
+### U.5 — SQLite Query Cutover And Query Simplification
+
+Scope:
+- move `atm list`, `atm read`, and related normal mailbox queries fully onto
+  SQLite
+- start query planning from mutable message state and only read content rows
+  that are actually needed
+- remove any remaining JSON-backed summary/source read path outside the private
+  watcher/import/export boundary
+
+Acceptance:
+- normal mailbox queries do not read Claude JSON directly
+- `atm list` and `atm read` are auditable as SQLite-backed query paths
+- query diagrams and tests show the actual boundary methods, tables read, and
+  error exits for all non-trivial mailbox queries
+
+### U.6 — Provenance / Timing Field Reduction
+
+Scope:
+- justify or remove mailbox-row provenance/timing fields that are not clearly
+  part of the enduring contract
+- specifically review `imported_from` and `recorded_at`
+
+Acceptance:
+- each surviving mailbox-row provenance/timing field has one clear product
+  reason to exist
+- fields that exist only for weak round-trip convenience are removed
+
+### U.7 — Roster Simplification And Explicit Member Model
+
+Scope:
+- replace the duplicated whole-roster JSON plus per-member projection design
+  with one canonical roster store
+- make member lifecycle and harness behavior explicit in first-class member
+  fields
+- sync Claude Code roster changes from `config.json` into the canonical roster
+  store behind the private watcher/import boundary instead of treating
+  `config.json` as general runtime truth
+- keep room for controlled extensibility through one metadata JSON field rather
+  than document-shaped roster duplication
+
+Target member fields:
+- `team_name`
+- `agent_name`
+- `member_kind` enum
+- `harness` enum:
+  - `claude-code`
+  - `codex-cli`
+  - `gemini-cli`
+  - `opencode`
+- `agent_type` string
+- `model` string
+- `metadata_json`
+- runtime/routing fields that remain justified after review (for example
+  `recipient_pane_id`, `pid`, `updated_at`)
+
+Acceptance:
+- ATM has one canonical roster truth, not both whole-team JSON and per-member
+  roster duplication
+- Claude Code `config.json` roster changes are ingested through the private
+  watcher/import boundary into the canonical roster store; normal runtime paths
+  do not read `config.json` directly for roster truth
+- `member_kind` is explicit and supports the distinct lifecycle logic for
+  permanent vs ephemeral members
+- `harness` is a first-class behavioral enum and is not treated as ad hoc
+  string metadata
+- `agent_type` and `model` remain plain strings for utility/informational use
+- custom harness/member extensions flow through `metadata_json` instead of
+  forcing new roster document shapes
+
+### U.8 — Shared Thin-Client ICD For CLI And Graft
+
+Scope:
+- restack the abandoned earlier graft-client work as a thin-client sprint
+- require `atm-graft` to use the same shared ICD family as CLI traffic
+- forbid a graft-private daemon API line
+
+Acceptance:
+- `atm-graft` is modeled as a thin client using shared `atm-core` protocol
+  contracts
+- any extra request/response shapes needed for graft remain part of the shared
+  ICD family rather than a daemon-private API
+
+### U.9 — Client-Owned Graft Runtime
+
+Scope:
+- restack the abandoned earlier graft-runtime work as an ownership sprint
+- move all client-specific graft runtime behavior into `atm-graft`
+- keep only generic request-serving/runtime composition in the daemon
+
+Acceptance:
+- the daemon does not own a graft-named runtime concept
+- client-specific receive/injection/runtime behavior is owned by `atm-graft`
+  or by generic shared interfaces in `atm-core`
+- the client runtime stays lean and production-complete:
+  one persistent receive thread, one open dedicated daemon advisory-stream
+  connection, one minimal pending queue, and one host wake/event path
+
+### U.10 — Generic Daemon Advisory-Notification Surface
+
+Scope:
+- restack the abandoned earlier graft-notification work as a generic-boundary sprint
+- define the daemon-owned post-commit advisory surface generically
+- keep `atm-graft` as one consumer of that surface rather than a daemon-owned
+  subsystem
+
+Acceptance:
+- the daemon owns only a generic advisory-notification surface
+- any message family needed for advisory delivery remains part of the same
+  shared ICD used by CLI and thin clients
+- the daemon-side design stays lean and does not grow a client-specific
+  notifier framework
+
+Phase U inventory note:
+- the authoritative current file/line removal inventory for U.0 through U.10
+  lives in `docs/phase-U/removal-inventory.md`

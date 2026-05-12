@@ -664,7 +664,7 @@ Required closeout work:
 - keep daemon architecture and phase-plan docs aligned on the accepted
   resource-cap and eviction contracts
 
-### S.15 SQLite Write-Worker Plan
+### S.15 SQLite Write-Worker / MessageAppendQueue Planning
 
 Goal:
 - define the next `atm-rusqlite` hardening pass around one in-process
@@ -682,15 +682,11 @@ Required outcomes:
 Required closeout work:
 - produce `docs/phase-S/sprint-S15.md`,
   `docs/phase-S/sprint-S15-rusqlite-plan.md`, and
-  `docs/phase-S/sprint-S15-rusqlite-hardening.md`, and
   `docs/adr/ADR-ATM-RUSQLITE-002.md` as the governing S.15 planning set
 - document queue capacity, batching constants, `spawn_blocking` requirements,
   and per-batch isolation semantics for the future implementation sprint
 - keep S.15 sequenced after the S.13/S.14 runtime hardening line so the writer
   plan can depend on the already-accepted daemon singleton/runtime contracts
-- Phase S accepts the flat bold-header sprint metadata format used by S.10-S.15
-  as the late-phase documentation pattern; YAML frontmatter remains the earlier
-  S.0-S.9 style and does not require back-conversion for closeout
 
 ## 6. Removed Windows CI Guardrail
 

@@ -1,0 +1,12 @@
+%% title: `register session`
+%% summary: Register one advisory-nudge consumer session.
+%% commentary: This registration path should stay bounded and generic so client-specific naming does not leak into daemon ownership.
+%% sets: client
+flowchart TD
+    A[registered-consumer register request] --> B[Daemon registration handler]
+    B --> C1[Validate session identity and consumer limits]
+    C1 -->|duplicate or invalid| E1[ValidationFailed]
+    C1 -->|over capacity| E2[DaemonUnavailable]
+    C1 --> C2[Store consumer session in bounded daemon runtime]
+    C2 -->|runtime error| E3[DaemonUnavailable]
+    C2 --> O1[Return registration accepted]

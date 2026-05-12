@@ -1,0 +1,11 @@
+%% title: `fetch nudges`
+%% summary: Snapshot advisory-nudge fetch without draining.
+%% commentary: This snapshot path should read the current queued nudge state without draining it and keep client naming out of daemon ownership.
+%% sets: client
+flowchart TD
+    A[registered-consumer fetch request] --> B[Daemon fetch handler]
+    B --> C1[Locate consumer session]
+    C1 -->|not found| E1[ValidationFailed or NotFound]
+    C1 --> C2[Read bounded advisory-nudge queue snapshot]
+    C2 -->|runtime error| E2[DaemonUnavailable]
+    C2 --> O1[Return queued nudges without draining]

@@ -1,0 +1,25 @@
+---
+required_variables:
+  - title
+  - stylesheet_href
+  - script_href
+  - section_html
+defaults: {}
+metadata:
+  purpose: Standalone static diagram fragment page
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="{{ stylesheet_href }}" />
+</head>
+<body>
+  <main class="page-shell fragment-shell">
+    {{ section_html | safe }}
+  </main>
+  <script src="{{ script_href }}"></script>
+</body>
+</html>

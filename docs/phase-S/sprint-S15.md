@@ -1,4 +1,4 @@
-# Sprint S.15 — SQLite Write-Worker / MessageAppendQueue Planning
+# Sprint S.15 — SQLite Write-Worker Plan
 
 **Branch**: feature/pS-s15-rusqlite-hardening  
 **Base**: integrate/phase-S @ 77badd5  

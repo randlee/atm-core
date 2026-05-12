@@ -1,0 +1,47 @@
+---
+required_variables:
+  - title
+  - summary
+  - commentary
+  - notes
+  - tables_html
+  - schema_dialogs_html
+  - ssot_path
+  - svg_markup
+  - copy_text
+  - fragment_href
+defaults: {}
+metadata:
+  purpose: One static diagram section fragment
+---
+<article class="xhtml-panel report-section">
+  <div class="xhtml-panel-head">
+    <div class="xhtml-panel-title">
+      <h2>{{ title }}</h2>
+      <p>{{ summary }}</p>
+    </div>
+    <div class="xhtml-panel-actions">
+{% if fragment_href %}
+      <a class="fragment-link" href="{{ fragment_href }}">Open panel</a>
+{% endif %}
+      <button class="icon-button" title="Copy diagram for AI discussion" data-copy-text="{{ copy_text | e }}">⎘</button>
+    </div>
+  </div>
+  <div class="xhtml-panel-body">
+    <p class="xhtml-panel-meta">SSOT: <code>{{ ssot_path }}</code></p>
+    <p class="xhtml-panel-commentary">{{ commentary }}</p>
+    <div class="diagram-svg">{{ svg_markup | safe }}</div>
+{% if notes %}
+    <div class="diagram-notes">
+      <h3>Notes</h3>
+      <ul>
+{% for note in notes %}
+        <li>{{ note }}</li>
+{% endfor %}
+      </ul>
+    </div>
+{% endif %}
+{{ tables_html | safe }}
+{{ schema_dialogs_html | safe }}
+  </div>
+</article>

@@ -1,0 +1,38 @@
+%% title: `Save Visibility State`
+%% summary: SQLite boundary method `MailStore::upsert_visibility_state`.
+%% commentary: This SQL-boundary path writes both the visibility-state JSON row and the ack-state projection row in one transaction.
+%% read_tables:
+%% write_tables: mail_visibility_states, ack_state
+%% notes: reads: 0 | writes: 2 | joins: 0 | transactions: 1
+%% sets: query
+flowchart TD
+    A["<b>Save Visibility State</b><br/>MailStore::upsert_visibility_state"]
+    A --> I["Input
+team
+agent
+actor
+state.message_key
+state.read
+state.pending_ack_at?
+state.acknowledged_at?
+state.updated_at?"]
+    I --> V["Prepare state payload
+serialize state_json"]
+    V -->|ok| T["Transaction (1)
+UPSERT mail_visibility_states ...
+UPSERT ack_state ..."]
+    T --> O["Output
+state"]
+    V --> EV["Serialization failed
+Validation failed"]
+    T --> ET["Transaction failed
+Mailbox lock timeout
+Mailbox write failed"]
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,O happy;
+    class EV,ET error;
+    class I,V,T neutral;

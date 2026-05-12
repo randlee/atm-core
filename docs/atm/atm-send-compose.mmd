@@ -1,0 +1,21 @@
+%% title: `atm send`
+%% summary: Compose and persist one message, then run post-commit effects.
+%% commentary: This path should validate input, commit SQLite first, then run post-commit hooks or advisory nudges without letting any side effect outrun durable truth.
+%% sets: cli,client
+flowchart TD
+    A[send compose request] --> B[Validate actor target and payload]
+    B -->|validation error| E1[ValidationFailed]
+    B --> C["Build MailStoreMessageRecord
+team, agent, message_key, envelope, imported_from?, recorded_at?"]
+    C --> D["MailStore::upsert_message(
+MailStoreUpsertMessageRequest { record }
+)
+-> Result<MailStoreUpsertMessageResponse, AtmError>"]
+    D -->|validation / mailbox write / mailbox lock error| E2[AtmError returned from MailStore boundary]
+    D --> N1[Post-commit notification subsystem]
+    N1 --> N2[Best-effort post-send hook path]
+    N1 --> N3[Generic advisory-nudge routing]
+    N2 -->|hook failure| W1[Warning only no rollback]
+    N3 -->|queue full or consumer error| W2[Degraded nudge delivery no rollback]
+    N2 --> O1[Return send outcome]
+    N3 --> O1

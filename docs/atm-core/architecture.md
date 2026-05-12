@@ -50,6 +50,9 @@ Decision:
 Consequences:
 - Thin callers do not need daemon-shaped API types.
 - Client and server transports share one contract family.
+- Thin plugin crates must stay on the shared contract family; if advisory
+  registration or notification streaming is added later, it must extend this
+  shared line rather than introducing a graft-private daemon API.
 
 Alternatives considered:
 - Keep the protocol modeled as daemon API types.
@@ -94,9 +97,8 @@ Consequences:
 - Thin extensions expose a smaller public surface.
 - Task-state rules still remain explicit in store and workflow boundaries.
 - The reply emitted by that workflow must hardcode `requires_ack = false`.
-- Send-shaped request data may carry `parentMessageId`, `threadMode`, and
-  `staleAt` when the caller is creating a successor-thread message or a
-  time-bounded ephemeral message.
+- Send-shaped request data may carry `parentMessageId` and `threadMode` when
+  the caller is creating a successor-thread message.
 - Update/correction threads are modeled as one linear successor chain whose
   terminal node is the effective current instruction.
 - Only the original sender may append chain successors.
@@ -251,8 +253,8 @@ Required wrappers:
 
 Architectural rule:
 - these values must not flow through the service/store boundary as raw
-  `String`, `usize`, or integer timeout primitives once the Phase Q
-  implementation lands
+  `String`, `usize`, or integer timeout primitives in the current SQLite/daemon
+  implementation line
 
 Store-family rule:
 - `MailStore` owns message lifecycle state
@@ -293,7 +295,7 @@ ATM-owned `.atm.toml` semantics for the retained multi-agent model:
 - launcher-owned sections such as `[rmux]` and future `[scmux]` are outside the
   `atm-core` runtime boundary and are intentionally ignored
 - `config.json` remains an ingress surface for roster updates, but it is not
-  the durable source of truth for roster state in the Phase Q target model
+  the durable source of truth for roster state in the current architecture
 
 Send-specific policy remains layered above the loader:
 - send may use a narrowly defined missing-document fallback when the product
@@ -311,8 +313,8 @@ Identity-specific policy:
 - aliases must resolve to canonical member names before membership validation,
   self-send checks, and mailbox lookup
 - same-team messages keep current canonical sender projection behavior
-- cross-team messages may project an alias-oriented `from` field only when
-  canonical sender identity is also persisted in `metadata.atm.fromIdentity` for
+- cross-team messages may project an alias-oriented `from` field only when the
+  canonical sender identity is also persisted in SQLite-owned state for
   validation, routing, and audit use
 - post-send-hook execution is outside the atomic mailbox mutation boundary
 - the hook runs only after a successful non-`dry-run` send
@@ -347,7 +349,7 @@ Identity-specific policy:
   successful send into a command failure
 - the hook fires for successful outbound mailbox writes from `atm send` and
   `atm ack`; `is_ack = false` for send and `is_ack = true` for ack
-- after Phase Q roster migration, the send path should populate
+- after roster migration, the send path should populate
   `ATM_POST_SEND.recipient_pane_id` from the authoritative roster/store record
   so hook scripts do not need to rediscover pane mappings from file state
 - the reserved diagnostic sender `atm-identity-missing@<team>` is for
@@ -359,16 +361,16 @@ Identity-specific policy:
   any lock path present in both snapshots is stale and should surface as
   `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
 
-Current `AgentMember` persisted schema:
-- `name: String` required for roster membership checks
-- `agent_id: String` stored as `agentId`, default empty string
-- `agent_type: String` stored as `agentType`, default empty string
-- `model: String`, default empty string
-- `joined_at: Option<u64>` stored as `joinedAt`
-- `tmux_pane_id: String` stored as `tmuxPaneId`, default empty string
-- `cwd: String`, default empty string
-- `extra: serde_json::Map<String, serde_json::Value>` via `#[serde(flatten)]`
-  for forward-compatible Claude Code fields
+Approved canonical roster-member schema direction:
+- `team_name`
+- `agent_name`
+- `member_kind` — `permanent` or `ephemeral`
+- `harness` — behavioral enum; approved values: `claude-code`, `codex-cli`, `gemini-cli`, `opencode`
+- `agent_type`
+- `model`
+- `metadata_json`
+- `recipient_pane_id` when known (runtime-only; ephemeral harness field)
+- `pid` when known (runtime-only; ephemeral member lifecycle field)
 
 Observability boundary note:
 - `AgentMember.extra` is intentionally out of scope for the L.4 observability
@@ -391,13 +393,10 @@ Sealed-trait note:
 ATM-authored alert metadata belongs to the send/schema boundary in `atm-core`.
 
 Architectural rule:
-- forward ATM-authored alert metadata lives under `metadata.atm`
+- ATM-owned repair/alert machine state belongs in SQLite-owned state and typed
+  diagnostics, not in an active `metadata.atm` namespace
 - legacy top-level alert fields such as `atmAlertKind` and
-  `missingConfigPath` remain read-compatible only
-- the current runtime send path may continue emitting the legacy top-level
-  fields until the migration implementation sprint lands
-- this compatibility-period carve-out is the bounded exception referenced by
-  [`requirements.md` `REQ-CORE-SEND-002`](./requirements.md#6-send-alert-metadata)
+  `missingConfigPath` remain read-compatible only until removed
 
 ## 3.2 Retained Team Recovery Boundary
 
@@ -426,7 +425,7 @@ Architectural rules:
 - the local `members` view is config-first; richer hook/session state may be
   layered later without changing the base recovery contract
 
-## 3.3 Phase Q Mail And Roster Ownership
+## 3.3 Current Mail And Roster Ownership
 
 `atm-core` must structure the mail system around these ownership rules:
 

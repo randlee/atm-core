@@ -142,7 +142,7 @@ cat > "$_VARS" <<'JSON'
   "tags": "  - boundaries\n  - lint\n  - privacy",
   "related_boundaries": "  - BOUNDARY-MailStore\n  - BOUNDARY-TaskStore\n  - BOUNDARY-RosterStore",
   "code_references": "  - crates/atm-rusqlite/src/lib.rs\n  - crates/atm-rusqlite/src/mail_store.rs",
-  "context": "- Phase Q drift showed that prose-only architecture was not enough to prevent concrete SQLite leakage.",
+  "context": "- Earlier SQLite/daemon drift showed that prose-only architecture was not enough to prevent concrete SQLite leakage.",
   "decision": "- All crate boundaries must be documented in machine-parsable records, and concrete implementations remain private behind the documented trait/facade.",
   "consequences": "- Lint and review can enforce forbidden references directly from crate-local boundary records.",
   "alternatives_considered": "- Keep boundary rules only in top-level architecture prose.\n- Infer boundary contracts from code instead of documenting them explicitly.",

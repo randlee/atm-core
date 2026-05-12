@@ -1,0 +1,17 @@
+%% title: `atm clear`
+%% summary: Status mutation without content-row deletion.
+%% commentary: This path should mutate only message-status for normal clear or delete operations and leave hard deletion to retention cleanup policy.
+%% sets: cli
+flowchart TD
+    A[atm clear request] --> B[Resolve clear mode]
+    B --> C1["SQL 1: scan message_status candidates
+filter actionable or history mode
+exclude already deleted in normal mode"]
+    C1 -->|sql error| E1[Typed MailboxReadFailed]
+    C1 -->|no rows| O0[Return zero cleared]
+    C1 --> C2["SQL 2: mutate message_status only
+set deleted or cleared state
+do not delete content rows"]
+    C2 -->|sql error| E2[Typed MailboxWriteFailed or MailboxLockTimeout]
+    C2 --> O1[Return cleared counts]
+    O1 --> N1[Optional cleanup policy later archives or hard-deletes rows]

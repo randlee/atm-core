@@ -1,0 +1,21 @@
+%% title: `atm list`
+%% summary: Bounded metadata-only mailbox query.
+%% commentary: This query should start from message-status, exclude deleted rows, collapse superseded rows in normal mode, and fetch only header fields for selected keys.
+%% sets: cli
+flowchart TD
+    A[atm list request] --> B[Daemon list handler]
+    B --> C1["SQL 1: scan message_status
+filter team/agent/query flags
+exclude deleted
+exclude superseded in normal mode
+compute queue counts
+select top N message_keys"]
+    C1 -->|sql error| E1[Typed MailboxReadFailed or MailboxLockTimeout]
+    C1 -->|no candidate rows| O0[Return empty metadata rows plus counts]
+    C1 --> C2["SQL 2: project headers only
+join selected keys to mail_messages
+read summary/from/timestamp/task_id
+do not fetch full body"]
+    C2 -->|sql error| E2[Typed MailboxReadFailed]
+    C2 --> O1[Return bounded metadata rows plus counts]
+    B -. forbidden .-> F1[inbox JSON or summary file read]

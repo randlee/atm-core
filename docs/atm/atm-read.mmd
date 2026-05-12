@@ -1,0 +1,42 @@
+%% title: `atm read`
+%% summary: Single-message read with status-first selection.
+%% commentary: This read path should select from message-status first, hide deleted rows in normal mode, and fetch full content only for the chosen key.
+%% sets: cli,client
+flowchart TD
+    A[atm read request] --> B{exact message id?}
+
+    B -->|yes| C1["SQL 1: lookup message_status by message key or legacy id
+include deleted or superseded only for admin or exact-id rules"]
+    C1 -->|not found| E1[MessageNotFound]
+    C1 -->|deleted and not admin| E2[HiddenDeletedMessage]
+    C1 --> C2["SQL 2: fetch full content for selected key
+join mail_messages and message_status"]
+    C2 -->|sql error| E3[Typed MailboxReadFailed]
+    C2 --> C3{update seen or ack state?}
+    C3 -->|yes| C4["SQL 3: mutate message_status only
+set read or ack timestamps"]
+    C4 -->|sql error| E4[Typed MailboxWriteFailed or MailboxLockTimeout]
+    C4 --> O1[Return one full message]
+    C3 -->|no| O1
+
+    B -->|no| D1["SQL 1: scan message_status
+apply sender/task/since/query filters
+exclude deleted
+exclude superseded for logical-current view
+select newest eligible key"]
+    D1 -->|no match| D2{timeout set?}
+    D2 -->|no| O2[Return no match]
+    D2 -->|yes| D3[Wait and retry status scan]
+    D3 -->|timeout| E5[ReadTimeout]
+    D3 -->|match found| D4["SQL 2: fetch full content for selected key
+join mail_messages and message_status"]
+    D1 -->|sql error| E6[Typed MailboxReadFailed]
+    D1 -->|match found| D4
+    D4 -->|sql error| E7[Typed MailboxReadFailed]
+    D4 --> D5{update seen or ack state?}
+    D5 -->|yes| D6["SQL 3: mutate message_status only"]
+    D6 -->|sql error| E8[Typed MailboxWriteFailed or MailboxLockTimeout]
+    D6 --> O3[Return newest selected full message]
+    D5 -->|no| O3
+
+    A -. forbidden .-> F1[inbox JSON or summary file read]

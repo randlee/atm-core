@@ -59,7 +59,6 @@ Initial allocation:
 - `REQ-CORE-COMPAT-*`
 - `REQ-CORE-INGEST-*`
 - `REQ-CORE-BOUNDARY-*`
-- `REQ-CORE-GRAFT-*`
 - `REQ-CORE-TRANSPORT-*`
 - `REQ-CORE-DAEMON-*`
 - `REQ-CORE-LOCK-*`
@@ -176,11 +175,6 @@ Initial crate requirement IDs:
   when absent, and fail with a typed daemon-unavailable error rather than
   silently falling back to direct SQLite or inbox-file access. Satisfies:
   `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
-- `REQ-CORE-GRAFT-001` `atm-core` owns the thin graft-facing client/session
-  contract shared by the retained CLI and future `atm-graft` crate, including
-  the open `AtmGraftClient` / `GraftSessionPort` traits plus the typed graft
-  registration, unregistration, and nudge fetch/drain DTO families. Satisfies:
-  `REQ-P-GRAFT-001`, `REQ-P-CONTRACT-001`.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
@@ -206,8 +200,8 @@ Initial crate requirement IDs:
   constants, `message_kind` assignments, and payload DTO mapping. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-LOCK-RETIRE-001` `atm-core` owns the service-layer rule that normal
-  ATM mail correctness must not depend on mailbox locks in the Phase Q target
-  architecture. Satisfies:
+  ATM mail correctness must not depend on mailbox locks in the current
+  SQLite/daemon architecture. Satisfies:
   `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-DOCTOR-002` `atm-core` owns the daemon-health query contract
   consumed by `atm doctor`. Satisfies:
@@ -215,7 +209,7 @@ Initial crate requirement IDs:
 - `REQ-CORE-TEST-RUNTIME-001` `atm-core` owns the rule that core correctness is
   testable in process without daemon spawning. Satisfies:
   `REQ-P-TEST-001`.
-- `REQ-CORE-QA-RUNTIME-001` `atm-core` owns the Phase Q QA invariants for
+- `REQ-CORE-QA-RUNTIME-001` `atm-core` owns the current runtime QA invariants for
   daemon singleton/runtime and boundary enforcement. Satisfies:
   `REQ-P-ACCEPTANCE-001`, `REQ-P-TEST-001`.
 
@@ -255,6 +249,7 @@ The `atm-core` crate docs must remain aligned with:
 - [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)
+- [`../plan-phase-U.md`](../plan-phase-U.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
 - [`./boundaries.md`](./boundaries.md)
@@ -288,10 +283,8 @@ Required `atm-core` crate rules:
   - notifier-facing service integration
 - `atm-core` owns the canonical durable-store contract including:
   - `messages`
-  - `ack_state`
-  - `message_visibility`
-  - `tasks`
-  - `team_roster`
+  - one unified mutable message-state surface
+  - one canonical roster/member surface
   - `inbox_ingest`
 - `atm-core` owns the canonical `message_key` identity format and the required
   dedupe / lookup indexes above the store boundary
@@ -303,16 +296,8 @@ Required `atm-core` crate rules:
   - production remote daemon peer transport
   - fake in-process transport doubles
   - loopback in-process transport
-  - thin graft-facing daemon clients built outside `atm-daemon`
 - `ClientTransport` must be strong enough for shared ownership and concurrent
   request execution without downstream callers restating `Send + Sync`
-- `REQ-CORE-GRAFT-001` keeps the graft-facing public API intentionally small:
-  - `SendRequest` / `SendOutcome`
-  - `ReadQuery` / `ReadOutcome`
-  - `AckRequest` / `AckOutcome`
-  - `AtmGraftClient`
-  - `GraftSessionPort`
-  - typed graft registration and nudge DTOs
 - `atm-core` owns one ATM frame contract for local IPC and remote daemon
   request/response transport, as defined by
   `docs/atm-daemon/protocol-icd.md`
@@ -333,11 +318,7 @@ Required `atm-core` crate rules:
 - `atm-core` must not let watcher/reconcile logic bypass the owned ingress or
   store boundaries
 - `atm-core` boundary traits are sealed by default; any boundary that must
-  remain externally implementable requires an explicit crate-doc note and
-  architecture justification
-- the graft-facing `AtmGraftClient` and `GraftSessionPort` traits are
-  intentionally open because `atm-graft` must implement them in a separate
-  crate without taking a Rust dependency on `atm-daemon`
+  remain externally implementable requires an explicit ADR and crate-doc note
 - `atm-core` must keep concrete adapter implementations and constructors
   private unless public exposure is required by a documented boundary contract
 - `atm-core` must keep business logic testable in-process without daemon
@@ -353,8 +334,8 @@ Required `atm-core` crate rules:
 
 Phase-Q crate-local supersession note:
 - earlier daemon-free phrasing in this file is historical from the prior line
-- for the Phase Q target architecture, the requirements in this section and in
-  product `requirements.md` Section 21 are authoritative
+- for the current SQLite/daemon architecture, the requirements in this section
+  and in product `requirements.md` Section 21 are authoritative
 
 ## 7. Send Alert Metadata
 
@@ -362,33 +343,19 @@ Requirement ID:
 - `REQ-CORE-SEND-002`
 
 Required write-path rules:
-- ATM-authored alert field writes must use ATM-owned `metadata.atm` fields
-- forward alert writes must target `metadata.atm.alertKind` and
-  `metadata.atm.missingConfigPath` or a later explicitly documented
-  `metadata.atm` field
+- ATM-owned alert/repair machine state must not be introduced back into shared
+  Claude JSON under any new namespace
 - new ATM-only alert top-level fields must be rejected with a descriptive
   validation error on the write path
-- exception: until the alert metadata migration sprint lands, the current
-  runtime send path may continue writing legacy top-level `atmAlertKind` and
-  `missingConfigPath` fields; this carve-out is bounded by
-  [`architecture.md` §3.1](./architecture.md)
-- the write-path rejection requirement applies to new ATM-only alert fields
-  introduced after Phase J
+- structured alert/repair state belongs in SQLite-owned state and typed ATM
+  diagnostics instead
 
 Required read-path rules:
 - ATM read must accept legacy top-level alert fields such as `atmAlertKind` and
-  `missingConfigPath`
-- ATM read must also accept forward `metadata.atm` alert fields
-- malformed ATM-owned alert metadata must degrade gracefully, emit warning
+  `missingConfigPath` while they still exist in compatibility data
+- malformed additive ATM alert fields must degrade gracefully, emit warning
   diagnostics, and never cause the message to be dropped when the
   Claude-native envelope remains usable
-
-Forward migration rule:
-- legacy top-level `atmAlertKind` migrates to `metadata.atm.alertKind`
-- legacy top-level `missingConfigPath` migrates to
-  `metadata.atm.missingConfigPath`
-- the forward architectural target and compatibility-period carve-out are
-  documented in [`architecture.md` §3.1](./architecture.md)
 
 ## 8. Observability Integration Boundary
 
@@ -485,7 +452,7 @@ Required identity rules:
 - same-team messages keep current canonical sender projection behavior
 - cross-team messages may persist an alias-oriented `from` value for
   Claude-facing ergonomics only when ATM also stores canonical sender identity
-  in `metadata.atm.fromIdentity`
+  in SQLite-owned state
 - canonical sender identity remains the source of truth for validation,
   self-send checks, routing, and audit behavior
 - each `[[atm.post_send_hooks]]` rule binds one `recipient` selector and one
@@ -522,7 +489,7 @@ Required identity rules:
 - hook-rule evaluation and execution outcomes must remain observable through
   structured diagnostics without creating caller-visible warnings for expected
   recipient non-match
-- once Phase Q roster truth is stored in SQLite, `atm-core` must source
+- once roster truth is stored in SQLite, `atm-core` must source
   `recipient_pane_id` from the authoritative roster/store boundary rather than
   forcing hooks to rediscover it from local files
 - hook failure or timeout is best-effort only and must not roll back a
