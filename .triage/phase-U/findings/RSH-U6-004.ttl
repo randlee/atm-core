@@ -6,18 +6,22 @@
 # Fix applied between U4@335fe3d and U4@039a552: doc comments added to
 # with_connection() and with_transaction() stating callers must use spawn_blocking.
 # RSH-U6-004 captures the residual: advisory doc comments exist on all four
-# in-scope branches (U4@039a552, U5@9bae271, U6@22dfffa, U7@af056ae), but
+# in-scope branches (U4@039a552, U5@9bae271, U6@22dfffa, U7@8e37dd1), but
 # there is no compile-time or runtime enforcement of the blocking contract.
 # No enforcement mechanism (block_in_place, must_not_await, tokio::task gating,
-# #[must_use], or equivalent) was found in shared_db.rs on any branch.
+# #[must_use], debug_assert, or accepted-risk comment) was found in shared_db.rs
+# on any branch.
 #
 # Sweep results per branch:
 # U4@039a552: lines 237-239 (with_connection doc+fn), 248-250 (with_transaction doc+fn)
 #             — spawn_blocking advisory present; no enforcement.
 # U5@9bae271: lines 237-239, 248-250 — same as U4.
 # U6@22dfffa: lines 236-238, 247-249 — same advisory pattern.
-# U7@af056ae: lines 230-232, 241-243 — same advisory pattern.
-# All four branches: open.
+# U7@af056ae (prior): lines 230-232, 241-243 — same advisory pattern.
+# U7@8e37dd1 (current): lines 232-243 — followup_pass confirmed: advisory doc
+#   only; no debug_assert, accepted-risk comment, block_in_place, must_not_await,
+#   tokio::task gating, or #[must_use] added in pU-u7-roster-simplification sprint.
+#   TASK-1391 acceptance has NOT been applied. Finding remains open on all branches.
 
 <urn:atm:triage:finding/RSH-U6-004>
   a triage:Finding ;
@@ -32,7 +36,7 @@
   triage:sweepScope "crate" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-05-12T12:00:00Z"^^xsd:dateTime ;
   triage:references "RSH-U4-001" , "PR #249" ;
   triage:hasOccurrence
     <urn:atm:triage:occurrence/RSH-U6-004/pU-u4-unified-message-state/1> ,
@@ -47,8 +51,8 @@
     <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> ,
     <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/9bae271> ,
     <urn:atm:triage:worktree/pU-u6-provenance-field-reduction/22dfffa> ,
-    <urn:atm:triage:worktree/pU-u7-roster-simplification/af056ae> ;
-  triage:promoteTo <urn:atm:triage:worktree/pU-u7-roster-simplification/af056ae> .
+    <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> .
 
 # — U4 occurrences —
 
@@ -122,7 +126,7 @@
   triage:headSha "22dfffa" ;
   triage:occursIn <urn:atm:triage:worktree/pU-u6-provenance-field-reduction/22dfffa> .
 
-# — U7 occurrences —
+# — U7 occurrences (updated to 8e37dd1) —
 
 <urn:atm:triage:occurrence/RSH-U6-004/pU-u7-roster-simplification/1>
   a triage:Occurrence ;
@@ -132,8 +136,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pU-u7-roster-simplification" ;
-  triage:headSha "af056ae" ;
-  triage:occursIn <urn:atm:triage:worktree/pU-u7-roster-simplification/af056ae> .
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> .
 
 <urn:atm:triage:occurrence/RSH-U6-004/pU-u7-roster-simplification/2>
   a triage:Occurrence ;
@@ -143,8 +147,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pU-u7-roster-simplification" ;
-  triage:headSha "af056ae" ;
-  triage:occursIn <urn:atm:triage:worktree/pU-u7-roster-simplification/af056ae> .
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> .
 
 # — WorktreeSnapshot nodes —
 
@@ -172,10 +176,10 @@
   triage:orderIndex 6 ;
   triage:branchState "open" .
 
-<urn:atm:triage:worktree/pU-u7-roster-simplification/af056ae>
+<urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pU-u7-roster-simplification" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
-  triage:headSha "af056ae" ;
+  triage:headSha "8e37dd1" ;
   triage:orderIndex 7 ;
   triage:branchState "open" .
