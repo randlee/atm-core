@@ -269,7 +269,7 @@ pub struct MessageEnvelope {
     pub thread_mode: Option<ThreadMode>,
 
     #[serde(rename = "staleAt", skip_serializing_if = "Option::is_none")]
-    pub stale_at: Option<IsoTimestamp>,
+    pub expires_at: Option<IsoTimestamp>,
 
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
@@ -443,7 +443,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: Some("TASK-123".parse().expect("task id")),
             extra: Map::new(),
         };
@@ -578,7 +578,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: Some("TASK-123".parse().expect("task id")),
             extra: Map::new(),
         };
@@ -622,7 +622,7 @@ mod tests {
             acknowledges_message_id: Some(AtmMessageId::new()),
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         };
@@ -656,7 +656,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         };
@@ -701,7 +701,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         };
@@ -738,7 +738,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         };
@@ -776,7 +776,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         };
@@ -819,7 +819,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra,
         };

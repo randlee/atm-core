@@ -36,7 +36,7 @@ no longer depends on ad-hoc per-operation write transactions.
   - incorrectly left on the legacy path and therefore still in scope for T.2
 - migrate the hot-path write entry points through the writer-owned lane:
   - `MailStore::upsert_message`
-  - `MailStore::upsert_visibility_state`
+  - `MailStore::upsert_message_state`
 - preserve `SharedDb::with_transaction(...)` for remaining cold-path callers
   during the incremental migration
 - define the bounded backpressure contract for blocking submitters and async

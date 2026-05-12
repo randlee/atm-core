@@ -1,12 +1,12 @@
-%% title: `Load Visibility State`
-%% summary: SQLite boundary method `MailStore::load_visibility_state`.
+%% title: `Load Message State`
+%% summary: SQLite boundary method `MailStore::load_message_state`.
 %% commentary: This SQL-boundary path reads one unified `mail_message_states` row and returns `None` when no row exists.
 %% read_tables: mail_message_states
 %% write_tables:
 %% notes: reads: 1 | writes: 0 | joins: 0 | transactions: 0
 %% sets: query
 flowchart TD
-    A["<b>Load Visibility State</b><br/>MailStore::load_visibility_state"]
+    A["<b>Load Message State</b><br/>MailStore::load_message_state"]
     A --> I["Input
 team
 agent
@@ -19,7 +19,7 @@ FROM mail_message_states
 WHERE team, agent, message_key"]
     R -->|row found| M["Materialize state
 parse optional timestamps
-rebuild MailStoreVisibilityState"]
+rebuild MailMessageState"]
     R -->|no row| O0["Output
 state: None"]
     M --> O1["Output

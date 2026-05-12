@@ -5,6 +5,23 @@ use atm_core::schema::{AtmMessageId, ThreadMode};
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use rusqlite::params;
 
+fn parse_optional_timestamp(
+    raw: Option<String>,
+    field_name: &str,
+) -> Result<Option<IsoTimestamp>, AtmError> {
+    raw.map(|value| value.parse::<chrono::DateTime<chrono::Utc>>())
+        .transpose()
+        .map_err(|error| {
+            AtmError::validation(format!(
+                "failed to parse bounded mailbox metadata {field_name}: {error}"
+            ))
+            .with_recovery(
+                "Repair or remove the malformed bounded mailbox metadata row before retrying the query.",
+            )
+        })
+        .map(|value| value.map(IsoTimestamp::from_datetime))
+}
+
 pub fn query_mailbox_metadata_rows(
     db: &SharedDb,
     team: &TeamName,
@@ -139,6 +156,10 @@ pub fn query_mailbox_metadata_rows(
                     })?,
                 read: read != 0,
                 pending_ack: pending_ack_at.is_some() && acknowledged_at.is_none(),
+                acknowledged_at: parse_optional_timestamp(
+                    acknowledged_at,
+                    "acknowledged_at timestamp",
+                )?,
                 task_id: task_id.map(|value| value.parse::<TaskId>()).transpose()?,
             });
             if let Some(limit) = limit

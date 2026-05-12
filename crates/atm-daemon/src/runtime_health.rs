@@ -420,7 +420,9 @@ impl DaemonRequestDispatcher {
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
-        let mut report = doctor::run_doctor(query, self.observability.as_ref())?;
+        let runtime = self.sqlite_runtime()?;
+        let mut report =
+            doctor::run_doctor_with_runtime(query, self.observability.as_ref(), &runtime)?;
         let daemon_observability_finding = match self.observability.health() {
             Ok(health) => daemon_observability_finding(&health),
             Err(error) => doctor::health::observability_finding_from_error(&error),
