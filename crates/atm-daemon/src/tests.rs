@@ -285,13 +285,15 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
         .roster_store()
         .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
             team: test_team().clone(),
-            roster: TeamConfig {
-                members: members
-                    .iter()
-                    .map(|name| AgentMember::with_name((*name).parse().expect("member")))
-                    .collect(),
-                ..Default::default()
-            },
+            members: members
+                .iter()
+                .map(|name| {
+                    atm_core::boundary::RosterMemberRecord::from_claude_code_member(
+                        test_team().clone(),
+                        AgentMember::with_name((*name).parse().expect("member")),
+                    )
+                })
+                .collect(),
             source: Some("daemon-heartbeat-test".to_string()),
         })
         .expect("replace roster");
@@ -447,7 +449,7 @@ fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
 }
 
 #[test]
-fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_state() {
+fn reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_state() {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
@@ -479,11 +481,9 @@ fn reload_runtime_view_rejects_invalid_config_and_preserves_last_known_good_stat
         .join("config.json");
     std::fs::write(&config_path, br#"{"members":["team-lead",}"#).expect("invalid config");
 
-    let error = dispatcher
+    dispatcher
         .reload_runtime_view()
-        .expect_err("invalid config should be rejected");
-
-    assert!(error.is_config(), "expected config error, got {error:?}");
+        .expect("invalid config should be ignored once roster truth is in sqlite");
     assert_eq!(
         status_cache
             .member_state_for_test(&team, &leader)

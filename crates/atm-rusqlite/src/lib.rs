@@ -162,7 +162,8 @@ impl SqliteBoundaryAssembly {
                 .prepare(
                     "SELECT state_json
                      FROM daemon_remote_replay_states
-                     ORDER BY team, agent, message_key;",
+                     ORDER BY team, agent, message_key
+                     LIMIT 10000;",
                 )
                 .map_err(|error| {
                     self.mail_store
@@ -807,6 +808,9 @@ impl boundary::TaskStore for SqliteTaskStore {
         &self,
         request: boundary::TaskStoreRecordAckTransitionRequest,
     ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, AtmError> {
+        // Accepted risk: task ack transitions remain append-only audit rows for
+        // a compatibility-only task-store shape. This branch keeps full
+        // history instead of silently pruning per-task transitions here.
         let transition_json = serialize_json(
             &serde_json::json!({
                 "message_key": request.message_key.clone(),
@@ -1925,8 +1929,22 @@ mod tests {
                 let collected = roster_columns
                     .collect::<Result<Vec<_>, _>>()
                     .map_err(|error| assembly.mail_store.db.error("failed to read roster column metadata", error))?;
+                assert!(collected.iter().any(|column| column == "member_kind"));
+                assert!(collected.iter().any(|column| column == "harness"));
+                assert!(collected.iter().any(|column| column == "agent_type"));
+                assert!(collected.iter().any(|column| column == "model"));
+                assert!(collected.iter().any(|column| column == "metadata_json"));
                 assert!(collected.iter().any(|column| column == "recipient_pane_id"));
-                assert!(collected.iter().any(|column| column == "pid"));
+                assert!(!collected.iter().any(|column| column == "pid"));
+
+                let roster_snapshot_table_exists: i64 = connection
+                    .query_row(
+                        "SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = 'rosters';",
+                        [],
+                        |row| row.get(0),
+                    )
+                    .map_err(|error| assembly.mail_store.db.error("failed to inspect rosters table", error))?;
+                assert_eq!(roster_snapshot_table_exists, 0);
 
                 let mut message_columns = connection
                     .prepare("PRAGMA table_info(mail_messages);")
@@ -1942,6 +1960,14 @@ mod tests {
                 assert!(collected.iter().any(|column| column == "message_at"));
                 assert!(collected.iter().any(|column| column == "message_id"));
                 assert!(!collected.iter().any(|column| column == "expires_at"));
+                assert!(
+                    !collected.iter().any(|column| column == "imported_from"),
+                    "imported_from must be absent from mail_messages"
+                );
+                assert!(
+                    collected.iter().any(|column| column == "recorded_at"),
+                    "recorded_at must be present in mail_messages"
+                );
 
                 let mut state_columns = connection
                     .prepare("PRAGMA table_info(mail_message_states);")
@@ -2203,15 +2229,64 @@ mod tests {
     fn roster_store_round_trips_roster_membership_and_health() {
         let assembly = in_memory_assembly();
         let store = assembly.roster_store();
-
-        let roster = TeamConfig {
-            members: vec![AgentMember::with_name(agent())],
-            extra: serde_json::Map::new(),
-        };
+        let members = vec![
+            boundary::RosterMemberRecord {
+                team_name: team(),
+                agent_name: "alpha".parse().expect("agent name"),
+                member_kind: boundary::RosterMemberKind::Permanent,
+                harness: boundary::RosterHarness::ClaudeCode,
+                agent_type: "planner".to_string(),
+                model: "claude-sonnet".to_string(),
+                recipient_pane_id: Some("%1".to_string()),
+                metadata_json: serde_json::Map::from_iter([(
+                    "cwd".to_string(),
+                    serde_json::Value::String("/tmp/alpha".to_string()),
+                )]),
+            },
+            boundary::RosterMemberRecord {
+                team_name: team(),
+                agent_name: "bravo".parse().expect("agent name"),
+                member_kind: boundary::RosterMemberKind::Ephemeral,
+                harness: boundary::RosterHarness::CodexCli,
+                agent_type: "worker".to_string(),
+                model: "gpt-5-codex".to_string(),
+                recipient_pane_id: None,
+                metadata_json: serde_json::Map::from_iter([(
+                    "session".to_string(),
+                    serde_json::Value::String("codex".to_string()),
+                )]),
+            },
+            boundary::RosterMemberRecord {
+                team_name: team(),
+                agent_name: "charlie".parse().expect("agent name"),
+                member_kind: boundary::RosterMemberKind::Permanent,
+                harness: boundary::RosterHarness::GeminiCli,
+                agent_type: "review".to_string(),
+                model: "gemini-2.5-pro".to_string(),
+                recipient_pane_id: None,
+                metadata_json: serde_json::Map::from_iter([(
+                    "region".to_string(),
+                    serde_json::Value::String("us".to_string()),
+                )]),
+            },
+            boundary::RosterMemberRecord {
+                team_name: team(),
+                agent_name: "delta".parse().expect("agent name"),
+                member_kind: boundary::RosterMemberKind::Permanent,
+                harness: boundary::RosterHarness::Opencode,
+                agent_type: "ops".to_string(),
+                model: "open-router".to_string(),
+                recipient_pane_id: None,
+                metadata_json: serde_json::Map::from_iter([(
+                    "provider".to_string(),
+                    serde_json::Value::String("opencode".to_string()),
+                )]),
+            },
+        ];
         let replaced = store
             .replace_roster(boundary::RosterStoreReplaceRosterRequest {
                 team: team(),
-                roster: roster.clone(),
+                members: members.clone(),
                 source: Some("config.json".to_string()),
             })
             .expect("replace");
@@ -2220,20 +2295,33 @@ mod tests {
         let loaded = store
             .load_roster(boundary::RosterStoreLoadRosterRequest { team: team() })
             .expect("load roster");
-        assert_eq!(loaded.roster, roster);
+        assert_eq!(loaded.members, members);
 
         let membership = store
             .query_membership(boundary::RosterStoreQueryMembershipRequest {
                 team: team(),
-                member: agent(),
+                member: "alpha".parse().expect("agent name"),
             })
             .expect("membership");
         assert!(membership.is_member);
+        assert_eq!(membership.member, Some(members[0].clone()));
 
         let health = store
             .health_snapshot(boundary::RosterStoreHealthSnapshotRequest { team: team() })
             .expect("health");
-        assert_eq!(health.snapshot.member_count, 1);
+        assert_eq!(health.snapshot.member_count, members.len() as u64);
+    }
+
+    #[test]
+    fn roster_store_load_roster_returns_empty_for_new_team() {
+        let assembly = in_memory_assembly();
+        let store = assembly.roster_store();
+
+        let loaded = store
+            .load_roster(boundary::RosterStoreLoadRosterRequest { team: team() })
+            .expect("load empty roster");
+
+        assert!(loaded.members.is_empty());
     }
 
     #[test]

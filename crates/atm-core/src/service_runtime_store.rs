@@ -6,8 +6,7 @@ use crate::boundary;
 use crate::error::AtmError;
 use crate::mailbox;
 use crate::mailbox::source::SourceFile;
-use crate::schema::MessageEnvelope;
-use crate::schema::TeamConfig;
+use crate::schema::{MessageEnvelope, TeamConfig};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::types::{AgentName, TeamName};
 
@@ -1012,7 +1011,7 @@ impl boundary::RosterStore for UnsupportedRosterStoreAdapter {
         Ok(boundary::RosterStoreReplaceRosterResponse {
             team: request.team,
             previous_member_count: 0,
-            current_member_count: request.roster.members.len() as u64,
+            current_member_count: request.members.len() as u64,
             replaced: true,
         })
     }
@@ -1023,10 +1022,7 @@ impl boundary::RosterStore for UnsupportedRosterStoreAdapter {
     ) -> Result<boundary::RosterStoreLoadRosterResponse, AtmError> {
         Ok(boundary::RosterStoreLoadRosterResponse {
             team: request.team,
-            roster: TeamConfig {
-                members: Vec::new(),
-                extra: serde_json::Map::new(),
-            },
+            members: Vec::new(),
         })
     }
 
@@ -1038,15 +1034,7 @@ impl boundary::RosterStore for UnsupportedRosterStoreAdapter {
             team: request.team,
             member: None,
             is_member: false,
-            pid: None,
         })
-    }
-
-    fn record_heartbeat(
-        &self,
-        _request: boundary::RosterStoreRecordHeartbeatRequest,
-    ) -> Result<boundary::RosterStoreRecordHeartbeatResponse, AtmError> {
-        Err(unsupported("RosterStore::record_heartbeat"))
     }
 
     fn health_snapshot(

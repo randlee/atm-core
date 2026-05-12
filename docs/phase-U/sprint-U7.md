@@ -140,9 +140,8 @@ and `config.json` sync rules together.
 - `harness` is a first-class behavioral enum with the approved initial set
 - `agent_type` and `model` remain plain strings
 - `metadata_json` is the only generic extension bucket
-- `recipient_pane_id` receives an explicit U.7 decision: either it is included
-  in the canonical member model with justification recorded in
-  `docs/phase-U/removal-inventory.md`, or it is excluded with rationale
+- `recipient_pane_id` remains an optional canonical member field because
+  authoritative pane routing may already be known at Claude-code roster ingest
 - Claude Code `config.json` roster changes are ingested through the private
   watcher/import boundary rather than treated as general runtime truth
 

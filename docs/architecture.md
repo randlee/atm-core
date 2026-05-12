@@ -1868,6 +1868,19 @@ Unified-state ownership notes:
 - the earlier split model (`mail_visibility_states` plus `ack_state`) is
   retired and must not be reintroduced under new names
 
+### 18.4.4 Phase U Provenance Reduction
+
+Phase U removed weak round-trip provenance from the durable mailbox contract.
+
+Current executed rule:
+- `imported_from` is removed from `MailStoreMessageRecord` durable truth and is
+  no longer part of the mailbox-row schema
+- `recorded_at` remains SQLite-owned ingest timing in `atm-rusqlite`, not
+  caller-supplied message data
+
+Governing ADR:
+- `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
+
 ### 18.5 New Error Codes
 
 - `MailboxLockFailed` / `ATM_MAILBOX_LOCK_FAILED` — lock-path creation,
@@ -2137,7 +2150,7 @@ ATM moves to a split state model:
   - team roster
 - daemon memory is the authoritative live runtime view for:
   - current agent status
-  - `pid`: durable SQLite truth cached in daemon memory as the primary
+  - `pid`: transient daemon-owned process identity cached as the primary
     liveness field
   - `last_active_at`: daemon-memory-only runtime state used for live overlays
 
@@ -2194,8 +2207,9 @@ Minimum canonical roster-member durable fields:
 - `metadata_json`
 - `recipient_pane_id TEXT NULL`
   - authoritative post-send-hook pane mapping when known
-- `pid INTEGER NULL`
-  - durable roster truth for the current owning process identity
+
+`pid` is not part of the canonical roster-member durable schema. It remains
+transient daemon-owned runtime state only.
 
 Schema-governance rule:
 - any SQLite schema change is a contract change
@@ -2428,9 +2442,14 @@ Object-safety rule:
   SQLite types
 
 Minimum method set:
-- replace/load roster rows
+- replace/load canonical roster member rows
 - query roster membership for routing/validation
 - return roster health/readiness snapshot
+
+Ownership rule:
+- runtime `pid` continuity is transient daemon-owned state and must not become
+  part of durable roster truth
+- `config.json` remains an ingress document, not a general runtime-read truth
 
 #### InboxIngress
 

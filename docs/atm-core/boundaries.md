@@ -135,6 +135,9 @@ Purpose:
 
 Notes:
 - Runtime status remains outside durable roster ownership.
+- Durable roster truth is the canonical member model only; `config.json`
+  documents are ingress inputs and daemon-owned live `pid` state stays outside
+  this boundary.
 
 ## ConfigIngress
 

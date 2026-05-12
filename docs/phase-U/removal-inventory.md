@@ -121,19 +121,21 @@ Primary code/doc targets:
 ## U.7 — Roster Simplification And Explicit Member Model
 
 Primary code/doc targets:
-- `crates/atm-rusqlite/src/shared_db.rs:68-112,381-390`
+- `crates/atm-rusqlite/src/shared_db.rs`
   - `rosters`
-  - `team_roster`
   - `roster_json`
-  - `member_json`
-- `crates/atm-rusqlite/src/roster_store.rs:23-61`
-  - whole-roster snapshot write plus per-member projection rebuild
-- `crates/atm-rusqlite/src/roster_store.rs:85-105`
-  - whole-roster snapshot load
-- `crates/atm-rusqlite/src/roster_store.rs:120-202`
-  - per-member projection reads/updates
-- `crates/atm-rusqlite/src/lib.rs:1373`
-  - schema test anchored to `team_roster`
+  - durable roster `pid`
+  - whole-roster JSON as SQLite truth
+- `crates/atm-rusqlite/src/roster_store.rs`
+  - whole-roster snapshot write/load logic
+  - per-member JSON projection readback
+  - durable heartbeat persistence through roster storage
+- `crates/atm-daemon/src/runtime_status_cache.rs`
+  - direct `config.json` content reads for runtime roster truth
+- `crates/atm-daemon/src/runtime_health.rs`
+  - durable roster `pid` continuity assumptions
+- `crates/atm-rusqlite/src/lib.rs`
+  - schema test anchored to the canonical `team_roster` shape
 
 ## U.8 — Shared Thin-Client ICD For CLI And Graft
 

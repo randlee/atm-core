@@ -81,22 +81,16 @@ CREATE TABLE IF NOT EXISTS task_ack_transitions (
     PRIMARY KEY (team, task_id, transition_index)
 );
 
-CREATE TABLE IF NOT EXISTS rosters (
-    team TEXT PRIMARY KEY,
-    roster_json TEXT NOT NULL,
-    source TEXT,
-    recipient_pane_id TEXT NULL,
-    pid INTEGER NULL,
-    updated_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS team_roster (
     team_name TEXT NOT NULL,
     agent_name TEXT NOT NULL,
-    member_json TEXT NOT NULL,
+    member_kind TEXT NOT NULL CHECK(member_kind IN ('permanent', 'ephemeral')),
+    harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode')),
+    agent_type TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
     source TEXT,
     recipient_pane_id TEXT NULL,
-    pid INTEGER NULL,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (team_name, agent_name)
 );
@@ -127,8 +121,8 @@ CREATE INDEX IF NOT EXISTS idx_task_records_lookup
 CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
     ON team_roster(team_name);
 "#;
-// `rosters` remains the canonical per-team `TeamConfig` snapshot, while
-// `team_roster` is the per-member durable projection that runtime lookup uses.
+// `team_roster` is the single canonical durable roster truth. Runtime pid
+// continuity is transient daemon-owned state and must not be persisted here.
 
 pub(crate) type SqliteConnection = Connection;
 
@@ -235,6 +229,10 @@ impl SharedDb {
 
     /// Call only from blocking code paths; async callers must enter
     /// `spawn_blocking` before borrowing a sqlite connection.
+    ///
+    /// Accepted risk: this is enforced as a crate-internal contract rather
+    /// than a runtime assert because `SharedDb` is only called from owned
+    /// blocking code paths inside `atm-rusqlite`.
     pub(crate) fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
@@ -246,6 +244,10 @@ impl SharedDb {
 
     /// Call only from blocking code paths; async callers must enter
     /// `spawn_blocking` before opening a sqlite transaction.
+    ///
+    /// Accepted risk: this is enforced as a crate-internal contract rather
+    /// than a runtime assert because `SharedDb` is only called from owned
+    /// blocking code paths inside `atm-rusqlite`.
     pub(crate) fn with_transaction<T>(
         &self,
         operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>,
@@ -467,16 +469,37 @@ pub(crate) fn ensure_schema(
     ensure_column(
         connection,
         target,
-        "rosters",
-        "recipient_pane_id",
-        "ALTER TABLE rosters ADD COLUMN recipient_pane_id TEXT NULL;",
+        "team_roster",
+        "member_kind",
+        "ALTER TABLE team_roster ADD COLUMN member_kind TEXT NOT NULL DEFAULT 'permanent';",
     )?;
     ensure_column(
         connection,
         target,
-        "rosters",
-        "pid",
-        "ALTER TABLE rosters ADD COLUMN pid INTEGER NULL;",
+        "team_roster",
+        "harness",
+        "ALTER TABLE team_roster ADD COLUMN harness TEXT NOT NULL DEFAULT 'claude-code';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "team_roster",
+        "agent_type",
+        "ALTER TABLE team_roster ADD COLUMN agent_type TEXT NOT NULL DEFAULT '';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "team_roster",
+        "model",
+        "ALTER TABLE team_roster ADD COLUMN model TEXT NOT NULL DEFAULT '';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "team_roster",
+        "metadata_json",
+        "ALTER TABLE team_roster ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';",
     )?;
     Ok(())
 }
