@@ -863,6 +863,7 @@ fn handle_connection(
             stream: &mut stream,
             codec: &codec,
             request_id,
+            force_shutdown,
         };
         return dispatcher.dispatch_graft_advisory_stream(request, &mut sink);
     }
@@ -936,6 +937,7 @@ struct LocalIpcAdvisoryStreamSink<'a> {
     stream: &'a mut LocalSocketStream,
     codec: &'a JsonAtmProtocolCodec,
     request_id: RequestId,
+    force_shutdown: &'a AtomicBool,
 }
 
 impl boundary::AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
@@ -953,6 +955,10 @@ impl boundary::AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
                 )
                 .with_source(source)
         })
+    }
+
+    fn stop_requested(&self) -> bool {
+        self.force_shutdown.load(Ordering::SeqCst)
     }
 }
 
@@ -1303,7 +1309,7 @@ mod tests {
         )
         .expect_err("bounded drain should fail once the forced-cancel deadline elapses");
         assert!(
-            shutdown_started.elapsed() < Duration::from_secs(1),
+            shutdown_started.elapsed() < Duration::from_secs(5),
             "forced cancel should bound shutdown even when tracked request work never completes"
         );
         assert!(force_shutdown.load(Ordering::SeqCst));

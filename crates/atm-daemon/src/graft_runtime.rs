@@ -185,6 +185,9 @@ impl GraftRuntime {
             limit: request.limit,
         };
         loop {
+            if sink.stop_requested() {
+                return Ok(());
+            }
             match self.drain_nudges(drain_request.clone()) {
                 Ok(batch) => {
                     if batch.nudges.is_empty() {

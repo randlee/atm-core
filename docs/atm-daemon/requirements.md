@@ -55,6 +55,8 @@ Current request/response packet families owned by the daemon transport line:
   - `GraftAdvisoryStream`
   - production requirement: one live advisory stream per active embedded
     client session
+  - the live advisory stream is the production nudge-delivery path whenever the
+    selected same-host transport supports streaming
 
 Current retained ATM surfaces not modeled as daemon request/response packets:
 - `atm log`

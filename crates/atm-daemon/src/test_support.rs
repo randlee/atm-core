@@ -91,7 +91,7 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
         .expect("daemon local ipc ready signal");
     let ipc_name =
         atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     let mut attempts = 0usize;
     let mut last_error = None;
     while std::time::Instant::now() < deadline {

@@ -302,7 +302,10 @@ impl<'de> Deserialize<'de> for NudgeMessage {
 
 impl fmt::Debug for NudgeMessage {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_tuple("NudgeMessage").field(&self.0).finish()
+        f.debug_struct("NudgeMessage")
+            .field("bytes", &self.0.len())
+            .field("redacted", &true)
+            .finish()
     }
 }
 

@@ -98,7 +98,7 @@ Lean-design rule:
    - targeted integration tests modeled after the current daemon local-IPC
      tests in `crates/atm-daemon/src/local_ipc_transport.rs`
    Required doc or boundary updates:
-   - update architecture docs to state that client-specific runtime logic is
+   - complete: architecture docs state that client-specific runtime logic is
      owned by the client crate
 
 2. Leave only generic daemon responsibilities
@@ -112,7 +112,8 @@ Lean-design rule:
    - boundary/lint checks or review-driven tests proving no daemon-owned
      client runtime leak
    Required doc or boundary updates:
-   - tighten daemon and core boundary docs
+   - complete: daemon and core boundary docs are tightened for the temporary
+     graft advisory stream and client-owned runtime split
 
 ## Acceptance Criteria
 
