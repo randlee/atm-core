@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U3-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U3-002" ;
+  triage:title "docs/architecture.md missing U.3 mode-aware body projection rule" ;
+  triage:description "docs/architecture.md is listed as a Required Doc Update for U.3 and appears in changed_files, but no U.3-specific content was added to section 5.2. Section 5.2 lists threadMode as a compatibility field but says nothing about how it governs body projection at query time. The mode-aware projection contract (terminal add-details composes predecessor context; terminal supersede exposes only replacement body) is in docs/atm-core/architecture.md (ADR-ATM-CORE-002) but not in the separately-required top-level product architecture doc. Required fix: Add a U.3 note in/after section 5.2 stating the mode-aware body projection rule and referencing docs/atm-core/architecture.md as crate-local detail owner." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U3-002/pU-u3/1> ,
+                       <urn:atm:triage:occurrence/ATM-QA-U3-002/pU-u2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/8394248> ,
+               <urn:atm:triage:worktree/pU-u2/1fb49d0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/ATM-QA-U3-002/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 664 ;
+  triage:snippet "### 5.2 Inbox Message ... threadMode listed without mode-aware body projection note" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/ATM-QA-U3-002/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 664 ;
+  triage:snippet "### 5.2 Inbox Message ... threadMode listed without mode-aware body projection note" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d0> .
+
+<urn:atm:triage:worktree/pU-u3/8394248>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:orderIndex 2 .
