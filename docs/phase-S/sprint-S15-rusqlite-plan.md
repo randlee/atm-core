@@ -34,7 +34,7 @@ Current high-frequency writes in `crates/atm-rusqlite/src/lib.rs`:
 - writes `ack_state`
 - currently does a `SELECT 1 ...` probe first to synthesize `inserted`
 
-2. `MailStore::upsert_visibility_state`
+2. `MailStore::upsert_message_state`
 - writes `mail_visibility_states`
 - writes `ack_state`
 - fires on read/ack visibility updates
@@ -70,7 +70,7 @@ maintenance.
 - one bounded submission channel for backpressure
 - one transaction per drained batch
 - a no-flag-day migration order starting with `upsert_message` and
-  `upsert_visibility_state`
+  `upsert_message_state`
 - `writer` remaining `pub(crate)` only
 - `1` permanent writer handle plus `3` reader handles inside the existing
   `1..=4` connection budget
@@ -272,7 +272,7 @@ Core message shape:
 
 Representative `WriteOp` cases:
 - `UpsertMessage`
-- `UpsertVisibilityState`
+- `UpsertMessageState`
 - `RecordIngestReplayState`
 - `CreateTask`
 - `UpdateTask`
@@ -383,7 +383,7 @@ Important invariant:
 
 ### Visibility hot path
 
-`UpsertVisibilityState` remains:
+`UpsertMessageState` remains:
 - `mail_visibility_states` upsert
 - `ack_state` upsert
 
@@ -403,7 +403,7 @@ should migrate after the mailbox path, but they still benefit from:
 No flag-day cutover:
 
 1. `MailStore::upsert_message`
-2. `MailStore::upsert_visibility_state`
+2. `MailStore::upsert_message_state`
 3. `MailStore::record_ingest_replay_state`
 4. task-store writes
 5. roster-store writes

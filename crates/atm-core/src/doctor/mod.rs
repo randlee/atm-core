@@ -12,6 +12,7 @@ use crate::observability::ObservabilityPort;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::legacy_runtime;
 use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
 
@@ -37,14 +38,14 @@ pub fn run_doctor(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<DoctorReport, crate::error::AtmError> {
-    let runtime = LocalServiceRuntime::default();
+    let runtime = legacy_runtime();
     run_doctor_with_runtime(query, observability, &runtime)
 }
 
-fn run_doctor_with_runtime<R: RetainedServiceRuntime>(
+pub fn run_doctor_with_runtime(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
-    runtime: &R,
+    runtime: &LocalServiceRuntime,
 ) -> Result<DoctorReport, crate::error::AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
     let home_dir = query.home_dir.clone();

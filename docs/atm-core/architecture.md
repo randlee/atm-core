@@ -269,7 +269,11 @@ Architectural rule:
 Store-family rule:
 - `MailStore` owns message lifecycle state
 - `TaskStore` owns task-domain state and task metadata
-- `RosterStore` owns durable roster membership state
+- `RosterStore` owns durable roster membership state only
+- daemon-owned live `pid` state and other session-transient runtime data stay
+  outside `RosterStore`
+- `TeamConfig` / `config.json` stays a config-ingress document, not the durable
+  roster contract
 - `MailStore` must not become the catch-all owner for unrelated future domains
   such as orchestration or daemon-live-status state
 

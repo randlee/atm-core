@@ -6,7 +6,6 @@ use crate::error::AtmError;
 use crate::mailbox;
 use crate::mailbox::source::SourceFile;
 use crate::schema::MessageEnvelope;
-use crate::schema::TeamConfig;
 use crate::service_runtime::LocalServiceRuntime;
 use crate::types::{AgentName, TeamName};
 
@@ -31,17 +30,17 @@ pub(crate) fn default_roster_store() -> Arc<dyn boundary::RosterStore + Send + S
     Arc::new(LegacyRosterStoreAdapter)
 }
 
-impl Default for LocalServiceRuntime {
-    fn default() -> Self {
-        Self {
-            mail_store: default_mail_store(),
-            task_store: default_task_store(),
-            roster_store: default_roster_store(),
-        }
-    }
+pub(crate) fn legacy_runtime() -> LocalServiceRuntime {
+    LocalServiceRuntime::new(
+        default_mail_store(),
+        default_task_store(),
+        default_roster_store(),
+    )
+    .with_legacy_mailbox_files()
 }
 
 pub(crate) trait RetainedMailboxRuntime {
+    fn allows_legacy_mailbox_files(&self) -> bool;
     fn query_mailbox_metadata_rows(
         &self,
         home_dir: &Path,
@@ -60,10 +59,7 @@ pub(crate) trait RetainedMailboxRuntime {
         &self,
         record: boundary::MailStoreMessageRecord,
     ) -> Result<(), AtmError>;
-    fn persist_visibility_state(
-        &self,
-        state: boundary::MailStoreVisibilityState,
-    ) -> Result<(), AtmError>;
+    fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError>;
     fn observe_source_files(
         &self,
         home_dir: &Path,
@@ -134,6 +130,7 @@ fn legacy_query_mailbox_metadata_rows(
                 read: envelope.read,
                 pending_ack: envelope.pending_ack_at.is_some()
                     && envelope.acknowledged_at.is_none(),
+                acknowledged_at: envelope.acknowledged_at,
                 task_id: envelope.task_id,
             });
             if let Some(limit) = limit
@@ -167,8 +164,6 @@ fn legacy_load_message_record(
         agent: agent.clone(),
         message_key: message_key.clone(),
         envelope,
-        imported_from: None,
-        recorded_at: None,
     }))
 }
 
@@ -214,6 +209,10 @@ where
 }
 
 impl RetainedMailboxRuntime for LocalServiceRuntime {
+    fn allows_legacy_mailbox_files(&self) -> bool {
+        self.allows_legacy_mailbox_files()
+    }
+
     fn query_mailbox_metadata_rows(
         &self,
         home_dir: &Path,
@@ -231,7 +230,10 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             .map(|response| response.rows)
         {
             Ok(rows) => Ok(rows),
-            Err(error) if is_unsupported_boundary(&error, "MailStore::query_mailbox_metadata") => {
+            Err(error)
+                if self.allows_legacy_mailbox_files()
+                    && is_unsupported_boundary(&error, "MailStore::query_mailbox_metadata") =>
+            {
                 legacy_query_mailbox_metadata_rows(home_dir, team, agent, limit)
             }
             Err(error) => Err(error),
@@ -255,7 +257,10 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
             .map(|response| response.record)
         {
             Ok(record) => Ok(record),
-            Err(error) if is_unsupported_boundary(&error, "MailStore::load_message") => {
+            Err(error)
+                if self.allows_legacy_mailbox_files()
+                    && is_unsupported_boundary(&error, "MailStore::load_message") =>
+            {
                 legacy_load_message_record(home_dir, team, agent, message_key)
             }
             Err(error) => Err(error),
@@ -276,20 +281,20 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         }
     }
 
-    fn persist_visibility_state(
-        &self,
-        state: boundary::MailStoreVisibilityState,
-    ) -> Result<(), AtmError> {
-        match self.mail_store.upsert_visibility_state(
-            boundary::MailStoreUpsertVisibilityStateRequest {
+    fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {
+        match self
+            .mail_store
+            .upsert_message_state(boundary::UpsertMailMessageStateRequest {
                 team: state.team.clone(),
                 agent: state.agent.clone(),
                 actor: state.actor.clone(),
                 state,
-            },
-        ) {
+            }) {
             Ok(_) => Ok(()),
-            Err(error) if is_unsupported_boundary(&error, "MailStore::upsert_visibility_state") => {
+            Err(error)
+                if self.allows_legacy_mailbox_files()
+                    && is_unsupported_boundary(&error, "MailStore::upsert_message_state") =>
+            {
                 Ok(())
             }
             Err(error) => Err(error),
@@ -411,20 +416,20 @@ impl boundary::MailStore for LegacyMailStoreAdapter {
         Err(unsupported("MailStore::query_mailbox_metadata_counts"))
     }
 
-    fn upsert_visibility_state(
+    fn upsert_message_state(
         &self,
-        request: boundary::MailStoreUpsertVisibilityStateRequest,
-    ) -> Result<boundary::MailStoreUpsertVisibilityStateResponse, AtmError> {
-        Ok(boundary::MailStoreUpsertVisibilityStateResponse {
+        request: boundary::UpsertMailMessageStateRequest,
+    ) -> Result<boundary::UpsertMailMessageStateResponse, AtmError> {
+        Ok(boundary::UpsertMailMessageStateResponse {
             state: request.state,
         })
     }
 
-    fn load_visibility_state(
+    fn load_message_state(
         &self,
-        _request: boundary::MailStoreLoadVisibilityStateRequest,
-    ) -> Result<boundary::MailStoreLoadVisibilityStateResponse, AtmError> {
-        Ok(boundary::MailStoreLoadVisibilityStateResponse { state: None })
+        _request: boundary::LoadMailMessageStateRequest,
+    ) -> Result<boundary::LoadMailMessageStateResponse, AtmError> {
+        Ok(boundary::LoadMailMessageStateResponse { state: None })
     }
 
     fn record_ingest_replay_state(
@@ -527,7 +532,7 @@ impl boundary::RosterStore for LegacyRosterStoreAdapter {
         Ok(boundary::RosterStoreReplaceRosterResponse {
             team: request.team,
             previous_member_count: 0,
-            current_member_count: request.roster.members.len() as u64,
+            current_member_count: request.members.len() as u64,
             replaced: true,
         })
     }
@@ -538,10 +543,7 @@ impl boundary::RosterStore for LegacyRosterStoreAdapter {
     ) -> Result<boundary::RosterStoreLoadRosterResponse, AtmError> {
         Ok(boundary::RosterStoreLoadRosterResponse {
             team: request.team,
-            roster: TeamConfig {
-                members: Vec::new(),
-                extra: serde_json::Map::new(),
-            },
+            members: Vec::new(),
         })
     }
 
@@ -553,15 +555,7 @@ impl boundary::RosterStore for LegacyRosterStoreAdapter {
             team: request.team,
             member: None,
             is_member: false,
-            pid: None,
         })
-    }
-
-    fn record_heartbeat(
-        &self,
-        _request: boundary::RosterStoreRecordHeartbeatRequest,
-    ) -> Result<boundary::RosterStoreRecordHeartbeatResponse, AtmError> {
-        Err(unsupported("RosterStore::record_heartbeat"))
     }
 
     fn health_snapshot(
