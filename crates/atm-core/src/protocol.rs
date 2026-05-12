@@ -123,6 +123,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
         | AtmErrorCode::DaemonGraftSessionAlreadyRegistered
+        | AtmErrorCode::DaemonGraftSessionNotRegistered
         | AtmErrorCode::RemoteDeliveryOutcomeUnknown => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::AddressParseFailed => AtmErrorKind::Address,
         AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => AtmErrorKind::TeamNotFound,

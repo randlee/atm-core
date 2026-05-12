@@ -126,11 +126,10 @@ impl GraftRuntime {
     ) -> Result<GraftNudgeFetchResponse, AtmError> {
         let state = self.lock_state_read()?;
         let session = state.sessions.get(&request.session_id).ok_or_else(|| {
-            AtmError::validation(format!(
+            AtmError::daemon_graft_session_not_registered(format!(
                 "graft session {} is not registered",
                 request.session_id
             ))
-            .with_recovery("Register the graft session before fetching daemon-owned nudge state.")
         })?;
         let limit = request.limit.get();
         let nudges = session
@@ -154,11 +153,10 @@ impl GraftRuntime {
     ) -> Result<GraftNudgeDrainResponse, AtmError> {
         let mut state = self.lock_state_write()?;
         let session = state.sessions.get_mut(&request.session_id).ok_or_else(|| {
-            AtmError::validation(format!(
+            AtmError::daemon_graft_session_not_registered(format!(
                 "graft session {} is not registered",
                 request.session_id
             ))
-            .with_recovery("Register the graft session before draining daemon-owned nudge state.")
         })?;
         let limit = request.limit.get();
         let mut nudges = Vec::with_capacity(limit.min(session.nudges.len()));
@@ -203,11 +201,8 @@ impl GraftRuntime {
                     ))?;
                 }
                 Err(error)
-                    if error.message.contains("is not registered")
-                        && error.recovery.as_deref()
-                            == Some(
-                                "Register the graft session before draining daemon-owned nudge state.",
-                            ) =>
+                    if error.code
+                        == atm_core::error::AtmErrorCode::DaemonGraftSessionNotRegistered =>
                 {
                     return Ok(());
                 }
@@ -232,13 +227,13 @@ impl GraftRuntime {
             ))
             .with_recovery("Shorten the send message or summary before enqueuing a graft nudge."));
         }
-        let nudge = NudgeEvent {
-            message_id: outcome.message_id,
-            from: outcome.sender.clone(),
+        let nudge = NudgeEvent::new(
+            outcome.message_id,
+            outcome.sender.clone(),
             message,
-            received_at: IsoTimestamp::now(),
-            task_id: outcome.task_id.clone(),
-        };
+            IsoTimestamp::now(),
+            outcome.task_id.clone(),
+        )?;
         let mut matched = false;
         let mut overflowed = false;
         for (session_id, session) in state.sessions.iter_mut() {
@@ -386,8 +381,8 @@ mod tests {
             })
             .expect("fetch");
         assert_eq!(fetch.nudges.len(), 2);
-        assert_eq!(fetch.nudges[0].message, "first");
-        assert_eq!(fetch.nudges[1].message, "second");
+        assert_eq!(fetch.nudges[0].message(), "first");
+        assert_eq!(fetch.nudges[1].message(), "second");
         assert_eq!(fetch.remaining, 0);
 
         let drain = runtime
@@ -397,7 +392,7 @@ mod tests {
             })
             .expect("drain");
         assert_eq!(drain.nudges.len(), 1);
-        assert_eq!(drain.nudges[0].message, "first");
+        assert_eq!(drain.nudges[0].message(), "first");
         assert_eq!(drain.remaining, 1);
 
         let final_drain = runtime
@@ -407,7 +402,7 @@ mod tests {
             })
             .expect("final drain");
         assert_eq!(final_drain.nudges.len(), 1);
-        assert_eq!(final_drain.nudges[0].message, "second");
+        assert_eq!(final_drain.nudges[0].message(), "second");
         assert_eq!(final_drain.remaining, 0);
     }
 
@@ -440,8 +435,8 @@ mod tests {
             .expect("drain");
         assert_eq!(drain.dropped_count, 1);
         assert_eq!(drain.nudges.len(), 2);
-        assert_eq!(drain.nudges[0].message, "first");
-        assert_eq!(drain.nudges[1].message, "second");
+        assert_eq!(drain.nudges[0].message(), "first");
+        assert_eq!(drain.nudges[1].message(), "second");
     }
 
     #[derive(Debug)]
@@ -494,7 +489,7 @@ mod tests {
             .expect("receive advisory batch");
         assert_eq!(batch.session_id, request.session_id);
         assert_eq!(batch.nudges.len(), 1);
-        assert_eq!(batch.nudges[0].message, "streamed");
+        assert_eq!(batch.nudges[0].message(), "streamed");
         assert_eq!(batch.remaining, 0);
 
         runtime

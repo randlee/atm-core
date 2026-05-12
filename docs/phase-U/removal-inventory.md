@@ -188,6 +188,9 @@ Matrix scope note:
 
 ## U.9 — Client-Owned Graft Runtime
 
+Status:
+- complete
+
 Primary current-develop code/doc targets:
 - `crates/atm-graft/src/lib.rs:55-82,86-150,166-239,311-836,943-1355`
   - `HostNudgeInjector`
@@ -208,6 +211,7 @@ Required restack rule:
   loop is not the target design
 - U.9 is the primary cutover sprint for:
   - `GraftSessionState`
+    - scope: client-owned session lifecycle only, not daemon queue semantics
   - old poll/drain receive-loop machinery in `crates/atm-graft/src/lib.rs`
 
 ## U.10 — Generic Daemon Advisory-Notification Surface

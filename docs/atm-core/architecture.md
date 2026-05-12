@@ -328,6 +328,8 @@ Identity-specific policy:
   config in the shared multi-agent checkout model
 - aliases must resolve to canonical member names before membership validation,
   self-send checks, and mailbox lookup
+- client-specific runtime logic is owned by the client crate, not by
+  `atm-core` adapters or the daemon composition layer
 - same-team messages keep current canonical sender projection behavior
 - cross-team messages may project an alias-oriented `from` field only when the
   canonical sender identity is also persisted in SQLite-owned state for

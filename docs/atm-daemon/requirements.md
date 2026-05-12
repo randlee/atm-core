@@ -47,6 +47,14 @@ Current request/response packet families owned by the daemon transport line:
 - clear
 - doctor
 - heartbeat
+- temporary graft session/advisory packet family during `U.9`/`U.10` restack:
+  - graft register
+  - graft unregister
+  - graft fetch
+  - graft drain
+  - `GraftAdvisoryStream`
+  - production requirement: one live advisory stream per active embedded
+    client session
 
 Current retained ATM surfaces not modeled as daemon request/response packets:
 - `atm log`

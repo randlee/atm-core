@@ -73,6 +73,9 @@ Thin-client extension rule:
   rather than forming a daemon-private plugin protocol.
 - Phase U.8 lands `atm-graft` on the existing shared unary packet family only;
   there are no graft-private packet kinds in the accepted U.8 transport line.
+- Phase U.9 temporarily adds `GraftAdvisoryStream` request/response frames to
+  this shared ICD family so the client-owned runtime can hold one live
+  advisory stream without creating a daemon-private side protocol.
 
 UDP is not an accepted transport for ATM daemon request/response messaging in
 the retained product surface.
@@ -89,6 +92,12 @@ Daemon packet families that this ICD must cover:
 - clear
 - doctor
 - heartbeat
+- temporary graft session/advisory packet family during `U.9`/`U.10` restack:
+  - graft register
+  - graft unregister
+  - graft fetch
+  - graft drain
+  - `GraftAdvisoryStream`
 
 Retained product workflows that are not daemon request/response packets in the
 current Phase S line:

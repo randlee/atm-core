@@ -262,20 +262,98 @@ pub struct GraftSessionUnregistrationResponse {
     pub closed: bool,
 }
 
+/// Validated nudge message text.
+#[derive(Clone, Serialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct NudgeMessage(String);
+
+impl NudgeMessage {
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the message exceeds
+    /// [`MAX_GRAFT_NUDGE_MESSAGE_BYTES`] UTF-8 bytes.
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        if value.len() > MAX_GRAFT_NUDGE_MESSAGE_BYTES {
+            return Err(AtmError::validation(format!(
+                "graft nudge message must be at most {MAX_GRAFT_NUDGE_MESSAGE_BYTES} bytes"
+            ))
+            .with_recovery(
+                "Shorten the daemon-owned advisory message before projecting it to the embedded graft host.",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for NudgeMessage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl fmt::Debug for NudgeMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_tuple("NudgeMessage").field(&self.0).finish()
+    }
+}
+
 /// One daemon-originated nudge event projected to an embedded host.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NudgeEvent {
     pub message_id: AtmMessageId,
     pub from: AgentName,
     /// Advisory graft payload text.
-    ///
-    /// Implementations producing `NudgeEvent` values must bound this field to
-    /// at most [`MAX_GRAFT_NUDGE_MESSAGE_BYTES`] UTF-8 bytes before crossing
-    /// the public ATM graft boundary.
-    pub message: String,
+    pub message: NudgeMessage,
     pub received_at: IsoTimestamp,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
+}
+
+impl NudgeEvent {
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the advisory message exceeds
+    /// [`MAX_GRAFT_NUDGE_MESSAGE_BYTES`] UTF-8 bytes.
+    pub fn new(
+        message_id: AtmMessageId,
+        from: AgentName,
+        message: impl Into<String>,
+        received_at: IsoTimestamp,
+        task_id: Option<TaskId>,
+    ) -> Result<Self, AtmError> {
+        Ok(Self {
+            message_id,
+            from,
+            message: NudgeMessage::new(message)?,
+            received_at,
+            task_id,
+        })
+    }
+
+    pub fn message(&self) -> &str {
+        self.message.as_str()
+    }
+}
+
+impl fmt::Debug for NudgeEvent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("NudgeEvent")
+            .field("message_id", &self.message_id)
+            .field("from", &self.from)
+            .field("message", &self.message)
+            .field("received_at", &self.received_at)
+            .field("task_id", &self.task_id)
+            .finish()
+    }
 }
 
 /// Fetch request for the current daemon-owned pending-nudge snapshot.
@@ -324,7 +402,7 @@ mod tests {
         GraftSessionRegistrationRequest, GraftSessionRegistrationResponse, GraftSessionState,
         GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
         MAX_GRAFT_BATCH_LIMIT, MAX_GRAFT_NUDGE_MESSAGE_BYTES, MAX_GRAFT_SESSION_ID_BYTES,
-        NudgeEvent,
+        NudgeEvent, NudgeMessage,
     };
     use crate::error::AtmError;
     use crate::schema::AtmMessageId;
@@ -414,13 +492,14 @@ mod tests {
     }
 
     fn nudge_event() -> NudgeEvent {
-        NudgeEvent {
-            message_id: AtmMessageId::new(),
-            from: "sender".parse().expect("sender"),
-            message: "hello".to_string(),
-            received_at: IsoTimestamp::now(),
-            task_id: None,
-        }
+        NudgeEvent::new(
+            AtmMessageId::new(),
+            "sender".parse().expect("sender"),
+            "hello",
+            IsoTimestamp::now(),
+            None,
+        )
+        .expect("nudge event")
     }
 
     fn fetch_response() -> GraftNudgeFetchResponse {
@@ -535,6 +614,17 @@ mod tests {
     }
 
     #[test]
+    fn nudge_message_rejects_overlong_values() {
+        let value = "a".repeat(MAX_GRAFT_NUDGE_MESSAGE_BYTES + 1);
+        let error = NudgeMessage::new(value).expect_err("overlong nudge message should fail");
+        assert!(
+            error
+                .to_string()
+                .contains("graft nudge message must be at most")
+        );
+    }
+
+    #[test]
     fn graft_drain_request_round_trips_json() {
         assert_json_round_trip(&drain_request());
     }
@@ -604,7 +694,7 @@ mod tests {
         assert_eq!(registration.session_id.as_str(), "session-1");
 
         let fetch = port.fetch_nudges(fetch_request()).expect("fetch");
-        assert_eq!(fetch.nudges[0].message, "hello");
+        assert_eq!(fetch.nudges[0].message(), "hello");
 
         let drain = port.drain_nudges(drain_request()).expect("drain");
         assert_eq!(drain.nudges[0].from.as_str(), "sender");

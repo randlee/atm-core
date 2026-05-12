@@ -2908,6 +2908,7 @@ Scope:
 - restack the abandoned earlier graft-runtime work as an ownership sprint
 - move all client-specific graft runtime behavior into `atm-graft`
 - keep only generic request-serving/runtime composition in the daemon
+- status: complete
 
 Acceptance:
 - the daemon does not own client-specific graft runtime behavior; temporary
