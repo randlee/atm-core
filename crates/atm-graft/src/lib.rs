@@ -206,6 +206,7 @@ fn unexpected_response(action: &'static str, response: ResponseEnvelope) -> AtmE
 
 #[cfg(test)]
 mod tests {
+    use std::env;
     use std::path::PathBuf;
     use std::sync::Arc;
 
@@ -221,6 +222,10 @@ mod tests {
     use serde_json::json;
 
     use super::*;
+
+    fn temp_path(name: &str) -> PathBuf {
+        env::temp_dir().join(name)
+    }
 
     #[test]
     fn send_uses_shared_send_envelope() {
@@ -254,8 +259,8 @@ mod tests {
         let outcome = client
             .send_message(
                 SendRequest::new(
-                    PathBuf::from("/tmp/home"),
-                    PathBuf::from("/tmp/current"),
+                    temp_path("atm-graft-home"),
+                    temp_path("atm-graft-current"),
                     Some(TEST_SENDER),
                     TEST_LEAD_ADDRESS,
                     None,
@@ -306,8 +311,8 @@ mod tests {
         let outcome = client
             .read_message(
                 ReadQuery::new(
-                    PathBuf::from("/tmp/home"),
-                    PathBuf::from("/tmp/current"),
+                    temp_path("atm-graft-home"),
+                    temp_path("atm-graft-current"),
                     Some(TEST_SENDER),
                     Some(TEST_LEAD_ADDRESS),
                     Some(TEST_TEAM),
@@ -360,8 +365,8 @@ mod tests {
         let client = GraftClient::from_transport(transport);
         let outcome = client
             .acknowledge_message(AckRequest {
-                home_dir: PathBuf::from("/tmp/home"),
-                current_dir: PathBuf::from("/tmp/current"),
+                home_dir: temp_path("atm-graft-home"),
+                current_dir: temp_path("atm-graft-current"),
                 actor_override: Some(TEST_SENDER.parse().expect("actor")),
                 team_override: Some(TEST_TEAM.parse().expect("team")),
                 message_id: AtmMessageId::new(),
@@ -377,8 +382,8 @@ mod tests {
     fn protocol_round_trip_uses_shared_request_family() {
         let request = RequestEnvelope::Receive(
             ReadQuery::new(
-                PathBuf::from("/tmp/home"),
-                PathBuf::from("/tmp/current"),
+                temp_path("atm-graft-home"),
+                temp_path("atm-graft-current"),
                 Some(TEST_SENDER),
                 Some(TEST_LEAD_ADDRESS),
                 Some(TEST_TEAM),

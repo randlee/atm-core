@@ -83,7 +83,7 @@ impl boundary::RosterStore for SqliteRosterStore {
                             member.agent_type.clone(),
                             member.model.clone(),
                             metadata_json,
-                            request.source.clone(),
+                            request.source.as_ref().map(|source| source.as_str()),
                             member.recipient_pane_id.clone(),
                             updated_at.clone(),
                         ],
