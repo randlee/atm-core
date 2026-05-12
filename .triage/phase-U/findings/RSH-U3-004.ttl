@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-U3-004>
+  a triage:Finding ;
+  triage:findingId "RSH-U3-004" ;
+  triage:title "runtime.read_messages called inside with_locked_source_files in ack/mod.rs with no I/O timeout" ;
+  triage:description "crates/atm-core/src/ack/mod.rs:516: Same unbounded-I/O-inside-lock pattern as RSH-U3-003. runtime.read_messages(reply_inbox_path) is called inside the with_locked_source_files body when the reply inbox is not already loaded. A stalled filesystem can block indefinitely inside the critical section. Required fix: document the accepted risk explicitly, or add a per-operation I/O deadline." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/ack/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U3-004/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U3-004/pU-u2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/8394248> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1fb49d0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/RSH-U3-004/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 516 ;
+  triage:snippet "messages: runtime.read_messages(reply_inbox_path)?," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/RSH-U3-004/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 516 ;
+  triage:snippet "messages: runtime.read_messages(reply_inbox_path)?," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d0> .
+
+<urn:atm:triage:worktree/pU-u3/8394248>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:orderIndex 2 .

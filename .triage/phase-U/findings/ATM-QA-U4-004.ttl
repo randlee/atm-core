@@ -1,0 +1,134 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U4-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U4-004" ;
+  triage:title "mail_store_round_trips_message_visibility_and_health test never exercises expiry round-trip" ;
+  triage:description "mail_store_round_trips_message_visibility_and_health constructs MailStoreVisibilityState.expires_at from record.envelope.stale_at (None), so expiry round-trip is never exercised. Fix: set expires_at explicitly to a non-None timestamp and assert round-trip correctness. Independent of ATM-QA-U4-001 root fix." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u4/3> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1b22524> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/c1e0e06> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4/335fe3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+# --- Occurrences on feature/pU-u2-one-message-identity (order_index=2) ---
+
+<urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1089 ;
+  triage:snippet "fn mail_store_round_trips_message_visibility_and_health()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 919 ;
+  triage:snippet "stale_at: None," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+# --- Occurrences on feature/pU-u3-thread-update-hardening (order_index=3) ---
+
+<urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1089 ;
+  triage:snippet "fn mail_store_round_trips_message_visibility_and_health()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 919 ;
+  triage:snippet "stale_at: None," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+# --- Occurrences on feature/pU-u4-unified-message-state (order_index=4, highest) ---
+
+<urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1128 ;
+  triage:snippet "fn mail_store_round_trips_message_visibility_and_health()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1172 ;
+  triage:snippet "expires_at: record.envelope.stale_at," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-004/pU-u4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1340 ;
+  triage:snippet "expires_at: None," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+# --- Worktree Snapshots ---
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .

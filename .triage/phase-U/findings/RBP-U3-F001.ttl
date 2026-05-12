@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-U3-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-U3-F001" ;
+  triage:title "parse_mailbox_record leaks raw serde_json::Error instead of AtmError" ;
+  triage:description "crates/atm-core/src/mailbox/mod.rs: parse_mailbox_record and parse_mailbox_value return Result<Option<MessageEnvelope>, serde_json::Error>, leaking the raw library error type. The counterpart parse_mailbox_summary_jsonl wraps in AtmError with MailboxRead kind plus path/line context. Required fix: change both functions to return Result<Option<MessageEnvelope>, AtmError> using the same map_err pattern as parse_mailbox_summary_jsonl." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/mailbox/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T07:53:21Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U3-F001/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U3-F001/pU-u3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U3-F001/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U3-F001/pU-u2/2> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/8394248> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1fb49d0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/RBP-U3-F001/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 305 ;
+  triage:snippet "fn parse_mailbox_record(...) -> Result<Option<MessageEnvelope>, serde_json::Error>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/RBP-U3-F001/pU-u3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 314 ;
+  triage:snippet "fn parse_mailbox_value(...) -> Result<Option<MessageEnvelope>, serde_json::Error>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/RBP-U3-F001/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 323 ;
+  triage:snippet "fn parse_mailbox_record(...) -> Result<Option<MessageEnvelope>, serde_json::Error>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d0> .
+
+<urn:atm:triage:occurrence/RBP-U3-F001/pU-u2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 332 ;
+  triage:snippet "fn parse_mailbox_value(...) -> Result<Option<MessageEnvelope>, serde_json::Error>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d0> .
+
+<urn:atm:triage:worktree/pU-u3/8394248>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:orderIndex 2 .

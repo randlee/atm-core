@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-U9-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-U9-F002" ;
+  triage:title "NudgeEvent.message is raw String with no newtype byte-bound enforcement" ;
+  triage:description "NudgeEvent.message (crates/atm-core/src/graft.rs:275) is typed as pub message: String with only a documentation comment bounding it to MAX_GRAFT_NUDGE_MESSAGE_BYTES (4096 bytes). There is no newtype wrapper enforcing the byte bound at construction. The comment states 'Implementations producing NudgeEvent values must bound this field to at most MAX_GRAFT_NUDGE_MESSAGE_BYTES UTF-8 bytes before crossing the public ATM graft boundary' — but this is purely advisory. A newtype (e.g. GraftNudgeMessage) with a validated constructor would enforce the invariant structurally." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U9-F002/pU-u9/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/RBP-U9-F002/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 275 ;
+  triage:snippet "pub message: String, // advisory comment only, no newtype byte-bound enforcement" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:worktree/integrate-phase-U/253fc60>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u8/8ce604b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .

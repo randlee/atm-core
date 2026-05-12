@@ -1,0 +1,40 @@
+finding_id: ATM-QA-U8-001
+title: project-plan.md workspace list missing atm-graft and atm-daemon-client
+severity: minor
+phase_id: phase-U
+triage_mode: initial_pass
+status: open
+
+location:
+  confirmed: docs/project-plan.md:97-102
+  excerpt: |
+    - the current merged workspace contains:
+      - `crates/atm-core`
+      - `crates/atm`
+      - `crates/atm-daemon`
+      - `crates/atm-rusqlite`
+      - `crates/sc-lint-*` support crates
+
+description: >
+  The workspace crate inventory at docs/project-plan.md lines 97-102 was written
+  before Phase U added `crates/atm-graft` and `crates/atm-daemon-client`. Both
+  crates now exist on the feature/pU-u8-shared-thin-client-icd branch and are
+  part of the Cargo workspace, but neither appears in the plan document's
+  "current merged workspace contains" list. Readers relying on the plan for
+  crate inventory will have an incomplete picture.
+
+pattern: stale docs
+repeatable: false
+
+promote_to_branch: feature/pU-u8-shared-thin-client-icd
+commit_ref: 633c34c
+
+fix_guidance: >
+  Update docs/project-plan.md lines 97-102 to add the two missing crates:
+    - `crates/atm-graft`
+    - `crates/atm-daemon-client`
+  Insert them after `crates/atm-rusqlite` and before the `sc-lint-*` line to
+  maintain logical ordering (library crates before lint support crates).
+
+dispatch_blocked_pending_triage_commit: true
+recorded_at: 2026-05-12

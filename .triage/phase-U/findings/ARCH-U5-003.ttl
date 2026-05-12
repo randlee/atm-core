@@ -1,0 +1,219 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ─── Finding ────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/ARCH-U5-003>
+  a triage:Finding ;
+  triage:findingId "ARCH-U5-003" ;
+  triage:title "LocalServiceRuntime::default() installs LegacyMailStoreAdapter — SQLite path unreachable" ;
+  triage:description "crates/atm-core/src/service_runtime_store.rs: default_mail_store() returns Arc::new(LegacyMailStoreAdapter) and LocalServiceRuntime::default() calls default_mail_store(). RetainedMailboxRuntime::query_mailbox_metadata_rows silently falls back to legacy_query_mailbox_metadata_rows (full JSON file scan) whenever MailStore::query_mailbox_metadata returns unsupported error. Since LegacyMailStoreAdapter::query_mailbox_metadata unconditionally returns Err(unsupported(...)), the SQLite path is unreachable in default CLI execution. atm list and atm read always use the file-backed path in production. Fix: wire the real atm-rusqlite SQLite adapter into LocalServiceRuntime::default()." ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u5/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U5-003/pU-u5/4> ;
+
+  triage:openOn <urn:atm:triage:worktree/pU-u1/6a692b40> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1b22524> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/c1e0e06> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4/335fe3d> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5/ae75f1a> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# ─── Occurrences: pU-u1 ─────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 14 ;
+  triage:snippet "struct LegacyMailStoreAdapter;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/6a692b40> .
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 23 ;
+  triage:snippet "Arc::new(LegacyMailStoreAdapter)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/6a692b40> .
+
+# ─── Occurrences: pU-u2 ─────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 14 ;
+  triage:snippet "struct LegacyMailStoreAdapter;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 23 ;
+  triage:snippet "Arc::new(LegacyMailStoreAdapter)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+# ─── Occurrences: pU-u3 ─────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 14 ;
+  triage:snippet "struct LegacyMailStoreAdapter;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 23 ;
+  triage:snippet "Arc::new(LegacyMailStoreAdapter)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+# ─── Occurrences: pU-u4 ─────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 14 ;
+  triage:snippet "struct LegacyMailStoreAdapter;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 23 ;
+  triage:snippet "Arc::new(LegacyMailStoreAdapter)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+# ─── Occurrences: pU-u5 ─────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 14 ;
+  triage:snippet "struct LegacyMailStoreAdapter;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 23 ;
+  triage:snippet "Arc::new(LegacyMailStoreAdapter)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 115 ;
+  triage:snippet "fn legacy_query_mailbox_metadata_rows(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+<urn:atm:triage:occurrence/ARCH-U5-003/pU-u5/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime_store.rs" ;
+  triage:line 235 ;
+  triage:snippet "legacy_query_mailbox_metadata_rows(home_dir, team, agent, limit)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# ─── WorktreeSnapshots ───────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pU-u1/6a692b40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u5/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 .

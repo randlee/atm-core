@@ -1,0 +1,84 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-U8-F003>
+  a triage:Finding ;
+  triage:findingId "RBP-U8-F003" ;
+  triage:title "boundary/store.rs uses Option<String> for source field instead of Option<ReplaySource>" ;
+  triage:description "crates/atm-core/src/boundary/store.rs:241,303 — RosterStoreReplaceRosterRequest.source and RosterStoreRequest.source are typed as Option<String> where Option<ReplaySource> (already defined in boundary/mail.rs) should be used for domain safety. ReplaySource enforces non-empty/non-whitespace invariant via TryFrom<String>; the raw Option<String> bypasses that guard and allows empty or whitespace-only source strings to be stored. Note: the finding initially cited atm-rusqlite/src/boundary/store.rs, but that file does not exist on U.8; the actual location is atm-core/src/boundary/store.rs." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "Option<String> fields in atm-rusqlite and atm-core domain types" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U8-F003/pU-u8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U8-F003/pU-u8/2> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u8/633c34c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+# --- U.8 occurrences — RosterStoreReplaceRosterRequest and RosterStoreRequest introduced on U.8 ---
+
+<urn:atm:triage:occurrence/RBP-U8-F003/pU-u8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/store.rs" ;
+  triage:line 241 ;
+  triage:snippet "pub source: Option<String>, // on RosterStoreReplaceRosterRequest — should be Option<ReplaySource>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+<urn:atm:triage:occurrence/RBP-U8-F003/pU-u8/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/store.rs" ;
+  triage:line 303 ;
+  triage:snippet "pub source: Option<String>, // on RosterStoreRequest — should be Option<ReplaySource>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+# --- Sweep result: no other Option<String> source/replay fields found across atm-rusqlite or atm-core domains ---
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/pU-u4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u5/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u7/8e37dd1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u8/633c34c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:orderIndex 5 .

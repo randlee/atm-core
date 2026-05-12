@@ -1,0 +1,459 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U10-008>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U10-008" ;
+  triage:title "graft.rs test functions use graft_ prefix on generic advisory types" ;
+  triage:description "crates/atm-core/src/graft.rs test module has test function names with graft_ prefix on what are now generic advisory types. Rename to advisory_ prefix for consistency with U.10 genericization." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:pattern "fn graft_|fn test_graft_" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u9/17> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-008/u10/17> ;
+
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u10/3730257> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u10/3730257> .
+
+# --- Worktree Snapshots ---
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/3730257>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:orderIndex 10 .
+
+# --- Occurrences on feature/pU-u9-client-owned-graft-runtime ---
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_graft.rs" ;
+  triage:line 56 ;
+  triage:snippet "fn graft_registration_request(session_id: &str) -> GraftSessionRegistrationRequest {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_graft.rs" ;
+  triage:line 66 ;
+  triage:snippet "fn graft_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 334 ;
+  triage:snippet "fn graft_session_id_rejects_blank_values() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 344 ;
+  triage:snippet "fn graft_batch_limit_rejects_zero() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 354 ;
+  triage:snippet "fn graft_session_id_rejects_overlong_values() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 365 ;
+  triage:snippet "fn graft_batch_limit_rejects_values_above_documented_ceiling() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 461 ;
+  triage:snippet "fn graft_session_id_deserialize_rejects_blank_values() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 472 ;
+  triage:snippet "fn graft_session_type_carries_all_documented_states() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 498 ;
+  triage:snippet "fn graft_registration_request_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 503 ;
+  triage:snippet "fn graft_registration_response_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 508 ;
+  triage:snippet "fn graft_unregistration_request_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 513 ;
+  triage:snippet "fn graft_unregistration_response_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 518 ;
+  triage:snippet "fn graft_fetch_request_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 523 ;
+  triage:snippet "fn graft_fetch_response_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 538 ;
+  triage:snippet "fn graft_drain_request_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 543 ;
+  triage:snippet "fn graft_drain_response_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u9/17>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 599 ;
+  triage:snippet "fn graft_session_port_mock_is_object_safe_and_typed() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+# --- Occurrences on feature/pU-u10-generic-advisory-notification ---
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_advisory.rs" ;
+  triage:line 56 ;
+  triage:snippet "fn graft_registration_request(session_id: &str) -> AdvisorySessionRegistrationRequest {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_advisory.rs" ;
+  triage:line 66 ;
+  triage:snippet "fn graft_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 336 ;
+  triage:snippet "fn graft_session_id_rejects_blank_values() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 347 ;
+  triage:snippet "fn graft_batch_limit_rejects_zero() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 357 ;
+  triage:snippet "fn graft_session_id_rejects_overlong_values() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 368 ;
+  triage:snippet "fn graft_batch_limit_rejects_values_above_documented_ceiling() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 464 ;
+  triage:snippet "fn graft_session_id_deserialize_rejects_blank_values() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 475 ;
+  triage:snippet "fn graft_session_type_carries_all_documented_states() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 501 ;
+  triage:snippet "fn graft_registration_request_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 506 ;
+  triage:snippet "fn graft_registration_response_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 511 ;
+  triage:snippet "fn graft_unregistration_request_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 516 ;
+  triage:snippet "fn graft_unregistration_response_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 521 ;
+  triage:snippet "fn graft_fetch_request_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 526 ;
+  triage:snippet "fn graft_fetch_response_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 541 ;
+  triage:snippet "fn graft_drain_request_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 546 ;
+  triage:snippet "fn graft_drain_response_round_trips_json() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-008/u10/17>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/graft.rs" ;
+  triage:line 602 ;
+  triage:snippet "fn graft_session_port_mock_is_object_safe_and_typed() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .

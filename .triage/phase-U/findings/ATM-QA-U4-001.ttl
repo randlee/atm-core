@@ -1,0 +1,157 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ============================================================
+# Finding: ATM-QA-U4-001
+# MessageEnvelope.expires_at serde wire name still staleAt — partial rename
+# Triage mode: followup_pass
+# Phase: phase-U
+# Updated: 2026-05-12
+# ============================================================
+#
+# Prior record (initial_pass) tracked stale_at field presence across U2/U3/U4.
+# This followup_pass tracks the narrowed finding: the serde rename attribute was
+# not updated from "staleAt" to "expiresAt" after the Rust field was renamed from
+# stale_at to expires_at. The field rename happened on U4; prior branches (U1-U3)
+# still carry stale_at field (broader finding, absent for this specific serde mismatch).
+#
+# Current sweep results (2026-05-12):
+#   U1 @ 6a692b40: stale_at field + "staleAt" serde rename — field not yet renamed; absent
+#   U2 @ 1b22524:  stale_at field + "staleAt" serde rename — field not yet renamed; absent
+#   U3 @ c1e0e06:  stale_at field + "staleAt" serde rename — field not yet renamed; absent
+#   U4 @ 039a552:  expires_at field + "staleAt" serde rename — OPEN (inbox_message.rs:271, mailbox/mod.rs:397)
+#   U5 @ ae75f1a:  expires_at field + "staleAt" serde rename — OPEN inbox_message.rs:271 only
+#                  mailbox/mod.rs: staleAt serde rename absent/fixed on U5
+# ============================================================
+
+<urn:atm:triage:finding/ATM-QA-U4-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U4-001" ;
+  triage:title "MessageEnvelope.expires_at serde wire name still staleAt — partial rename" ;
+  triage:description "crates/atm-core/src/schema/inbox_message.rs:271: Rust field was renamed from stale_at to expires_at but #[serde(rename = \"staleAt\")] was not updated to #[serde(rename = \"expiresAt\")]. JSON wire key remains \"staleAt\". Sprint-U4.md:116 and REQ-CORE-MAILBOX require expires_at as canonical expiration field name. Fix: change serde rename to \"expiresAt\"; update JSON fixtures; update docs/atm-message-schema.md / docs/legacy-atm-message-schema.md if they document the wire key. Also present in crates/atm-core/src/mailbox/mod.rs:397 on U4." ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+
+  # Open occurrences — U4
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-001/pU-u4/inbox-serde-rename> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-001/pU-u4/mailbox-mod-serde-rename> ;
+
+  # Open occurrences — U5
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-001/pU-u5/inbox-serde-rename> ;
+
+  triage:openOn <urn:atm:triage:worktree/pU-u4/039a552> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5/ae75f1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# ============================================================
+# Worktree Snapshots
+# ============================================================
+
+<urn:atm:triage:worktree/pU-u1/6a692b40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u5/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 .
+
+# ============================================================
+# Occurrences — U1 (feature/pU-u1-metadata-atm-read-cleanup @ 6a692b40)
+# Branch state: absent — field still named stale_at; serde rename mismatch
+# not applicable until field is renamed to expires_at
+# ============================================================
+
+# No occurrences recorded for U1: field still stale_at, absent for this finding scope.
+
+# ============================================================
+# Occurrences — U2 (feature/pU-u2-one-message-identity @ 1b22524)
+# Branch state: absent — field still named stale_at
+# ============================================================
+
+# No occurrences recorded for U2: field still stale_at, absent for this finding scope.
+
+# ============================================================
+# Occurrences — U3 (feature/pU-u3-thread-update-hardening @ c1e0e06)
+# Branch state: absent — field still named stale_at
+# ============================================================
+
+# No occurrences recorded for U3: field still stale_at, absent for this finding scope.
+
+# ============================================================
+# Occurrences — U4 (feature/pU-u4-unified-message-state @ 039a552)
+# Branch state: open — field renamed to expires_at but serde rename not updated
+# ============================================================
+
+<urn:atm:triage:occurrence/ATM-QA-U4-001/pU-u4/inbox-serde-rename>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 271 ;
+  triage:snippet "#[serde(rename = \"staleAt\", skip_serializing_if = \"Option::is_none\")]\\n    pub expires_at: Option<IsoTimestamp>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/039a552> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-001/pU-u4/mailbox-mod-serde-rename>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 397 ;
+  triage:snippet "#[serde(rename = \"staleAt\", default)]\\n    expires_at: Option<IsoTimestamp>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/039a552> .
+
+# ============================================================
+# Occurrences — U5 (feature/pU-u5-sqlite-query-cutover @ ae75f1a)
+# Branch state: open — inbox_message.rs still has "staleAt" rename;
+# mailbox/mod.rs: staleAt serde rename absent (fixed on this branch)
+# Highest open branch — promote_to_branch
+# ============================================================
+
+<urn:atm:triage:occurrence/ATM-QA-U4-001/pU-u5/inbox-serde-rename>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 271 ;
+  triage:snippet "#[serde(rename = \"staleAt\", skip_serializing_if = \"Option::is_none\")]\\n    pub expires_at: Option<IsoTimestamp>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .

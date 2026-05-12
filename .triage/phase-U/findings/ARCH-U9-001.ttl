@@ -1,0 +1,68 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Finding: ARCH-U9-001
+# crates/atm-graft/src/lib.rs exceeds 1000-line ceiling
+# Phase: phase-U  |  Triage mode: initial_pass  |  Severity: blocking
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/ARCH-U9-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-U9-001" ;
+  triage:title "crates/atm-graft/src/lib.rs exceeds 1000-line ceiling" ;
+  triage:description "lib.rs has 1127 non-test lines; RULE-003 ceiling is 1000. Fix: extract receive_loop.rs and local_ipc.rs submodules from lib.rs." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U9-001/pU-u9/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Occurrence
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-U9-001/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 1 ;
+  triage:snippet "lib.rs: 1127 non-test lines (total 1716; #[cfg(test)] mod tests begins at line 1128)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WorktreeSnapshots
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/integrate-phase-U/253fc60>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:orderIndex 0 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u8/8ce604b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:orderIndex 8 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 ;
+  triage:branchState "open" .

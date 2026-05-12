@@ -1,0 +1,192 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U5-010>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U5-010" ;
+  triage:title "query_mailbox_metadata_counts defined but not wired into atm list" ;
+  triage:description "docs/atm-rusqlite/query-diagrams.md:23-30: query_mailbox_metadata_counts is defined and documented but not wired into atm list. Counts are computed Rust-side via bucket_counts_for over already-fetched rows. Either wire the SQL count query into the list flow or add a note clarifying it is defined but deferred." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-010/u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-010/u1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-010/u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-010/u2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-010/u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-010/u3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-010/u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-010/u4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-010/u5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-010/u5/2> ;
+
+  triage:openOn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+# --- Occurrences on u1 ---
+
+<urn:atm:triage:occurrence/ATM-QA-U5-010/u1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 195 ;
+  triage:snippet "let bucket_counts = bucket_counts_for(&logical_current);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-010/u1/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/query-diagrams.md" ;
+  triage:line 25 ;
+  triage:snippet "- query mailbox metadata counts: [sql_query-mailbox-metadata-counts.mmd]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40> .
+
+# --- Occurrences on u2 ---
+
+<urn:atm:triage:occurrence/ATM-QA-U5-010/u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 195 ;
+  triage:snippet "let bucket_counts = bucket_counts_for(&logical_current);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-010/u2/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/query-diagrams.md" ;
+  triage:line 25 ;
+  triage:snippet "- query mailbox metadata counts: [sql_query-mailbox-metadata-counts.mmd]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+# --- Occurrences on u3 ---
+
+<urn:atm:triage:occurrence/ATM-QA-U5-010/u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 190 ;
+  triage:snippet "let bucket_counts = bucket_counts_for(&logical_current);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-010/u3/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/query-diagrams.md" ;
+  triage:line 25 ;
+  triage:snippet "- query mailbox metadata counts: [sql_query-mailbox-metadata-counts.mmd]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+# --- Occurrences on u4 ---
+
+<urn:atm:triage:occurrence/ATM-QA-U5-010/u4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 190 ;
+  triage:snippet "let bucket_counts = bucket_counts_for(&logical_current);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-010/u4/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/query-diagrams.md" ;
+  triage:line 25 ;
+  triage:snippet "- query mailbox metadata counts: [sql_query-mailbox-metadata-counts.mmd]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+# --- Occurrences on u5 ---
+
+<urn:atm:triage:occurrence/ATM-QA-U5-010/u5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 178 ;
+  triage:snippet "let bucket_counts = bucket_counts_for(&logical_current);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-010/u5/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/query-diagrams.md" ;
+  triage:line 25 ;
+  triage:snippet "- query mailbox metadata counts: [sql_query-mailbox-metadata-counts.mmd]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+# --- Worktree Snapshots ---
+
+<urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 .

@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-U3-001>
+  a triage:Finding ;
+  triage:findingId "RSH-U3-001" ;
+  triage:title "logical_current_envelope AddDetails chain join has no composed-text size cap" ;
+  triage:description "crates/atm-core/src/threading.rs:106: logical_current_envelope concatenates AddDetails chain segments with no total size cap. Each individual body is bounded at MAX_STDIN_MESSAGE_BYTES (256 KiB) but an N-message chain produces up to N*256 KiB in composed_text. chain[start_index..] joined with newlines has no guard on resulting composed_text length. Required fix: add a composed-text length cap (e.g., same 256 KiB or a documented higher constant) after the join, return an error or truncate with a sentinel. Alternatively cap the chain-walking range before the join." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:26:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U3-001/pU-u3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/8394248> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/RSH-U3-001/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/threading.rs" ;
+  triage:line 106 ;
+  triage:snippet "let composed_text = chain[start_index..].iter().filter_map(...).collect::<Vec<_>>().join(\"\\n\\n\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:worktree/pU-u3/8394248>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:orderIndex 2 .

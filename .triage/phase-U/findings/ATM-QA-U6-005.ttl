@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ATM-QA-U6-005 — REQ-P-RELIABILITY-001 cited in sprint-U6.md but not defined in docs/requirements.md
+# Triage result: FALSE POSITIVE — REQ-P-RELIABILITY-001 IS defined in docs/requirements.md
+# at line 2023 (section 17. Reliability Requirements) on all swept branches.
+# The finding premise did not hold; no open occurrence exists on any branch.
+
+<urn:atm:triage:finding/ATM-QA-U6-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U6-005" ;
+  triage:title "REQ-P-RELIABILITY-001 cited in sprint-U6.md but not defined in docs/requirements.md" ;
+  triage:description "docs/phase-U/sprint-U6.md cites REQ-P-RELIABILITY-001 as a governing requirement but docs/requirements.md has no definition of this ID. Fix: define it in requirements.md OR update sprint-U6.md to cite existing IDs (REQ-CORE-STORE-001, REQ-CORE-STORE-002, REQ-CORE-BOUNDARY-001)." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pU-u7/af056ae> ;
+  triage:fixedOn <urn:atm:triage:worktree/pU-u4/039a552> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u7/af056ae> .
+
+# WorktreeSnapshot nodes
+
+<urn:atm:triage:worktree/pU-u4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 4 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u5/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 5 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 6 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u7/af056ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "af056ae" ;
+  triage:orderIndex 7 ;
+  triage:branchState "absent" .

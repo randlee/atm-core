@@ -1,0 +1,122 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U9-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U9-003" ;
+  triage:title "Architecture docs not updated: docs/atm-core/architecture.md and docs/atm-daemon/architecture.md" ;
+  triage:description "docs/atm-core/architecture.md and docs/atm-daemon/architecture.md do not yet state 'client-specific runtime logic owned by client crate' as required by sprint-U9.md:96-102 + 147-148. Both docs must be updated as mandatory U.9 deliverables." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U9-003/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U9-003/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U9-003/pU-u8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U9-003/pU-u8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U9-003/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U9-003/pU-u9/2> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/253fc60> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u8/8ce604b> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+# --- Occurrences on integrate/phase-U ---
+
+<urn:atm:triage:occurrence/ATM-QA-U9-003/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "required text 'client-specific runtime logic owned by client crate' is absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/253fc60> .
+
+<urn:atm:triage:occurrence/ATM-QA-U9-003/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "required text 'client-specific runtime logic owned by client crate' is absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/253fc60> .
+
+# --- Occurrences on feature/pU-u8-shared-thin-client-icd ---
+
+<urn:atm:triage:occurrence/ATM-QA-U9-003/pU-u8/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "required text 'client-specific runtime logic owned by client crate' is absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/8ce604b> .
+
+<urn:atm:triage:occurrence/ATM-QA-U9-003/pU-u8/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "required text 'client-specific runtime logic owned by client crate' is absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/8ce604b> .
+
+# --- Occurrences on feature/pU-u9-client-owned-graft-runtime ---
+
+<urn:atm:triage:occurrence/ATM-QA-U9-003/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "required text 'client-specific runtime logic owned by client crate' is absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U9-003/pU-u9/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "required text 'client-specific runtime logic owned by client crate' is absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/integrate-phase-U/253fc60>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u8/8ce604b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
