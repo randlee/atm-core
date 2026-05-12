@@ -131,13 +131,13 @@ impl DaemonRequestDispatcher {
             tracing::warn!(
                 step = label,
                 cap = MAX_SHUTDOWN_FINALIZER_THREADS,
-                "shutdown finalizer thread cap reached; dropping retained worker handle"
+                "shutdown finalizer thread cap reached; dropping retained watcher handle"
             );
         }
         tracing::warn!(
             step = label,
             timeout_ms = deadline.as_millis(),
-            "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
+            "daemon shutdown finalizer step exceeded its deadline; watcher handle retained for later join"
         );
     }
 

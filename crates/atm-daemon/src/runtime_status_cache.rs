@@ -371,17 +371,25 @@ pub(crate) fn build_runtime_status_cache_state(
         if !entry.path().is_dir() {
             continue;
         }
-        let team_name = entry.file_name().to_string_lossy().into_owned();
-        let team: TeamName = team_name.parse().map_err(|error| {
-            AtmError::config(format!(
-                "runtime_health: invalid team name from storage under {}: {team_name}",
-                teams_root.display()
-            ))
-            .with_recovery(
-                "Remove or rename the malformed team directory under the ATM teams root before retrying.",
-            )
-            .with_source(error)
-        })?;
+        let Some(team_name) = entry.file_name().to_str().map(str::to_owned) else {
+            tracing::warn!(
+                path = %entry.path().display(),
+                "runtime status reload skipped non-UTF-8 team directory entry"
+            );
+            continue;
+        };
+        let team: TeamName = match team_name.parse() {
+            Ok(team) => team,
+            Err(error) => {
+                tracing::warn!(
+                    team_name = %team_name,
+                    path = %entry.path().display(),
+                    error = %error,
+                    "runtime status reload skipped invalid team directory name"
+                );
+                continue;
+            }
+        };
         let roster = roster_store
             .load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?;
         for member in roster.members {
