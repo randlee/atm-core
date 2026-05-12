@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-U8-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-U8-F002" ;
+  triage:title "composition.rs endpoint_guard Mutex rationale comment insufficient" ;
+  triage:description "crates/atm-daemon/src/composition.rs:125 — QA reported endpoint_guard Mutex comment does not clearly explain invariant or why Mutex is required vs alternatives. TRIAGE VERDICT: INVALID. Lines 123-124 state: 'Endpoint cleanup ownership moves between startup, serve, and teardown transitions, so this mutex protects exclusive handoff/drop of the guard rather than a simple ready flag.' This comment names the invariant (exclusive ownership handoff across lifecycle phases), explains why Mutex is required (handoff/drop semantics, not a boolean flag), and explicitly distinguishes it from a simpler alternative. Comment is adequate. No fix required. Workspace sweep confirmed all other Mutex usages in production code carry equivalent or stronger rationale comments." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "all Mutex usages in workspace Rust source" ;
+  triage:status "closed" ;
+  triage:resolution "invalid" ;
+  triage:resolutionNote "Rationale comment at lines 123-124 adequately documents the invariant (exclusive handoff/drop across startup/serve/teardown) and justifies Mutex over a simpler flag. Finding does not hold." ;
+  triage:dispatchReady false ;
+  triage:dispatchBlockedPendingTriageCommit false ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U8-F002/U8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/633c34c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/633c34c> .
+
+<urn:atm:triage:occurrence/RBP-U8-F002/U8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 125 ;
+  triage:snippet "endpoint_guard: Mutex<Option<SocketEndpointGuard>>," ;
+  triage:rationale "Lines 123-124: 'Endpoint cleanup ownership moves between startup, serve, and teardown transitions, so this mutex protects exclusive handoff/drop of the guard rather than a simple ready flag.'" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/633c34c> .
+
+<urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/633c34c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .

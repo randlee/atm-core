@@ -1,0 +1,98 @@
+finding_id: ARCH-U8-001
+title: service_runtime_store.rs exceeds line limit
+severity: blocking
+status: open
+phase: phase-U
+promote_to_branch: feature/pU-u8-shared-thin-client-icd
+highest_open_branch: feature/pU-u8-shared-thin-client-icd
+dispatch_ready: true
+dispatch_blocked_pending_triage_commit: false
+repeatable: true
+
+# Verified facts
+# - integrate/phase-U: 405 lines (already below limit — not open there)
+# - U.5: 1067 lines (open — propagated from prior sprint)
+# - U.6: 1065 lines (open)
+# - U.7: 1053 lines (open)
+# - U.8: 1053 lines (open — highest impl branch, fix target)
+# - U.9: 1053 lines (open — inherits U.8 baseline)
+# - U.10: 1053 lines (open — inherits U.8 baseline)
+# Unsupported adapters section confirmed at lines 833-1053 (fn unsupported + impl blocks)
+
+occurrences:
+  - branch: feature/pU-u5-sqlite-query-cutover
+    file: crates/atm-core/src/service_runtime_store.rs
+    lines: 833-1067
+    line_count: 1067
+    state: open
+  - branch: feature/pU-u6-provenance-field-reduction
+    file: crates/atm-core/src/service_runtime_store.rs
+    lines: 833-1065
+    line_count: 1065
+    state: open
+  - branch: feature/pU-u7-roster-simplification
+    file: crates/atm-core/src/service_runtime_store.rs
+    lines: 833-1053
+    line_count: 1053
+    state: open
+  - branch: feature/pU-u8-shared-thin-client-icd
+    file: crates/atm-core/src/service_runtime_store.rs
+    lines: 833-1053
+    line_count: 1053
+    state: open
+  - branch: feature/pU-u9-client-owned-graft-runtime
+    file: crates/atm-core/src/service_runtime_store.rs
+    lines: 833-1053
+    line_count: 1053
+    state: open
+  - branch: feature/pU-u10-generic-advisory-notification
+    file: crates/atm-core/src/service_runtime_store.rs
+    lines: 833-1053
+    line_count: 1053
+    state: open
+
+fix: |
+  Extract lines ~833-1053 (fn unsupported + UnsupportedMailStoreAdapter / UnsupportedTaskStoreAdapter /
+  UnsupportedRosterStoreAdapter impl blocks) to crates/atm-core/src/unsupported_adapters.rs.
+  Add `mod unsupported_adapters; use unsupported_adapters::*;` (or pub use as needed) in service_runtime_store.rs.
+  Note: adapter struct definitions at lines 14-20 and factory fns at lines 43-52 may also move to
+  unsupported_adapters.rs to keep all unsupported-adapter logic together.
+  Fix on feature/pU-u8-shared-thin-client-icd; merge-forward closes U.9 and U.10 occurrences.
+
+additional_oversized_files:
+  - file: crates/sc-lint-boundary/src/tests.rs
+    line_count_u8: 1992
+    note: test file — 500-line limit typically applies to src files only; assess separately
+  - file: crates/atm-rusqlite/src/lib.rs
+    line_count_u8: 2466
+    note: existing baseline file — not introduced by phase-U; assess separately
+  - file: crates/atm-core/src/read/mod.rs
+    line_count_u8: 1360
+    note: existing baseline file — not introduced by phase-U; assess separately
+  - file: crates/atm-daemon/src/local_ipc_transport.rs
+    line_count_u8: 1333
+    note: existing baseline file — not introduced by phase-U; assess separately
+  - file: crates/atm-core/tests/mailbox_locking.rs
+    line_count_u8: 1293
+    note: integration test file — assess separately
+  - file: crates/atm-core/src/mailbox/lock.rs
+    line_count_u8: 1247
+    note: existing baseline file — not introduced by phase-U; assess separately
+  - file: crates/atm-daemon/src/peer_transport.rs
+    line_count_u8: 1199
+    note: existing baseline file — not introduced by phase-U; assess separately
+  - file: crates/atm-daemon/src/reconcile_runtime.rs
+    line_count_u8: 1191
+    note: existing baseline file — not introduced by phase-U; assess separately
+  - file: crates/atm-core/src/config/mod.rs
+    line_count_integrate: 1030
+    note: present on integrate/phase-U baseline; not introduced by phase-U sprints
+
+notes: |
+  integrate/phase-U already has service_runtime_store.rs at 405 lines (the extraction was done
+  on that branch independently). Phase-U sprint branches U.5–U.10 all carry the un-extracted
+  version. Fix on U.8 (highest impl sprint branch); merge-forward to U.9 and U.10 closes those
+  occurrences. U.5 and U.6 occurrences close automatically when those branches are rebased or
+  superseded by the integration merge-forward chain.
+  All other oversized files are pre-existing baseline files not introduced by phase-U work;
+  they are noted for awareness but are NOT in scope for this finding.
