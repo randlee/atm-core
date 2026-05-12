@@ -7,6 +7,7 @@ mod roster_store;
 mod shared_db;
 mod writer;
 
+use atm_core::LocalServiceRuntime;
 use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::protocol::RequestEnvelope;
@@ -237,6 +238,15 @@ pub fn assemble_boundary(path: impl AsRef<Path>) -> Result<SqliteBoundaryAssembl
 
 pub fn assemble_default_boundary() -> Result<SqliteBoundaryAssembly, AtmError> {
     SqliteBoundaryAssembly::default_production()
+}
+
+pub fn default_local_runtime() -> Result<LocalServiceRuntime, AtmError> {
+    let assembly = assemble_default_boundary()?;
+    Ok(LocalServiceRuntime::new(
+        assembly.mail_store_arc(),
+        assembly.task_store_arc(),
+        assembly.roster_store_arc(),
+    ))
 }
 
 #[derive(Debug)]
@@ -935,15 +945,17 @@ mod tests {
     use atm_core::boundary::MailStore as _;
     use atm_core::doctor::DoctorQuery;
     use atm_core::home::team_dir_from_home;
-    use atm_core::list::{ListQuery, list_mail_with_runtime};
+    use atm_core::install_default_runtime_factory;
+    use atm_core::list::{ListQuery, list_mail, list_mail_with_runtime};
     use atm_core::observability::NullObservability;
     use atm_core::protocol::RequestEnvelope;
-    use atm_core::read::{ReadQuery, read_mail_with_runtime};
+    use atm_core::read::{ReadQuery, read_mail, read_mail_with_runtime};
     use atm_core::schema::TeamConfig;
     use atm_core::schema::{AgentMember, MessageEnvelope};
     use atm_core::types::{
         AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TaskId, TeamName,
     };
+    use std::sync::OnceLock;
     use tempfile::TempDir;
 
     fn temp_disk_db() -> (TempDir, PathBuf) {
@@ -996,6 +1008,26 @@ mod tests {
             assembly.task_store_arc(),
             assembly.roster_store_arc(),
         )
+    }
+
+    fn entrypoint_assembly() -> &'static SqliteBoundaryAssembly {
+        static ASSEMBLY: OnceLock<SqliteBoundaryAssembly> = OnceLock::new();
+        ASSEMBLY.get_or_init(in_memory_assembly)
+    }
+
+    fn install_entrypoint_runtime() {
+        install_default_runtime_factory(entrypoint_runtime);
+    }
+
+    fn entrypoint_runtime() -> Result<LocalServiceRuntime, AtmError> {
+        Ok(sqlite_runtime(entrypoint_assembly()))
+    }
+
+    fn unique_suffix() -> u128 {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .expect("system time")
+            .as_nanos()
     }
 
     fn envelope() -> MessageEnvelope {
@@ -1173,6 +1205,163 @@ mod tests {
         assert_eq!(
             message.envelope.summary.as_deref(),
             Some("summary: sqlite body")
+        );
+    }
+
+    #[test]
+    fn list_mail_entrypoint_uses_installed_sqlite_runtime_without_inbox_files() {
+        install_entrypoint_runtime();
+        let assembly = entrypoint_assembly();
+        let team_name: TeamName = format!("entrypoint-list-{}", unique_suffix())
+            .parse()
+            .expect("team");
+        let agent_name: AgentName = format!("entrypoint-agent-{}", unique_suffix())
+            .parse()
+            .expect("agent");
+        assembly
+            .mail_store()
+            .bootstrap(boundary::MailStoreBootstrapRequest {
+                team_dir: std::env::temp_dir(),
+                team: team_name.clone(),
+                team_config: None,
+            })
+            .expect("bootstrap");
+
+        let record = boundary::MailStoreMessageRecord {
+            team: team_name.clone(),
+            agent: agent_name.clone(),
+            message_key: message_key("atm:entrypoint-list"),
+            envelope: MessageEnvelope {
+                from: actor(),
+                text: "entrypoint list body".to_string(),
+                timestamp: IsoTimestamp::now(),
+                read: false,
+                source_team: Some(team_name.clone()),
+                summary: Some("entrypoint list summary".to_string()),
+                message_id: Some(atm_core::schema::AtmMessageId::new()),
+                pending_ack_at: Some(IsoTimestamp::now()),
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: Some(task_id()),
+                extra: serde_json::Map::new(),
+            },
+            imported_from: None,
+            recorded_at: None,
+        };
+        assembly
+            .mail_store()
+            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+            .expect("upsert message");
+
+        let tempdir = TempDir::new().expect("tempdir");
+        write_team_config(
+            tempdir.path(),
+            &team_name,
+            &[AgentMember::with_name(agent_name.clone())],
+        );
+        let query = ListQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some(actor().as_str()),
+            Some(&format!("{}@{}", agent_name, team_name)),
+            None,
+            ReadSelection::Actionable,
+            false,
+            Some(50),
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("list query");
+
+        let outcome = list_mail(query, &NullObservability).expect("sqlite list entrypoint");
+        assert_eq!(outcome.count, 1);
+        assert_eq!(outcome.rows[0].summary, "entrypoint list summary");
+    }
+
+    #[test]
+    fn read_mail_entrypoint_uses_installed_sqlite_runtime_without_source_files() {
+        install_entrypoint_runtime();
+        let assembly = entrypoint_assembly();
+        let team_name: TeamName = format!("entrypoint-read-{}", unique_suffix())
+            .parse()
+            .expect("team");
+        let agent_name: AgentName = format!("entrypoint-agent-{}", unique_suffix())
+            .parse()
+            .expect("agent");
+        assembly
+            .mail_store()
+            .bootstrap(boundary::MailStoreBootstrapRequest {
+                team_dir: std::env::temp_dir(),
+                team: team_name.clone(),
+                team_config: None,
+            })
+            .expect("bootstrap");
+
+        let record = boundary::MailStoreMessageRecord {
+            team: team_name.clone(),
+            agent: agent_name.clone(),
+            message_key: message_key("atm:entrypoint-read"),
+            envelope: MessageEnvelope {
+                from: actor(),
+                text: "entrypoint read body".to_string(),
+                timestamp: IsoTimestamp::now(),
+                read: false,
+                source_team: Some(team_name.clone()),
+                summary: Some("entrypoint read summary".to_string()),
+                message_id: None,
+                pending_ack_at: Some(IsoTimestamp::now()),
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: Some(task_id()),
+                extra: serde_json::Map::new(),
+            },
+            imported_from: None,
+            recorded_at: None,
+        };
+        assembly
+            .mail_store()
+            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+            .expect("upsert message");
+
+        let tempdir = TempDir::new().expect("tempdir");
+        write_team_config(
+            tempdir.path(),
+            &team_name,
+            &[AgentMember::with_name(agent_name.clone())],
+        );
+        let query = ReadQuery::new(
+            tempdir.path().to_path_buf(),
+            tempdir.path().to_path_buf(),
+            Some(actor().as_str()),
+            Some(&format!("{}@{}", agent_name, team_name)),
+            None,
+            ReadSelection::Actionable,
+            false,
+            false,
+            AckActivationMode::ReadOnly,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query");
+
+        let outcome = read_mail(query, &NullObservability).expect("sqlite read entrypoint");
+        let message = outcome.message.expect("message");
+        assert_eq!(message.envelope.text, "entrypoint read body");
+        assert_eq!(
+            message.envelope.summary.as_deref(),
+            Some("entrypoint read summary")
         );
     }
 
