@@ -452,7 +452,7 @@ mod tests {
     use super::*;
     use atm_core::MessageKey;
     use atm_core::boundary;
-    use atm_core::schema::{LegacyMessageId, MessageEnvelope};
+    use atm_core::schema::{AtmMessageId, MessageEnvelope};
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
     use rusqlite::OptionalExtension;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -522,7 +522,7 @@ mod tests {
     }
 
     fn upsert_message_request(index: usize) -> WriteOp {
-        WriteOp::UpsertMessage(boundary::MailStoreUpsertMessageRequest {
+        WriteOp::UpsertMessage(Box::new(boundary::MailStoreUpsertMessageRequest {
             record: boundary::MailStoreMessageRecord {
                 team: team(),
                 agent: agent(),
@@ -531,7 +531,7 @@ mod tests {
                 imported_from: Some("writer-test".to_string()),
                 recorded_at: Some(IsoTimestamp::now()),
             },
-        })
+        }))
     }
 
     fn message_count(target: &SharedDbTarget) -> i64 {
@@ -688,19 +688,19 @@ mod tests {
             &mut cache,
             vec![
                 QueuedWrite {
-                    op: Box::new(WriteOp::UpsertMessage(
+                    op: Box::new(WriteOp::UpsertMessage(Box::new(
                         boundary::MailStoreUpsertMessageRequest {
                             record: message_record("bad-key", "invalid"),
                         },
-                    )),
+                    ))),
                     reply: invalid_tx,
                 },
                 QueuedWrite {
-                    op: Box::new(WriteOp::UpsertMessage(
+                    op: Box::new(WriteOp::UpsertMessage(Box::new(
                         boundary::MailStoreUpsertMessageRequest {
                             record: message_record("atm:valid", "valid"),
                         },
-                    )),
+                    ))),
                     reply: valid_tx,
                 },
             ],
@@ -745,7 +745,7 @@ mod tests {
         let verify = open_connection_for_target(target.as_ref()).expect("open verifier");
         let mut cache = stmt_cache::WriterStatementCache;
 
-        let parent_message_id = LegacyMessageId::new();
+        let parent_message_id = AtmMessageId::new();
         let mut existing_successor = message_record("atm:existing-successor", "existing");
         existing_successor.envelope.parent_message_id = Some(parent_message_id);
 
@@ -755,11 +755,11 @@ mod tests {
             &mut connection,
             &mut cache,
             vec![QueuedWrite {
-                op: Box::new(WriteOp::UpsertMessage(
+                op: Box::new(WriteOp::UpsertMessage(Box::new(
                     boundary::MailStoreUpsertMessageRequest {
                         record: existing_successor,
                     },
-                )),
+                ))),
                 reply: seed_tx,
             }],
         );
@@ -779,19 +779,19 @@ mod tests {
             &mut cache,
             vec![
                 QueuedWrite {
-                    op: Box::new(WriteOp::UpsertMessage(
+                    op: Box::new(WriteOp::UpsertMessage(Box::new(
                         boundary::MailStoreUpsertMessageRequest {
                             record: message_record("atm:root", "root"),
                         },
-                    )),
+                    ))),
                     reply: root_tx,
                 },
                 QueuedWrite {
-                    op: Box::new(WriteOp::UpsertMessage(
+                    op: Box::new(WriteOp::UpsertMessage(Box::new(
                         boundary::MailStoreUpsertMessageRequest {
                             record: conflicting_successor,
                         },
-                    )),
+                    ))),
                     reply: conflict_tx,
                 },
             ],
@@ -840,20 +840,20 @@ mod tests {
         .expect("writer");
 
         let first = writer
-            .submit(WriteOp::UpsertMessage(
+            .submit(WriteOp::UpsertMessage(Box::new(
                 boundary::MailStoreUpsertMessageRequest {
                     record: message_record("atm:dup-test", "original"),
                 },
-            ))
+            )))
             .expect("first insert");
         assert_eq!(first, WriteOpResult::UpsertMessage { inserted: true });
 
         let second = writer
-            .submit(WriteOp::UpsertMessage(
+            .submit(WriteOp::UpsertMessage(Box::new(
                 boundary::MailStoreUpsertMessageRequest {
                     record: message_record("atm:dup-test", "overwrite"),
                 },
-            ))
+            )))
             .expect("duplicate insert");
         assert_eq!(second, WriteOpResult::UpsertMessage { inserted: false });
 

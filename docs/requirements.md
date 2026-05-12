@@ -52,7 +52,8 @@ Schema ownership references:
   [`atm-error-codes.md`](./atm-error-codes.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
-  `tools/schema_models/atm_message_schema.py` and
+  `tools/schema_models/atm_message_schema.py`
+- historical/read-compatibility schema record only:
   `tools/schema_models/legacy_atm_message_schema.py`
 
 ## 1.1 Documentation Structure
@@ -1750,6 +1751,8 @@ For ATM-authored messages:
 - ATM machine-readable identity is mandatory
 - ATM uses one logical message identity and exports it through `message_id` on
   the shared compatibility surface
+- ATM service addressing may accept either ULID text or UUID-wire text, but
+  both must resolve to the same logical identity
 - thread/update metadata uses `parentMessageId` plus `threadMode`
 - time-bounded ephemeral retention uses SQLite-owned `expires_at`
 - ATM-authored machine identifiers must not be null or blank

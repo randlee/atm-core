@@ -15,9 +15,9 @@ use crate::config;
 use crate::error::AtmError;
 use crate::identity;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
-use crate::mailbox::surface::dedupe_legacy_message_id_surface;
+use crate::mailbox::surface::dedupe_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
@@ -42,7 +42,7 @@ pub struct ReadQuery {
     pub seen_state_filter: bool,
     pub seen_state_update: bool,
     pub ack_activation_mode: AckActivationMode,
-    pub message_id_filter: Option<LegacyMessageId>,
+    pub message_id_filter: Option<AtmMessageId>,
     pub sender_filter: Option<AgentName>,
     pub timestamp_filter: Option<IsoTimestamp>,
     pub task_filter: Option<TaskId>,
@@ -83,7 +83,7 @@ impl ReadQuery {
             ack_activation_mode,
             message_id_filter: message_id_filter
                 .map(|value| {
-                    value.parse::<LegacyMessageId>().map_err(|source| {
+                    value.parse::<AtmMessageId>().map_err(|source| {
                         AtmError::validation(format!("invalid message id: {value}"))
                             .with_recovery(
                                 "Provide a valid UUID-formatted --message-id before retrying `atm read`.",
@@ -163,7 +163,7 @@ pub struct ReadOutcome {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<ClassifiedMessage>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub selected_message_id: Option<LegacyMessageId>,
+    pub selected_message_id: Option<AtmMessageId>,
     pub match_count: usize,
     pub additional_match_count: usize,
     pub bucket_counts: BucketCounts,
@@ -254,7 +254,7 @@ fn read_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             timeout_secs,
             || {
                 Ok(apply_idle_notification_dedup(
-                    dedupe_legacy_message_id_surface(
+                    dedupe_message_id_surface(
                         merged_surface(&runtime.observe_source_files(
                             &query.home_dir,
                             &target.team,
@@ -416,7 +416,7 @@ pub(crate) fn selection_state_for_source_files(
 ) -> (BucketCounts, Vec<ClassifiedMessage>) {
     let classified_all = classify_all(
         apply_idle_notification_dedup(
-            dedupe_legacy_message_id_surface(
+            dedupe_message_id_surface(
                 merged_surface(source_files),
                 |message: &SourcedMessage| message.envelope.message_id,
                 |message: &SourcedMessage| message.envelope.timestamp,
@@ -894,7 +894,7 @@ mod tests {
     use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
+    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{
         AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
@@ -904,7 +904,7 @@ mod tests {
 
     fn sourced_message(index: usize, text: &str) -> SourcedMessage {
         SourcedMessage {
-            envelope: message(text, LegacyMessageId::new(), None, None, false),
+            envelope: message(text, AtmMessageId::new(), None, None, false),
             source_path: PathBuf::from(format!("{TEST_SENDER}.json")),
             source_index: index.into(),
         }
@@ -912,8 +912,8 @@ mod tests {
 
     fn message_at(
         text: &str,
-        message_id: LegacyMessageId,
-        parent_message_id: Option<LegacyMessageId>,
+        message_id: AtmMessageId,
+        parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
         read: bool,
         timestamp: IsoTimestamp,
@@ -939,8 +939,8 @@ mod tests {
 
     fn message(
         text: &str,
-        message_id: LegacyMessageId,
-        parent_message_id: Option<LegacyMessageId>,
+        message_id: AtmMessageId,
+        parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
         read: bool,
     ) -> MessageEnvelope {
@@ -1067,8 +1067,8 @@ mod tests {
 
     #[test]
     fn actionable_selection_prefers_terminal_thread_message() {
-        let root_id = LegacyMessageId::new();
-        let terminal_id = LegacyMessageId::new();
+        let root_id = AtmMessageId::new();
+        let terminal_id = AtmMessageId::new();
         let root_at =
             IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::seconds(1));
         let terminal_at = IsoTimestamp::now();
@@ -1117,7 +1117,7 @@ mod tests {
 
     #[test]
     fn read_ephemeral_message_is_hidden_outside_view_all() {
-        let message_id = LegacyMessageId::new();
+        let message_id = AtmMessageId::new();
         let stale_at =
             IsoTimestamp::from_datetime(chrono::Utc::now() + chrono::Duration::minutes(30));
         let messages = vec![SourcedMessage {
@@ -1160,7 +1160,7 @@ mod tests {
 
     #[test]
     fn expired_ephemeral_message_is_cleaned_from_all_views() {
-        let message_id = LegacyMessageId::new();
+        let message_id = AtmMessageId::new();
         let stale_at =
             IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::minutes(1));
         let messages = vec![SourcedMessage {
@@ -1200,8 +1200,8 @@ mod tests {
 
     #[test]
     fn task_filter_matches_logical_current_terminal_message_only() {
-        let root_id = LegacyMessageId::new();
-        let terminal_id = LegacyMessageId::new();
+        let root_id = AtmMessageId::new();
+        let terminal_id = AtmMessageId::new();
         let task_id: TaskId = "TASK-77".parse().expect("task id");
         let root_at =
             IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::seconds(1));
@@ -1257,8 +1257,8 @@ mod tests {
 
     #[test]
     fn exact_message_id_bypasses_logical_current_collapse() {
-        let root_id = LegacyMessageId::new();
-        let terminal_id = LegacyMessageId::new();
+        let root_id = AtmMessageId::new();
+        let terminal_id = AtmMessageId::new();
         let source_files = vec![SourceFile {
             path: PathBuf::from("recipient.json"),
             messages: vec![

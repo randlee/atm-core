@@ -151,7 +151,9 @@ Initial crate requirement IDs:
   state-separation and reliability aspects of:
   `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-001` `atm-core` owns the SQLite schema contract, canonical
-  `message_key` identity model, and required lookup/dedupe constraints.
+  `message_key` row-key model, the one-logical-message-identity rule
+  (`AtmMessageId`), and required lookup/dedupe constraints for the compatible
+  `message_id` wire form.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-002` `atm-core` owns WAL / foreign-key / explicit

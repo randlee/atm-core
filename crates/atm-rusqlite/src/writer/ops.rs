@@ -8,7 +8,7 @@ pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 
 #[derive(Debug, Clone)]
 pub(crate) enum WriteOp {
-    UpsertMessage(boundary::MailStoreUpsertMessageRequest),
+    UpsertMessage(Box<boundary::MailStoreUpsertMessageRequest>),
     UpsertVisibilityState(boundary::MailStoreUpsertVisibilityStateRequest),
 }
 
@@ -80,7 +80,7 @@ fn execute_upsert_message(
     let message_text = record.envelope.text.clone();
     let summary = record.envelope.summary.clone();
     let message_at = record.envelope.timestamp.into_inner().to_rfc3339();
-    let legacy_message_id = record.envelope.message_id.as_ref().map(ToString::to_string);
+    let message_id = record.envelope.message_id.as_ref().map(ToString::to_string);
     let recorded_at = record
         .recorded_at
         .map(|value| value.into_inner().to_rfc3339());
@@ -97,7 +97,7 @@ fn execute_upsert_message(
                 message_text,
                 summary,
                 message_at,
-                legacy_message_id,
+                message_id,
                 parent_message_id,
                 thread_mode,
                 stale_at,
@@ -184,21 +184,21 @@ fn validate_message_record(
         }
     }
 
-    if let Some(legacy_message_id) = record.envelope.message_id {
+    if let Some(message_id) = record.envelope.message_id {
         let owner = cache
-            .load_legacy_identity_owner(
+            .load_message_id_owner(
                 connection,
                 params![
                     record.team.as_str(),
                     record.agent.as_str(),
-                    legacy_message_id.to_string()
+                    message_id.to_string()
                 ],
             )
             .optional()
             .map_err(|error| {
                 crate::shared_db::sqlite_error(
                     target,
-                    "failed to validate legacy message identity uniqueness",
+                    "failed to validate message identity uniqueness",
                     error,
                 )
             })?;
@@ -206,10 +206,10 @@ fn validate_message_record(
             && owner != message_key
         {
             return Err(AtmError::validation(format!(
-                "legacy message_id `{legacy_message_id}` is already owned by `{owner}` and cannot be reassigned to `{message_key}`"
+                "message_id `{message_id}` is already owned by `{owner}` and cannot be reassigned to `{message_key}`"
             ))
             .with_recovery(
-                "Reuse the existing message_key for that legacy message identity or generate a new legacy identity before retrying the sqlite write.",
+                "Reuse the existing message_key for that message identity or generate a new message id before retrying the sqlite write.",
             ));
         }
     }

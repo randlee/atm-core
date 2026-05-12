@@ -11,13 +11,13 @@ use std::borrow::Cow;
 use std::fs;
 use std::path::Path;
 
-use serde::{Deserialize, Deserializer};
+use serde::Deserialize;
 use serde_json::Value;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::mailbox::source::SummaryMessage;
-use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
+use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
@@ -334,11 +334,11 @@ fn parse_mailbox_value(
     path: &Path,
     line_number: usize,
 ) -> Result<Option<MessageEnvelope>, serde_json::Error> {
-    sanitize_legacy_message_id(value, path, line_number);
+    sanitize_message_id(value, path, line_number);
     serde_json::from_value::<MessageEnvelope>(value.take()).map(Some)
 }
 
-fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize) {
+fn sanitize_message_id(value: &mut Value, path: &Path, line_number: usize) {
     let Some(object) = value.as_object_mut() else {
         return;
     };
@@ -351,13 +351,18 @@ fn sanitize_legacy_message_id(value: &mut Value, path: &Path, line_number: usize
         return;
     }
 
-    if serde_json::from_value::<LegacyMessageId>(raw_message_id.clone()).is_err() {
+    let valid_message_id = raw_message_id
+        .as_str()
+        .and_then(|value| value.parse::<AtmMessageId>().ok())
+        .is_some();
+
+    if !valid_message_id {
         warn!(
             code = %AtmErrorCode::WarningMalformedAtmFieldIgnored,
             mailbox_path = %path.display(),
             line = line_number,
             field = "message_id",
-            expected_format = "UUID",
+            expected_format = "ULID or UUID wire string",
             raw_value = %raw_message_id,
             "treating malformed ATM-owned field as absent during mailbox read"
         );
@@ -376,28 +381,16 @@ struct SummaryMailboxRecord<'a> {
     source_team: Option<TeamName>,
     #[serde(default)]
     summary: Option<String>,
-    #[serde(
-        rename = "message_id",
-        default,
-        deserialize_with = "deserialize_optional_legacy_message_id"
-    )]
-    message_id: Option<LegacyMessageId>,
+    #[serde(rename = "message_id", default)]
+    message_id: Option<String>,
     #[serde(rename = "pendingAckAt", default)]
     pending_ack_at: Option<IsoTimestamp>,
     #[serde(rename = "acknowledgedAt", default)]
     acknowledged_at: Option<IsoTimestamp>,
-    #[serde(
-        rename = "acknowledgesMessageId",
-        default,
-        deserialize_with = "deserialize_optional_legacy_message_id"
-    )]
-    acknowledges_message_id: Option<LegacyMessageId>,
-    #[serde(
-        rename = "parentMessageId",
-        default,
-        deserialize_with = "deserialize_optional_legacy_message_id"
-    )]
-    parent_message_id: Option<LegacyMessageId>,
+    #[serde(rename = "acknowledgesMessageId", default)]
+    acknowledges_message_id: Option<String>,
+    #[serde(rename = "parentMessageId", default)]
+    parent_message_id: Option<String>,
     #[serde(rename = "threadMode", default)]
     thread_mode: Option<ThreadMode>,
     #[serde(rename = "staleAt", default)]
@@ -410,6 +403,9 @@ fn summarize_mailbox_record(
     record: SummaryMailboxRecord<'_>,
     contains_filter: Option<&str>,
 ) -> SummaryMessage {
+    let message_id = parse_message_id(record.message_id.as_deref());
+    let acknowledges_message_id = parse_message_id(record.acknowledges_message_id.as_deref());
+    let parent_message_id = parse_message_id(record.parent_message_id.as_deref());
     let summary_preview = summarize_text(record.summary.as_deref(), record.text.as_ref());
     let body_contains_match = contains_filter
         .map(str::trim)
@@ -425,11 +421,11 @@ fn summarize_mailbox_record(
             read: record.read,
             source_team: record.source_team,
             summary: record.summary,
-            message_id: record.message_id,
+            message_id,
             pending_ack_at: record.pending_ack_at,
             acknowledged_at: record.acknowledged_at,
-            acknowledges_message_id: record.acknowledges_message_id,
-            parent_message_id: record.parent_message_id,
+            acknowledges_message_id,
+            parent_message_id,
             thread_mode: record.thread_mode,
             stale_at: record.stale_at,
             task_id: record.task_id,
@@ -441,20 +437,8 @@ fn summarize_mailbox_record(
     }
 }
 
-fn deserialize_optional_legacy_message_id<'de, D>(
-    deserializer: D,
-) -> Result<Option<LegacyMessageId>, D::Error>
-where
-    D: Deserializer<'de>,
-{
-    let raw = Option::<Value>::deserialize(deserializer)?;
-    Ok(raw.and_then(|value| {
-        if value.is_null() {
-            None
-        } else {
-            serde_json::from_value::<LegacyMessageId>(value).ok()
-        }
-    }))
+fn parse_message_id(value: Option<&str>) -> Option<AtmMessageId> {
+    value.and_then(|value| value.parse::<AtmMessageId>().ok())
 }
 
 fn summarize_text(summary: Option<&str>, text: &str) -> String {
@@ -651,7 +635,7 @@ mod tests {
     }
 
     #[test]
-    fn read_messages_treats_malformed_legacy_message_id_as_absent() {
+    fn read_messages_treats_malformed_message_id_as_absent() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("malformed-message-id.jsonl");
         let contents = serde_json::json!({
@@ -659,7 +643,7 @@ mod tests {
             "text": "valid body",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
-            "message_id": "01JABCDEF0123456789ABCDEF0"
+            "message_id": "not-a-valid-message-id"
         });
         fs::write(
             &path,
@@ -804,7 +788,7 @@ mod tests {
     }
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
-        let legacy_message_id = crate::schema::LegacyMessageId::from(message_id);
+        let atm_message_id = crate::schema::AtmMessageId::from(message_id);
 
         MessageEnvelope {
             from: TEST_SENDER.parse::<AgentName>().expect("agent"),
@@ -817,7 +801,7 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
-            message_id: Some(legacy_message_id),
+            message_id: Some(atm_message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,

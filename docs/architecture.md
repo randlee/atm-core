@@ -696,6 +696,8 @@ Architectural rules:
   compatibility output.
 - ATM keeps one logical message identity; shared inbox `message_id` is the
   compatibility wire encoding of that identity.
+- if SQLite persists `message_id`, it stores that same identity in the
+  compatibility wire form rather than as a second ATM-owned id.
 - Compatibility writes may preserve established top-level additive fields, but
   they must not become the place where new ATM-owned machine state accumulates.
 
