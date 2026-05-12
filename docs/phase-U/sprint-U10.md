@@ -22,9 +22,10 @@ daemon may own. `atm-graft` is just one consumer of that surface.
 
 Lean-design rule:
 - the daemon emits one generic post-commit advisory signal
-- the daemon keeps one bounded pending queue per registered consumer or one
-  equivalent simple stream-backed state model
-- the client consumes that signal over the shared ICD family
+- the daemon keeps one bounded pending queue per registered consumer and one
+  simple live advisory stream per active consumer session
+- the client consumes that signal over the shared ICD family and the live
+  advisory stream
 - avoid extra daemon runtime layers or client-specific protocol concepts
 
 ## Governing Requirements
@@ -66,10 +67,15 @@ Lean-design rule:
    - describe the daemon-owned post-commit advisory event flow
    - keep hook execution and advisory delivery behind generic boundaries
    - keep the daemon contract production-simple: registration, notification
-     delivery, bounded pending state, and typed backpressure only
+     delivery, bounded pending state, one live advisory stream per active
+     session, and typed backpressure only
    - anchor the shared message family in the current `develop` protocol line:
      - `crates/atm-core/src/protocol.rs`
      - `docs/atm-daemon/protocol-icd.md`
+     - current `develop @ b6506ef` reusable references:
+       - `crates/atm-daemon/src/graft_runtime.rs`
+       - `crates/atm-daemon/src/tests.rs`
+       - `docs/atm-daemon/protocol-icd.md`
    Required tests:
    - delivery/error-path tests at the generic boundary
    - reuse/extend the current protocol and transport-style tests rather than
@@ -79,10 +85,13 @@ Lean-design rule:
 
 2. Express client consumption generically
    Development work:
+   - make the persistent advisory stream the production `atm-graft` delivery
+     path
    - if registration/fetch/drain messages are still needed, define them as
      generic shared-ICD messages rather than graft-specific daemon APIs
-   - if a persistent advisory stream is used, keep it in the same shared ICD
-     family rather than inventing a parallel client API
+   - keep fetch/drain as optional companion CLI/debug surfaces only
+   - keep the advisory stream in the same shared ICD family rather than
+     inventing a parallel client API
    Required tests:
    - protocol tests proving the messages remain part of the shared ICD line
    - boundary lint proving the client/plugin crate still does not reference
@@ -99,6 +108,8 @@ Lean-design rule:
   shared ICD used by CLI/thin clients
 - the daemon-side shape stays lean: one generic advisory surface rather than a
   stack of client-specific runtime abstractions
+- production embedded delivery is one live advisory stream per active session;
+  fetch/drain may remain only as companion debug or CLI surfaces
 - the plugin crate remains isolated from daemon implementation crates by lint
   as well as by design text
 

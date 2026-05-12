@@ -24,8 +24,8 @@ Rules:
 
 Purpose:
 - own the concrete `GraftSession` lifecycle used by an embedded host CLI
-- keep one persistent receive thread and one open daemon connection for nudges
-  while the session is active
+- keep one persistent receive thread and one open dedicated daemon
+  advisory-stream connection for nudges while the session is active
 - queue received nudges until the host consumes them and fire a host wake/event
   callback on arrival
 
@@ -36,6 +36,8 @@ Rules:
   but daemon-owned queue state remains outside it
 - reconnect and shutdown behavior are owned here rather than in daemon-private
   runtime code
+- production embedded delivery must come from the live advisory-stream
+  connection; poll/drain alone is not sufficient
 
 ## Host Injection Consumer
 

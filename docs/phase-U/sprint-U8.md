@@ -25,6 +25,8 @@ Lean-design rule:
 - prefer the existing shared `ClientTransport` plus request/response DTOs
 - do not add a graft-specific public trait family unless the shared boundary is
   provably insufficient
+- do not preserve the current `Graft*` naming if a generic shared-ICD shape
+  can carry the same behavior
 
 ## Governing Requirements
 
@@ -68,15 +70,22 @@ Lean-design rule:
 1. Rewrite the abandoned earlier graft-client intent around the shared protocol
    Development work:
    - define the `atm-graft` request/response needs in terms of the existing
-     shared `AtmProtocol` envelopes and DTOs already present on `develop`
+     shared request/response envelopes and DTOs already present on `develop`
    - start from:
      - `crates/atm-core/src/boundary/mod.rs` `ClientTransport`
      - `crates/atm-core/src/protocol.rs` `RequestEnvelope` /
        `ResponseEnvelope`
      - `docs/atm-daemon/protocol-icd.md` current ICD inventory
+     - current `develop @ b6506ef` references:
+       - `crates/atm-core/src/graft.rs`
+       - `crates/atm-core/src/protocol.rs`
+       - `crates/atm/src/composition.rs`
    - forbid graft-private daemon API types
    - keep the client surface as simple as `command -> send` over the shared
      transport contract
+   - if registration or advisory-delivery packets remain necessary, keep them
+     in the same shared family but rename them generically rather than
+     preserving `GraftRegister` / `GraftFetch` / `GraftDrain`
    Required tests:
    - protocol round-trip tests showing CLI and graft-shaped traffic share the
      same ICD family
@@ -101,6 +110,10 @@ Lean-design rule:
 
 - `atm-graft` is modeled as a thin client using shared `atm-core` interfaces
 - daemon request/response traffic for graft uses the same ICD family as CLI
+- unary `send` / `read` / `ack` traffic shares the same request/response
+  family as CLI
+- any additive registration or advisory-delivery messages remain part of that
+  same shared family and are renamed generically when reintroduced
 - no graft-specific daemon API surface is introduced
 - no extra graft-specific public trait family is introduced unless the shared
   transport/protocol contract proves insufficient

@@ -2885,8 +2885,8 @@ Acceptance:
 - client-specific receive/injection/runtime behavior is owned by `atm-graft`
   or by generic shared interfaces in `atm-core`
 - the client runtime stays lean and production-complete:
-  one persistent receive thread, one open daemon nudge connection, one minimal
-  pending queue, and one host wake/event path
+  one persistent receive thread, one open dedicated daemon advisory-stream
+  connection, one minimal pending queue, and one host wake/event path
 
 ### U.10 — Generic Daemon Advisory-Notification Surface
 

@@ -10,9 +10,10 @@ Status:
 - completed by `team-lead`
 
 Inventory note:
-- the old graft implementation line is already gone on `develop`
-- the later graft sprints (`U.8` through `U.10`) restack ownership and shared
-  interfaces rather than preserving or incrementally repairing the removed line
+- the old graft implementation line is removed on `integrate/phase-U` by
+  `team-lead`, but current `develop @ b6506ef` still carries the pre-U.0 line
+- the later graft sprints (`U.8` through `U.10`) use the current `develop`
+  surfaces below as removal/restack targets rather than preserving them
 
 ## U.1 — Delete `metadata.atm` Read-Path Dependence
 
@@ -136,47 +137,66 @@ Primary code/doc targets:
 
 ## U.8 — Shared Thin-Client ICD For CLI And Graft
 
-Develop note:
-- there is no current graft implementation line on `develop` to remove.
-- this sprint restacks the abandoned earlier graft-client intent as a shared
-  thin-client design rule.
-
-Primary develop-branch design/doc targets:
-- `docs/atm-core/boundaries.md`
-- `docs/atm-core/architecture.md`
-- `docs/atm-daemon/protocol-icd.md`
+Primary current-develop code/doc targets:
+- `crates/atm-core/src/graft.rs:25-296`
+  - `AtmGraftClient`
+  - `GraftSessionPort`
+  - `GraftSessionState`
+  - `GraftSessionId`
+  - `NudgeEvent`
+  - `GraftNudgeFetchRequest`
+  - `GraftNudgeDrainRequest`
+- `crates/atm-core/src/protocol.rs:54-57,69-72,219-233,532-553`
+  - graft-specific request/response envelope variants and packet kinds
+- `crates/atm/src/composition.rs:327-443`
+  - graft-specific CLI composition forwarding helpers
+- `docs/atm-daemon/protocol-icd.md:247-264,292-306,351-365,493-496`
+  - graft-specific protocol inventory entries
 
 Required restack rule:
-- any graft support must use shared `AtmProtocol` contracts and the same ICD
-  family as CLI traffic.
+- any graft support must use the same shared ICD family as CLI traffic
+- additive registration or advisory-delivery messages must be renamed
+  generically rather than preserving `Graft*` packet naming
 
 ## U.9 — Client-Owned Graft Runtime
 
-Develop note:
-- there is no current graft runtime implementation line on `develop` to remove.
-- this sprint restacks the abandoned earlier graft-runtime intent as an
-  ownership rule.
-
-Primary develop-branch design/doc targets:
+Primary current-develop code/doc targets:
+- `crates/atm-graft/src/lib.rs:55-82,86-150,166-239,311-836,943-1355`
+  - `HostNudgeInjector`
+  - `GraftObservability`
+  - `GraftSessionOptions`
+  - `GraftClient`
+  - `GraftSession`
+  - `run_receive_loop(...)`
+  - current poll/drain receive-loop tests
 - `docs/atm-core/architecture.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-core/boundaries.md`
 
 Required restack rule:
-- client-specific runtime behavior belongs in `atm-graft`, not `atm-daemon`.
+- client-specific runtime behavior belongs in `atm-graft`, not `atm-daemon`
+- the production embedded runtime path is one persistent receive thread
+  reading one dedicated daemon advisory-stream socket; the current poll/drain
+  loop is not the target design
 
 ## U.10 — Generic Daemon Advisory-Notification Surface
 
-Develop note:
-- there is no current graft-specific daemon surface on `develop` to remove.
-- this sprint restacks the abandoned earlier graft-notification intent as a
-  generic-boundary rule.
-
-Primary develop-branch design/doc targets:
+Primary current-develop code/doc targets:
+- `crates/atm-daemon/src/graft_runtime.rs:18-244,300-393`
+  - daemon graft runtime ownership
+  - bounded queue semantics
+  - fetch/drain behavior
+  - overflow tests
+- `crates/atm-daemon/src/tests.rs:404-505`
+  - graft-specific dispatcher routing tests
+- `crates/atm/src/commands/graft.rs:1-232`
+  - companion CLI fetch/drain debug surface
 - `docs/atm-daemon/architecture.md`
-- `docs/atm-daemon/protocol-icd.md`
+- `docs/atm-daemon/protocol-icd.md:247-264,292-306,351-365,493-496`
 - `docs/atm-core/boundaries.md`
 
 Required restack rule:
 - any daemon-owned post-commit notification surface must be generic; client
-  crates such as `atm-graft` are consumers, not daemon-owned subsystems.
+  crates such as `atm-graft` are consumers, not daemon-owned subsystems
+- production embedded delivery must use a live daemon advisory stream;
+  fetch/drain remains optional companion CLI/debug support only

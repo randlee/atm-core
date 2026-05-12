@@ -20,16 +20,16 @@ Rebuild the static ATM HTML reports and JSON sidecars from the Mermaid source-of
 ## Execution
 
 ```python
-python3 docs/atm/diagrams/scripts/generate_diagram_pages.py
+python3 docs/reports/generate_diagram_pages.py
 ```
 
 ## Outputs
 
 This command regenerates:
-- `docs/atm/cli-diagrams.html`
-- `docs/atm/cli-diagrams.json`
-- `docs/atm/client-interface-diagrams.html`
-- `docs/atm/client-interface-diagrams.json`
-- `docs/atm-rusqlite/query-diagrams.html`
-- `docs/atm-rusqlite/query-diagrams.json`
-- `docs/atm/diagrams/panels/*.html`
+- `docs/reports/cli-diagrams.html`
+- `docs/reports/cli-diagrams.json`
+- `docs/reports/client-interface-diagrams.html`
+- `docs/reports/client-interface-diagrams.json`
+- `docs/reports/query-diagrams.html`
+- `docs/reports/query-diagrams.json`
+- `docs/reports/panels/*.html`

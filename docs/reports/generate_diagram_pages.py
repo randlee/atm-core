@@ -12,12 +12,12 @@ import subprocess
 import tempfile
 
 
-ROOT = Path(__file__).resolve().parents[4]
+ROOT = Path(__file__).resolve().parents[2]
 ATM_DOCS = ROOT / "docs" / "atm"
 SQLITE_DOCS = ROOT / "docs" / "atm-rusqlite"
-DIAGRAMS_DIR = ATM_DOCS / "diagrams"
-PANELS_DIR = ATM_DOCS / "diagrams" / "panels"
-TEMPLATES_DIR = DIAGRAMS_DIR / "templates"
+REPORTS_DIR = ROOT / "docs" / "reports"
+PANELS_DIR = REPORTS_DIR / "panels"
+TEMPLATES_DIR = ROOT / "docs" / "templates" / "diagram-report"
 METADATA_RE = re.compile(r"^%%\s*([a-z_]+)\s*:\s*(.+?)\s*$")
 TABLE_RE = re.compile(
     r"CREATE TABLE IF NOT EXISTS\s+([a-zA-Z0-9_]+)\s*\((.*?)\n\);",
@@ -56,26 +56,26 @@ PAGE_CONFIG = {
     "cli": {
         "title": "CLI Interface",
         "intro": "These panels show the retained CLI command surfaces and their target command-to-daemon or command-to-service flows, including error paths.",
-        "output_path": ATM_DOCS / "cli-diagrams.html",
-        "json_output_path": ATM_DOCS / "cli-diagrams.json",
-        "stylesheet_href": "./diagrams/assets/diagram-panels.css",
-        "script_href": "./diagrams/assets/diagram-panels.js",
+        "output_path": REPORTS_DIR / "cli-diagrams.html",
+        "json_output_path": REPORTS_DIR / "cli-diagrams.json",
+        "stylesheet_href": "./assets/diagram-panels.css",
+        "script_href": "./assets/diagram-panels.js",
     },
     "client": {
         "title": "Client Interface",
         "intro": "These panels cover the daemon message surfaces used by thin clients such as atm-graft. Shared command flows reuse the same diagrams where the packet contract is identical.",
-        "output_path": ATM_DOCS / "client-interface-diagrams.html",
-        "json_output_path": ATM_DOCS / "client-interface-diagrams.json",
-        "stylesheet_href": "./diagrams/assets/diagram-panels.css",
-        "script_href": "./diagrams/assets/diagram-panels.js",
+        "output_path": REPORTS_DIR / "client-interface-diagrams.html",
+        "json_output_path": REPORTS_DIR / "client-interface-diagrams.json",
+        "stylesheet_href": "./assets/diagram-panels.css",
+        "script_href": "./assets/diagram-panels.js",
     },
     "query": {
         "title": "SQL Queries",
         "intro": "SQLite is the mailbox SSOT. These panels show the target query shapes: status-first selection, deleted-row exclusion in normal queries, and full message fetch only when a message must actually be rendered.",
-        "output_path": SQLITE_DOCS / "query-diagrams.html",
-        "json_output_path": SQLITE_DOCS / "query-diagrams.json",
-        "stylesheet_href": "../atm/diagrams/assets/diagram-panels.css",
-        "script_href": "../atm/diagrams/assets/diagram-panels.js",
+        "output_path": REPORTS_DIR / "query-diagrams.html",
+        "json_output_path": REPORTS_DIR / "query-diagrams.json",
+        "stylesheet_href": "./assets/diagram-panels.css",
+        "script_href": "./assets/diagram-panels.js",
     },
 }
 
@@ -180,7 +180,8 @@ def schema_map() -> dict[str, str]:
 
 def all_panels() -> tuple[Panel, ...]:
     panels = []
-    for source_path in sorted(DIAGRAMS_DIR.glob("*.mmd")):
+    source_paths = sorted(ATM_DOCS.glob("*.mmd")) + sorted(SQLITE_DOCS.glob("*.mmd"))
+    for source_path in source_paths:
         metadata = parse_metadata(source_path)
         missing = {"title", "summary", "commentary", "sets"} - set(metadata)
         if missing:

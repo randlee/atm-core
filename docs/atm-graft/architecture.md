@@ -141,7 +141,8 @@ Responsibilities:
 - connect to the same-host daemon API
 - register the current host-agent identity and process context
 - run one persistent receive task/thread for daemon-originated nudge events
-  while the session is active and keep the daemon socket connection open
+  while the session is active and keep one dedicated daemon advisory-stream
+  socket connection open
 - expose daemon-originated nudges to the embedding host executable
 - queue received nudges until the embedding host consumes them
 - fire a host wake/event callback when a new nudge arrives so inactive hosts
@@ -167,6 +168,9 @@ Architectural rules:
   session; omitting the receive loop defeats the purpose of `atm-graft`
 - the host supplies the execution model for that receive loop, but `atm-graft`
   must require the loop to exist
+- the production receive loop must block on the dedicated daemon
+  advisory-stream connection; a periodic poll/drain loop is not the production
+  `atm-graft` design
 
 Queue-ownership rule:
 - bounded pending-nudge state belongs in the daemon
@@ -220,6 +224,8 @@ Architectural rules:
   of the embedding agent loop
 - the open receive connection must remain active even while the host is idle so
   nudges are observed promptly
+- the live receive connection is a dedicated daemon advisory-stream socket
+  owned by the active `GraftSession`
 - new nudges must enqueue client-side until host consumption and must trigger a
   host wake/event signal carrying enough information for the host to force
   follow-on action

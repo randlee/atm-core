@@ -1,8 +1,8 @@
 {
   "title": "CLI Interface",
-  "generated_at": "2026-05-12T04:21:05.899483+00:00",
+  "generated_at": "2026-05-12T04:52:01.364178+00:00",
   "set": "cli",
-  "output_path": "docs/atm/cli-diagrams.html",
+  "output_path": "docs/reports/cli-diagrams.html",
   "sections": [
     {
       "key": "atm-clear",
@@ -12,8 +12,8 @@
       "notes": [],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/atm/diagrams/atm-clear.mmd",
-      "fragment_path": "docs/atm/diagrams/panels/atm-clear.html",
+      "ssot_path": "docs/atm/atm-clear.mmd",
+      "fragment_path": "docs/reports/panels/atm-clear.html",
       "sets": [
         "cli"
       ]
@@ -26,8 +26,8 @@
       "notes": [],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/atm/diagrams/atm-doctor.mmd",
-      "fragment_path": "docs/atm/diagrams/panels/atm-doctor.html",
+      "ssot_path": "docs/atm/atm-doctor.mmd",
+      "fragment_path": "docs/reports/panels/atm-doctor.html",
       "sets": [
         "cli"
       ]
@@ -40,8 +40,8 @@
       "notes": [],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/atm/diagrams/atm-list.mmd",
-      "fragment_path": "docs/atm/diagrams/panels/atm-list.html",
+      "ssot_path": "docs/atm/atm-list.mmd",
+      "fragment_path": "docs/reports/panels/atm-list.html",
       "sets": [
         "cli"
       ]
@@ -54,8 +54,8 @@
       "notes": [],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/atm/diagrams/atm-log.mmd",
-      "fragment_path": "docs/atm/diagrams/panels/atm-log.html",
+      "ssot_path": "docs/atm/atm-log.mmd",
+      "fragment_path": "docs/reports/panels/atm-log.html",
       "sets": [
         "cli"
       ]
@@ -68,8 +68,8 @@
       "notes": [],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/atm/diagrams/atm-members.mmd",
-      "fragment_path": "docs/atm/diagrams/panels/atm-members.html",
+      "ssot_path": "docs/atm/atm-members.mmd",
+      "fragment_path": "docs/reports/panels/atm-members.html",
       "sets": [
         "cli"
       ]
@@ -82,8 +82,8 @@
       "notes": [],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/atm/diagrams/atm-read.mmd",
-      "fragment_path": "docs/atm/diagrams/panels/atm-read.html",
+      "ssot_path": "docs/atm/atm-read.mmd",
+      "fragment_path": "docs/reports/panels/atm-read.html",
       "sets": [
         "cli",
         "client"
@@ -97,8 +97,8 @@
       "notes": [],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/atm/diagrams/atm-send-ack.mmd",
-      "fragment_path": "docs/atm/diagrams/panels/atm-send-ack.html",
+      "ssot_path": "docs/atm/atm-send-ack.mmd",
+      "fragment_path": "docs/reports/panels/atm-send-ack.html",
       "sets": [
         "cli",
         "client"
@@ -112,8 +112,8 @@
       "notes": [],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/atm/diagrams/atm-send-compose.mmd",
-      "fragment_path": "docs/atm/diagrams/panels/atm-send-compose.html",
+      "ssot_path": "docs/atm/atm-send-compose.mmd",
+      "fragment_path": "docs/reports/panels/atm-send-compose.html",
       "sets": [
         "cli",
         "client"
@@ -127,8 +127,8 @@
       "notes": [],
       "read_tables": [],
       "write_tables": [],
-      "ssot_path": "docs/atm/diagrams/atm-teams.mmd",
-      "fragment_path": "docs/atm/diagrams/panels/atm-teams.html",
+      "ssot_path": "docs/atm/atm-teams.mmd",
+      "fragment_path": "docs/reports/panels/atm-teams.html",
       "sets": [
         "cli"
       ]

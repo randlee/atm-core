@@ -40,7 +40,8 @@ Sprint summary:
 - `U.7` roster simplification and explicit member model
 - `U.8` shared thin-client ICD for CLI and graft
 - `U.9` client-owned graft runtime with one persistent receive thread, one
-  open daemon nudge connection, and one host wake/event path
+  open dedicated daemon advisory-stream connection, and one host wake/event
+  path
 - `U.10` generic daemon advisory-notification surface kept intentionally lean
 
 Phase rules:
@@ -51,5 +52,9 @@ Phase rules:
   unless the sprint doc states a concrete approved reason
 - any unapproved schema surface discovered during implementation should be
   deleted or moved behind an explicitly non-implemented trait surface
-- the authoritative file/line removal inventory for the Phase U cleanup line
+- Phase U schema simplification was discovered concretely on
+  `feature/fix-sqlite-load-writer-shutdown`, especially in
+  `crates/atm-rusqlite/src/shared_db.rs`; use that discovery work as evidence
+  when executing the schema sprints rather than re-inventing the removal set
+  - the authoritative file/line removal inventory for the Phase U cleanup line
   lives in `docs/phase-U/removal-inventory.md`

@@ -16,39 +16,39 @@ Design goals captured by these diagrams:
 
 Shared command/message diagrams:
 - `atm send` and `AtmGraftClient::send`:
-  [atm-send-compose.mmd](./diagrams/atm-send-compose.mmd)
+  [atm-send-compose.mmd](./atm-send-compose.mmd)
 - `atm ack` and `AtmGraftClient::ack`:
-  [atm-send-ack.mmd](./diagrams/atm-send-ack.mmd)
+  [atm-send-ack.mmd](./atm-send-ack.mmd)
 - `atm list`:
-  [atm-list.mmd](./diagrams/atm-list.mmd)
+  [atm-list.mmd](./atm-list.mmd)
 - `atm read` and `AtmGraftClient::read`:
-  [atm-read.mmd](./diagrams/atm-read.mmd)
+  [atm-read.mmd](./atm-read.mmd)
 - `atm clear`:
-  [atm-clear.mmd](./diagrams/atm-clear.mmd)
+  [atm-clear.mmd](./atm-clear.mmd)
 - `atm doctor`:
-  [atm-doctor.mmd](./diagrams/atm-doctor.mmd)
+  [atm-doctor.mmd](./atm-doctor.mmd)
 - `atm log`:
-  [atm-log.mmd](./diagrams/atm-log.mmd)
+  [atm-log.mmd](./atm-log.mmd)
 - `atm teams`:
-  [atm-teams.mmd](./diagrams/atm-teams.mmd)
+  [atm-teams.mmd](./atm-teams.mmd)
 - `atm members`:
-  [atm-members.mmd](./diagrams/atm-members.mmd)
+  [atm-members.mmd](./atm-members.mmd)
 
 `atm-graft`-specific daemon packet/message diagrams:
 - register consumer session:
-  [atm-graft-register.mmd](./diagrams/atm-graft-register.mmd)
+  [atm-graft-register.mmd](./atm-graft-register.mmd)
 - unregister consumer session:
-  [atm-graft-unregister.mmd](./diagrams/atm-graft-unregister.mmd)
+  [atm-graft-unregister.mmd](./atm-graft-unregister.mmd)
 - fetch advisory nudges:
-  [atm-graft-fetch.mmd](./diagrams/atm-graft-fetch.mmd)
+  [atm-graft-fetch.mmd](./atm-graft-fetch.mmd)
 - drain advisory nudges:
-  [atm-graft-drain.mmd](./diagrams/atm-graft-drain.mmd)
+  [atm-graft-drain.mmd](./atm-graft-drain.mmd)
 
 Static HTML viewers:
 - CLI interface panels:
-  [cli-diagrams.html](./cli-diagrams.html)
+  [cli-diagrams.html](../reports/cli-diagrams.html)
 - client-interface panels:
-  [client-interface-diagrams.html](./client-interface-diagrams.html)
+  [client-interface-diagrams.html](../reports/client-interface-diagrams.html)
 
 Simplified target model:
 - one private Claude compatibility boundary for JSONL ingest/export

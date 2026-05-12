@@ -25,14 +25,14 @@ Planning baseline:
 
 ## 3. Current Baseline
 
-Useful implementation already present:
+Useful generic implementation already present:
 - durable mail/task/roster store contracts in `atm-core`
 - mature SQLite-backed record families in `atm-rusqlite`
 - same-host daemon runtime with singleton control and bounded shutdown
 - real same-host request handling as a product path, not a future placeholder
 - retained CLI paths already proving the daemon/client integration shape
 
-Reusable current-develop building blocks:
+Reusable generic current-develop building blocks:
 - shared `ClientTransport` boundary in `crates/atm-core/src/boundary/mod.rs`
 - shared request/response envelope family in `crates/atm-core/src/protocol.rs`
 - shared protocol codec `JsonAtmProtocolCodec` in
@@ -48,22 +48,39 @@ Reusable current-develop building blocks:
     `crates/atm-daemon/src/peer_transport.rs`
 - current shared ICD inventory in `docs/atm-daemon/protocol-icd.md`
 
-Remaining gaps relative to `atm-graft`:
-- no graft registration or daemon-to-client nudge stream exists yet
-- no daemon-owned pending-nudge queue or drain API exists yet
+Current `develop @ b6506ef` graft-specific discovery references:
+- `crates/atm-core/src/graft.rs`
+- `crates/atm-core/src/protocol.rs`
+- `crates/atm-daemon/src/graft_runtime.rs`
+- `crates/atm-daemon/src/tests.rs`
+- `crates/atm-graft/src/lib.rs`
+- `crates/atm/src/composition.rs`
+- `crates/atm/src/commands/graft.rs`
+
+Historical/use rule:
+- reuse DTO shapes, queue semantics, host-injection seams, and focused tests
+  where they fit the new boundaries
+- do not preserve the current `Graft*` daemon naming or the current poll/drain
+  receive loop as the production design
+
+Remaining gaps relative to the target `atm-graft` design:
+- no generic consumer registration or daemon-to-client advisory stream exists
+  yet
+- no daemon-owned generic pending-advisory queue exists yet
 - no `[atm.graft]` config surface exists in `atm-core`
 - no thin embedded crate packages the existing daemon client behavior for host
   agents
 - the public client-facing `atm-core` surface still needs a dedicated
   embeddable shape rather than exposing only CLI-oriented composition
-- no documented automatic embedded-mode injection loop exists yet
+- the current embedded runtime uses poll/drain instead of one dedicated live
+  advisory-stream connection
 
 Planning consequence:
 - `atm-graft` is no longer a large protocol bootstrap effort
 - it is now a thin follow-on line on top of the current IPC/runtime baseline
 - the work should therefore live as three additive Phase U sprints
 - all new thin-client work should start from the current shared protocol and
-  transport seams already present on `develop`, not by reintroducing
+  transport seams already present on `develop`, without reintroducing
   graft-private packet families
 
 ## 4. Gap Analysis
@@ -90,13 +107,15 @@ Current state:
 - the daemon is already the correct owner of runtime coordination
 - there is no graft registration / unregistration path
 - there is no daemon-owned bounded pending-nudge queue or drain request
-- there is no persistent client-side session thread holding an open daemon
-  connection for nudges while the host is idle
+- there is no persistent client-side session thread holding one dedicated live
+  daemon advisory-stream socket while the host is idle
 
 Required change:
 - add graft registration / unregistration handlers
 - add daemon-owned bounded nudge queueing
-- add nudge drain/fetch requests for embedded and hook/poll consumers
+- add one dedicated daemon advisory stream per active session as the
+  production delivery path
+- keep nudge fetch/drain only as companion CLI/debug support if still needed
 - add one persistent embedded-session receive thread per active
   `GraftSession`; that thread must hold the live daemon socket connection used
   for advisory nudge delivery
@@ -118,7 +137,8 @@ Required change:
   contract
 - add minimal `[atm.graft]` activation
 - add `GraftSession`
-- add host-facing nudge fetch/drain bridging
+- replace the current poll/drain runtime with host-facing automatic advisory
+  delivery plus a minimal pending queue and wake/event callback
 - add the concrete thin crate surfaces:
   - `GraftClient`
   - `GraftSession`
@@ -167,8 +187,10 @@ Implementation scope:
 Deliverables:
 - generic consumer registration / unregistration protocol
 - daemon-owned bounded pending advisory-nudge queue
-- daemon-owned generic drain/fetch API and/or persistent advisory stream using
-  the same shared ICD family as CLI/thin clients
+- daemon-owned persistent advisory stream using the same shared ICD family as
+  CLI/thin clients
+- optional daemon-owned generic fetch/drain API for companion CLI/debug
+  behavior
 - typed backpressure and queue-overflow behavior
 - hook-facing `atm` command surface for nudge drain on the same daemon API
 - daemon-side support consumed by the automatic embedded-session
@@ -214,7 +236,7 @@ Embedded session mode:
   bridge once it resumes at the next safe insertion point
 
 Non-production companion path:
-- a CLI drain/poll command may still exist for debugging, migration, or
+- a CLI fetch/drain command may still exist for debugging, migration, or
   non-embedded environments
 - that path is explicitly not the production completion target for
   `atm-graft`

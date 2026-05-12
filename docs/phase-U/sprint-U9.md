@@ -23,7 +23,7 @@ owns its own client runtime behavior on top of shared `atm-core` contracts.
 
 Lean-design rule:
 - one persistent receive thread
-- one open daemon nudge connection
+- one open dedicated daemon advisory-stream connection
 - one minimal client-side pending queue until host consumption
 - one host wake/event path
 - no extra runtime layers beyond those required for production behavior
@@ -67,11 +67,24 @@ Lean-design rule:
      logic in `atm-graft`
    - remove any daemon-owned client-named runtime concept
    - require exactly one persistent receive thread per active session and keep
-     the daemon nudge connection open while the session is active
+     one dedicated daemon advisory-stream socket open while the session is
+     active
    - require a minimal client-side pending queue until the host consumes the
      nudge and a host wake/event callback when new nudges arrive during host
      inactivity
-   - start from the reusable current-develop seams rather than inventing new
+   - current `develop @ b6506ef` reusable references:
+     - `crates/atm-graft/src/lib.rs`
+       - `GraftClient`
+       - `GraftSessionOptions`
+       - `HostNudgeInjector`
+       - `GraftObservability`
+       - `run_receive_loop(...)`
+     - `crates/atm/src/composition.rs`
+       same-host client adapter methods
+   - do not preserve the current poll/drain receive loop as the production
+     design; replace it with a blocking reader on the live advisory-stream
+     connection
+   - start from the reusable current generic seams rather than inventing new
      daemon-private ones:
      - `crates/atm-core/src/transport/testing.rs` `FakeClientTransport`
      - `crates/atm-core/src/transport/testing.rs` `LoopbackClientTransport`
@@ -100,8 +113,10 @@ Lean-design rule:
 - daemon does not own a graft-named runtime concept
 - shared interfaces needed by `atm-graft` live in `atm-core`, not `atm-daemon`
 - the client runtime is production-simple: one persistent receive thread, one
-  open daemon nudge connection, one minimal pending queue, one host wake/event
-  path
+  open dedicated daemon advisory-stream connection, one minimal pending queue,
+  one host wake/event path
+- production embedded delivery uses that live connection; poll/drain remains a
+  companion debug path only
 - the owning plugin crate still passes boundary lint with no `atm-daemon`
   dependency
 

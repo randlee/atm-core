@@ -56,7 +56,7 @@ Initial crate requirement IDs:
 - `REQ-GRAFT-CLIENT-001` `atm-graft` owns the embedded same-host daemon client
   surface for first-party Rust host agents. Satisfies:
   `REQ-P-GRAFT-001`, `REQ-CORE-TRANSPORT-001`.
-- `REQ-GRAFT-NOTIFY-001` `atm-graft` owns the host-facing nudge fetch/drain
+- `REQ-GRAFT-NOTIFY-001` `atm-graft` owns the host-facing advisory-delivery
   contract and structured payload rendering used for between-tool-call
   injection. Satisfies:
   `REQ-P-GRAFT-001`.
@@ -118,10 +118,12 @@ Required rules:
   nudges into the host's between-tool-call context flow; manual polling is not
   sufficient for `atm-graft` acceptance
 - embedded mode must keep one persistent receive task/thread and one live
-  daemon connection dedicated to advisory nudges while the session is active
+  dedicated daemon advisory-stream connection while the session is active
 - if the host is idle when a nudge arrives, `atm-graft` must enqueue the
   received nudge until host consumption and fire a host wake/event signal so
   the host takes follow-on action promptly
+- production embedded delivery must come from that live advisory-stream
+  connection; fetch/drain alone is not sufficient for `atm-graft`
 - production `atm-graft` acceptance must not depend on `tmux send-keys`,
   shell-hook polling, or any equivalent external terminal-injection mechanism
 - the intended production integration is a custom host CLI with `atm-graft`
@@ -196,8 +198,9 @@ Scope-simplification rule for the first implementation pass:
   - `atm_core::load_atm_config` is the public loader consumed by `atm-graft`
   - `atm-graft` remains inert when `.atm.toml` is absent
 - `REQ-GRAFT-RUNTIME-001`
-  - daemon-owned registration, unregistration, and typed queue fetch/drain
-    surfaces exist before the `atm-graft` crate tries to consume them
+- daemon-owned registration, unregistration, and typed queue fetch/drain
+    surfaces and/or advisory-stream control surfaces exist before the
+    `atm-graft` crate tries to consume them
   - the concrete `GraftSession` lifecycle type exists once `U.9` lands
   - embedded mode includes one persistent receive task/thread plus one live
     daemon connection per active `GraftSession` once `U.9` lands
@@ -212,9 +215,10 @@ Scope-simplification rule for the first implementation pass:
   - the concrete exported types include `GraftClient` and `GraftSession`
   - `atm-graft` does not take a Rust dependency on `atm-daemon`
 - `REQ-GRAFT-NOTIFY-001`
-  - daemon-originated nudge receipt is automatic in embedded mode
-  - daemon-owned drain/fetch or subscription surfaces exist for the
-    session/runtime bridge
+- daemon-originated nudge receipt is automatic in embedded mode
+- daemon-owned advisory-stream delivery plus companion drain/fetch or
+  subscription surfaces exist for the
+  session/runtime bridge
   - the host-facing nudge payload exposes at least `from` and `message`
   - the client runtime queues nudges until host consumption and emits a host
     wake/event signal on arrival

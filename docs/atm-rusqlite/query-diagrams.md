@@ -11,18 +11,21 @@ Query rules:
 - no ATM-owned mailbox query reads inbox JSON or summary files
 
 Diagrams:
-- bounded metadata list:
-  [atm-list.mmd](../atm/diagrams/atm-list.mmd)
-- single-message read, including exact-id and superseded/current behavior:
-  [atm-read.mmd](../atm/diagrams/atm-read.mmd)
-- clear/delete status mutation:
-  [atm-clear.mmd](../atm/diagrams/atm-clear.mmd)
-- send/ack write-side commit and post-commit effects:
-  [atm-send-compose.mmd](../atm/diagrams/atm-send-compose.mmd)
-  [atm-send-ack.mmd](../atm/diagrams/atm-send-ack.mmd)
+- save message:
+  [sql_save-message.mmd](./sql_save-message.mmd)
+- load message:
+  [sql_load-message.mmd](./sql_load-message.mmd)
+- save visibility state:
+  [sql_save-visibility-state.mmd](./sql_save-visibility-state.mmd)
+- load visibility state:
+  [sql_load-visibility-state.mmd](./sql_load-visibility-state.mmd)
+- query mailbox metadata rows:
+  [sql_query-mailbox-metadata-rows.mmd](./sql_query-mailbox-metadata-rows.mmd)
+- query mailbox metadata counts:
+  [sql_query-mailbox-metadata-counts.mmd](./sql_query-mailbox-metadata-counts.mmd)
 
 Static HTML viewer:
-- [query-diagrams.html](./query-diagrams.html)
+- [query-diagrams.html](../reports/query-diagrams.html)
 
 Optimization target:
 - `atm list` should use one status-rooted candidate/count query and one

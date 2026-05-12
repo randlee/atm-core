@@ -21,6 +21,12 @@ This sprint redraws the SQLite mailbox state model so content rows stay in
 `mail_messages` while all mutable mailbox/runtime state moves into one unified
 message-state surface. It also renames `stale_at` to `expires_at`.
 
+Discovery reference:
+- the split-state and `stale_at` issues were surfaced concretely during the
+  `feature/fix-sqlite-load-writer-shutdown` discovery work in
+  `crates/atm-rusqlite/src/shared_db.rs`; use that file as the starting schema
+  evidence for this sprint
+
 ## Governing Requirements
 
 - `REQ-CORE-MAILBOX-001`
