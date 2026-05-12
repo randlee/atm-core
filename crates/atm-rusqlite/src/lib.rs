@@ -1248,8 +1248,6 @@ mod tests {
                 task_id: Some(task_id()),
                 extra: serde_json::Map::new(),
             },
-            imported_from: None,
-            recorded_at: None,
         };
         assembly
             .mail_store()
@@ -1323,8 +1321,6 @@ mod tests {
                 task_id: Some(task_id()),
                 extra: serde_json::Map::new(),
             },
-            imported_from: None,
-            recorded_at: None,
         };
         assembly
             .mail_store()
@@ -1363,6 +1359,53 @@ mod tests {
             message.envelope.summary.as_deref(),
             Some("entrypoint read summary")
         );
+    }
+
+    #[test]
+    fn recorded_at_is_stamped_by_store_not_caller() {
+        let assembly = in_memory_assembly();
+        assembly
+            .mail_store()
+            .bootstrap(boundary::MailStoreBootstrapRequest {
+                team_dir: std::env::temp_dir(),
+                team: team(),
+                team_config: None,
+            })
+            .expect("bootstrap");
+
+        let record = boundary::MailStoreMessageRecord {
+            team: team(),
+            agent: agent(),
+            message_key: message_key("atm:recorded-at"),
+            envelope: envelope(),
+        };
+        assembly
+            .mail_store()
+            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+            .expect("upsert message");
+
+        let recorded_at: String = assembly
+            .mail_store
+            .db
+            .with_connection(|connection| {
+                connection
+                    .query_row(
+                        "SELECT recorded_at FROM mail_messages
+                         WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                        params![team().as_str(), agent().as_str(), "atm:recorded-at"],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .map_err(|error| {
+                        assembly
+                            .mail_store
+                            .db
+                            .error("failed to load recorded_at verification row", error)
+                    })
+            })
+            .expect("load recorded_at");
+
+        let parsed = chrono::DateTime::parse_from_rfc3339(&recorded_at).expect("rfc3339");
+        assert_eq!(parsed.to_rfc3339(), recorded_at);
     }
 
     #[test]
