@@ -1,0 +1,112 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F004>
+  a triage:Finding ;
+  triage:findingId "RBP-F004" ;
+  triage:title "summarize_mailbox_record return type has unreachable Err and Ok(None) arms" ;
+  triage:description "crates/atm-core/src/mailbox/mod.rs — summarize_mailbox_record returns Result<Option<SummaryMessage>, AtmError> but every code path returns Ok(Some(...)). The Err and Ok(None) arms at call sites are structurally unreachable dead code (RBP-007). Fix: change return type to SummaryMessage. Update call sites." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/integrate-phase-U/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pU-u1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004/pU-u1/3> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/e45dc48> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+# --- Occurrences on integrate/phase-U (order_index 0) ---
+
+<urn:atm:triage:occurrence/RBP-F004/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 449 ;
+  triage:snippet ") -> Result<Option<SummaryMessage>, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/RBP-F004/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 252 ;
+  triage:snippet "|(index, record)| match summarize_mailbox_record(record, contains_filter) {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/RBP-F004/integrate-phase-U/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 321 ;
+  triage:snippet ".and_then(|record| summarize_mailbox_record(record, contains_filter))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+# --- Occurrences on feature/pU-u1-metadata-atm-read-cleanup (order_index 1) ---
+
+<urn:atm:triage:occurrence/RBP-F004/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 417 ;
+  triage:snippet ") -> Result<Option<SummaryMessage>, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+<urn:atm:triage:occurrence/RBP-F004/pU-u1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 251 ;
+  triage:snippet "|(index, record)| match summarize_mailbox_record(record, contains_filter) {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+<urn:atm:triage:occurrence/RBP-F004/pU-u1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 320 ;
+  triage:snippet ".and_then(|record| summarize_mailbox_record(record, contains_filter))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/integrate-phase-U/8aa2aed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u1/e45dc48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:orderIndex 1 .
