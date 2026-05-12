@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U9-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U9-002" ;
+  triage:title "sprint-U9.md internal contradiction — lines 129 vs 131 on run_receive_loop" ;
+  triage:description "docs/phase-U/sprint-U9.md:129-133: line 129 says 'companion debug path only'; line 131 says 'retired not supplemented'. These contradict. Team-lead ruling: update to 'retained for test transports only; production always uses live advisory stream.'" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:teamLeadRuling "run_receive_loop is RETAINED as test-transport-only fallback. Sprint-U9.md must be updated to read: 'live advisory stream is the production path; polling fallback retained only when !supports_live_advisory_stream() — test transports only.'" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U9-002/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U9-002/pU-u8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U9-002/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9-client-owned-graft-runtime/4ba0e00> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/8ce604b> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/253fc60> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u9-client-owned-graft-runtime/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U9-002/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/sprint-U9.md" ;
+  triage:line 129 ;
+  triage:snippet "production embedded delivery uses that live connection; poll/drain remains a companion debug path only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9-client-owned-graft-runtime/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U9-002/pU-u8/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/sprint-U9.md" ;
+  triage:line 126 ;
+  triage:snippet "production embedded delivery uses that live connection; poll/drain remains a companion debug path only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/8ce604b> .
+
+<urn:atm:triage:occurrence/ATM-QA-U9-002/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/sprint-U9.md" ;
+  triage:line 127 ;
+  triage:snippet "production embedded delivery uses that live connection; poll/drain remains a companion debug path only" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/253fc60> .
+
+<urn:atm:triage:worktree/integrate-phase-U/253fc60>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:orderIndex 0 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/8ce604b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:orderIndex 8 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u9-client-owned-graft-runtime/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 ;
+  triage:branchState "open" .
