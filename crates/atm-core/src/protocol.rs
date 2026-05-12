@@ -122,7 +122,8 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::DaemonServingStateRejected
         | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
         | AtmErrorCode::DaemonAutoStartFailed
-        | AtmErrorCode::DaemonGraftSessionAlreadyRegistered
+        | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
+        | AtmErrorCode::DaemonAdvisorySessionNotRegistered
         | AtmErrorCode::RemoteDeliveryOutcomeUnknown => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::AddressParseFailed => AtmErrorKind::Address,
         AtmErrorCode::TeamUnavailable | AtmErrorCode::TeamNotFound => AtmErrorKind::TeamNotFound,
@@ -675,9 +676,26 @@ fn platform_local_ipc_endpoint_path(path: PathBuf) -> PathBuf {
 }
 
 /// Shared notification event payload.
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum NotificationKind {
+    Delivery,
+    ReconcileComplete,
+}
+
+impl fmt::Display for NotificationKind {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let value = match self {
+            Self::Delivery => "delivery",
+            Self::ReconcileComplete => "reconcile_complete",
+        };
+        f.write_str(value)
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct NotificationEvent {
-    pub kind: String,
+    pub kind: NotificationKind,
     pub detail: String,
     pub team: Option<TeamName>,
     pub agent: Option<AgentName>,

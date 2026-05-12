@@ -335,6 +335,11 @@ Required `atm-core` crate rules:
   - clear
   - doctor
   - heartbeat
+  - advisory register
+  - advisory unregister
+  - advisory fetch
+  - advisory drain
+  - advisory stream
 - `atm-core` framed transport helpers must delimit packets explicitly rather
   than relying on EOF/connection shutdown to mark request boundaries
   rather than passing raw integer literals through the service boundary

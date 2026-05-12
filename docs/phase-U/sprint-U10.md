@@ -6,7 +6,7 @@ phase: U
 sprint: "U.10"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification
 branch: feature/pU-u10-generic-advisory-notification
-status: planned
+status: completed
 estimated_scope: M
 ```
 
@@ -14,6 +14,9 @@ estimated_scope: M
 
 Restack the abandoned earlier graft-notification work as a generic daemon
 advisory-notification surface rather than graft-specific daemon ownership.
+
+Completion note:
+- completed on `feature/pU-u10-generic-advisory-notification`
 
 ## Scope Summary
 

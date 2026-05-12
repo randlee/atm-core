@@ -883,6 +883,7 @@ fn handle_connection(
             stream: &mut stream,
             codec: &codec,
             request_id,
+            force_shutdown,
         };
         return dispatcher.dispatch_advisory_stream(request, &mut sink);
     }
@@ -956,6 +957,7 @@ struct LocalIpcAdvisoryStreamSink<'a> {
     stream: &'a mut LocalSocketStream,
     codec: &'a JsonAtmProtocolCodec,
     request_id: RequestId,
+    force_shutdown: &'a std::sync::atomic::AtomicBool,
 }
 
 impl boundary::AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
@@ -973,6 +975,11 @@ impl boundary::AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
                 )
                 .with_source(source)
         })
+    }
+
+    fn stop_requested(&self) -> bool {
+        self.force_shutdown
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 

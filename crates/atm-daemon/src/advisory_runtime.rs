@@ -7,10 +7,9 @@ use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::graft::{
     AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent, AdvisoryFetchRequest,
-    AdvisoryFetchResponse, AdvisorySessionId, AdvisorySessionRegistrationRequest,
+    AdvisoryFetchResponse, AdvisoryMessage, AdvisorySessionId, AdvisorySessionRegistrationRequest,
     AdvisorySessionRegistrationResponse, AdvisorySessionUnregistrationRequest,
     AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AdvisoryStreamResponse,
-    MAX_ADVISORY_MESSAGE_BYTES,
 };
 use atm_core::protocol::ResponseEnvelope;
 use atm_core::send::SendOutcome;
@@ -67,7 +66,7 @@ impl AdvisoryRuntime {
     ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
         let mut state = self.lock_state_write()?;
         if state.sessions.contains_key(&request.session_id) {
-            return Err(AtmError::daemon_graft_session_already_registered(format!(
+            return Err(AtmError::daemon_advisory_session_already_registered(format!(
                 "advisory session {} is already registered",
                 request.session_id
             ))
@@ -126,13 +125,10 @@ impl AdvisoryRuntime {
     ) -> Result<AdvisoryFetchResponse, AtmError> {
         let state = self.lock_state_read()?;
         let session = state.sessions.get(&request.session_id).ok_or_else(|| {
-            AtmError::validation(format!(
+            AtmError::daemon_advisory_session_not_registered(format!(
                 "advisory session {} is not registered",
                 request.session_id
             ))
-            .with_recovery(
-                "Register the advisory session before fetching daemon-owned advisory state.",
-            )
         })?;
         let limit = request.limit.get();
         let nudges = session
@@ -156,13 +152,10 @@ impl AdvisoryRuntime {
     ) -> Result<AdvisoryDrainResponse, AtmError> {
         let mut state = self.lock_state_write()?;
         let session = state.sessions.get_mut(&request.session_id).ok_or_else(|| {
-            AtmError::validation(format!(
+            AtmError::daemon_advisory_session_not_registered(format!(
                 "advisory session {} is not registered",
                 request.session_id
             ))
-            .with_recovery(
-                "Register the advisory session before draining daemon-owned advisory state.",
-            )
         })?;
         let limit = request.limit.get();
         let mut nudges = Vec::with_capacity(limit.min(session.nudges.len()));
@@ -191,9 +184,15 @@ impl AdvisoryRuntime {
             limit: request.limit,
         };
         loop {
+            if sink.stop_requested() {
+                return Ok(());
+            }
             match self.drain_nudges(drain_request.clone()) {
                 Ok(batch) => {
                     if batch.nudges.is_empty() {
+                        if sink.stop_requested() {
+                            return Ok(());
+                        }
                         thread::sleep(STREAM_IDLE_WAIT);
                         continue;
                     }
@@ -205,11 +204,8 @@ impl AdvisoryRuntime {
                     }))?;
                 }
                 Err(error)
-                    if error.message.contains("is not registered")
-                        && error.recovery.as_deref()
-                            == Some(
-                                "Register the advisory session before draining daemon-owned advisory state.",
-                            ) =>
+                    if error.code
+                        == atm_core::error_codes::AtmErrorCode::DaemonAdvisorySessionNotRegistered =>
                 {
                     return Ok(());
                 }
@@ -228,18 +224,10 @@ impl AdvisoryRuntime {
             .clone()
             .or_else(|| outcome.summary.clone())
             .unwrap_or_default();
-        if message.len() > MAX_ADVISORY_MESSAGE_BYTES {
-            return Err(AtmError::validation(format!(
-                "advisory message exceeds the {MAX_ADVISORY_MESSAGE_BYTES}-byte limit"
-            ))
-            .with_recovery(
-                "Shorten the send message or summary before enqueuing an advisory event.",
-            ));
-        }
         let nudge = AdvisoryEvent {
             message_id: outcome.message_id,
             from: outcome.sender.clone(),
-            message,
+            message: AdvisoryMessage::new(message)?,
             received_at: IsoTimestamp::now(),
             task_id: outcome.task_id.clone(),
         };

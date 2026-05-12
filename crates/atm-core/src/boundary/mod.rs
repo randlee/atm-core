@@ -243,6 +243,10 @@ pub trait AdvisoryStreamSink {
     /// Returns `AtmError` when the next advisory response frame cannot be
     /// delivered to the connected client.
     fn emit(&mut self, response: ResponseEnvelope) -> Result<(), AtmError>;
+
+    fn stop_requested(&self) -> bool {
+        false
+    }
 }
 
 /// BOUNDARY-NotificationSink — see docs/atm-core/boundaries.md.

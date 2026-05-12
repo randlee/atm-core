@@ -24,7 +24,7 @@ impl Drop for LifecycleFlagResetGuard {
     fn drop(&mut self) {
         self.lifecycle.set_terminate_for_test(false);
         self.lifecycle.set_reload_for_test(false);
-        if let Err(error) = self.lifecycle.shutdown_worker_with_timeout() {
+        if let Err(error) = self.lifecycle.reset_shared_state_for_test() {
             tracing::warn!(
                 %error,
                 "failed to drain shared lifecycle worker during test reset"

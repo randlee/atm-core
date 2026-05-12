@@ -53,7 +53,7 @@ fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
     .expect("write team config");
 }
 
-fn graft_registration_request(session_id: &str) -> AdvisorySessionRegistrationRequest {
+fn advisory_registration_request(session_id: &str) -> AdvisorySessionRegistrationRequest {
     AdvisorySessionRegistrationRequest {
         team: TEST_TEAM.parse().expect("team"),
         agent: ROLE_TEAM_LEAD.parse().expect("agent"),
@@ -63,13 +63,16 @@ fn graft_registration_request(session_id: &str) -> AdvisorySessionRegistrationRe
     }
 }
 
-fn graft_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {
+fn advisory_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
     install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
+    // TempDir paths are process-local, but the daemon dispatcher still uses
+    // global lifecycle/runtime state in test mode, so the advisory dispatcher
+    // helpers remain #[serial] until the full runtime harness is de-globalized.
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
     (tempdir, dispatcher)
@@ -77,9 +80,9 @@ fn graft_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {
 
 #[test]
 #[serial]
-fn dispatcher_routes_graft_register_requests() {
-    let (_tempdir, dispatcher) = graft_test_dispatcher();
-    let request = graft_registration_request("session-register");
+fn dispatcher_routes_advisory_register_requests() {
+    let (_tempdir, dispatcher) = advisory_test_dispatcher();
+    let request = advisory_registration_request("session-register");
 
     let response = dispatcher
         .dispatch(RequestEnvelope::AdvisoryRegister(request.clone()))
@@ -92,15 +95,15 @@ fn dispatcher_routes_graft_register_requests() {
             assert_eq!(registered.session_id, request.session_id);
             assert_eq!(registered.queue_capacity, 256);
         }
-        other => panic!("expected graft register response, got {other:?}"),
+        other => panic!("expected advisory register response, got {other:?}"),
     }
 }
 
 #[test]
 #[serial]
-fn dispatcher_routes_graft_unregister_requests() {
-    let (_tempdir, dispatcher) = graft_test_dispatcher();
-    let request = graft_registration_request("session-unregister");
+fn dispatcher_routes_advisory_unregister_requests() {
+    let (_tempdir, dispatcher) = advisory_test_dispatcher();
+    let request = advisory_registration_request("session-unregister");
     dispatcher
         .dispatch(RequestEnvelope::AdvisoryRegister(request.clone()))
         .expect("register response");
@@ -118,15 +121,15 @@ fn dispatcher_routes_graft_unregister_requests() {
             assert_eq!(unregistered.session_id, request.session_id);
             assert!(unregistered.closed);
         }
-        other => panic!("expected graft unregister response, got {other:?}"),
+        other => panic!("expected advisory unregister response, got {other:?}"),
     }
 }
 
 #[test]
 #[serial]
-fn dispatcher_routes_graft_fetch_requests() {
-    let (_tempdir, dispatcher) = graft_test_dispatcher();
-    let request = graft_registration_request("session-fetch");
+fn dispatcher_routes_advisory_fetch_requests() {
+    let (_tempdir, dispatcher) = advisory_test_dispatcher();
+    let request = advisory_registration_request("session-fetch");
     dispatcher
         .dispatch(RequestEnvelope::AdvisoryRegister(request.clone()))
         .expect("register response");
@@ -145,15 +148,15 @@ fn dispatcher_routes_graft_fetch_requests() {
             assert_eq!(fetch.remaining, 0);
             assert_eq!(fetch.dropped_count, 0);
         }
-        other => panic!("expected graft fetch response, got {other:?}"),
+        other => panic!("expected advisory fetch response, got {other:?}"),
     }
 }
 
 #[test]
 #[serial]
-fn dispatcher_routes_graft_drain_requests() {
-    let (_tempdir, dispatcher) = graft_test_dispatcher();
-    let request = graft_registration_request("session-drain");
+fn dispatcher_routes_advisory_drain_requests() {
+    let (_tempdir, dispatcher) = advisory_test_dispatcher();
+    let request = advisory_registration_request("session-drain");
     dispatcher
         .dispatch(RequestEnvelope::AdvisoryRegister(request.clone()))
         .expect("register response");
@@ -172,6 +175,6 @@ fn dispatcher_routes_graft_drain_requests() {
             assert_eq!(drain.remaining, 0);
             assert_eq!(drain.dropped_count, 0);
         }
-        other => panic!("expected graft drain response, got {other:?}"),
+        other => panic!("expected advisory drain response, got {other:?}"),
     }
 }

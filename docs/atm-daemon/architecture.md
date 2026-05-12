@@ -98,6 +98,15 @@ Current packet-supported daemon surface:
 - advisory drain
 - advisory stream
 
+Advisory-surface rule:
+- the daemon-owned advisory surface is generic, not graft-specific
+- the daemon may own:
+  - registration / unregistration
+  - one bounded pending advisory queue per active session
+  - optional fetch/drain inspection over the shared ICD
+  - one live advisory stream per active session
+- `atm-graft` is one consumer of that surface, not a daemon-owned subsystem
+
 Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm log`
 - `atm teams`

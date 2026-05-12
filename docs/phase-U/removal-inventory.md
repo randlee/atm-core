@@ -212,6 +212,9 @@ Required restack rule:
 
 ## U.10 — Generic Daemon Advisory-Notification Surface
 
+Status:
+- completed on `feature/pU-u10-generic-advisory-notification`
+
 Primary current-develop code/doc targets:
 - `crates/atm-daemon/src/advisory_runtime.rs:18-244,300-393`
   - daemon graft runtime ownership

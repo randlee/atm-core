@@ -291,7 +291,7 @@ fn persist_notification(
 #[cfg(test)]
 mod tests {
     use super::NotificationRuntime;
-    use atm_core::protocol::NotificationEvent;
+    use atm_core::protocol::{NotificationEvent, NotificationKind};
     use tempfile::TempDir;
 
     #[test]
@@ -302,7 +302,7 @@ mod tests {
         runtime.start().expect("start");
         runtime
             .deliver(NotificationEvent {
-                kind: "delivery".to_string(),
+                kind: NotificationKind::Delivery,
                 detail: "message delivered".to_string(),
                 team: None,
                 agent: None,
@@ -327,7 +327,7 @@ mod tests {
         runtime.start().expect("start");
         runtime
             .deliver(NotificationEvent {
-                kind: "delivery".to_string(),
+                kind: NotificationKind::Delivery,
                 detail: "message delivered".to_string(),
                 team: None,
                 agent: None,
@@ -339,7 +339,7 @@ mod tests {
 
         let error = runtime
             .deliver(NotificationEvent {
-                kind: "delivery".to_string(),
+                kind: NotificationKind::Delivery,
                 detail: "message delivered".to_string(),
                 team: None,
                 agent: None,

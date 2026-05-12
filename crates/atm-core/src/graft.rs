@@ -269,15 +269,74 @@ pub struct AdvisorySessionUnregistrationResponse {
 pub struct AdvisoryEvent {
     pub message_id: AtmMessageId,
     pub from: AgentName,
-    /// Advisory graft payload text.
+    /// Advisory payload text.
     ///
     /// Implementations producing `AdvisoryEvent` values must bound this field to
     /// at most [`MAX_ADVISORY_MESSAGE_BYTES`] UTF-8 bytes before crossing
     /// the public ATM graft boundary.
-    pub message: String,
+    pub message: AdvisoryMessage,
     pub received_at: IsoTimestamp,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
+}
+
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(transparent)]
+pub struct AdvisoryMessage(String);
+
+impl AdvisoryMessage {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        if value.len() > MAX_ADVISORY_MESSAGE_BYTES {
+            return Err(AtmError::validation(format!(
+                "advisory message exceeds the {MAX_ADVISORY_MESSAGE_BYTES}-byte limit"
+            ))
+            .with_recovery(
+                "Shorten the advisory payload before crossing the shared ATM advisory boundary.",
+            ));
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::ops::Deref for AdvisoryMessage {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl AsRef<str> for AdvisoryMessage {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for AdvisoryMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl<'de> Deserialize<'de> for AdvisoryMessage {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl PartialEq<&str> for AdvisoryMessage {
+    fn eq(&self, other: &&str) -> bool {
+        self.as_str() == *other
+    }
 }
 
 /// Fetch request for the current daemon-owned pending-nudge snapshot.
@@ -322,8 +381,8 @@ mod tests {
 
     use super::{
         AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
-        AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySession, AdvisorySessionId,
-        AdvisorySessionPort, AdvisorySessionRegistrationRequest,
+        AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisoryMessage, AdvisorySession,
+        AdvisorySessionId, AdvisorySessionPort, AdvisorySessionRegistrationRequest,
         AdvisorySessionRegistrationResponse, AdvisorySessionState,
         AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
         MAX_ADVISORY_BATCH_LIMIT, MAX_ADVISORY_MESSAGE_BYTES, MAX_ADVISORY_SESSION_ID_BYTES,
@@ -333,7 +392,7 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     #[test]
-    fn graft_session_id_rejects_blank_values() {
+    fn advisory_session_id_rejects_blank_values() {
         let error =
             AdvisorySessionId::new("   ").expect_err("blank advisory session id should fail");
         assert!(
@@ -344,7 +403,7 @@ mod tests {
     }
 
     #[test]
-    fn graft_batch_limit_rejects_zero() {
+    fn advisory_batch_limit_rejects_zero() {
         let error = AdvisoryBatchLimit::new(0).expect_err("zero graft batch limit should fail");
         assert!(
             error
@@ -354,7 +413,7 @@ mod tests {
     }
 
     #[test]
-    fn graft_session_id_rejects_overlong_values() {
+    fn advisory_session_id_rejects_overlong_values() {
         let overlong = "a".repeat(MAX_ADVISORY_SESSION_ID_BYTES + 1);
         let error = AdvisorySessionId::new(overlong).expect_err("overlong session id should fail");
         assert!(
@@ -365,7 +424,7 @@ mod tests {
     }
 
     #[test]
-    fn graft_batch_limit_rejects_values_above_documented_ceiling() {
+    fn advisory_batch_limit_rejects_values_above_documented_ceiling() {
         let error = AdvisoryBatchLimit::new(MAX_ADVISORY_BATCH_LIMIT + 1)
             .expect_err("oversized graft batch limit should fail");
         assert!(
@@ -420,7 +479,7 @@ mod tests {
         AdvisoryEvent {
             message_id: AtmMessageId::new(),
             from: "sender".parse().expect("sender"),
-            message: "hello".to_string(),
+            message: AdvisoryMessage::new("hello").expect("message"),
             received_at: IsoTimestamp::now(),
             task_id: None,
         }
@@ -461,7 +520,7 @@ mod tests {
     }
 
     #[test]
-    fn graft_session_id_deserialize_rejects_blank_values() {
+    fn advisory_session_id_deserialize_rejects_blank_values() {
         let error = serde_json::from_str::<AdvisorySessionId>("\"   \"")
             .expect_err("blank advisory session id should fail");
         assert!(
@@ -472,7 +531,7 @@ mod tests {
     }
 
     #[test]
-    fn graft_session_type_carries_all_documented_states() {
+    fn advisory_session_type_carries_all_documented_states() {
         let team: TeamName = "test-team".parse().expect("team");
         let agent: AgentName = "test-agent".parse().expect("agent");
         let session_id = AdvisorySessionId::new("session-1").expect("session");
@@ -498,32 +557,32 @@ mod tests {
     }
 
     #[test]
-    fn graft_registration_request_round_trips_json() {
+    fn advisory_registration_request_round_trips_json() {
         assert_json_round_trip(&registration_request());
     }
 
     #[test]
-    fn graft_registration_response_round_trips_json() {
+    fn advisory_registration_response_round_trips_json() {
         assert_json_round_trip(&registration_response());
     }
 
     #[test]
-    fn graft_unregistration_request_round_trips_json() {
+    fn advisory_unregistration_request_round_trips_json() {
         assert_json_round_trip(&unregister_request());
     }
 
     #[test]
-    fn graft_unregistration_response_round_trips_json() {
+    fn advisory_unregistration_response_round_trips_json() {
         assert_json_round_trip(&unregister_response());
     }
 
     #[test]
-    fn graft_fetch_request_round_trips_json() {
+    fn advisory_fetch_request_round_trips_json() {
         assert_json_round_trip(&fetch_request());
     }
 
     #[test]
-    fn graft_fetch_response_round_trips_json() {
+    fn advisory_fetch_response_round_trips_json() {
         assert_json_round_trip(&fetch_response());
     }
 
@@ -538,12 +597,12 @@ mod tests {
     }
 
     #[test]
-    fn graft_drain_request_round_trips_json() {
+    fn advisory_drain_request_round_trips_json() {
         assert_json_round_trip(&drain_request());
     }
 
     #[test]
-    fn graft_drain_response_round_trips_json() {
+    fn advisory_drain_response_round_trips_json() {
         assert_json_round_trip(&drain_response());
     }
 
@@ -599,7 +658,7 @@ mod tests {
     }
 
     #[test]
-    fn graft_session_port_mock_is_object_safe_and_typed() {
+    fn advisory_session_port_mock_is_object_safe_and_typed() {
         let port: &dyn AdvisorySessionPort = &MockAdvisorySessionPort;
         let registration = port
             .register_session(registration_request())

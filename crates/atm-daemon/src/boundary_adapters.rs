@@ -229,7 +229,7 @@ mod tests {
         InboxExport, InboxExportReexportMessageRequest, InboxIngress,
         InboxIngressIdentityFingerprintRequest, InboxIngressImportRequest, NotificationSink,
     };
-    use atm_core::protocol::NotificationEvent;
+    use atm_core::protocol::{NotificationEvent, NotificationKind};
     use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::schema::{AtmMessageId, MessageEnvelope};
     use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
@@ -247,7 +247,7 @@ mod tests {
         sink.start().expect("start");
         boundary
             .deliver(NotificationEvent {
-                kind: "delivery".to_string(),
+                kind: NotificationKind::Delivery,
                 detail: "boundary-only".to_string(),
                 team: None,
                 agent: None,
