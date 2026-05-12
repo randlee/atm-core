@@ -79,7 +79,8 @@ Required shape for every sub-task:
      every surviving approved read
    Required doc or boundary updates:
    - update `docs/architecture.md` and `docs/atm-message-schema.md` to state
-     which `metadata.atm` fields, if any, remain output-only
+     that the active implementation preserves zero surviving `metadata.atm`
+     fields
 
 2. Redirect or delete runtime reads
    Development work:
@@ -95,7 +96,7 @@ Required shape for every sub-task:
 
 3. Compatibility output hardening
    Development work:
-   - keep only explicitly justified compatibility output under `metadata.atm`
+   - remove the `metadata.atm` namespace from active compatibility output
    - delete dead helper code that writes unapproved ATM-owned metadata
    Required tests:
    - serialization tests proving remaining compatibility output is bounded and
@@ -105,9 +106,8 @@ Required shape for every sub-task:
 
 ## Split Recommendation
 
-Do not split unless a single remaining `metadata.atm` field proves to require a
-separate approved product decision. The default outcome of this sprint should
-be deletion, not deferral.
+Do not split around compatibility output. The default outcome of this sprint
+should be zero surviving `metadata.atm` fields, not deferral.
 
 ## Acceptance Criteria
 

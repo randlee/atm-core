@@ -403,7 +403,7 @@ ATM-authored alert metadata belongs to the send/schema boundary in `atm-core`.
 
 Architectural rule:
 - ATM-owned repair/alert machine state belongs in SQLite-owned state and typed
-  diagnostics, not in an active `metadata.atm` namespace
+  diagnostics, not in shared inbox metadata namespaces
 - legacy top-level alert fields such as `atmAlertKind` and
   `missingConfigPath` remain read-compatible only until removed
 

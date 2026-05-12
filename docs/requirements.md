@@ -414,7 +414,7 @@ Required rules:
   - ATM top-level additive compatibility messages
 - no normal ATM runtime/query path may depend on ATM-owned machine-state reads
   from Claude JSON
-- new ATM-owned machine state must not be introduced under `metadata.atm`
+- no `metadata.atm` namespace may survive in active compatibility output
 - shared inbox `message_id` is the compatibility wire encoding of the one
   logical ATM message identity
 - ATM-owned workflow, delete/close, expiry, sender-projection, and repair
