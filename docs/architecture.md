@@ -692,7 +692,8 @@ Architectural rules:
 - Claude JSON is a compatibility surface, not ATM-owned durable truth.
 - No normal ATM runtime/query path may read machine state from Claude JSON.
 - ATM-owned machine state belongs in SQLite-backed state and projections.
-- `metadata.atm` is not an approved active machine-state namespace.
+- `metadata.atm` is not an approved namespace and must not survive in active
+  compatibility output.
 - ATM keeps one logical message identity; shared inbox `message_id` is the
   compatibility wire encoding of that identity.
 - Compatibility writes may preserve established top-level additive fields, but

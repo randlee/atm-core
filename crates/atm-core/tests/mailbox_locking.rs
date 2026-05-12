@@ -18,10 +18,7 @@ use atm_core::error::AtmErrorCode;
 use atm_core::observability::NullObservability;
 use atm_core::read::{ReadQuery, read_mail};
 use atm_core::roles::ROLE_TEAM_LEAD;
-use atm_core::schema::{
-    AgentMember, AtmMessageId, LegacyMessageId, MessageEnvelope, TeamConfig,
-    hydrate_legacy_fields_from_metadata,
-};
+use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use chrono::Utc;
@@ -246,11 +243,7 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     assert!(
         arch_workflow["messages"][format!("legacy:{pending_message_id}")]["acknowledgedAt"]
             .as_str()
-            .is_some()
-            || arch_workflow["messages"]
-                [format!("atm:{}", pending_message_id.into_atm_message_id())]["acknowledgedAt"]
-                .as_str()
-                .is_some(),
+            .is_some(),
         "pending message was not acknowledged in workflow state: {arch_workflow:?}"
     );
     let qa_inbox = ack_fixture.inbox_contents(SECONDARY_AGENT);
@@ -313,21 +306,21 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
     assert!(plain_message.task_id.is_none());
     assert!(plain_message.pending_ack_at.is_none());
 
-    let plain_atm_id = message_atm_id(plain_message);
-    let task_atm_id = message_atm_id(task_message);
+    let plain_workflow_key = message_workflow_key(plain_message);
+    let task_workflow_key = message_workflow_key(task_message);
     let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
     assert!(
-        workflow["messages"][format!("atm:{plain_atm_id}")]
+        workflow["messages"][plain_workflow_key.clone()]
             .as_object()
             .is_some(),
         "plain workflow entry missing: {workflow:?}"
     );
     assert!(
-        workflow["messages"][format!("atm:{plain_atm_id}")]["pendingAckAt"].is_null(),
+        workflow["messages"][plain_workflow_key]["pendingAckAt"].is_null(),
         "plain workflow state should not require ack: {workflow:?}"
     );
     assert!(
-        workflow["messages"][format!("atm:{task_atm_id}")]["pendingAckAt"]
+        workflow["messages"][task_workflow_key]["pendingAckAt"]
             .as_str()
             .is_some(),
         "task workflow state should preserve pending ack: {workflow:?}"
@@ -398,13 +391,13 @@ fn concurrent_same_recipient_sends_preserve_preseeded_workflow_entries() {
         "preseeded workflow entry was dropped: {workflow:?}"
     );
     assert!(
-        workflow["messages"][format!("atm:{}", message_atm_id(first_message))]
+        workflow["messages"][message_workflow_key(first_message)]
             .as_object()
             .is_some(),
         "first send workflow entry missing after concurrent update: {workflow:?}"
     );
     assert!(
-        workflow["messages"][format!("atm:{}", message_atm_id(second_message))]
+        workflow["messages"][message_workflow_key(second_message)]
             .as_object()
             .is_some(),
         "second send workflow entry missing after concurrent update: {workflow:?}"
@@ -435,9 +428,8 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
     assert_eq!(notice.from, "atm-identity-missing");
     assert_eq!(notice.source_team.as_deref(), Some("broken-dev"));
     let workflow = fixture.workflow_state_contents_for_team("broken-dev", TEAM_LEAD);
-    let notice_atm_id = message_atm_id(notice);
     assert!(
-        workflow["messages"][format!("atm:{notice_atm_id}")]
+        workflow["messages"][message_workflow_key(notice)]
             .as_object()
             .is_some(),
         "missing-config workflow entry missing: {workflow:?}"
@@ -501,9 +493,8 @@ fn concurrent_normal_send_and_missing_config_notice_complete_without_data_loss()
     let notices = fixture.inbox_contents_for_team("broken-dev", TEAM_LEAD);
     let notice = notices.first().expect("missing-config notice");
     let workflow = fixture.workflow_state_contents_for_team("broken-dev", TEAM_LEAD);
-    let notice_atm_id = message_atm_id(notice);
     assert!(
-        workflow["messages"][format!("atm:{notice_atm_id}")]["pendingAckAt"].is_null(),
+        workflow["messages"][message_workflow_key(notice)]["pendingAckAt"].is_null(),
         "missing-config notice workflow state missing after concurrent send: {workflow:?}"
     );
 }
@@ -735,9 +726,6 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     let fixture = Fixture::new();
     let observability = NullObservability;
 
-    // Criterion (a) is verified through the standard send path rather than a
-    // direct helper call: send_mail internally assigns metadata.atm.messageId
-    // via the private workflow::set_atm_message_id path before read_mail runs.
     send_mail(
         fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "hello sidecar"),
         &observability,
@@ -747,9 +735,9 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
     let inbox_before = fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT))
         .expect("raw inbox before read");
     let physical_before = find_inbox_json_line(&inbox_before, "hello sidecar");
-    let atm_message_id = physical_before["metadata"]["atm"]["messageId"]
+    let message_id = physical_before["message_id"]
         .as_str()
-        .expect("atm message id")
+        .expect("message id")
         .to_string();
     assert_eq!(physical_before["read"], false);
 
@@ -768,10 +756,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         .expect("raw inbox after read");
     assert_eq!(inbox_after, inbox_before);
     let physical_after = find_inbox_json_line(&inbox_after, "hello sidecar");
-    assert_eq!(
-        physical_after["metadata"]["atm"]["messageId"],
-        atm_message_id
-    );
+    assert_eq!(physical_after["message_id"], message_id);
     assert_eq!(physical_after["read"], false);
     assert!(
         !sentinel_path(&fixture.primary_inbox_path(PRIMARY_AGENT)).exists(),
@@ -780,7 +765,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 
     let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
     assert_eq!(
-        workflow["messages"][format!("atm:{atm_message_id}")]["read"],
+        workflow["messages"][format!("legacy:{message_id}")]["read"],
         true
     );
 }
@@ -919,8 +904,8 @@ impl Fixture {
             &[TEAM_LEAD, PRIMARY_AGENT, SECONDARY_AGENT],
         );
 
-        let arch_message_id = LegacyMessageId::from_atm_message_id(AtmMessageId::new());
-        let qa_message_id = LegacyMessageId::from_atm_message_id(AtmMessageId::new());
+        let arch_message_id = LegacyMessageId::new();
+        let qa_message_id = LegacyMessageId::new();
 
         let fixture = Self {
             tempdir,
@@ -1117,12 +1102,12 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
     .expect("write team config");
 }
 
-fn message_atm_id(message: &MessageEnvelope) -> String {
+fn message_workflow_key(message: &MessageEnvelope) -> String {
     message
-        .atm_message_id()
-        .map(|message_id| message_id.to_string())
+        .message_id
+        .map(|message_id| format!("legacy:{message_id}"))
         .as_deref()
-        .expect("atm message id")
+        .expect("message id")
         .to_string()
 }
 
@@ -1142,10 +1127,7 @@ fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {
 
     values
         .into_iter()
-        .map(|mut value| {
-            hydrate_legacy_fields_from_metadata(&mut value);
-            serde_json::from_value(value).expect("message envelope")
-        })
+        .map(|value| serde_json::from_value(value).expect("message envelope"))
         .collect()
 }
 
@@ -1195,26 +1177,6 @@ fn pending_ack_message_at(
     source_team: &str,
     timestamp: chrono::DateTime<Utc>,
 ) -> MessageEnvelope {
-    let mut extra = serde_json::Map::new();
-    let mut metadata = serde_json::Map::new();
-    let mut atm = serde_json::Map::new();
-    let atm_message_id = message_id.into_atm_message_id();
-    atm.insert(
-        "messageId".to_string(),
-        serde_json::Value::String(atm_message_id.to_string()),
-    );
-    atm.insert(
-        "sourceTeam".to_string(),
-        serde_json::Value::String(source_team.to_string()),
-    );
-    metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-    extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
-    assert_eq!(
-        LegacyMessageId::from_atm_message_id(message_atm_id_from_extra(&extra).expect("atm id")),
-        message_id,
-        "mailbox fixture metadata.atm.messageId must match legacy message_id",
-    );
-
     MessageEnvelope {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
@@ -1230,7 +1192,7 @@ fn pending_ack_message_at(
         thread_mode: None,
         stale_at: None,
         task_id: None,
-        extra,
+        extra: serde_json::Map::new(),
     }
 }
 
@@ -1244,26 +1206,6 @@ fn read_message_at(
     message_id: LegacyMessageId,
     timestamp: chrono::DateTime<Utc>,
 ) -> MessageEnvelope {
-    let mut extra = serde_json::Map::new();
-    let mut metadata = serde_json::Map::new();
-    let mut atm = serde_json::Map::new();
-    let atm_message_id = message_id.into_atm_message_id();
-    atm.insert(
-        "messageId".to_string(),
-        serde_json::Value::String(atm_message_id.to_string()),
-    );
-    atm.insert(
-        "sourceTeam".to_string(),
-        serde_json::Value::String(PRIMARY_TEAM.to_string()),
-    );
-    metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-    extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
-    assert_eq!(
-        LegacyMessageId::from_atm_message_id(message_atm_id_from_extra(&extra).expect("atm id")),
-        message_id,
-        "mailbox fixture metadata.atm.messageId must match legacy message_id",
-    );
-
     MessageEnvelope {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
@@ -1279,31 +1221,11 @@ fn read_message_at(
         thread_mode: None,
         stale_at: None,
         task_id: None,
-        extra,
+        extra: serde_json::Map::new(),
     }
 }
 
 fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> MessageEnvelope {
-    let mut extra = serde_json::Map::new();
-    let mut metadata = serde_json::Map::new();
-    let mut atm = serde_json::Map::new();
-    let atm_message_id = message_id.into_atm_message_id();
-    atm.insert(
-        "messageId".to_string(),
-        serde_json::Value::String(atm_message_id.to_string()),
-    );
-    atm.insert(
-        "sourceTeam".to_string(),
-        serde_json::Value::String(PRIMARY_TEAM.to_string()),
-    );
-    metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-    extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
-    assert_eq!(
-        LegacyMessageId::from_atm_message_id(message_atm_id_from_extra(&extra).expect("atm id")),
-        message_id,
-        "mailbox fixture metadata.atm.messageId must match legacy message_id",
-    );
-
     MessageEnvelope {
         from: from.parse::<AgentName>().expect("agent"),
         text: text.to_string(),
@@ -1319,19 +1241,6 @@ fn unread_message(from: &str, text: &str, message_id: LegacyMessageId) -> Messag
         thread_mode: None,
         stale_at: None,
         task_id: None,
-        extra,
+        extra: serde_json::Map::new(),
     }
-}
-
-fn message_atm_id_from_extra(
-    extra: &serde_json::Map<String, serde_json::Value>,
-) -> Option<AtmMessageId> {
-    extra
-        .get("metadata")
-        .and_then(serde_json::Value::as_object)
-        .and_then(|metadata| metadata.get("atm"))
-        .and_then(serde_json::Value::as_object)
-        .and_then(|atm| atm.get("messageId"))
-        .and_then(serde_json::Value::as_str)
-        .and_then(|value| value.parse().ok())
 }

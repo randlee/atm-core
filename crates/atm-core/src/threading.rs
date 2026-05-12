@@ -4,16 +4,7 @@ use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp};
 
 pub(crate) fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
-    message
-        .extra
-        .get("metadata")
-        .and_then(serde_json::Value::as_object)
-        .and_then(|metadata| metadata.get("atm"))
-        .and_then(serde_json::Value::as_object)
-        .and_then(|atm| atm.get("fromIdentity"))
-        .cloned()
-        .and_then(|value| serde_json::from_value(value).ok())
-        .unwrap_or_else(|| message.from.clone())
+    message.from.clone()
 }
 
 pub(crate) fn is_ephemeral(message: &MessageEnvelope) -> bool {
@@ -172,17 +163,10 @@ mod tests {
     }
 
     #[test]
-    fn canonical_sender_identity_prefers_metadata_override() {
-        let mut message = message(TEST_SENDER, LegacyMessageId::new(), None, None);
-        message.extra.insert(
-            "metadata".to_string(),
-            serde_json::json!({"atm": {"fromIdentity": "canonical-sender"}}),
-        );
+    fn canonical_sender_identity_uses_from_field() {
+        let message = message(TEST_SENDER, LegacyMessageId::new(), None, None);
 
-        assert_eq!(
-            canonical_sender_identity(&message).as_str(),
-            "canonical-sender"
-        );
+        assert_eq!(canonical_sender_identity(&message).as_str(), TEST_SENDER);
     }
 
     #[test]

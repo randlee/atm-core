@@ -12,11 +12,11 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope, ThreadMode};
+use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
-use crate::types::{AgentName, CommandAction, TaskId, TeamName};
+use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
 
 mod alert_state;
@@ -248,14 +248,9 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     )?;
     let summary = summary::build_summary(&body, request.summary_override);
     let message_id = LegacyMessageId::new();
-    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
+    let timestamp = IsoTimestamp::now();
 
     if !request.dry_run {
-        let mut extra = Map::new();
-        workflow::set_atm_message_id(&mut extra, atm_message_id);
-        if display_sender != canonical_sender.clone() {
-            set_canonical_sender_metadata(&mut extra, &canonical_sender);
-        }
         let envelope = MessageEnvelope {
             from: display_sender.clone(),
             text: body.clone(),
@@ -271,7 +266,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             thread_mode: request.thread_mode,
             stale_at: request.stale_at,
             task_id: task_id.clone(),
-            extra,
+            extra: Map::new(),
         };
         append_mailbox_message_and_seed_workflow(
             runtime,
@@ -424,17 +419,7 @@ fn notify_team_lead_missing_config(
     };
 
     let config_path = team_dir.join("config.json");
-    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
-    let mut extra = Map::new();
-    workflow::set_atm_message_id(&mut extra, atm_message_id);
-    extra.insert(
-        "atmAlertKind".into(),
-        serde_json::Value::String("missing_team_config".into()),
-    );
-    extra.insert(
-        "missingConfigPath".into(),
-        serde_json::Value::String(config_path.display().to_string()),
-    );
+    let timestamp = IsoTimestamp::now();
 
     let notice = MessageEnvelope {
         from: AgentName::from_validated("atm-identity-missing"),
@@ -456,7 +441,7 @@ fn notify_team_lead_missing_config(
         thread_mode: None,
         stale_at: None,
         task_id: None,
-        extra,
+        extra: Map::new(),
     };
 
     if let Err(error) = append_mailbox_message_and_seed_workflow(
@@ -635,34 +620,6 @@ pub(super) fn qualified_sender_identity(
     sender_team
         .map(|team| format!("{sender}@{team}"))
         .unwrap_or_else(|| sender.to_string())
-}
-
-fn set_canonical_sender_metadata(
-    extra: &mut Map<String, serde_json::Value>,
-    canonical_from: &AgentName,
-) {
-    let metadata = extra
-        .entry("metadata".to_string())
-        .or_insert_with(|| serde_json::Value::Object(Map::new()));
-    if !metadata.is_object() {
-        *metadata = serde_json::Value::Object(Map::new());
-    }
-    let Some(metadata) = metadata.as_object_mut() else {
-        return;
-    };
-    let atm = metadata
-        .entry("atm".to_string())
-        .or_insert_with(|| serde_json::Value::Object(Map::new()));
-    if !atm.is_object() {
-        *atm = serde_json::Value::Object(Map::new());
-    }
-    let Some(atm) = atm.as_object_mut() else {
-        return;
-    };
-    atm.insert(
-        "fromIdentity".to_string(),
-        serde_json::Value::String(canonical_from.to_string()),
-    );
 }
 
 pub(crate) fn maybe_run_post_send_hook(

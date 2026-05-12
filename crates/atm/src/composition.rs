@@ -365,10 +365,7 @@ mod tests {
         ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
     };
     use atm_core::read::ReadQuery;
-    use atm_core::schema::{
-        AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig,
-        hydrate_legacy_fields_from_metadata,
-    };
+    use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{
         ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM,
@@ -455,10 +452,7 @@ mod tests {
             let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
             values
                 .into_iter()
-                .map(|mut value| {
-                    hydrate_legacy_fields_from_metadata(&mut value);
-                    serde_json::from_value(value).expect("message envelope")
-                })
+                .map(|value| serde_json::from_value(value).expect("message envelope"))
                 .collect()
         }
 

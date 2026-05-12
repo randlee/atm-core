@@ -60,8 +60,8 @@ Claude JSON:
 - canonical sender projection
 - repair/alert machine metadata
 
-If ATM still exports compatibility hints for an older consumer, those writes
-must remain output-only and must not become a runtime read dependency again.
+If an older compatibility shape is ever reconsidered, it requires explicit
+approval; the active Phase U design preserves no `metadata.atm` namespace.
 
 ## 5. Threading And Task Semantics
 
@@ -84,12 +84,12 @@ and workflow logic, not in repeated JSON reads.
 
 ## 6. No Active `metadata.atm` Namespace
 
-`metadata.atm` is not an approved active machine-state namespace in the Phase U
-architecture.
+`metadata.atm` is not an approved namespace in the Phase U architecture.
 
 Rules:
 
-- ATM must not add new product-critical runtime state under `metadata.atm`.
+- ATM must not add or preserve machine-state fields under `metadata.atm`.
 - ATM must not rely on `metadata.atm` reads for normal mailbox behavior.
-- Any leftover `metadata.atm` writes are compatibility debt and should be
-  removed or kept only with explicit approval.
+- The active implementation must expose zero surviving `metadata.atm` fields.
+- inbound shared-inbox records that still carry `metadata.atm` for backward
+  compatibility are silently stripped, not rejected

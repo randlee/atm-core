@@ -11,14 +11,13 @@ use std::borrow::Cow;
 use std::fs;
 use std::path::Path;
 
-use serde::Deserialize;
+use serde::{Deserialize, Deserializer};
 use serde_json::Value;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::mailbox::source::SummaryMessage;
-use crate::schema::inbox_message::hydrate_legacy_fields_from_metadata;
-use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope, ThreadMode};
+use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
@@ -247,23 +246,7 @@ fn parse_mailbox_summary_array(
 
     Ok(records
         .into_iter()
-        .enumerate()
-        .filter_map(
-            |(index, record)| match summarize_mailbox_record(record, contains_filter) {
-                Ok(Some(message)) => Some(message),
-                Ok(None) => None,
-                Err(error) => {
-                    warn!(
-                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
-                        line = index + 1,
-                        mailbox_path = %path.display(),
-                        %error,
-                        "skipping malformed mailbox record during bounded list projection"
-                    );
-                    None
-                }
-            },
-        )
+        .map(|record| summarize_mailbox_record(record, contains_filter))
         .collect())
 }
 
@@ -318,10 +301,9 @@ fn parse_mailbox_summary_jsonl(
                     )
                     .with_source(error)
                 })
-                .and_then(|record| summarize_mailbox_record(record, contains_filter))
+                .map(|record| summarize_mailbox_record(record, contains_filter))
             {
-                Ok(Some(message)) => Some(message),
-                Ok(None) => None,
+                Ok(message) => Some(message),
                 Err(error) => {
                     warn!(
                         code = %AtmErrorCode::WarningMailboxRecordSkipped,
@@ -352,7 +334,6 @@ fn parse_mailbox_value(
     path: &Path,
     line_number: usize,
 ) -> Result<Option<MessageEnvelope>, serde_json::Error> {
-    hydrate_legacy_fields_from_metadata(value);
     sanitize_legacy_message_id(value, path, line_number);
     serde_json::from_value::<MessageEnvelope>(value.take()).map(Some)
 }
@@ -395,46 +376,28 @@ struct SummaryMailboxRecord<'a> {
     source_team: Option<TeamName>,
     #[serde(default)]
     summary: Option<String>,
-    #[serde(rename = "message_id", default)]
-    message_id: Option<String>,
+    #[serde(
+        rename = "message_id",
+        default,
+        deserialize_with = "deserialize_optional_legacy_message_id"
+    )]
+    message_id: Option<LegacyMessageId>,
     #[serde(rename = "pendingAckAt", default)]
     pending_ack_at: Option<IsoTimestamp>,
     #[serde(rename = "acknowledgedAt", default)]
     acknowledged_at: Option<IsoTimestamp>,
-    #[serde(rename = "acknowledgesMessageId", default)]
-    acknowledges_message_id: Option<String>,
-    #[serde(rename = "parentMessageId", default)]
-    parent_message_id: Option<String>,
-    #[serde(rename = "threadMode", default)]
-    thread_mode: Option<ThreadMode>,
-    #[serde(rename = "staleAt", default)]
-    stale_at: Option<IsoTimestamp>,
-    #[serde(rename = "taskId", default)]
-    task_id: Option<TaskId>,
-    #[serde(default)]
-    metadata: Option<SummaryMailboxMetadata>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct SummaryMailboxMetadata {
-    #[serde(default)]
-    atm: Option<SummaryAtmMetadata>,
-}
-
-#[derive(Debug, Default, Deserialize)]
-struct SummaryAtmMetadata {
-    #[serde(rename = "messageId", default)]
-    message_id: Option<String>,
-    #[serde(rename = "sourceTeam", default)]
-    source_team: Option<TeamName>,
-    #[serde(rename = "pendingAckAt", default)]
-    pending_ack_at: Option<IsoTimestamp>,
-    #[serde(rename = "acknowledgedAt", default)]
-    acknowledged_at: Option<IsoTimestamp>,
-    #[serde(rename = "acknowledgesMessageId", default)]
-    acknowledges_message_id: Option<String>,
-    #[serde(rename = "parentMessageId", default)]
-    parent_message_id: Option<String>,
+    #[serde(
+        rename = "acknowledgesMessageId",
+        default,
+        deserialize_with = "deserialize_optional_legacy_message_id"
+    )]
+    acknowledges_message_id: Option<LegacyMessageId>,
+    #[serde(
+        rename = "parentMessageId",
+        default,
+        deserialize_with = "deserialize_optional_legacy_message_id"
+    )]
+    parent_message_id: Option<LegacyMessageId>,
     #[serde(rename = "threadMode", default)]
     thread_mode: Option<ThreadMode>,
     #[serde(rename = "staleAt", default)]
@@ -446,17 +409,7 @@ struct SummaryAtmMetadata {
 fn summarize_mailbox_record(
     record: SummaryMailboxRecord<'_>,
     contains_filter: Option<&str>,
-) -> Result<Option<SummaryMessage>, AtmError> {
-    let atm = record
-        .metadata
-        .as_ref()
-        .and_then(|metadata| metadata.atm.as_ref());
-    let message_id = parse_legacy_id(record.message_id.as_deref())
-        .or_else(|| parse_atm_id(atm.and_then(|value| value.message_id.as_deref())));
-    let acknowledges_message_id = parse_legacy_id(record.acknowledges_message_id.as_deref())
-        .or_else(|| parse_atm_id(atm.and_then(|value| value.acknowledges_message_id.as_deref())));
-    let parent_message_id = parse_legacy_id(record.parent_message_id.as_deref())
-        .or_else(|| parse_atm_id(atm.and_then(|value| value.parent_message_id.as_deref())));
+) -> SummaryMessage {
     let summary_preview = summarize_text(record.summary.as_deref(), record.text.as_ref());
     let body_contains_match = contains_filter
         .map(str::trim)
@@ -464,50 +417,44 @@ fn summarize_mailbox_record(
         .is_some_and(|needle| ascii_case_insensitive_contains(record.text.as_ref(), needle));
     let idle_notification_sender = idle_notification_sender_from_text(record.text.as_ref());
 
-    Ok(Some(SummaryMessage {
+    SummaryMessage {
         envelope: MessageEnvelope {
             from: record.from,
             text: String::new(),
             timestamp: record.timestamp,
             read: record.read,
-            source_team: record
-                .source_team
-                .or_else(|| atm.and_then(|value| value.source_team.clone())),
+            source_team: record.source_team,
             summary: record.summary,
-            message_id,
-            pending_ack_at: record
-                .pending_ack_at
-                .or_else(|| atm.and_then(|value| value.pending_ack_at)),
-            acknowledged_at: record
-                .acknowledged_at
-                .or_else(|| atm.and_then(|value| value.acknowledged_at)),
-            acknowledges_message_id,
-            parent_message_id,
-            thread_mode: record
-                .thread_mode
-                .or_else(|| atm.and_then(|value| value.thread_mode)),
-            stale_at: record
-                .stale_at
-                .or_else(|| atm.and_then(|value| value.stale_at)),
-            task_id: record
-                .task_id
-                .or_else(|| atm.and_then(|value| value.task_id.clone())),
+            message_id: record.message_id,
+            pending_ack_at: record.pending_ack_at,
+            acknowledged_at: record.acknowledged_at,
+            acknowledges_message_id: record.acknowledges_message_id,
+            parent_message_id: record.parent_message_id,
+            thread_mode: record.thread_mode,
+            stale_at: record.stale_at,
+            task_id: record.task_id,
             extra: serde_json::Map::new(),
         },
         summary_preview,
         body_contains_match,
         idle_notification_sender,
+    }
+}
+
+fn deserialize_optional_legacy_message_id<'de, D>(
+    deserializer: D,
+) -> Result<Option<LegacyMessageId>, D::Error>
+where
+    D: Deserializer<'de>,
+{
+    let raw = Option::<Value>::deserialize(deserializer)?;
+    Ok(raw.and_then(|value| {
+        if value.is_null() {
+            None
+        } else {
+            serde_json::from_value::<LegacyMessageId>(value).ok()
+        }
     }))
-}
-
-fn parse_legacy_id(value: Option<&str>) -> Option<LegacyMessageId> {
-    value.and_then(|value| value.parse::<LegacyMessageId>().ok())
-}
-
-fn parse_atm_id(value: Option<&str>) -> Option<LegacyMessageId> {
-    value
-        .and_then(|value| value.parse::<AtmMessageId>().ok())
-        .map(LegacyMessageId::from_atm_message_id)
 }
 
 fn summarize_text(summary: Option<&str>, text: &str) -> String {
@@ -587,9 +534,9 @@ mod tests {
     }
 
     #[test]
-    fn append_message_serializes_metadata_atm_without_top_level_machine_fields() {
+    fn append_message_keeps_approved_machine_fields_top_level() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("append-message-metadata.json");
+        let path = tempdir.path().join("append-message-top-level.json");
         let envelope = sample_message(Uuid::new_v4(), "first");
 
         append_message(&path, &envelope).expect("append");
@@ -597,9 +544,9 @@ mod tests {
         let raw = fs::read_to_string(&path).expect("raw contents");
         let values: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
         let object = values[0].as_object().expect("message object");
-        assert!(object.contains_key("metadata"));
-        assert!(!object.contains_key("message_id"));
-        assert!(!object.contains_key("source_team"));
+        assert!(!object.contains_key("metadata"));
+        assert!(object.contains_key("message_id"));
+        assert!(object.contains_key("source_team"));
     }
 
     #[test]
@@ -762,23 +709,19 @@ mod tests {
     }
 
     #[test]
-    fn read_messages_hydrates_fields_from_metadata_atm() {
+    fn read_messages_use_top_level_compatibility_fields() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("metadata-atm.json");
+        let path = tempdir.path().join("top-level-compatibility.json");
         let contents = serde_json::json!({
             "from": ROLE_TEAM_LEAD,
             "text": "hello",
             "timestamp": "2026-03-30T00:00:00Z",
             "read": false,
             "summary": "hello",
-            "metadata": {
-                "atm": {
-                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
-                    "sourceTeam": TEST_TEAM,
-                    "pendingAckAt": "2026-03-30T00:00:01Z",
-                    "taskId": "TASK-123"
-                }
-            }
+            "message_id": "11111111-1111-4111-8111-111111111111",
+            "source_team": TEST_TEAM,
+            "pendingAckAt": "2026-03-30T00:00:01Z",
+            "taskId": "TASK-123"
         });
         fs::write(&path, serde_json::to_vec(&contents).expect("json")).expect("write");
 
@@ -790,6 +733,45 @@ mod tests {
         assert_eq!(
             messages[0].task_id.as_ref().map(|task_id| task_id.as_str()),
             Some("TASK-123")
+        );
+    }
+
+    #[test]
+    fn read_messages_preserves_metadata_atm_as_opaque_extra() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("metadata-atm-pass-through.jsonl");
+        let contents = serde_json::json!({
+            "from": ROLE_TEAM_LEAD,
+            "text": "hello",
+            "timestamp": "2026-03-30T00:00:00Z",
+            "read": false,
+            "metadata": {
+                "atm": {
+                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+                    "sourceTeam": TEST_TEAM
+                },
+                "foreign": {
+                    "keep": true
+                }
+            }
+        });
+        fs::write(&path, serde_json::to_vec(&contents).expect("json")).expect("write");
+
+        let messages = read_messages(&path).expect("read");
+        assert_eq!(messages.len(), 1);
+        assert!(messages[0].message_id.is_none());
+        assert!(messages[0].source_team.is_none());
+        assert_eq!(
+            messages[0].extra.get("metadata"),
+            Some(&serde_json::json!({
+                "atm": {
+                    "messageId": "01JQYVB6W51Q2E7E6T3Y4Q9N2M",
+                    "sourceTeam": TEST_TEAM
+                },
+                "foreign": {
+                    "keep": true
+                }
+            }))
         );
     }
 
@@ -823,21 +805,6 @@ mod tests {
 
     fn sample_message(message_id: Uuid, body: &str) -> MessageEnvelope {
         let legacy_message_id = crate::schema::LegacyMessageId::from(message_id);
-        let atm_message_id = legacy_message_id.into_atm_message_id();
-        let message_id = crate::schema::LegacyMessageId::from_atm_message_id(atm_message_id);
-        let mut extra = serde_json::Map::new();
-        let mut metadata = serde_json::Map::new();
-        let mut atm = serde_json::Map::new();
-        atm.insert(
-            "messageId".to_string(),
-            serde_json::Value::String(atm_message_id.to_string()),
-        );
-        atm.insert(
-            "sourceTeam".to_string(),
-            serde_json::Value::String(TEST_TEAM.to_string()),
-        );
-        metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-        extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
 
         MessageEnvelope {
             from: TEST_SENDER.parse::<AgentName>().expect("agent"),
@@ -850,7 +817,7 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
-            message_id: Some(message_id),
+            message_id: Some(legacy_message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -858,7 +825,7 @@ mod tests {
             thread_mode: None,
             stale_at: None,
             task_id: None,
-            extra,
+            extra: serde_json::Map::new(),
         }
     }
 }

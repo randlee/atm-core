@@ -2727,8 +2727,7 @@ Scope:
 
 Acceptance:
 - no normal ATM read/query/runtime path depends on `metadata.atm.*`
-- any surviving `metadata.atm` write is explicitly justified as compatibility
-  output only, not an ATM-owned read source
+- the active implementation exposes zero surviving `metadata.atm` fields
 - dead compatibility helpers and tests that only exist to preserve
   `metadata.atm` reads are removed
 

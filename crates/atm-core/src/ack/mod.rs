@@ -11,7 +11,7 @@ use crate::mailbox::source::{SourceFile, SourcedMessage};
 use crate::mailbox::surface::dedupe_legacy_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
-use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+use crate::schema::{LegacyMessageId, MessageEnvelope};
 use crate::send::{PostSendHookContext, ResolvedRecipient, input, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -195,12 +195,10 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         return Err(AtmError::agent_not_found(&reply_agent, &reply_team));
     }
 
-    let (reply_atm_message_id, ack_timestamp) = AtmMessageId::new_with_timestamp();
+    let ack_timestamp = IsoTimestamp::now();
     let reply_text = input::validate_message_text(request.reply_body)?;
     let reply_message_id = LegacyMessageId::new();
     let source_task_id = source_message.envelope.task_id.clone();
-    let mut reply_extra = Map::new();
-    workflow::set_atm_message_id(&mut reply_extra, reply_atm_message_id);
     let reply_message = MessageEnvelope {
         from: actor.clone(),
         text: reply_text.clone(),
@@ -216,7 +214,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         thread_mode: None,
         stale_at: None,
         task_id: None,
-        extra: reply_extra,
+        extra: Map::new(),
     };
 
     let reply_inbox_path = runtime.inbox_path(&request.home_dir, &reply_team, &reply_agent)?;
@@ -530,8 +528,6 @@ fn append_reply_message(
 mod tests {
     use std::path::PathBuf;
 
-    use serde_json::json;
-
     use super::{canonical_sender_identity, reject_non_terminal_ack, resolve_reply_target};
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -585,24 +581,15 @@ mod tests {
     }
 
     #[test]
-    fn canonical_sender_identity_reads_metadata_override() {
-        let mut message = message_with_from("lead");
-        message.extra.insert(
-            "metadata".to_string(),
-            json!({"atm": {"fromIdentity": ROLE_TEAM_LEAD}}),
-        );
-
+    fn canonical_sender_identity_uses_from_field() {
+        let message = message_with_from(ROLE_TEAM_LEAD);
         assert_eq!(canonical_sender_identity(&message).as_str(), ROLE_TEAM_LEAD);
     }
 
     #[test]
-    fn resolve_reply_target_prefers_canonical_sender_identity_metadata() {
-        let mut message = message_with_from("lead");
+    fn resolve_reply_target_uses_from_field() {
+        let mut message = message_with_from(ROLE_TEAM_LEAD);
         message.source_team = Some(TEST_TEAM.parse::<TeamName>().expect("team"));
-        message.extra.insert(
-            "metadata".to_string(),
-            json!({"atm": {"fromIdentity": ROLE_TEAM_LEAD}}),
-        );
 
         let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM))
             .expect("reply target");

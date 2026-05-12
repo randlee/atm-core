@@ -677,10 +677,10 @@ mod tests {
     };
     use atm_core::protocol::ReconcileResult;
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use atm_core::schema::{LegacyMessageId, MessageEnvelope};
     use atm_core::types::IsoTimestamp;
     use chrono::Utc;
-    use serde_json::{Map, Value};
+    use serde_json::Map;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::{Arc, Condvar, Mutex, mpsc};
     use std::time::Duration;
@@ -1168,17 +1168,7 @@ mod tests {
     }
 
     fn sample_message(text: &str) -> MessageEnvelope {
-        let atm_message_id = AtmMessageId::new();
-        let message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
-        let mut atm = Map::new();
-        atm.insert(
-            "messageId".to_string(),
-            Value::String(atm_message_id.to_string()),
-        );
-        let mut metadata = Map::new();
-        metadata.insert("atm".to_string(), Value::Object(atm));
-        let mut extra = Map::new();
-        extra.insert("metadata".to_string(), Value::Object(metadata));
+        let message_id = LegacyMessageId::new();
 
         MessageEnvelope {
             from: ROLE_TEAM_LEAD.parse().expect("agent"),
@@ -1195,7 +1185,7 @@ mod tests {
             thread_mode: None,
             stale_at: None,
             task_id: None,
-            extra,
+            extra: Map::new(),
         }
     }
 }
