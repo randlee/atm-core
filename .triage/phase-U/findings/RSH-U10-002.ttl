@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-U10-002>
+  a triage:Finding ;
+  triage:findingId "RSH-U10-002" ;
+  triage:title "run_live_receive_loop has no stop channel" ;
+  triage:description "crates/atm-graft/src/lib.rs run_live_receive_loop runs until transport error with no cooperative shutdown path. No stop channel present." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U10-002/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U10-002/pU-u10/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u10/3730257> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/RSH-U10-002/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 867 ;
+  triage:snippet "fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/RSH-U10-002/pU-u10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 868 ;
+  triage:snippet "fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/3730257>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:orderIndex 10 .

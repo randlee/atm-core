@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/FTQ-U10-006>
+    a triage:Finding ;
+    triage:findingId "FTQ-U10-006" ;
+    triage:title "live_receive_loop test server.join() ordering — potential premature exit" ;
+    triage:description "crates/atm-graft/src/lib.rs live_receive_loop_injects_streamed_nudge_and_exits_on_eof test has server.join() ordering after client assertions — potential for join to be reached before server thread cleanly exits. (Note: finding originally referenced tests_advisory.rs; actual location is atm-graft/src/lib.rs in #[cfg(test)] module.)" ;
+    triage:phaseId "phase-U" ;
+    triage:triageMode "initial_pass" ;
+    triage:category "FTQ" ;
+    triage:severity "minor" ;
+    triage:repeatable true ;
+    triage:sweepScope "crate" ;
+    triage:status "open" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+    triage:references "PR #255" ;
+    triage:triageNote "file_filter tests_advisory\\.rs did not match; occurrence found in crates/atm-graft/src/lib.rs via unfiltered crate sweep. integrate/phase-U is absent (atm-graft crate not yet merged)." ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-006/pU-u9/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-006/pU-u10/1> ;
+    triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+    triage:openOn <urn:atm:triage:worktree/pU-u10/3730257> ;
+    triage:promoteTo <urn:atm:triage:worktree/pU-u10/3730257> .
+
+# ── Occurrences ────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/FTQ-U10-006/pU-u9/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-graft/src/lib.rs" ;
+    triage:line 1714 ;
+    triage:snippet "server.join().expect(\"join server\");" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+    triage:headSha "4ba0e00" ;
+    triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U10-006/pU-u10/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-graft/src/lib.rs" ;
+    triage:line 1713 ;
+    triage:snippet "server.join().expect(\"join server\");" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pU-u10-generic-advisory-notification" ;
+    triage:headSha "3730257" ;
+    triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+# ── WorktreeSnapshots ──────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-U" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+    triage:headSha "54fabfa" ;
+    triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+    triage:headSha "4ba0e00" ;
+    triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/3730257>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pU-u10-generic-advisory-notification" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+    triage:headSha "3730257" ;
+    triage:orderIndex 10 .

@@ -1,0 +1,89 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U10-011>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U10-011" ;
+  triage:title "GraftSessionSnapshot internal alias — residual graft-named internal type" ;
+  triage:description "crates/atm-graft/src/lib.rs contains GraftSessionSnapshot as an internal alias on what is now a generic advisory session handle. Rename to generic name consistent with U.10 genericization." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-011/u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-011/u9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-011/u10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-011/u10/2> ;
+  triage:openOn <urn:atm:triage:worktree/u9/4ba0e00> ;
+  triage:openOn <urn:atm:triage:worktree/u10/3730257> ;
+  triage:promoteTo <urn:atm:triage:worktree/u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-011/u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 18 ;
+  triage:snippet "GraftSession as GraftSessionSnapshot, GraftSessionId, GraftSessionPort," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-011/u9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 38 ;
+  triage:snippet "pub type SessionSnapshot = GraftSessionSnapshot;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-011/u10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 17 ;
+  triage:snippet "AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySession as GraftSessionSnapshot," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-011/u10/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 39 ;
+  triage:snippet "pub type SessionSnapshot = GraftSessionSnapshot;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/u10/3730257> .
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/u10/3730257>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:orderIndex 10 .
