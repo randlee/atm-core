@@ -591,16 +591,16 @@ The daemon owns the live runtime view of agent status.
 
 Architectural rules:
 - live status remains in daemon memory
-- current agent `pid` is durable SQLite truth and is cached in daemon memory
-  as the primary liveness field
+- current agent `pid` is transient daemon-owned runtime state and is retained
+  in daemon memory as the primary liveness field
 - `last_active_at` remains in daemon memory alongside live status
 - daemon-managed team-member fields update only through the documented heartbeat
   socket handler in `docs/team-member-state.md`
-- SQLite does not own live status or `last_active_at`; it owns durable roster
-  state and the current per-member `pid`
+- SQLite does not own live status, `last_active_at`, or the current process
+  `pid`
 - status cache rebuild after restart hydrates configured roster members as
-  `unknown`, consults durable SQLite pid continuity only as startup fallback,
-  and refreshes thereafter through runtime events
+  `unknown` and refreshes thereafter through runtime events rather than through
+  persisted pid state
 - startup hydration records explicit `unknown` entries in the daemon cache so
   bounded eviction can demote live members back to `unknown` without silently
   deleting the member from runtime state

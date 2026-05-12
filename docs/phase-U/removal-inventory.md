@@ -158,6 +158,17 @@ Required restack rule:
 - additive registration or advisory-delivery messages must be renamed
   generically rather than preserving `Graft*` packet naming
 
+U.8-U.10 ownership matrix for current graft-named surfaces:
+
+| Current surface | Primary cutover sprint | Reason |
+| --- | --- | --- |
+| `GraftSessionId` | `U.8` | shared identifier naming and DTO-family ownership belongs to the shared ICD sprint |
+| `GraftSessionState` | `U.9` | session lifecycle interpretation is client-runtime ownership |
+| `GraftSessionPort` | `U.10` | session registration/fetch/drain contract is finalized with the generic daemon advisory surface |
+| `NudgeEvent` | `U.10` | daemon-originated advisory event payload is finalized with the generic daemon advisory surface |
+| `GraftNudgeFetchRequest` | `U.10` | fetch/drain remains a daemon advisory/debug surface decision |
+| `GraftNudgeDrainRequest` | `U.10` | fetch/drain remains a daemon advisory/debug surface decision |
+
 ## U.9 — Client-Owned Graft Runtime
 
 Primary current-develop code/doc targets:
@@ -178,6 +189,9 @@ Required restack rule:
 - the production embedded runtime path is one persistent receive thread
   reading one dedicated daemon advisory-stream socket; the current poll/drain
   loop is not the target design
+- U.9 is the primary cutover sprint for:
+  - `GraftSessionState`
+  - old poll/drain receive-loop machinery in `crates/atm-graft/src/lib.rs`
 
 ## U.10 — Generic Daemon Advisory-Notification Surface
 
@@ -200,3 +214,8 @@ Required restack rule:
   crates such as `atm-graft` are consumers, not daemon-owned subsystems
 - production embedded delivery must use a live daemon advisory stream;
   fetch/drain remains optional companion CLI/debug support only
+- U.10 is the primary cutover sprint for:
+  - `GraftSessionPort`
+  - `NudgeEvent`
+  - `GraftNudgeFetchRequest`
+  - `GraftNudgeDrainRequest`

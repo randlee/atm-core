@@ -52,11 +52,12 @@ U.7 does not depend on U.2 (one-message-identity). Roster member identity
 (`agent_name`, `team_name`) is independent of mailbox message identity
 (`AtmMessageId`). Roster cleanup can proceed without waiting for U.2.
 
-`recipient_pane_id` and `pid` fields (present in `atm-core/architecture.md`
-roster-member schema) are in scope for U.7 only as runtime/routing candidates.
-They are retained only if justified by the U.7 roster review. U.7 must either
-place them explicitly in the approved canonical member model or document why
-they remain out of scope.
+`recipient_pane_id` remains in scope for U.7 only as a runtime/routing
+candidate. It is retained only if justified by the U.7 roster review.
+
+`pid` is not part of the canonical roster-member model. It is transient
+daemon-owned runtime state and must stay outside the U.7 canonical member row
+and outside SQLite roster truth.
 
 ## Non-Goals
 
@@ -83,6 +84,7 @@ Required shape for every sub-task:
      - `agent_type`
      - `model`
      - `metadata_json`
+     - optional `recipient_pane_id` only if justified by the U.7 review
    Required tests:
    - schema and roster-store tests for the approved member model
    Required doc or boundary updates:

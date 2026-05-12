@@ -371,8 +371,11 @@ Approved canonical roster-member schema direction:
 - `metadata_json`
 - `recipient_pane_id` when known, only if the U.7 roster review keeps a
   runtime/routing field on canonical member rows
-- `pid` when known, only if the U.7 roster review keeps a runtime/routing
-  field on canonical member rows
+
+`pid` is not part of the canonical roster-member schema. It is transient
+daemon-owned runtime state and must not be treated as a roster-member identity,
+harness field, or durable SQLite roster field in the U.7 canonical member
+model.
 
 Observability boundary note:
 - `AgentMember.extra` is intentionally out of scope for the L.4 observability

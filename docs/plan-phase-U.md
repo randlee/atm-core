@@ -46,6 +46,11 @@ Sprint summary:
   path
 - `U.10` generic daemon advisory-notification surface kept intentionally lean
 
+Graft ownership split:
+- `U.8` owns shared ICD family and naming/DTO planning
+- `U.9` owns client runtime cutover
+- `U.10` owns daemon advisory-surface generification
+
 Phase rules:
 - no normal ATM runtime/query path may read Claude JSON or `config.json`
   directly for durable truth; those inputs must stay behind watcher/import

@@ -104,6 +104,9 @@ Lean-design rule:
    Development work:
    - ensure daemon responsibilities remain request serving, post-commit
      notification, and generic runtime composition only
+   - treat `GraftSessionState` and the client-side lifecycle interpretation of
+     the shared session identifier as U.9-owned cutover work; do not pull
+     daemon advisory DTO generification backward from U.10
    Required tests:
    - boundary/lint checks or review-driven tests proving no daemon-owned
      client runtime leak
@@ -118,6 +121,9 @@ Lean-design rule:
 - the client runtime is production-simple: one persistent receive thread, one
   open dedicated daemon advisory-stream connection, one minimal pending queue,
   one host wake/event path
+- U.9 owns client-runtime replacement of `GraftSessionState` and the old
+  poll/drain receive loop machinery; daemon advisory DTO generification remains
+  owned by U.10
 - production embedded delivery uses that live connection; poll/drain remains a
   companion debug path only
 - the old poll/drain receive loop (`run_receive_loop` and associated machinery
