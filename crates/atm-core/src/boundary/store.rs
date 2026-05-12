@@ -340,7 +340,7 @@ pub struct InboxIngressDiagnosticsRequest {
 /// Stub inbox-ingress diagnostics response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InboxIngressDiagnosticsResponse {
-    pub duplicate_legacy_message_ids: usize,
+    pub duplicate_message_ids: usize,
     pub messages_without_ids: usize,
 }
 

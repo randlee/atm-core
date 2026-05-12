@@ -10,7 +10,7 @@ use serde_json::{Map, Value};
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
-use crate::schema::LegacyMessageId;
+use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
@@ -21,7 +21,7 @@ pub struct CommandEvent {
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
-    pub message_id: Option<LegacyMessageId>,
+    pub message_id: Option<AtmMessageId>,
     pub requires_ack: bool,
     pub dry_run: bool,
     pub task_id: Option<TaskId>,

@@ -1,15 +1,15 @@
 use crate::shared_db::SharedDb;
 use atm_core::boundary::MessageKey;
 use atm_core::error::AtmError;
-use atm_core::schema::LegacyMessageId;
+use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use rusqlite::params;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct MailboxMetadataRow {
     pub message_key: MessageKey,
-    pub legacy_message_id: Option<LegacyMessageId>,
-    pub parent_message_id: Option<LegacyMessageId>,
+    pub message_id: Option<AtmMessageId>,
+    pub parent_message_id: Option<AtmMessageId>,
     pub from_agent: AgentName,
     pub summary: Option<String>,
     pub message_at: IsoTimestamp,
@@ -36,7 +36,7 @@ pub fn query_mailbox_metadata_rows(
             .prepare(
                 "SELECT
                      mail_messages.message_key,
-                     mail_messages.legacy_message_id,
+                     mail_messages.message_id,
                      mail_messages.parent_message_id,
                      mail_messages.from_agent,
                      mail_messages.summary,
@@ -84,7 +84,7 @@ pub fn query_mailbox_metadata_rows(
         for row in rows {
             let (
                 message_key,
-                legacy_message_id,
+                message_id,
                 parent_message_id,
                 from_agent,
                 summary,
@@ -103,21 +103,21 @@ pub fn query_mailbox_metadata_rows(
                         "Repair or remove the malformed message-key row before retrying the bounded mailbox metadata query.",
                     )
                 })?,
-                legacy_message_id: legacy_message_id
+                message_id: message_id
                     .map(|value| {
-                        value.parse::<LegacyMessageId>().map_err(|error| {
+                        value.parse::<AtmMessageId>().map_err(|error| {
                             AtmError::validation(format!(
-                                "failed to parse bounded mailbox metadata legacy_message_id: {error}"
+                                "failed to parse bounded mailbox metadata message_id: {error}"
                             ))
                             .with_recovery(
-                                "Repair or remove the malformed legacy_message_id row before retrying the bounded mailbox metadata query.",
+                                "Repair or remove the malformed message_id row before retrying the bounded mailbox metadata query.",
                             )
                         })
                     })
                     .transpose()?,
                 parent_message_id: parent_message_id
                     .map(|value| {
-                        value.parse::<LegacyMessageId>().map_err(|error| {
+                        value.parse::<AtmMessageId>().map_err(|error| {
                             AtmError::validation(format!(
                                 "failed to parse bounded mailbox metadata parent_message_id: {error}"
                             ))

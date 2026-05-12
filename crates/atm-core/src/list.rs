@@ -7,13 +7,13 @@ use crate::address::AgentAddress;
 use crate::error::AtmError;
 use crate::identity;
 use crate::mailbox::source::{SummarySourceFile, resolve_target};
-use crate::mailbox::surface::dedupe_legacy_message_id_surface;
+use crate::mailbox::surface::dedupe_message_id_surface;
 use crate::observability::ObservabilityPort;
 use crate::read::{
     BucketCounts, ClassifiedMessage, filters, normalize_contains_filter, sort_and_limit_selected,
     state,
 };
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
@@ -97,7 +97,7 @@ fn normalize_limit(limit: Option<usize>) -> Result<Option<usize>, AtmError> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListRow {
     #[serde(default)]
-    pub message_id: Option<LegacyMessageId>,
+    pub message_id: Option<AtmMessageId>,
     pub summary: String,
     pub from: AgentName,
     pub timestamp: IsoTimestamp,
@@ -251,7 +251,7 @@ fn classify_summary_source_files(
     source_files: &[SummarySourceFile],
     workflow_state: &workflow::WorkflowStateFile,
 ) -> Vec<ClassifiedMessage> {
-    let deduped = dedupe_legacy_message_id_surface(
+    let deduped = dedupe_message_id_surface(
         merged_summary_surface(source_files),
         |message: &SummarySourcedMessage| message.envelope.message_id,
         |message: &SummarySourcedMessage| message.envelope.timestamp,

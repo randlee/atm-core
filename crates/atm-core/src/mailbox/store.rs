@@ -145,7 +145,7 @@ mod tests {
     use crate::mailbox::read_messages;
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{LegacyMessageId, MessageEnvelope};
+    use crate::schema::{AtmMessageId, MessageEnvelope};
     use crate::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -300,7 +300,7 @@ mod tests {
     }
 
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {
-        let message_id = LegacyMessageId::new();
+        let message_id = AtmMessageId::new();
 
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent name"),

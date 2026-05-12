@@ -1,6 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp};
 
 pub(crate) fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
@@ -16,14 +16,14 @@ pub(crate) fn is_expired_ephemeral(message: &MessageEnvelope, now: IsoTimestamp)
 }
 
 pub(crate) struct ThreadIndex<'a> {
-    by_id: HashMap<LegacyMessageId, &'a MessageEnvelope>,
-    children: HashMap<LegacyMessageId, Vec<&'a MessageEnvelope>>,
+    by_id: HashMap<AtmMessageId, &'a MessageEnvelope>,
+    children: HashMap<AtmMessageId, Vec<&'a MessageEnvelope>>,
 }
 
 impl<'a> ThreadIndex<'a> {
     pub(crate) fn new(messages: &'a [MessageEnvelope]) -> Self {
         let mut by_id = HashMap::new();
-        let mut children: HashMap<LegacyMessageId, Vec<&MessageEnvelope>> = HashMap::new();
+        let mut children: HashMap<AtmMessageId, Vec<&MessageEnvelope>> = HashMap::new();
 
         for message in messages {
             if let Some(message_id) = message.message_id {
@@ -40,11 +40,11 @@ impl<'a> ThreadIndex<'a> {
         Self { by_id, children }
     }
 
-    pub(crate) fn message(&self, message_id: LegacyMessageId) -> Option<&'a MessageEnvelope> {
+    pub(crate) fn message(&self, message_id: AtmMessageId) -> Option<&'a MessageEnvelope> {
         self.by_id.get(&message_id).copied()
     }
 
-    pub(crate) fn root_id(&self, message_id: LegacyMessageId) -> Option<LegacyMessageId> {
+    pub(crate) fn root_id(&self, message_id: AtmMessageId) -> Option<AtmMessageId> {
         let mut current = message_id;
         let mut seen = HashSet::new();
 
@@ -60,15 +60,15 @@ impl<'a> ThreadIndex<'a> {
         }
     }
 
-    pub(crate) fn successor_count(&self, parent_id: LegacyMessageId) -> usize {
+    pub(crate) fn successor_count(&self, parent_id: AtmMessageId) -> usize {
         self.children.get(&parent_id).map_or(0, Vec::len)
     }
 
-    pub(crate) fn has_successor(&self, parent_id: LegacyMessageId) -> bool {
+    pub(crate) fn has_successor(&self, parent_id: AtmMessageId) -> bool {
         self.successor_count(parent_id) > 0
     }
 
-    pub(crate) fn terminal_id(&self, message_id: LegacyMessageId) -> Option<LegacyMessageId> {
+    pub(crate) fn terminal_id(&self, message_id: AtmMessageId) -> Option<AtmMessageId> {
         let mut current = message_id;
         let mut seen = HashSet::new();
 
@@ -84,17 +84,17 @@ impl<'a> ThreadIndex<'a> {
         }
     }
 
-    pub(crate) fn is_terminal(&self, message_id: LegacyMessageId) -> bool {
+    pub(crate) fn is_terminal(&self, message_id: AtmMessageId) -> bool {
         self.terminal_id(message_id) == Some(message_id)
     }
 
-    pub(crate) fn thread_requires_ack(&self, message_id: LegacyMessageId) -> bool {
+    pub(crate) fn thread_requires_ack(&self, message_id: AtmMessageId) -> bool {
         self.chain_messages(message_id)
             .into_iter()
             .any(|message| message.pending_ack_at.is_some() || message.acknowledged_at.is_some())
     }
 
-    pub(crate) fn chain_messages(&self, message_id: LegacyMessageId) -> Vec<&'a MessageEnvelope> {
+    pub(crate) fn chain_messages(&self, message_id: AtmMessageId) -> Vec<&'a MessageEnvelope> {
         let Some(root_id) = self.root_id(message_id) else {
             return Vec::new();
         };
@@ -118,7 +118,7 @@ impl<'a> ThreadIndex<'a> {
         chain
     }
 
-    fn primary_successor(&self, parent_id: LegacyMessageId) -> Option<&'a MessageEnvelope> {
+    fn primary_successor(&self, parent_id: AtmMessageId) -> Option<&'a MessageEnvelope> {
         let successors = self.children.get(&parent_id)?;
         successors.iter().copied().max_by(|left, right| {
             left.timestamp
@@ -133,14 +133,14 @@ mod tests {
     use serde_json::Map;
 
     use super::{ThreadIndex, canonical_sender_identity, is_ephemeral, is_expired_ephemeral};
-    use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
+    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     fn message(
         from: &str,
-        message_id: LegacyMessageId,
-        parent_message_id: Option<LegacyMessageId>,
+        message_id: AtmMessageId,
+        parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
     ) -> MessageEnvelope {
         MessageEnvelope {
@@ -164,15 +164,15 @@ mod tests {
 
     #[test]
     fn canonical_sender_identity_uses_from_field() {
-        let message = message(TEST_SENDER, LegacyMessageId::new(), None, None);
+        let message = message(TEST_SENDER, AtmMessageId::new(), None, None);
 
         assert_eq!(canonical_sender_identity(&message).as_str(), TEST_SENDER);
     }
 
     #[test]
     fn thread_index_resolves_root_terminal_and_ack_requirement() {
-        let root_id = LegacyMessageId::new();
-        let terminal_id = LegacyMessageId::new();
+        let root_id = AtmMessageId::new();
+        let terminal_id = AtmMessageId::new();
         let mut root = message(TEST_SENDER, root_id, None, None);
         root.acknowledged_at = Some(IsoTimestamp::now());
         let terminal = message(
@@ -191,7 +191,7 @@ mod tests {
 
     #[test]
     fn ephemeral_helpers_use_stale_at() {
-        let mut message = message(TEST_SENDER, LegacyMessageId::new(), None, None);
+        let mut message = message(TEST_SENDER, AtmMessageId::new(), None, None);
         let stale_at = IsoTimestamp::now();
         message.stale_at = Some(stale_at);
 

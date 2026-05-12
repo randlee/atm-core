@@ -231,7 +231,7 @@ mod tests {
     };
     use atm_core::protocol::NotificationEvent;
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::schema::{LegacyMessageId, MessageEnvelope};
+    use atm_core::schema::{AtmMessageId, MessageEnvelope};
     use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, IsoTimestamp};
     use std::sync::Arc;
@@ -394,7 +394,7 @@ mod tests {
     }
 
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {
-        let message_id = LegacyMessageId::new();
+        let message_id = AtmMessageId::new();
 
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent"),

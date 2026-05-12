@@ -936,7 +936,7 @@ mod tests {
             read,
             source_team: Some(team()),
             summary: Some(format!("summary: {text}")),
-            message_id: Some(atm_core::schema::LegacyMessageId::new()),
+            message_id: Some(atm_core::schema::AtmMessageId::new()),
             pending_ack_at: pending_ack.then_some(IsoTimestamp::from_datetime(timestamp)),
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -1265,7 +1265,7 @@ mod tests {
                 assert!(collected.iter().any(|column| column == "from_agent"));
                 assert!(collected.iter().any(|column| column == "message_text"));
                 assert!(collected.iter().any(|column| column == "message_at"));
-                assert!(collected.iter().any(|column| column == "legacy_message_id"));
+                assert!(collected.iter().any(|column| column == "message_id"));
                 Ok(())
             })
             .expect("schema inspection");
@@ -1275,7 +1275,7 @@ mod tests {
     fn mail_store_enforces_message_key_prefix_and_single_successor() {
         let assembly = in_memory_assembly();
         let store = assembly.mail_store();
-        let root_id = atm_core::schema::LegacyMessageId::new();
+        let root_id = atm_core::schema::AtmMessageId::new();
 
         let root_record = boundary::MailStoreMessageRecord {
             team: team(),
@@ -1313,7 +1313,7 @@ mod tests {
             agent: agent(),
             message_key: message_key("atm:successor-1"),
             envelope: MessageEnvelope {
-                message_id: Some(atm_core::schema::LegacyMessageId::new()),
+                message_id: Some(atm_core::schema::AtmMessageId::new()),
                 parent_message_id: Some(root_id),
                 thread_mode: Some(atm_core::schema::ThreadMode::AddDetails),
                 ..envelope()
@@ -1334,7 +1334,7 @@ mod tests {
                     agent: agent(),
                     message_key: message_key("atm:successor-2"),
                     envelope: MessageEnvelope {
-                        message_id: Some(atm_core::schema::LegacyMessageId::new()),
+                        message_id: Some(atm_core::schema::AtmMessageId::new()),
                         parent_message_id: Some(root_id),
                         thread_mode: Some(atm_core::schema::ThreadMode::Supersede),
                         ..envelope()
@@ -1366,13 +1366,13 @@ mod tests {
                     recorded_at: Some(IsoTimestamp::now()),
                 },
             })
-            .expect_err("duplicate legacy identity");
+            .expect_err("duplicate message identity");
         assert!(duplicate_legacy_identity.is_validation());
         assert!(
             duplicate_legacy_identity
                 .message
                 .contains("already owned by"),
-            "legacy identity collision should be rejected by crate-owned validation before sqlite constraint handling"
+            "message identity collision should be rejected by crate-owned validation before sqlite constraint handling"
         );
     }
 
