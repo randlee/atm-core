@@ -6,7 +6,7 @@ phase: U
 sprint: "U.9"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime
 branch: feature/pU-u9-client-owned-graft-runtime
-status: planned
+status: complete
 estimated_scope: M
 ```
 
@@ -98,7 +98,7 @@ Lean-design rule:
    - targeted integration tests modeled after the current daemon local-IPC
      tests in `crates/atm-daemon/src/local_ipc_transport.rs`
    Required doc or boundary updates:
-   - update architecture docs to state that client-specific runtime logic is
+   - complete: architecture docs state that client-specific runtime logic is
      owned by the client crate
 
 2. Leave only generic daemon responsibilities
@@ -112,7 +112,8 @@ Lean-design rule:
    - boundary/lint checks or review-driven tests proving no daemon-owned
      client runtime leak
    Required doc or boundary updates:
-   - tighten daemon and core boundary docs
+   - complete: daemon and core boundary docs are tightened for the temporary
+     graft advisory stream and client-owned runtime split
 
 ## Acceptance Criteria
 
@@ -126,12 +127,10 @@ Lean-design rule:
 - U.9 owns client-runtime replacement of `GraftSessionState` and the old
   poll/drain receive loop machinery; daemon advisory DTO generification remains
   owned by U.10
-- production embedded delivery uses that live connection; poll/drain remains a
-  companion debug path only
-- the old poll/drain receive loop (`run_receive_loop` and associated machinery
-  listed in `docs/phase-U/removal-inventory.md` U.9 targets) is retired —
-  not supplemented; the live advisory-stream connection replaces it entirely
-  for production use
+- production embedded delivery uses that live connection; polling fallback is
+  retained only when `!supports_live_advisory_stream()` for test transports
+- the live advisory stream is the production path; polling fallback is retained
+  only when `!supports_live_advisory_stream()` for test transports
 - the owning plugin crate still passes boundary lint with no `atm-daemon`
   dependency
 

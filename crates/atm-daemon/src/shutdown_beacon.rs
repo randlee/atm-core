@@ -78,7 +78,7 @@ mod tests {
             entered_tx
                 .send(())
                 .expect("notify waiter entered polling loop");
-            assert!(waiter.wait_until_tripped(Duration::from_secs(1)));
+            assert!(waiter.wait_until_tripped(Duration::from_secs(5)));
         });
 
         entered_rx

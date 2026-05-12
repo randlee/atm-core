@@ -56,6 +56,7 @@ Sprint summary:
 - `U.9` client-owned graft runtime with one persistent receive thread, one
   open dedicated daemon advisory-stream connection, one minimal client-side
   pending queue until host consumption, and one host wake/event path
+  - complete
 - `U.10` generic daemon advisory-notification surface kept intentionally lean
   - completed on `feature/pU-u10-generic-advisory-notification`
 

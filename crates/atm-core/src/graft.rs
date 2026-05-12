@@ -280,7 +280,7 @@ pub struct AdvisoryEvent {
     pub task_id: Option<TaskId>,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Clone, Serialize, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct AdvisoryMessage(String);
 
@@ -330,6 +330,15 @@ impl<'de> Deserialize<'de> for AdvisoryMessage {
     {
         let value = String::deserialize(deserializer)?;
         Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl fmt::Debug for AdvisoryMessage {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("AdvisoryMessage")
+            .field("bytes", &self.0.len())
+            .field("redacted", &true)
+            .finish()
     }
 }
 
@@ -594,6 +603,13 @@ mod tests {
     #[test]
     fn nudge_message_contract_exposes_documented_max_bytes() {
         assert_eq!(MAX_ADVISORY_MESSAGE_BYTES, 4096);
+    }
+
+    #[test]
+    fn advisory_message_rejects_overlong_values() {
+        let value = "a".repeat(MAX_ADVISORY_MESSAGE_BYTES + 1);
+        let error = AdvisoryMessage::new(value).expect_err("overlong advisory message should fail");
+        assert!(error.to_string().contains("advisory message exceeds the"));
     }
 
     #[test]

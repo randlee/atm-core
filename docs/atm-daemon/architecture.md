@@ -140,6 +140,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   macOS, Linux, and Windows; service-control integration may exist inside the
   Windows lifecycle adapter, but Phase S parity does not depend on a separate
   SCM-only host model
+- client-specific runtime logic is owned by the client crate; `atm-daemon`
+  may serve the advisory transport but must not own embedded client receive
+  behavior
 - same-host transport and lifecycle control must remain platform-neutral above
   the adapter line:
   - platform-specific listener/stream/control types are allowed only inside

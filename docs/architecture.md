@@ -1866,7 +1866,7 @@ Unified-state ownership notes:
 - deleted-row visibility is admin-only; normal list/read/count queries must
   exclude rows with `deleted_at`
 - the earlier split model (`mail_visibility_states` plus `ack_state`) is
-  retired and must not be reintroduced
+  retired and must not be reintroduced under new names
 
 ### 18.5 New Error Codes
 

@@ -1,4 +1,6 @@
 //! Thin embedded ATM client crate for graft-aware host agents.
+//! Production nudge delivery uses one live advisory-stream receive loop when
+//! the selected transport supports same-host streaming.
 
 use std::fmt;
 use std::path::PathBuf;
