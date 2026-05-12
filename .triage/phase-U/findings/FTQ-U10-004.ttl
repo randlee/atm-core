@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ============================================================
+# FTQ-U10-004: session_registers test timing race — fixed sleep before stream verification
+#
+# Sweep outcome:
+# - Pattern "fn session_registers|thread::sleep" applied to file_filter "tests_advisory.rs"
+#   across all three worktrees.
+# - tests_advisory.rs exists ONLY in feature/pU-u10-generic-advisory-notification
+#   (atm-graft crate absent from integrate/phase-U; no tests_advisory.rs in u9).
+# - No match for fn session_registers or thread::sleep in tests_advisory.rs on any branch.
+# - The test fn session_registers_and_automatically_injects_nudges resides in
+#   crates/atm-graft/src/lib.rs on both u9 and u10; it uses channel recv_timeout
+#   (not thread::sleep) for all synchronization — race-free by design.
+# - No thread::sleep inside session_registers_and_automatically_injects_nudges on any branch.
+# - integrate/phase-U: atm-graft crate not present → pattern absent.
+# - Finding as described (fixed sleep before stream verification) does NOT exist.
+# - aggregate status: absent / never_existed
+# ============================================================
+
+<urn:atm:triage:finding/FTQ-U10-004>
+    a triage:Finding ;
+    triage:findingId "FTQ-U10-004" ;
+    triage:title "session_registers test timing race — fixed sleep before stream verification" ;
+    triage:description "crates/atm-daemon/src/tests_advisory.rs session_registers test polls advisory stream with a fixed sleep before verifying registration. Non-deterministic under load." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "FTQ" ;
+    triage:phaseId "phase-U" ;
+    triage:severity "important" ;
+    triage:repeatable true ;
+    triage:sweepScope "crate" ;
+    triage:status "absent" ;
+    triage:dispatchReady false ;
+    triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+    triage:notes "Finding description references tests_advisory.rs but that file has no session_registers test and no thread::sleep. The fn session_registers_and_automatically_injects_nudges test lives in crates/atm-graft/src/lib.rs on both u9 and u10 and already uses channel recv_timeout for synchronization — no fixed sleep, race-free. integrate/phase-U has no atm-graft crate. Pattern absent on all branches. No dev dispatch warranted." .
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-U" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+    triage:headSha "54fabfa" ;
+    triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+    triage:headSha "4ba0e00" ;
+    triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/3730257>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pU-u10-generic-advisory-notification" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+    triage:headSha "3730257" ;
+    triage:orderIndex 10 .

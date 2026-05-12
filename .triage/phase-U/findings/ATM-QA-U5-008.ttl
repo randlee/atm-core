@@ -1,0 +1,190 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U5-008>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U5-008" ;
+  triage:title "docs/atm/atm-read.mmd diagram references non-existent types and tables" ;
+  triage:description "docs/atm/atm-read.mmd: Diagram references non-existent error types HiddenDeletedMessage and MessageNotFound, a non-existent table message_status, and SQL 3: mutate message_status only. Actual implementation: single metadata query with optional id filter, no typed MessageNotFound/HiddenDeletedMessage exits, mutation via persist_visibility_state -> MailStore::upsert_visibility_state." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "directory" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u5/2> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/6a692b40> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1b22524> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/c1e0e06> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4/335fe3d> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5/ae75f1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# --- Occurrences on feature/pU-u1-metadata-atm-read-cleanup ---
+
+<urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/atm-read.mmd" ;
+  triage:line 10 ;
+  triage:snippet "C1 -->|not found| E1[MessageNotFound]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/6a692b40> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u1/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/atm-read.mmd" ;
+  triage:line 11 ;
+  triage:snippet "C1 -->|deleted and not admin| E2[HiddenDeletedMessage]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/6a692b40> .
+
+# --- Occurrences on feature/pU-u2-one-message-identity ---
+
+<urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/atm-read.mmd" ;
+  triage:line 10 ;
+  triage:snippet "C1 -->|not found| E1[MessageNotFound]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u2/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/atm-read.mmd" ;
+  triage:line 11 ;
+  triage:snippet "C1 -->|deleted and not admin| E2[HiddenDeletedMessage]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+# --- Occurrences on feature/pU-u3-thread-update-hardening ---
+
+<urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/atm-read.mmd" ;
+  triage:line 10 ;
+  triage:snippet "C1 -->|not found| E1[MessageNotFound]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u3/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/atm-read.mmd" ;
+  triage:line 11 ;
+  triage:snippet "C1 -->|deleted and not admin| E2[HiddenDeletedMessage]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+# --- Occurrences on feature/pU-u4-unified-message-state ---
+
+<urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u4/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/atm-read.mmd" ;
+  triage:line 10 ;
+  triage:snippet "C1 -->|not found| E1[MessageNotFound]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u4/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/atm-read.mmd" ;
+  triage:line 11 ;
+  triage:snippet "C1 -->|deleted and not admin| E2[HiddenDeletedMessage]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+# --- Occurrences on feature/pU-u5-sqlite-query-cutover ---
+
+<urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u5/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm/atm-read.mmd" ;
+  triage:line 10 ;
+  triage:snippet "C1 -->|not found| E1[MessageNotFound]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-008/pU-u5/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm/atm-read.mmd" ;
+  triage:line 11 ;
+  triage:snippet "C1 -->|deleted and not admin| E2[HiddenDeletedMessage]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/pU-u1/6a692b40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u5/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 .

@@ -1,0 +1,116 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U10-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U10-003" ;
+  triage:title "plan-phase-U.md and project-plan.md U.10 status still 'planned'" ;
+  triage:description "docs/plan-phase-U.md and docs/project-plan.md still show U.10 sprint status as 'planned'. Plan docs must reflect completion state before merge per sprint contract requirement." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-003/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-003/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-003/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-003/pU-u9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-003/pU-u10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-003/pU-u10/2> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u10/3730257> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u10/3730257> .
+
+# integrate/phase-U occurrences
+
+<urn:atm:triage:occurrence/ATM-QA-U10-003/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 2907 ;
+  triage:snippet "### U.10 — Generic Daemon Advisory-Notification Surface" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-003/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-U.md" ;
+  triage:line 51 ;
+  triage:snippet "- `U.10` generic daemon advisory-notification surface kept intentionally lean" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> .
+
+# feature/pU-u9-client-owned-graft-runtime occurrences
+
+<urn:atm:triage:occurrence/ATM-QA-U10-003/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 2923 ;
+  triage:snippet "### U.10 — Generic Daemon Advisory-Notification Surface" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-003/pU-u9/2>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-U.md" ;
+  triage:line 59 ;
+  triage:snippet "- `U.10` generic daemon advisory-notification surface kept intentionally lean" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+# feature/pU-u10-generic-advisory-notification occurrences
+
+<urn:atm:triage:occurrence/ATM-QA-U10-003/pU-u10/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 2923 ;
+  triage:snippet "### U.10 — Generic Daemon Advisory-Notification Surface" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-003/pU-u10/2>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-U.md" ;
+  triage:line 59 ;
+  triage:snippet "- `U.10` generic daemon advisory-notification surface kept intentionally lean" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+# WorktreeSnapshot nodes
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/3730257>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:orderIndex 10 .

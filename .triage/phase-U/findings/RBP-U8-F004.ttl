@@ -1,0 +1,37 @@
+finding_id: RBP-U8-F004
+title: ClientSessionId doc comment missing format description
+severity: minor
+phase_id: phase-U
+triage_mode: initial_pass
+status: open
+
+location:
+  stated: crates/atm-graft/src/types.rs:278
+  confirmed: crates/atm-core/src/types.rs:254
+  note: >
+    ClientSessionId is defined in atm-core/src/types.rs and re-exported from
+    atm-graft/src/lib.rs. The stated line (atm-graft/src/types.rs) does not
+    exist; the actual struct is at atm-core/src/types.rs:254-257. The finding
+    is valid at the confirmed location.
+
+description: >
+  The doc comment for ClientSessionId reads: "Shared identifier for one active
+  thin-client session." It mentions the recovery message references a "stable
+  non-empty" value but nowhere describes the format or structure (e.g. opaque
+  string, UUID, base64, max length). A reader of the public API cannot infer
+  the acceptable format from the comment alone.
+
+pattern: incomplete doc comment on public type
+repeatable: false
+
+promote_to_branch: feature/pU-u8-shared-thin-client-icd
+commit_ref: 633c34c
+
+fix_guidance: >
+  Extend the doc comment on `ClientSessionId` in crates/atm-core/src/types.rs
+  to describe the format: opaque non-empty, non-blank UTF-8 string with no
+  internal whitespace constraints beyond the blank check. Include an example
+  of a typical session id (e.g. a UUID or similar stable token).
+
+dispatch_blocked_pending_triage_commit: true
+recorded_at: 2026-05-12

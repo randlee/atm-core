@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U6-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U6-001" ;
+  triage:title "docs/project-plan.md has no Phase U section" ;
+  triage:description "docs/project-plan.md ends at line 1004 with no Phase-U content. Sprint U.6 contract (docs/phase-U/sprint-U6.md) lists docs/project-plan.md as a required doc update. The section is entirely absent." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "absent" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:triageNote "Phase U section found at line 2684 on all four feature worktrees and integrate/phase-U. File is ~2930 lines, not 1004. Finding description was based on stale/incorrect line count. No live occurrence of a missing Phase U section exists on any branch. U.6 sprint-completion tracking record (e.g. COMPLETED marker) is not yet present but that is post-merge bookkeeping, not a pre-merge blocker." .
+
+<urn:atm:triage:worktree/pU-u4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u5/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pU-u6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pU-u7/af056ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "af056ae" ;
+  triage:orderIndex 7 .

@@ -1,0 +1,231 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# followup_pass — 2026-05-12
+# Prior record (initial_pass @ 335fe3d) tracked VisibilityState struct-name vocabulary across workspace.
+# This followup narrows scope to doc-comment vocabulary in boundary/mail.rs only (file_filter applied).
+# Pattern: upsert-visibility|visibility state
+# file_filter: crates/atm-core/src/boundary
+# sweep_scope: file
+#
+# Sweep results (boundary/ filtered):
+#   U1 (6a692b4): mail.rs:166,175,299,307 — open (4 occurrences)
+#   U2 (1b22524): mail.rs:166,175,299,307 — open (4 occurrences)
+#   U3 (c1e0e06): mail.rs:166,175,299,307 — open (4 occurrences)
+#   U4 (039a552): mail.rs:170,179,303,311 — open (4 occurrences; line numbers shifted after struct renames)
+#   U5 (ae75f1a): mail.rs:220,229,369,377 — open (4 occurrences; line numbers shifted further)
+# Highest open branch: feature/pU-u4-unified-message-state (order_index 4)
+# promote_to_branch: feature/pU-u4-unified-message-state
+# Prior occurrences on U4 (type-name occurrences at 335fe3d) are now absent — struct renames done.
+# Remaining violations are doc-comment strings only.
+
+<urn:atm:triage:finding/ATM-QA-U4-010>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U4-010" ;
+  triage:title "boundary/mail.rs doc comments still use visibility state vocabulary" ;
+  triage:description "crates/atm-core/src/boundary/mail.rs: Doc comments retain old 'visibility state' / 'upsert-visibility' vocabulary after partial struct rename. Lines 170,179: 'Stub mail-store upsert-visibility request/response for the Phase R skeleton.' Lines 303,311: 'Returns AtmError when visibility state persistence/cannot be loaded fails.' Fix: replace 'upsert-visibility' with 'upsert-message-state' and 'visibility state' with 'message state' in doc comments. Sweep all remaining occurrences in boundary/mail.rs." ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #249" , "TASK-1380 QA-1 verdict at 335fe3d" , "followup_pass at 039a552" ;
+  triage:hasOccurrence
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u4-unified-message-state/doc-1> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u4-unified-message-state/doc-2> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u4-unified-message-state/doc-3> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u4-unified-message-state/doc-4> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u5-sqlite-query-cutover/doc-1> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u5-sqlite-query-cutover/doc-2> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u5-sqlite-query-cutover/doc-3> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u5-sqlite-query-cutover/doc-4> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u3-thread-update-hardening/doc-1> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u2-one-message-identity/doc-1> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u1-metadata-atm-read-cleanup/doc-1> ;
+  triage:openOn
+    <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b4> ,
+    <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> ,
+    <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> ,
+    <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> ,
+    <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> .
+
+# --- U4 occurrences (promote_to_branch sweep — boundary/mail.rs) ---
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u4-unified-message-state/doc-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 170 ;
+  triage:snippet "/// Stub mail-store upsert-visibility request for the Phase R skeleton." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u4-unified-message-state/doc-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 179 ;
+  triage:snippet "/// Stub mail-store upsert-visibility response for the Phase R skeleton." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u4-unified-message-state/doc-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 303 ;
+  triage:snippet "/// Returns `AtmError` when visibility state persistence fails." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u4-unified-message-state/doc-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 311 ;
+  triage:snippet "/// Returns `AtmError` when visibility state cannot be loaded." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> .
+
+# --- U5 representative occurrences (boundary/mail.rs only) ---
+<urn:atm:triage:occurrence/ATM-QA-U5-010/pU-u5-sqlite-query-cutover/doc-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 220 ;
+  triage:snippet "/// Stub mail-store upsert-visibility request for the Phase R skeleton." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u5-sqlite-query-cutover/doc-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 220 ;
+  triage:snippet "/// Stub mail-store upsert-visibility request for the Phase R skeleton." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u5-sqlite-query-cutover/doc-2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 229 ;
+  triage:snippet "/// Stub mail-store upsert-visibility response for the Phase R skeleton." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u5-sqlite-query-cutover/doc-3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 369 ;
+  triage:snippet "/// Returns `AtmError` when visibility state persistence fails." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u5-sqlite-query-cutover/doc-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 377 ;
+  triage:snippet "/// Returns `AtmError` when visibility state cannot be loaded." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+# --- Representative occurrences on lower branches ---
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u3-thread-update-hardening/doc-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 166 ;
+  triage:snippet "/// Stub mail-store upsert-visibility request for the Phase R skeleton." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u2-one-message-identity/doc-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 166 ;
+  triage:snippet "/// Stub mail-store upsert-visibility request for the Phase R skeleton." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-010/pU-u1-metadata-atm-read-cleanup/doc-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 166 ;
+  triage:snippet "/// Stub mail-store upsert-visibility request for the Phase R skeleton." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b4" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b4> .
+
+# --- WorktreeSnapshot nodes ---
+<urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b4" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .

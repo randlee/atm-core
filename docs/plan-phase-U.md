@@ -61,7 +61,17 @@ Sprint summary:
 Graft ownership split:
 - `U.8` owns shared ICD family and naming/DTO planning
 - `U.9` owns client runtime cutover
+  - `U.9` is allowed to build on the current graft-named session/advisory
+    substrate from `develop` as a temporary compatibility surface
+  - that temporary substrate must not be treated as the final boundary shape
 - `U.10` owns daemon advisory-surface generification
+  - `U.10` must remove or generify the remaining daemon-owned graft-specific
+    code so the temporary `U.9` substrate does not harden into the final
+    architecture
+  - specifically, `U.10` is responsible for cleaning up the daemon-owned
+    graft runtime line, graft-named daemon packet family, and related daemon
+    tests/docs that are only being tolerated temporarily so `U.9` can land on
+    the existing substrate
 
 Phase rules:
 - no normal ATM runtime/query path may read Claude JSON or `config.json`

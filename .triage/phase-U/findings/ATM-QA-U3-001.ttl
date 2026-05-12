@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U3-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U3-001" ;
+  triage:title "REQ-P-THREAD-005 prematurely renamed stale_at to expires_at with zero code backing" ;
+  triage:description "docs/requirements.md in both U2 and U3 branches: REQ-P-THREAD-005 was changed from stale_at to expires_at, but the entire implementation still uses stale_at (threading.rs:11 is_ephemeral(), threading.rs:15 is_expired_ephemeral(), MessageEnvelope struct field, send validation, and a test literally named ephemeral_helpers_use_stale_at). The stale_at->expires_at rename is scoped to sprint U.4 per docs/phase-U/sprint-U3.md and docs/plan-phase-U.md. Both branches also dropped the compatibility/export payloads carry ephemeral expiry with staleAt bullet present in the develop baseline." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U3-001/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U3-001/pU-u3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U3-001/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U3-001/pU-u2/2> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/8394248> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1fb49d0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/ATM-QA-U3-001/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1328 ;
+  triage:snippet "ephemeral messages expire by time only, using `expires_at`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/ATM-QA-U3-001/pU-u3/2>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1334 ;
+  triage:snippet "remains visible through `--view-all` until `expires_at`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/ATM-QA-U3-001/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1323 ;
+  triage:snippet "ephemeral messages expire by time only, using `expires_at`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d0> .
+
+<urn:atm:triage:occurrence/ATM-QA-U3-001/pU-u2/2>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1329 ;
+  triage:snippet "remains visible through `--view-all` until `expires_at`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d0> .
+
+<urn:atm:triage:worktree/pU-u3/8394248>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:orderIndex 2 .

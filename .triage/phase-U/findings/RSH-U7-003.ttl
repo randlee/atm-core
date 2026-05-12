@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-U7-003>
+  a triage:Finding ;
+  triage:findingId "RSH-U7-003" ;
+  triage:title "replace_roster no input bound on members Vec length before N-INSERT transaction" ;
+  triage:description "crates/atm-rusqlite/src/roster_store.rs:39 — replace_roster takes a Vec of members and runs N INSERT statements inside a transaction with no cap on the input Vec length. An arbitrarily large roster could exhaust memory or database write capacity." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U7-003/U7/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> .
+
+<urn:atm:triage:occurrence/RSH-U7-003/U7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/roster_store.rs" ;
+  triage:line 39 ;
+  triage:snippet "for member in &request.members {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1> .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 2 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u6-provenance-field-reduction/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 3 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u7-roster-simplification/8e37dd1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .

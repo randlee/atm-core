@@ -1,0 +1,97 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Sweep notes (followup_pass):
+# Pattern: execute_upsert_message_state|execute_upsert_visibility_state in ops.rs
+# U1 (6a692b4): execute_upsert_visibility_state — JSON-blob state, no columnar expires_at. Absent.
+# U2 (1b22524): Same as U1. Absent.
+# U3 (c1e0e06): Same as U1. Absent.
+# U4 (039a552): execute_upsert_message_state line 258 —
+#     request.state.expires_at.map(rfc3339) — no bounds validation on expires_at.
+#     Still open; SHA updated from prior record (335fe3d → 039a552). Not fixed.
+# U5 (ae75f1a): Identical code at line 258 — no validation. Finding propagated to U5.
+#     Branch not present in prior record. Open.
+# Prior highest_open: U4. Current highest_open: U5 (propagated without fix).
+
+<urn:atm:triage:finding/RSH-U4-002>
+  a triage:Finding ;
+  triage:findingId "RSH-U4-002" ;
+  triage:title "execute_upsert_message_state accepts past expires_at with no validation or accepted-risk doc" ;
+  triage:description "crates/atm-rusqlite/src/writer/ops.rs:258: execute_upsert_message_state accepts any expires_at timestamp including past values with no semantic validation or accepted-risk comment. A caller can persist an already-expired expiry, creating invisible ghost rows with no error feedback since the query layer filters by expiry." ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T08:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #249" , "QA-1 initial_pass at 335fe3d" , "followup_pass at 039a552 / ae75f1a" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-002/pU-u4-unified-message-state/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-002/pU-u5-sqlite-query-cutover/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/RSH-U4-002/pU-u4-unified-message-state/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 258 ;
+  triage:snippet "request.state.expires_at.map(rfc3339)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> .
+
+<urn:atm:triage:occurrence/RSH-U4-002/pU-u5-sqlite-query-cutover/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 258 ;
+  triage:snippet "request.state.expires_at.map(rfc3339)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b4" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .

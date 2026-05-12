@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-U9-001>
+  a triage:Finding ;
+  triage:findingId "RSH-U9-001" ;
+  triage:title "run_live_receive_loop has no stop channel — fragile multi-hop shutdown" ;
+  triage:description "LiveReceiveLoopContext struct (line 952) lacks a stop_rx field. When supports_live_advisory_stream() returns true the spawned thread has no cooperative shutdown path: stop_tx is set to None (line 427, 438) and the live path returns (None, join_handle) at line 524, so GraftSession::close() cannot signal the live receive thread to exit. The poll/drain path (run_receive_loop) correctly uses stop_rx. The asymmetry means live advisory stream threads can only terminate via EOF or error, not via owner-driven shutdown." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U9-001/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U9-001/pU-u9/2> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/RSH-U9-001/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 952 ;
+  triage:snippet "struct LiveReceiveLoopContext { ... /* no stop_rx field */ }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/RSH-U9-001/pU-u9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 477 ;
+  triage:snippet "run_live_receive_loop(LiveReceiveLoopContext { ... }) // stop_tx = None" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:worktree/integrate-phase-U/253fc60>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u8/8ce604b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .

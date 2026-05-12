@@ -1,0 +1,76 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-U9-002>
+  a triage:Finding ;
+  triage:findingId "FTQ-U9-002" ;
+  triage:title "1s timing assertion in tests is fragile on loaded CI" ;
+  triage:description "Multiple test timing assertions use Duration::from_secs(1) as deadlines for recv_timeout or elapsed comparisons. These assertions are fragile on loaded CI where scheduling jitter can exceed 1 second: atm-daemon/src/local_ipc_transport.rs:1110,1326 use elapsed() <= from_secs(1) assertions; shutdown_beacon.rs:81 asserts wait_until_tripped(Duration::from_secs(1)). The sweep also found similar patterns in atm-graft tests using recv_timeout(Duration::from_secs(2)) as synchronization barriers which are adjacent risk." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-002/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-002/pU-u9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-002/pU-u9/3> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U9-002/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1110 ;
+  triage:snippet "shutdown_started.elapsed() <= Duration::from_secs(1)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U9-002/pU-u9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1326 ;
+  triage:snippet "shutdown_started.elapsed() < Duration::from_secs(1)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U9-002/pU-u9/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 81 ;
+  triage:snippet "assert!(waiter.wait_until_tripped(Duration::from_secs(1)))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:worktree/integrate-phase-U/253fc60>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u8/8ce604b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .

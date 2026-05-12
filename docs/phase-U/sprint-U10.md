@@ -27,6 +27,8 @@ Lean-design rule:
 - the client consumes that signal over the shared ICD family and the live
   advisory stream
 - avoid extra daemon runtime layers or client-specific protocol concepts
+- the temporary graft-named daemon substrate used by `U.9` must be cleaned up
+  here rather than preserved as the final architecture
 
 ## Governing Requirements
 
@@ -64,14 +66,33 @@ Lean-design rule:
 
 1. Define the generic post-commit notification surface
    Development work:
+   - PRIORITY-1: removing the `atm-daemon` reference introduced by `U.9` is
+     the top-priority deliverable of `U.10`; all other work is secondary to
+     this removal
+   - `U.9` was granted a conditional architectural exception to reference
+     `atm-daemon`'s `graft_runtime`; `U.10` must unconditionally close that
+     exception by removing all `atm-graft` -> `atm-daemon` references before
+     this sprint is considered complete
    - describe the daemon-owned post-commit advisory event flow
    - keep hook execution and advisory delivery behind generic boundaries
+   - treat the current graft-named daemon/session substrate as temporary
+     compatibility only; `U.10` must delete or generify it rather than let it
+     survive Phase U unchanged
    - own the generic replacement of the remaining graft-named advisory/session
      daemon surfaces:
      - `GraftSessionPort`
      - `NudgeEvent`
      - `GraftNudgeFetchRequest`
      - `GraftNudgeDrainRequest`
+   - explicitly clean up the daemon-owned graft-specific implementation line
+     that `U.9` temporarily depends on:
+     - `crates/atm-daemon/src/graft_runtime.rs`
+     - `crates/atm-daemon/src/tests_graft.rs`
+     - graft-named daemon handling in `crates/atm-daemon/src/runtime_health.rs`
+     - graft-named request/response variants and message kinds in
+       `crates/atm-core/src/protocol.rs`
+     - graft-named daemon protocol inventory entries in
+       `docs/atm-daemon/protocol-icd.md`
    - keep the daemon contract production-simple: registration, notification
      delivery, bounded pending state, one live advisory stream per active
      session, and typed backpressure only
@@ -98,6 +119,12 @@ Lean-design rule:
    - keep fetch/drain as optional companion CLI/debug surfaces only
    - keep the advisory stream in the same shared ICD family rather than
      inventing a parallel client API
+   - add a lint boundary rule under `boundaries/atm-graft/` prohibiting
+     `atm-graft` from referencing `atm-daemon`; the rule must be present in
+     the `sc-lint-boundary` configuration so that `just lint` enforces it
+     automatically
+   - verify the boundary rule is enforced: `just lint` must fail if
+     `atm-graft` imports `atm-daemon` after `U.10`
    Required tests:
    - protocol tests proving the messages remain part of the shared ICD line
    - boundary lint proving the client/plugin crate still does not reference
@@ -112,6 +139,13 @@ Lean-design rule:
   subsystem
 - any extra message family needed for advisory delivery remains part of the
   shared ICD used by CLI/thin clients
+- the temporary graft-named daemon substrate used by `U.9` is gone or fully
+  genericized by the end of `U.10`; no daemon-owned graft runtime line is left
+  in place as an accidental permanent boundary
+- `boundaries/atm-graft/` contains an explicit deny rule for `atm-daemon`
+  references
+- `just lint` enforces the `atm-graft` -> `atm-daemon` prohibition
+- zero `atm-daemon` references exist in the `atm-graft` crate after `U.10`
 - the daemon-side shape stays lean: one generic advisory surface rather than a
   stack of client-specific runtime abstractions
 - `docs/atm-core/requirements.md` and `docs/atm-daemon/requirements.md`
