@@ -2,6 +2,7 @@ use super::stmt_cache::WriterStatementCache;
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_thread_mode};
 use atm_core::boundary;
 use atm_core::error::AtmError;
+use atm_core::schema::MessageEnvelope;
 use rusqlite::{Connection, OptionalExtension, params};
 
 pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
@@ -9,7 +10,7 @@ pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 #[derive(Debug, Clone)]
 pub(crate) enum WriteOp {
     UpsertMessage(Box<boundary::MailStoreUpsertMessageRequest>),
-    UpsertVisibilityState(boundary::MailStoreUpsertVisibilityStateRequest),
+    UpsertVisibilityState(Box<boundary::MailStoreUpsertVisibilityStateRequest>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -37,7 +38,10 @@ pub(crate) fn execute(
 pub(crate) fn validate_upsert_message_request(
     request: &boundary::MailStoreUpsertMessageRequest,
 ) -> Result<(), AtmError> {
-    let envelope_json = serialize_json(&request.record.envelope, "mail-store envelope")?;
+    let envelope_json = serialize_json(
+        &storage_envelope(&request.record.envelope),
+        "mail-store envelope",
+    )?;
     if envelope_json.len() > MAX_ENVELOPE_JSON_BYTES {
         return Err(AtmError::validation(format!(
             "mail-store envelope JSON exceeded the writer lane limit of {MAX_ENVELOPE_JSON_BYTES} bytes"
@@ -56,7 +60,7 @@ fn execute_upsert_message(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     let record = &request.record;
-    let envelope_json = serialize_json(&record.envelope, "mail-store envelope")?;
+    let envelope_json = serialize_json(&storage_envelope(&record.envelope), "mail-store envelope")?;
     validate_message_record(record, envelope_json.len(), connection, cache, target)?;
     let parent_message_id = record
         .envelope
@@ -64,7 +68,7 @@ fn execute_upsert_message(
         .as_ref()
         .map(ToString::to_string);
     let thread_mode = sqlite_thread_mode(record.envelope.thread_mode);
-    let stale_at = record
+    let expires_at = record
         .envelope
         .stale_at
         .map(|value| value.into_inner().to_rfc3339());
@@ -100,7 +104,6 @@ fn execute_upsert_message(
                 message_id,
                 parent_message_id,
                 thread_mode,
-                stale_at,
                 record.imported_from,
                 recorded_at.clone(),
             ],
@@ -109,21 +112,30 @@ fn execute_upsert_message(
             crate::shared_db::sqlite_error(target, "failed to upsert mail-store message", error)
         })?
         == 1;
-    cache
-        .upsert_ack_state(
-            connection,
-            params![
-                record.team.as_str(),
-                record.agent.as_str(),
-                record.message_key.as_ref(),
-                pending_ack_at,
-                acknowledged_at,
-                recorded_at,
-            ],
-        )
-        .map_err(|error| {
-            crate::shared_db::sqlite_error(target, "failed to upsert ack-state row", error)
-        })?;
+    if inserted {
+        cache
+            .upsert_message_state(
+                connection,
+                params![
+                    record.team.as_str(),
+                    record.agent.as_str(),
+                    record.message_key.as_ref(),
+                    i64::from(record.envelope.read),
+                    pending_ack_at,
+                    acknowledged_at,
+                    expires_at,
+                    Option::<String>::None,
+                    recorded_at,
+                ],
+            )
+            .map_err(|error| {
+                crate::shared_db::sqlite_error(
+                    target,
+                    "failed to upsert mail message state row",
+                    error,
+                )
+            })?;
+    }
 
     Ok(WriteOpResult::UpsertMessage { inserted })
 }
@@ -223,31 +235,14 @@ fn execute_upsert_visibility_state(
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
-    let state_json = serialize_json(&request.state, "mail-store visibility state")?;
     cache
-        .upsert_visibility_state(
+        .upsert_message_state(
             connection,
             params![
                 request.team.as_str(),
                 request.agent.as_str(),
                 request.state.message_key.as_ref(),
-                state_json,
-            ],
-        )
-        .map_err(|error| {
-            crate::shared_db::sqlite_error(
-                target,
-                "failed to upsert mail-store visibility state",
-                error,
-            )
-        })?;
-    cache
-        .upsert_ack_state(
-            connection,
-            params![
-                request.team.as_str(),
-                request.agent.as_str(),
-                request.state.message_key.as_ref(),
+                i64::from(request.state.read),
                 request
                     .state
                     .pending_ack_at
@@ -258,6 +253,14 @@ fn execute_upsert_visibility_state(
                     .map(|value| value.into_inner().to_rfc3339()),
                 request
                     .state
+                    .expires_at
+                    .map(|value| value.into_inner().to_rfc3339()),
+                request
+                    .state
+                    .deleted_at
+                    .map(|value| value.into_inner().to_rfc3339()),
+                request
+                    .state
                     .updated_at
                     .map(|value| value.into_inner().to_rfc3339()),
             ],
@@ -265,9 +268,18 @@ fn execute_upsert_visibility_state(
         .map_err(|error| {
             crate::shared_db::sqlite_error(
                 target,
-                "failed to upsert ack-state visibility projection",
+                "failed to upsert unified mail message state",
                 error,
             )
         })?;
     Ok(WriteOpResult::Unit)
+}
+
+fn storage_envelope(envelope: &MessageEnvelope) -> MessageEnvelope {
+    let mut envelope = envelope.clone();
+    envelope.read = false;
+    envelope.pending_ack_at = None;
+    envelope.acknowledged_at = None;
+    envelope.stale_at = None;
+    envelope
 }

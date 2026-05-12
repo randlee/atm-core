@@ -29,32 +29,26 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     message_id TEXT NULL,
     parent_message_id TEXT NULL,
     thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
-    stale_at TEXT NULL,
     imported_from TEXT,
     recorded_at TEXT,
     CHECK(message_key GLOB 'atm:*' OR message_key GLOB 'ext:*'),
     PRIMARY KEY (team, agent, message_key)
 );
 
-CREATE TABLE IF NOT EXISTS ack_state (
+CREATE TABLE IF NOT EXISTS mail_message_states (
     team TEXT NOT NULL,
     agent TEXT NOT NULL,
     message_key TEXT NOT NULL,
+    read INTEGER NOT NULL DEFAULT 0 CHECK(read IN (0, 1)),
     pending_ack_at TEXT NULL,
     acknowledged_at TEXT NULL,
+    expires_at TEXT NULL,
+    deleted_at TEXT NULL,
     updated_at TEXT NULL,
     PRIMARY KEY (team, agent, message_key),
     FOREIGN KEY (team, agent, message_key)
         REFERENCES mail_messages(team, agent, message_key)
         ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS mail_visibility_states (
-    team TEXT NOT NULL,
-    agent TEXT NOT NULL,
-    message_key TEXT NOT NULL,
-    state_json TEXT NOT NULL,
-    PRIMARY KEY (team, agent, message_key)
 );
 
 CREATE TABLE IF NOT EXISTS mail_ingest_replay_states (
@@ -119,8 +113,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_message_id
 CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
     ON mail_messages(team, agent);
 
-CREATE INDEX IF NOT EXISTS idx_mail_visibility_mailbox
-    ON mail_visibility_states(team, agent);
+CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
+    ON mail_message_states(team, agent);
 
 CREATE INDEX IF NOT EXISTS idx_mail_ingest_mailbox
     ON mail_ingest_replay_states(team, agent);
@@ -300,7 +294,7 @@ impl SharedDb {
         let state = request.state.clone();
         let result = self
             .writer
-            .submit(WriteOp::UpsertVisibilityState(request))?;
+            .submit(WriteOp::UpsertVisibilityState(Box::new(request)))?;
         match result {
             WriteOpResult::Unit => Ok(atm_core::boundary::MailStoreUpsertVisibilityStateResponse {
                 state,

@@ -1845,6 +1845,8 @@ state.
 
 Current executed rule:
 - ATM-owned mailbox workflow durability lives in SQLite-backed state.
+- mutable per-message mailbox state is owned by the explicit
+  `mail_message_states` table rather than split visibility/ack storage.
 - `send` commits durable message/content state first.
 - `read`, `ack`, and `clear` read and mutate the SQLite-backed state model.
 - Claude inbox export is a compatibility projection only.

@@ -1326,14 +1326,14 @@ Phase R continuation semantics:
 - `REQ-P-THREAD-005` Ephemeral messages are standalone, time-bounded records.
 
   Required behavior:
-  - ephemeral messages expire by time only, using `stale_at`
+  - ephemeral messages expire by time only, using SQLite-owned `expires_at`
   - compatibility/export payloads carry ephemeral expiry with `staleAt`
   - no product behavior may depend on first-read deletion semantics
   - periodic daemon cleanup deletes expired ephemeral rows
   - ephemeral messages are not updatable
   - ephemeral messages may not be parents or children in successor chains
   - once read, an ephemeral message becomes hidden from normal reads but
-    remains visible through `--view-all` until `stale_at`
+    remains visible through `--view-all` until `expires_at`
 
 ### 8.5 Output Contract
 

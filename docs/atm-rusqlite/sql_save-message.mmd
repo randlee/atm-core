@@ -1,8 +1,8 @@
 %% title: `Save Message`
 %% summary: SQLite boundary method `MailStore::upsert_message`.
-%% commentary: This SQL-boundary path shows the boundary contract first: input, validation, one transaction, output, and boundary-visible error classes.
+%% commentary: This SQL-boundary path stores immutable content in `mail_messages`, strips mutable fields out of the stored envelope, and writes the unified mutable projection into `mail_message_states`.
 %% read_tables: mail_messages
-%% write_tables: mail_messages, ack_state
+%% write_tables: mail_messages, mail_message_states
 %% notes: reads before write: 0..2 | writes: 2 | transactions: 1
 %% sets: query
 flowchart TD
@@ -23,7 +23,7 @@ if message_id exists:
   does mail_messages already assign that message_id to a different message?"]
     V -->|ok| T["Transaction (1)
 INSERT mail_messages ... DO NOTHING
-UPSERT ack_state ..."]
+UPSERT mail_message_states ..."]
     T --> O["Output
 record
 inserted: true | false"]

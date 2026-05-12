@@ -71,6 +71,10 @@ pub struct MailStoreVisibilityState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acknowledged_at: Option<IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deleted_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<IsoTimestamp>,
 }
 

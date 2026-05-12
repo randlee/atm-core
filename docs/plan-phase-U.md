@@ -40,7 +40,7 @@ Sprint summary:
 - `U.3` thread/update/supersede hardening
   - `add-details` preserves predecessor context in the effective current body
   - `supersede` exposes only the replacement body
-- `U.4` unified mutable message state
+- `U.4` unified mutable message state (`mail_message_states`)
 - `U.5` SQLite query cutover and query simplification
 - `U.6` provenance/timing field reduction
 - `U.7` roster simplification and explicit member model

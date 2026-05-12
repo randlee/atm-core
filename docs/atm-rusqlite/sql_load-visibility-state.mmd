@@ -1,7 +1,7 @@
 %% title: `Load Visibility State`
 %% summary: SQLite boundary method `MailStore::load_visibility_state`.
-%% commentary: This SQL-boundary path reads one visibility-state JSON row and returns `None` when no row exists.
-%% read_tables: mail_visibility_states
+%% commentary: This SQL-boundary path reads one unified `mail_message_states` row and returns `None` when no row exists.
+%% read_tables: mail_message_states
 %% write_tables:
 %% notes: reads: 1 | writes: 0 | joins: 0 | transactions: 0
 %% sets: query
@@ -12,12 +12,14 @@ team
 agent
 actor
 message_key"]
-    I --> R["Read visibility row
-SELECT state_json
-FROM mail_visibility_states
+    I --> R["Read unified state row
+SELECT read, pending_ack_at, acknowledged_at,
+       expires_at, deleted_at, updated_at
+FROM mail_message_states
 WHERE team, agent, message_key"]
     R -->|row found| M["Materialize state
-deserialize state_json"]
+parse optional timestamps
+rebuild MailStoreVisibilityState"]
     R -->|no row| O0["Output
 state: None"]
     M --> O1["Output

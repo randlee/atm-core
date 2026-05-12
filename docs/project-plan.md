@@ -2782,6 +2782,7 @@ Acceptance:
 Scope:
 - replace the split `mail_visibility_states` / `ack_state` model with one
   mutable message-state owner
+- land the unified table as `mail_message_states`
 - move mailbox/runtime state into that unified state surface, including:
   - read state
   - ack state

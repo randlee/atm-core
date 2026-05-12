@@ -4,6 +4,7 @@ The diagrams here describe the simplified target query model.
 
 Query rules:
 - every ATM-owned mailbox read starts from mutable message-status state
+- one explicit `mail_message_states` table owns mutable mailbox state
 - deleted rows remain hidden from normal queries
 - logical-current queries exclude superseded rows unless an admin-only
   diagnostic surface explicitly asks for them

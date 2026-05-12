@@ -86,6 +86,11 @@ public boundary shape must remain split:
 - `TaskStore` may remain an upstream trait, but no SQLite task schema is
   approved until the task model is explicitly designed.
 
+Within `MailStore`, the current approved durable shape is:
+- `mail_messages` for immutable/authored message content
+- `mail_message_states` for mutable mailbox state such as read, ack, expiry,
+  and delete visibility
+
 Architectural rule:
 - sharing one internal connection/transaction root is acceptable
 - exposing one public god-interface is not

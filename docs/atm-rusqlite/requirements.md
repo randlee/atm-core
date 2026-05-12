@@ -107,6 +107,8 @@ Required rules:
 - the durable schema must expose:
   - one concrete message table with queryable identity/timestamp columns plus
     full-envelope JSON
+  - one explicit mutable message-state table for read/ack/expiry/delete state;
+    split `ack_state` / `mail_visibility_states` storage is not permitted
   - one canonical roster/member store with explicit behavioral fields such as
     `member_kind` and `harness`
 - routine SQLite failures must return typed errors, not panic/unwrap
