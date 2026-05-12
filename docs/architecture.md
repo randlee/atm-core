@@ -1855,6 +1855,17 @@ Current executed requirement:
 - any remaining code or docs that still describe workflow sidecars or
   `metadata.atm.messageId` are cleanup debt and must be removed in Phase U.
 
+Unified-state ownership notes:
+- `mail_messages` keeps immutable content only
+- `mail_message_states` owns mutable mailbox/runtime state behind the
+  `message_key` foreign-key relationship
+- `expires_at` moved out of `mail_messages` and now lives only on
+  `mail_message_states`
+- deleted-row visibility is admin-only; normal list/read/count queries must
+  exclude rows with `deleted_at`
+- the earlier split model (`mail_visibility_states` plus `ack_state`) is
+  retired and must not be reintroduced
+
 ### 18.5 New Error Codes
 
 - `MailboxLockFailed` / `ATM_MAILBOX_LOCK_FAILED` — lock-path creation,

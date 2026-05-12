@@ -8,13 +8,16 @@ use crate::identity;
 use crate::mailbox::source::resolve_target;
 use crate::observability::ObservabilityPort;
 use crate::read::{
-    BucketCounts, ClassifiedMessage, filters, normalize_contains_filter, sort_and_limit_selected,
-    state,
+    BucketCounts, ClassifiedMessage, filters,
+    metadata_selection::{
+        bucket_counts_for, classify_mailbox_metadata_rows, logical_current_messages,
+        select_messages, sort_and_limit_selected,
+    },
+    normalize_contains_filter,
 };
-use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::schema::AtmMessageId;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, legacy_runtime};
-use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, ReadSelection, TaskId, TeamName};
 
 const DEFAULT_LIST_LIMIT: usize = 200;
@@ -120,7 +123,7 @@ pub fn list_mail(
     observability: &dyn ObservabilityPort,
 ) -> Result<ListOutcome, AtmError> {
     let runtime = legacy_runtime();
-    list_mail_with_runtime(query, observability, &runtime)
+    list_mail_with_runtime_impl(query, observability, &runtime)
 }
 
 pub fn list_mail_with_runtime(
@@ -216,85 +219,6 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     })
 }
 
-fn classify_mailbox_metadata_rows(
-    rows: &[crate::boundary::MailStoreMailboxMetadataRow],
-) -> Vec<ClassifiedMessage> {
-    let projected = rows
-        .iter()
-        .enumerate()
-        .map(|(index, row)| ClassifiedMessage {
-            source_index: index.into(),
-            source_path: PathBuf::from(row.message_key.as_ref()),
-            bucket: crate::types::DisplayBucket::Unread,
-            class: crate::types::MessageClass::Unread,
-            envelope: MessageEnvelope {
-                from: row.from_agent.clone(),
-                text: row.summary.clone().unwrap_or_default(),
-                timestamp: row.message_at,
-                read: row.read,
-                source_team: None,
-                summary: row.summary.clone(),
-                message_id: row.message_id,
-                pending_ack_at: row.pending_ack.then_some(row.message_at),
-                acknowledged_at: row.acknowledged_at,
-                acknowledges_message_id: None,
-                parent_message_id: row.parent_message_id,
-                thread_mode: row.thread_mode,
-                expires_at: None,
-                task_id: row.task_id.clone(),
-                extra: serde_json::Map::new(),
-            },
-        })
-        .collect::<Vec<_>>();
-    let envelopes = projected
-        .iter()
-        .map(|message| message.envelope.clone())
-        .collect::<Vec<_>>();
-    let thread_index = ThreadIndex::new(&envelopes);
-
-    projected
-        .into_iter()
-        .map(|message| {
-            let effective = effective_display_envelope(&message.envelope, &thread_index);
-            let class = state::classify_message(&effective);
-            let bucket = state::display_bucket_for_class(class);
-            ClassifiedMessage {
-                source_index: message.source_index,
-                source_path: message.source_path,
-                bucket,
-                class,
-                envelope: effective,
-            }
-        })
-        .collect()
-}
-
-fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedMessage> {
-    let projected = messages
-        .iter()
-        .map(|message| message.envelope.clone())
-        .collect::<Vec<_>>();
-    let thread_index = ThreadIndex::new(&projected);
-
-    messages
-        .into_iter()
-        .filter(|message| {
-            message
-                .envelope
-                .message_id
-                .is_none_or(|message_id| thread_index.is_terminal(message_id))
-        })
-        .map(|mut message| {
-            if let Some(message_id) = message.envelope.message_id
-                && let Some(logical) = thread_index.logical_current_envelope(message_id)
-            {
-                message.envelope = logical;
-            }
-            message
-        })
-        .collect()
-}
-
 fn apply_list_filters(
     messages: Vec<ClassifiedMessage>,
     sender_filter: Option<&AgentName>,
@@ -311,77 +235,6 @@ fn apply_list_filters(
     );
 
     filters::apply_contains_filter(filtered, contains_filter)
-}
-
-fn select_messages(
-    messages: &[ClassifiedMessage],
-    selection_mode: ReadSelection,
-    seen_watermark: Option<IsoTimestamp>,
-) -> Vec<ClassifiedMessage> {
-    let watermark = if selection_mode == ReadSelection::All {
-        None
-    } else {
-        seen_watermark
-    };
-
-    let visible = messages
-        .iter()
-        .filter(|message| !hidden_for_selection(&message.envelope, selection_mode))
-        .cloned()
-        .collect::<Vec<_>>();
-
-    filters::apply_selection_mode(visible, selection_mode, watermark)
-}
-
-fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
-    messages.iter().fold(
-        BucketCounts {
-            unread: 0,
-            pending_ack: 0,
-            history: 0,
-        },
-        |mut counts, message| {
-            if hidden_from_normal_views(&message.envelope) {
-                return counts;
-            }
-            match message.bucket {
-                crate::types::DisplayBucket::Unread => counts.unread += 1,
-                crate::types::DisplayBucket::PendingAck => counts.pending_ack += 1,
-                crate::types::DisplayBucket::History => counts.history += 1,
-            }
-            counts
-        },
-    )
-}
-
-fn hidden_from_normal_views(envelope: &MessageEnvelope) -> bool {
-    let now = IsoTimestamp::now();
-    is_expired_ephemeral(envelope, now) || (is_ephemeral(envelope) && envelope.read)
-}
-
-fn hidden_for_selection(envelope: &MessageEnvelope, selection_mode: ReadSelection) -> bool {
-    let now = IsoTimestamp::now();
-    if is_expired_ephemeral(envelope, now) {
-        return true;
-    }
-    selection_mode != ReadSelection::All && is_ephemeral(envelope) && envelope.read
-}
-
-fn effective_display_envelope(
-    envelope: &MessageEnvelope,
-    thread_index: &ThreadIndex<'_>,
-) -> MessageEnvelope {
-    let Some(message_id) = envelope.message_id else {
-        return envelope.clone();
-    };
-    if thread_index.is_terminal(message_id) {
-        return envelope.clone();
-    }
-
-    let mut historical = envelope.clone();
-    historical.read = true;
-    historical.pending_ack_at = None;
-    historical
 }
 
 fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
