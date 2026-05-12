@@ -8,10 +8,10 @@ use crate::config;
 use crate::error::AtmError;
 use crate::identity;
 use crate::mailbox::source::{SourceFile, SourcedMessage};
-use crate::mailbox::surface::dedupe_legacy_message_id_surface;
+use crate::mailbox::surface::dedupe_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::send::{PostSendHookContext, ResolvedRecipient, input, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -26,7 +26,7 @@ pub struct AckRequest {
     pub current_dir: PathBuf,
     pub actor_override: Option<AgentName>,
     pub team_override: Option<TeamName>,
-    pub message_id: LegacyMessageId,
+    pub message_id: AtmMessageId,
     pub reply_body: String,
 }
 
@@ -36,11 +36,11 @@ pub struct AckOutcome {
     pub action: CommandAction,
     pub team: TeamName,
     pub agent: AgentName,
-    pub message_id: LegacyMessageId,
+    pub message_id: AtmMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
     pub reply_target: ReplyTarget,
-    pub reply_message_id: LegacyMessageId,
+    pub reply_message_id: AtmMessageId,
     pub reply_text: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
@@ -197,7 +197,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
     let ack_timestamp = IsoTimestamp::now();
     let reply_text = input::validate_message_text(request.reply_body)?;
-    let reply_message_id = LegacyMessageId::new();
+    let reply_message_id = AtmMessageId::new();
     let source_task_id = source_message.envelope.task_id.clone();
     let reply_message = MessageEnvelope {
         from: actor.clone(),
@@ -378,7 +378,7 @@ fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
 fn reject_non_terminal_ack(
     source_files: &[SourceFile],
     workflow_state: &workflow::WorkflowStateFile,
-    message_id: LegacyMessageId,
+    message_id: AtmMessageId,
 ) -> Result<(), AtmError> {
     let envelopes = merged_surface(source_files, workflow_state)
         .into_iter()
@@ -424,11 +424,11 @@ fn merged_surface(
 fn find_source_message(
     source_files: &[SourceFile],
     workflow_state: &workflow::WorkflowStateFile,
-    message_id: LegacyMessageId,
+    message_id: AtmMessageId,
     actor: &AgentName,
     team: &TeamName,
 ) -> Result<SourcedMessage, AtmError> {
-    dedupe_legacy_message_id_surface(
+    dedupe_message_id_surface(
         merged_surface(source_files, workflow_state),
         |message: &SourcedMessage| message.envelope.message_id,
         |message: &SourcedMessage| message.envelope.timestamp,
@@ -531,7 +531,7 @@ mod tests {
     use super::{canonical_sender_identity, reject_non_terminal_ack, resolve_reply_target};
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
+    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
     use crate::test_support::TEST_TEAM;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use crate::workflow;
@@ -557,8 +557,8 @@ mod tests {
     }
 
     fn thread_message(
-        message_id: LegacyMessageId,
-        parent_message_id: Option<LegacyMessageId>,
+        message_id: AtmMessageId,
+        parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
     ) -> MessageEnvelope {
         MessageEnvelope {
@@ -604,13 +604,13 @@ mod tests {
 
     #[test]
     fn reject_non_terminal_ack_requires_latest_thread_message() {
-        let root_id = LegacyMessageId::new();
+        let root_id = AtmMessageId::new();
         let source_files = vec![SourceFile {
             path: PathBuf::from("recipient.json"),
             messages: vec![
                 thread_message(root_id, None, None),
                 thread_message(
-                    LegacyMessageId::new(),
+                    AtmMessageId::new(),
                     Some(root_id),
                     Some(ThreadMode::Supersede),
                 ),

@@ -365,7 +365,7 @@ mod tests {
         ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
     };
     use atm_core::read::ReadQuery;
-    use atm_core::schema::{AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig};
+    use atm_core::schema::{AgentMember, AtmMessageId, MessageEnvelope, TeamConfig};
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{
         ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM,
@@ -501,7 +501,7 @@ mod tests {
             .expect("send request")
         }
 
-        fn ack_request(&self, message_id: LegacyMessageId, reply_body: &str) -> AckRequest {
+        fn ack_request(&self, message_id: AtmMessageId, reply_body: &str) -> AckRequest {
             AckRequest {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
@@ -574,8 +574,8 @@ mod tests {
             }
         }
 
-        fn pending_ack_message(&self, text: &str) -> (LegacyMessageId, MessageEnvelope) {
-            let message_id = LegacyMessageId::new();
+        fn pending_ack_message(&self, text: &str) -> (AtmMessageId, MessageEnvelope) {
+            let message_id = AtmMessageId::new();
             let mut message = self.message(text, true);
             message.message_id = Some(message_id);
             message.pending_ack_at = Some(Utc::now().into());

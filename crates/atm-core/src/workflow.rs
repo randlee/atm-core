@@ -220,7 +220,7 @@ mod tests {
         WorkflowMessageState, apply_projected_state, load_workflow_state, project_envelope,
         remember_initial_state, remove_message_state, save_workflow_state, workflow_key,
     };
-    use crate::schema::{LegacyMessageId, MessageEnvelope};
+    use crate::schema::{AtmMessageId, MessageEnvelope};
     use crate::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -232,7 +232,7 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
-            message_id: Some(LegacyMessageId::new()),
+            message_id: Some(AtmMessageId::new()),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -274,7 +274,7 @@ mod tests {
     }
 
     #[test]
-    fn workflow_key_uses_legacy_message_id() {
+    fn workflow_key_uses_message_id() {
         let message = sample_message();
 
         assert_eq!(

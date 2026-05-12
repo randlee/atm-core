@@ -12,7 +12,7 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
+use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
@@ -46,7 +46,7 @@ pub struct SendRequest {
     pub summary_override: Option<String>,
     pub requires_ack: bool,
     pub task_id: Option<TaskId>,
-    pub parent_message_id: Option<LegacyMessageId>,
+    pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub stale_at: Option<crate::types::IsoTimestamp>,
     pub dry_run: bool,
@@ -92,7 +92,7 @@ pub struct SendOutcome {
     pub agent: AgentName,
     pub sender: AgentName,
     pub outcome: String,
-    pub message_id: LegacyMessageId,
+    pub message_id: AtmMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
@@ -247,7 +247,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &recipient.team,
     )?;
     let summary = summary::build_summary(&body, request.summary_override);
-    let message_id = LegacyMessageId::new();
+    let message_id = AtmMessageId::new();
     let timestamp = IsoTimestamp::now();
 
     if !request.dry_run {
@@ -342,7 +342,7 @@ pub(crate) struct PostSendHookContext<'a> {
     pub(crate) sender_team: Option<&'a TeamName>,
     pub(crate) recipient: &'a ResolvedRecipient,
     pub(crate) recipient_pane_id: Option<&'a str>,
-    pub(crate) message_id: LegacyMessageId,
+    pub(crate) message_id: AtmMessageId,
     pub(crate) requires_ack: bool,
     pub(crate) is_ack: bool,
     pub(crate) task_id: Option<&'a TaskId>,
@@ -433,7 +433,7 @@ fn notify_team_lead_missing_config(
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
-        message_id: Some(LegacyMessageId::new()),
+        message_id: Some(AtmMessageId::new()),
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -524,7 +524,7 @@ fn prepare_threaded_message(
 fn validate_thread_append(
     envelope: &mut MessageEnvelope,
     inbox_messages: &[MessageEnvelope],
-    parent_id: LegacyMessageId,
+    parent_id: AtmMessageId,
 ) -> Result<(), AtmError> {
     let index = ThreadIndex::new(inbox_messages);
     let parent = index.message(parent_id).ok_or_else(|| {
@@ -639,15 +639,15 @@ mod tests {
     use super::{alert_state, prepare_threaded_message};
     use crate::process::process_is_alive;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
+    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     fn message(
         from: &str,
-        message_id: LegacyMessageId,
-        parent_message_id: Option<LegacyMessageId>,
+        message_id: AtmMessageId,
+        parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
     ) -> MessageEnvelope {
         MessageEnvelope {
@@ -762,12 +762,12 @@ mod tests {
 
     #[test]
     fn prepare_threaded_message_reopens_ack_for_ack_required_thread() {
-        let root_id = LegacyMessageId::new();
+        let root_id = AtmMessageId::new();
         let mut root = message(TEST_SENDER, root_id, None, None);
         root.acknowledged_at = Some(IsoTimestamp::now());
         let mut update = message(
             TEST_SENDER,
-            LegacyMessageId::new(),
+            AtmMessageId::new(),
             Some(root_id),
             Some(ThreadMode::AddDetails),
         );
@@ -780,11 +780,11 @@ mod tests {
 
     #[test]
     fn prepare_threaded_message_rejects_non_originating_sender() {
-        let root_id = LegacyMessageId::new();
+        let root_id = AtmMessageId::new();
         let root = message(TEST_SENDER, root_id, None, None);
         let mut update = message(
             ROLE_TEAM_LEAD,
-            LegacyMessageId::new(),
+            AtmMessageId::new(),
             Some(root_id),
             Some(ThreadMode::Supersede),
         );

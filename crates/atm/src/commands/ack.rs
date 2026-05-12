@@ -1,7 +1,7 @@
 use anyhow::{Context, Result};
 use atm_core::ack::AckRequest;
 use atm_core::home;
-use atm_core::schema::LegacyMessageId;
+use atm_core::schema::AtmMessageId;
 use clap::Args;
 
 use crate::composition::CliComposition;
@@ -43,7 +43,7 @@ impl AckCommand {
     ) -> Result<AckRequest> {
         let message_id = self
             .message_id
-            .parse::<LegacyMessageId>()
+            .parse::<AtmMessageId>()
             .with_context(|| format!("invalid message id: {}", self.message_id))?;
 
         Ok(AckRequest {

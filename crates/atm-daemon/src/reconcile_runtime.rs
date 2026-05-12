@@ -677,7 +677,7 @@ mod tests {
     };
     use atm_core::protocol::ReconcileResult;
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::schema::{LegacyMessageId, MessageEnvelope};
+    use atm_core::schema::{AtmMessageId, MessageEnvelope};
     use atm_core::types::IsoTimestamp;
     use chrono::Utc;
     use serde_json::Map;
@@ -922,7 +922,7 @@ mod tests {
             _request: InboxIngressDiagnosticsRequest,
         ) -> Result<InboxIngressDiagnosticsResponse, atm_core::error::AtmError> {
             Ok(InboxIngressDiagnosticsResponse {
-                duplicate_legacy_message_ids: 0,
+                duplicate_message_ids: 0,
                 messages_without_ids: 0,
             })
         }
@@ -1168,7 +1168,7 @@ mod tests {
     }
 
     fn sample_message(text: &str) -> MessageEnvelope {
-        let message_id = LegacyMessageId::new();
+        let message_id = AtmMessageId::new();
 
         MessageEnvelope {
             from: ROLE_TEAM_LEAD.parse().expect("agent"),

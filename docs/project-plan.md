@@ -2745,6 +2745,8 @@ Acceptance:
 - `metadata.atm.messageId` is removed from the design and implementation line
 - duplicated UUID/ULID reinterpretation plumbing no longer persists two fields
   for the same logical identity
+- if SQLite persists `message_id`, it persists only the compatibility UUID wire
+  form of that one logical identity
 - the project docs include an ADR-level statement that ATM owns one logical
   message identity and Claude `message_id` is only the compatible boundary
   encoding of that identity

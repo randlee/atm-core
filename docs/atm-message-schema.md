@@ -43,6 +43,8 @@ Rules:
 
 - ATM keeps one logical message identity in its own system.
 - Claude inbox `message_id` is the shared-wire encoding of that same identity.
+- if ATM persists a durable `message_id` column, it stores that same logical
+  identity in the compatibility wire form rather than as a second ATM-owned id
 - ATM must not persist a second ATM-owned message id under another field name.
 - `metadata.atm.messageId` is not part of the approved schema.
 - confusing `legacy_*` naming should be removed from the implementation line in

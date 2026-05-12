@@ -11,71 +11,33 @@ use crate::config::types::{ByteCount, DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES
 use crate::error::AtmError;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
-#[serde(transparent)]
-/// UUID-based compatibility identifier for legacy top-level ATM `message_id`.
-pub struct LegacyMessageId(Uuid);
+#[derive(Debug, Clone)]
+pub struct AtmMessageIdParseError(String);
 
-impl LegacyMessageId {
-    pub fn new() -> Self {
-        Self(Uuid::new_v4())
-    }
-
-    pub fn from_atm_message_id(value: AtmMessageId) -> Self {
-        Self(Uuid::from_bytes(value.into_ulid().to_bytes()))
-    }
-
-    pub fn into_uuid(self) -> Uuid {
-        self.0
-    }
-
-    /// Reinterpret the raw UUID bytes as an ATM message ULID without mutation.
-    pub fn into_atm_message_id(self) -> AtmMessageId {
-        AtmMessageId::from(Ulid::from_bytes(self.0.into_bytes()))
-    }
-}
-
-impl Default for LegacyMessageId {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl From<Uuid> for LegacyMessageId {
-    fn from(value: Uuid) -> Self {
-        Self(value)
-    }
-}
-
-impl From<LegacyMessageId> for Uuid {
-    fn from(value: LegacyMessageId) -> Self {
-        value.0
-    }
-}
-
-impl std::str::FromStr for LegacyMessageId {
-    type Err = uuid::Error;
-
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Uuid::parse_str(s).map(Self)
-    }
-}
-
-impl fmt::Display for LegacyMessageId {
+impl fmt::Display for AtmMessageIdParseError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        f.write_str(&self.0)
     }
 }
 
+impl std::error::Error for AtmMessageIdParseError {}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
 #[serde(transparent)]
-/// Historical ULID-based ATM identifier retained until Phase U identity
-/// cleanup removes the extra ATM-owned message-id layer.
+/// ATM-owned logical message identifier.
 pub struct AtmMessageId(Ulid);
 
 impl AtmMessageId {
     pub fn new() -> Self {
         Self(Ulid::new())
+    }
+
+    pub fn from_uuid_wire(value: Uuid) -> Self {
+        Self(Ulid::from_bytes(value.into_bytes()))
+    }
+
+    pub fn into_uuid_wire(self) -> Uuid {
+        Uuid::from_bytes(self.0.to_bytes())
     }
 
     pub fn into_ulid(self) -> Ulid {
@@ -106,23 +68,89 @@ impl From<Ulid> for AtmMessageId {
     }
 }
 
+impl From<Uuid> for AtmMessageId {
+    fn from(value: Uuid) -> Self {
+        Self::from_uuid_wire(value)
+    }
+}
+
 impl From<AtmMessageId> for Ulid {
     fn from(value: AtmMessageId) -> Self {
         value.0
     }
 }
 
+impl From<AtmMessageId> for Uuid {
+    fn from(value: AtmMessageId) -> Self {
+        value.into_uuid_wire()
+    }
+}
+
 impl std::str::FromStr for AtmMessageId {
-    type Err = ulid::DecodeError;
+    type Err = AtmMessageIdParseError;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        Ulid::from_string(s).map(Self)
+        Ulid::from_string(s)
+            .map(Self)
+            .or_else(|_| Uuid::parse_str(s).map(Self::from_uuid_wire))
+            .map_err(|error| AtmMessageIdParseError(error.to_string()))
     }
 }
 
 impl fmt::Display for AtmMessageId {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
+    }
+}
+
+mod atm_message_id_uuid_wire {
+    use super::AtmMessageId;
+    use serde::{Deserialize, Deserializer, Serializer};
+    use uuid::Uuid;
+
+    pub fn serialize<S>(value: &AtmMessageId, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&value.into_uuid_wire().to_string())
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<AtmMessageId, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        Uuid::parse_str(&raw)
+            .map(AtmMessageId::from_uuid_wire)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+mod option_atm_message_id_uuid_wire {
+    use super::AtmMessageId;
+    use serde::{Deserialize, Deserializer, Serializer};
+    use uuid::Uuid;
+
+    pub fn serialize<S>(value: &Option<AtmMessageId>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some(value) => serializer.serialize_some(&value.into_uuid_wire().to_string()),
+            None => serializer.serialize_none(),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<AtmMessageId>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        Option::<String>::deserialize(deserializer)?
+            .map(|raw| {
+                let uuid = Uuid::parse_str(&raw).map_err(serde::de::Error::custom)?;
+                Ok(AtmMessageId::from_uuid_wire(uuid))
+            })
+            .transpose()
     }
 }
 
@@ -211,8 +239,9 @@ pub struct MessageEnvelope {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub summary: Option<String>,
 
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub message_id: Option<LegacyMessageId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(with = "option_atm_message_id_uuid_wire")]
+    pub message_id: Option<AtmMessageId>,
 
     #[serde(rename = "pendingAckAt", skip_serializing_if = "Option::is_none")]
     pub pending_ack_at: Option<IsoTimestamp>,
@@ -222,12 +251,19 @@ pub struct MessageEnvelope {
 
     #[serde(
         rename = "acknowledgesMessageId",
+        default,
         skip_serializing_if = "Option::is_none"
     )]
-    pub acknowledges_message_id: Option<LegacyMessageId>,
+    #[serde(with = "option_atm_message_id_uuid_wire")]
+    pub acknowledges_message_id: Option<AtmMessageId>,
 
-    #[serde(rename = "parentMessageId", skip_serializing_if = "Option::is_none")]
-    pub parent_message_id: Option<LegacyMessageId>,
+    #[serde(
+        rename = "parentMessageId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    #[serde(with = "option_atm_message_id_uuid_wire")]
+    pub parent_message_id: Option<AtmMessageId>,
 
     #[serde(rename = "threadMode", skip_serializing_if = "Option::is_none")]
     pub thread_mode: Option<ThreadMode>,
@@ -246,7 +282,8 @@ pub struct MessageEnvelope {
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct PendingAck {
-    pub message_id: LegacyMessageId,
+    #[serde(with = "atm_message_id_uuid_wire")]
+    pub message_id: AtmMessageId,
     pub from: AgentName,
     pub acked: bool,
     pub acked_at: Option<IsoTimestamp>,
@@ -354,7 +391,7 @@ mod tests {
     use chrono::Utc;
 
     use super::{
-        AlertKind, AtmMessageId, IsoTimestamp, LegacyMessageId, MessageEnvelope, PendingAck,
+        AlertKind, AtmMessageId, IsoTimestamp, MessageEnvelope, PendingAck,
         SharedInboxExportPolicy, to_shared_inbox_value, to_shared_inbox_value_with_policy,
     };
     use crate::config::types::ByteCount;
@@ -396,7 +433,7 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("hello".into()),
-            message_id: Some(LegacyMessageId::new()),
+            message_id: Some(AtmMessageId::new()),
             pending_ack_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
@@ -469,7 +506,7 @@ mod tests {
     #[test]
     fn pending_ack_round_trips() {
         let pending_ack = PendingAck {
-            message_id: LegacyMessageId::new(),
+            message_id: AtmMessageId::new(),
             from: ROLE_TEAM_LEAD.parse().expect("agent"),
             acked: true,
             acked_at: Some(IsoTimestamp::from_datetime(
@@ -492,11 +529,14 @@ mod tests {
     }
 
     #[test]
-    fn legacy_message_id_parses_from_uuid_string() {
-        let parsed: LegacyMessageId = "11111111-1111-4111-8111-111111111111"
+    fn atm_message_id_parses_from_uuid_wire_string() {
+        let parsed: AtmMessageId = "11111111-1111-4111-8111-111111111111"
             .parse()
-            .expect("parse legacy id");
-        assert_eq!(parsed.to_string(), "11111111-1111-4111-8111-111111111111");
+            .expect("parse uuid wire id");
+        assert_eq!(
+            parsed.into_uuid_wire().to_string(),
+            "11111111-1111-4111-8111-111111111111"
+        );
     }
 
     #[test]
@@ -519,7 +559,7 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("hello".into()),
-            message_id: Some(LegacyMessageId::new()),
+            message_id: Some(AtmMessageId::new()),
             pending_ack_at: Some(IsoTimestamp::from_datetime(
                 Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 1)
                     .single()
@@ -567,10 +607,10 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("ack reply".into()),
-            message_id: Some(LegacyMessageId::new()),
+            message_id: Some(AtmMessageId::new()),
             pending_ack_at: None,
             acknowledged_at: Some(acknowledged_at),
-            acknowledges_message_id: Some(LegacyMessageId::new()),
+            acknowledges_message_id: Some(AtmMessageId::new()),
             parent_message_id: None,
             thread_mode: None,
             stale_at: None,
@@ -589,7 +629,7 @@ mod tests {
 
     #[test]
     fn shared_inbox_write_stubs_oversized_atm_authored_messages() {
-        let legacy_message_id = LegacyMessageId::new();
+        let message_id = AtmMessageId::new();
         let envelope = MessageEnvelope {
             from: TEST_SENDER.parse().expect("agent"),
             text: "x".repeat(32),
@@ -601,7 +641,7 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("oversized".into()),
-            message_id: Some(legacy_message_id),
+            message_id: Some(message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -622,15 +662,18 @@ mod tests {
 
         assert_eq!(
             encoded["text"],
-            json!(format!("atm read --message-id {legacy_message_id}"))
+            json!(format!("atm read --message-id {message_id}"))
         );
         assert_eq!(encoded["summary"], json!("oversized"));
-        assert_eq!(encoded["message_id"], json!(legacy_message_id.to_string()));
+        assert_eq!(
+            encoded["message_id"],
+            json!(message_id.into_uuid_wire().to_string())
+        );
     }
 
     #[test]
     fn shared_inbox_write_exports_full_body_at_exact_cap() {
-        let legacy_message_id = LegacyMessageId::new();
+        let message_id = AtmMessageId::new();
         let text = "x".repeat(32);
         let envelope = MessageEnvelope {
             from: TEST_SENDER.parse().expect("agent"),
@@ -643,7 +686,7 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("exact-cap".into()),
-            message_id: Some(legacy_message_id),
+            message_id: Some(message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -667,7 +710,7 @@ mod tests {
 
     #[test]
     fn shared_inbox_write_exports_stub_above_cap() {
-        let legacy_message_id = LegacyMessageId::new();
+        let message_id = AtmMessageId::new();
         let text = "x".repeat(32);
         let envelope = MessageEnvelope {
             from: TEST_SENDER.parse().expect("agent"),
@@ -680,7 +723,7 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse().expect("team")),
             summary: Some("above-cap".into()),
-            message_id: Some(legacy_message_id),
+            message_id: Some(message_id),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -701,7 +744,7 @@ mod tests {
 
         assert_eq!(
             encoded["text"],
-            json!(format!("atm read --message-id {legacy_message_id}"))
+            json!(format!("atm read --message-id {message_id}"))
         );
     }
 
@@ -761,7 +804,7 @@ mod tests {
             read: false,
             source_team: None,
             summary: None,
-            message_id: Some(LegacyMessageId::new()),
+            message_id: Some(AtmMessageId::new()),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
