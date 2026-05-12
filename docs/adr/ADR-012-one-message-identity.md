@@ -53,6 +53,10 @@ Required implementation consequences:
   logic
 - `metadata.atm.messageId` is deleted
 - `legacy_*` identity naming is removed from the active implementation path
+- `crates/atm-core/src/workflow.rs` may continue to accept `legacy:` workflow
+  sidecar keys as a read-compatibility shim only; all new writes use `atm:`,
+  and the shim can be removed once older workflow-state files no longer need
+  to be read in place
 - Claude compatibility ingest/export remains supported through the approved
   UUID-wire boundary cast
 - future ATM features must use `AtmMessageId` as the only ATM-owned message

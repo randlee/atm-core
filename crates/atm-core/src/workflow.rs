@@ -26,6 +26,11 @@ pub(crate) struct WorkflowStateFile {
     pub messages: BTreeMap<WorkflowMessageKey, WorkflowMessageState>,
 }
 
+/// Workflow sidecar key for one ATM-owned message identity.
+///
+/// Per ADR-012, all new writes use the `atm:` prefix. `legacy:` remains
+/// accepted here for read-compatibility only while older workflow state files
+/// are still present on disk.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct WorkflowMessageKey(AtmMessageId);
 
