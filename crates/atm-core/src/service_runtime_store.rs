@@ -1,5 +1,6 @@
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::sync::OnceLock;
 
 use crate::boundary;
 use crate::error::AtmError;
@@ -22,6 +23,15 @@ struct UnsupportedRosterStoreAdapter;
 pub(crate) struct LegacyMailboxRuntime {
     inner: LocalServiceRuntime,
 }
+
+pub(crate) enum DefaultMailboxRuntime {
+    Sqlite(LocalServiceRuntime),
+    Legacy(LegacyMailboxRuntime),
+}
+
+type DefaultRuntimeFactory = fn() -> Result<LocalServiceRuntime, AtmError>;
+
+static DEFAULT_RUNTIME_FACTORY: OnceLock<DefaultRuntimeFactory> = OnceLock::new();
 
 impl std::ops::Deref for LegacyMailboxRuntime {
     type Target = LocalServiceRuntime;
@@ -51,6 +61,17 @@ pub(crate) fn legacy_runtime() -> LegacyMailboxRuntime {
             unsupported_roster_store(),
         )
         .with_legacy_mailbox_files(),
+    }
+}
+
+pub fn install_default_runtime_factory(factory: DefaultRuntimeFactory) {
+    let _ = DEFAULT_RUNTIME_FACTORY.set(factory);
+}
+
+pub(crate) fn default_runtime() -> Result<DefaultMailboxRuntime, AtmError> {
+    match DEFAULT_RUNTIME_FACTORY.get().copied() {
+        Some(factory) => factory().map(DefaultMailboxRuntime::Sqlite),
+        None => Ok(DefaultMailboxRuntime::Legacy(legacy_runtime())),
     }
 }
 
@@ -452,6 +473,158 @@ impl RetainedServiceRuntime for LegacyMailboxRuntime {
     }
 }
 
+impl RetainedServiceRuntime for DefaultMailboxRuntime {
+    fn load_config(
+        &self,
+        current_dir: &Path,
+    ) -> Result<Option<crate::config::AtmConfig>, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.load_config(current_dir),
+            Self::Legacy(runtime) => runtime.load_config(current_dir),
+        }
+    }
+
+    fn load_team_config(&self, team_dir: &Path) -> Result<TeamConfig, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.load_team_config(team_dir),
+            Self::Legacy(runtime) => runtime.load_team_config(team_dir),
+        }
+    }
+
+    fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.team_dir(home_dir, team),
+            Self::Legacy(runtime) => runtime.team_dir(home_dir, team),
+        }
+    }
+
+    fn inbox_path(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<PathBuf, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.inbox_path(home_dir, team, agent),
+            Self::Legacy(runtime) => runtime.inbox_path(home_dir, team, agent),
+        }
+    }
+
+    fn workflow_state_path(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<PathBuf, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.workflow_state_path(home_dir, team, agent),
+            Self::Legacy(runtime) => runtime.workflow_state_path(home_dir, team, agent),
+        }
+    }
+
+    fn load_workflow_state(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<crate::workflow::WorkflowStateFile, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.load_workflow_state(home_dir, team, agent),
+            Self::Legacy(runtime) => runtime.load_workflow_state(home_dir, team, agent),
+        }
+    }
+
+    fn save_workflow_state(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        state: &crate::workflow::WorkflowStateFile,
+    ) -> Result<(), AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.save_workflow_state(home_dir, team, agent, state),
+            Self::Legacy(runtime) => runtime.save_workflow_state(home_dir, team, agent, state),
+        }
+    }
+
+    fn load_seen_watermark(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<crate::types::IsoTimestamp>, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.load_seen_watermark(home_dir, team, agent),
+            Self::Legacy(runtime) => runtime.load_seen_watermark(home_dir, team, agent),
+        }
+    }
+
+    fn save_seen_watermark(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        timestamp: crate::types::IsoTimestamp,
+    ) -> Result<(), AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.save_seen_watermark(home_dir, team, agent, timestamp),
+            Self::Legacy(runtime) => runtime.save_seen_watermark(home_dir, team, agent, timestamp),
+        }
+    }
+
+    fn mailbox_timeout_policy(&self) -> crate::service_runtime::RetainedMailboxTimeoutPolicy {
+        match self {
+            Self::Sqlite(runtime) => runtime.mailbox_timeout_policy(),
+            Self::Legacy(runtime) => runtime.mailbox_timeout_policy(),
+        }
+    }
+
+    fn maybe_run_post_send_hook(
+        &self,
+        warnings: &mut Vec<crate::send::WarningEntry>,
+        config: Option<&crate::config::AtmConfig>,
+        context: crate::send::PostSendHookContext<'_>,
+    ) {
+        match self {
+            Self::Sqlite(runtime) => runtime.maybe_run_post_send_hook(warnings, config, context),
+            Self::Legacy(runtime) => runtime.maybe_run_post_send_hook(warnings, config, context),
+        }
+    }
+
+    fn commit_workflow_state<T, I, F>(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        extra_write_paths: I,
+        timeout: std::time::Duration,
+        body: F,
+    ) -> Result<T, AtmError>
+    where
+        I: IntoIterator<Item = PathBuf>,
+        F: FnOnce(&mut crate::workflow::WorkflowStateFile) -> Result<(T, bool), AtmError>,
+    {
+        match self {
+            Self::Sqlite(runtime) => runtime.commit_workflow_state(
+                home_dir,
+                team,
+                agent,
+                extra_write_paths,
+                timeout,
+                body,
+            ),
+            Self::Legacy(runtime) => runtime.commit_workflow_state(
+                home_dir,
+                team,
+                agent,
+                extra_write_paths,
+                timeout,
+                body,
+            ),
+        }
+    }
+}
+
 impl RetainedMailboxRuntime for LegacyMailboxRuntime {
     fn allows_legacy_mailbox_files(&self) -> bool {
         true
@@ -527,6 +700,136 @@ impl RetainedMailboxRuntime for LegacyMailboxRuntime {
         F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
     {
         with_locked_source_files(home_dir, team, agent, extra_write_paths, timeout, body)
+    }
+}
+
+impl RetainedMailboxRuntime for DefaultMailboxRuntime {
+    fn allows_legacy_mailbox_files(&self) -> bool {
+        match self {
+            Self::Sqlite(runtime) => runtime.allows_legacy_mailbox_files(),
+            Self::Legacy(runtime) => runtime.allows_legacy_mailbox_files(),
+        }
+    }
+
+    fn query_mailbox_metadata_rows(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        limit: Option<usize>,
+    ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => {
+                runtime.query_mailbox_metadata_rows(home_dir, team, agent, limit)
+            }
+            Self::Legacy(runtime) => {
+                runtime.query_mailbox_metadata_rows(home_dir, team, agent, limit)
+            }
+        }
+    }
+
+    fn load_message_record(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &boundary::MessageKey,
+    ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => {
+                runtime.load_message_record(home_dir, team, agent, message_key)
+            }
+            Self::Legacy(runtime) => {
+                runtime.load_message_record(home_dir, team, agent, message_key)
+            }
+        }
+    }
+
+    fn persist_message_record(
+        &self,
+        record: boundary::MailStoreMessageRecord,
+    ) -> Result<(), AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.persist_message_record(record),
+            Self::Legacy(runtime) => runtime.persist_message_record(record),
+        }
+    }
+
+    fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.persist_message_state(state),
+            Self::Legacy(runtime) => runtime.persist_message_state(state),
+        }
+    }
+
+    fn observe_source_files(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Vec<SourceFile>, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.observe_source_files(home_dir, team, agent),
+            Self::Legacy(runtime) => runtime.observe_source_files(home_dir, team, agent),
+        }
+    }
+
+    fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.commit_source_files(source_files),
+            Self::Legacy(runtime) => runtime.commit_source_files(source_files),
+        }
+    }
+
+    fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.read_messages(path),
+            Self::Legacy(runtime) => runtime.read_messages(path),
+        }
+    }
+
+    fn commit_mailbox_state(
+        &self,
+        path: &Path,
+        messages: &[MessageEnvelope],
+    ) -> Result<(), AtmError> {
+        match self {
+            Self::Sqlite(runtime) => runtime.commit_mailbox_state(path, messages),
+            Self::Legacy(runtime) => runtime.commit_mailbox_state(path, messages),
+        }
+    }
+
+    fn with_locked_source_files<T, I, F>(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        extra_write_paths: I,
+        timeout: std::time::Duration,
+        body: F,
+    ) -> Result<T, AtmError>
+    where
+        I: IntoIterator<Item = PathBuf>,
+        F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
+    {
+        match self {
+            Self::Sqlite(runtime) => runtime.with_locked_source_files(
+                home_dir,
+                team,
+                agent,
+                extra_write_paths,
+                timeout,
+                body,
+            ),
+            Self::Legacy(runtime) => runtime.with_locked_source_files(
+                home_dir,
+                team,
+                agent,
+                extra_write_paths,
+                timeout,
+                body,
+            ),
+        }
     }
 }
 

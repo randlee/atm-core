@@ -19,7 +19,7 @@ use crate::mailbox::source::{SourceFile, resolve_target};
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::{RetainedMailboxRuntime, legacy_runtime};
+use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::ThreadIndex;
 use crate::types::{
     AckActivationMode, AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass,
@@ -194,17 +194,8 @@ pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ReadOutcome, AtmError> {
-    let runtime = legacy_runtime();
-    let context = resolve_read_context(&query, &runtime)?;
-    read_mail_legacy_path(
-        query,
-        observability,
-        &runtime,
-        context.actor,
-        context.actor_team,
-        context.target,
-        context.seen_watermark,
-    )
+    let runtime = default_runtime()?;
+    read_mail_with_runtime_impl(query, observability, &runtime)
 }
 
 pub fn read_mail_with_runtime(
@@ -229,10 +220,21 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
     let mut metadata_rows =
         runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
-    if metadata_rows
+    let has_legacy_keys = metadata_rows
         .iter()
-        .any(|row| row.message_key.as_ref().starts_with("legacy:"))
-    {
+        .any(|row| row.message_key.as_ref().starts_with("legacy:"));
+    if has_legacy_keys && runtime.allows_legacy_mailbox_files() {
+        return read_mail_legacy_path(
+            query,
+            observability,
+            runtime,
+            actor,
+            actor_team,
+            target,
+            seen_watermark,
+        );
+    }
+    if has_legacy_keys {
         return Err(AtmError::validation(
             "sqlite mailbox metadata returned legacy-prefixed message keys in non-legacy runtime mode",
         )
