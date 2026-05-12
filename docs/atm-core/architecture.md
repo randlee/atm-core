@@ -369,8 +369,10 @@ Approved canonical roster-member schema direction:
 - `agent_type`
 - `model`
 - `metadata_json`
-- `recipient_pane_id` when known (runtime-only; ephemeral harness field)
-- `pid` when known (runtime-only; ephemeral member lifecycle field)
+- `recipient_pane_id` when known, only if the U.7 roster review keeps a
+  runtime/routing field on canonical member rows
+- `pid` when known, only if the U.7 roster review keeps a runtime/routing
+  field on canonical member rows
 
 Observability boundary note:
 - `AgentMember.extra` is intentionally out of scope for the L.4 observability

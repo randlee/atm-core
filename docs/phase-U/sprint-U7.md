@@ -53,11 +53,10 @@ U.7 does not depend on U.2 (one-message-identity). Roster member identity
 (`AtmMessageId`). Roster cleanup can proceed without waiting for U.2.
 
 `recipient_pane_id` and `pid` fields (present in `atm-core/architecture.md`
-roster-member schema) are in scope for U.7. They are runtime-only harness
-fields — `recipient_pane_id` belongs in the `harness` behavioral enum context
-and `pid` is an ephemeral member lifecycle field. U.7 must either fold them
-into the canonical member model or explicitly document them as out-of-scope
-with a concrete rationale.
+roster-member schema) are in scope for U.7 only as runtime/routing candidates.
+They are retained only if justified by the U.7 roster review. U.7 must either
+place them explicitly in the approved canonical member model or document why
+they remain out of scope.
 
 ## Non-Goals
 

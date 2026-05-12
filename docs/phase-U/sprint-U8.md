@@ -129,14 +129,17 @@ only on the identity, query, and member-addressing surfaces above.
   transport/protocol contract proves insufficient
 - `atm-graft` has no Rust-crate dependency on `atm-daemon`, and that rule is
   lint-enforced rather than documented only
-- the following types from `docs/phase-U/removal-inventory.md` are removed or
-  renamed generically by end of U.8:
+- U.8 owns protocol/DTO family ownership and rename planning only
+- actual removal or generic replacement of the following
+  `docs/phase-U/removal-inventory.md` items is split across U.8 through U.10:
   - `GraftSessionPort`
   - `GraftSessionState`
   - `GraftSessionId`
   - `NudgeEvent`
   - `GraftNudgeFetchRequest`
   - `GraftNudgeDrainRequest`
+- by end of U.8, the plan includes an explicit ownership matrix showing which
+  sprint removes or generifies each item
 
 ## Required Validation
 
