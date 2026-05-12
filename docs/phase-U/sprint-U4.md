@@ -6,7 +6,7 @@ phase: U
 sprint: "U.4"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state
 branch: feature/pU-u4-unified-message-state
-status: planned
+status: completed
 estimated_scope: L
 ```
 
@@ -19,10 +19,10 @@ canonical mutable message-state owner.
 
 This sprint redraws the SQLite mailbox state model so content rows stay in
 `mail_messages` while all mutable mailbox/runtime state moves into one unified
-message-state surface. It also renames `stale_at` to `expires_at`.
+message-state surface. It also renames `expires_at` to `expires_at`.
 
 Discovery reference:
-- the split-state and `stale_at` issues were surfaced concretely during the
+- the split-state and `expires_at` issues were surfaced concretely during the
   `feature/fix-sqlite-load-writer-shutdown` discovery work in
   `crates/atm-rusqlite/src/shared_db.rs`; use that file as the starting schema
   evidence for this sprint
@@ -86,7 +86,7 @@ Required shape for every sub-task:
 2. Remove split ownership
    Development work:
    - remove the split between visibility JSON and separate ack columns
-   - move `stale_at` out of `mail_messages`
+   - move `expires_at` out of `mail_messages`
    - rename it to `expires_at`
    Required tests:
    - store write/load tests proving the unified state is authoritative
@@ -138,5 +138,5 @@ If the field set is approved, land the schema and code cleanup together.
 ## Risks And Watchouts
 
 - do not keep duplicate mutable state under new names
-- do not leave `stale_at` on content rows while also introducing `expires_at`
+- do not leave `expires_at` on content rows while also introducing `expires_at`
 - do not preserve JSON blobs where explicit mutable fields are now approved

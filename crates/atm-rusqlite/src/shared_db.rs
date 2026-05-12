@@ -29,32 +29,26 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     message_id TEXT NULL,
     parent_message_id TEXT NULL,
     thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
-    stale_at TEXT NULL,
     imported_from TEXT,
     recorded_at TEXT,
     CHECK(message_key GLOB 'atm:*' OR message_key GLOB 'ext:*'),
     PRIMARY KEY (team, agent, message_key)
 );
 
-CREATE TABLE IF NOT EXISTS ack_state (
+CREATE TABLE IF NOT EXISTS mail_message_states (
     team TEXT NOT NULL,
     agent TEXT NOT NULL,
     message_key TEXT NOT NULL,
+    read INTEGER NOT NULL DEFAULT 0 CHECK(read IN (0, 1)),
     pending_ack_at TEXT NULL,
     acknowledged_at TEXT NULL,
+    expires_at TEXT NULL,
+    deleted_at TEXT NULL,
     updated_at TEXT NULL,
     PRIMARY KEY (team, agent, message_key),
     FOREIGN KEY (team, agent, message_key)
         REFERENCES mail_messages(team, agent, message_key)
         ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS mail_visibility_states (
-    team TEXT NOT NULL,
-    agent TEXT NOT NULL,
-    message_key TEXT NOT NULL,
-    state_json TEXT NOT NULL,
-    PRIMARY KEY (team, agent, message_key)
 );
 
 CREATE TABLE IF NOT EXISTS mail_ingest_replay_states (
@@ -119,8 +113,8 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_message_id
 CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
     ON mail_messages(team, agent);
 
-CREATE INDEX IF NOT EXISTS idx_mail_visibility_mailbox
-    ON mail_visibility_states(team, agent);
+CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
+    ON mail_message_states(team, agent);
 
 CREATE INDEX IF NOT EXISTS idx_mail_ingest_mailbox
     ON mail_ingest_replay_states(team, agent);
@@ -211,6 +205,8 @@ impl SharedDb {
     pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
+            // Accepted risk: durable-state root creation happens during boundary
+            // assembly and is allowed to block on the host filesystem once.
             std::fs::create_dir_all(parent).map_err(|error| {
                 AtmError::mailbox_write(format!(
                     "failed to create sqlite parent directory {}: {error}",
@@ -238,6 +234,8 @@ impl SharedDb {
         })
     }
 
+    /// Call only from blocking code paths; async callers must enter
+    /// `spawn_blocking` before borrowing a sqlite connection.
     pub(crate) fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
@@ -247,6 +245,8 @@ impl SharedDb {
         operation(&mut connection)
     }
 
+    /// Call only from blocking code paths; async callers must enter
+    /// `spawn_blocking` before opening a sqlite transaction.
     pub(crate) fn with_transaction<T>(
         &self,
         operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>,
@@ -293,20 +293,20 @@ impl SharedDb {
         }
     }
 
-    pub(crate) fn submit_upsert_visibility_state(
+    pub(crate) fn submit_upsert_message_state(
         &self,
-        request: atm_core::boundary::MailStoreUpsertVisibilityStateRequest,
-    ) -> Result<atm_core::boundary::MailStoreUpsertVisibilityStateResponse, AtmError> {
+        request: atm_core::boundary::UpsertMailMessageStateRequest,
+    ) -> Result<atm_core::boundary::UpsertMailMessageStateResponse, AtmError> {
         let state = request.state.clone();
         let result = self
             .writer
-            .submit(WriteOp::UpsertVisibilityState(request))?;
+            .submit(WriteOp::UpsertMessageState(Box::new(request)))?;
         match result {
-            WriteOpResult::Unit => Ok(atm_core::boundary::MailStoreUpsertVisibilityStateResponse {
+            WriteOpResult::Unit => Ok(atm_core::boundary::UpsertMailMessageStateResponse {
                 state,
             }),
             other => Err(AtmError::daemon_unavailable(format!(
-                "sqlite writer returned unexpected result for upsert_visibility_state: {other:?}"
+                "sqlite writer returned unexpected result for upsert_message_state: {other:?}"
             ))
             .with_recovery(
                 "Inspect the sqlite writer operation routing and retry after correcting the mismatched result contract.",
@@ -407,6 +407,9 @@ pub(crate) fn configure_connection(
 pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Connection, AtmError> {
     let mut connection = match target {
         SharedDbTarget::Path(path) => {
+            // Accepted risk: sqlite connection open is a process-init boundary
+            // operation and may block on the host filesystem before runtime
+            // request handling starts.
             Connection::open(path).map_err(|error| sqlite_open_error(target, error))?
         }
         #[cfg(test)]
@@ -504,17 +507,20 @@ fn ensure_column(
                 error,
             )
         })?;
-    for entry in columns {
-        if entry.map_err(|error| {
-            sqlite_error(
-                target,
-                format!("failed to read sqlite column metadata for {table}"),
-                error,
-            )
-        })? == column
-        {
-            return Ok(());
-        }
+    let collected = columns
+        .into_iter()
+        .map(|entry| {
+            entry.map_err(|error| {
+                sqlite_error(
+                    target,
+                    format!("failed to read sqlite column metadata for {table}"),
+                    error,
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if collected.into_iter().any(|value| value == column) {
+        return Ok(());
     }
     connection.execute_batch(ddl).map_err(|error| {
         sqlite_error(

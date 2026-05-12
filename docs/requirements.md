@@ -1326,14 +1326,34 @@ Phase R continuation semantics:
 - `REQ-P-THREAD-005` Ephemeral messages are standalone, time-bounded records.
 
   Required behavior:
-  - ephemeral messages expire by time only, using `stale_at`
+  - ephemeral messages expire by time only, using SQLite-owned `expires_at`
   - compatibility/export payloads carry ephemeral expiry with `staleAt`
   - no product behavior may depend on first-read deletion semantics
   - periodic daemon cleanup deletes expired ephemeral rows
   - ephemeral messages are not updatable
   - ephemeral messages may not be parents or children in successor chains
   - once read, an ephemeral message becomes hidden from normal reads but
-    remains visible through `--view-all` until `stale_at`
+    remains visible through `--view-all` until `expires_at`
+
+- `REQ-CORE-MAILBOX-UNIFIED` Mutable mailbox/runtime state must be owned by one
+  canonical SQLite table, `mail_message_states`.
+
+  Required behavior:
+  - `mail_messages` remains the immutable message-content table
+  - `mail_message_states` is the only canonical owner for mutable mailbox
+    state:
+    - `read`
+    - `pending_ack_at`
+    - `acknowledged_at`
+    - `expires_at`
+    - `deleted_at`
+    - `updated_at`
+  - the retired split-state model (`mail_visibility_states` plus `ack_state`)
+    must not be reintroduced under old or new names
+  - normal mailbox queries must hide rows with `deleted_at`
+  - deleted rows may surface only through explicit admin/diagnostic paths
+  - time-bounded ephemeral retention uses `expires_at` from
+    `mail_message_states`, not a field on `mail_messages`
 
 ### 8.5 Output Contract
 
@@ -2730,7 +2750,7 @@ mail correctness.
     - message records
     - read/unread state
     - ack-required / acknowledged state
-    - clear/visibility state
+    - clear/delete/message state
     - task linkage and task metadata
     - team roster
   - Claude-owned inbox JSONL files are compatibility ingress/export surfaces,

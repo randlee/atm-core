@@ -498,7 +498,7 @@ mod tests {
                 acknowledges_message_id: None,
                 parent_message_id,
                 thread_mode,
-                stale_at: None,
+                expires_at: None,
                 task_id: None::<TaskId>,
                 extra: Map::new(),
             },

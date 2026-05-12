@@ -2,14 +2,17 @@ use super::stmt_cache::WriterStatementCache;
 use crate::shared_db::{SharedDbTarget, serialize_json, sqlite_thread_mode};
 use atm_core::boundary;
 use atm_core::error::AtmError;
+use atm_core::schema::MessageEnvelope;
+use atm_core::types::IsoTimestamp;
 use rusqlite::{Connection, OptionalExtension, params};
+use serde::Serialize;
 
 pub(crate) const MAX_ENVELOPE_JSON_BYTES: usize = 1_048_576;
 
 #[derive(Debug, Clone)]
 pub(crate) enum WriteOp {
     UpsertMessage(Box<boundary::MailStoreUpsertMessageRequest>),
-    UpsertVisibilityState(boundary::MailStoreUpsertVisibilityStateRequest),
+    UpsertMessageState(Box<boundary::UpsertMailMessageStateRequest>),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -28,8 +31,8 @@ pub(crate) fn execute(
         WriteOp::UpsertMessage(request) => {
             execute_upsert_message(request, connection, cache, target)
         }
-        WriteOp::UpsertVisibilityState(request) => {
-            execute_upsert_visibility_state(request, connection, cache, target)
+        WriteOp::UpsertMessageState(request) => {
+            execute_upsert_message_state(request, connection, cache, target)
         }
     }
 }
@@ -37,7 +40,10 @@ pub(crate) fn execute(
 pub(crate) fn validate_upsert_message_request(
     request: &boundary::MailStoreUpsertMessageRequest,
 ) -> Result<(), AtmError> {
-    let envelope_json = serialize_json(&request.record.envelope, "mail-store envelope")?;
+    let envelope_json = serialize_json(
+        &StorageEnvelope::new(&request.record.envelope),
+        "mail-store envelope",
+    )?;
     if envelope_json.len() > MAX_ENVELOPE_JSON_BYTES {
         return Err(AtmError::validation(format!(
             "mail-store envelope JSON exceeded the writer lane limit of {MAX_ENVELOPE_JSON_BYTES} bytes"
@@ -56,7 +62,10 @@ fn execute_upsert_message(
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
     let record = &request.record;
-    let envelope_json = serialize_json(&record.envelope, "mail-store envelope")?;
+    let envelope_json = serialize_json(
+        &StorageEnvelope::new(&record.envelope),
+        "mail-store envelope",
+    )?;
     validate_message_record(record, envelope_json.len(), connection, cache, target)?;
     let parent_message_id = record
         .envelope
@@ -64,10 +73,9 @@ fn execute_upsert_message(
         .as_ref()
         .map(ToString::to_string);
     let thread_mode = sqlite_thread_mode(record.envelope.thread_mode);
-    let stale_at = record
-        .envelope
-        .stale_at
-        .map(|value| value.into_inner().to_rfc3339());
+    // Accepted risk: `IsoTimestamp` is ATM's validated UTC timestamp newtype,
+    // so column writes can reuse its canonical RFC3339 rendering directly.
+    let expires_at = record.envelope.expires_at.map(rfc3339);
     let pending_ack_at = record
         .envelope
         .pending_ack_at
@@ -100,7 +108,6 @@ fn execute_upsert_message(
                 message_id,
                 parent_message_id,
                 thread_mode,
-                stale_at,
                 record.imported_from,
                 recorded_at.clone(),
             ],
@@ -109,21 +116,30 @@ fn execute_upsert_message(
             crate::shared_db::sqlite_error(target, "failed to upsert mail-store message", error)
         })?
         == 1;
-    cache
-        .upsert_ack_state(
-            connection,
-            params![
-                record.team.as_str(),
-                record.agent.as_str(),
-                record.message_key.as_ref(),
-                pending_ack_at,
-                acknowledged_at,
-                recorded_at,
-            ],
-        )
-        .map_err(|error| {
-            crate::shared_db::sqlite_error(target, "failed to upsert ack-state row", error)
-        })?;
+    if inserted {
+        cache
+            .upsert_message_state(
+                connection,
+                params![
+                    record.team.as_str(),
+                    record.agent.as_str(),
+                    record.message_key.as_ref(),
+                    i64::from(record.envelope.read),
+                    pending_ack_at,
+                    acknowledged_at,
+                    expires_at,
+                    Option::<String>::None,
+                    recorded_at,
+                ],
+            )
+            .map_err(|error| {
+                crate::shared_db::sqlite_error(
+                    target,
+                    "failed to upsert mail message state row",
+                    error,
+                )
+            })?;
+    }
 
     Ok(WriteOpResult::UpsertMessage { inserted })
 }
@@ -217,37 +233,20 @@ fn validate_message_record(
     Ok(())
 }
 
-fn execute_upsert_visibility_state(
-    request: &boundary::MailStoreUpsertVisibilityStateRequest,
+fn execute_upsert_message_state(
+    request: &boundary::UpsertMailMessageStateRequest,
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
 ) -> Result<WriteOpResult, AtmError> {
-    let state_json = serialize_json(&request.state, "mail-store visibility state")?;
     cache
-        .upsert_visibility_state(
+        .upsert_message_state(
             connection,
             params![
                 request.team.as_str(),
                 request.agent.as_str(),
                 request.state.message_key.as_ref(),
-                state_json,
-            ],
-        )
-        .map_err(|error| {
-            crate::shared_db::sqlite_error(
-                target,
-                "failed to upsert mail-store visibility state",
-                error,
-            )
-        })?;
-    cache
-        .upsert_ack_state(
-            connection,
-            params![
-                request.team.as_str(),
-                request.agent.as_str(),
-                request.state.message_key.as_ref(),
+                i64::from(request.state.read),
                 request
                     .state
                     .pending_ack_at
@@ -255,6 +254,11 @@ fn execute_upsert_visibility_state(
                 request
                     .state
                     .acknowledged_at
+                    .map(|value| value.into_inner().to_rfc3339()),
+                request.state.expires_at.map(rfc3339),
+                request
+                    .state
+                    .deleted_at
                     .map(|value| value.into_inner().to_rfc3339()),
                 request
                     .state
@@ -265,9 +269,73 @@ fn execute_upsert_visibility_state(
         .map_err(|error| {
             crate::shared_db::sqlite_error(
                 target,
-                "failed to upsert ack-state visibility projection",
+                "failed to upsert unified mail message state",
                 error,
             )
         })?;
     Ok(WriteOpResult::Unit)
+}
+
+#[derive(Serialize)]
+struct StorageEnvelope<'a> {
+    from: &'a atm_core::types::AgentName,
+    text: &'a str,
+    timestamp: IsoTimestamp,
+    read: bool,
+    #[serde(default)]
+    source_team: &'a Option<atm_core::types::TeamName>,
+    #[serde(default)]
+    summary: &'a Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    message_id: Option<String>,
+    #[serde(rename = "pendingAckAt", skip_serializing_if = "Option::is_none")]
+    pending_ack_at: Option<IsoTimestamp>,
+    #[serde(rename = "acknowledgedAt", skip_serializing_if = "Option::is_none")]
+    acknowledged_at: Option<IsoTimestamp>,
+    #[serde(
+        rename = "acknowledgesMessageId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    acknowledges_message_id: Option<String>,
+    #[serde(
+        rename = "parentMessageId",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    parent_message_id: Option<String>,
+    #[serde(rename = "threadMode", skip_serializing_if = "Option::is_none")]
+    thread_mode: &'a Option<atm_core::schema::ThreadMode>,
+    #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
+    task_id: &'a Option<atm_core::types::TaskId>,
+    #[serde(flatten)]
+    extra: &'a serde_json::Map<String, serde_json::Value>,
+}
+
+impl<'a> StorageEnvelope<'a> {
+    fn new(envelope: &'a MessageEnvelope) -> Self {
+        Self {
+            from: &envelope.from,
+            text: envelope.text.as_str(),
+            timestamp: envelope.timestamp,
+            read: false,
+            source_team: &envelope.source_team,
+            summary: &envelope.summary,
+            message_id: envelope.message_id.as_ref().map(ToString::to_string),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: envelope
+                .acknowledges_message_id
+                .as_ref()
+                .map(ToString::to_string),
+            parent_message_id: envelope.parent_message_id.as_ref().map(ToString::to_string),
+            thread_mode: &envelope.thread_mode,
+            task_id: &envelope.task_id,
+            extra: &envelope.extra,
+        }
+    }
+}
+
+fn rfc3339(value: IsoTimestamp) -> String {
+    value.into_inner().to_rfc3339()
 }

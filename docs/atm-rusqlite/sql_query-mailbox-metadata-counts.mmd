@@ -1,9 +1,9 @@
 %% title: `Query Mailbox Metadata Counts`
 %% summary: Public sqlite-store method `query_mailbox_metadata_counts`.
-%% commentary: This SQL path returns mailbox totals, unread counts, and pending-ack counts by aggregating the immutable rows with visibility and ack projections.
-%% read_tables: mail_messages, mail_visibility_states, ack_state
+%% commentary: This SQL path returns mailbox totals, unread counts, and pending-ack counts by aggregating immutable rows with the unified mutable state row while excluding deleted and expired messages.
+%% read_tables: mail_messages, mail_message_states
 %% write_tables:
-%% notes: reads: 1 | writes: 0 | joins: 2 | transactions: 0
+%% notes: reads: 1 | writes: 0 | joins: 1 | transactions: 0
 %% sets: query
 flowchart TD
     A["<b>Query Mailbox Metadata Counts</b><br/>query_mailbox_metadata_counts"]
@@ -13,9 +13,10 @@ agent"]
     I --> R["Read aggregate counts
 SELECT COUNT(*), unread SUM(...), pending_ack SUM(...)
 FROM mail_messages
-LEFT JOIN mail_visibility_states ...
-LEFT JOIN ack_state ...
-WHERE team, agent"]
+LEFT JOIN mail_message_states ...
+WHERE team, agent
+exclude deleted_at
+exclude expired expires_at"]
     R --> O["Output
 total_messages
 unread_messages

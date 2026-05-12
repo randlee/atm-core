@@ -1183,7 +1183,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         }

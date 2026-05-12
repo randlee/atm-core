@@ -1,9 +1,9 @@
 %% title: `Query Mailbox Metadata Rows`
 %% summary: Public sqlite-store method `query_mailbox_metadata_rows`.
-%% commentary: This SQL path returns bounded mailbox header rows. It joins immutable message rows with visibility and ack projections, then decodes the row set into `MailboxMetadataRow` values.
-%% read_tables: mail_messages, mail_visibility_states, ack_state
+%% commentary: This SQL path returns bounded mailbox header rows. It joins immutable message rows with the unified mutable state row, filters deleted and expired messages, then decodes the row set into `MailboxMetadataRow` values.
+%% read_tables: mail_messages, mail_message_states
 %% write_tables:
-%% notes: reads: 1 | writes: 0 | joins: 2 | transactions: 0
+%% notes: reads: 1 | writes: 0 | joins: 1 | transactions: 0
 %% sets: query
 flowchart TD
     A["<b>Query Mailbox Metadata Rows</b><br/>query_mailbox_metadata_rows"]
@@ -13,9 +13,10 @@ agent
 limit"]
     I --> R["Read bounded rows
 SELECT mail_messages ...
-LEFT JOIN mail_visibility_states ...
-LEFT JOIN ack_state ...
+LEFT JOIN mail_message_states ...
 WHERE team, agent
+exclude deleted_at
+exclude expired expires_at
 ORDER BY message_at DESC, message_key DESC
 LIMIT ?"]
     R --> D["Decode result rows

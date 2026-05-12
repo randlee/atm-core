@@ -1845,6 +1845,8 @@ state.
 
 Current executed rule:
 - ATM-owned mailbox workflow durability lives in SQLite-backed state.
+- mutable per-message mailbox state is owned by the explicit
+  `mail_message_states` table rather than split visibility/ack storage.
 - `send` commits durable message/content state first.
 - `read`, `ack`, and `clear` read and mutate the SQLite-backed state model.
 - Claude inbox export is a compatibility projection only.
@@ -1852,6 +1854,17 @@ Current executed rule:
 Current executed requirement:
 - any remaining code or docs that still describe workflow sidecars or
   `metadata.atm.messageId` are cleanup debt and must be removed in Phase U.
+
+Unified-state ownership notes:
+- `mail_messages` keeps immutable content only
+- `mail_message_states` owns mutable mailbox/runtime state behind the
+  `message_key` foreign-key relationship
+- `expires_at` moved out of `mail_messages` and now lives only on
+  `mail_message_states`
+- deleted-row visibility is admin-only; normal list/read/count queries must
+  exclude rows with `deleted_at`
+- the earlier split model (`mail_visibility_states` plus `ack_state`) is
+  retired and must not be reintroduced under new names
 
 ### 18.5 New Error Codes
 
@@ -2118,7 +2131,7 @@ ATM moves to a split state model:
 - SQLite is the authoritative durable store for:
   - messages
   - ack/task state
-  - read/clear visibility state
+  - read/clear/delete message state
   - team roster
 - daemon memory is the authoritative live runtime view for:
   - current agent status
@@ -2375,12 +2388,12 @@ Minimum method set:
 - open/bootstrap store
 - run transaction
 - upsert/load message rows
-- upsert/load ack/visibility state
+- upsert/load unified message state
 - record/load ingest replay state
 - return health/readiness snapshot
 
 Scope rule:
-- `MailStore` owns message rows plus read/ack/visibility state tied directly to
+- `MailStore` owns message rows plus unified read/ack/delete/expiry state tied directly to
   message lifecycle
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains

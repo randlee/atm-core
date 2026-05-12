@@ -1,6 +1,6 @@
 {
   "title": "SQL Queries",
-  "generated_at": "2026-05-12T07:03:22.204835+00:00",
+  "generated_at": "2026-05-12T10:18:16.639634+00:00",
   "set": "query",
   "output_path": "docs/reports/query-diagrams.html",
   "sections": [
@@ -27,9 +27,9 @@
     },
     {
       "key": "sql_load-visibility-state",
-      "title": "Load Visibility State",
-      "summary": "SQLite boundary method `MailStore::load_visibility_state`.",
-      "commentary": "This SQL-boundary path reads one visibility-state JSON row and returns `None` when no row exists.",
+      "title": "Load Message State",
+      "summary": "SQLite boundary method `MailStore::load_message_state`.",
+      "commentary": "This SQL-boundary path reads one unified `mail_message_states` row and returns `None` when no row exists.",
       "notes": [
         "reads: 1",
         "writes: 0",
@@ -37,7 +37,7 @@
         "transactions: 0"
       ],
       "read_tables": [
-        "mail_visibility_states"
+        "mail_message_states"
       ],
       "write_tables": [],
       "ssot_path": "docs/atm-rusqlite/sql_load-visibility-state.mmd",
@@ -50,17 +50,16 @@
       "key": "sql_query-mailbox-metadata-counts",
       "title": "Query Mailbox Metadata Counts",
       "summary": "Public sqlite-store method `query_mailbox_metadata_counts`.",
-      "commentary": "This SQL path returns mailbox totals, unread counts, and pending-ack counts by aggregating the immutable rows with visibility and ack projections.",
+      "commentary": "This SQL path returns mailbox totals, unread counts, and pending-ack counts by aggregating immutable rows with the unified mutable state row while excluding deleted and expired messages.",
       "notes": [
         "reads: 1",
         "writes: 0",
-        "joins: 2",
+        "joins: 1",
         "transactions: 0"
       ],
       "read_tables": [
         "mail_messages",
-        "mail_visibility_states",
-        "ack_state"
+        "mail_message_states"
       ],
       "write_tables": [],
       "ssot_path": "docs/atm-rusqlite/sql_query-mailbox-metadata-counts.mmd",
@@ -73,17 +72,16 @@
       "key": "sql_query-mailbox-metadata-rows",
       "title": "Query Mailbox Metadata Rows",
       "summary": "Public sqlite-store method `query_mailbox_metadata_rows`.",
-      "commentary": "This SQL path returns bounded mailbox header rows. It joins immutable message rows with visibility and ack projections, then decodes the row set into `MailboxMetadataRow` values.",
+      "commentary": "This SQL path returns bounded mailbox header rows. It joins immutable message rows with the unified mutable state row, filters deleted and expired messages, then decodes the row set into `MailboxMetadataRow` values.",
       "notes": [
         "reads: 1",
         "writes: 0",
-        "joins: 2",
+        "joins: 1",
         "transactions: 0"
       ],
       "read_tables": [
         "mail_messages",
-        "mail_visibility_states",
-        "ack_state"
+        "mail_message_states"
       ],
       "write_tables": [],
       "ssot_path": "docs/atm-rusqlite/sql_query-mailbox-metadata-rows.mmd",
@@ -96,7 +94,7 @@
       "key": "sql_save-message",
       "title": "Save Message",
       "summary": "SQLite boundary method `MailStore::upsert_message`.",
-      "commentary": "This SQL-boundary path shows the boundary contract first: input, validation, one transaction, output, and boundary-visible error classes.",
+      "commentary": "This SQL-boundary path stores immutable content in `mail_messages`, strips mutable fields out of the stored envelope, and writes the unified mutable projection into `mail_message_states`.",
       "notes": [
         "reads before write: 0..2",
         "writes: 2",
@@ -107,7 +105,7 @@
       ],
       "write_tables": [
         "mail_messages",
-        "ack_state"
+        "mail_message_states"
       ],
       "ssot_path": "docs/atm-rusqlite/sql_save-message.mmd",
       "fragment_path": "docs/reports/panels/sql_save-message.html",
@@ -117,9 +115,9 @@
     },
     {
       "key": "sql_save-visibility-state",
-      "title": "Save Visibility State",
-      "summary": "SQLite boundary method `MailStore::upsert_visibility_state`.",
-      "commentary": "This SQL-boundary path writes both the visibility-state JSON row and the ack-state projection row in one transaction.",
+      "title": "Save Message State",
+      "summary": "SQLite boundary method `MailStore::upsert_message_state`.",
+      "commentary": "This SQL-boundary path writes the entire mutable mailbox projection into one explicit `mail_message_states` row.",
       "notes": [
         "reads: 0",
         "writes: 2",
@@ -128,8 +126,7 @@
       ],
       "read_tables": [],
       "write_tables": [
-        "mail_visibility_states",
-        "ack_state"
+        "mail_message_states"
       ],
       "ssot_path": "docs/atm-rusqlite/sql_save-visibility-state.mmd",
       "fragment_path": "docs/reports/panels/sql_save-visibility-state.html",

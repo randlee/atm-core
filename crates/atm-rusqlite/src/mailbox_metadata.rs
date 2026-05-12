@@ -42,24 +42,25 @@ pub fn query_mailbox_metadata_rows(
                      mail_messages.summary,
                      mail_messages.message_at,
                      COALESCE(
-                         json_extract(mail_visibility_states.state_json, '$.read'),
+                         mail_message_states.read,
                          json_extract(mail_messages.envelope_json, '$.read'),
                          0
                      ),
-                     ack_state.pending_ack_at,
-                     ack_state.acknowledged_at,
+                     mail_message_states.pending_ack_at,
+                     mail_message_states.acknowledged_at,
                      json_extract(mail_messages.envelope_json, '$.taskId')
                  FROM mail_messages
-                 LEFT JOIN mail_visibility_states
-                   ON mail_visibility_states.team = mail_messages.team
-                  AND mail_visibility_states.agent = mail_messages.agent
-                  AND mail_visibility_states.message_key = mail_messages.message_key
-                 LEFT JOIN ack_state
-                   ON ack_state.team = mail_messages.team
-                  AND ack_state.agent = mail_messages.agent
-                  AND ack_state.message_key = mail_messages.message_key
+                 LEFT JOIN mail_message_states
+                   ON mail_message_states.team = mail_messages.team
+                  AND mail_message_states.agent = mail_messages.agent
+                  AND mail_message_states.message_key = mail_messages.message_key
                  WHERE mail_messages.team = ?1
                    AND mail_messages.agent = ?2
+                   AND mail_message_states.deleted_at IS NULL
+                   AND (
+                        mail_message_states.expires_at IS NULL
+                        OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                   )
                  ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC
                  LIMIT ?3;",
             )
@@ -161,28 +162,29 @@ pub fn query_mailbox_metadata_counts(
                      COUNT(*),
                      SUM(CASE
                            WHEN COALESCE(
-                                    json_extract(mail_visibility_states.state_json, '$.read'),
+                                    mail_message_states.read,
                                     json_extract(mail_messages.envelope_json, '$.read'),
                                     0
                                 ) = 0
                            THEN 1 ELSE 0
                          END),
                      SUM(CASE
-                           WHEN ack_state.pending_ack_at IS NOT NULL
-                            AND ack_state.acknowledged_at IS NULL
+                           WHEN mail_message_states.pending_ack_at IS NOT NULL
+                            AND mail_message_states.acknowledged_at IS NULL
                            THEN 1 ELSE 0
                          END)
                  FROM mail_messages
-                 LEFT JOIN mail_visibility_states
-                   ON mail_visibility_states.team = mail_messages.team
-                  AND mail_visibility_states.agent = mail_messages.agent
-                  AND mail_visibility_states.message_key = mail_messages.message_key
-                 LEFT JOIN ack_state
-                   ON ack_state.team = mail_messages.team
-                  AND ack_state.agent = mail_messages.agent
-                  AND ack_state.message_key = mail_messages.message_key
+                 LEFT JOIN mail_message_states
+                   ON mail_message_states.team = mail_messages.team
+                  AND mail_message_states.agent = mail_messages.agent
+                  AND mail_message_states.message_key = mail_messages.message_key
                  WHERE mail_messages.team = ?1
-                   AND mail_messages.agent = ?2;",
+                   AND mail_messages.agent = ?2
+                   AND mail_message_states.deleted_at IS NULL
+                   AND (
+                        mail_message_states.expires_at IS NULL
+                        OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+                   );",
                 params![team.as_str(), agent.as_str()],
                 |row| {
                     Ok(MailboxMetadataCounts {
