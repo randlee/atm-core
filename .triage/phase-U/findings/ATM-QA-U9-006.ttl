@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U9-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U9-006" ;
+  triage:title "GraftSessionState ownership scope ambiguous in removal-inventory.md — does it belong to U.9 or U.10 removal scope?" ;
+  triage:description "removal-inventory.md line 183 assigns GraftSessionState cutover to U.9 in the ownership matrix, and line 210 lists it as a U.9 primary target. Sprint-U9.md acceptance criteria also states U.9 owns GraftSessionState client-runtime replacement. The ownership is consistently U.9 per spec, but the inventory does not explicitly state whether the type is to be removed from atm-core in U.9 or only moved/renamed. The ambiguity is whether 'client-runtime replacement' means GraftSessionState is deleted from the shared protocol contract (U.9) or merely demoted from daemon advisory use (U.10 scope)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U9-006/pU-u9/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ATM-QA-U9-006/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/removal-inventory.md" ;
+  triage:line 183 ;
+  triage:snippet "| `GraftSessionState` | `U.9` | session lifecycle interpretation is client-runtime ownership |" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:worktree/integrate-phase-U/253fc60>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u8/8ce604b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .

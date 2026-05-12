@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-U10-F003>
+  a triage:Finding ;
+  triage:findingId "RBP-U10-F003" ;
+  triage:title "NotificationEvent.kind: String — untyped discriminant" ;
+  triage:description "crates/atm-core/src/protocol.rs — NotificationEvent.kind field is String, an untyped discriminant. Inconsistent with typed envelope pattern used elsewhere." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U10-F003/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U10-F003/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U10-F003/pU-u10/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u10/3730257> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/RBP-U10-F003/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 651 ;
+  triage:snippet "pub kind: String," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> .
+
+<urn:atm:triage:occurrence/RBP-U10-F003/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 680 ;
+  triage:snippet "pub kind: String," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/RBP-U10-F003/pU-u10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 680 ;
+  triage:snippet "pub kind: String," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/3730257>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:orderIndex 10 .

@@ -1,0 +1,122 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-U10-002>
+  a triage:Finding ;
+  triage:findingId "FTQ-U10-002" ;
+  triage:title "SHARED_LIFECYCLE and INSTALL_LOCK are process-wide statics in lifecycle_control.rs" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:12,15 — SHARED_LIFECYCLE and INSTALL_LOCK are process-wide statics. Tests that register/deregister advisory sessions share this state, creating cross-test contamination. Requires isolation or reset path under #[cfg(test)]." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-002/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-002/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-002/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-002/pU-u9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-002/pU-u10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-002/pU-u10/2> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u10/3730257> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u10/3730257> .
+
+# --- integrate/phase-U occurrences ---
+
+<urn:atm:triage:occurrence/FTQ-U10-002/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 12 ;
+  triage:snippet "static SHARED_LIFECYCLE: Mutex<Option<SharedLifecycleControlState>> = Mutex::new(None);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> .
+
+<urn:atm:triage:occurrence/FTQ-U10-002/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 15 ;
+  triage:snippet "static INSTALL_LOCK: Mutex<()> = Mutex::new(());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> .
+
+# --- feature/pU-u9-client-owned-graft-runtime occurrences ---
+
+<urn:atm:triage:occurrence/FTQ-U10-002/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 12 ;
+  triage:snippet "static SHARED_LIFECYCLE: Mutex<Option<SharedLifecycleControlState>> = Mutex::new(None);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U10-002/pU-u9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 15 ;
+  triage:snippet "static INSTALL_LOCK: Mutex<()> = Mutex::new(());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+# --- feature/pU-u10-generic-advisory-notification occurrences ---
+
+<urn:atm:triage:occurrence/FTQ-U10-002/pU-u10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 12 ;
+  triage:snippet "static SHARED_LIFECYCLE: Mutex<Option<SharedLifecycleControlState>> = Mutex::new(None);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/FTQ-U10-002/pU-u10/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 15 ;
+  triage:snippet "static INSTALL_LOCK: Mutex<()> = Mutex::new(());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/3730257>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:orderIndex 10 .
