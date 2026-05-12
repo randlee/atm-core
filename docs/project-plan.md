@@ -2788,7 +2788,7 @@ Scope:
   - ack state
   - expiration
   - delete/hide state
-- rename `stale_at` to `expires_at`
+- rename `expires_at` to `expires_at`
 
 Acceptance:
 - ATM no longer splits mutable per-message state across visibility JSON and a
@@ -2820,6 +2820,9 @@ Scope:
 - justify or remove mailbox-row provenance/timing fields that are not clearly
   part of the enduring contract
 - specifically review `imported_from` and `recorded_at`
+- remove weak round-trip provenance from the enduring message contract
+- if `recorded_at` survives, keep it only as store-owned ingest timing for
+  local health/reporting rather than caller-supplied message metadata
 
 Acceptance:
 - each surviving mailbox-row provenance/timing field has one clear product

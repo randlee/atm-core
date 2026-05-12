@@ -74,7 +74,7 @@ The follow-on implementation should not:
 
 Implementation-sprint acceptance:
 
-- `MailStore::upsert_message` and `MailStore::upsert_visibility_state` route
+- `MailStore::upsert_message` and `MailStore::upsert_message_state` route
   through `SqliteWriter`
 - `SharedDb::with_transaction(...)` keeps its current callable shape for
   remaining cold-path callers while the migrated hot-path writes use typed

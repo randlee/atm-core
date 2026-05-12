@@ -72,11 +72,11 @@ surface deletion.
 
 Primary code/doc targets:
 - `crates/atm-rusqlite/src/shared_db.rs:24-45,100`
-  - `stale_at`
+  - `expires_at`
   - `ack_state`
   - `mail_visibility_states`
 - `crates/atm-rusqlite/src/lib.rs:291-369`
-  - split write path for `stale_at`, `ack_state`, `recorded_at`
+  - split write path for `expires_at`, `ack_state`, `recorded_at`
 - `crates/atm-rusqlite/src/lib.rs:442-456`
   - split visibility/ack updates
 - `crates/atm-rusqlite/src/lib.rs:486,581,609`
@@ -84,9 +84,9 @@ Primary code/doc targets:
 - `crates/atm-rusqlite/src/mailbox_metadata.rs:45-60,164-183`
   - multi-table mailbox projection joins
 - `crates/atm-core/src/schema/inbox_message.rs:219,304,408-433,568-596`
-  - `stale_at` compatibility-envelope handling
+  - `expires_at` compatibility-envelope handling
 - `crates/atm-core/src/threading.rs:20-24`
-  - expiration semantics currently rooted in `stale_at`
+  - expiration semantics currently rooted in `expires_at`
 
 ## U.5 — SQLite Query Cutover And Query Simplification
 

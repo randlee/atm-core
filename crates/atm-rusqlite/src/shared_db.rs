@@ -29,7 +29,6 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     message_id TEXT NULL,
     parent_message_id TEXT NULL,
     thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
-    imported_from TEXT,
     recorded_at TEXT,
     CHECK(message_key GLOB 'atm:*' OR message_key GLOB 'ext:*'),
     PRIMARY KEY (team, agent, message_key)
@@ -205,6 +204,8 @@ impl SharedDb {
     pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
+            // Accepted risk: durable-state root creation happens during boundary
+            // assembly and is allowed to block on the host filesystem once.
             std::fs::create_dir_all(parent).map_err(|error| {
                 AtmError::mailbox_write(format!(
                     "failed to create sqlite parent directory {}: {error}",
@@ -232,6 +233,8 @@ impl SharedDb {
         })
     }
 
+    /// Call only from blocking code paths; async callers must enter
+    /// `spawn_blocking` before borrowing a sqlite connection.
     pub(crate) fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
@@ -241,6 +244,8 @@ impl SharedDb {
         operation(&mut connection)
     }
 
+    /// Call only from blocking code paths; async callers must enter
+    /// `spawn_blocking` before opening a sqlite transaction.
     pub(crate) fn with_transaction<T>(
         &self,
         operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>,
@@ -287,20 +292,20 @@ impl SharedDb {
         }
     }
 
-    pub(crate) fn submit_upsert_visibility_state(
+    pub(crate) fn submit_upsert_message_state(
         &self,
-        request: atm_core::boundary::MailStoreUpsertVisibilityStateRequest,
-    ) -> Result<atm_core::boundary::MailStoreUpsertVisibilityStateResponse, AtmError> {
+        request: atm_core::boundary::UpsertMailMessageStateRequest,
+    ) -> Result<atm_core::boundary::UpsertMailMessageStateResponse, AtmError> {
         let state = request.state.clone();
         let result = self
             .writer
-            .submit(WriteOp::UpsertVisibilityState(Box::new(request)))?;
+            .submit(WriteOp::UpsertMessageState(Box::new(request)))?;
         match result {
-            WriteOpResult::Unit => Ok(atm_core::boundary::MailStoreUpsertVisibilityStateResponse {
+            WriteOpResult::Unit => Ok(atm_core::boundary::UpsertMailMessageStateResponse {
                 state,
             }),
             other => Err(AtmError::daemon_unavailable(format!(
-                "sqlite writer returned unexpected result for upsert_visibility_state: {other:?}"
+                "sqlite writer returned unexpected result for upsert_message_state: {other:?}"
             ))
             .with_recovery(
                 "Inspect the sqlite writer operation routing and retry after correcting the mismatched result contract.",
@@ -401,6 +406,9 @@ pub(crate) fn configure_connection(
 pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Connection, AtmError> {
     let mut connection = match target {
         SharedDbTarget::Path(path) => {
+            // Accepted risk: sqlite connection open is a process-init boundary
+            // operation and may block on the host filesystem before runtime
+            // request handling starts.
             Connection::open(path).map_err(|error| sqlite_open_error(target, error))?
         }
         #[cfg(test)]
@@ -498,17 +506,20 @@ fn ensure_column(
                 error,
             )
         })?;
-    for entry in columns {
-        if entry.map_err(|error| {
-            sqlite_error(
-                target,
-                format!("failed to read sqlite column metadata for {table}"),
-                error,
-            )
-        })? == column
-        {
-            return Ok(());
-        }
+    let collected = columns
+        .into_iter()
+        .map(|entry| {
+            entry.map_err(|error| {
+                sqlite_error(
+                    target,
+                    format!("failed to read sqlite column metadata for {table}"),
+                    error,
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if collected.into_iter().any(|value| value == column) {
+        return Ok(());
     }
     connection.execute_batch(ddl).map_err(|error| {
         sqlite_error(

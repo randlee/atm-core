@@ -1,12 +1,12 @@
-%% title: `Save Visibility State`
-%% summary: SQLite boundary method `MailStore::upsert_visibility_state`.
+%% title: `Save Message State`
+%% summary: SQLite boundary method `MailStore::upsert_message_state`.
 %% commentary: This SQL-boundary path writes the entire mutable mailbox projection into one explicit `mail_message_states` row.
 %% read_tables:
 %% write_tables: mail_message_states
 %% notes: reads: 0 | writes: 2 | joins: 0 | transactions: 1
 %% sets: query
 flowchart TD
-    A["<b>Save Visibility State</b><br/>MailStore::upsert_visibility_state"]
+    A["<b>Save Message State</b><br/>MailStore::upsert_message_state"]
     A --> I["Input
 team
 agent

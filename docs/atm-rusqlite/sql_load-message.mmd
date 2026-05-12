@@ -1,6 +1,6 @@
 %% title: `Load Message`
 %% summary: SQLite boundary method `MailStore::load_message`.
-%% commentary: This SQL-boundary path shows the direct immutable-row load. It currently reads only `mail_messages`, rebuilds one `MailStoreMessageRecord`, and returns `None` when no row exists.
+%% commentary: This SQL-boundary path shows the direct immutable-row load. It reads only `mail_messages`, rebuilds one `MailStoreMessageRecord` from the stored envelope, and returns `None` when no row exists.
 %% read_tables: mail_messages
 %% write_tables:
 %% notes: reads: 1 | writes: 0 | joins: 0 | transactions: 0
@@ -12,12 +12,11 @@ team
 agent
 message_key"]
     I --> R["Read message row
-SELECT envelope_json, imported_from, recorded_at
+SELECT envelope_json
 FROM mail_messages
 WHERE team, agent, message_key"]
     R -->|row found| M["Materialize record
 deserialize envelope_json
-parse recorded_at?
 rebuild MailStoreMessageRecord"]
     R -->|no row| O0["Output
 record: None"]

@@ -161,8 +161,8 @@ impl Drop for SqliteWriter {
         if let Some(sender) = sender {
             match sender.try_send(WriterMessage::Shutdown) {
                 Ok(()) | Err(TrySendError::Disconnected(_)) => {}
-                Err(TrySendError::Full(_)) => eprintln!(
-                    "warn: sqlite writer shutdown signal skipped because the bounded queue was full; relying on channel disconnect to let the writer exit once in-flight work drains"
+                Err(TrySendError::Full(_)) => tracing::warn!(
+                    "sqlite writer shutdown signal skipped because the bounded queue was full; relying on channel disconnect to let the writer exit once in-flight work drains"
                 ),
             }
             drop(sender);
@@ -179,21 +179,21 @@ impl Drop for SqliteWriter {
                 }
                 Ok(Err(_)) => {
                     let _ = join_helper.join();
-                    eprintln!(
-                        "error: sqlite writer thread panicked while shutting down; the durable write lane may have exited mid-drain"
+                    tracing::warn!(
+                        "sqlite writer thread panicked while shutting down; the durable write lane may have exited mid-drain"
                     );
                 }
                 Err(RecvTimeoutError::Timeout) => {
                     drop(join_helper);
-                    eprintln!(
-                        "warn: sqlite writer shutdown exceeded the bounded join deadline of {}ms; detaching join helper",
-                        self.shutdown_join_deadline.as_millis()
+                    tracing::warn!(
+                        timeout_ms = self.shutdown_join_deadline.as_millis(),
+                        "sqlite writer shutdown exceeded the bounded join deadline; detaching join helper"
                     );
                 }
                 Err(RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
-                    eprintln!(
-                        "warn: sqlite writer join helper disconnected before reporting the worker shutdown result"
+                    tracing::warn!(
+                        "sqlite writer join helper disconnected before reporting the worker shutdown result"
                     );
                 }
             }
@@ -226,9 +226,10 @@ fn checkpoint_writer_connection(target: &SharedDbTarget, connection: &mut Sqlite
     }
 
     if let Err(error) = connection.query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(())) {
-        eprintln!(
-            "warn: sqlite writer final wal checkpoint failed after draining the write lane for {}: {error}",
-            target.display()
+        tracing::warn!(
+            path = %target.display(),
+            %error,
+            "sqlite writer final wal checkpoint failed after draining the write lane"
         );
     }
 }
@@ -504,7 +505,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: Some(task_id()),
             extra: serde_json::Map::new(),
         }
@@ -516,8 +517,6 @@ mod tests {
             agent: agent(),
             message_key: message_key(key),
             envelope: envelope(text),
-            imported_from: None,
-            recorded_at: Some(IsoTimestamp::now()),
         }
     }
 
@@ -528,8 +527,6 @@ mod tests {
                 agent: agent(),
                 message_key: message_key(&format!("atm:writer-{index}")),
                 envelope: envelope(&format!("writer message {index}")),
-                imported_from: Some("writer-test".to_string()),
-                recorded_at: Some(IsoTimestamp::now()),
             },
         }))
     }

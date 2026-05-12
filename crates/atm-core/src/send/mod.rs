@@ -15,7 +15,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::RetainedMailboxRuntime;
+use crate::service_runtime_store::{RetainedMailboxRuntime, legacy_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
@@ -49,7 +49,7 @@ pub struct SendRequest {
     pub task_id: Option<TaskId>,
     pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
-    pub stale_at: Option<crate::types::IsoTimestamp>,
+    pub expires_at: Option<crate::types::IsoTimestamp>,
     pub dry_run: bool,
 }
 
@@ -79,7 +79,7 @@ impl SendRequest {
             task_id,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             dry_run,
         })
     }
@@ -150,7 +150,7 @@ pub fn send_mail(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
-    let runtime = LocalServiceRuntime::default();
+    let runtime = legacy_runtime();
     send_mail_with_runtime(request, observability, &runtime)
 }
 
@@ -273,7 +273,7 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
             acknowledges_message_id: None,
             parent_message_id: request.parent_message_id,
             thread_mode: request.thread_mode,
-            stale_at: request.stale_at,
+            expires_at: request.expires_at,
             task_id: task_id.clone(),
             extra: Map::new(),
         };
@@ -453,7 +453,7 @@ fn notify_team_lead_missing_config(
         acknowledges_message_id: None,
         parent_message_id: None,
         thread_mode: None,
-        stale_at: None,
+        expires_at: None,
         task_id: None,
         extra: Map::new(),
     };
@@ -477,7 +477,7 @@ fn notify_team_lead_missing_config(
     }
 }
 
-fn append_mailbox_message_and_seed_workflow(
+pub(crate) fn append_mailbox_message_and_seed_workflow(
     runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     team: &TeamName,
@@ -528,10 +528,8 @@ fn mirror_message_to_store(
         agent: agent.clone(),
         message_key: message_key.clone(),
         envelope: envelope.clone(),
-        imported_from: None,
-        recorded_at: None,
     })?;
-    runtime.persist_visibility_state(boundary::MailStoreVisibilityState {
+    runtime.persist_message_state(boundary::MailMessageState {
         team: team.clone(),
         agent: agent.clone(),
         actor: agent.clone(),
@@ -539,7 +537,7 @@ fn mirror_message_to_store(
         read: envelope.read,
         pending_ack_at: envelope.pending_ack_at,
         acknowledged_at: envelope.acknowledged_at,
-        expires_at: envelope.stale_at,
+        expires_at: envelope.expires_at,
         deleted_at: None,
         updated_at: Some(IsoTimestamp::now()),
     })
@@ -552,7 +550,7 @@ fn prepare_threaded_message(
     match (
         envelope.parent_message_id,
         envelope.thread_mode,
-        envelope.stale_at,
+        envelope.expires_at,
     ) {
         (None, None, _) => Ok(()),
         (Some(_), Some(_), Some(_)) => Err(AtmError::validation(
@@ -713,7 +711,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id,
             thread_mode,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         }
