@@ -53,10 +53,6 @@ pub struct MailStoreMessageRecord {
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub imported_from: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recorded_at: Option<IsoTimestamp>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]

@@ -10,6 +10,9 @@ Query rules:
 - expired rows remain hidden from normal queries
 - full message content is fetched only for selected keys that must be rendered
 - no ATM-owned mailbox query reads inbox JSON or summary files
+- weak provenance round-trip fields are not part of the message load/save
+  contract; store-owned ingest timing may still exist internally for health
+  reporting
 
 Diagrams:
 - save message:

@@ -201,8 +201,6 @@ fn legacy_load_message_record(
         agent: agent.clone(),
         message_key: message_key.clone(),
         envelope,
-        imported_from: None,
-        recorded_at: None,
     }))
 }
 

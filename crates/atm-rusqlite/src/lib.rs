@@ -404,7 +404,7 @@ impl boundary::MailStore for SqliteMailStore {
         let record = self.db.with_connection(|connection| {
             let loaded = connection
                 .query_row(
-                    "SELECT envelope_json, imported_from, recorded_at
+                    "SELECT envelope_json
                      FROM mail_messages
                      WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
                     params![
@@ -412,13 +412,7 @@ impl boundary::MailStore for SqliteMailStore {
                         request.agent.as_str(),
                         request.message_key.as_ref()
                     ],
-                    |row| {
-                        Ok((
-                            row.get::<_, String>(0)?,
-                            row.get::<_, Option<String>>(1)?,
-                            row.get::<_, Option<String>>(2)?,
-                        ))
-                    },
+                    |row| row.get::<_, String>(0),
                 )
                 .optional()
                 .map_err(|error| self.db.error("failed to load mail-store message", error))?;
@@ -428,20 +422,17 @@ impl boundary::MailStore for SqliteMailStore {
                 &request.agent,
                 &request.message_key,
             )?;
-            Ok(loaded.map(|row| (row, state)))
+            Ok(loaded.map(|envelope_json| (envelope_json, state)))
         })?;
 
-        let record = if let Some(((envelope_json, imported_from, recorded_at), state)) = record {
+        let record = if let Some((envelope_json, state)) = record {
             let envelope = deserialize_json(&envelope_json, "mail-store envelope")?;
             let envelope = Self::apply_loaded_state(envelope, state.as_ref());
-            let recorded_at = Self::parse_optional_timestamp(recorded_at, "recorded_at")?;
             Some(boundary::MailStoreMessageRecord {
                 team: request.team.clone(),
                 agent: request.agent.clone(),
                 message_key: request.message_key.clone(),
                 envelope,
-                imported_from,
-                recorded_at,
             })
         } else {
             None
@@ -1109,8 +1100,6 @@ mod tests {
             agent: agent(),
             message_key: message_key("atm:active"),
             envelope: active_envelope,
-            imported_from: None,
-            recorded_at: None,
         };
         let mut expired_envelope = envelope();
         expired_envelope.text = "expired".to_string();
@@ -1127,8 +1116,6 @@ mod tests {
             agent: agent(),
             message_key: message_key("atm:expired"),
             envelope: expired_envelope,
-            imported_from: None,
-            recorded_at: None,
         };
         assembly
             .mail_store()
@@ -1183,8 +1170,6 @@ mod tests {
             agent: agent(),
             message_key: message_key("atm:readable"),
             envelope: readable_envelope,
-            imported_from: None,
-            recorded_at: None,
         };
         assembly
             .mail_store()
@@ -1263,8 +1248,6 @@ mod tests {
                 task_id: Some(task_id()),
                 extra: serde_json::Map::new(),
             },
-            imported_from: None,
-            recorded_at: None,
         };
         assembly
             .mail_store()
@@ -1338,8 +1321,6 @@ mod tests {
                 task_id: Some(task_id()),
                 extra: serde_json::Map::new(),
             },
-            imported_from: None,
-            recorded_at: None,
         };
         assembly
             .mail_store()
@@ -1378,6 +1359,53 @@ mod tests {
             message.envelope.summary.as_deref(),
             Some("entrypoint read summary")
         );
+    }
+
+    #[test]
+    fn recorded_at_is_stamped_by_store_not_caller() {
+        let assembly = in_memory_assembly();
+        assembly
+            .mail_store()
+            .bootstrap(boundary::MailStoreBootstrapRequest {
+                team_dir: std::env::temp_dir(),
+                team: team(),
+                team_config: None,
+            })
+            .expect("bootstrap");
+
+        let record = boundary::MailStoreMessageRecord {
+            team: team(),
+            agent: agent(),
+            message_key: message_key("atm:recorded-at"),
+            envelope: envelope(),
+        };
+        assembly
+            .mail_store()
+            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+            .expect("upsert message");
+
+        let recorded_at: String = assembly
+            .mail_store
+            .db
+            .with_connection(|connection| {
+                connection
+                    .query_row(
+                        "SELECT recorded_at FROM mail_messages
+                         WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                        params![team().as_str(), agent().as_str(), "atm:recorded-at"],
+                        |row| row.get::<_, String>(0),
+                    )
+                    .map_err(|error| {
+                        assembly
+                            .mail_store
+                            .db
+                            .error("failed to load recorded_at verification row", error)
+                    })
+            })
+            .expect("load recorded_at");
+
+        let parsed = chrono::DateTime::parse_from_rfc3339(&recorded_at).expect("rfc3339");
+        assert_eq!(parsed.to_rfc3339(), recorded_at);
     }
 
     #[test]
@@ -1498,8 +1526,6 @@ mod tests {
                     agent: agent(),
                     message_key: message_key("atm:test-reopen"),
                     envelope: envelope(),
-                    imported_from: None,
-                    recorded_at: Some(IsoTimestamp::now()),
                 },
             })
             .expect("write");
@@ -1540,8 +1566,6 @@ mod tests {
                 expires_at: Some(expires_at),
                 ..envelope()
             },
-            imported_from: Some("cli-send".to_string()),
-            recorded_at: Some(IsoTimestamp::now()),
         };
         let upsert = store
             .upsert_message(boundary::MailStoreUpsertMessageRequest {
@@ -1661,10 +1685,6 @@ mod tests {
                     pending_ack,
                     task_id_value,
                 ),
-                imported_from: None,
-                recorded_at: Some(IsoTimestamp::from_datetime(
-                    now + chrono::Duration::seconds(index as i64),
-                )),
             };
             assembly
                 .mail_store()
@@ -1717,10 +1737,6 @@ mod tests {
                     false,
                     None,
                 ),
-                imported_from: None,
-                recorded_at: Some(IsoTimestamp::from_datetime(
-                    now + chrono::Duration::seconds(index as i64),
-                )),
             };
             assembly
                 .mail_store()
@@ -1841,8 +1857,6 @@ mod tests {
                     agent: agent(),
                     message_key: message_key("atm:deleted-state"),
                     envelope: envelope(),
-                    imported_from: None,
-                    recorded_at: Some(IsoTimestamp::from_datetime(now)),
                 },
             })
             .expect("upsert message");
@@ -1963,8 +1977,6 @@ mod tests {
                 message_id: Some(root_id),
                 ..envelope()
             },
-            imported_from: None,
-            recorded_at: Some(IsoTimestamp::now()),
         };
         store
             .upsert_message(boundary::MailStoreUpsertMessageRequest {
@@ -1979,8 +1991,6 @@ mod tests {
                     agent: agent(),
                     message_key: MessageKey::new("bad-key").expect("non-empty"),
                     envelope: envelope(),
-                    imported_from: None,
-                    recorded_at: Some(IsoTimestamp::now()),
                 },
             })
             .expect_err("invalid key");
@@ -1996,8 +2006,6 @@ mod tests {
                 thread_mode: Some(atm_core::schema::ThreadMode::AddDetails),
                 ..envelope()
             },
-            imported_from: None,
-            recorded_at: Some(IsoTimestamp::now()),
         };
         store
             .upsert_message(boundary::MailStoreUpsertMessageRequest {
@@ -2017,8 +2025,6 @@ mod tests {
                         thread_mode: Some(atm_core::schema::ThreadMode::Supersede),
                         ..envelope()
                     },
-                    imported_from: None,
-                    recorded_at: Some(IsoTimestamp::now()),
                 },
             })
             .expect_err("duplicate successor");
@@ -2040,8 +2046,6 @@ mod tests {
                         message_id: Some(root_id),
                         ..envelope()
                     },
-                    imported_from: None,
-                    recorded_at: Some(IsoTimestamp::now()),
                 },
             })
             .expect_err("duplicate message identity");
@@ -2063,8 +2067,6 @@ mod tests {
             agent: agent(),
             message_key: message_key("atm:duplicate"),
             envelope: envelope(),
-            imported_from: None,
-            recorded_at: Some(IsoTimestamp::now()),
         };
         let replacement = boundary::MailStoreMessageRecord {
             envelope: MessageEnvelope {
@@ -2073,8 +2075,6 @@ mod tests {
                 pending_ack_at: None,
                 ..original.envelope.clone()
             },
-            imported_from: Some("duplicate-rewrite-attempt".to_string()),
-            recorded_at: Some(IsoTimestamp::now()),
             ..original.clone()
         };
 
@@ -2115,8 +2115,6 @@ mod tests {
                         agent: agent(),
                         message_key: message_key(&format!("atm:concurrent-{index}")),
                         envelope: envelope(),
-                        imported_from: Some("concurrency-test".to_string()),
-                        recorded_at: Some(IsoTimestamp::now()),
                     },
                 });
                 response.expect("concurrent upsert").inserted

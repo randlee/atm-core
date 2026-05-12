@@ -12,7 +12,7 @@ team
 agent
 message_key"]
     I --> R["Read message row + state
-SELECT envelope_json, imported_from, recorded_at,
+SELECT envelope_json,
        state.read, state.pending_ack_at,
        state.acknowledged_at, state.expires_at,
        state.deleted_at, state.updated_at
@@ -21,7 +21,6 @@ LEFT JOIN mail_message_states ...
 WHERE team, agent, message_key"]
     R -->|row found| M["Materialize record
 deserialize envelope_json
-parse recorded_at?
 apply_loaded_state
 rebuild MailStoreMessageRecord"]
     R -->|no row| O0["Output

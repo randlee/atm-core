@@ -89,9 +89,8 @@ fn execute_upsert_message(
     let summary = record.envelope.summary.clone();
     let message_at = record.envelope.timestamp.into_inner().to_rfc3339();
     let message_id = record.envelope.message_id.as_ref().map(ToString::to_string);
-    let recorded_at = record
-        .recorded_at
-        .map(|value| value.into_inner().to_rfc3339());
+    // Ingest timing is owned by the durable store, not by callers (ADR-005).
+    let recorded_at = IsoTimestamp::now().into_inner().to_rfc3339();
 
     let inserted = cache
         .insert_message_row(
@@ -108,7 +107,6 @@ fn execute_upsert_message(
                 message_id,
                 parent_message_id,
                 thread_mode,
-                record.imported_from,
                 recorded_at.clone(),
             ],
         )

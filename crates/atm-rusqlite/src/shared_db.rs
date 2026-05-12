@@ -29,7 +29,6 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     message_id TEXT NULL,
     parent_message_id TEXT NULL,
     thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
-    imported_from TEXT,
     recorded_at TEXT,
     CHECK(message_key GLOB 'atm:*' OR message_key GLOB 'ext:*'),
     PRIMARY KEY (team, agent, message_key)

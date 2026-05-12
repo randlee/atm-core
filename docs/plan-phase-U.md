@@ -46,6 +46,9 @@ Sprint summary:
   - `atm ack` and `atm clear` remain on their existing runtime path until a
     later dedicated rewrite
 - `U.6` provenance/timing field reduction
+  - delete weak round-trip provenance such as `imported_from`
+  - keep only clearly justified store-owned ingest timing such as
+    `recorded_at` when health/reporting requires it
 - `U.7` roster simplification and explicit member model
 - `U.8` shared thin-client ICD for CLI and graft
 - `U.9` client-owned graft runtime with one persistent receive thread, one
