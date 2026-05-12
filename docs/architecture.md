@@ -1868,6 +1868,19 @@ Unified-state ownership notes:
 - the earlier split model (`mail_visibility_states` plus `ack_state`) is
   retired and must not be reintroduced
 
+### 18.4.4 Phase U Provenance Reduction
+
+Phase U removed weak round-trip provenance from the durable mailbox contract.
+
+Current executed rule:
+- `imported_from` is removed from `MailStoreMessageRecord` durable truth and is
+  no longer part of the mailbox-row schema
+- `recorded_at` remains SQLite-owned ingest timing in `atm-rusqlite`, not
+  caller-supplied message data
+
+Governing ADR:
+- `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
+
 ### 18.5 New Error Codes
 
 - `MailboxLockFailed` / `ATM_MAILBOX_LOCK_FAILED` — lock-path creation,

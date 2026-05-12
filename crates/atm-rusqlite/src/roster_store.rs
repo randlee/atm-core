@@ -369,3 +369,43 @@ fn validate_roster_text_field(
     }
     Ok(value)
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn stored_row(member_kind: &str, harness: &str) -> StoredRosterMemberRow {
+        StoredRosterMemberRow {
+            member_kind: member_kind.to_string(),
+            harness: harness.to_string(),
+            agent_type: String::new(),
+            model: String::new(),
+            metadata_json: "{}".to_string(),
+            recipient_pane_id: None,
+        }
+    }
+
+    #[test]
+    fn build_roster_member_rejects_unknown_member_kind() {
+        let team: atm_core::types::TeamName = "tm".parse().expect("team");
+        let error = build_roster_member(
+            &team,
+            "agent".to_string(),
+            stored_row("mystery", "claude-code"),
+        )
+        .expect_err("unknown member_kind should fail");
+        assert!(error.is_validation());
+    }
+
+    #[test]
+    fn build_roster_member_rejects_unknown_harness() {
+        let team: atm_core::types::TeamName = "tm".parse().expect("team");
+        let error = build_roster_member(
+            &team,
+            "agent".to_string(),
+            stored_row("permanent", "mystery-harness"),
+        )
+        .expect_err("unknown harness should fail");
+        assert!(error.is_validation());
+    }
+}

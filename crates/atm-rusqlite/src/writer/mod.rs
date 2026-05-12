@@ -161,6 +161,9 @@ impl Drop for SqliteWriter {
         if let Some(sender) = sender {
             match sender.try_send(WriterMessage::Shutdown) {
                 Ok(()) | Err(TrySendError::Disconnected(_)) => {}
+                // Accepted risk: std::sync::mpsc::SyncSender does not expose a
+                // queue-depth probe here, so shutdown logging cannot report an
+                // exact depth without replacing the channel primitive.
                 Err(TrySendError::Full(_)) => tracing::warn!(
                     "sqlite writer shutdown signal skipped because the bounded queue was full; relying on channel disconnect to let the writer exit once in-flight work drains"
                 ),

@@ -162,7 +162,8 @@ impl SqliteBoundaryAssembly {
                 .prepare(
                     "SELECT state_json
                      FROM daemon_remote_replay_states
-                     ORDER BY team, agent, message_key;",
+                     ORDER BY team, agent, message_key
+                     LIMIT 10000;",
                 )
                 .map_err(|error| {
                     self.mail_store
@@ -807,6 +808,9 @@ impl boundary::TaskStore for SqliteTaskStore {
         &self,
         request: boundary::TaskStoreRecordAckTransitionRequest,
     ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, AtmError> {
+        // Accepted risk: task ack transitions remain append-only audit rows for
+        // a compatibility-only task-store shape. This branch keeps full
+        // history instead of silently pruning per-task transitions here.
         let transition_json = serialize_json(
             &serde_json::json!({
                 "message_key": request.message_key.clone(),
@@ -1956,6 +1960,14 @@ mod tests {
                 assert!(collected.iter().any(|column| column == "message_at"));
                 assert!(collected.iter().any(|column| column == "message_id"));
                 assert!(!collected.iter().any(|column| column == "expires_at"));
+                assert!(
+                    !collected.iter().any(|column| column == "imported_from"),
+                    "imported_from must be absent from mail_messages"
+                );
+                assert!(
+                    collected.iter().any(|column| column == "recorded_at"),
+                    "recorded_at must be present in mail_messages"
+                );
 
                 let mut state_columns = connection
                     .prepare("PRAGMA table_info(mail_message_states);")
