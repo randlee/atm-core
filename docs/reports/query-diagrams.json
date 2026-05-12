@@ -1,32 +1,11 @@
 {
   "title": "SQL Queries",
-  "generated_at": "2026-05-12T11:16:01.081349+00:00",
+  "generated_at": "2026-05-12T12:55:58.378060+00:00",
   "set": "query",
   "output_path": "docs/reports/query-diagrams.html",
   "sections": [
     {
-      "key": "sql_load-message",
-      "title": "Load Message",
-      "summary": "SQLite boundary method `MailStore::load_message`.",
-      "commentary": "This SQL-boundary path shows the direct immutable-row load. It reads only `mail_messages`, rebuilds one `MailStoreMessageRecord` from the stored envelope, and returns `None` when no row exists.",
-      "notes": [
-        "reads: 1",
-        "writes: 0",
-        "joins: 0",
-        "transactions: 0"
-      ],
-      "read_tables": [
-        "mail_messages"
-      ],
-      "write_tables": [],
-      "ssot_path": "docs/atm-rusqlite/sql_load-message.mmd",
-      "fragment_path": "docs/reports/panels/sql_load-message.html",
-      "sets": [
-        "query"
-      ]
-    },
-    {
-      "key": "sql_load-visibility-state",
+      "key": "sql_load-message-state",
       "title": "Load Message State",
       "summary": "SQLite boundary method `MailStore::load_message_state`.",
       "commentary": "This SQL-boundary path reads one unified `mail_message_states` row and returns `None` when no row exists.",
@@ -40,8 +19,30 @@
         "mail_message_states"
       ],
       "write_tables": [],
-      "ssot_path": "docs/atm-rusqlite/sql_load-visibility-state.mmd",
-      "fragment_path": "docs/reports/panels/sql_load-visibility-state.html",
+      "ssot_path": "docs/atm-rusqlite/sql_load-message-state.mmd",
+      "fragment_path": "docs/reports/panels/sql_load-message-state.html",
+      "sets": [
+        "query"
+      ]
+    },
+    {
+      "key": "sql_load-message",
+      "title": "Load Message",
+      "summary": "SQLite boundary method `MailStore::load_message`.",
+      "commentary": "This SQL-boundary path reads the immutable row from `mail_messages`, LEFT JOINs `mail_message_states`, applies the loaded mutable state projection to the envelope, and returns `None` when no row exists.",
+      "notes": [
+        "reads: 1",
+        "writes: 0",
+        "joins: 1",
+        "transactions: 0"
+      ],
+      "read_tables": [
+        "mail_messages",
+        "mail_message_states"
+      ],
+      "write_tables": [],
+      "ssot_path": "docs/atm-rusqlite/sql_load-message.mmd",
+      "fragment_path": "docs/reports/panels/sql_load-message.html",
       "sets": [
         "query"
       ]
@@ -91,10 +92,31 @@
       ]
     },
     {
+      "key": "sql_save-message-state",
+      "title": "Save Message State",
+      "summary": "SQLite boundary method `MailStore::upsert_message_state`.",
+      "commentary": "This SQL-boundary path writes the entire mutable mailbox projection into one explicit `mail_message_states` row.",
+      "notes": [
+        "reads: 0",
+        "writes: 2",
+        "joins: 0",
+        "transactions: 1"
+      ],
+      "read_tables": [],
+      "write_tables": [
+        "mail_message_states"
+      ],
+      "ssot_path": "docs/atm-rusqlite/sql_save-message-state.mmd",
+      "fragment_path": "docs/reports/panels/sql_save-message-state.html",
+      "sets": [
+        "query"
+      ]
+    },
+    {
       "key": "sql_save-message",
       "title": "Save Message",
       "summary": "SQLite boundary method `MailStore::upsert_message`.",
-      "commentary": "This SQL-boundary path stores immutable content in `mail_messages`, lets the store stamp internal ingest timing, strips mutable fields out of the stored envelope, and writes the unified mutable projection into `mail_message_states`.",
+      "commentary": "This SQL-boundary path stores immutable content in `mail_messages`, strips mutable fields out of the stored envelope, and writes the unified mutable projection into `mail_message_states`.",
       "notes": [
         "reads before write: 0..2",
         "writes: 2",
@@ -109,27 +131,6 @@
       ],
       "ssot_path": "docs/atm-rusqlite/sql_save-message.mmd",
       "fragment_path": "docs/reports/panels/sql_save-message.html",
-      "sets": [
-        "query"
-      ]
-    },
-    {
-      "key": "sql_save-visibility-state",
-      "title": "Save Message State",
-      "summary": "SQLite boundary method `MailStore::upsert_message_state`.",
-      "commentary": "This SQL-boundary path writes the entire mutable mailbox projection into one explicit `mail_message_states` row.",
-      "notes": [
-        "reads: 0",
-        "writes: 2",
-        "joins: 0",
-        "transactions: 1"
-      ],
-      "read_tables": [],
-      "write_tables": [
-        "mail_message_states"
-      ],
-      "ssot_path": "docs/atm-rusqlite/sql_save-visibility-state.mmd",
-      "fragment_path": "docs/reports/panels/sql_save-visibility-state.html",
       "sets": [
         "query"
       ]

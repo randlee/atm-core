@@ -7,37 +7,51 @@ use crate::mailbox;
 use crate::mailbox::source::SourceFile;
 use crate::schema::MessageEnvelope;
 use crate::schema::TeamConfig;
-use crate::service_runtime::LocalServiceRuntime;
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::types::{AgentName, TeamName};
 
 #[derive(Debug, Default)]
-struct LegacyMailStoreAdapter;
+struct UnsupportedMailStoreAdapter;
 
 #[derive(Debug, Default)]
-struct LegacyTaskStoreAdapter;
+struct UnsupportedTaskStoreAdapter;
 
 #[derive(Debug, Default)]
-struct LegacyRosterStoreAdapter;
+struct UnsupportedRosterStoreAdapter;
 
-pub(crate) fn default_mail_store() -> Arc<dyn boundary::MailStore + Send + Sync> {
-    Arc::new(LegacyMailStoreAdapter)
+pub(crate) struct LegacyMailboxRuntime {
+    inner: LocalServiceRuntime,
 }
 
-pub(crate) fn default_task_store() -> Arc<dyn boundary::TaskStore + Send + Sync> {
-    Arc::new(LegacyTaskStoreAdapter)
+impl std::ops::Deref for LegacyMailboxRuntime {
+    type Target = LocalServiceRuntime;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
 }
 
-pub(crate) fn default_roster_store() -> Arc<dyn boundary::RosterStore + Send + Sync> {
-    Arc::new(LegacyRosterStoreAdapter)
+fn unsupported_mail_store() -> Arc<dyn boundary::MailStore + Send + Sync> {
+    Arc::new(UnsupportedMailStoreAdapter)
 }
 
-pub(crate) fn legacy_runtime() -> LocalServiceRuntime {
-    LocalServiceRuntime::new(
-        default_mail_store(),
-        default_task_store(),
-        default_roster_store(),
-    )
-    .with_legacy_mailbox_files()
+fn unsupported_task_store() -> Arc<dyn boundary::TaskStore + Send + Sync> {
+    Arc::new(UnsupportedTaskStoreAdapter)
+}
+
+fn unsupported_roster_store() -> Arc<dyn boundary::RosterStore + Send + Sync> {
+    Arc::new(UnsupportedRosterStoreAdapter)
+}
+
+pub(crate) fn legacy_runtime() -> LegacyMailboxRuntime {
+    LegacyMailboxRuntime {
+        inner: LocalServiceRuntime::new(
+            unsupported_mail_store(),
+            unsupported_task_store(),
+            unsupported_roster_store(),
+        )
+        .with_legacy_mailbox_files(),
+    }
 }
 
 pub(crate) trait RetainedMailboxRuntime {
@@ -132,6 +146,7 @@ fn legacy_query_mailbox_metadata_rows(
                 pending_ack: envelope.pending_ack_at.is_some()
                     && envelope.acknowledged_at.is_none(),
                 acknowledged_at: envelope.acknowledged_at,
+                expires_at: envelope.expires_at,
                 task_id: envelope.task_id,
             });
             if let Some(limit) = limit
@@ -216,56 +231,34 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
 
     fn query_mailbox_metadata_rows(
         &self,
-        home_dir: &Path,
+        _home_dir: &Path,
         team: &TeamName,
         agent: &AgentName,
         limit: Option<usize>,
     ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
-        match self
-            .mail_store
+        self.mail_store
             .query_mailbox_metadata(boundary::MailStoreQueryMailboxMetadataRequest {
                 team: team.clone(),
                 agent: agent.clone(),
                 limit,
             })
             .map(|response| response.rows)
-        {
-            Ok(rows) => Ok(rows),
-            Err(error)
-                if self.allows_legacy_mailbox_files()
-                    && is_unsupported_boundary(&error, "MailStore::query_mailbox_metadata") =>
-            {
-                legacy_query_mailbox_metadata_rows(home_dir, team, agent, limit)
-            }
-            Err(error) => Err(error),
-        }
     }
 
     fn load_message_record(
         &self,
-        home_dir: &Path,
+        _home_dir: &Path,
         team: &TeamName,
         agent: &AgentName,
         message_key: &boundary::MessageKey,
     ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
-        match self
-            .mail_store
+        self.mail_store
             .load_message(boundary::MailStoreLoadMessageRequest {
                 team: team.clone(),
                 agent: agent.clone(),
                 message_key: message_key.clone(),
             })
             .map(|response| response.record)
-        {
-            Ok(record) => Ok(record),
-            Err(error)
-                if self.allows_legacy_mailbox_files()
-                    && is_unsupported_boundary(&error, "MailStore::load_message") =>
-            {
-                legacy_load_message_record(home_dir, team, agent, message_key)
-            }
-            Err(error) => Err(error),
-        }
     }
 
     fn persist_message_record(
@@ -352,6 +345,189 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
     }
 }
 
+impl RetainedServiceRuntime for LegacyMailboxRuntime {
+    fn load_config(
+        &self,
+        current_dir: &Path,
+    ) -> Result<Option<crate::config::AtmConfig>, AtmError> {
+        self.inner.load_config(current_dir)
+    }
+
+    fn load_team_config(&self, team_dir: &Path) -> Result<TeamConfig, AtmError> {
+        self.inner.load_team_config(team_dir)
+    }
+
+    fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError> {
+        self.inner.team_dir(home_dir, team)
+    }
+
+    fn inbox_path(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<PathBuf, AtmError> {
+        self.inner.inbox_path(home_dir, team, agent)
+    }
+
+    fn workflow_state_path(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<PathBuf, AtmError> {
+        self.inner.workflow_state_path(home_dir, team, agent)
+    }
+
+    fn load_workflow_state(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<crate::workflow::WorkflowStateFile, AtmError> {
+        self.inner.load_workflow_state(home_dir, team, agent)
+    }
+
+    fn save_workflow_state(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        state: &crate::workflow::WorkflowStateFile,
+    ) -> Result<(), AtmError> {
+        self.inner.save_workflow_state(home_dir, team, agent, state)
+    }
+
+    fn load_seen_watermark(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<crate::types::IsoTimestamp>, AtmError> {
+        self.inner.load_seen_watermark(home_dir, team, agent)
+    }
+
+    fn save_seen_watermark(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        timestamp: crate::types::IsoTimestamp,
+    ) -> Result<(), AtmError> {
+        self.inner
+            .save_seen_watermark(home_dir, team, agent, timestamp)
+    }
+
+    fn mailbox_timeout_policy(&self) -> crate::service_runtime::RetainedMailboxTimeoutPolicy {
+        self.inner.mailbox_timeout_policy()
+    }
+
+    fn maybe_run_post_send_hook(
+        &self,
+        warnings: &mut Vec<crate::send::WarningEntry>,
+        config: Option<&crate::config::AtmConfig>,
+        context: crate::send::PostSendHookContext<'_>,
+    ) {
+        self.inner
+            .maybe_run_post_send_hook(warnings, config, context)
+    }
+
+    fn commit_workflow_state<T, I, F>(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        extra_write_paths: I,
+        timeout: std::time::Duration,
+        body: F,
+    ) -> Result<T, AtmError>
+    where
+        I: IntoIterator<Item = PathBuf>,
+        F: FnOnce(&mut crate::workflow::WorkflowStateFile) -> Result<(T, bool), AtmError>,
+    {
+        self.inner
+            .commit_workflow_state(home_dir, team, agent, extra_write_paths, timeout, body)
+    }
+}
+
+impl RetainedMailboxRuntime for LegacyMailboxRuntime {
+    fn allows_legacy_mailbox_files(&self) -> bool {
+        true
+    }
+
+    fn query_mailbox_metadata_rows(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        limit: Option<usize>,
+    ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+        legacy_query_mailbox_metadata_rows(home_dir, team, agent, limit)
+    }
+
+    fn load_message_record(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &boundary::MessageKey,
+    ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+        legacy_load_message_record(home_dir, team, agent, message_key)
+    }
+
+    fn persist_message_record(
+        &self,
+        record: boundary::MailStoreMessageRecord,
+    ) -> Result<(), AtmError> {
+        self.inner.persist_message_record(record)
+    }
+
+    fn persist_message_state(&self, state: boundary::MailMessageState) -> Result<(), AtmError> {
+        self.inner.persist_message_state(state)
+    }
+
+    fn observe_source_files(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Vec<SourceFile>, AtmError> {
+        observe_source_files(home_dir, team, agent)
+    }
+
+    fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError> {
+        commit_source_files(source_files)
+    }
+
+    fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+        crate::mailbox::read_messages(path)
+    }
+
+    fn commit_mailbox_state(
+        &self,
+        path: &Path,
+        messages: &[MessageEnvelope],
+    ) -> Result<(), AtmError> {
+        commit_mailbox_state(path, messages)
+    }
+
+    fn with_locked_source_files<T, I, F>(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        extra_write_paths: I,
+        timeout: std::time::Duration,
+        body: F,
+    ) -> Result<T, AtmError>
+    where
+        I: IntoIterator<Item = PathBuf>,
+        F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
+    {
+        with_locked_source_files(home_dir, team, agent, extra_write_paths, timeout, body)
+    }
+}
+
 fn unsupported(what: &str) -> AtmError {
     AtmError::validation(format!(
         "retained runtime placeholder adapter does not implement {what}"
@@ -361,9 +537,9 @@ fn unsupported(what: &str) -> AtmError {
     )
 }
 
-impl boundary::sealed::Sealed for LegacyMailStoreAdapter {}
+impl boundary::sealed::Sealed for UnsupportedMailStoreAdapter {}
 
-impl boundary::MailStore for LegacyMailStoreAdapter {
+impl boundary::MailStore for UnsupportedMailStoreAdapter {
     fn bootstrap(
         &self,
         request: boundary::MailStoreBootstrapRequest,
@@ -466,9 +642,9 @@ impl boundary::MailStore for LegacyMailStoreAdapter {
     }
 }
 
-impl boundary::sealed::Sealed for LegacyTaskStoreAdapter {}
+impl boundary::sealed::Sealed for UnsupportedTaskStoreAdapter {}
 
-impl boundary::TaskStore for LegacyTaskStoreAdapter {
+impl boundary::TaskStore for UnsupportedTaskStoreAdapter {
     fn create_task(
         &self,
         request: boundary::TaskStoreCreateTaskRequest,
@@ -523,9 +699,9 @@ impl boundary::TaskStore for LegacyTaskStoreAdapter {
     }
 }
 
-impl boundary::sealed::Sealed for LegacyRosterStoreAdapter {}
+impl boundary::sealed::Sealed for UnsupportedRosterStoreAdapter {}
 
-impl boundary::RosterStore for LegacyRosterStoreAdapter {
+impl boundary::RosterStore for UnsupportedRosterStoreAdapter {
     fn replace_roster(
         &self,
         request: boundary::RosterStoreReplaceRosterRequest,
