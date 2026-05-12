@@ -101,10 +101,16 @@ Consequences:
 - Thin extensions expose a smaller public surface.
 - Task-state rules still remain explicit in store and workflow boundaries.
 - The reply emitted by that workflow must hardcode `requires_ack = false`.
+- Shared core request and query surfaces must resolve both ULID text and UUID
+  wire text to the same `AtmMessageId`.
 - Send-shaped request data may carry `parentMessageId` and `threadMode` when
   the caller is creating a successor-thread message.
 - Update/correction threads are modeled as one linear successor chain whose
   terminal node is the effective current instruction.
+- The effective current instruction is mode-aware:
+  - terminal `add-details` keeps the terminal id but composes the still-valid
+    predecessor context into the current body
+  - terminal `supersede` exposes only the replacement body
 - Only the original sender may append chain successors.
 - Ack is evaluated at the chain level rather than per-node toggle churn, with
   the root message establishing whether the thread is ack-required.
@@ -403,7 +409,7 @@ ATM-authored alert metadata belongs to the send/schema boundary in `atm-core`.
 
 Architectural rule:
 - ATM-owned repair/alert machine state belongs in SQLite-owned state and typed
-  diagnostics, not in an active `metadata.atm` namespace
+  diagnostics, not in shared inbox metadata namespaces
 - legacy top-level alert fields such as `atmAlertKind` and
   `missingConfigPath` remain read-compatible only until removed
 

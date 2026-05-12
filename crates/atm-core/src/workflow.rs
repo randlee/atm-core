@@ -6,12 +6,11 @@
 //! code must not shape or persist workflow JSON directly.
 
 use std::collections::BTreeMap;
+use std::fmt;
 use std::fs;
 use std::path::{Path, PathBuf};
+use std::str::FromStr;
 use std::time::Duration;
-
-use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
 
 use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
@@ -19,11 +18,73 @@ use crate::mailbox::lock;
 use crate::persistence;
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub(crate) struct WorkflowStateFile {
     #[serde(default)]
-    pub messages: BTreeMap<String, WorkflowMessageState>,
+    pub messages: BTreeMap<WorkflowMessageKey, WorkflowMessageState>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub(crate) struct WorkflowMessageKey(AtmMessageId);
+
+impl WorkflowMessageKey {
+    const PREFIX: &str = "atm:";
+
+    pub(crate) fn new(message_id: AtmMessageId) -> Self {
+        Self(message_id)
+    }
+
+    pub(crate) fn from_envelope(envelope: &MessageEnvelope) -> Option<Self> {
+        envelope.message_id.map(Self::new)
+    }
+}
+
+impl fmt::Display for WorkflowMessageKey {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}{}", Self::PREFIX, self.0)
+    }
+}
+
+impl FromStr for WorkflowMessageKey {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let raw_id = value
+            .strip_prefix(Self::PREFIX)
+            .or_else(|| value.strip_prefix("legacy:"))
+            .ok_or_else(|| {
+                format!(
+                    "workflow key must start with '{}' or 'legacy:'",
+                    Self::PREFIX
+                )
+            })?;
+        let message_id = raw_id
+            .parse::<AtmMessageId>()
+            .map_err(|error| format!("invalid workflow message id: {error}"))?;
+        Ok(Self::new(message_id))
+    }
+}
+
+impl Serialize for WorkflowMessageKey {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
+    }
+}
+
+impl<'de> Deserialize<'de> for WorkflowMessageKey {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let raw = String::deserialize(deserializer)?;
+        raw.parse::<WorkflowMessageKey>()
+            .map_err(serde::de::Error::custom)
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -185,51 +246,8 @@ pub(crate) fn remove_message_state(
         .is_some()
 }
 
-pub(crate) fn workflow_key(envelope: &MessageEnvelope) -> Option<String> {
-    atm_message_id(envelope)
-        .map(|message_id| format!("atm:{message_id}"))
-        .or_else(|| {
-            envelope
-                .message_id
-                .map(|message_id| format!("legacy:{message_id}"))
-        })
-}
-
-pub(crate) fn atm_message_id(envelope: &MessageEnvelope) -> Option<AtmMessageId> {
-    envelope
-        .extra
-        .get("metadata")
-        .and_then(Value::as_object)
-        .and_then(|metadata| metadata.get("atm"))
-        .and_then(Value::as_object)
-        .and_then(|atm| atm.get("messageId"))
-        .and_then(Value::as_str)
-        .and_then(|value| value.parse().ok())
-}
-
-pub(crate) fn set_atm_message_id(extra: &mut Map<String, Value>, message_id: AtmMessageId) {
-    let metadata = extra
-        .entry("metadata".to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-    if !metadata.is_object() {
-        *metadata = Value::Object(Map::new());
-    }
-    let Some(metadata) = metadata.as_object_mut() else {
-        return;
-    };
-    let atm = metadata
-        .entry("atm".to_string())
-        .or_insert_with(|| Value::Object(Map::new()));
-    if !atm.is_object() {
-        *atm = Value::Object(Map::new());
-    }
-    let Some(atm) = atm.as_object_mut() else {
-        return;
-    };
-    atm.insert(
-        "messageId".to_string(),
-        Value::String(message_id.to_string()),
-    );
+pub(crate) fn workflow_key(envelope: &MessageEnvelope) -> Option<WorkflowMessageKey> {
+    WorkflowMessageKey::from_envelope(envelope)
 }
 
 pub(crate) fn initial_state_for_envelope(envelope: &MessageEnvelope) -> WorkflowMessageState {
@@ -257,15 +275,14 @@ pub(crate) fn remember_initial_state(
 
 #[cfg(test)]
 mod tests {
-    use serde_json::Map;
     use tempfile::TempDir;
 
     use super::{
-        WorkflowMessageState, apply_projected_state, atm_message_id, load_workflow_state,
+        WorkflowMessageKey, WorkflowMessageState, apply_projected_state, load_workflow_state,
         project_envelope, remember_initial_state, remove_message_state, save_workflow_state,
-        set_atm_message_id, workflow_key,
+        workflow_key,
     };
-    use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use crate::schema::{AtmMessageId, MessageEnvelope};
     use crate::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -277,7 +294,7 @@ mod tests {
             read: false,
             source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
             summary: None,
-            message_id: Some(LegacyMessageId::new()),
+            message_id: Some(AtmMessageId::new()),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -285,7 +302,7 @@ mod tests {
             thread_mode: None,
             stale_at: None,
             task_id: None,
-            extra: Map::new(),
+            extra: serde_json::Map::new(),
         }
     }
 
@@ -303,7 +320,9 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let mut state = super::WorkflowStateFile::default();
         state.messages.insert(
-            "legacy:test".to_string(),
+            "atm:01KRFK5QTF2R6NRS3Q0F8Z9K0S"
+                .parse::<WorkflowMessageKey>()
+                .expect("workflow key"),
             WorkflowMessageState {
                 read: true,
                 pending_ack_at: None,
@@ -319,23 +338,22 @@ mod tests {
     }
 
     #[test]
-    fn workflow_key_prefers_forward_atm_message_id() {
-        let mut message = sample_message();
-        let atm_id = AtmMessageId::new();
-        set_atm_message_id(&mut message.extra, atm_id);
+    fn workflow_key_uses_atm_message_id() {
+        let message = sample_message();
 
-        assert_eq!(atm_message_id(&message), Some(atm_id));
-        assert_eq!(workflow_key(&message), Some(format!("atm:{atm_id}")));
+        assert_eq!(
+            workflow_key(&message),
+            message.message_id.map(WorkflowMessageKey::new)
+        );
     }
 
     #[test]
     fn project_envelope_prefers_sidecar_state() {
-        let mut message = sample_message();
-        let atm_id = AtmMessageId::new();
-        set_atm_message_id(&mut message.extra, atm_id);
+        let message = sample_message();
+        let message_id = message.message_id.expect("message id");
         let mut state = super::WorkflowStateFile::default();
         state.messages.insert(
-            format!("atm:{atm_id}"),
+            WorkflowMessageKey::new(message_id),
             WorkflowMessageState {
                 read: true,
                 pending_ack_at: Some(IsoTimestamp::now()),
@@ -375,5 +393,14 @@ mod tests {
 
         assert!(remember_initial_state(&mut state, &message));
         assert_eq!(state.messages.len(), 1);
+    }
+
+    #[test]
+    fn workflow_message_key_accepts_legacy_prefix_for_read_compatibility() {
+        let key = "legacy:01KRFK5QTF2R6NRS3Q0F8Z9K0S"
+            .parse::<WorkflowMessageKey>()
+            .expect("workflow key");
+
+        assert_eq!(key.to_string(), "atm:01KRFK5QTF2R6NRS3Q0F8Z9K0S");
     }
 }

@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U2-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U2-004" ;
+  triage:title "sprint-U2.md status field not updated from planned to complete" ;
+  triage:description "docs/phase-U/sprint-U2.md:9 — status: planned not updated to status: complete. Sprint doc must reflect completion status." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-004/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-004/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-004/pU-u2/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/d6390795352a96ec50c197fee2a61e55a2253860> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/a4285c7f4fbddfd18961d2d816b81367963e202b> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310> .
+
+<urn:atm:triage:occurrence/ATM-QA-U2-004/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/sprint-U2.md" ;
+  triage:line 9 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/d6390795352a96ec50c197fee2a61e55a2253860> .
+
+<urn:atm:triage:occurrence/ATM-QA-U2-004/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/sprint-U2.md" ;
+  triage:line 9 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/a4285c7f4fbddfd18961d2d816b81367963e202b> .
+
+<urn:atm:triage:occurrence/ATM-QA-U2-004/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/sprint-U2.md" ;
+  triage:line 9 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310> .
+
+<urn:atm:triage:worktree/integrate-phase-U/d6390795352a96ec50c197fee2a61e55a2253860>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u1/a4285c7f4fbddfd18961d2d816b81367963e202b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:orderIndex 2 .

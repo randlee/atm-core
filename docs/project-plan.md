@@ -2727,8 +2727,7 @@ Scope:
 
 Acceptance:
 - no normal ATM read/query/runtime path depends on `metadata.atm.*`
-- any surviving `metadata.atm` write is explicitly justified as compatibility
-  output only, not an ATM-owned read source
+- the active implementation exposes zero surviving `metadata.atm` fields
 - dead compatibility helpers and tests that only exist to preserve
   `metadata.atm` reads are removed
 
@@ -2746,6 +2745,8 @@ Acceptance:
 - `metadata.atm.messageId` is removed from the design and implementation line
 - duplicated UUID/ULID reinterpretation plumbing no longer persists two fields
   for the same logical identity
+- if SQLite persists `message_id`, it persists only the compatibility UUID wire
+  form of that one logical identity
 - the project docs include an ADR-level statement that ATM owns one logical
   message identity and Claude `message_id` is only the compatible boundary
   encoding of that identity
@@ -2760,6 +2761,10 @@ Scope:
   validation, selection, ack, and nudge behavior
 - remove any shortcut where generic successor-chain collapse hides missing
   per-mode semantics
+- terminal `add-details` must preserve predecessor context in the effective
+  current body used for matching and display
+- terminal `supersede` must expose only the replacement body as the effective
+  current instruction
 
 Acceptance:
 - mode-specific tests exist for both `add-details` and `supersede`

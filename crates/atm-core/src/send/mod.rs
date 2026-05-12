@@ -12,11 +12,11 @@ use crate::error::{AtmError, AtmErrorCode};
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope, ThreadMode};
+use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
-use crate::types::{AgentName, CommandAction, TaskId, TeamName};
+use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
 
 mod alert_state;
@@ -46,7 +46,7 @@ pub struct SendRequest {
     pub summary_override: Option<String>,
     pub requires_ack: bool,
     pub task_id: Option<TaskId>,
-    pub parent_message_id: Option<LegacyMessageId>,
+    pub parent_message_id: Option<AtmMessageId>,
     pub thread_mode: Option<ThreadMode>,
     pub stale_at: Option<crate::types::IsoTimestamp>,
     pub dry_run: bool,
@@ -92,7 +92,7 @@ pub struct SendOutcome {
     pub agent: AgentName,
     pub sender: AgentName,
     pub outcome: String,
-    pub message_id: LegacyMessageId,
+    pub message_id: AtmMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
@@ -247,15 +247,10 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &recipient.team,
     )?;
     let summary = summary::build_summary(&body, request.summary_override);
-    let message_id = LegacyMessageId::new();
-    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
+    let message_id = AtmMessageId::new();
+    let timestamp = IsoTimestamp::now();
 
     if !request.dry_run {
-        let mut extra = Map::new();
-        workflow::set_atm_message_id(&mut extra, atm_message_id);
-        if display_sender != canonical_sender.clone() {
-            set_canonical_sender_metadata(&mut extra, &canonical_sender);
-        }
         let envelope = MessageEnvelope {
             from: display_sender.clone(),
             text: body.clone(),
@@ -271,7 +266,7 @@ fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             thread_mode: request.thread_mode,
             stale_at: request.stale_at,
             task_id: task_id.clone(),
-            extra,
+            extra: Map::new(),
         };
         append_mailbox_message_and_seed_workflow(
             runtime,
@@ -347,7 +342,7 @@ pub(crate) struct PostSendHookContext<'a> {
     pub(crate) sender_team: Option<&'a TeamName>,
     pub(crate) recipient: &'a ResolvedRecipient,
     pub(crate) recipient_pane_id: Option<&'a str>,
-    pub(crate) message_id: LegacyMessageId,
+    pub(crate) message_id: AtmMessageId,
     pub(crate) requires_ack: bool,
     pub(crate) is_ack: bool,
     pub(crate) task_id: Option<&'a TaskId>,
@@ -383,13 +378,15 @@ fn resolve_message_body(
     match source {
         SendMessageSource::Inline(message) => input::validate_message_text(message.clone()),
         SendMessageSource::Stdin => input::read_message_from_stdin(),
-        SendMessageSource::File { path, message } => file_policy::process_file_reference(
-            path,
-            message.as_deref(),
-            team_name,
-            current_dir,
-            home_dir,
-        ),
+        SendMessageSource::File { path, message } => {
+            input::validate_message_text(file_policy::process_file_reference(
+                path,
+                message.as_deref(),
+                team_name,
+                current_dir,
+                home_dir,
+            )?)
+        }
     }
 }
 
@@ -404,6 +401,9 @@ fn notify_team_lead_missing_config(
     team: &TeamName,
     recipient: &AgentName,
 ) {
+    // Accepted risk: this fallback notice is best-effort only. ATM may race a fast
+    // shutdown and skip persistence rather than threading a shutdown token through
+    // this compatibility-only warning path.
     let alert_key = alert_state::missing_team_config_alert_key(team_dir);
     if !alert_state::register_missing_team_config_alert(home_dir, &alert_key) {
         return;
@@ -424,17 +424,7 @@ fn notify_team_lead_missing_config(
     };
 
     let config_path = team_dir.join("config.json");
-    let (atm_message_id, timestamp) = AtmMessageId::new_with_timestamp();
-    let mut extra = Map::new();
-    workflow::set_atm_message_id(&mut extra, atm_message_id);
-    extra.insert(
-        "atmAlertKind".into(),
-        serde_json::Value::String("missing_team_config".into()),
-    );
-    extra.insert(
-        "missingConfigPath".into(),
-        serde_json::Value::String(config_path.display().to_string()),
-    );
+    let timestamp = IsoTimestamp::now();
 
     let notice = MessageEnvelope {
         from: AgentName::from_validated("atm-identity-missing"),
@@ -448,7 +438,7 @@ fn notify_team_lead_missing_config(
         summary: Some(format!(
             "ATM warning: missing team config fallback used for {recipient}@{team}"
         )),
-        message_id: Some(LegacyMessageId::new()),
+        message_id: Some(AtmMessageId::new()),
         pending_ack_at: None,
         acknowledged_at: None,
         acknowledges_message_id: None,
@@ -456,7 +446,7 @@ fn notify_team_lead_missing_config(
         thread_mode: None,
         stale_at: None,
         task_id: None,
-        extra,
+        extra: Map::new(),
     };
 
     if let Err(error) = append_mailbox_message_and_seed_workflow(
@@ -497,6 +487,9 @@ fn append_mailbox_message_and_seed_workflow(
             if require_existing_inbox && !inbox_path.exists() {
                 return Ok(((), false));
             }
+            // Accepted risk: mailbox lock acquisition is time-bounded, but the
+            // subsequent file read is synchronous and may still stall on a bad
+            // filesystem while the lock is held.
             let mut inbox_messages = runtime.read_messages(inbox_path)?;
             let mut prepared = envelope.clone();
             prepare_threaded_message(&mut prepared, &inbox_messages)?;
@@ -539,7 +532,7 @@ fn prepare_threaded_message(
 fn validate_thread_append(
     envelope: &mut MessageEnvelope,
     inbox_messages: &[MessageEnvelope],
-    parent_id: LegacyMessageId,
+    parent_id: AtmMessageId,
 ) -> Result<(), AtmError> {
     let index = ThreadIndex::new(inbox_messages);
     let parent = index.message(parent_id).ok_or_else(|| {
@@ -637,34 +630,6 @@ pub(super) fn qualified_sender_identity(
         .unwrap_or_else(|| sender.to_string())
 }
 
-fn set_canonical_sender_metadata(
-    extra: &mut Map<String, serde_json::Value>,
-    canonical_from: &AgentName,
-) {
-    let metadata = extra
-        .entry("metadata".to_string())
-        .or_insert_with(|| serde_json::Value::Object(Map::new()));
-    if !metadata.is_object() {
-        *metadata = serde_json::Value::Object(Map::new());
-    }
-    let Some(metadata) = metadata.as_object_mut() else {
-        return;
-    };
-    let atm = metadata
-        .entry("atm".to_string())
-        .or_insert_with(|| serde_json::Value::Object(Map::new()));
-    if !atm.is_object() {
-        *atm = serde_json::Value::Object(Map::new());
-    }
-    let Some(atm) = atm.as_object_mut() else {
-        return;
-    };
-    atm.insert(
-        "fromIdentity".to_string(),
-        serde_json::Value::String(canonical_from.to_string()),
-    );
-}
-
 pub(crate) fn maybe_run_post_send_hook(
     warnings: &mut Vec<WarningEntry>,
     config: Option<&config::AtmConfig>,
@@ -682,15 +647,15 @@ mod tests {
     use super::{alert_state, prepare_threaded_message};
     use crate::process::process_is_alive;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
+    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
     use crate::send::{SendMessageSource, SendRequest};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     fn message(
         from: &str,
-        message_id: LegacyMessageId,
-        parent_message_id: Option<LegacyMessageId>,
+        message_id: AtmMessageId,
+        parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
     ) -> MessageEnvelope {
         MessageEnvelope {
@@ -805,12 +770,12 @@ mod tests {
 
     #[test]
     fn prepare_threaded_message_reopens_ack_for_ack_required_thread() {
-        let root_id = LegacyMessageId::new();
+        let root_id = AtmMessageId::new();
         let mut root = message(TEST_SENDER, root_id, None, None);
         root.acknowledged_at = Some(IsoTimestamp::now());
         let mut update = message(
             TEST_SENDER,
-            LegacyMessageId::new(),
+            AtmMessageId::new(),
             Some(root_id),
             Some(ThreadMode::AddDetails),
         );
@@ -822,12 +787,30 @@ mod tests {
     }
 
     #[test]
+    fn prepare_threaded_message_reopens_ack_for_ack_required_supersede_thread() {
+        let root_id = AtmMessageId::new();
+        let mut root = message(TEST_SENDER, root_id, None, None);
+        root.acknowledged_at = Some(IsoTimestamp::now());
+        let mut update = message(
+            TEST_SENDER,
+            AtmMessageId::new(),
+            Some(root_id),
+            Some(ThreadMode::Supersede),
+        );
+
+        prepare_threaded_message(&mut update, &[root]).expect("prepare update");
+
+        assert!(update.pending_ack_at.is_some());
+        assert!(update.acknowledged_at.is_none());
+    }
+
+    #[test]
     fn prepare_threaded_message_rejects_non_originating_sender() {
-        let root_id = LegacyMessageId::new();
+        let root_id = AtmMessageId::new();
         let root = message(TEST_SENDER, root_id, None, None);
         let mut update = message(
             ROLE_TEAM_LEAD,
-            LegacyMessageId::new(),
+            AtmMessageId::new(),
             Some(root_id),
             Some(ThreadMode::Supersede),
         );

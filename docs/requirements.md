@@ -44,13 +44,16 @@ Schema ownership references:
   [`atm-message-schema.md`](./atm-message-schema.md)
 - legacy ATM read-compatibility schema:
   [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+  (historical only; Phase U removed its `metadata.atm` coverage from the
+  active compatibility design)
 - `sc-observability` schema ownership pointer:
   [`sc-observability-schema.md`](./sc-observability-schema.md)
 - ATM-owned error-code registry:
   [`atm-error-codes.md`](./atm-error-codes.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
-  `tools/schema_models/atm_message_schema.py` and
+  `tools/schema_models/atm_message_schema.py`
+- historical/read-compatibility schema record only:
   `tools/schema_models/legacy_atm_message_schema.py`
 
 ## 1.1 Documentation Structure
@@ -120,6 +123,10 @@ Phase-S portability note:
 - the thin-client extension surface should center on `send` and `receive`
   over the shared ATM protocol, while the retained CLI may continue to expose
   `ack` as a user-facing workflow
+- Phase U removed the active `metadata.atm` namespace from the approved
+  compatibility schema; the authoritative schema is
+  [`atm-message-schema.md`](./atm-message-schema.md) and the planning record is
+  [`plan-phase-U.md`](./plan-phase-U.md)
 
 ## 2. Scope
 
@@ -414,7 +421,7 @@ Required rules:
   - ATM top-level additive compatibility messages
 - no normal ATM runtime/query path may depend on ATM-owned machine-state reads
   from Claude JSON
-- new ATM-owned machine state must not be introduced under `metadata.atm`
+- no `metadata.atm` namespace may survive in active compatibility output
 - shared inbox `message_id` is the compatibility wire encoding of the one
   logical ATM message identity
 - ATM-owned workflow, delete/close, expiry, sender-projection, and repair
@@ -430,6 +437,8 @@ Required rules:
 - [`claude-code-message-schema.md`](./claude-code-message-schema.md)
 - [`atm-message-schema.md`](./atm-message-schema.md)
 - [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+  (historical only; its `metadata.atm` coverage was superseded and removed
+  from the active compatibility design in Phase U)
 - [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
   §2.2 and §3.3 for forward ATM alert-field placement and sender-side dedup
   semantics
@@ -1293,6 +1302,11 @@ Phase R continuation semantics:
     valid historical context
   - `supersede` replaces the prior message as the effective current
     instruction
+  - logical-current selection keeps the terminal message id for both modes
+  - terminal `add-details` preserves still-valid predecessor context in the
+    effective current body used for matching and display
+  - terminal `supersede` uses only the replacement body as the effective
+    current instruction
   - if a successor arrives after the predecessor was already read, the
     successor still produces a new nudge so the current effective instruction
     is visible
@@ -1312,13 +1326,14 @@ Phase R continuation semantics:
 - `REQ-P-THREAD-005` Ephemeral messages are standalone, time-bounded records.
 
   Required behavior:
-  - ephemeral messages expire by time only, using `expires_at`
+  - ephemeral messages expire by time only, using `stale_at`
+  - compatibility/export payloads carry ephemeral expiry with `staleAt`
   - no product behavior may depend on first-read deletion semantics
   - periodic daemon cleanup deletes expired ephemeral rows
   - ephemeral messages are not updatable
   - ephemeral messages may not be parents or children in successor chains
   - once read, an ephemeral message becomes hidden from normal reads but
-    remains visible through `--view-all` until `expires_at`
+    remains visible through `--view-all` until `stale_at`
 
 ### 8.5 Output Contract
 
@@ -1742,6 +1757,8 @@ For ATM-authored messages:
 - ATM machine-readable identity is mandatory
 - ATM uses one logical message identity and exports it through `message_id` on
   the shared compatibility surface
+- ATM service addressing may accept either ULID text or UUID-wire text, but
+  both must resolve to the same logical identity
 - thread/update metadata uses `parentMessageId` plus `threadMode`
 - time-bounded ephemeral retention uses SQLite-owned `expires_at`
 - ATM-authored machine identifiers must not be null or blank

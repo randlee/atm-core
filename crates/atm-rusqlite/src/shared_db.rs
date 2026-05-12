@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     message_text TEXT NOT NULL,
     summary TEXT NULL,
     message_at TEXT NOT NULL,
-    legacy_message_id TEXT NULL,
+    message_id TEXT NULL,
     parent_message_id TEXT NULL,
     thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
     stale_at TEXT NULL,
@@ -112,9 +112,9 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_legacy_identity
-    ON mail_messages(team, agent, legacy_message_id)
-    WHERE legacy_message_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_message_id
+    ON mail_messages(team, agent, message_id)
+    WHERE message_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
     ON mail_messages(team, agent);
@@ -277,7 +277,9 @@ impl SharedDb {
     ) -> Result<atm_core::boundary::MailStoreUpsertMessageResponse, AtmError> {
         validate_upsert_message_request(&request)?;
         let record = request.record.clone();
-        let result = self.writer.submit(WriteOp::UpsertMessage(request))?;
+        let result = self
+            .writer
+            .submit(WriteOp::UpsertMessage(Box::new(request)))?;
         match result {
             WriteOpResult::UpsertMessage { inserted } => {
                 Ok(atm_core::boundary::MailStoreUpsertMessageResponse { record, inserted })
@@ -457,8 +459,8 @@ pub(crate) fn ensure_schema(
         connection,
         target,
         "mail_messages",
-        "legacy_message_id",
-        "ALTER TABLE mail_messages ADD COLUMN legacy_message_id TEXT NULL;",
+        "message_id",
+        "ALTER TABLE mail_messages ADD COLUMN message_id TEXT NULL;",
     )?;
     ensure_column(
         connection,

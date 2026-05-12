@@ -86,14 +86,14 @@ pub fn report_inbox_diagnostics(
     request: InboxIngressDiagnosticsRequest,
 ) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
     let mut seen = HashSet::new();
-    let mut duplicate_legacy_message_ids = 0usize;
+    let mut duplicate_message_ids = 0usize;
     let mut messages_without_ids = 0usize;
 
     for source in request.source_files {
         for message in source.messages {
             if let Some(message_id) = message.message_id {
                 if !seen.insert(message_id) {
-                    duplicate_legacy_message_ids += 1;
+                    duplicate_message_ids += 1;
                 }
             } else {
                 messages_without_ids += 1;
@@ -102,7 +102,7 @@ pub fn report_inbox_diagnostics(
     }
 
     Ok(InboxIngressDiagnosticsResponse {
-        duplicate_legacy_message_ids,
+        duplicate_message_ids,
         messages_without_ids,
     })
 }

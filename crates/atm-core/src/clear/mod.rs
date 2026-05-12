@@ -11,7 +11,7 @@ use crate::address::AgentAddress;
 use crate::error::AtmError;
 use crate::identity;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
-use crate::mailbox::surface::dedupe_legacy_message_id_surface;
+use crate::mailbox::surface::dedupe_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::MessageEnvelope;
@@ -157,7 +157,7 @@ fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
                         &workflow_state,
                     )?;
                 }
-                let remaining_total = dedupe_legacy_message_id_surface(
+                let remaining_total = dedupe_message_id_surface(
                     merged_surface(source_files, &workflow_state),
                     |message: &SourcedMessage| message.envelope.message_id,
                     |message: &SourcedMessage| message.envelope.timestamp,
@@ -246,7 +246,7 @@ fn removable_messages(
     cutoff: Option<DateTime<Utc>>,
     idle_only: bool,
 ) -> (HashSet<(PathBuf, SourceIndex)>, RemovedByClass, usize) {
-    let merged = dedupe_legacy_message_id_surface(
+    let merged = dedupe_message_id_surface(
         merged_surface(source_files, workflow_state),
         |message: &SourcedMessage| message.envelope.message_id,
         |message: &SourcedMessage| message.envelope.timestamp,

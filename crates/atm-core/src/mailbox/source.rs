@@ -27,7 +27,6 @@ pub(crate) struct SummarySourceFile {
 pub(crate) struct SummaryMessage {
     pub envelope: MessageEnvelope,
     pub summary_preview: String,
-    pub body_contains_match: bool,
     pub idle_notification_sender: Option<AgentName>,
 }
 
@@ -217,7 +216,6 @@ pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, At
 
 pub(crate) fn load_summary_source_files(
     paths: &[PathBuf],
-    contains_filter: Option<&str>,
 ) -> Result<Vec<SummarySourceFile>, AtmError> {
     let mut sources = Vec::with_capacity(paths.len());
     for path in paths {
@@ -231,7 +229,7 @@ pub(crate) fn load_summary_source_files(
             ));
         }
 
-        let messages = super::read_message_summaries(path, contains_filter)?;
+        let messages = super::read_message_summaries(path)?;
         sources.push(SummarySourceFile {
             path: path.clone(),
             messages,

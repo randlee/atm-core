@@ -20,7 +20,7 @@ ORDER BY message_at DESC, message_key DESC
 LIMIT ?"]
     R --> D["Decode result rows
 parse message_key
-parse legacy_message_id?
+parse message_id?
 parse parent_message_id?
 parse message_at
 derive read and pending_ack"]

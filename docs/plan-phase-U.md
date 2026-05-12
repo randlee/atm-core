@@ -33,9 +33,13 @@ Authoritative sprint sequence:
 
 Sprint summary:
 - `U.0` remove the old `atm-graft` implementation line (`completed by team-lead`)
-- `U.1` delete `metadata.atm` read-path dependence
-- `U.2` one message identity ADR and implementation cleanup
+- `U.1` delete `metadata.atm` read-path dependence and remove the namespace
+  from active compatibility output
+- `U.2` one message identity ADR and implementation cleanup, with Claude
+  `message_id` retained only as the UUID wire form of `AtmMessageId`
 - `U.3` thread/update/supersede hardening
+  - `add-details` preserves predecessor context in the effective current body
+  - `supersede` exposes only the replacement body
 - `U.4` unified mutable message state
 - `U.5` SQLite query cutover and query simplification
 - `U.6` provenance/timing field reduction

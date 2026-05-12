@@ -19,8 +19,8 @@ message_key has valid prefix?
 envelope size ok?
 if parent_message_id exists:
   does mail_messages already contain a different successor?
-if legacy_message_id exists:
-  does mail_messages already assign that legacy id to a different message?"]
+if message_id exists:
+  does mail_messages already assign that message_id to a different message?"]
     V -->|ok| T["Transaction (1)
 INSERT mail_messages ... DO NOTHING
 UPSERT ack_state ..."]

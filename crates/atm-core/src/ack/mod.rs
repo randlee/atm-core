@@ -8,10 +8,10 @@ use crate::config;
 use crate::error::AtmError;
 use crate::identity;
 use crate::mailbox::source::{SourceFile, SourcedMessage};
-use crate::mailbox::surface::dedupe_legacy_message_id_surface;
+use crate::mailbox::surface::dedupe_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
-use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::send::{PostSendHookContext, ResolvedRecipient, input, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
@@ -26,7 +26,7 @@ pub struct AckRequest {
     pub current_dir: PathBuf,
     pub actor_override: Option<AgentName>,
     pub team_override: Option<TeamName>,
-    pub message_id: LegacyMessageId,
+    pub message_id: AtmMessageId,
     pub reply_body: String,
 }
 
@@ -36,11 +36,11 @@ pub struct AckOutcome {
     pub action: CommandAction,
     pub team: TeamName,
     pub agent: AgentName,
-    pub message_id: LegacyMessageId,
+    pub message_id: AtmMessageId,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub task_id: Option<TaskId>,
     pub reply_target: ReplyTarget,
-    pub reply_message_id: LegacyMessageId,
+    pub reply_message_id: AtmMessageId,
     pub reply_text: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub warnings: Vec<String>,
@@ -195,12 +195,10 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         return Err(AtmError::agent_not_found(&reply_agent, &reply_team));
     }
 
-    let (reply_atm_message_id, ack_timestamp) = AtmMessageId::new_with_timestamp();
+    let ack_timestamp = IsoTimestamp::now();
     let reply_text = input::validate_message_text(request.reply_body)?;
-    let reply_message_id = LegacyMessageId::new();
+    let reply_message_id = AtmMessageId::new();
     let source_task_id = source_message.envelope.task_id.clone();
-    let mut reply_extra = Map::new();
-    workflow::set_atm_message_id(&mut reply_extra, reply_atm_message_id);
     let reply_message = MessageEnvelope {
         from: actor.clone(),
         text: reply_text.clone(),
@@ -216,7 +214,7 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         thread_mode: None,
         stale_at: None,
         task_id: None,
-        extra: reply_extra,
+        extra: Map::new(),
     };
 
     let reply_inbox_path = runtime.inbox_path(&request.home_dir, &reply_team, &reply_agent)?;
@@ -380,7 +378,7 @@ fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
 fn reject_non_terminal_ack(
     source_files: &[SourceFile],
     workflow_state: &workflow::WorkflowStateFile,
-    message_id: LegacyMessageId,
+    message_id: AtmMessageId,
 ) -> Result<(), AtmError> {
     let envelopes = merged_surface(source_files, workflow_state)
         .into_iter()
@@ -426,11 +424,11 @@ fn merged_surface(
 fn find_source_message(
     source_files: &[SourceFile],
     workflow_state: &workflow::WorkflowStateFile,
-    message_id: LegacyMessageId,
+    message_id: AtmMessageId,
     actor: &AgentName,
     team: &TeamName,
 ) -> Result<SourcedMessage, AtmError> {
-    dedupe_legacy_message_id_surface(
+    dedupe_message_id_surface(
         merged_surface(source_files, workflow_state),
         |message: &SourcedMessage| message.envelope.message_id,
         |message: &SourcedMessage| message.envelope.timestamp,
@@ -515,6 +513,9 @@ fn append_reply_message(
 
     source_files.push(SourceFile {
         path: reply_inbox_path.to_path_buf(),
+        // Accepted risk: mailbox lock acquisition is time-bounded, but this
+        // compatibility read remains synchronous and may still stall on a bad
+        // filesystem while the lock is held.
         messages: runtime.read_messages(reply_inbox_path)?,
     });
     source_files
@@ -530,13 +531,14 @@ fn append_reply_message(
 mod tests {
     use std::path::PathBuf;
 
-    use serde_json::json;
-
-    use super::{canonical_sender_identity, reject_non_terminal_ack, resolve_reply_target};
+    use super::{
+        canonical_sender_identity, find_source_message, reject_non_terminal_ack,
+        resolve_reply_target,
+    };
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{LegacyMessageId, MessageEnvelope, ThreadMode};
-    use crate::test_support::TEST_TEAM;
+    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use crate::workflow;
 
@@ -561,8 +563,8 @@ mod tests {
     }
 
     fn thread_message(
-        message_id: LegacyMessageId,
-        parent_message_id: Option<LegacyMessageId>,
+        message_id: AtmMessageId,
+        parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
     ) -> MessageEnvelope {
         MessageEnvelope {
@@ -585,24 +587,15 @@ mod tests {
     }
 
     #[test]
-    fn canonical_sender_identity_reads_metadata_override() {
-        let mut message = message_with_from("lead");
-        message.extra.insert(
-            "metadata".to_string(),
-            json!({"atm": {"fromIdentity": ROLE_TEAM_LEAD}}),
-        );
-
+    fn canonical_sender_identity_uses_from_field() {
+        let message = message_with_from(ROLE_TEAM_LEAD);
         assert_eq!(canonical_sender_identity(&message).as_str(), ROLE_TEAM_LEAD);
     }
 
     #[test]
-    fn resolve_reply_target_prefers_canonical_sender_identity_metadata() {
-        let mut message = message_with_from("lead");
+    fn resolve_reply_target_uses_from_field() {
+        let mut message = message_with_from(ROLE_TEAM_LEAD);
         message.source_team = Some(TEST_TEAM.parse::<TeamName>().expect("team"));
-        message.extra.insert(
-            "metadata".to_string(),
-            json!({"atm": {"fromIdentity": ROLE_TEAM_LEAD}}),
-        );
 
         let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM))
             .expect("reply target");
@@ -617,13 +610,13 @@ mod tests {
 
     #[test]
     fn reject_non_terminal_ack_requires_latest_thread_message() {
-        let root_id = LegacyMessageId::new();
+        let root_id = AtmMessageId::new();
         let source_files = vec![SourceFile {
             path: PathBuf::from("recipient.json"),
             messages: vec![
                 thread_message(root_id, None, None),
                 thread_message(
-                    LegacyMessageId::new(),
+                    AtmMessageId::new(),
                     Some(root_id),
                     Some(ThreadMode::Supersede),
                 ),
@@ -638,5 +631,57 @@ mod tests {
         .expect_err("stale parent ack");
 
         assert!(error.message.contains("current terminal message"));
+    }
+
+    #[test]
+    fn reject_non_terminal_ack_requires_latest_thread_message_for_add_details() {
+        let root_id = AtmMessageId::new();
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![
+                thread_message(root_id, None, None),
+                thread_message(
+                    AtmMessageId::new(),
+                    Some(root_id),
+                    Some(ThreadMode::AddDetails),
+                ),
+            ],
+        }];
+
+        let error = reject_non_terminal_ack(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            root_id,
+        )
+        .expect_err("stale parent ack");
+
+        assert!(error.message.contains("current terminal message"));
+    }
+
+    #[test]
+    fn find_source_message_accepts_uuid_wire_form_for_ack_lookup() {
+        let message_id: AtmMessageId = "01KRFK5QTF2R6NRS3Q0F8Z9K0S"
+            .parse()
+            .expect("atm message id");
+        let source_files = vec![SourceFile {
+            path: PathBuf::from("recipient.json"),
+            messages: vec![thread_message(message_id, None, None)],
+        }];
+        let parsed_from_uuid: AtmMessageId = message_id
+            .into_uuid_wire()
+            .to_string()
+            .parse()
+            .expect("uuid wire parse");
+
+        let found = find_source_message(
+            &source_files,
+            &workflow::WorkflowStateFile::default(),
+            parsed_from_uuid,
+            &AgentName::from_validated(TEST_SENDER),
+            &TeamName::from_validated(TEST_TEAM),
+        )
+        .expect("source message");
+
+        assert_eq!(found.envelope.message_id, Some(message_id));
     }
 }

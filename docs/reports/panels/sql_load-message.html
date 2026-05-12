@@ -80,7 +80,7 @@ This SQL-boundary path shows the direct immutable-row load. It currently reads o
     message_text TEXT NOT NULL,
     summary TEXT NULL,
     message_at TEXT NOT NULL,
-    legacy_message_id TEXT NULL,
+    message_id TEXT NULL,
     parent_message_id TEXT NULL,
     thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN (&#x27;add-details&#x27;, &#x27;supersede&#x27;)),
     stale_at TEXT NULL,

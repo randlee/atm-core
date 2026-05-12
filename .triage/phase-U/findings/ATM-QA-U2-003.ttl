@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U2-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U2-003" ;
+  triage:title "No test asserts lossless ULID-UUID wire cast round-trip for AtmMessageId" ;
+  triage:description "crates/atm-core/src/schema/inbox_message.rs — ADR-012 states ATM may cast UUID wire values into AtmMessageId on ingest and cast AtmMessageId back into UUID wire form on export. No test asserts the byte-identity of this round-trip (from_uuid_wire(id.into_uuid_wire()) == id). Existing parse tests cover parsing; none cover lossless ULID-UUID cast. Fix: add atm_message_id_uuid_wire_round_trip_preserves_identity test asserting lossless cast for a known value." ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U2-003/pU-u2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310> .
+
+<urn:atm:triage:occurrence/ATM-QA-U2-003/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 35 ;
+  triage:snippet "pub fn from_uuid_wire(value: Uuid) -> Self { ... } pub fn into_uuid_wire(self) -> Uuid { ... } — no round-trip identity test present" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310> .
+
+<urn:atm:triage:worktree/integrate-phase-U/d6390795352a96ec50c197fee2a61e55a2253860>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u1/a4285c7f4fbddfd18961d2d816b81367963e202b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:orderIndex 2 .

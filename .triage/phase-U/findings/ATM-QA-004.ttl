@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-004" ;
+  triage:title "No regression test for parse_mailbox_value with raw metadata.atm in JSONL" ;
+  triage:description "crates/atm-core/src/schema/inbox_message.rs — No regression test for parse_mailbox_value read path verifying raw JSONL containing metadata.atm parses successfully with the field preserved as opaque pass-through in extra, not interpreted. Sprint-U1 sub-task 1 requires an inventory-backed regression check for every surviving approved read." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/feature-pU-u1/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pU-u1-metadata-atm-read-cleanup/e45dc48> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pU-u1-metadata-atm-read-cleanup/e45dc48> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 350 ;
+  triage:snippet "fn parse_mailbox_value(...) — no test for raw JSONL with metadata.atm preserved opaquely in extra; read_messages_hydrates_fields_from_metadata_atm covers hydration path only, not pass-through preservation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/feature-pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 349 ;
+  triage:snippet "fn parse_mailbox_value(...) — no test for raw JSONL with metadata.atm preserved opaquely in extra; read_messages_hydrates_fields_from_metadata_atm test removed; read_messages_use_top_level_compatibility_fields tests top-level compat fields only, not metadata.atm namespace pass-through" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pU-u1-metadata-atm-read-cleanup/e45dc48> .
+
+<urn:atm:triage:worktree/integrate-phase-U/8aa2aed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/feature-pU-u1-metadata-atm-read-cleanup/e45dc48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:orderIndex 1 .
