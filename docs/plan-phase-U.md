@@ -8,6 +8,8 @@ Goal:
   private Claude compatibility watcher/import/export boundary
 - leave the codebase with smaller, more explicit storage and query contracts
 
+Integration branch: `integrate/phase-U`
+
 Execution model:
 - `team-lead` should execute Phase U as a sequential cleanup line
 - each sprint should delete redirected structure rather than preserve fallback

@@ -46,6 +46,19 @@ duplication, defines the approved member fields, and moves Claude Code
 
 - `U.1`
 
+## Dependency Notes
+
+U.7 does not depend on U.2 (one-message-identity). Roster member identity
+(`agent_name`, `team_name`) is independent of mailbox message identity
+(`AtmMessageId`). Roster cleanup can proceed without waiting for U.2.
+
+`recipient_pane_id` and `pid` fields (present in `atm-core/architecture.md`
+roster-member schema) are in scope for U.7. They are runtime-only harness
+fields — `recipient_pane_id` belongs in the `harness` behavioral enum context
+and `pid` is an ephemeral member lifecycle field. U.7 must either fold them
+into the canonical member model or explicitly document them as out-of-scope
+with a concrete rationale.
+
 ## Non-Goals
 
 - task-store redesign
@@ -146,6 +159,7 @@ and `config.json` sync rules together.
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/boundaries.md`
+- `docs/atm-rusqlite/requirements.md` (update clauses for roster table changes)
 
 ## Risks And Watchouts
 

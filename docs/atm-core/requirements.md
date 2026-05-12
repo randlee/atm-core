@@ -249,6 +249,7 @@ The `atm-core` crate docs must remain aligned with:
 - [`../atm-error-codes.md`](../atm-error-codes.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)
+- [`../plan-phase-U.md`](../plan-phase-U.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
 - [`./boundaries.md`](./boundaries.md)

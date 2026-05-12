@@ -467,6 +467,11 @@ Required runtime rules:
   family business logic
 - the socket receive loop must not perform SQL, watcher, notifier, or
   workflow/state-transition logic inline
+- the daemon must not own client-specific runtime behavior for any plugin crate
+  (e.g., `atm-graft`); client-specific receive loops, injection paths, and
+  host-integration logic belong in the client plugin crate, not in `atm-daemon`;
+  the daemon's responsibility is request serving, post-commit notification, and
+  generic runtime composition only (REQ-CORE-DAEMON-003)
 - any violation of these daemon boundary rules is a direct QA failure
 - daemon tests must not become the normal mechanism for validating core ATM
   correctness

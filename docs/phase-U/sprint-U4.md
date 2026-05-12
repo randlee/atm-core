@@ -39,7 +39,7 @@ Discovery reference:
 ## Governing ADRs
 
 - `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
-- one-message-identity ADR from `U.2`
+- `docs/adr/ADR-012-one-message-identity.md` (written by `U.2`)
 
 ## Governing Boundaries
 
@@ -132,8 +132,8 @@ If the field set is approved, land the schema and code cleanup together.
 - `docs/architecture.md`
 - `docs/requirements.md`
 - `docs/atm-rusqlite/architecture.md`
-- `docs/atm-rusqlite/requirements.md`
-- `docs/atm-rusqlite/query-diagrams.md`
+- `docs/atm-rusqlite/requirements.md` (update durable schema field clauses)
+- `docs/atm-rusqlite/query-diagrams.md` (update existing content to reflect unified state schema)
 
 ## Risks And Watchouts
 

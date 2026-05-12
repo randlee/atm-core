@@ -32,6 +32,9 @@ Lean-design rule:
 
 - `REQ-CORE-BOUNDARY-001`
 - `REQ-CORE-DAEMON-002`
+- `REQ-CORE-DAEMON-003` — daemon must not own client-specific runtime behavior;
+  client plugin crates own their receive loops and host-integration paths
+  (defined in `docs/atm-daemon/requirements.md`)
 - `REQ-P-CONTRACT-001`
 
 ## Governing ADRs
@@ -117,6 +120,10 @@ Lean-design rule:
   one host wake/event path
 - production embedded delivery uses that live connection; poll/drain remains a
   companion debug path only
+- the old poll/drain receive loop (`run_receive_loop` and associated machinery
+  listed in `docs/phase-U/removal-inventory.md` U.9 targets) is retired —
+  not supplemented; the live advisory-stream connection replaces it entirely
+  for production use
 - the owning plugin crate still passes boundary lint with no `atm-daemon`
   dependency
 

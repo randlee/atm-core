@@ -32,7 +32,7 @@ logical id while Claude `message_id` remains only the boundary wire encoding.
 ## Governing ADRs
 
 - `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
-- this sprint must add a new ADR for one message identity
+- `docs/adr/ADR-012-one-message-identity.md` (stub — this sprint writes the full ADR)
 
 ## Governing Boundaries
 

@@ -2683,6 +2683,8 @@ Acceptance:
 
 ## 25. Phase U Mailbox Simplification And Identity Cleanup
 
+Integration branch: `integrate/phase-U`
+
 Goal:
 - remove the remaining confusing mailbox/identity carry-forward design from the
   current ATM line

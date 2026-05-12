@@ -38,7 +38,8 @@ Lean-design rule:
 ## Governing ADRs
 
 - `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
-- shared thin-client protocol ownership ADRs in `docs/atm-core/architecture.md`
+- `ADR-ATM-CORE-001` (in `docs/atm-core/architecture.md`) — thin-client boundary model
+- `ADR-ATM-CORE-002` (in `docs/atm-core/architecture.md`) — shared transport/protocol contract
 
 ## Governing Boundaries
 
@@ -54,9 +55,18 @@ Lean-design rule:
 
 ## Hard Dependencies
 
-- `U.1`
-- `U.2`
-- `U.5`
+- `U.1` — `metadata.atm` read-path removed before ICD restack
+- `U.2` — one-message-identity ADR in place before graft protocol is restacked
+- `U.5` — SQLite query cutover complete before ICD is treated as authoritative
+- `U.7` — roster simplification complete; member addressing must be stable
+  before the shared ICD family is finalized
+
+## Dependency Notes
+
+U.3 (thread/update hardening), U.4 (unified mutable state), and U.6
+(provenance field reduction) are not blocking for U.8. The ICD restack does
+not depend on internal mutable-state or provenance field decisions — it depends
+only on the identity, query, and member-addressing surfaces above.
 
 ## Non-Goals
 
@@ -119,6 +129,14 @@ Lean-design rule:
   transport/protocol contract proves insufficient
 - `atm-graft` has no Rust-crate dependency on `atm-daemon`, and that rule is
   lint-enforced rather than documented only
+- the following types from `docs/phase-U/removal-inventory.md` are removed or
+  renamed generically by end of U.8:
+  - `GraftSessionPort`
+  - `GraftSessionState`
+  - `GraftSessionId`
+  - `NudgeEvent`
+  - `GraftNudgeFetchRequest`
+  - `GraftNudgeDrainRequest`
 
 ## Required Validation
 

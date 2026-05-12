@@ -112,8 +112,9 @@ be deletion, not deferral.
 ## Acceptance Criteria
 
 - no normal ATM read/query/runtime path depends on `metadata.atm.*`
-- any surviving `metadata.atm` field is explicitly justified as
-  compatibility/output only
+- no `metadata.atm` field survives as compatibility output — the entire
+  namespace is removed; `docs/atm-message-schema.md` must be updated to
+  reflect zero surviving `metadata.atm` fields
 - dead compatibility helpers and tests that only preserved `metadata.atm`
   reads are removed
 

@@ -118,9 +118,9 @@ state decision. `atm list` and `atm read` should move together.
 - `docs/plan-phase-U.md`
 - `docs/architecture.md`
 - `docs/requirements.md`
-- `docs/atm-rusqlite/query-diagrams.md`
-- `docs/atm/flow-diagrams.md`
-- generated diagram pages under `docs/atm/` and `docs/atm-rusqlite/`
+- `docs/atm-rusqlite/query-diagrams.md` (update existing content to reflect SQLite query cutover)
+- `docs/atm/flow-diagrams.md` (update existing content to reflect SQLite-backed list/read flows)
+- regenerate diagram pages under `docs/atm/` and `docs/atm-rusqlite/` using `python3 docs/reports/generate_diagram_pages.py`
 
 ## Risks And Watchouts
 

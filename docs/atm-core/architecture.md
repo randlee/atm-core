@@ -364,13 +364,13 @@ Identity-specific policy:
 Approved canonical roster-member schema direction:
 - `team_name`
 - `agent_name`
-- `member_kind`
-- `harness`
+- `member_kind` — `permanent` or `ephemeral`
+- `harness` — behavioral enum; approved values: `claude-code`, `codex-cli`, `gemini-cli`, `opencode`
 - `agent_type`
 - `model`
 - `metadata_json`
-- `recipient_pane_id` when known
-- `pid` when known
+- `recipient_pane_id` when known (runtime-only; ephemeral harness field)
+- `pid` when known (runtime-only; ephemeral member lifecycle field)
 
 Observability boundary note:
 - `AgentMember.extra` is intentionally out of scope for the L.4 observability

@@ -102,6 +102,7 @@ Do not split. This sprint should be small and decisive.
 - `docs/plan-phase-U.md`
 - `docs/architecture.md`
 - `docs/atm-rusqlite/architecture.md`
+- `docs/atm-rusqlite/requirements.md` (update clauses for removed provenance fields)
 - `docs/atm-rusqlite/query-diagrams.md`
 
 ## Risks And Watchouts
