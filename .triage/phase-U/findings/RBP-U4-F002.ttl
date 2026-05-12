@@ -1,0 +1,64 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-U4-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-U4-F002" ;
+  triage:title "StoredMailMessageState.read raw bool loaded from i64 — no semantic doc" ;
+  triage:description "crates/atm-rusqlite/src/lib.rs:236 — StoredMailMessageState.read is a raw bool loaded from i64 with no semantic doc comment explaining the conversion." ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U4-F002/pU-u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U4-F002/pU-u4/2> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4/335fe3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/RBP-U4-F002/pU-u4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 236 ;
+  triage:snippet "struct StoredMailMessageState { read: bool," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/RBP-U4-F002/pU-u4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 300 ;
+  triage:snippet "read: read != 0," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .

@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Sweep notes:
+# Pattern: execute_upsert_visibility_state|expires_at in ops.rs
+# U2: ops.rs line 220 — execute_upsert_visibility_state defined; stores state_json blob (no columnar expires_at).
+#     No expires_at field in U2 schema (old visibility state JSON blob). No validation issue on U2.
+# U3: Same as U2 — no columnar expires_at; not applicable.
+# U4: ops.rs line 232 — execute_upsert_visibility_state now passes expires_at as individual column param.
+#     Line 256: request.state.expires_at.map(|value| value.into_inner().to_rfc3339()) — no bounds validation.
+#     Finding is open only on U4 (U4 introduced the columnar expires_at field).
+
+<urn:atm:triage:finding/RSH-U4-002>
+  a triage:Finding ;
+  triage:findingId "RSH-U4-002" ;
+  triage:title "execute_upsert_visibility_state no bounds validation on expires_at timestamp" ;
+  triage:description "crates/atm-rusqlite/src/writer/ops.rs:232 — execute_upsert_visibility_state accepts year-9999 and epoch-0 expires_at timestamps without validation." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #249" , "TASK-1380 QA-1 verdict at 335fe3d" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-002/pU-u4-unified-message-state/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/RSH-U4-002/pU-u4-unified-message-state/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 256 ;
+  triage:snippet "request.state.expires_at.map(|value| value.into_inner().to_rfc3339())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .

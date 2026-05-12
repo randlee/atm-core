@@ -1,0 +1,225 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-U4-004>
+  a triage:Finding ;
+  triage:findingId "RSH-U4-004" ;
+  triage:title "SqliteWriter shutdown queue-full uses eprintln! not tracing::warn!" ;
+  triage:description "crates/atm-rusqlite/src/writer/mod.rs:163 — SqliteWriter shutdown queue-full path uses eprintln! instead of tracing::warn!." ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u2/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u2/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u2/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u3/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u3/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u3/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u4/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u4/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U4-004/pU-u4/5> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1b22524> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/c1e0e06> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4/335fe3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+# u2 occurrences — writer/mod.rs (canonical scope: writer shutdown path)
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 164 ;
+  triage:snippet "Err(TrySendError::Full(_)) => eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 182 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 188 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u2/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 195 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u2/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 229 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+# u3 occurrences — writer/mod.rs
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 164 ;
+  triage:snippet "Err(TrySendError::Full(_)) => eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 182 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 188 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u3/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 195 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u3/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 229 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+# u4 occurrences — writer/mod.rs
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 164 ;
+  triage:snippet "Err(TrySendError::Full(_)) => eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 182 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 188 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u4/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 195 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:occurrence/RSH-U4-004/pU-u4/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 229 ;
+  triage:snippet "eprintln!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .

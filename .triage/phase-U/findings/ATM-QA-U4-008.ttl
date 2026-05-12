@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U4-008>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U4-008" ;
+  triage:title "query-diagrams.md still uses old split-state vocabulary" ;
+  triage:description "docs/atm-rusqlite/query-diagrams.md:19-26 still references save-visibility-state / load-visibility-state file names and headers using old split-state vocabulary. Must be updated to unified mail_message_states language." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #249" , "TASK-1380 QA-1 verdict at 335fe3d" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-008/pU-u2-one-message-identity/1> ,
+                       <urn:atm:triage:occurrence/ATM-QA-U4-008/pU-u3-thread-update-hardening/1> ,
+                       <urn:atm:triage:occurrence/ATM-QA-U4-008/pU-u4-unified-message-state/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> ,
+                <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> ,
+                <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-008/pU-u2-one-message-identity/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/query-diagrams.md" ;
+  triage:line 18 ;
+  triage:snippet "- save visibility state: [sql_save-visibility-state.mmd](./sql_save-visibility-state.mmd)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-008/pU-u3-thread-update-hardening/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/query-diagrams.md" ;
+  triage:line 18 ;
+  triage:snippet "- save visibility state: [sql_save-visibility-state.mmd](./sql_save-visibility-state.mmd)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-008/pU-u4-unified-message-state/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/query-diagrams.md" ;
+  triage:line 19 ;
+  triage:snippet "- save visibility state: [sql_save-visibility-state.mmd](./sql_save-visibility-state.mmd)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .

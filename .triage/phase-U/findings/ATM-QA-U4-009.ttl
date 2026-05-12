@@ -1,0 +1,129 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Triage notes:
+# U2: requirements.md has expires_at (2 hits) but NOT mail_message_states, delete-as-state-mutation absent.
+#     architecture.md has expires_at (1 hit) but NOT mail_message_states explicitly.
+#     project-plan.md has mail_message_states, expires_at, delete/close as state mutations.
+#     => requirements.md and architecture.md missing mail_message_states + delete-as-state-mutation.
+# U3: Same as U2 baseline — project-plan.md has content, core docs partial.
+# U4: project-plan.md has mail_message_states, expires_at, delete-as-state-mutation.
+#     architecture.md (root) has mail_message_states (1 hit in atm-rusqlite/architecture.md, not root docs/architecture.md).
+#     docs/requirements.md: ABSENT mail_message_states. docs/architecture.md: ABSENT mail_message_states.
+#     => Finding is open on U4 (requirements.md and architecture.md still lack explicit coverage).
+
+<urn:atm:triage:finding/ATM-QA-U4-009>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U4-009" ;
+  triage:title "Core docs lack explicit coverage of unified state, expires_at, delete-as-state-mutation" ;
+  triage:description "docs/requirements.md, docs/architecture.md, docs/project-plan.md lack explicit coverage of unified mail_message_states, expires_at rename, and delete-as-state-mutation semantics. Sprint U.4 contract requires all 3 documents to be updated." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #249" , "TASK-1380 QA-1 verdict at 335fe3d" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u4-unified-message-state/1> ,
+                       <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u4-unified-message-state/2> ,
+                       <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u2-one-message-identity/1> ,
+                       <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u2-one-message-identity/2> ,
+                       <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u3-thread-update-hardening/1> ,
+                       <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u3-thread-update-hardening/2> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> ,
+                <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> ,
+                <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u4-unified-message-state/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "mail_message_states absent; delete-as-state-mutation semantics absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u4-unified-message-state/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "mail_message_states absent from root architecture.md; delete-as-state-mutation semantics absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u2-one-message-identity/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "mail_message_states absent; delete-as-state-mutation semantics absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u2-one-message-identity/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "mail_message_states absent from root architecture.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u3-thread-update-hardening/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "mail_message_states absent; delete-as-state-mutation semantics absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u3-thread-update-hardening/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "mail_message_states absent from root architecture.md" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
