@@ -193,6 +193,9 @@ Initial crate requirement IDs:
   `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared
   `AtmProtocol` / `ClientTransport` family rather than by a graft-private core
   requirement.
+  The generic session identifier name reserved for the thin-client line is
+  `ClientSessionId`; later advisory/session work must build on that generic
+  core-owned name rather than reviving `GraftSessionId`.
 - `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
   used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.

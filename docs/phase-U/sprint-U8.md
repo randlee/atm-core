@@ -6,7 +6,7 @@ phase: U
 sprint: "U.8"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd
 branch: feature/pU-u8-shared-thin-client-icd
-status: planned
+status: implemented
 estimated_scope: M
 ```
 
@@ -123,6 +123,9 @@ only on the identity, query, and member-addressing surfaces above.
 - daemon request/response traffic for graft uses the same ICD family as CLI
 - unary `send` / `read` / `ack` traffic shares the same request/response
   family as CLI
+- `U.8` lands the `atm-graft` crate as a thin shared-ICD client over
+  `ClientTransport`; session runtime and advisory-stream ownership stay
+  deferred to `U.9` and `U.10`
 - any additive registration or advisory-delivery messages remain part of that
   same shared family and are renamed generically when reintroduced
 - no graft-specific daemon API surface is introduced
