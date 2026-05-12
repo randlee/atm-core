@@ -7,18 +7,14 @@ pub(crate) mod source;
 pub(crate) mod store;
 pub(crate) mod surface;
 
-use std::borrow::Cow;
 use std::fs;
 use std::path::Path;
 
-use serde::Deserialize;
 use serde_json::Value;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
-use crate::mailbox::source::SummaryMessage;
-use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
-use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use crate::schema::{AtmMessageId, MessageEnvelope};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// Append one message to a shared inbox file under the mailbox lock.
@@ -125,64 +121,11 @@ pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     parse_mailbox_contents(&raw, path)
 }
 
-pub(crate) fn read_message_summaries(path: &Path) -> Result<Vec<SummaryMessage>, AtmError> {
-    if !path.exists() {
-        return Ok(Vec::new());
-    }
-
-    let file_size = fs::metadata(path).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::MailboxRead,
-            format!("failed to inspect mailbox file {}: {error}", path.display()),
-        )
-        .with_recovery(
-            "Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.",
-        )
-        .with_source(error)
-    })?;
-    if file_size.len() > MAX_MAILBOX_READ_BYTES {
-        return Err(
-            AtmError::new(
-                AtmErrorKind::MailboxRead,
-                format!(
-                    "mailbox file {} exceeds the {}-byte read limit",
-                    path.display(),
-                    MAX_MAILBOX_READ_BYTES
-                ),
-            )
-            .with_recovery(
-                "Trim or archive oversized mailbox contents before retrying `atm list` so ATM does not load an unbounded mailbox into memory.",
-            ),
-        );
-    }
-
-    let raw = fs::read_to_string(path).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::MailboxRead,
-            format!("failed to read mailbox file {}: {error}", path.display()),
-        )
-        .with_recovery(
-            "Retry after concurrent ATM activity completes, or verify the mailbox file still exists and is readable.",
-        )
-        .with_source(error)
-    })?;
-
-    parse_mailbox_summary_contents(&raw, path)
-}
-
 fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     match raw.chars().find(|ch| !ch.is_whitespace()) {
         None => Ok(Vec::new()),
         Some('[') => parse_mailbox_array(raw, path),
         Some(_) => Ok(parse_mailbox_jsonl(raw, path)),
-    }
-}
-
-fn parse_mailbox_summary_contents(raw: &str, path: &Path) -> Result<Vec<SummaryMessage>, AtmError> {
-    match raw.chars().find(|ch| !ch.is_whitespace()) {
-        None => Ok(Vec::new()),
-        Some('[') => parse_mailbox_summary_array(raw, path),
-        Some(_) => Ok(parse_mailbox_summary_jsonl(raw, path)),
     }
 }
 
@@ -221,21 +164,6 @@ fn parse_mailbox_array(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, A
         .collect())
 }
 
-fn parse_mailbox_summary_array(raw: &str, path: &Path) -> Result<Vec<SummaryMessage>, AtmError> {
-    let records = serde_json::from_str::<Vec<SummaryMailboxRecord<'_>>>(raw).map_err(|error| {
-        AtmError::new(
-            AtmErrorKind::MailboxRead,
-            format!("failed to parse mailbox array {}: {error}", path.display()),
-        )
-        .with_recovery(
-            "Inspect the mailbox file for malformed JSON array syntax or partial writes before retrying `atm list`.",
-        )
-        .with_source(error)
-    })?;
-
-    Ok(records.into_iter().map(summarize_mailbox_record).collect())
-}
-
 fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<MessageEnvelope> {
     raw.lines()
         .enumerate()
@@ -255,45 +183,6 @@ fn parse_mailbox_jsonl(raw: &str, path: &Path) -> Vec<MessageEnvelope> {
                         raw_record = %line,
                         %error,
                         "skipping malformed mailbox record"
-                    );
-                    None
-                }
-            }
-        })
-        .collect()
-}
-
-fn parse_mailbox_summary_jsonl(raw: &str, path: &Path) -> Vec<SummaryMessage> {
-    raw.lines()
-        .enumerate()
-        .filter_map(|(index, line)| {
-            if line.trim().is_empty() {
-                return None;
-            }
-
-            match serde_json::from_str::<SummaryMailboxRecord<'_>>(line)
-                .map_err(|error| {
-                    AtmError::new(
-                        AtmErrorKind::MailboxRead,
-                        format!(
-                            "failed to parse mailbox JSONL record {}:{}: {error}",
-                            path.display(),
-                            index + 1
-                        ),
-                    )
-                    .with_source(error)
-                })
-                .map(summarize_mailbox_record)
-            {
-                Ok(message) => Some(message),
-                Err(error) => {
-                    warn!(
-                        code = %AtmErrorCode::WarningMailboxRecordSkipped,
-                        line = index + 1,
-                        mailbox_path = %path.display(),
-                        raw_record = %line,
-                        %error,
-                        "skipping malformed mailbox record during bounded list projection"
                     );
                     None
                 }
@@ -369,98 +258,6 @@ fn mailbox_record_parse_error(
         ),
     )
     .with_source(error)
-}
-
-#[derive(Debug, Deserialize)]
-struct SummaryMailboxRecord<'a> {
-    from: AgentName,
-    #[serde(borrow)]
-    text: Cow<'a, str>,
-    timestamp: IsoTimestamp,
-    read: bool,
-    #[serde(default)]
-    source_team: Option<TeamName>,
-    #[serde(default)]
-    summary: Option<String>,
-    #[serde(rename = "message_id", default)]
-    message_id: Option<String>,
-    #[serde(rename = "pendingAckAt", default)]
-    pending_ack_at: Option<IsoTimestamp>,
-    #[serde(rename = "acknowledgedAt", default)]
-    acknowledged_at: Option<IsoTimestamp>,
-    #[serde(rename = "acknowledgesMessageId", default)]
-    acknowledges_message_id: Option<String>,
-    #[serde(rename = "parentMessageId", default)]
-    parent_message_id: Option<String>,
-    #[serde(rename = "threadMode", default)]
-    thread_mode: Option<ThreadMode>,
-    #[serde(rename = "staleAt", default)]
-    stale_at: Option<IsoTimestamp>,
-    #[serde(rename = "taskId", default)]
-    task_id: Option<TaskId>,
-}
-
-fn summarize_mailbox_record(record: SummaryMailboxRecord<'_>) -> SummaryMessage {
-    let message_id = parse_message_id(record.message_id.as_deref());
-    let acknowledges_message_id = parse_message_id(record.acknowledges_message_id.as_deref());
-    let parent_message_id = parse_message_id(record.parent_message_id.as_deref());
-    let summary_preview = summarize_text(record.summary.as_deref(), record.text.as_ref());
-    let idle_notification_sender = idle_notification_sender_from_text(record.text.as_ref());
-
-    SummaryMessage {
-        envelope: MessageEnvelope {
-            from: record.from,
-            text: String::new(),
-            timestamp: record.timestamp,
-            read: record.read,
-            source_team: record.source_team,
-            summary: record.summary,
-            message_id,
-            pending_ack_at: record.pending_ack_at,
-            acknowledged_at: record.acknowledged_at,
-            acknowledges_message_id,
-            parent_message_id,
-            thread_mode: record.thread_mode,
-            stale_at: record.stale_at,
-            task_id: record.task_id,
-            extra: serde_json::Map::new(),
-        },
-        summary_preview,
-        idle_notification_sender,
-    }
-}
-
-fn parse_message_id(value: Option<&str>) -> Option<AtmMessageId> {
-    value.and_then(|value| value.parse::<AtmMessageId>().ok())
-}
-
-fn summarize_text(summary: Option<&str>, text: &str) -> String {
-    if let Some(summary) = summary.map(str::trim).filter(|value| !value.is_empty()) {
-        return summary.to_string();
-    }
-
-    let first_line = text
-        .lines()
-        .map(str::trim)
-        .find(|value| !value.is_empty())
-        .unwrap_or("");
-    let mut summary = first_line.to_string();
-    if summary.len() > 120 {
-        summary.truncate(117);
-        summary.push_str("...");
-    }
-    summary
-}
-
-fn idle_notification_sender_from_text(text: &str) -> Option<AgentName> {
-    let value = serde_json::from_str::<Value>(text).ok()?;
-    if value.get("type").and_then(Value::as_str) != Some("idle_notification") {
-        return None;
-    }
-    value
-        .get("from")
-        .and_then(Value::as_str)
-        .and_then(|sender| sender.parse().ok())
 }
 
 #[cfg(test)]

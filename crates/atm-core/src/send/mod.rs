@@ -7,6 +7,7 @@ use serde_json::Map;
 use tracing::warn;
 
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::config;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::identity;
@@ -153,7 +154,15 @@ pub fn send_mail(
     send_mail_with_runtime(request, observability, &runtime)
 }
 
-fn send_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+pub fn send_mail_with_runtime(
+    request: SendRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<SendOutcome, AtmError> {
+    send_mail_with_runtime_impl(request, observability, runtime)
+}
+
+fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -495,12 +504,45 @@ fn append_mailbox_message_and_seed_workflow(
             prepare_threaded_message(&mut prepared, &inbox_messages)?;
             inbox_messages.push(prepared.clone());
             runtime.commit_mailbox_state(inbox_path, &inbox_messages)?;
+            mirror_message_to_store(runtime, team, agent, &prepared)?;
             Ok((
                 (),
                 workflow::remember_initial_state(workflow_state, &prepared),
             ))
         },
     )
+}
+
+fn mirror_message_to_store(
+    runtime: &(impl RetainedMailboxRuntime + ?Sized),
+    team: &TeamName,
+    agent: &AgentName,
+    envelope: &MessageEnvelope,
+) -> Result<(), AtmError> {
+    let Some(message_id) = envelope.message_id else {
+        return Ok(());
+    };
+    let message_key = boundary::MessageKey::new(format!("atm:{message_id}"))?;
+    runtime.persist_message_record(boundary::MailStoreMessageRecord {
+        team: team.clone(),
+        agent: agent.clone(),
+        message_key: message_key.clone(),
+        envelope: envelope.clone(),
+        imported_from: None,
+        recorded_at: None,
+    })?;
+    runtime.persist_visibility_state(boundary::MailStoreVisibilityState {
+        team: team.clone(),
+        agent: agent.clone(),
+        actor: agent.clone(),
+        message_key,
+        read: envelope.read,
+        pending_ack_at: envelope.pending_ack_at,
+        acknowledged_at: envelope.acknowledged_at,
+        expires_at: envelope.stale_at,
+        deleted_at: None,
+        updated_at: Some(IsoTimestamp::now()),
+    })
 }
 
 fn prepare_threaded_message(

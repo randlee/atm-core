@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -6,8 +5,7 @@ use serde::{Deserialize, Serialize};
 use crate::address::AgentAddress;
 use crate::error::AtmError;
 use crate::identity;
-use crate::mailbox::source::{SummarySourceFile, resolve_target};
-use crate::mailbox::surface::dedupe_message_id_surface;
+use crate::mailbox::source::resolve_target;
 use crate::observability::ObservabilityPort;
 use crate::read::{
     BucketCounts, ClassifiedMessage, filters, normalize_contains_filter, sort_and_limit_selected,
@@ -18,7 +16,6 @@ use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, ReadSelection, TaskId, TeamName};
-use crate::workflow;
 
 const DEFAULT_LIST_LIMIT: usize = 200;
 const MAX_LIST_LIMIT: usize = 10_000;
@@ -126,21 +123,15 @@ pub fn list_mail(
     list_mail_with_runtime(query, observability, &runtime)
 }
 
-#[derive(Debug, Clone)]
-struct SummaryProjection {
-    summary_preview: String,
-    idle_notification_sender: Option<AgentName>,
+pub fn list_mail_with_runtime(
+    query: ListQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<ListOutcome, AtmError> {
+    list_mail_with_runtime_impl(query, observability, runtime)
 }
 
-#[derive(Debug, Clone)]
-struct SummarySourcedMessage {
-    projection: SummaryProjection,
-    envelope: MessageEnvelope,
-    source_path: PathBuf,
-    source_index: crate::types::SourceIndex,
-}
-
-fn list_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     query: ListQuery,
     _observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -180,17 +171,13 @@ fn list_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         None
     };
 
-    let workflow_state =
-        runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
-    let source_files =
-        runtime.observe_summary_source_files(&query.home_dir, &target.team, &target.agent)?;
-    let projection_index = projection_index(&source_files);
-    let classified_all = classify_summary_source_files(&source_files, &workflow_state);
+    let metadata_rows =
+        runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
+    let classified_all = classify_mailbox_metadata_rows(&metadata_rows);
     let logical_current = logical_current_messages(classified_all);
     let bucket_counts = bucket_counts_for(&logical_current);
     let filtered = apply_list_filters(
         logical_current,
-        &projection_index,
         query.sender_filter.as_ref(),
         query.timestamp_filter,
         query.task_filter.as_ref(),
@@ -201,7 +188,7 @@ fn list_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
     let rows = selected
         .iter()
-        .map(|message| list_row_from_message(message, &projection_index))
+        .map(list_row_from_message)
         .collect::<Vec<_>>();
     let history_collapsed = query.selection_mode != ReadSelection::All && bucket_counts.history > 0;
 
@@ -217,51 +204,46 @@ fn list_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     })
 }
 
-fn projection_index(
-    source_files: &[SummarySourceFile],
-) -> HashMap<(PathBuf, usize), SummaryProjection> {
-    source_files
-        .iter()
-        .flat_map(|source| {
-            source
-                .messages
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(index, message)| {
-                    (
-                        (source.path.clone(), index),
-                        SummaryProjection {
-                            summary_preview: message.summary_preview,
-                            idle_notification_sender: message.idle_notification_sender,
-                        },
-                    )
-                })
-        })
-        .collect()
-}
-
-fn classify_summary_source_files(
-    source_files: &[SummarySourceFile],
-    workflow_state: &workflow::WorkflowStateFile,
+fn classify_mailbox_metadata_rows(
+    rows: &[crate::boundary::MailStoreMailboxMetadataRow],
 ) -> Vec<ClassifiedMessage> {
-    let deduped = dedupe_message_id_surface(
-        merged_summary_surface(source_files),
-        |message: &SummarySourcedMessage| message.envelope.message_id,
-        |message: &SummarySourcedMessage| message.envelope.timestamp,
-    );
-    let projected = apply_idle_notification_dedup(deduped);
+    let projected = rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| ClassifiedMessage {
+            source_index: index.into(),
+            source_path: PathBuf::from(row.message_key.as_ref()),
+            bucket: crate::types::DisplayBucket::Unread,
+            class: crate::types::MessageClass::Unread,
+            envelope: MessageEnvelope {
+                from: row.from_agent.clone(),
+                text: row.summary.clone().unwrap_or_default(),
+                timestamp: row.message_at,
+                read: row.read,
+                source_team: None,
+                summary: row.summary.clone(),
+                message_id: row.message_id,
+                pending_ack_at: row.pending_ack.then_some(row.message_at),
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: row.parent_message_id,
+                thread_mode: row.thread_mode,
+                stale_at: None,
+                task_id: row.task_id.clone(),
+                extra: serde_json::Map::new(),
+            },
+        })
+        .collect::<Vec<_>>();
     let envelopes = projected
         .iter()
-        .map(|message| workflow::project_envelope(&message.envelope, workflow_state))
+        .map(|message| message.envelope.clone())
         .collect::<Vec<_>>();
     let thread_index = ThreadIndex::new(&envelopes);
 
     projected
         .into_iter()
-        .zip(envelopes.iter().cloned())
-        .map(|(message, projected)| {
-            let effective = effective_display_envelope(&projected, &thread_index);
+        .map(|message| {
+            let effective = effective_display_envelope(&message.envelope, &thread_index);
             let class = state::classify_message(&effective);
             let bucket = state::display_bucket_for_class(class);
             ClassifiedMessage {
@@ -270,55 +252,6 @@ fn classify_summary_source_files(
                 bucket,
                 class,
                 envelope: effective,
-            }
-        })
-        .collect()
-}
-
-fn merged_summary_surface(source_files: &[SummarySourceFile]) -> Vec<SummarySourcedMessage> {
-    source_files
-        .iter()
-        .flat_map(|source| {
-            source
-                .messages
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(source_index, message)| SummarySourcedMessage {
-                    projection: SummaryProjection {
-                        summary_preview: message.summary_preview,
-                        idle_notification_sender: message.idle_notification_sender,
-                    },
-                    envelope: message.envelope,
-                    source_path: source.path.clone(),
-                    source_index: source_index.into(),
-                })
-        })
-        .collect()
-}
-
-fn apply_idle_notification_dedup(
-    messages: Vec<SummarySourcedMessage>,
-) -> Vec<SummarySourcedMessage> {
-    let mut latest_idle_for_sender = HashMap::new();
-    for (index, message) in messages.iter().enumerate() {
-        if !message.envelope.read
-            && let Some(sender) = message.projection.idle_notification_sender.as_ref()
-        {
-            latest_idle_for_sender.insert(sender.clone(), index);
-        }
-    }
-
-    messages
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, message)| {
-            if message.envelope.read {
-                return Some(message);
-            }
-            match message.projection.idle_notification_sender.as_ref() {
-                Some(sender) if latest_idle_for_sender.get(sender) != Some(&index) => None,
-                _ => Some(message),
             }
         })
         .collect()
@@ -352,7 +285,6 @@ fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedM
 
 fn apply_list_filters(
     messages: Vec<ClassifiedMessage>,
-    _projection_index: &HashMap<(PathBuf, usize), SummaryProjection>,
     sender_filter: Option<&AgentName>,
     timestamp_filter: Option<IsoTimestamp>,
     task_filter: Option<&TaskId>,
@@ -440,18 +372,10 @@ fn effective_display_envelope(
     historical
 }
 
-fn list_row_from_message(
-    message: &ClassifiedMessage,
-    projection_index: &HashMap<(PathBuf, usize), SummaryProjection>,
-) -> ListRow {
-    let summary = projection_index
-        .get(&(message.source_path.clone(), message.source_index.get()))
-        .map(|projection| projection.summary_preview.clone())
-        .unwrap_or_default();
-
+fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
     ListRow {
         message_id: message.envelope.message_id,
-        summary,
+        summary: message.envelope.summary.clone().unwrap_or_default(),
         from: message.envelope.from.clone(),
         timestamp: message.envelope.timestamp,
         read: message.envelope.read,
@@ -467,7 +391,7 @@ mod tests {
 
     use serde_json::Map;
 
-    use super::{SummaryProjection, apply_list_filters, logical_current_messages};
+    use super::{apply_list_filters, logical_current_messages};
     use crate::read::ClassifiedMessage;
     use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
@@ -540,14 +464,7 @@ mod tests {
             ),
         ]);
 
-        let filtered = apply_list_filters(
-            current,
-            &std::collections::HashMap::<(PathBuf, usize), SummaryProjection>::new(),
-            None,
-            None,
-            None,
-            Some("root context"),
-        );
+        let filtered = apply_list_filters(current, None, None, None, Some("root context"));
 
         assert!(filtered.is_empty());
     }

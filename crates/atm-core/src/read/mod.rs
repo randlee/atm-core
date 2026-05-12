@@ -4,13 +4,14 @@ pub(crate) mod state;
 pub(crate) mod wait;
 
 use std::collections::HashMap;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::config;
 use crate::error::AtmError;
 use crate::identity;
@@ -194,7 +195,15 @@ pub fn read_mail(
     read_mail_with_runtime(query, observability, &runtime)
 }
 
-fn read_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+pub fn read_mail_with_runtime(
+    query: ReadQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<ReadOutcome, AtmError> {
+    read_mail_with_runtime_impl(query, observability, runtime)
+}
+
+fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -236,7 +245,191 @@ fn read_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     } else {
         None
     };
+    let mut metadata_rows =
+        runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
+    if metadata_rows
+        .iter()
+        .any(|row| row.message_key.as_ref().starts_with("legacy:"))
+    {
+        return read_mail_legacy_path(
+            query,
+            observability,
+            runtime,
+            actor,
+            actor_team,
+            target,
+            seen_watermark,
+        );
+    }
+    let (mut bucket_counts, mut selected) =
+        selection_state_for_mailbox_metadata_rows(&metadata_rows, &query, seen_watermark);
+    let mut timed_out = false;
 
+    if selected.is_empty()
+        && let Some(timeout_secs) = query.timeout_secs
+    {
+        let wait_satisfied = wait::wait_for_eligible_message(
+            timeout_secs,
+            || {
+                runtime.query_mailbox_metadata_rows(
+                    &query.home_dir,
+                    &target.team,
+                    &target.agent,
+                    None,
+                )
+            },
+            |rows| {
+                !selection_state_for_mailbox_metadata_rows(rows, &query, seen_watermark)
+                    .1
+                    .is_empty()
+            },
+        )?;
+
+        if wait_satisfied {
+            metadata_rows = runtime.query_mailbox_metadata_rows(
+                &query.home_dir,
+                &target.team,
+                &target.agent,
+                None,
+            )?;
+            (bucket_counts, selected) =
+                selection_state_for_mailbox_metadata_rows(&metadata_rows, &query, seen_watermark);
+        } else {
+            timed_out = true;
+        }
+    }
+
+    let match_count = selected.len();
+    sort_and_limit_selected(&mut selected, Some(1));
+    let mutation_needed = displayed_messages_require_mutation(&selected);
+
+    let (mutation_applied, output_message, bucket_counts, selected_message_id, match_count) =
+        if timed_out || selected.is_empty() || !mutation_needed {
+            (
+                false,
+                output_messages_from_metadata_selection(
+                    runtime,
+                    &query.home_dir,
+                    &target.team,
+                    &target.agent,
+                    &metadata_rows,
+                    &selected,
+                    query.message_id_filter,
+                )?
+                .into_iter()
+                .next(),
+                bucket_counts,
+                selected
+                    .first()
+                    .and_then(|message| message.envelope.message_id),
+                match_count,
+            )
+        } else {
+            let mut metadata_rows = runtime.query_mailbox_metadata_rows(
+                &query.home_dir,
+                &target.team,
+                &target.agent,
+                None,
+            )?;
+            let (bucket_counts, mut selected) =
+                selection_state_for_mailbox_metadata_rows(&metadata_rows, &query, seen_watermark);
+            let match_count = selected.len();
+            sort_and_limit_selected(&mut selected, Some(1));
+            let mutation_applied = apply_display_mutations_to_store(
+                runtime,
+                &target.team,
+                &target.agent,
+                &selected,
+                query.ack_activation_mode,
+                own_inbox,
+            )?;
+            metadata_rows = runtime.query_mailbox_metadata_rows(
+                &query.home_dir,
+                &target.team,
+                &target.agent,
+                None,
+            )?;
+            let (_updated_counts, updated_selected) =
+                selection_state_for_mailbox_metadata_rows(&metadata_rows, &query, seen_watermark);
+            let output_message = output_messages_from_metadata_selection(
+                runtime,
+                &query.home_dir,
+                &target.team,
+                &target.agent,
+                &metadata_rows,
+                &updated_selected.into_iter().take(1).collect::<Vec<_>>(),
+                query.message_id_filter,
+            )?
+            .into_iter()
+            .next();
+            (
+                mutation_applied,
+                output_message,
+                bucket_counts,
+                selected
+                    .first()
+                    .and_then(|message| message.envelope.message_id),
+                match_count,
+            )
+        };
+
+    if query.seen_state_update
+        && !selected.is_empty()
+        && let Some(latest_timestamp) = selected
+            .iter()
+            .map(|message| message.envelope.timestamp)
+            .max()
+    {
+        runtime.save_seen_watermark(
+            &query.home_dir,
+            &target.team,
+            &target.agent,
+            latest_timestamp,
+        )?;
+    }
+
+    let outcome = ReadOutcome {
+        action: CommandAction::Read,
+        team: target.team.clone(),
+        agent: target.agent.clone(),
+        selection_mode: query.selection_mode,
+        mutation_applied,
+        count: usize::from(output_message.is_some()),
+        message: output_message,
+        selected_message_id,
+        match_count,
+        additional_match_count: match_count.saturating_sub(1),
+        bucket_counts,
+    };
+
+    let _ = observability.emit(CommandEvent {
+        command: "read",
+        action: "read",
+        outcome: if timed_out { "timeout" } else { "ok" },
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: actor,
+        message_id: None,
+        requires_ack: false,
+        dry_run: false,
+        task_id: None,
+        error_code: None,
+        error_message: None,
+    });
+
+    Ok(outcome)
+}
+
+fn read_mail_legacy_path<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    query: ReadQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+    actor: AgentName,
+    actor_team: Option<TeamName>,
+    target: crate::mailbox::source::ResolvedTarget,
+    seen_watermark: Option<IsoTimestamp>,
+) -> Result<ReadOutcome, AtmError> {
+    let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
     let workflow_path =
         runtime.workflow_state_path(&query.home_dir, &target.team, &target.agent)?;
     let mut workflow_state =
@@ -443,6 +636,85 @@ pub(crate) fn selection_state_for_source_files(
     );
     let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
     (bucket_counts, selected)
+}
+
+fn selection_state_for_mailbox_metadata_rows(
+    rows: &[boundary::MailStoreMailboxMetadataRow],
+    query: &ReadQuery,
+    seen_watermark: Option<IsoTimestamp>,
+) -> (BucketCounts, Vec<ClassifiedMessage>) {
+    let classified_all = classify_mailbox_metadata_rows(rows);
+    let logical_current = logical_current_messages(classified_all.clone());
+    let bucket_counts = bucket_counts_for(&logical_current);
+    if let Some(message_id) = query.message_id_filter {
+        let selected = classified_all
+            .into_iter()
+            .filter(|message| message.envelope.message_id == Some(message_id))
+            .collect();
+        return (bucket_counts, selected);
+    }
+    let filtered = apply_filters(
+        logical_current,
+        query.sender_filter.as_ref(),
+        query.timestamp_filter,
+        query.task_filter.as_ref(),
+        query.contains_filter.as_deref(),
+    );
+    let selected = select_messages(&filtered, query.selection_mode, seen_watermark);
+    (bucket_counts, selected)
+}
+
+fn classify_mailbox_metadata_rows(
+    rows: &[boundary::MailStoreMailboxMetadataRow],
+) -> Vec<ClassifiedMessage> {
+    let projected = rows
+        .iter()
+        .enumerate()
+        .map(|(index, row)| ClassifiedMessage {
+            source_index: index.into(),
+            source_path: PathBuf::from(row.message_key.as_ref()),
+            bucket: DisplayBucket::Unread,
+            class: MessageClass::Unread,
+            envelope: MessageEnvelope {
+                from: row.from_agent.clone(),
+                text: row.summary.clone().unwrap_or_default(),
+                timestamp: row.message_at,
+                read: row.read,
+                source_team: None,
+                summary: row.summary.clone(),
+                message_id: row.message_id,
+                pending_ack_at: row.pending_ack.then_some(row.message_at),
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: row.parent_message_id,
+                thread_mode: row.thread_mode,
+                stale_at: None,
+                task_id: row.task_id.clone(),
+                extra: serde_json::Map::new(),
+            },
+        })
+        .collect::<Vec<_>>();
+    let envelopes = projected
+        .iter()
+        .map(|message| message.envelope.clone())
+        .collect::<Vec<_>>();
+    let thread_index = ThreadIndex::new(&envelopes);
+
+    projected
+        .into_iter()
+        .map(|message| {
+            let effective = effective_display_envelope(&message.envelope, &thread_index);
+            let class = state::classify_message(&effective);
+            let bucket = state::display_bucket_for_class(class);
+            ClassifiedMessage {
+                source_index: message.source_index,
+                source_path: message.source_path,
+                bucket,
+                class,
+                envelope: effective,
+            }
+        })
+        .collect()
 }
 
 fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
@@ -724,6 +996,149 @@ pub(crate) fn sort_and_limit_selected(selected: &mut Vec<ClassifiedMessage>, lim
     if let Some(limit) = limit {
         selected.truncate(limit);
     }
+}
+
+fn message_key_for_classified(
+    message: &ClassifiedMessage,
+) -> Result<boundary::MessageKey, AtmError> {
+    boundary::MessageKey::new(message.source_path.to_string_lossy().into_owned())
+}
+
+fn output_messages_from_metadata_selection<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    selected: &[ClassifiedMessage],
+    exact_message_id: Option<AtmMessageId>,
+) -> Result<Vec<ClassifiedMessage>, AtmError> {
+    let row_by_id = metadata_rows
+        .iter()
+        .filter_map(|row| row.message_id.map(|message_id| (message_id, row)))
+        .collect::<HashMap<_, _>>();
+
+    selected
+        .iter()
+        .cloned()
+        .map(|selected_message| {
+            let message_key = message_key_for_classified(&selected_message)?;
+            let Some(record) = runtime.load_message_record(home_dir, team, agent, &message_key)?
+            else {
+                return Ok(selected_message);
+            };
+            let envelope = if exact_message_id == record.envelope.message_id {
+                record.envelope
+            } else if record.envelope.thread_mode == Some(crate::schema::ThreadMode::AddDetails) {
+                load_logical_current_record(
+                    runtime,
+                    home_dir,
+                    team,
+                    agent,
+                    &row_by_id,
+                    &selected_message,
+                    record.envelope,
+                )?
+            } else {
+                record.envelope
+            };
+            Ok(ClassifiedMessage {
+                source_index: selected_message.source_index,
+                source_path: selected_message.source_path,
+                bucket: state::display_bucket_for_class(state::classify_message(&envelope)),
+                class: state::classify_message(&envelope),
+                envelope,
+            })
+        })
+        .collect()
+}
+
+fn load_logical_current_record<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    row_by_id: &HashMap<AtmMessageId, &boundary::MailStoreMailboxMetadataRow>,
+    selected_message: &ClassifiedMessage,
+    terminal_envelope: MessageEnvelope,
+) -> Result<MessageEnvelope, AtmError> {
+    let Some(mut current_id) = terminal_envelope.message_id else {
+        return Ok(terminal_envelope);
+    };
+
+    let mut chain_ids = Vec::new();
+    while let Some(row) = row_by_id.get(&current_id) {
+        chain_ids.push(current_id);
+        let Some(parent_id) = row.parent_message_id else {
+            break;
+        };
+        current_id = parent_id;
+    }
+    chain_ids.reverse();
+
+    let mut chain = Vec::new();
+    for message_id in chain_ids {
+        let Some(row) = row_by_id.get(&message_id) else {
+            continue;
+        };
+        let record = runtime.load_message_record(home_dir, team, agent, &row.message_key)?;
+        if let Some(record) = record {
+            chain.push(record.envelope);
+        }
+    }
+    if chain.is_empty() {
+        return Ok(terminal_envelope);
+    }
+    let thread_index = ThreadIndex::new(&chain);
+    thread_index
+        .logical_current_envelope(
+            terminal_envelope
+                .message_id
+                .or(selected_message.envelope.message_id)
+                .unwrap_or(current_id),
+        )
+        .ok_or_else(|| {
+            AtmError::validation("failed to reconstruct logical current thread envelope")
+                .with_recovery(
+                    "Repair or remove the malformed sqlite mailbox thread rows before retrying `atm read`.",
+                )
+        })
+}
+
+fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    team: &TeamName,
+    agent: &AgentName,
+    displayed_messages: &[ClassifiedMessage],
+    ack_activation_mode: AckActivationMode,
+    own_inbox: bool,
+) -> Result<bool, AtmError> {
+    let mut changed = false;
+    let promote_unread =
+        own_inbox && ack_activation_mode == AckActivationMode::PromoteDisplayedUnread;
+    let now = IsoTimestamp::now();
+
+    for message in displayed_messages {
+        let updated = transition_displayed_message(message, promote_unread, now).into_envelope();
+        if updated == message.envelope {
+            continue;
+        }
+        runtime.persist_visibility_state(boundary::MailStoreVisibilityState {
+            team: team.clone(),
+            agent: agent.clone(),
+            actor: agent.clone(),
+            message_key: message_key_for_classified(message)?,
+            read: updated.read,
+            pending_ack_at: updated.pending_ack_at,
+            acknowledged_at: updated.acknowledged_at,
+            expires_at: updated.stale_at,
+            deleted_at: None,
+            updated_at: Some(now),
+        })?;
+        changed = true;
+    }
+
+    Ok(changed)
 }
 
 fn output_messages_from_selection(

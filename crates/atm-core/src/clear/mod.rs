@@ -8,6 +8,7 @@ use serde_json::Value;
 use tracing::debug;
 
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::error::AtmError;
 use crate::identity;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
@@ -17,7 +18,7 @@ use crate::read::state;
 use crate::schema::MessageEnvelope;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::types::{AgentName, CommandAction, MessageClass, SourceIndex, TeamName};
+use crate::types::{AgentName, CommandAction, IsoTimestamp, MessageClass, SourceIndex, TeamName};
 use crate::workflow;
 
 /// Parameters for clearing read or acknowledged mailbox messages.
@@ -77,7 +78,15 @@ pub fn clear_mail(
     clear_mail_with_runtime(query, observability, &runtime)
 }
 
-fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+pub fn clear_mail_with_runtime(
+    query: ClearQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<ClearOutcome, AtmError> {
+    clear_mail_with_runtime_impl(query, observability, runtime)
+}
+
+fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -143,11 +152,20 @@ fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
                     runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
                 let (removable, removed_by_class, _) =
                     removable_messages(source_files, &workflow_state, cutoff, query.idle_only);
+                let deleted_states = deletion_states_from_source_files(
+                    &target.team,
+                    &target.agent,
+                    source_files,
+                    &removable,
+                )?;
                 let workflow_changed =
                     remove_workflow_state_entries(&mut workflow_state, source_files, &removable);
                 apply_removals(source_files, &removable);
                 if !removable.is_empty() {
                     runtime.commit_source_files(source_files)?;
+                    for state in deleted_states {
+                        runtime.persist_visibility_state(state)?;
+                    }
                 }
                 if workflow_changed {
                     runtime.save_workflow_state(
@@ -324,6 +342,41 @@ fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf,
             })
             .collect();
     }
+}
+
+fn deletion_states_from_source_files(
+    team: &TeamName,
+    agent: &AgentName,
+    source_files: &[SourceFile],
+    removable: &HashSet<(PathBuf, SourceIndex)>,
+) -> Result<Vec<boundary::MailStoreVisibilityState>, AtmError> {
+    let deleted_at = IsoTimestamp::now();
+    let mut states = Vec::new();
+
+    for source in source_files {
+        for (index, message) in source.messages.iter().enumerate() {
+            if !removable.contains(&(source.path.clone(), index.into())) {
+                continue;
+            }
+            let Some(message_id) = message.message_id else {
+                continue;
+            };
+            states.push(boundary::MailStoreVisibilityState {
+                team: team.clone(),
+                agent: agent.clone(),
+                actor: agent.clone(),
+                message_key: boundary::MessageKey::new(format!("atm:{message_id}"))?,
+                read: message.read,
+                pending_ack_at: message.pending_ack_at,
+                acknowledged_at: message.acknowledged_at,
+                expires_at: message.stale_at,
+                deleted_at: Some(deleted_at),
+                updated_at: Some(deleted_at),
+            });
+        }
+    }
+
+    Ok(states)
 }
 
 #[cfg(test)]

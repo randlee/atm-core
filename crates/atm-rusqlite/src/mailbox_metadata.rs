@@ -1,36 +1,16 @@
 use crate::shared_db::SharedDb;
-use atm_core::boundary::MessageKey;
+use atm_core::boundary::{MailStoreMailboxMetadataCounts, MailStoreMailboxMetadataRow, MessageKey};
 use atm_core::error::AtmError;
-use atm_core::schema::AtmMessageId;
+use atm_core::schema::{AtmMessageId, ThreadMode};
 use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use rusqlite::params;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct MailboxMetadataRow {
-    pub message_key: MessageKey,
-    pub message_id: Option<AtmMessageId>,
-    pub parent_message_id: Option<AtmMessageId>,
-    pub from_agent: AgentName,
-    pub summary: Option<String>,
-    pub message_at: IsoTimestamp,
-    pub read: bool,
-    pub pending_ack: bool,
-    pub task_id: Option<TaskId>,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub struct MailboxMetadataCounts {
-    pub total_messages: u64,
-    pub unread_messages: u64,
-    pub pending_ack_messages: u64,
-}
 
 pub fn query_mailbox_metadata_rows(
     db: &SharedDb,
     team: &TeamName,
     agent: &AgentName,
-    limit: usize,
-) -> Result<Vec<MailboxMetadataRow>, AtmError> {
+    limit: Option<usize>,
+) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
     db.with_connection(|connection| {
         let mut statement = connection
             .prepare(
@@ -38,6 +18,7 @@ pub fn query_mailbox_metadata_rows(
                      mail_messages.message_key,
                      mail_messages.message_id,
                      mail_messages.parent_message_id,
+                     mail_messages.thread_mode,
                      mail_messages.from_agent,
                      mail_messages.summary,
                      mail_messages.message_at,
@@ -61,23 +42,23 @@ pub fn query_mailbox_metadata_rows(
                         mail_message_states.expires_at IS NULL
                         OR mail_message_states.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
                    )
-                 ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC
-                 LIMIT ?3;",
+                 ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC;",
             )
             .map_err(|error| db.error("failed to prepare bounded mailbox metadata query", error))?;
         let rows = statement
-            .query_map(params![team.as_str(), agent.as_str(), limit as i64], |row| {
+            .query_map(params![team.as_str(), agent.as_str()], |row| {
                 Ok((
                     row.get::<_, String>(0)?,
                     row.get::<_, Option<String>>(1)?,
                     row.get::<_, Option<String>>(2)?,
-                    row.get::<_, String>(3)?,
-                    row.get::<_, Option<String>>(4)?,
-                    row.get::<_, String>(5)?,
-                    row.get::<_, i64>(6)?,
-                    row.get::<_, Option<String>>(7)?,
+                    row.get::<_, Option<String>>(3)?,
+                    row.get::<_, String>(4)?,
+                    row.get::<_, Option<String>>(5)?,
+                    row.get::<_, String>(6)?,
+                    row.get::<_, i64>(7)?,
                     row.get::<_, Option<String>>(8)?,
                     row.get::<_, Option<String>>(9)?,
+                    row.get::<_, Option<String>>(10)?,
                 ))
             })
             .map_err(|error| db.error("failed to execute bounded mailbox metadata query", error))?;
@@ -87,6 +68,7 @@ pub fn query_mailbox_metadata_rows(
                 message_key,
                 message_id,
                 parent_message_id,
+                thread_mode,
                 from_agent,
                 summary,
                 message_at,
@@ -95,7 +77,7 @@ pub fn query_mailbox_metadata_rows(
                 acknowledged_at,
                 task_id,
             ) = row.map_err(|error| db.error("failed to decode bounded mailbox metadata row", error))?;
-            collected.push(MailboxMetadataRow {
+            collected.push(MailStoreMailboxMetadataRow {
                 message_key: MessageKey::new(message_key).map_err(|error| {
                     AtmError::validation(format!(
                         "failed to parse bounded mailbox metadata message key: {error}"
@@ -128,6 +110,20 @@ pub fn query_mailbox_metadata_rows(
                         })
                     })
                     .transpose()?,
+                thread_mode: thread_mode
+                    .map(|value| {
+                        serde_json::from_str::<ThreadMode>(&format!("\"{value}\"")).map_err(
+                            |error| {
+                                AtmError::validation(format!(
+                                    "failed to parse bounded mailbox metadata thread_mode: {error}"
+                                ))
+                                .with_recovery(
+                                    "Repair or remove the malformed thread_mode row before retrying the bounded mailbox metadata query.",
+                                )
+                            },
+                        )
+                    })
+                    .transpose()?,
                 from_agent: from_agent.parse()?,
                 summary,
                 message_at: message_at
@@ -145,6 +141,11 @@ pub fn query_mailbox_metadata_rows(
                 pending_ack: pending_ack_at.is_some() && acknowledged_at.is_none(),
                 task_id: task_id.map(|value| value.parse::<TaskId>()).transpose()?,
             });
+            if let Some(limit) = limit
+                && collected.len() >= limit
+            {
+                break;
+            }
         }
         Ok(collected)
     })
@@ -154,7 +155,7 @@ pub fn query_mailbox_metadata_counts(
     db: &SharedDb,
     team: &TeamName,
     agent: &AgentName,
-) -> Result<MailboxMetadataCounts, AtmError> {
+) -> Result<MailStoreMailboxMetadataCounts, AtmError> {
     db.with_connection(|connection| {
         connection
             .query_row(
@@ -187,7 +188,7 @@ pub fn query_mailbox_metadata_counts(
                    );",
                 params![team.as_str(), agent.as_str()],
                 |row| {
-                    Ok(MailboxMetadataCounts {
+                    Ok(MailStoreMailboxMetadataCounts {
                         total_messages: row.get::<_, i64>(0)? as u64,
                         unread_messages: row.get::<_, Option<i64>>(1)?.unwrap_or(0) as u64,
                         pending_ack_messages: row.get::<_, Option<i64>>(2)?.unwrap_or(0) as u64,

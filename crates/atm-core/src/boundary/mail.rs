@@ -1,6 +1,6 @@
 use crate::error::AtmError;
-use crate::schema::{MessageEnvelope, TeamConfig};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::schema::{AtmMessageId, MessageEnvelope, TeamConfig, ThreadMode};
+use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
@@ -103,6 +103,56 @@ pub struct MailStoreHealthSnapshot {
     pub read_messages: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latest_message_timestamp: Option<IsoTimestamp>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreMailboxMetadataRow {
+    pub message_key: MessageKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<AtmMessageId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_message_id: Option<AtmMessageId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_mode: Option<ThreadMode>,
+    pub from_agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    pub message_at: IsoTimestamp,
+    pub read: bool,
+    pub pending_ack: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<TaskId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreQueryMailboxMetadataRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreQueryMailboxMetadataResponse {
+    pub rows: Vec<MailStoreMailboxMetadataRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreMailboxMetadataCounts {
+    pub total_messages: u64,
+    pub unread_messages: u64,
+    pub pending_ack_messages: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreQueryMailboxMetadataCountsRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreQueryMailboxMetadataCountsResponse {
+    pub counts: MailStoreMailboxMetadataCounts,
 }
 
 /// Stub mail-store request for the Phase R skeleton.
@@ -297,6 +347,22 @@ pub trait MailStore: sealed::Sealed {
         &self,
         request: MailStoreLoadMessageRequest,
     ) -> Result<MailStoreLoadMessageResponse, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when mailbox metadata rows cannot be queried.
+    fn query_mailbox_metadata(
+        &self,
+        request: MailStoreQueryMailboxMetadataRequest,
+    ) -> Result<MailStoreQueryMailboxMetadataResponse, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when mailbox metadata counts cannot be queried.
+    fn query_mailbox_metadata_counts(
+        &self,
+        request: MailStoreQueryMailboxMetadataCountsRequest,
+    ) -> Result<MailStoreQueryMailboxMetadataCountsResponse, AtmError>;
 
     /// # Errors
     ///

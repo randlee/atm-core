@@ -4,6 +4,7 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use serde_json::Map;
 use tracing::trace;
 
+use crate::boundary;
 use crate::config;
 use crate::error::AtmError;
 use crate::identity;
@@ -115,7 +116,15 @@ pub fn ack_mail(
     ack_mail_with_runtime(request, observability, &runtime)
 }
 
-fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+pub fn ack_mail_with_runtime(
+    request: AckRequest,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<AckOutcome, AtmError> {
+    ack_mail_with_runtime_impl(request, observability, runtime)
+}
+
+fn ack_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -273,6 +282,8 @@ fn ack_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             )?;
             append_reply_message(runtime, source_files, &reply_inbox_path, reply_message.clone())?;
             runtime.commit_source_files(source_files)?;
+            mirror_acknowledged_source_to_store(runtime, &team, &actor, &source_message, ack_timestamp)?;
+            mirror_reply_to_store(runtime, &reply_team, &reply_agent, &reply_message)?;
             if reply_targets_source_mailbox {
                 workflow::remember_initial_state(&mut source_workflow_state, &reply_message);
                 runtime.save_workflow_state(
@@ -495,6 +506,62 @@ fn update_source_message(
         })?;
     *stored = transitioned;
     Ok(true)
+}
+
+fn mirror_acknowledged_source_to_store(
+    runtime: &(impl RetainedMailboxRuntime + ?Sized),
+    team: &TeamName,
+    agent: &AgentName,
+    source_message: &SourcedMessage,
+    acknowledged_at: IsoTimestamp,
+) -> Result<(), AtmError> {
+    let Some(message_id) = source_message.envelope.message_id else {
+        return Ok(());
+    };
+    runtime.persist_visibility_state(boundary::MailStoreVisibilityState {
+        team: team.clone(),
+        agent: agent.clone(),
+        actor: agent.clone(),
+        message_key: boundary::MessageKey::new(format!("atm:{message_id}"))?,
+        read: true,
+        pending_ack_at: None,
+        acknowledged_at: Some(acknowledged_at),
+        expires_at: source_message.envelope.stale_at,
+        deleted_at: None,
+        updated_at: Some(acknowledged_at),
+    })
+}
+
+fn mirror_reply_to_store(
+    runtime: &(impl RetainedMailboxRuntime + ?Sized),
+    team: &TeamName,
+    agent: &AgentName,
+    reply_message: &MessageEnvelope,
+) -> Result<(), AtmError> {
+    let Some(message_id) = reply_message.message_id else {
+        return Ok(());
+    };
+    let message_key = boundary::MessageKey::new(format!("atm:{message_id}"))?;
+    runtime.persist_message_record(boundary::MailStoreMessageRecord {
+        team: team.clone(),
+        agent: agent.clone(),
+        message_key: message_key.clone(),
+        envelope: reply_message.clone(),
+        imported_from: None,
+        recorded_at: None,
+    })?;
+    runtime.persist_visibility_state(boundary::MailStoreVisibilityState {
+        team: team.clone(),
+        agent: agent.clone(),
+        actor: agent.clone(),
+        message_key,
+        read: reply_message.read,
+        pending_ack_at: reply_message.pending_ack_at,
+        acknowledged_at: reply_message.acknowledged_at,
+        expires_at: reply_message.stale_at,
+        deleted_at: None,
+        updated_at: Some(reply_message.timestamp),
+    })
 }
 
 fn append_reply_message(

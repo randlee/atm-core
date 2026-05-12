@@ -4,7 +4,7 @@ use std::sync::Arc;
 use crate::boundary;
 use crate::error::AtmError;
 use crate::mailbox;
-use crate::mailbox::source::{SourceFile, SummarySourceFile};
+use crate::mailbox::source::SourceFile;
 use crate::schema::MessageEnvelope;
 use crate::schema::TeamConfig;
 use crate::service_runtime::LocalServiceRuntime;
@@ -42,18 +42,34 @@ impl Default for LocalServiceRuntime {
 }
 
 pub(crate) trait RetainedMailboxRuntime {
+    fn query_mailbox_metadata_rows(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        limit: Option<usize>,
+    ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError>;
+    fn load_message_record(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &boundary::MessageKey,
+    ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError>;
+    fn persist_message_record(
+        &self,
+        record: boundary::MailStoreMessageRecord,
+    ) -> Result<(), AtmError>;
+    fn persist_visibility_state(
+        &self,
+        state: boundary::MailStoreVisibilityState,
+    ) -> Result<(), AtmError>;
     fn observe_source_files(
         &self,
         home_dir: &Path,
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Vec<SourceFile>, AtmError>;
-    fn observe_summary_source_files(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<Vec<SummarySourceFile>, AtmError>;
     fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError>;
     fn read_messages(&self, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError>;
     fn commit_mailbox_state(
@@ -75,20 +91,93 @@ pub(crate) trait RetainedMailboxRuntime {
         F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>;
 }
 
+const LEGACY_MESSAGE_KEY_PREFIX: &str = "legacy:";
+
+fn is_unsupported_boundary(error: &AtmError, what: &str) -> bool {
+    error.is_validation() && error.message.contains(what)
+}
+
+fn encode_legacy_message_key(path: &Path, index: usize) -> Result<boundary::MessageKey, AtmError> {
+    boundary::MessageKey::new(format!(
+        "{LEGACY_MESSAGE_KEY_PREFIX}{index}:{}",
+        path.display()
+    ))
+}
+
+fn decode_legacy_message_key(message_key: &boundary::MessageKey) -> Option<(PathBuf, usize)> {
+    let encoded = message_key
+        .as_ref()
+        .strip_prefix(LEGACY_MESSAGE_KEY_PREFIX)?;
+    let (index, path) = encoded.split_once(':')?;
+    Some((PathBuf::from(path), index.parse().ok()?))
+}
+
+fn legacy_query_mailbox_metadata_rows(
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    limit: Option<usize>,
+) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+    let source_files = observe_source_files(home_dir, team, agent)?;
+    let mut rows = Vec::new();
+
+    for source in source_files {
+        for (index, envelope) in source.messages.into_iter().enumerate() {
+            rows.push(boundary::MailStoreMailboxMetadataRow {
+                message_key: encode_legacy_message_key(&source.path, index)?,
+                message_id: envelope.message_id,
+                parent_message_id: envelope.parent_message_id,
+                thread_mode: envelope.thread_mode,
+                from_agent: envelope.from,
+                summary: envelope.summary,
+                message_at: envelope.timestamp,
+                read: envelope.read,
+                pending_ack: envelope.pending_ack_at.is_some()
+                    && envelope.acknowledged_at.is_none(),
+                task_id: envelope.task_id,
+            });
+            if let Some(limit) = limit
+                && rows.len() >= limit
+            {
+                return Ok(rows);
+            }
+        }
+    }
+
+    Ok(rows)
+}
+
+fn legacy_load_message_record(
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+    message_key: &boundary::MessageKey,
+) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+    let Some((path, index)) = decode_legacy_message_key(message_key) else {
+        return Ok(None);
+    };
+    let source_files = observe_source_files(home_dir, team, agent)?;
+    let envelope = source_files
+        .into_iter()
+        .find(|source| source.path == path)
+        .and_then(|source| source.messages.into_iter().nth(index));
+
+    Ok(envelope.map(|envelope| boundary::MailStoreMessageRecord {
+        team: team.clone(),
+        agent: agent.clone(),
+        message_key: message_key.clone(),
+        envelope,
+        imported_from: None,
+        recorded_at: None,
+    }))
+}
+
 pub(crate) fn observe_source_files(
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
     mailbox::store::observe_source_files(home_dir, team, agent)
-}
-
-pub(crate) fn observe_summary_source_files(
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-) -> Result<Vec<SummarySourceFile>, AtmError> {
-    mailbox::store::observe_summary_source_files(home_dir, team, agent)
 }
 
 pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
@@ -125,6 +214,88 @@ where
 }
 
 impl RetainedMailboxRuntime for LocalServiceRuntime {
+    fn query_mailbox_metadata_rows(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        limit: Option<usize>,
+    ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+        match self
+            .mail_store
+            .query_mailbox_metadata(boundary::MailStoreQueryMailboxMetadataRequest {
+                team: team.clone(),
+                agent: agent.clone(),
+                limit,
+            })
+            .map(|response| response.rows)
+        {
+            Ok(rows) => Ok(rows),
+            Err(error) if is_unsupported_boundary(&error, "MailStore::query_mailbox_metadata") => {
+                legacy_query_mailbox_metadata_rows(home_dir, team, agent, limit)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn load_message_record(
+        &self,
+        home_dir: &Path,
+        team: &TeamName,
+        agent: &AgentName,
+        message_key: &boundary::MessageKey,
+    ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+        match self
+            .mail_store
+            .load_message(boundary::MailStoreLoadMessageRequest {
+                team: team.clone(),
+                agent: agent.clone(),
+                message_key: message_key.clone(),
+            })
+            .map(|response| response.record)
+        {
+            Ok(record) => Ok(record),
+            Err(error) if is_unsupported_boundary(&error, "MailStore::load_message") => {
+                legacy_load_message_record(home_dir, team, agent, message_key)
+            }
+            Err(error) => Err(error),
+        }
+    }
+
+    fn persist_message_record(
+        &self,
+        record: boundary::MailStoreMessageRecord,
+    ) -> Result<(), AtmError> {
+        match self
+            .mail_store
+            .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
+        {
+            Ok(_) => Ok(()),
+            Err(error) if is_unsupported_boundary(&error, "MailStore::upsert_message") => Ok(()),
+            Err(error) => Err(error),
+        }
+    }
+
+    fn persist_visibility_state(
+        &self,
+        state: boundary::MailStoreVisibilityState,
+    ) -> Result<(), AtmError> {
+        match self.mail_store.upsert_visibility_state(
+            boundary::MailStoreUpsertVisibilityStateRequest {
+                team: state.team.clone(),
+                agent: state.agent.clone(),
+                actor: state.actor.clone(),
+                state,
+            },
+        ) {
+            Ok(_) => Ok(()),
+            Err(error) if is_unsupported_boundary(&error, "MailStore::upsert_visibility_state") => {
+                Ok(())
+            }
+            Err(error) => Err(error),
+        }
+    }
+
     fn observe_source_files(
         &self,
         home_dir: &Path,
@@ -136,16 +307,6 @@ impl RetainedMailboxRuntime for LocalServiceRuntime {
         // persistence path is fully lifted behind the store boundary.
         let _ = self.mail_store.as_ref();
         observe_source_files(home_dir, team, agent)
-    }
-
-    fn observe_summary_source_files(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<Vec<SummarySourceFile>, AtmError> {
-        let _ = self.mail_store.as_ref();
-        observe_summary_source_files(home_dir, team, agent)
     }
 
     fn commit_source_files(&self, source_files: &[SourceFile]) -> Result<(), AtmError> {
@@ -234,6 +395,20 @@ impl boundary::MailStore for LegacyMailStoreAdapter {
         _request: boundary::MailStoreLoadMessageRequest,
     ) -> Result<boundary::MailStoreLoadMessageResponse, AtmError> {
         Err(unsupported("MailStore::load_message"))
+    }
+
+    fn query_mailbox_metadata(
+        &self,
+        _request: boundary::MailStoreQueryMailboxMetadataRequest,
+    ) -> Result<boundary::MailStoreQueryMailboxMetadataResponse, AtmError> {
+        Err(unsupported("MailStore::query_mailbox_metadata"))
+    }
+
+    fn query_mailbox_metadata_counts(
+        &self,
+        _request: boundary::MailStoreQueryMailboxMetadataCountsRequest,
+    ) -> Result<boundary::MailStoreQueryMailboxMetadataCountsResponse, AtmError> {
+        Err(unsupported("MailStore::query_mailbox_metadata_counts"))
     }
 
     fn upsert_visibility_state(

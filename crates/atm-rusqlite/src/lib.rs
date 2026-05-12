@@ -11,10 +11,7 @@ use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::protocol::RequestEnvelope;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use mailbox_metadata::{
-    MailboxMetadataCounts, MailboxMetadataRow, query_mailbox_metadata_counts,
-    query_mailbox_metadata_rows,
-};
+use mailbox_metadata::{query_mailbox_metadata_counts, query_mailbox_metadata_rows};
 #[cfg(test)]
 use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, OptionalExtension, params};
@@ -89,12 +86,24 @@ impl SqliteBoundaryAssembly {
         self.mail_store.as_ref()
     }
 
+    pub fn mail_store_arc(&self) -> Arc<dyn boundary::MailStore + Send + Sync> {
+        self.mail_store.clone()
+    }
+
     pub fn task_store(&self) -> &dyn boundary::TaskStore {
         self.task_store.as_ref()
     }
 
+    pub fn task_store_arc(&self) -> Arc<dyn boundary::TaskStore + Send + Sync> {
+        self.task_store.clone()
+    }
+
     pub fn roster_store(&self) -> &dyn boundary::RosterStore {
         self.roster_store.as_ref()
+    }
+
+    pub fn roster_store_arc(&self) -> Arc<dyn boundary::RosterStore + Send + Sync> {
+        self.roster_store.clone()
     }
 
     pub fn checkpoint_wal(&self) -> Result<(), AtmError> {
@@ -105,8 +114,8 @@ impl SqliteBoundaryAssembly {
         &self,
         team: &TeamName,
         agent: &AgentName,
-        limit: usize,
-    ) -> Result<Vec<MailboxMetadataRow>, AtmError> {
+        limit: Option<usize>,
+    ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
         query_mailbox_metadata_rows(&self.mail_store.db, team, agent, limit)
     }
 
@@ -114,7 +123,7 @@ impl SqliteBoundaryAssembly {
         &self,
         team: &TeamName,
         agent: &AgentName,
-    ) -> Result<MailboxMetadataCounts, AtmError> {
+    ) -> Result<boundary::MailStoreMailboxMetadataCounts, AtmError> {
         query_mailbox_metadata_counts(&self.mail_store.db, team, agent)
     }
 
@@ -424,6 +433,29 @@ impl boundary::MailStore for SqliteMailStore {
         };
 
         Ok(boundary::MailStoreLoadMessageResponse { record })
+    }
+
+    fn query_mailbox_metadata(
+        &self,
+        request: boundary::MailStoreQueryMailboxMetadataRequest,
+    ) -> Result<boundary::MailStoreQueryMailboxMetadataResponse, AtmError> {
+        Ok(boundary::MailStoreQueryMailboxMetadataResponse {
+            rows: query_mailbox_metadata_rows(
+                &self.db,
+                &request.team,
+                &request.agent,
+                request.limit,
+            )?,
+        })
+    }
+
+    fn query_mailbox_metadata_counts(
+        &self,
+        request: boundary::MailStoreQueryMailboxMetadataCountsRequest,
+    ) -> Result<boundary::MailStoreQueryMailboxMetadataCountsResponse, AtmError> {
+        Ok(boundary::MailStoreQueryMailboxMetadataCountsResponse {
+            counts: query_mailbox_metadata_counts(&self.db, &request.team, &request.agent)?,
+        })
     }
 
     fn upsert_visibility_state(
@@ -1268,7 +1300,7 @@ mod tests {
         }
 
         let rows = assembly
-            .query_mailbox_metadata_rows(&team, &agent, 2)
+            .query_mailbox_metadata_rows(&team, &agent, Some(2))
             .expect("bounded metadata rows");
         assert_eq!(rows.len(), 2);
         assert_eq!(rows[0].summary.as_deref(), Some("summary: newest"));
@@ -1285,7 +1317,7 @@ mod tests {
             .expect("bounded metadata counts");
         assert_eq!(
             counts,
-            MailboxMetadataCounts {
+            boundary::MailStoreMailboxMetadataCounts {
                 total_messages: 3,
                 unread_messages: 2,
                 pending_ack_messages: 2,
@@ -1374,7 +1406,7 @@ mod tests {
             .expect("mark expired");
 
         let rows = assembly
-            .query_mailbox_metadata_rows(&team, &agent, 10)
+            .query_mailbox_metadata_rows(&team, &agent, Some(10))
             .expect("bounded metadata rows");
         assert_eq!(rows.len(), 1);
         assert_eq!(rows[0].summary.as_deref(), Some("summary: active"));
@@ -1384,7 +1416,7 @@ mod tests {
             .expect("bounded metadata counts");
         assert_eq!(
             counts,
-            MailboxMetadataCounts {
+            boundary::MailStoreMailboxMetadataCounts {
                 total_messages: 1,
                 unread_messages: 1,
                 pending_ack_messages: 0,
