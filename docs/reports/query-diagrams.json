@@ -1,6 +1,6 @@
 {
   "title": "SQL Queries",
-  "generated_at": "2026-05-12T08:47:58.150781+00:00",
+  "generated_at": "2026-05-12T11:16:01.081349+00:00",
   "set": "query",
   "output_path": "docs/reports/query-diagrams.html",
   "sections": [
@@ -8,7 +8,7 @@
       "key": "sql_load-message",
       "title": "Load Message",
       "summary": "SQLite boundary method `MailStore::load_message`.",
-      "commentary": "This SQL-boundary path shows the direct immutable-row load. It currently reads only `mail_messages`, rebuilds one `MailStoreMessageRecord`, and returns `None` when no row exists.",
+      "commentary": "This SQL-boundary path shows the direct immutable-row load. It reads only `mail_messages`, rebuilds one `MailStoreMessageRecord` from the stored envelope, and returns `None` when no row exists.",
       "notes": [
         "reads: 1",
         "writes: 0",
@@ -27,8 +27,8 @@
     },
     {
       "key": "sql_load-visibility-state",
-      "title": "Load Visibility State",
-      "summary": "SQLite boundary method `MailStore::load_visibility_state`.",
+      "title": "Load Message State",
+      "summary": "SQLite boundary method `MailStore::load_message_state`.",
       "commentary": "This SQL-boundary path reads one unified `mail_message_states` row and returns `None` when no row exists.",
       "notes": [
         "reads: 1",
@@ -94,7 +94,7 @@
       "key": "sql_save-message",
       "title": "Save Message",
       "summary": "SQLite boundary method `MailStore::upsert_message`.",
-      "commentary": "This SQL-boundary path stores immutable content in `mail_messages`, strips mutable fields out of the stored envelope, and writes the unified mutable projection into `mail_message_states`.",
+      "commentary": "This SQL-boundary path stores immutable content in `mail_messages`, lets the store stamp internal ingest timing, strips mutable fields out of the stored envelope, and writes the unified mutable projection into `mail_message_states`.",
       "notes": [
         "reads before write: 0..2",
         "writes: 2",
@@ -115,8 +115,8 @@
     },
     {
       "key": "sql_save-visibility-state",
-      "title": "Save Visibility State",
-      "summary": "SQLite boundary method `MailStore::upsert_visibility_state`.",
+      "title": "Save Message State",
+      "summary": "SQLite boundary method `MailStore::upsert_message_state`.",
       "commentary": "This SQL-boundary path writes the entire mutable mailbox projection into one explicit `mail_message_states` row.",
       "notes": [
         "reads: 0",

@@ -10,15 +10,18 @@ Query rules:
   diagnostic surface explicitly asks for them
 - full message content is fetched only for selected keys that must be rendered
 - no ATM-owned mailbox query reads inbox JSON or summary files
+- weak provenance round-trip fields are not part of the message load/save
+  contract; store-owned ingest timing may still exist internally for health
+  reporting
 
 Diagrams:
 - save message:
   [sql_save-message.mmd](./sql_save-message.mmd)
 - load message:
   [sql_load-message.mmd](./sql_load-message.mmd)
-- save visibility state:
+- save message state:
   [sql_save-visibility-state.mmd](./sql_save-visibility-state.mmd)
-- load visibility state:
+- load message state:
   [sql_load-visibility-state.mmd](./sql_load-visibility-state.mmd)
 - query mailbox metadata rows:
   [sql_query-mailbox-metadata-rows.mmd](./sql_query-mailbox-metadata-rows.mmd)

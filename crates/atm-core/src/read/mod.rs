@@ -20,7 +20,7 @@ use crate::mailbox::surface::dedupe_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::RetainedMailboxRuntime;
+use crate::service_runtime_store::{RetainedMailboxRuntime, legacy_runtime};
 use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
 use crate::types::{
     AckActivationMode, AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass,
@@ -191,7 +191,7 @@ pub fn read_mail(
     query: ReadQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ReadOutcome, AtmError> {
-    let runtime = LocalServiceRuntime::default();
+    let runtime = legacy_runtime();
     read_mail_with_runtime(query, observability, &runtime)
 }
 
@@ -247,10 +247,10 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     };
     let mut metadata_rows =
         runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
-    if metadata_rows
+    let has_legacy_keys = metadata_rows
         .iter()
-        .any(|row| row.message_key.as_ref().starts_with("legacy:"))
-    {
+        .any(|row| row.message_key.as_ref().starts_with("legacy:"));
+    if has_legacy_keys && runtime.allows_legacy_mailbox_files() {
         return read_mail_legacy_path(
             query,
             observability,
@@ -260,6 +260,14 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
             target,
             seen_watermark,
         );
+    }
+    if has_legacy_keys {
+        return Err(AtmError::validation(
+            "sqlite mailbox metadata returned legacy-prefixed message keys in non-legacy runtime mode",
+        )
+        .with_recovery(
+            "Repair or remove the malformed mailbox rows before retrying `atm read`; production runtimes must not downgrade back to file-backed mailbox reads.",
+        ));
     }
     let (mut bucket_counts, mut selected) =
         selection_state_for_mailbox_metadata_rows(&metadata_rows, &query, seen_watermark);
@@ -684,11 +692,11 @@ fn classify_mailbox_metadata_rows(
                 summary: row.summary.clone(),
                 message_id: row.message_id,
                 pending_ack_at: row.pending_ack.then_some(row.message_at),
-                acknowledged_at: None,
+                acknowledged_at: row.acknowledged_at,
                 acknowledges_message_id: None,
                 parent_message_id: row.parent_message_id,
                 thread_mode: row.thread_mode,
-                stale_at: None,
+                expires_at: None,
                 task_id: row.task_id.clone(),
                 extra: serde_json::Map::new(),
             },
@@ -1025,7 +1033,13 @@ fn output_messages_from_metadata_selection<R: RetainedMailboxRuntime>(
             let message_key = message_key_for_classified(&selected_message)?;
             let Some(record) = runtime.load_message_record(home_dir, team, agent, &message_key)?
             else {
-                return Ok(selected_message);
+                return Err(AtmError::validation(format!(
+                    "sqlite mailbox metadata row {} could not be reloaded for read output",
+                    message_key
+                ))
+                .with_recovery(
+                    "Repair or remove the malformed sqlite mailbox row before retrying `atm read`.",
+                ));
             };
             let envelope = if exact_message_id == record.envelope.message_id {
                 record.envelope
@@ -1079,15 +1093,25 @@ fn load_logical_current_record<R: RetainedMailboxRuntime>(
     let mut chain = Vec::new();
     for message_id in chain_ids {
         let Some(row) = row_by_id.get(&message_id) else {
-            continue;
+            return Err(AtmError::validation(format!(
+                "sqlite mailbox thread row for {} disappeared during logical-current reconstruction",
+                message_id
+            ))
+            .with_recovery(
+                "Repair the malformed sqlite thread chain before retrying `atm read`.",
+            ));
         };
-        let record = runtime.load_message_record(home_dir, team, agent, &row.message_key)?;
-        if let Some(record) = record {
-            chain.push(record.envelope);
-        }
-    }
-    if chain.is_empty() {
-        return Ok(terminal_envelope);
+        let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
+        else {
+            return Err(AtmError::validation(format!(
+                "sqlite mailbox thread row {} could not be reloaded for logical-current reconstruction",
+                row.message_key
+            ))
+            .with_recovery(
+                "Repair the malformed sqlite thread chain before retrying `atm read`.",
+            ));
+        };
+        chain.push(record.envelope);
     }
     let thread_index = ThreadIndex::new(&chain);
     thread_index
@@ -1123,7 +1147,7 @@ fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
         if updated == message.envelope {
             continue;
         }
-        runtime.persist_visibility_state(boundary::MailStoreVisibilityState {
+        runtime.persist_message_state(boundary::MailMessageState {
             team: team.clone(),
             agent: agent.clone(),
             actor: agent.clone(),
@@ -1131,7 +1155,7 @@ fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
             read: updated.read,
             pending_ack_at: updated.pending_ack_at,
             acknowledged_at: updated.acknowledged_at,
-            expires_at: updated.stale_at,
+            expires_at: updated.expires_at,
             deleted_at: None,
             updated_at: Some(now),
         })?;
@@ -1354,7 +1378,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id,
             thread_mode,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
             extra: Map::new(),
         }
@@ -1730,11 +1754,11 @@ mod tests {
     #[test]
     fn read_ephemeral_message_is_hidden_outside_view_all() {
         let message_id = AtmMessageId::new();
-        let stale_at =
+        let expires_at =
             IsoTimestamp::from_datetime(chrono::Utc::now() + chrono::Duration::minutes(30));
         let messages = vec![SourcedMessage {
             envelope: MessageEnvelope {
-                stale_at: Some(stale_at),
+                expires_at: Some(expires_at),
                 ..message("ephemeral", message_id, None, None, true)
             },
             source_path: PathBuf::from("recipient.json"),
@@ -1773,11 +1797,11 @@ mod tests {
     #[test]
     fn expired_ephemeral_message_is_cleaned_from_all_views() {
         let message_id = AtmMessageId::new();
-        let stale_at =
+        let expires_at =
             IsoTimestamp::from_datetime(chrono::Utc::now() - chrono::Duration::minutes(1));
         let messages = vec![SourcedMessage {
             envelope: MessageEnvelope {
-                stale_at: Some(stale_at),
+                expires_at: Some(expires_at),
                 ..message("expired ephemeral", message_id, None, None, false)
             },
             source_path: PathBuf::from("recipient.json"),

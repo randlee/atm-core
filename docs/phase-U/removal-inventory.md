@@ -72,11 +72,11 @@ surface deletion.
 
 Primary code/doc targets:
 - `crates/atm-rusqlite/src/shared_db.rs:24-45,100`
-  - `stale_at`
+  - `expires_at`
   - `ack_state`
   - `mail_visibility_states`
 - `crates/atm-rusqlite/src/lib.rs:291-369`
-  - split write path for `stale_at`, `ack_state`, `recorded_at`
+  - split write path for `expires_at`, `ack_state`, `recorded_at`
 - `crates/atm-rusqlite/src/lib.rs:442-456`
   - split visibility/ack updates
 - `crates/atm-rusqlite/src/lib.rs:486,581,609`
@@ -84,9 +84,9 @@ Primary code/doc targets:
 - `crates/atm-rusqlite/src/mailbox_metadata.rs:45-60,164-183`
   - multi-table mailbox projection joins
 - `crates/atm-core/src/schema/inbox_message.rs:219,304,408-433,568-596`
-  - `stale_at` compatibility-envelope handling
+  - `expires_at` compatibility-envelope handling
 - `crates/atm-core/src/threading.rs:20-24`
-  - expiration semantics currently rooted in `stale_at`
+  - expiration semantics currently rooted in `expires_at`
 
 ## U.5 — SQLite Query Cutover And Query Simplification
 
@@ -121,19 +121,21 @@ Primary code/doc targets:
 ## U.7 — Roster Simplification And Explicit Member Model
 
 Primary code/doc targets:
-- `crates/atm-rusqlite/src/shared_db.rs:68-112,381-390`
+- `crates/atm-rusqlite/src/shared_db.rs`
   - `rosters`
-  - `team_roster`
   - `roster_json`
-  - `member_json`
-- `crates/atm-rusqlite/src/roster_store.rs:23-61`
-  - whole-roster snapshot write plus per-member projection rebuild
-- `crates/atm-rusqlite/src/roster_store.rs:85-105`
-  - whole-roster snapshot load
-- `crates/atm-rusqlite/src/roster_store.rs:120-202`
-  - per-member projection reads/updates
-- `crates/atm-rusqlite/src/lib.rs:1373`
-  - schema test anchored to `team_roster`
+  - durable roster `pid`
+  - whole-roster JSON as SQLite truth
+- `crates/atm-rusqlite/src/roster_store.rs`
+  - whole-roster snapshot write/load logic
+  - per-member JSON projection readback
+  - durable heartbeat persistence through roster storage
+- `crates/atm-daemon/src/runtime_status_cache.rs`
+  - direct `config.json` content reads for runtime roster truth
+- `crates/atm-daemon/src/runtime_health.rs`
+  - durable roster `pid` continuity assumptions
+- `crates/atm-rusqlite/src/lib.rs`
+  - schema test anchored to the canonical `team_roster` shape
 
 ## U.8 — Shared Thin-Client ICD For CLI And Graft
 

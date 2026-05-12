@@ -376,26 +376,28 @@ impl DaemonRequestDispatcher {
             .ok_or_else(|| {
                 self.status_cache.mark_sqlite_unavailable();
                 AtmError::daemon_unavailable(
-                    "sqlite-backed durable pid continuity is unavailable for daemon heartbeats",
+                    "sqlite-backed roster truth is unavailable for daemon heartbeats",
                 )
                 .with_recovery(
                     "Restore the host-scoped ATM SQLite database and restart atm-daemon before retrying heartbeat traffic.",
                 )
             })?;
+        let membership = roster_store.query_membership(
+            atm_core::boundary::RosterStoreQueryMembershipRequest {
+                team: request.team.clone(),
+                member: request.member.clone(),
+            },
+        )?;
+        if !membership.is_member {
+            return Err(AtmError::agent_not_found(
+                request.member.as_str(),
+                request.team.as_str(),
+            ));
+        }
         let cached_pid = self
             .status_cache
             .cached_pid(&request.team, &request.member)?;
-        let durable_pid = if cached_pid.is_some() {
-            None
-        } else {
-            roster_store
-                .query_membership(atm_core::boundary::RosterStoreQueryMembershipRequest {
-                    team: request.team.clone(),
-                    member: request.member.clone(),
-                })?
-                .pid
-        };
-        if let Some(existing_pid) = cached_pid.or(durable_pid).filter(|pid| *pid != request.pid)
+        if let Some(existing_pid) = cached_pid.filter(|pid| *pid != request.pid)
             && process_is_alive(existing_pid)
         {
             self.status_cache
@@ -407,20 +409,14 @@ impl DaemonRequestDispatcher {
                 "Stop the conflicting ATM process, confirm the stale PID is gone, then retry the heartbeat from the active runtime owner.",
             ));
         }
-        let durable = roster_store.record_heartbeat(
-            atm_core::boundary::RosterStoreRecordHeartbeatRequest {
-                team: request.team.clone(),
-                member: request.member.clone(),
-                pid: request.pid,
-                observed_at: request.observed_at,
-            },
-        )?;
         self.status_cache
-            .record_heartbeat(&request, durable.pid_changed)
+            .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid))
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
-        let mut report = doctor::run_doctor(query, self.observability.as_ref())?;
+        let runtime = self.sqlite_runtime()?;
+        let mut report =
+            doctor::run_doctor_with_runtime(query, self.observability.as_ref(), &runtime)?;
         let daemon_observability_finding = match self.observability.health() {
             Ok(health) => daemon_observability_finding(&health),
             Err(error) => doctor::health::observability_finding_from_error(&error),

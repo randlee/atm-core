@@ -10,7 +10,6 @@ use atm_core::protocol::{
     RuntimeStatusCounts, RuntimeStatusSnapshot, TeamMemberHeartbeatRequest,
     TeamMemberHeartbeatResponse,
 };
-use atm_core::schema::TeamConfig;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
 pub(crate) const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
@@ -298,7 +297,7 @@ fn finish_runtime_snapshot(
     let mut details = Vec::new();
     if !cache.sqlite_ready {
         details.push(
-            "sqlite-backed durable pid continuity is unavailable; runtime cache updates are degraded"
+            "sqlite-backed roster truth is unavailable; runtime cache updates are degraded"
                 .to_string(),
         );
     }
@@ -369,6 +368,9 @@ pub(crate) fn build_runtime_status_cache_state(
             )
             .with_source(error)
         })?;
+        if !entry.path().is_dir() {
+            continue;
+        }
         let team_name = entry.file_name().to_string_lossy().into_owned();
         let team: TeamName = team_name.parse().map_err(|error| {
             AtmError::config(format!(
@@ -380,47 +382,19 @@ pub(crate) fn build_runtime_status_cache_state(
             )
             .with_source(error)
         })?;
-        let config_path = entry.path().join("config.json");
-        if !config_path.is_file() {
-            continue;
-        }
-        let raw = std::fs::read(&config_path).map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to read daemon team config {}",
-                config_path.display()
-            ))
-            .with_recovery(
-                "Restore the daemon team config file or fix its read permissions before retrying atm-daemon startup.",
-            )
-            .with_source(error)
-        })?;
-        let config: TeamConfig = serde_json::from_slice(&raw).map_err(|error| {
-            AtmError::config(format!(
-                "failed to parse daemon team config {}: {error}",
-                config_path.display()
-            ))
-            .with_recovery(
-                "Repair or remove the malformed team config file and restart atm-daemon or send SIGHUP.",
-            )
-            .with_source(error)
-        })?;
-        for member in config.members {
+        let roster = roster_store
+            .load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?;
+        for member in roster.members {
             if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
                 return Err(AtmError::config(format!(
-                    "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while reading {}",
-                    config_path.display()
+                    "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while loading roster for team {}",
+                    team
                 ))
                 .with_recovery(
                     "Reduce configured roster size or increase the documented status-cache budget before retrying SIGHUP.",
                 ));
             }
-            let member_name = member.name;
-            let membership = roster_store.query_membership(
-                atm_core::boundary::RosterStoreQueryMembershipRequest {
-                    team: team.clone(),
-                    member: member_name.clone(),
-                },
-            )?;
+            let member_name = member.agent_name;
             let key = RuntimeMemberKey {
                 team: team.clone(),
                 member: member_name,
@@ -429,7 +403,7 @@ pub(crate) fn build_runtime_status_cache_state(
             next_state.members.insert(
                 key,
                 RuntimeMemberRecord {
-                    pid: membership.pid,
+                    pid: existing.and_then(|record| record.pid),
                     state: existing
                         .map(|record| record.state)
                         .unwrap_or(RuntimeMemberState::Unknown),
