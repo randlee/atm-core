@@ -128,6 +128,8 @@ The abandoned early SQLite/daemon target implementation was split across:
 - `crates/atm-core`
 - `crates/atm`
 - `crates/atm-daemon`
+- `crates/atm-daemon-client`
+- `crates/atm-graft`
 - `crates/atm-rusqlite`
 
 Crate-local scope detail is owned by:
@@ -2908,7 +2910,8 @@ Scope:
 - keep only generic request-serving/runtime composition in the daemon
 
 Acceptance:
-- the daemon does not own a graft-named runtime concept
+- the daemon does not own client-specific graft runtime behavior; temporary
+  graft-named advisory substrate cleanup remains owned by `U.10`
 - client-specific receive/injection/runtime behavior is owned by `atm-graft`
   or by generic shared interfaces in `atm-core`
 - the client runtime stays lean and production-complete:

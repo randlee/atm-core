@@ -3,27 +3,34 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::{
-    LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
-    ack::ack_mail_with_runtime,
+    RequestEnvelope, ResponseEnvelope,
+    ack::ack_mail,
     boundary,
-    clear::clear_mail_with_runtime,
+    clear::clear_mail,
     doctor::{
         self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
     },
     error::AtmError,
-    list::list_mail_with_runtime,
+    graft::{
+        GraftAdvisoryStreamRequest, GraftNudgeDrainRequest, GraftNudgeDrainResponse,
+        GraftNudgeFetchRequest, GraftNudgeFetchResponse, GraftSessionRegistrationRequest,
+        GraftSessionRegistrationResponse, GraftSessionUnregistrationRequest,
+        GraftSessionUnregistrationResponse,
+    },
+    list::list_mail,
     process::process_is_alive,
     protocol::{
         RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope,
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
-    read::read_mail_with_runtime,
-    send::send_mail_with_runtime,
+    read::read_mail,
+    send::send_mail,
 };
 use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
 use crate::AtmHomeDir;
 use crate::daemon_runtime_observability::DaemonRuntimeObservability;
+use crate::graft_runtime::GraftRuntime;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -49,6 +56,7 @@ pub(crate) struct DaemonRequestDispatcher {
     observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
     sqlite_boundary: Option<SqliteBoundaryAssembly>,
+    graft_runtime: GraftRuntime,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
@@ -57,6 +65,7 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
             .field("home_dir", &self.home_dir)
             .field("status_cache", &self.status_cache)
             .field("sqlite_boundary_present", &self.sqlite_boundary.is_some())
+            .field("graft_runtime", &"GraftRuntime")
             .finish()
     }
 }
@@ -98,19 +107,23 @@ impl DaemonRequestDispatcher {
     fn spawn_shutdown_step(
         label: &'static str,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
-    ) -> Option<std::thread::JoinHandle<()>> {
-        match std::thread::Builder::new()
+    ) -> std::thread::JoinHandle<()> {
+        std::thread::Builder::new()
             .name(format!("shutdown-finalizer-{label}"))
             .spawn(move || {
                 step().unwrap_or_else(|error| {
                     tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
                 });
-            }) {
-            Ok(handle) => Some(handle),
-            Err(error) => {
-                tracing::warn!(%error, step = label, "failed to spawn daemon shutdown finalizer step; skipping");
-                None
-            }
+            })
+            .expect("spawn daemon shutdown finalizer step")
+    }
+
+    fn complete_shutdown_step(label: &'static str, shutdown_handle: std::thread::JoinHandle<()>) {
+        if shutdown_handle.join().is_err() {
+            tracing::warn!(
+                step = label,
+                "daemon shutdown finalizer step panicked before reporting completion"
+            );
         }
     }
 
@@ -131,13 +144,13 @@ impl DaemonRequestDispatcher {
             tracing::warn!(
                 step = label,
                 cap = MAX_SHUTDOWN_FINALIZER_THREADS,
-                "shutdown finalizer thread cap reached; dropping retained watcher handle"
+                "shutdown finalizer thread cap reached; dropping retained worker handle"
             );
         }
         tracing::warn!(
             step = label,
             timeout_ms = deadline.as_millis(),
-            "daemon shutdown finalizer step exceeded its deadline; watcher handle retained for later join"
+            "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
         );
     }
 
@@ -146,57 +159,22 @@ impl DaemonRequestDispatcher {
         deadline: Duration,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
     ) {
-        let Some(shutdown_handle) = Self::spawn_shutdown_step(label, step) else {
-            return;
-        };
-
-        // Join the worker with a bounded timeout using a watcher thread + Condvar so we avoid
-        // a busy-sleep poll loop. The watcher joins the worker and signals the condvar; the
-        // caller waits on the condvar for up to `deadline`.
-        let pair = std::sync::Arc::new((std::sync::Mutex::new(false), std::sync::Condvar::new()));
-        let pair_watcher = std::sync::Arc::clone(&pair);
-        let watcher = std::thread::Builder::new()
-            .name(format!("shutdown-watcher-{label}"))
-            .spawn(move || {
-                if shutdown_handle.join().is_err() {
-                    tracing::warn!(step = label, "daemon shutdown finalizer step panicked");
-                }
-                let (done, cvar) = &*pair_watcher;
-                if let Ok(mut guard) = done.lock() {
-                    *guard = true;
-                    cvar.notify_one();
-                }
-            });
-
-        let Ok(watcher) = watcher else {
-            // Watcher spawn failed; we cannot bound the wait, so skip the step.
-            tracing::warn!(
-                step = label,
-                "failed to spawn shutdown watcher thread; shutdown step result is unobserved"
-            );
-            return;
-        };
-
-        let (done, cvar) = &*pair;
-        let finished = done.lock().is_ok_and(|guard| {
-            cvar.wait_timeout_while(guard, deadline, |finished| !*finished)
-                .is_ok_and(|(_, timeout_result)| !timeout_result.timed_out())
-        });
-
-        if finished {
-            // Watcher has already joined the worker handle; join the watcher itself to clean up.
-            if watcher.join().is_err() {
-                tracing::warn!(step = label, "daemon shutdown watcher thread panicked");
+        let shutdown_handle = Self::spawn_shutdown_step(label, step);
+        let started = std::time::Instant::now();
+        loop {
+            if shutdown_handle.is_finished() {
+                Self::complete_shutdown_step(label, shutdown_handle);
+                return;
             }
-        } else {
-            // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
-            // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
-            // than dropping it orphaned because tests and orderly process teardown can join it
-            // later once the blocking storage step finishes.
-            //
-            // Note: The watcher thread still holds the original worker JoinHandle. We retain the
-            // watcher instead so that both the worker and the watcher can be cleaned up together.
-            Self::retain_shutdown_step(label, watcher, deadline);
+            if started.elapsed() >= deadline {
+                // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
+                // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
+                // than dropping it orphaned because tests and orderly process teardown can join it
+                // later once the blocking storage step finishes.
+                Self::retain_shutdown_step(label, shutdown_handle, deadline);
+                return;
+            }
+            std::thread::sleep(Duration::from_millis(10));
         }
     }
 
@@ -229,6 +207,7 @@ impl DaemonRequestDispatcher {
             observability,
             status_cache,
             sqlite_boundary,
+            graft_runtime: GraftRuntime::new(),
         }
     }
 
@@ -268,59 +247,73 @@ impl boundary::sealed::Sealed for DaemonRequestDispatcher {}
 
 impl boundary::RequestDispatcher for DaemonRequestDispatcher {
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let runtime = self.sqlite_runtime()?;
         match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
-                let outcome =
-                    send_mail_with_runtime(request, self.observability.as_ref(), &runtime)?;
+                let outcome = send_mail(request, self.observability.as_ref())?;
+                if let Err(error) = self.graft_runtime.enqueue_nudge_for_recipient(&outcome) {
+                    self.record_runtime_event(
+                        "graft_nudge_enqueue",
+                        "degraded",
+                        "graft nudge queue overflowed",
+                    );
+                    return Err(error);
+                }
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)))
             }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => {
                 Ok(ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(
-                    ack_mail_with_runtime(request, self.observability.as_ref(), &runtime)?,
+                    ack_mail(request, self.observability.as_ref())?,
                 )))
             }
             RequestEnvelope::Heartbeat(request) => {
                 Ok(ResponseEnvelope::Heartbeat(self.record_heartbeat(request)?))
             }
-            RequestEnvelope::List(query) => Ok(ResponseEnvelope::List(list_mail_with_runtime(
+            RequestEnvelope::List(query) => Ok(ResponseEnvelope::List(list_mail(
                 query,
                 self.observability.as_ref(),
-                &runtime,
             )?)),
-            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(
-                read_mail_with_runtime(query, self.observability.as_ref(), &runtime)?,
-            )),
-            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail_with_runtime(
+            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(read_mail(
                 query,
                 self.observability.as_ref(),
-                &runtime,
+            )?)),
+            RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail(
+                query,
+                self.observability.as_ref(),
             )?)),
             RequestEnvelope::Doctor(query) => {
                 Ok(ResponseEnvelope::Doctor(self.project_doctor_report(query)?))
             }
+            RequestEnvelope::GraftRegister(request) => Ok(ResponseEnvelope::GraftRegister(
+                self.register_graft_session(request)?,
+            )),
+            RequestEnvelope::GraftUnregister(request) => Ok(ResponseEnvelope::GraftUnregister(
+                self.unregister_graft_session(request)?,
+            )),
+            RequestEnvelope::GraftFetch(request) => Ok(ResponseEnvelope::GraftFetch(
+                self.fetch_graft_nudges(request)?,
+            )),
+            RequestEnvelope::GraftDrain(request) => Ok(ResponseEnvelope::GraftDrain(
+                self.drain_graft_nudges(request)?,
+            )),
+            RequestEnvelope::GraftAdvisoryStream(_) => Err(AtmError::validation(
+                "graft advisory stream requests require the same-host streaming transport path",
+            )
+            .with_recovery(
+                "Open the dedicated same-host advisory stream connection instead of routing advisory delivery through unary request dispatch.",
+            )),
         }
+    }
+
+    fn dispatch_graft_advisory_stream(
+        &self,
+        request: GraftAdvisoryStreamRequest,
+        sink: &mut dyn boundary::AdvisoryStreamSink,
+    ) -> Result<(), AtmError> {
+        self.graft_runtime.stream_nudges(request, sink)
     }
 }
 
 impl DaemonRequestDispatcher {
-    fn sqlite_runtime(&self) -> Result<LocalServiceRuntime, AtmError> {
-        let boundary = self.sqlite_boundary.as_ref().ok_or_else(|| {
-            self.status_cache.mark_sqlite_unavailable();
-            AtmError::daemon_unavailable(
-                "sqlite-backed daemon request handling is unavailable because the sqlite boundary is not assembled",
-            )
-            .with_recovery(
-                "Restore the host-scoped ATM SQLite durable-state database and restart atm-daemon before retrying the command.",
-            )
-        })?;
-        Ok(LocalServiceRuntime::new(
-            boundary.mail_store_arc(),
-            boundary.task_store_arc(),
-            boundary.roster_store_arc(),
-        ))
-    }
-
     pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
         let roster_store = self
             .sqlite_boundary
@@ -413,10 +406,36 @@ impl DaemonRequestDispatcher {
             .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid))
     }
 
+    fn register_graft_session(
+        &self,
+        request: GraftSessionRegistrationRequest,
+    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
+        self.graft_runtime.register_session(request)
+    }
+
+    fn unregister_graft_session(
+        &self,
+        request: GraftSessionUnregistrationRequest,
+    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
+        self.graft_runtime.unregister_session(request)
+    }
+
+    fn fetch_graft_nudges(
+        &self,
+        request: GraftNudgeFetchRequest,
+    ) -> Result<GraftNudgeFetchResponse, AtmError> {
+        self.graft_runtime.fetch_nudges(request)
+    }
+
+    fn drain_graft_nudges(
+        &self,
+        request: GraftNudgeDrainRequest,
+    ) -> Result<GraftNudgeDrainResponse, AtmError> {
+        self.graft_runtime.drain_nudges(request)
+    }
+
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
-        let runtime = self.sqlite_runtime()?;
-        let mut report =
-            doctor::run_doctor_with_runtime(query, self.observability.as_ref(), &runtime)?;
+        let mut report = doctor::run_doctor(query, self.observability.as_ref())?;
         let daemon_observability_finding = match self.observability.health() {
             Ok(health) => daemon_observability_finding(&health),
             Err(error) => doctor::health::observability_finding_from_error(&error),

@@ -67,7 +67,9 @@ Lean-design rule:
    Development work:
    - keep receive-loop, injection, host-facing queueing, and host wake/event
      logic in `atm-graft`
-   - remove any daemon-owned client-named runtime concept
+   - do not leave any daemon-owned client-specific runtime interpretation in
+     place; temporary graft-named advisory substrate compatibility remains
+     allowed until `U.10`
    - require exactly one persistent receive thread per active session and keep
      one dedicated daemon advisory-stream socket open while the session is
      active
@@ -115,7 +117,8 @@ Lean-design rule:
 ## Acceptance Criteria
 
 - client-specific graft runtime logic is owned by `atm-graft`
-- daemon does not own a graft-named runtime concept
+- daemon does not own client-specific graft runtime behavior; temporary
+  graft-named advisory substrate cleanup remains owned by `U.10`
 - shared interfaces needed by `atm-graft` live in `atm-core`, not `atm-daemon`
 - the client runtime is production-simple: one persistent receive thread, one
   open dedicated daemon advisory-stream connection, one minimal pending queue,
