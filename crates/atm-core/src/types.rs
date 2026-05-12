@@ -252,6 +252,9 @@ impl fmt::Display for TaskId {
 }
 
 /// Shared identifier for one active thin-client session.
+///
+/// Format: caller-chosen non-empty UTF-8 string. ATM treats the value as an
+/// opaque identifier and does not require UUID, ULID, or socket-derived shape.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
 pub struct ClientSessionId(String);

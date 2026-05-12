@@ -294,7 +294,10 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
                     )
                 })
                 .collect(),
-            source: Some("daemon-heartbeat-test".to_string()),
+            source: Some(
+                atm_core::boundary::ReplaySource::new("daemon-heartbeat-test")
+                    .expect("replay source"),
+            ),
         })
         .expect("replace roster");
 }

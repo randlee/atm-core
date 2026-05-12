@@ -98,6 +98,8 @@ Status:
   - `crates/atm-core`
   - `crates/atm`
   - `crates/atm-daemon`
+  - `crates/atm-daemon-client`
+  - `crates/atm-graft`
   - `crates/atm-rusqlite`
   - `crates/sc-lint-*` support crates
 
