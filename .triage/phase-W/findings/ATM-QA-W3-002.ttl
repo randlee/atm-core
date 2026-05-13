@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W3-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W3-002" ;
+  triage:title "SqliteWriter Drop shutdown paths missing SqliteObservabilityEvent emission" ;
+  triage:description "crates/atm-rusqlite/src/writer/mod.rs:218-260 (feature branch 2f245dc): impl Drop for SqliteWriter has four shutdown paths of which zero emit SqliteObservabilityEvent. Sprint-W3.md:108-113 explicitly lists all four as required insertion points. Path 1 (TrySendError::Full — shutdown signal skipped because queue full): only tracing::warn!. Path 2 (Ok(Err(_)) — writer thread panic): only tracing::warn!. Path 3 (RecvTimeoutError::Timeout — shutdown join exceeded deadline): only tracing::warn!. Path 4 (RecvTimeoutError::Disconnected — join-helper disconnected): only tracing::warn!. self.observability Arc is available in drop(&mut self). Fix: add emit_sqlite_event_or_warn calls — (1) TrySendError::Full: action='writer_shutdown_signal', outcome=Failed; (2) thread panic Ok(Err(_)): action='writer_shutdown_join', outcome=Failed; (3) Timeout: action='writer_shutdown_join', outcome=Timeout; (4) Disconnected: action='writer_shutdown_join', outcome=Failed." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-rusqlite/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteToWorktree "feature/pW-s3-sqlite-observability" ;
+  triage:verdict "CONFIRMED — 0 of 4 Drop paths instrumented; all listed as required in sprint-W3.md:108-113; self.observability in scope; dispatch to feature branch" ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3-sqlite-observability/2f245dc> .
+
+<urn:atm:triage:worktree/pW-s3-sqlite-observability/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .

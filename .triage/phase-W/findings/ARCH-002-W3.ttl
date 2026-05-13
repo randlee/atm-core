@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-002-W3>
+  a triage:Finding ;
+  triage:findingId "ARCH-002-W3" ;
+  triage:title "atm-rusqlite/src/lib.rs exceeds RULE-003 1000-line threshold — full decomposition required" ;
+  triage:description "crates/atm-rusqlite/src/lib.rs is 2,577 non-test lines on feature/pW-s3-sqlite-observability, 157% over the RULE-003 1000-line threshold. QA report understated the magnitude as 1040 lines. Prescribed extraction of observability symbols (SqliteObservabilityEvent, SqliteObservability, NullSqliteObservability, emit_sqlite_event_or_warn) into observability.rs saves ~68 lines and is required but insufficient — post-extraction the file will be ~2,509 non-test lines, still far over limit. Full decomposition of lib.rs into multiple focused modules is required to close RULE-003. Secondary sweep finding: crates/atm-graft/src/lib.rs is 1,212 non-test lines, also a RULE-003 violation (not in W.3 scope). Fix target for W.3: extract observability surface to crates/atm-rusqlite/src/observability.rs as minimum slice, then decompose remaining lib.rs content into appropriate modules (shared_db extraction, writer types, boundary assembly types)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteToWorktree "feature/pW-s3-sqlite-observability" ;
+  triage:verdict "CONFIRMED — lib.rs is 2577 non-test lines; prescribed observability extraction (~68 lines) is insufficient alone; full decomposition required; secondary: atm-graft/src/lib.rs 1212 lines also RULE-003 violation; dispatch to feature branch" ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3-sqlite-observability/2f245dc> .
+
+<urn:atm:triage:worktree/pW-s3-sqlite-observability/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .

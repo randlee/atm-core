@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W3-012>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W3-012" ;
+  triage:title "crates/atm-core/src/protocol.rs absent from W.3 review targets" ;
+  triage:description "crates/atm-core/src/protocol.rs was not included in the W.3 QA review targets despite sprint-W3.md lines 131-133 naming it as required scope for ProtocolErrorEnvelope parity (from_error / into_atm_error for non-CLI consumers). This is a review scope gap, not a code defect. The file exists on both feature/pW-s3-sqlite-observability and integrate/phase-W. Action: include crates/atm-core/src/protocol.rs in review targets for the next QA round to verify ProtocolErrorEnvelope parity." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "qa-process" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "review_process" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:dispatchReadyNote "Scope gap — no code fix required. Add protocol.rs to review targets in next QA round dispatch." ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W3-012/pW-s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3/2f245dc> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:occurrence/ATM-QA-W3-012/pW-s3/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-W/sprint-W3.md" ;
+  triage:line 131 ;
+  triage:snippet "crates/atm-core/src/protocol.rs — ProtocolErrorEnvelope:{from_error,into_atm_error} parity for non-CLI consumers" ;
+  triage:note "File listed as required review scope in sprint doc but omitted from QA round review targets" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:worktree/pW-s3/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .

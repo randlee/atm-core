@@ -1,0 +1,20 @@
+@prefix atm: <https://atm-core.dev/triage#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+atm:ATM-QA-W3-007 a atm:Finding ;
+    atm:finding_id "ATM-QA-W3-007" ;
+    atm:title "submit() TrySendError::Disconnected branch not instrumented unlike Timeout branch" ;
+    atm:severity "important" ;
+    atm:status "open" ;
+    atm:highest_open_branch "feature/pW-s3-sqlite-observability" ;
+    atm:promote_to_branch "feature/pW-s3-sqlite-observability" ;
+    atm:dispatch_ready "true"^^xsd:boolean ;
+    atm:occurrences (
+        [
+            atm:branch "feature/pW-s3-sqlite-observability" ;
+            atm:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+            atm:lines "143-148" ;
+            atm:status "open"
+        ]
+    ) ;
+    atm:notes """Confirmed on feature branch at 2f245dc. The TrySendError::Disconnected arm at lines 143-148 in submit() returns a DaemonUnavailable error without calling emit_sqlite_event_or_warn. The parallel TrySendError::Full / timeout branch at lines 129-138 correctly calls emit_sqlite_event_or_warn with SqliteObservabilityOutcome::Timeout before returning. Sprint-W3.md lines 103-106 lists submission channel disconnected as a required instrumented path alongside submission queue timeout. The observability field is accessible as self.observability.as_ref() (demonstrated by the Timeout branch). integrate/phase-W at 6df690b does not contain W.3 observability code; this finding is absent on that branch.""" .

@@ -1,0 +1,20 @@
+@prefix atm: <https://atm-core.dev/triage#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+atm:ATM-QA-W3-005 a atm:Finding ;
+    atm:finding_id "ATM-QA-W3-005" ;
+    atm:title "SqliteWriter::start_with_settings() thread spawn failure missing emit_sqlite_event_or_warn" ;
+    atm:severity "important" ;
+    atm:status "open" ;
+    atm:highest_open_branch "feature/pW-s3-sqlite-observability" ;
+    atm:promote_to_branch "feature/pW-s3-sqlite-observability" ;
+    atm:dispatch_ready "true"^^xsd:boolean ;
+    atm:occurrences (
+        [
+            atm:branch "feature/pW-s3-sqlite-observability" ;
+            atm:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+            atm:lines "85-95" ;
+            atm:status "open"
+        ]
+    ) ;
+    atm:notes """Confirmed on feature branch at 2f245dc. The .map_err closure at lines 87-95 builds a DaemonUnavailable error for thread spawn failure but does not call emit_sqlite_event_or_warn before returning the error via ?. The observability Arc is in scope (captured into worker_observability clone at line 83; original observability field bound at line 99) and is available before the ? propagation. Sprint-W3.md lines 82-86 and 101-102 list SqliteWriter::start_with_settings() / writer thread spawn failure as a required insertion point. The Timeout branch in submit() at lines 129-138 demonstrates the correct pattern. integrate/phase-W at 6df690b does not contain W.3 observability code; this finding is absent on that branch.""" .
