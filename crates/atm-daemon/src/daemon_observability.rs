@@ -14,7 +14,6 @@ use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort, RetainedSinkFaultMode,
 };
-use atm_core::schema::AtmMessageId;
 use sc_observability::{
     LogSink, Logger, LoggerConfig, RetentionPolicy, RotationPolicy, SinkRegistration,
 };
