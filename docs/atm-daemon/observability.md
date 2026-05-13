@@ -201,7 +201,9 @@ It must not own:
 - `crates/atm-daemon/src/lifecycle_control.rs`
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 
-Shared wiring and test/support surfaces that must follow the final boundary:
+Shared wiring and test/support surfaces that must follow the final boundary are
+all `V.2` refactor targets, with `V.3` shim cleanup where compatibility-only
+paths remain:
 - `crates/atm-daemon/src/daemon_runtime_observability.rs`
   - `V.2` required action: refactor this file to the final injected trait and
     daemon event surface used by subsystem-owned emission
