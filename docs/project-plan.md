@@ -3047,3 +3047,42 @@ Deferred backlog:
 - sprint-close hygiene gate
   - create GH issue from `ATM-QA-PU-001` through `ATM-QA-PU-005`
   - GH issue: `#261`
+
+## 27. Phase W Production Readiness Follow-Up
+
+Planning branch:
+- `feature/observability-findings-planning`
+
+Goal:
+- close the remaining production-readiness gaps identified after Phase V before
+  implementation starts
+- preserve one shared operator/diagnostic contract across ATM CLI, `atm-graft`,
+  and cross-daemon peer transport
+- collapse duplicate interface-specific error/reporting paths when the same
+  failure class is currently implemented in parallel
+
+Execution shape:
+- `W.1` daemon-side observability sink failure visibility
+- `W.2` same-host daemon traceability and interface parity
+- `W.3` SQLite subsystem observability and protocol parity
+- `W.4` peer replay recovery text and peer-side protocol parity
+
+Execution rules:
+- `W.1` defines the daemon-side sink-failure behavior for later emitted events
+- `W.2` owns same-host parity across `atm`, `atm-daemon-client`, and
+  `atm-graft`
+- `W.3` owns SQLite-backed doctor projection and non-CLI protocol-envelope
+  parity
+- `W.4` is independently executable from `W.2` and `W.3`; it owns peer replay
+  recovery text and peer-side parity through the shared protocol envelope
+
+Acceptance:
+- every critical failure class named in `docs/plan-phase-W.md` is assigned to a
+  specific sprint
+- each sprint has explicit hard dependencies, required work, acceptance
+  criteria, and required validation
+- each sprint names the shared ATM error / protocol / doctor paths it must
+  reuse and the current `main` CLI baseline it must preserve
+- duplicate interface-specific error/reporting implementations for the same
+  touched failure class are marked for consolidation rather than preservation
+- no Phase W scope item relies on an implicit discovery sprint

@@ -21,6 +21,23 @@ worktree: TBD
 - preserve interface parity so the same daemon-availability failure class uses
   the same ATM code/recovery semantics on CLI and `atm-graft` same-host flows
 
+## Hard Dependencies
+
+- depends on `W.1` for the final daemon-side sink-failure rule when new
+  traceability events are emitted
+- no hard dependency on `W.3` or `W.4`
+
+## Required Work
+
+- add attempt-level tracing for same-host daemon bootstrap/connect paths
+- audit current CLI-facing same-host errors against `atm-graft` same-host
+  errors and recovery text
+- collapse duplicate same-host error/reporting paths when they describe the
+  same daemon failure class
+- preserve one doctor-facing diagnostic story for same-host failures
+- compare every touched same-host failure class against the current `main` CLI
+  contract before finalizing any refactor
+
 ## Acceptance Criteria
 
 - every path listed in the current path inventory is addressed directly; the
@@ -44,6 +61,10 @@ worktree: TBD
 - where CLI and `atm-graft` currently duplicate error-mapping or reporting
   code for the same same-host failure class, the sprint should collapse those
   paths onto one shared implementation
+- the sprint identifies the shared ATM error/protocol/doctor functions that
+  become the single source of truth for each touched same-host failure class
+- req-qa can verify from the sprint doc exactly which same-host surfaces are
+  in scope and that CLI-side path tracing is explicitly owned here
 
 ## Implementation Notes
 
@@ -68,6 +89,30 @@ Primary insertion points:
   - advisory-stream connect / write / flush / timeout setup
 - `crates/atm-graft/src/runtime.rs`
   - advisory-stream receive / reconnect / response validation failures
+
+Shared paths that must be reused or consolidated:
+- `crates/atm-core/src/error.rs`
+  - `AtmError::daemon_unavailable(...)`
+  - `AtmError::daemon_auto_start_failed(...)`
+- `crates/atm-core/src/protocol.rs`
+  - protocol-envelope mapping for same-host daemon failures returned through
+    non-CLI consumers
+- `crates/atm-core/src/doctor/mod.rs`
+- `crates/atm/src/commands/doctor.rs`
+- `crates/atm/src/output.rs`
+- `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/runtime_status_cache.rs`
+
+Current main CLI baseline to preserve:
+- `crates/atm-daemon-client/src/lib.rs`
+  - final same-host daemon-availability failures already return ATM errors
+    through the shared daemon-client bootstrap path
+- `crates/atm/src/composition.rs`
+  - CLI bootstrap and exchange failures already terminate commands with
+    concise ATM errors
+- `crates/atm-core/src/error.rs`
+  - current ATM error constructors and recovery text remain the baseline for
+    daemon-unavailable and auto-start failure classes
 
 Current path inventory:
 - `crates/atm-daemon-client/src/lib.rs`
@@ -157,3 +202,18 @@ Cross-sprint dependency:
 - SQLite writer instrumentation
 - peer replay recovery text
 - large ATM CLI output redesign beyond what is required for concise failures
+
+## Required Validation
+
+Plan-auditable now:
+- explicit ownership of CLI, daemon-client, and `atm-graft` same-host paths
+- explicit duplicate-path collapse responsibility
+- explicit interface-parity contract
+
+Implementation validation later:
+- same ATM code/recovery semantics demonstrated for equivalent same-host
+  failure classes across CLI and `atm-graft`
+- runtime proof that doctor exposes the deeper daemon-start/connect trail
+- proof that duplicate same-host mapping/reporting logic was collapsed onto the
+  shared ATM error / doctor paths where the touched failure class existed in
+  parallel before

@@ -23,6 +23,24 @@ worktree: TBD
   same ATM error code/recovery semantics whether reached from CLI, graft host,
   or peer-transport-triggered daemon work
 
+## Hard Dependencies
+
+- depends on `W.1` for non-silent daemon-side event emission when SQLite
+  subsystem signals are forwarded through daemon observability
+- no hard dependency on `W.2`
+- no code dependency on `W.4`; only ordinary merge-forward discipline applies
+
+## Required Work
+
+- add SQLite subsystem signals at the listed queue, reply, WAL, and budget
+  paths
+- define exactly how SQLite-backed failures project into doctor/runtime health
+- verify protocol envelope parity for non-CLI consumers
+- collapse duplicate interface-specific SQLite error/reporting paths if they
+  exist
+- compare every touched SQLite-backed failure class against the current `main`
+  CLI command-failure contract before finalizing any refactor
+
 ## Acceptance Criteria
 
 - every SQLite path listed in the current path inventory is addressed directly
@@ -49,6 +67,11 @@ worktree: TBD
 - where SQLite-backed error mapping/reporting has duplicated interface-specific
   handling, the sprint should collapse those paths onto one shared
   implementation
+- the sprint identifies the shared ATM error/protocol/doctor functions that
+  become the single source of truth for each touched SQLite-backed failure
+  class
+- req-qa can verify from the sprint doc that SQLite-backed parity and protocol
+  envelope preservation are explicitly owned here
 
 ## Implementation Notes
 
@@ -111,6 +134,23 @@ Daemon-side integration points:
   - bounded shutdown WAL checkpoint path
   - doctor/runtime-health projections that can expose SQLite degraded state
 
+Shared paths that must be reused or consolidated:
+- `crates/atm-core/src/error.rs`
+- `crates/atm-core/src/protocol.rs`
+  - `ProtocolErrorEnvelope::{from_error,into_atm_error}`
+- `crates/atm-core/src/doctor/mod.rs`
+- `crates/atm/src/commands/doctor.rs`
+- `crates/atm/src/output.rs`
+- `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/runtime_status_cache.rs`
+
+Current main CLI baseline to preserve:
+- SQLite-backed ATM command failures already terminate through the shared ATM
+  error surface rather than a SQLite-specific CLI formatter
+- the touched SQLite-backed failure classes must continue to use the same ATM
+  code and recovery intent when surfaced to CLI, graft host, or peer-triggered
+  consumers
+
 Event families required:
 - writer queue backlog / timeout
 - writer reply timeout
@@ -144,3 +184,18 @@ Cross-sprint dependency:
 - unrelated SQLite schema work
 - daemon-client startup tracing
 - peer replay recovery text
+
+## Required Validation
+
+Plan-auditable now:
+- explicit ownership of SQLite-backed doctor projection and protocol parity
+- explicit duplicate-path collapse responsibility
+- explicit separation from same-host daemon-client tracing and peer replay text
+
+Implementation validation later:
+- runtime proof that doctor exposes queue backlog, reply timeout, WAL, and
+  reader-budget diagnostics
+- parity proof that equivalent SQLite-backed failures preserve the same ATM
+  code/recovery intent across CLI and non-CLI consumers
+- proof that duplicate SQLite-specific reporting or mapping paths were
+  collapsed onto shared ATM error / protocol / doctor implementations

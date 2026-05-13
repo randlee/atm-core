@@ -23,6 +23,24 @@ worktree: TBD
   - `atm doctor` degraded-health diagnostics when the sink is impaired but the
     command path still succeeds
 
+## Hard Dependencies
+
+- none on `W.2`, `W.3`, or `W.4`
+- shared observability trait and doctor/runtime-health paths remain the only
+  allowed reporting surfaces
+
+## Required Work
+
+- replace every daemon-side silent `emit()` / `emit_event()` discard in the
+  required path inventory
+- define the common fallback behavior once and apply it consistently
+- define how sustained sink degradation becomes visible through doctor or
+  runtime health instead of being silently dropped
+- explicitly document whether any emit failure is allowed to remain
+  non-blocking and why
+- identify the shared daemon surfaces that own the fallback and degraded-health
+  projection so no subsystem grows its own reporting side channel
+
 ## Acceptance Criteria
 
 - every `let _ = ...emit(...)` and `let _ = ...emit_event(...)` call in the
@@ -39,8 +57,13 @@ worktree: TBD
 - the sprint verifies whether any ATM CLI commands already surface an adequate
   warning/failure and names the exact regressions that must be restored where
   they do not
+- the sprint names the shared runtime-health / doctor projection points that
+  carry observability impairment across CLI, graft, and peer-triggered
+  diagnostics
 - every file/function inventory item listed below is treated as required scope,
-  not as a best-effort review target
+  not as an optional review target
+- req-qa can verify from the sprint doc alone that daemon-client tracing is
+  intentionally owned by `W.2`, not omitted from Phase W
 
 ## Implementation Notes
 
@@ -103,8 +126,26 @@ Files in scope:
 - `crates/atm-daemon/src/daemon_observability.rs`
 - `crates/atm-daemon/src/daemon_runtime_observability.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/tests.rs`
 - `crates/atm-daemon/src/test_observability.rs`
+
+Shared reporting paths that must be reused:
+- `crates/atm-daemon/src/daemon_observability.rs`
+- `crates/atm-daemon/src/daemon_runtime_observability.rs`
+- `crates/atm-core/src/doctor/mod.rs`
+- `crates/atm/src/commands/doctor.rs`
+- `crates/atm/src/output.rs`
+- `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/runtime_status_cache.rs`
+- `crates/atm-core/src/error.rs`
+
+Current main baseline to preserve:
+- degraded daemon conditions should continue to be surfaced through the shared
+  ATM error / doctor paths rather than hidden behind daemon-only warnings
+- this sprint must verify whether any CLI-facing command currently reports
+  observability impairment directly or only through doctor/runtime health, and
+  must preserve that behavior while removing silent discard
 
 Critical issue classes covered directly by this sprint:
 - observability sink degradation
@@ -115,3 +156,16 @@ Critical issue classes covered directly by this sprint:
 - daemon-client connection tracing
 - SQLite subsystem observability
 - replay persistence recovery text outside the sink-failure policy
+
+## Required Validation
+
+Plan-auditable now:
+- inventory completeness against the listed daemon files
+- ownership split between `W.1` and `W.2`
+- explicit shared-path rule and non-silent fallback requirement
+
+Implementation validation later:
+- grep or lint proof that no listed daemon-side silent-discard callsite remains
+- tests showing doctor/runtime-health can surface observability impairment
+- proof that the final fallback/reporting path is shared rather than
+  subsystem-specific

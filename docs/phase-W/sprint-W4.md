@@ -20,6 +20,23 @@ worktree: TBD
   interfaces so remote-delivery failure classes do not drift from the shared
   ATM error model
 
+## Hard Dependencies
+
+- no hard dependency on `W.2` or `W.3`
+- must reuse the existing shared protocol/error contract and the persistent
+  recovery-text rules document
+
+## Required Work
+
+- add missing replay-persistence recovery text on the listed peer branches
+- verify shared protocol-envelope parity for peer-side failures
+- collapse duplicate peer-specific error/reporting paths when they restate the
+  same shared failure class
+- make the independence/ordering rule explicit so implementation can proceed
+  without waiting on unrelated same-host or SQLite work
+- compare every touched peer replay failure class against the current `main`
+  send-failure contract before finalizing any refactor
+
 ## Acceptance Criteria
 
 - the sprint covers the exact uncovered replay-persistence branches listed in
@@ -33,6 +50,11 @@ worktree: TBD
 - where peer transport currently duplicates shared error-mapping/reporting
   behavior for the same failure class, the sprint should collapse those paths
   onto one shared implementation
+- the sprint identifies the shared ATM error/protocol/doctor functions that
+  become the single source of truth for each touched replay-persistence
+  failure class
+- req-qa can verify from the sprint doc that `W.4` is independently executable
+  and does not hide an undocumented dependency on `W.2` or `W.3`
 
 ## Implementation Notes
 
@@ -41,6 +63,24 @@ Primary file in scope:
 
 Shared parity file in scope:
 - `crates/atm-core/src/protocol.rs`
+
+Shared paths that must be reused or consolidated:
+- `crates/atm-core/src/error.rs`
+- `crates/atm-core/src/protocol.rs`
+  - `ProtocolErrorEnvelope::{from_error,into_atm_error}`
+- `crates/atm-core/src/doctor/mod.rs`
+- `crates/atm/src/commands/doctor.rs`
+- `crates/atm/src/output.rs`
+- `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/runtime_status_cache.rs`
+
+Current main CLI baseline to preserve:
+- remote-delivery and replay-persistence failures must continue to surface
+  through the shared ATM error surface rather than a peer-specific CLI
+  formatter
+- if the operator is told whether retry is safe or whether durable replay
+  persisted, that guidance must stay aligned across CLI, cross-daemon
+  consumers, and doctor follow-through
 
 Targeted functions:
 - `PeerClientTransport::persist_replay_request(...)`
@@ -91,3 +131,17 @@ CLI / doctor split:
 - broad peer transport redesign
 - daemon-client startup tracing
 - SQLite subsystem instrumentation
+
+## Required Validation
+
+Plan-auditable now:
+- explicit independence from `W.2` and `W.3`
+- explicit shared-protocol parity ownership
+- explicit duplicate-path collapse responsibility
+
+Implementation validation later:
+- parity proof that equivalent peer replay failure classes preserve the same
+  ATM code/recovery intent through protocol envelopes
+- test coverage for the listed replay-persistence branches
+- proof that duplicate peer-specific mapping/reporting logic was collapsed
+  onto shared ATM error / protocol / doctor implementations

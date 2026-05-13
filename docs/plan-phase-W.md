@@ -10,6 +10,12 @@ Goal:
 - remove silent observability loss in daemon subsystems so incident evidence is
   not discarded when the sink is degraded
 
+Phase scope note:
+- Phase W is implementation planning only.
+- It is not a discovery line and not a runtime-proof line by itself.
+- Sprint docs must be detailed enough that implementation agents can execute
+  them without adding a separate planning sprint.
+
 Planning branch:
 - `feature/observability-findings-planning`
 
@@ -42,8 +48,31 @@ Critical issue reporting contract:
     - same-host ATM CLI
     - same-host `atm-graft` host flows
     - cross-daemon socket / peer transport flows
-  - doctor/runtimե-health diagnostics remain one shared diagnostic surface even
+  - doctor/runtime-health diagnostics remain one shared diagnostic surface even
     when the failing interface differs
+
+Shared implementation boundary:
+- Phase W must converge the touched failure classes onto shared implementations
+  rather than preserve parallel interface-specific handling.
+- Shared code paths that should be reused or tightened when the touched failure
+  class already exists there:
+  - ATM error construction in `crates/atm-core/src/error.rs`
+  - protocol-envelope mapping in `crates/atm-core/src/protocol.rs`
+  - shared doctor engine in `crates/atm-core/src/doctor/mod.rs`
+  - same-host daemon bootstrap/connect logic in
+    `crates/atm-daemon-client/src/lib.rs`
+  - CLI-facing command bootstrap/reporting in `crates/atm/src/composition.rs`
+  - doctor command/output entrypoints in:
+    - `crates/atm/src/commands/doctor.rs`
+    - `crates/atm/src/output.rs`
+  - doctor/runtime-health projection in:
+    - `crates/atm-daemon/src/runtime_health.rs`
+    - `crates/atm-daemon/src/runtime_status_cache.rs`
+- Forbidden outcomes:
+  - a new interface-specific error taxonomy
+  - separate doctor reporting logic per participant
+  - duplicate per-interface string formatting for the same failure class when a
+    shared ATM error or protocol-envelope path can own it once
 
 Interface parity matrix:
 - same-host CLI:
@@ -58,8 +87,67 @@ Interface parity matrix:
 - shared error-envelope / doctor surfaces:
   - `crates/atm-core/src/error.rs`
   - `crates/atm-core/src/protocol.rs`
+  - `crates/atm-core/src/doctor/mod.rs`
+  - `crates/atm/src/commands/doctor.rs`
+  - `crates/atm/src/output.rs`
   - `crates/atm-daemon/src/runtime_health.rs`
   - `crates/atm-daemon/src/runtime_status_cache.rs`
+
+Sprint ownership map:
+- `W.1` owns daemon-side observability sink failure behavior and doctor/runtime
+  degradation signaling for lost daemon subsystem events.
+- `W.2` owns same-host interface parity and consolidation across:
+  - `atm`
+  - `atm-daemon-client`
+  - `atm-graft`
+- `W.3` owns SQLite-backed failure signaling, doctor projection, and protocol
+  envelope parity for non-CLI consumers.
+- `W.4` owns cross-daemon peer replay recovery text and peer-side parity
+  through the shared protocol envelope.
+
+Critical failure ownership matrix:
+- daemon startup / connect / publish failure:
+  - sprint owner: `W.2`
+  - shared paths:
+    - `crates/atm-daemon-client/src/lib.rs`
+    - `crates/atm/src/composition.rs`
+    - `crates/atm-core/src/error.rs`
+    - `crates/atm-core/src/doctor/mod.rs`
+    - `crates/atm/src/commands/doctor.rs`
+    - `crates/atm-daemon/src/runtime_health.rs`
+- ATM command failure on same-host daemon path:
+  - sprint owner: `W.2`
+  - shared paths:
+    - `crates/atm/src/composition.rs`
+    - `crates/atm-daemon-client/src/lib.rs`
+    - `crates/atm-core/src/error.rs`
+    - `crates/atm-core/src/doctor/mod.rs`
+- SQLite writer / queue / reply / WAL / reader-budget failure:
+  - sprint owner: `W.3`
+  - shared paths:
+    - `crates/atm-rusqlite/src/writer/mod.rs`
+    - `crates/atm-rusqlite/src/shared_db.rs`
+    - `crates/atm-rusqlite/src/lib.rs`
+    - `crates/atm-core/src/error.rs`
+    - `crates/atm-core/src/protocol.rs`
+    - `crates/atm-core/src/doctor/mod.rs`
+    - `crates/atm-daemon/src/runtime_health.rs`
+- observability sink degradation:
+  - sprint owner: `W.1`
+  - shared paths:
+    - `crates/atm-daemon/src/daemon_observability.rs`
+    - `crates/atm-daemon/src/daemon_runtime_observability.rs`
+    - `crates/atm-core/src/doctor/mod.rs`
+    - `crates/atm-daemon/src/runtime_health.rs`
+    - `crates/atm-daemon/src/runtime_status_cache.rs`
+- remote delivery outcome unknown / replay persistence failure:
+  - sprint owner: `W.4`
+  - shared paths:
+    - `crates/atm-daemon/src/peer_transport.rs`
+    - `crates/atm-core/src/error.rs`
+    - `crates/atm-core/src/protocol.rs`
+    - `crates/atm-core/src/doctor/mod.rs`
+    - `crates/atm-daemon/src/runtime_health.rs`
 
 Execution shape:
 - `W.1` removes daemon-side silent `emit()` discards and defines the fallback
@@ -117,14 +205,30 @@ Cross-sprint dependencies:
     class with incompatible ATM codes or contradictory recovery guidance
   - duplicate error-mapping or reporting code paths for the same failure class
     should be collapsed when the sprint touches them
+- `W.4` is independently executable from `W.2` and `W.3` at the code-scope
+  level; it depends only on the existing shared protocol/error contract and on
+  ordinary merge-forward discipline.
+- `W.1` does not own daemon-client tracing or CLI-side path narration; those
+  same-host path gaps are owned by `W.2`.
+- if audit finds any critical-failure path not assignable to `W.1` through
+  `W.4`, the plan must add the missing sprint rather than leave it implicit.
 
 Current path inventory requirement:
 - every Phase W sprint doc must itemize the current log/error paths it will
   change
 - path inventories must name concrete files and current functions or branch
   sites, not only modules
+- for every touched critical failure class, the sprint doc must also name the
+  current shared CLI/doctor/error baseline that exists on `main` so
+  implementation can verify no regression while collapsing duplicate paths
 - no separate discovery or planning sprint is part of Phase W; the sprint docs
   themselves are the implementation-ready path inventories
+
+Plan QA boundary:
+- req-qa can fully validate this plan as a document set without running the
+  daemon only if each sprint doc clearly separates:
+  - document-auditable acceptance criteria
+  - implementation/runtime validation that the future sprint must run
 
 Out of scope for Phase W:
 - unrelated daemon redesign work
