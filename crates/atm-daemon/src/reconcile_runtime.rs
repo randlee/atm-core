@@ -10,6 +10,8 @@ use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use crate::{DaemonSubsystem, SubsystemObservability};
+
 const DEFAULT_RECONCILE_DEBOUNCE: Duration = Duration::from_millis(25);
 const DEFAULT_RECONCILE_COMPLETION_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_RECONCILE_IDLE_INTERVAL: Duration = Duration::from_millis(50);
@@ -39,6 +41,7 @@ struct ReconcileRuntimeInner {
     pending_changed: Condvar,
     debounce: Duration,
     executor: ReconcileExecutor,
+    observability: SubsystemObservability,
     // Lock ordering invariant: if code ever needs both runtime state and the
     // fingerprint registry, it must drop `state` before locking this mutex.
     // The registry is ancillary reconcile-emission state and must never nest
@@ -157,10 +160,25 @@ impl ReconcileKey {
 }
 
 impl ReconcileRuntime {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn new(
         watch_source: Arc<dyn WatchEventSource + Send + Sync>,
         inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
+    ) -> Self {
+        Self::new_with_observability(
+            watch_source,
+            inbox_ingress,
+            notification_sink,
+            SubsystemObservability::disabled(DaemonSubsystem::ReconcileRuntime),
+        )
+    }
+
+    pub(crate) fn new_with_observability(
+        watch_source: Arc<dyn WatchEventSource + Send + Sync>,
+        inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
+        notification_sink: Arc<dyn NotificationSink + Send + Sync>,
+        observability: SubsystemObservability,
     ) -> Self {
         // Fingerprints must survive across executor invocations so duplicate
         // reconcile cycles can compare the newest inbox projection with the
@@ -206,6 +224,7 @@ impl ReconcileRuntime {
             }),
             DEFAULT_RECONCILE_DEBOUNCE,
             notification_fingerprints,
+            observability,
         )
     }
 
@@ -213,6 +232,7 @@ impl ReconcileRuntime {
         executor: ReconcileExecutor,
         debounce: Duration,
         notification_fingerprints: Arc<Mutex<NotificationFingerprintRegistry>>,
+        observability: SubsystemObservability,
     ) -> Self {
         Self {
             inner: Arc::new(ReconcileRuntimeInner {
@@ -222,6 +242,7 @@ impl ReconcileRuntime {
                 pending_changed: Condvar::new(),
                 debounce,
                 executor,
+                observability,
                 notification_fingerprints,
             }),
         }
@@ -245,6 +266,11 @@ impl ReconcileRuntime {
             .name("atm-daemon-reconcile".to_string())
             .spawn(move || reconcile_worker_loop(inner))
             .map_err(|source| {
+                let _ = self.inner.observability.emit(
+                    "start",
+                    "failed",
+                    "failed to spawn reconcile runtime worker",
+                );
                 AtmError::daemon_unavailable("failed to spawn reconcile runtime worker")
                     .with_source(source)
             })?;
@@ -261,6 +287,10 @@ impl ReconcileRuntime {
             }
         };
         state.worker = Some(handle);
+        let _ = self
+            .inner
+            .observability
+            .emit("start", "ok", "reconcile runtime worker started");
         Ok(())
     }
 
@@ -295,9 +325,19 @@ impl ReconcileRuntime {
             match result_rx.recv_timeout(RECONCILE_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "ok",
+                        "reconcile runtime worker shut down cleanly",
+                    );
                 }
                 Ok(Err(_)) => {
                     let _ = join_helper.join();
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "failed",
+                        "reconcile runtime worker panicked during shutdown",
+                    );
                     return Err(AtmError::daemon_unavailable(
                         "reconcile runtime worker panicked during shutdown",
                     )
@@ -314,6 +354,11 @@ impl ReconcileRuntime {
                         timeout_ms = RECONCILE_SHUTDOWN_DEADLINE.as_millis(),
                         "reconcile runtime worker exceeded shutdown deadline; detaching join helper"
                     );
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "degraded",
+                        "reconcile runtime worker exceeded its shutdown deadline",
+                    );
                     return Err(AtmError::daemon_unavailable(
                         "reconcile runtime worker exceeded the bounded shutdown deadline",
                     )
@@ -323,6 +368,11 @@ impl ReconcileRuntime {
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "failed",
+                        "reconcile runtime join helper disconnected during shutdown",
+                    );
                     tracing::warn!(
                         thread_id = ?worker_thread_id,
                         "reconcile runtime worker join helper exited before reporting shutdown status"
@@ -340,6 +390,8 @@ impl ReconcileRuntime {
     }
 
     pub(crate) fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
+        let request_team = request.team.clone();
+        let request_agent = request.agent.clone();
         let waiter_id = {
             let mut state = self.inner.state.lock().map_err(|_| {
                 AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
@@ -347,11 +399,33 @@ impl ReconcileRuntime {
                 )
             })?;
             if !state.started {
+                let event = self
+                    .inner
+                    .observability
+                    .event(
+                        "reconcile",
+                        "rejected",
+                        "reconcile runtime is unavailable before daemon startup",
+                    )
+                    .with_team(request_team.clone())
+                    .with_agent(request_agent.clone());
+                let _ = self.inner.observability.emit_event(event);
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime is unavailable before daemon startup",
                 ));
             }
             if state.shutdown {
+                let event = self
+                    .inner
+                    .observability
+                    .event(
+                        "reconcile",
+                        "rejected",
+                        "reconcile runtime is unavailable during daemon shutdown",
+                    )
+                    .with_team(request_team.clone())
+                    .with_agent(request_agent.clone());
+                let _ = self.inner.observability.emit_event(event);
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime is unavailable during daemon shutdown",
                 ));
@@ -388,6 +462,17 @@ impl ReconcileRuntime {
         loop {
             if state.shutdown {
                 state.release_waiter(waiter_id);
+                let event = self
+                    .inner
+                    .observability
+                    .event(
+                        "reconcile",
+                        "degraded",
+                        "reconcile runtime shut down before completion",
+                    )
+                    .with_team(request_team.clone())
+                    .with_agent(request_agent.clone());
+                let _ = self.inner.observability.emit_event(event);
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime shut down before completion",
                 ));
@@ -409,6 +494,17 @@ impl ReconcileRuntime {
             state = wait.0;
             if wait.1.timed_out() {
                 state.release_waiter(waiter_id);
+                let event = self
+                    .inner
+                    .observability
+                    .event(
+                        "reconcile",
+                        "degraded",
+                        "reconcile runtime timed out waiting for background completion",
+                    )
+                    .with_team(request_team.clone())
+                    .with_agent(request_agent.clone());
+                let _ = self.inner.observability.emit_event(event);
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime timed out waiting for background completion",
                 ));
@@ -422,6 +518,7 @@ impl ReconcileRuntime {
             executor,
             debounce,
             Arc::new(Mutex::new(NotificationFingerprintRegistry::default())),
+            SubsystemObservability::disabled(DaemonSubsystem::ReconcileRuntime),
         )
     }
 

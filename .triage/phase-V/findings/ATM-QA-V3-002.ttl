@@ -1,0 +1,22 @@
+finding_id = "ATM-QA-V3-002"
+title = "sprint-V3.md YAML frontmatter stale (status, worktree, branch fields)"
+severity = "minor"
+pattern = "stale-frontmatter"
+repeatable = false
+sweep_scope = "docs/phase-V/"
+highest_open_branch = "feature/pV-s3-observability-cleanup"
+promote_to_branch = "feature/pV-s3-observability-cleanup"
+occurrences = [
+  { branch = "feature/pV-s3-observability-cleanup", file = "docs/phase-V/sprint-V3.md", lines = "7-10", status = "open (folded into ATM-QA-V3-001 fix)" },
+]
+dispatch_ready = false
+dispatch_blocked_pending_triage_commit = false
+notes = """
+Folded into ATM-QA-V3-001 — fix both defects in a single edit pass on sprint-V3.md.
+Do NOT dispatch separately; ATM-QA-V3-001 is the dispatch target.
+
+Required frontmatter corrections:
+  status: planned        → implemented
+  worktree: TBD          → /Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s3-observability-cleanup
+  branch: TBD            → feature/pV-s3-observability-cleanup
+"""

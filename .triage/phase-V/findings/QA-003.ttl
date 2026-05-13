@@ -1,0 +1,14 @@
+finding_id = "QA-003"
+title = "cargo fmt failure in host_ownership.rs"
+severity = "blocking"
+pattern = "fmt-failure"
+repeatable = false
+sweep_scope = "crates/atm-daemon/src/host_ownership.rs"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/host_ownership.rs", lines = "58", status = "open" }
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = "Fixed in a single pass with: cargo fmt --manifest-path crates/atm-daemon/Cargo.toml (shared fix with QA-001, QA-002, QA-004, QA-005)."

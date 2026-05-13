@@ -1,0 +1,14 @@
+finding_id = "VQ2-005"
+title = "sprint-V2.md AC4 partially satisfied due to VQ2-003 boundary gap"
+severity = "minor"
+pattern = "ac-partial-satisfaction"
+repeatable = false
+sweep_scope = "docs/phase-V/sprint-V2.md"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "docs/phase-V/sprint-V2.md", lines = "", status = "open" }
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = "AC4 (strict observability boundary enforcement) is not fully satisfied while VQ2-003 (DaemonSubsystem import in daemon_observability.rs test module) remains open. This finding closes automatically when VQ2-003 is resolved."

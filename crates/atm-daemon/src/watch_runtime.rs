@@ -8,6 +8,8 @@ use std::sync::{Arc, Condvar, Mutex, mpsc};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
 
+use crate::{DaemonSubsystem, SubsystemObservability};
+
 const DEFAULT_WATCH_POLL_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_WATCH_SUBSCRIPTIONS: usize = 256;
 const WATCH_POLL_HEALTH_TIMEOUT_MULTIPLIER: u32 = 5;
@@ -32,6 +34,7 @@ struct WatchRuntimeInner {
     wake: Condvar,
     poller: WatchPoller,
     poll_interval: Duration,
+    observability: SubsystemObservability,
 }
 
 #[derive(Default)]
@@ -104,7 +107,14 @@ impl WatchKey {
 }
 
 impl WatchRuntime {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn new() -> Self {
+        Self::new_with_observability(SubsystemObservability::disabled(
+            DaemonSubsystem::WatchRuntime,
+        ))
+    }
+
+    pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self::new_with_poller(
             Arc::new(|request| {
                 let inbox_path = atm_core::home::inbox_path_from_home(
@@ -157,16 +167,22 @@ impl WatchRuntime {
                 Ok(WatchEventBatch { paths })
             }),
             DEFAULT_WATCH_POLL_INTERVAL,
+            observability,
         )
     }
 
-    fn new_with_poller(poller: WatchPoller, poll_interval: Duration) -> Self {
+    fn new_with_poller(
+        poller: WatchPoller,
+        poll_interval: Duration,
+        observability: SubsystemObservability,
+    ) -> Self {
         Self {
             inner: Arc::new(WatchRuntimeInner {
                 state: Mutex::new(WatchState::default()),
                 wake: Condvar::new(),
                 poller,
                 poll_interval,
+                observability,
             }),
         }
     }
@@ -189,6 +205,11 @@ impl WatchRuntime {
             .name("atm-daemon-watch".to_string())
             .spawn(move || watch_worker_loop(inner))
             .map_err(|source| {
+                let _ = self.inner.observability.emit(
+                    "start",
+                    "failed",
+                    "failed to spawn watch runtime worker",
+                );
                 AtmError::daemon_unavailable("failed to spawn watch runtime worker")
                     .with_source(source)
             })?;
@@ -205,6 +226,10 @@ impl WatchRuntime {
             }
         };
         state.worker = Some(handle);
+        let _ = self
+            .inner
+            .observability
+            .emit("start", "ok", "watch runtime worker started");
         Ok(())
     }
 
@@ -226,13 +251,36 @@ impl WatchRuntime {
                 .spawn(move || {
                     let _ = result_tx.send(handle.join());
                 })
-                .expect("failed to spawn watch join helper");
+                .map_err(|source| {
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "failed",
+                        "failed to spawn watch runtime join helper",
+                    );
+                    AtmError::daemon_unavailable(
+                        "failed to spawn watch runtime join helper during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; watch shutdown could not create its bounded join helper.",
+                    )
+                    .with_source(source)
+                })?;
             match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "ok",
+                        "watch runtime worker shut down cleanly",
+                    );
                 }
                 Ok(Err(_)) => {
                     let _ = join_helper.join();
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "failed",
+                        "watch runtime worker panicked during shutdown",
+                    );
                     return Err(AtmError::daemon_unavailable(
                         "watch runtime worker panicked during shutdown",
                     )
@@ -248,6 +296,11 @@ impl WatchRuntime {
                         timeout_ms = WATCH_SHUTDOWN_DEADLINE.as_millis(),
                         "watch runtime worker exceeded shutdown deadline; detaching join helper"
                     );
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "degraded",
+                        "watch runtime worker exceeded its shutdown deadline",
+                    );
                     return Err(AtmError::daemon_unavailable(
                         "watch runtime worker exceeded the bounded shutdown deadline",
                     )
@@ -257,6 +310,11 @@ impl WatchRuntime {
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "failed",
+                        "watch runtime join helper disconnected during shutdown",
+                    );
                     tracing::warn!(
                         "watch runtime worker join helper exited before reporting shutdown status"
                     );
@@ -270,6 +328,8 @@ impl WatchRuntime {
         &self,
         request: WatchSubscriptionRequest,
     ) -> Result<WatchEventBatch, AtmError> {
+        let request_team = request.team.clone();
+        let request_agent = request.agent.clone();
         let key = WatchKey::from_request(&request);
         let mut state = self.inner.state.lock().map_err(|_| {
             AtmError::daemon_unavailable("watch runtime state lock poisoned").with_recovery(
@@ -294,6 +354,17 @@ impl WatchRuntime {
             }
             None => {
                 if state.subscriptions.len() >= MAX_WATCH_SUBSCRIPTIONS {
+                    let event = self
+                        .inner
+                        .observability
+                        .event(
+                            "poll",
+                            "rejected",
+                            "watch runtime refused a new subscription at the bounded registry cap",
+                        )
+                        .with_team(request_team.clone())
+                        .with_agent(request_agent.clone());
+                    let _ = self.inner.observability.emit_event(event);
                     return Err(
                         AtmError::daemon_unavailable(format!(
                             "watch runtime refused a new subscription because the bounded registry capacity of {MAX_WATCH_SUBSCRIPTIONS} entries was reached"
@@ -346,6 +417,17 @@ impl WatchRuntime {
                 })?;
             state = wait.0;
             if wait.1.timed_out() {
+                let event = self
+                    .inner
+                    .observability
+                    .event(
+                        "poll",
+                        "degraded",
+                        "watch runtime did not deliver an updated batch before the worker health timeout elapsed",
+                    )
+                    .with_team(request_team.clone())
+                    .with_agent(request_agent.clone());
+                let _ = self.inner.observability.emit_event(event);
                 return Err(
                     AtmError::daemon_unavailable(
                         "watch runtime did not deliver an updated batch before the worker health timeout elapsed",
@@ -360,7 +442,11 @@ impl WatchRuntime {
 
     #[cfg(test)]
     pub(crate) fn new_for_test(poller: WatchPoller, poll_interval: Duration) -> Self {
-        Self::new_with_poller(poller, poll_interval)
+        Self::new_with_poller(
+            poller,
+            poll_interval,
+            SubsystemObservability::disabled(DaemonSubsystem::WatchRuntime),
+        )
     }
 }
 

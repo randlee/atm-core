@@ -1,0 +1,42 @@
+{
+  "phase_id": "phase-V",
+  "integration_branch": "integrate/phase-V",
+  "integration_worktree_path": "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-V",
+  "worktrees": [
+    {
+      "order": 0,
+      "branch": "integrate/phase-V",
+      "path": "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-V",
+      "head_sha": "264b77a39e9ff7202260e065b385bc3f5d599c38",
+      "status": "integration"
+    },
+    {
+      "order": 1,
+      "branch": "feature/pV-s1-observability-boundary",
+      "path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s1-observability-boundary",
+      "head_sha": "1be7d5a",
+      "status": "merged"
+    },
+    {
+      "order": 2,
+      "branch": "feature/pV-s2-observability-migration",
+      "path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s2-observability-migration",
+      "head_sha": "513d832318d1bd4e427b32626f55fdd68ba755f4",
+      "status": "open"
+    },
+    {
+      "order": 3,
+      "branch": "feature/pV-s3-observability-cleanup",
+      "path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s3-observability-cleanup",
+      "head_sha": "513d832318d1bd4e427b32626f55fdd68ba755f4",
+      "status": "in-progress"
+    },
+    {
+      "order": 4,
+      "branch": "feature/pV-s4-recovery-hardening",
+      "path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s4-recovery-hardening",
+      "head_sha": "8ecd99989b1bc5da5507f8c9b360f9c2e0470dfa",
+      "status": "queued"
+    }
+  ]
+}

@@ -1,0 +1,14 @@
+finding_id = "QA-007"
+title = "Naked #[allow(dead_code)] on NotificationRuntime::new() in notification_runtime.rs"
+severity = "important"
+pattern = "naked-dead-code-allow"
+repeatable = true
+sweep_scope = "crates/atm-daemon/src/notification_runtime.rs"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/notification_runtime.rs", lines = "46", status = "open" }
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = "NotificationRuntime::new() is unreachable after the _with_observability migration. Remove the dead constructor or gate with #[cfg(test)] if test-only. Naked #[allow(dead_code)] suppresses a real signal; fix the root cause instead."

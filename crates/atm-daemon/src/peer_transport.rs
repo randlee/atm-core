@@ -16,6 +16,8 @@ use atm_core::protocol::{
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
+use crate::{DaemonSubsystem, SubsystemObservability};
+
 // Architecture authority: docs/architecture.md §21.6.4 daemon operational
 // defaults and remote peer transport rules.
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
@@ -99,10 +101,14 @@ struct PeerClientTransport {
     config: PeerTransportConfig,
     replay_store: Option<Arc<dyn RemoteReplayStore>>,
     codec: JsonAtmProtocolCodec,
+    observability: SubsystemObservability,
 }
 
 impl PeerClientTransport {
-    fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
+    fn new_with_observability(
+        replay_store: Option<Arc<dyn RemoteReplayStore>>,
+        observability: SubsystemObservability,
+    ) -> Self {
         let endpoint = daemon_peer_endpoint_from_env();
         let config = std::env::current_dir()
             .ok()
@@ -125,6 +131,7 @@ impl PeerClientTransport {
             config,
             replay_store,
             codec: JsonAtmProtocolCodec,
+            observability,
         }
     }
 
@@ -141,6 +148,7 @@ impl PeerClientTransport {
             config,
             replay_store: Some(replay_store),
             codec: JsonAtmProtocolCodec,
+            observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
         }
     }
 
@@ -168,6 +176,11 @@ impl PeerClientTransport {
                         replay_attempt_count = record.attempt_count,
                         "daemon remote replay delivered successfully"
                     );
+                    let _ = self.observability.emit(
+                        "resume_pending_replay",
+                        "ok",
+                        "daemon remote replay delivered a retained record",
+                    );
                     delivered += 1;
                 }
                 Err(error) => {
@@ -181,6 +194,11 @@ impl PeerClientTransport {
                         error_code = %error.code,
                         error_message = %error.message,
                         "daemon remote replay delivery attempt failed; retaining record"
+                    );
+                    let _ = self.observability.emit(
+                        "resume_pending_replay",
+                        "degraded",
+                        "daemon remote replay delivery failed and retained the record for retry",
                     );
                     replay_store.enqueue(record)?;
                     retained += 1;
@@ -276,6 +294,11 @@ impl PeerClientTransport {
                         attempt,
                         "daemon peer delivery succeeded"
                     );
+                    let _ = self.observability.emit(
+                        "send_to_endpoint",
+                        "ok",
+                        "daemon peer delivery succeeded",
+                    );
                     return Ok(response);
                 }
                 Err(failure) if failure.kind == AttemptFailureKind::Retryable => {
@@ -287,6 +310,11 @@ impl PeerClientTransport {
                             error_code = %failure.error.code,
                             error_message = %failure.error.message,
                             "daemon peer delivery exhausted retry budget"
+                        );
+                        let _ = self.observability.emit(
+                            "send_to_endpoint",
+                            "failed",
+                            "daemon peer delivery exhausted its retry budget",
                         );
                         return Err(failure.error);
                     }
@@ -300,6 +328,11 @@ impl PeerClientTransport {
                         error_code = %failure.error.code,
                         error_message = %failure.error.message,
                         "daemon peer delivery hit retryable failure"
+                    );
+                    let _ = self.observability.emit(
+                        "send_to_endpoint",
+                        "degraded",
+                        "daemon peer delivery hit a retryable failure",
                     );
                     if wait_for_retry_backoff(&terminate, sleep_for) {
                         return Err(
@@ -327,6 +360,11 @@ impl PeerClientTransport {
                         error_code = %failure.error.code,
                         error_message = %failure.error.message,
                         "daemon peer delivery failed"
+                    );
+                    let _ = self.observability.emit(
+                        "send_to_endpoint",
+                        "failed",
+                        "daemon peer delivery failed with a non-retryable or outcome-unknown error",
                     );
                     return Err(failure.error);
                 }
@@ -506,13 +544,22 @@ impl Default for PeerTransportRuntime {
 
 impl PeerTransportRuntime {
     pub(crate) fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
+        Self::new_with_observability(
+            replay_store,
+            SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        )
+    }
+
+    pub(crate) fn new_with_observability(
+        replay_store: Option<Arc<dyn RemoteReplayStore>>,
+        observability: SubsystemObservability,
+    ) -> Self {
         Self {
-            client: PeerClientTransport::new(replay_store),
+            client: PeerClientTransport::new_with_observability(replay_store, observability),
         }
     }
 
     #[cfg(test)]
-    #[allow(dead_code)]
     pub(crate) fn client_transport(&self) -> &dyn ClientTransport {
         &self.client
     }

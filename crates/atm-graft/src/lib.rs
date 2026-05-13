@@ -20,6 +20,7 @@ use atm_core::graft::{
     AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
     AdvisoryStreamRequest, AtmGraftClient,
 };
+use atm_core::observability::NullObservability;
 use atm_core::protocol::{
     RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
@@ -27,7 +28,7 @@ use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
-use atm_daemon_client::DaemonSupervisor;
+use atm_daemon_client::{BootstrapTraceability, DaemonSupervisor};
 
 mod runtime;
 mod transport;
@@ -197,7 +198,16 @@ impl GraftClient {
         let advisory_transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
         let transport = Arc::clone(&advisory_transport) as Arc<dyn ClientTransport + Send + Sync>;
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
-        supervisor.ensure_daemon_available(|| advisory_transport.try_connect().map(|_| ()))?;
+        let observability = NullObservability;
+        let traceability = BootstrapTraceability::new(
+            "graft_connect",
+            &observability,
+            parse_bootstrap_team()?,
+            parse_bootstrap_agent()?,
+        );
+        supervisor.ensure_daemon_available_with_traceability(&traceability, || {
+            advisory_transport.try_connect().map(|_| ())
+        })?;
         Ok(Self {
             transport,
             advisory_transport: Some(advisory_transport),
@@ -327,6 +337,24 @@ impl GraftSessionClient for GraftClient {
         })?;
         transport.open_advisory_stream(request)
     }
+}
+
+fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
+    std::env::var("ATM_IDENTITY")
+        .unwrap_or_else(|_| "unknown".to_string())
+        .parse()
+        .map_err(|error: AtmError| {
+            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
+        })
+}
+
+fn parse_bootstrap_team() -> Result<TeamName, AtmError> {
+    std::env::var("ATM_TEAM")
+        .unwrap_or_else(|_| "unknown".to_string())
+        .parse()
+        .map_err(|error: AtmError| {
+            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
+        })
 }
 
 /// Concrete embedded graft session runtime.

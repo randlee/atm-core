@@ -1,4 +1,5 @@
 use std::fs::{self, File, OpenOptions};
+use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
@@ -6,8 +7,11 @@ use std::{fmt, thread};
 
 use atm_core::error::AtmError;
 use atm_core::observability::{CommandEvent, ObservabilityPort};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::types::{AgentName, TeamName};
 use fs2::FileExt;
+use interprocess::local_socket::Stream as LocalSocketStream;
+use interprocess::local_socket::traits::Stream as _;
 
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
@@ -75,7 +79,7 @@ pub struct DaemonSupervisor {
     daemon_bin: DaemonBinaryPath,
 }
 
-struct BootstrapTraceability<'a> {
+pub struct BootstrapTraceability<'a> {
     command: &'static str,
     observability: &'a (dyn ObservabilityPort + Send + Sync),
     team: TeamName,
@@ -83,16 +87,18 @@ struct BootstrapTraceability<'a> {
 }
 
 impl<'a> BootstrapTraceability<'a> {
-    fn new(
+    pub fn new(
         command: &'static str,
         observability: &'a (dyn ObservabilityPort + Send + Sync),
-    ) -> Result<Self, AtmError> {
-        Ok(Self {
+        team: TeamName,
+        agent: AgentName,
+    ) -> Self {
+        Self {
             command,
             observability,
-            team: parse_bootstrap_team()?,
-            agent: parse_bootstrap_agent()?,
-        })
+            team,
+            agent,
+        }
     }
 
     fn emit(&self, action: &'static str, outcome: &'static str, error: Option<&AtmError>) {
@@ -122,6 +128,80 @@ impl<'a> BootstrapTraceability<'a> {
     }
 }
 
+pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
+    LocalSocketStream::connect(atm_core::protocol::daemon_local_ipc_name_from_path(
+        endpoint.as_ref(),
+    )?)
+    .map_err(|source| {
+        AtmError::daemon_unavailable(format!(
+            "failed to connect to daemon local IPC endpoint at {}",
+            endpoint.display()
+        ))
+        .with_source(source)
+    })
+}
+
+/// This function performs blocking IPC I/O. Callers in async contexts must
+/// wrap this in `tokio::task::spawn_blocking`.
+pub fn exchange(
+    endpoint: &DaemonLocalIpcEndpoint,
+    request: RequestEnvelope,
+    request_deadline: Duration,
+) -> Result<ResponseEnvelope, AtmError> {
+    let mut stream = try_connect(endpoint)?;
+    stream
+        .set_send_timeout(Some(request_deadline))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to configure daemon local IPC write timeout")
+                .with_source(source)
+        })?;
+    stream
+        .set_recv_timeout(Some(request_deadline))
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to configure daemon local IPC read timeout")
+                .with_source(source)
+        })?;
+    let request_id = atm_core::protocol::next_request_id();
+    let frame = atm_core::protocol::request_to_frame_payload(request_id, request)?;
+    atm_core::protocol::write_frame(&mut stream, &frame, "failed to write daemon request frame")?;
+    stream.flush().map_err(|source| {
+        AtmError::daemon_unavailable("failed to flush daemon request frame").with_source(source)
+    })?;
+    let response_frame = atm_core::protocol::read_frame(
+        &mut stream,
+        "failed to read daemon response frame",
+        "daemon response frame exceeded the maximum supported size",
+    )?
+    .ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "daemon closed the local IPC connection before returning a response frame",
+        )
+        .with_recovery(
+            "Retry the request after atm-daemon reaches serving state and inspect daemon logs if the problem persists.",
+        )
+    })?;
+    let (response_id, response) = atm_core::protocol::response_from_frame_payload(response_frame)?;
+    if response_id != request_id {
+        return Err(AtmError::daemon_unavailable(format!(
+            "daemon response request_id {} did not match request_id {}",
+            response_id, request_id
+        ))
+        .with_recovery(
+            "Align the ATM client and daemon builds so both sides use the same local IPC protocol contract before retrying.",
+        ));
+    }
+    Ok(response)
+}
+
+pub fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
+    AtmError::validation(format!(
+        "transport returned an unexpected response for `{command}`: {response:?}"
+    ))
+    .with_recovery(
+        "Retry the request once. If the mismatch persists, inspect daemon/client version alignment and retained daemon logs before retrying again.",
+    )
+}
+
 impl DaemonSupervisor {
     pub fn new(endpoint: DaemonLocalIpcEndpoint, daemon_bin: DaemonBinaryPath) -> Self {
         Self {
@@ -144,19 +224,17 @@ impl DaemonSupervisor {
 
     pub fn ensure_daemon_available_with_traceability<F>(
         &self,
-        command: &'static str,
-        observability: &(dyn ObservabilityPort + Send + Sync),
+        traceability: &BootstrapTraceability<'_>,
         try_connect: F,
     ) -> Result<(), AtmError>
     where
         F: FnMut() -> Result<(), AtmError>,
     {
-        let traceability = BootstrapTraceability::new(command, observability)?;
         self.ensure_daemon_available_with_timeout_impl(
             try_connect,
             AUTO_START_PUBLISH_TIMEOUT,
             Duration::from_millis(25),
-            Some(&traceability),
+            Some(traceability),
         )
     }
 
@@ -226,23 +304,37 @@ impl DaemonSupervisor {
     where
         F: FnMut() -> Result<(), AtmError>,
     {
-        if try_connect().is_ok() {
-            if let Some(traceability) = traceability {
-                traceability.emit("daemon_connect", "connected", None);
-            }
-            return Ok(());
-        }
-        if let Some(traceability) = traceability {
-            traceability.emit("daemon_connect", "pending", None);
-        }
-        let deadline = Instant::now() + publish_timeout;
-        let mut gate_contention_reported = false;
-        loop {
-            if try_connect().is_ok() {
+        match try_connect() {
+            Ok(()) => {
                 if let Some(traceability) = traceability {
                     traceability.emit("daemon_connect", "connected", None);
                 }
                 return Ok(());
+            }
+            Err(error) => {
+                if let Some(traceability) = traceability {
+                    traceability.emit("daemon_connect", "initial_miss", Some(&error));
+                }
+            }
+        }
+        let deadline = Instant::now() + publish_timeout;
+        let mut gate_contention_reported = false;
+        loop {
+            if let Some(traceability) = traceability {
+                traceability.emit("daemon_connect", "retry_attempt", None);
+            }
+            match try_connect() {
+                Ok(()) => {
+                    if let Some(traceability) = traceability {
+                        traceability.emit("daemon_connect", "connected", None);
+                    }
+                    return Ok(());
+                }
+                Err(error) => {
+                    if let Some(traceability) = traceability {
+                        traceability.emit("daemon_connect", "pending", Some(&error));
+                    }
+                }
             }
             let launch_gate = match LaunchGateGuard::try_acquire_at(launch_lock_path.clone()) {
                 Ok(launch_gate) => launch_gate,
@@ -255,7 +347,7 @@ impl DaemonSupervisor {
             };
             if let Some(_guard) = launch_gate {
                 if let Some(traceability) = traceability {
-                    traceability.emit("daemon_auto_start", "launch_gate_acquired", None);
+                    traceability.emit("daemon_launch_gate", "acquired", None);
                 }
                 if try_connect().is_ok() {
                     if let Some(traceability) = traceability {
@@ -287,22 +379,25 @@ impl DaemonSupervisor {
                 let error = AtmError::daemon_auto_start_failed(format!(
                     "failed to connect to daemon local IPC endpoint at {} after auto-start",
                     self.endpoint.display()
-                ));
+                ))
+                .with_recovery(
+                    "Inspect atm-daemon startup logs, confirm the daemon publishes its local IPC endpoint, and retry only after the same-host socket becomes reachable.",
+                );
                 if let Some(traceability) = traceability {
-                    traceability.emit("daemon_auto_start", "error", Some(&error));
+                    traceability.emit("daemon_auto_start", "timeout_exhausted", Some(&error));
                 }
                 return Err(error);
             }
             if !gate_contention_reported {
                 if let Some(traceability) = traceability {
-                    traceability.emit("daemon_auto_start", "launch_gate_contended", None);
+                    traceability.emit("daemon_launch_gate", "contended", None);
                 }
                 gate_contention_reported = true;
             }
             if Instant::now() >= deadline {
                 let error = LaunchGateGuard::rejected_error(&self.endpoint);
                 if let Some(traceability) = traceability {
-                    traceability.emit("daemon_auto_start", "error", Some(&error));
+                    traceability.emit("daemon_launch_gate", "timeout_exhausted", Some(&error));
                 }
                 return Err(error);
             }
@@ -334,6 +429,9 @@ impl DaemonSupervisor {
                 "failed to spawn daemon binary at {}",
                 self.daemon_bin.display()
             ))
+            .with_recovery(
+                "Confirm ATM_DAEMON_BIN points to an executable atm-daemon binary and retry after fixing the daemon launch environment.",
+            )
             .with_source(source)
         })?;
         Ok(())
@@ -356,6 +454,9 @@ impl LaunchGateGuard {
             "daemon launch gate remained owned while connecting to {}",
             endpoint.display()
         ))
+        .with_recovery(
+            "Wait for the in-flight daemon launch to finish, then retry the same-host connection. If the launch gate stays owned, inspect the launch-lock owner and clear stale launch state before retrying.",
+        )
     }
 
     pub fn try_acquire_at(lock_path: PathBuf) -> Result<Option<Self>, AtmError> {
@@ -365,6 +466,9 @@ impl LaunchGateGuard {
                     "failed to create daemon launch lock directory at {}",
                     parent.display()
                 ))
+                .with_recovery(
+                    "Create or grant write access to the daemon launch-lock directory before retrying daemon auto-start.",
+                )
                 .with_source(source)
             })?;
         }
@@ -379,6 +483,9 @@ impl LaunchGateGuard {
                     "failed to open daemon launch gate at {}",
                     lock_path.display()
                 ))
+                .with_recovery(
+                    "Confirm the daemon launch-lock path is writable and not blocked by another process before retrying daemon auto-start.",
+                )
                 .with_source(source)
             })?;
 
@@ -389,6 +496,9 @@ impl LaunchGateGuard {
                 "failed to acquire daemon launch gate at {}",
                 lock_path.display()
             ))
+            .with_recovery(
+                "Inspect the daemon launch-lock owner and repair stale lock state before retrying daemon auto-start.",
+            )
             .with_source(source)),
         }
     }
@@ -416,24 +526,11 @@ pub fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
     }
 }
 
-fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
-    std::env::var("ATM_IDENTITY")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-}
-
-fn parse_bootstrap_team() -> Result<TeamName, AtmError> {
-    std::env::var("ATM_TEAM")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-}
-
 #[cfg(test)]
 mod tests {
-    use std::ffi::OsString;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
-    use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
+    use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
     use atm_core::error::{AtmError, AtmErrorCode};
@@ -444,8 +541,8 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
-        LaunchGateGuard, parse_bootstrap_agent, parse_bootstrap_team,
+        BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
     };
 
     #[derive(Debug, Default)]
@@ -485,52 +582,6 @@ mod tests {
         }
     }
 
-    struct EnvGuard {
-        restorations: Vec<EnvRestore>,
-        _guard: MutexGuard<'static, ()>,
-    }
-
-    struct EnvRestore {
-        key: &'static str,
-        original: Option<OsString>,
-    }
-
-    impl EnvGuard {
-        fn set_many<const N: usize>(changes: [(&'static str, Option<&str>); N]) -> Self {
-            let guard = env_lock().lock().expect("env lock");
-            Self {
-                restorations: changes
-                    .into_iter()
-                    .map(|(key, value)| {
-                        let original = std::env::var_os(key);
-                        match value {
-                            Some(value) => unsafe { std::env::set_var(key, value) },
-                            None => unsafe { std::env::remove_var(key) },
-                        }
-                        EnvRestore { key, original }
-                    })
-                    .collect(),
-                _guard: guard,
-            }
-        }
-    }
-
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            for restore in self.restorations.iter_mut().rev() {
-                match restore.original.take() {
-                    Some(value) => unsafe { std::env::set_var(restore.key, value) },
-                    None => unsafe { std::env::remove_var(restore.key) },
-                }
-            }
-        }
-    }
-
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
     fn supervisor(tempdir: &TempDir) -> DaemonSupervisor {
         DaemonSupervisor::new(
             DaemonLocalIpcEndpoint::new(tempdir.path().join("daemon.sock")).expect("endpoint"),
@@ -543,26 +594,32 @@ mod tests {
     }
 
     #[test]
-    fn bootstrap_traceability_uses_unknown_identity_defaults() {
-        let _env = EnvGuard::set_many([("ATM_IDENTITY", None), ("ATM_TEAM", None)]);
+    fn bootstrap_traceability_preserves_explicit_identity() {
+        let observability = RecordingObservability::default();
+        let traceability = BootstrapTraceability::new(
+            "send",
+            &observability,
+            "trace-team".parse().expect("team"),
+            "trace-agent".parse().expect("agent"),
+        );
 
-        assert_eq!(parse_bootstrap_agent().expect("agent").as_str(), "unknown");
-        assert_eq!(parse_bootstrap_team().expect("team").as_str(), "unknown");
+        assert_eq!(traceability.team.as_str(), "trace-team");
+        assert_eq!(traceability.agent.as_str(), "trace-agent");
     }
 
     #[test]
     fn traceability_emits_pending_and_connected_for_retry_success() {
-        let _env = EnvGuard::set_many([
-            ("ATM_IDENTITY", Some("trace-agent")),
-            ("ATM_TEAM", Some("trace-team")),
-        ]);
         let tempdir = TempDir::new().expect("tempdir");
         let supervisor = supervisor(&tempdir);
         let observability = RecordingObservability::default();
         let attempts = Arc::new(AtomicUsize::new(0));
         let try_connect_attempts = Arc::clone(&attempts);
-        let traceability =
-            super::BootstrapTraceability::new("send", &observability).expect("traceability");
+        let traceability = BootstrapTraceability::new(
+            "send",
+            &observability,
+            "trace-team".parse().expect("team"),
+            "trace-agent".parse().expect("agent"),
+        );
 
         supervisor
             .ensure_daemon_available_with_lock_path_impl(
@@ -581,27 +638,29 @@ mod tests {
             .expect("daemon available");
 
         let events = observability.events();
-        assert_eq!(events.len(), 2);
+        assert_eq!(events.len(), 3);
         assert_eq!(events[0].command, "send");
         assert_eq!(events[0].action, "daemon_connect");
-        assert_eq!(events[0].outcome, "pending");
+        assert_eq!(events[0].outcome, "initial_miss");
         assert_eq!(events[1].action, "daemon_connect");
-        assert_eq!(events[1].outcome, "connected");
-        assert_eq!(events[1].team.as_str(), "trace-team");
-        assert_eq!(events[1].agent.as_str(), "trace-agent");
+        assert_eq!(events[1].outcome, "retry_attempt");
+        assert_eq!(events[2].action, "daemon_connect");
+        assert_eq!(events[2].outcome, "connected");
+        assert_eq!(events[2].team.as_str(), "trace-team");
+        assert_eq!(events[2].agent.as_str(), "trace-agent");
     }
 
     #[test]
     fn traceability_emits_spawn_failure_error() {
-        let _env = EnvGuard::set_many([
-            ("ATM_IDENTITY", Some("trace-agent")),
-            ("ATM_TEAM", Some("trace-team")),
-        ]);
         let tempdir = TempDir::new().expect("tempdir");
         let supervisor = supervisor(&tempdir);
         let observability = RecordingObservability::default();
-        let traceability =
-            super::BootstrapTraceability::new("doctor", &observability).expect("traceability");
+        let traceability = BootstrapTraceability::new(
+            "doctor",
+            &observability,
+            "trace-team".parse().expect("team"),
+            "trace-agent".parse().expect("agent"),
+        );
 
         let error = supervisor
             .ensure_daemon_available_with_lock_path_impl(

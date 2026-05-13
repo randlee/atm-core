@@ -1,5 +1,4 @@
 use std::fmt;
-use std::io::Write;
 use std::sync::Arc;
 
 use atm_core::ack::{AckOutcome, AckRequest};
@@ -20,12 +19,14 @@ use atm_core::protocol::{
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
+use atm_core::types::{AgentName, TeamName};
 use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
-use atm_daemon_client::{DaemonLocalIpcEndpoint, DaemonSupervisor};
+use atm_daemon_client::{
+    BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor, exchange as daemon_exchange,
+    try_connect as daemon_try_connect, unexpected_response,
+};
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
-use interprocess::local_socket::Stream as LocalSocketStream;
-use interprocess::local_socket::traits::Stream as _;
 
 use crate::observability::CliObservability;
 
@@ -51,10 +52,6 @@ impl ReceiveCommandEntryPoint {
     }
 }
 
-// Parallel to `GraftLocalIpcClientTransport` in crates/atm-graft/src/lib.rs.
-// Kept separate: atm-graft must not depend on the atm crate; sharing via
-// atm-daemon-client would require exposing the IPC exchange internals as a
-// public API surface, which is out of scope for that boundary crate.
 #[derive(Debug)]
 struct LocalIpcClientTransportAdapter {
     endpoint: DaemonLocalIpcEndpoint,
@@ -65,70 +62,14 @@ impl LocalIpcClientTransportAdapter {
         Self { endpoint }
     }
 
-    fn try_connect(&self) -> Result<LocalSocketStream, AtmError> {
-        LocalSocketStream::connect(atm_core::protocol::daemon_local_ipc_name_from_path(
-            self.endpoint.as_ref(),
-        )?)
-        .map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to connect to daemon local IPC endpoint at {}",
-                self.endpoint.display()
-            ))
-            .with_source(source)
-        })
+    fn try_connect(&self) -> Result<interprocess::local_socket::Stream, AtmError> {
+        daemon_try_connect(&self.endpoint)
     }
 
     /// This function performs blocking IPC I/O. Callers in async contexts must
     /// wrap this in `tokio::task::spawn_blocking`.
     fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let mut stream = self.try_connect()?;
-        stream
-            .set_send_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
-            .map_err(|source| {
-                AtmError::daemon_unavailable("failed to configure daemon local IPC write timeout")
-                    .with_source(source)
-            })?;
-        stream
-            .set_recv_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
-            .map_err(|source| {
-                AtmError::daemon_unavailable("failed to configure daemon local IPC read timeout")
-                    .with_source(source)
-            })?;
-        let request_id = atm_core::protocol::next_request_id();
-        let frame = atm_core::protocol::request_to_frame_payload(request_id, request)?;
-        atm_core::protocol::write_frame(
-            &mut stream,
-            &frame,
-            "failed to write daemon request frame",
-        )?;
-        stream.flush().map_err(|source| {
-            AtmError::daemon_unavailable("failed to flush daemon request frame").with_source(source)
-        })?;
-        let response_frame = atm_core::protocol::read_frame(
-            &mut stream,
-            "failed to read daemon response frame",
-            "daemon response frame exceeded the maximum supported size",
-        )?
-        .ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "daemon closed the local IPC connection before returning a response frame",
-            )
-            .with_recovery(
-                "Retry the ATM command after the daemon reaches serving state and verify the daemon logs if the problem persists.",
-            )
-        })?;
-        let (response_id, response) =
-            atm_core::protocol::response_from_frame_payload(response_frame)?;
-        if response_id != request_id {
-            return Err(AtmError::daemon_unavailable(format!(
-                "daemon response request_id {} did not match request_id {}",
-                response_id, request_id
-            ))
-            .with_recovery(
-                "Align the CLI and daemon builds so both sides use the same ATM daemon protocol contract before retrying.",
-            ));
-        }
-        Ok(response)
+        daemon_exchange(&self.endpoint, request, SAME_HOST_REQUEST_DEADLINE)
     }
 }
 
@@ -373,20 +314,35 @@ impl<'a> CliComposition<'a> {
         let daemon_bin = resolve_daemon_bin("atm")?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
-        supervisor.ensure_daemon_available_with_traceability(command, observability, || {
+        let traceability = BootstrapTraceability::new(
+            command,
+            observability,
+            parse_bootstrap_team()?,
+            parse_bootstrap_agent()?,
+        );
+        supervisor.ensure_daemon_available_with_traceability(&traceability, || {
             transport.try_connect().map(|_| ())
         })?;
         Ok(Self::from_transport(transport, observability))
     }
 }
 
-fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
-    AtmError::validation(format!(
-        "transport returned an unexpected response for `{command}`: {response:?}"
-    ))
-    .with_recovery(
-        "Retry the ATM command once. If the mismatch persists, inspect daemon/client version alignment and retained daemon logs before retrying again.",
-    )
+fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
+    std::env::var("ATM_IDENTITY")
+        .unwrap_or_else(|_| "unknown".to_string())
+        .parse()
+        .map_err(|error: AtmError| {
+            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
+        })
+}
+
+fn parse_bootstrap_team() -> Result<TeamName, AtmError> {
+    std::env::var("ATM_TEAM")
+        .unwrap_or_else(|_| "unknown".to_string())
+        .parse()
+        .map_err(|error: AtmError| {
+            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
+        })
 }
 
 impl AtmGraftClient for CliComposition<'_> {
