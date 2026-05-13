@@ -70,6 +70,8 @@ fn main() -> ExitCode {
         "fail" => ExitCode::from(3),
         "sleep" => {
             let _ = fs::write(&output_path, payload);
+            // Accepted test risk: this fixture intentionally simulates a hung hook subprocess so
+            // timeout handling can be validated against a real sleeping process.
             thread::sleep(Duration::from_secs(6));
             ExitCode::SUCCESS
         }

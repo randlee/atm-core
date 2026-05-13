@@ -138,10 +138,11 @@ impl GraftSessionOptions {
         self
     }
 
+    #[cfg(test)]
     /// # Errors
     ///
     /// Returns [`AtmError`] when the poll interval is zero.
-    pub fn with_poll_interval(mut self, poll_interval: Duration) -> Result<Self, AtmError> {
+    fn with_poll_interval(mut self, poll_interval: Duration) -> Result<Self, AtmError> {
         if poll_interval.is_zero() {
             return Err(AtmError::validation(
                 "graft session poll interval must be greater than zero",
@@ -205,7 +206,7 @@ impl GraftClient {
     /// be resolved or the same-host daemon cannot be reached or started.
     pub fn connect() -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
-        let daemon_bin = resolve_daemon_bin()?;
+        let daemon_bin = resolve_daemon_bin("graft host")?;
         let advisory_transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
         let transport = Arc::clone(&advisory_transport) as Arc<dyn ClientTransport + Send + Sync>;
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
@@ -216,7 +217,8 @@ impl GraftClient {
         })
     }
 
-    pub fn from_transport(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
+    #[cfg(test)]
+    fn from_transport(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
         Self {
             transport,
             advisory_transport: None,
@@ -249,13 +251,6 @@ impl GraftClient {
             ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
             response => Ok(response),
         }
-    }
-
-    pub fn fetch_pending_nudges(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        self.fetch_nudges(request)
     }
 
     pub fn drain_pending_nudges(
@@ -554,13 +549,6 @@ impl GraftSession {
 
     pub fn ack(&self, request: AckRequest) -> Result<AckOutcome, AtmError> {
         self.client.acknowledge_message(request)
-    }
-
-    pub fn fetch_pending_nudges(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        self.client.fetch_nudges(request)
     }
 
     pub fn drain_pending_nudges(

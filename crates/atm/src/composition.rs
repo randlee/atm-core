@@ -1,6 +1,5 @@
 use std::fmt;
 use std::io::Write;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use atm_core::ack::{AckOutcome, AckRequest};
@@ -28,6 +27,9 @@ use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
 use crate::observability::CliObservability;
+
+#[path = "../../shared/daemon_bootstrap.rs"]
+mod daemon_bootstrap;
 
 const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
 
@@ -374,20 +376,11 @@ impl<'a> CliComposition<'a> {
 }
 
 fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    DaemonLocalIpcEndpoint::new(atm_core::protocol::daemon_socket_path()?)
+    daemon_bootstrap::resolve_daemon_local_ipc_endpoint()
 }
 
 fn resolve_daemon_bin() -> Result<DaemonBinaryPath, AtmError> {
-    if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
-        return DaemonBinaryPath::new(PathBuf::from(path));
-    }
-    let current = std::env::current_exe().map_err(|source| {
-        AtmError::daemon_unavailable("failed to resolve the current atm executable path")
-            .with_source(source)
-    })?;
-    DaemonBinaryPath::new(
-        current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
-    )
+    daemon_bootstrap::resolve_daemon_bin("atm")
 }
 
 fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {

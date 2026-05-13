@@ -100,7 +100,9 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
             Err(error) => {
                 attempts += 1;
                 last_error = Some(error);
-                std::thread::sleep(std::time::Duration::from_millis(10));
+                // The ready signal is the structural synchronization point; this retry only
+                // covers the residual OS socket publication race after readiness.
+                std::thread::yield_now();
             }
         }
     }

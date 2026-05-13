@@ -1,15 +1,18 @@
-use std::io::Write;
-use std::path::PathBuf;
-
 use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::error::AtmError;
 use atm_core::protocol::{RequestEnvelope, RequestId, ResponseEnvelope};
-use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint};
+use atm_daemon_client::DaemonLocalIpcEndpoint;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
+use std::io::Write;
 
 use crate::{ADVISORY_STREAM_READ_DEADLINE, SAME_HOST_REQUEST_DEADLINE};
+
+#[path = "../../shared/daemon_bootstrap.rs"]
+mod daemon_bootstrap;
+
+pub(crate) use daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
 
 #[derive(Debug)]
 pub(crate) struct GraftLocalIpcClientTransport {
@@ -142,23 +145,6 @@ impl ClientTransport for GraftLocalIpcClientTransport {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         self.exchange(request)
     }
-}
-
-pub(crate) fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    DaemonLocalIpcEndpoint::new(atm_core::protocol::daemon_socket_path()?)
-}
-
-pub(crate) fn resolve_daemon_bin() -> Result<DaemonBinaryPath, AtmError> {
-    if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
-        return DaemonBinaryPath::new(PathBuf::from(path));
-    }
-    let current = std::env::current_exe().map_err(|source| {
-        AtmError::daemon_unavailable("failed to resolve the current graft host executable path")
-            .with_source(source)
-    })?;
-    DaemonBinaryPath::new(
-        current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
-    )
 }
 
 pub(crate) fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
