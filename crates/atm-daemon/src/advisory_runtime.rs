@@ -15,15 +15,21 @@ use atm_core::protocol::ResponseEnvelope;
 use atm_core::send::SendOutcome;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
+use crate::{DaemonSubsystem, SubsystemObservability};
+
 const MAX_ADVISORY_SESSIONS: usize = 128;
 const MAX_ADVISORY_EVENTS_PER_SESSION: usize = 256;
 const STREAM_IDLE_WAIT: Duration = Duration::from_millis(100);
 
-#[derive(Debug, Default)]
+#[derive(Debug)]
 pub(crate) struct AdvisoryRuntime {
+    // Advisory fetch/drain/read operations are read-heavy and independent per session, so an
+    // RwLock keeps concurrent readers off the registration/drain write path without requiring
+    // broader actor-style coordination for this bounded in-process runtime cache.
     state: RwLock<AdvisoryRuntimeState>,
     max_sessions: usize,
     max_nudges_per_session: usize,
+    observability: SubsystemObservability,
 }
 
 #[derive(Debug, Default)]
@@ -43,11 +49,19 @@ struct RegisteredAdvisorySession {
 }
 
 impl AdvisoryRuntime {
+    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn new() -> Self {
+        Self::new_with_observability(SubsystemObservability::disabled(
+            DaemonSubsystem::AdvisoryRuntime,
+        ))
+    }
+
+    pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self {
             state: RwLock::new(AdvisoryRuntimeState::default()),
             max_sessions: MAX_ADVISORY_SESSIONS,
             max_nudges_per_session: MAX_ADVISORY_EVENTS_PER_SESSION,
+            observability,
         }
     }
 
@@ -57,6 +71,7 @@ impl AdvisoryRuntime {
             state: RwLock::new(AdvisoryRuntimeState::default()),
             max_sessions,
             max_nudges_per_session,
+            observability: SubsystemObservability::disabled(DaemonSubsystem::AdvisoryRuntime),
         }
     }
 
@@ -66,6 +81,16 @@ impl AdvisoryRuntime {
     ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
         let mut state = self.lock_state_write()?;
         if state.sessions.contains_key(&request.session_id) {
+            let event = self
+                .observability
+                .event(
+                    "register_session",
+                    "rejected",
+                    "advisory session registration reused an existing session id",
+                )
+                .with_team(request.team.clone())
+                .with_agent(request.agent.clone());
+            let _ = self.observability.emit_event(event);
             return Err(AtmError::daemon_advisory_session_already_registered(format!(
                 "advisory session {} is already registered",
                 request.session_id
@@ -75,6 +100,16 @@ impl AdvisoryRuntime {
             ));
         }
         if state.sessions.len() >= self.max_sessions {
+            let event = self
+                .observability
+                .event(
+                    "register_session",
+                    "rejected",
+                    "advisory session registration hit the bounded session cap",
+                )
+                .with_team(request.team.clone())
+                .with_agent(request.agent.clone());
+            let _ = self.observability.emit_event(event);
             return Err(AtmError::daemon_unavailable(format!(
                 "advisory session registration rejected because the daemon session cap {} is exhausted",
                 self.max_sessions
@@ -97,6 +132,12 @@ impl AdvisoryRuntime {
                 dropped_count: 0,
             },
         );
+        let event = self
+            .observability
+            .event("register_session", "ok", "advisory session registered")
+            .with_team(request.team.clone())
+            .with_agent(request.agent.clone());
+        let _ = self.observability.emit_event(event);
 
         Ok(AdvisorySessionRegistrationResponse {
             team: request.team,
@@ -113,6 +154,15 @@ impl AdvisoryRuntime {
     ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
         let mut state = self.lock_state_write()?;
         let closed = state.sessions.remove(&request.session_id).is_some();
+        let _ = self.observability.emit(
+            "unregister_session",
+            if closed { "ok" } else { "noop" },
+            if closed {
+                "advisory session unregistered"
+            } else {
+                "advisory session unregistration found no registered session"
+            },
+        );
         Ok(AdvisorySessionUnregistrationResponse {
             session_id: request.session_id,
             closed,
@@ -239,6 +289,20 @@ impl AdvisoryRuntime {
                 if session.nudges.len() >= self.max_nudges_per_session {
                     session.dropped_count = session.dropped_count.saturating_add(1);
                     overflowed = true;
+                    let mut event = self
+                        .observability
+                        .event(
+                            "enqueue_nudge",
+                            "degraded",
+                            "advisory queue rejected an event because the bounded session queue is full",
+                        )
+                        .with_team(outcome.team.clone())
+                        .with_agent(outcome.agent.clone());
+                    event = event.with_message_id(outcome.message_id);
+                    if let Some(task_id) = outcome.task_id.clone() {
+                        event = event.with_task_id(task_id);
+                    }
+                    let _ = self.observability.emit_event(event);
                     tracing::debug!(
                         session_id = %session_id,
                         team = %outcome.team,
@@ -253,6 +317,26 @@ impl AdvisoryRuntime {
             }
         }
         if matched {
+            let mut event = self
+                .observability
+                .event(
+                    "enqueue_nudge",
+                    if overflowed { "degraded" } else { "ok" },
+                    if overflowed {
+                        "advisory runtime enqueued at least one nudge and dropped at least one due to queue pressure"
+                    } else {
+                        "advisory runtime queued a nudge for a registered session"
+                    },
+                )
+                .with_team(outcome.team.clone())
+                .with_agent(outcome.agent.clone())
+                .with_recipient(outcome.agent.clone())
+                .with_sender(outcome.sender.clone());
+            event = event.with_message_id(outcome.message_id);
+            if let Some(task_id) = outcome.task_id.clone() {
+                event = event.with_task_id(task_id);
+            }
+            let _ = self.observability.emit_event(event);
             tracing::debug!(
                 team = %outcome.team,
                 agent = %outcome.agent,

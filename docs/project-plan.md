@@ -2969,3 +2969,145 @@ Acceptance:
 Phase U inventory note:
 - the authoritative current file/line removal inventory for U.0 through U.11
   lives in `docs/phase-U/removal-inventory.md`
+
+## 26. Phase V Daemon Hardening And Boundary Cleanup
+
+Planning branch:
+- `feature/daemon-hardening-plan`
+
+Goal:
+- close the daemon hardening follow-on work identified by the Phase U
+  post-mortem before daemon observability and runtime failure handling are
+  treated as settled enough for system testing
+- close the carried-forward daemon observability boundary issue and remove the
+  remaining central event-reconstruction shape
+- keep only testing-critical work on this line; defer the rest to backlog
+
+Execution shape:
+- `V.1` defines the observability boundary and event model
+- `V.2` migrates observability ownership into the daemon subsystems
+- `V.3` removes old central observability mapping code and streamlines the
+  final shape
+- `V.4` hardens daemon/client/runtime recovery guidance after the observability
+  line is in place
+- system testing should begin after `V.4`
+- `ARCH-PU-002` / `RULE-002` are owned end-to-end by `V.1` through `V.3`,
+  not deferred
+
+Phase V deliverables:
+- `SubsystemObservability` newtype and per-subsystem injection across the
+  daemon runtime line, including explicit ownership in
+  `RuntimeHealthMonitor` and `RuntimeComposition`
+- deletion of the old central observability delegation helpers:
+  `map_command_event`, `map_daemon_event`, `map_runtime_event`,
+  `emit_runtime_event`, and `record_daemon_event`
+- `.with_recovery()` hardening on the four required runtime error categories:
+  `ATM_DAEMON_UNAVAILABLE`, `ATM_SOCKET_CONNECT_FAILED`,
+  `ATM_DAEMON_START_FAILED`, and `ATM_IPC_RUNTIME_FAILED`
+- stable recovery/error-code namespace documented in
+  `docs/atm-daemon/recovery-text-rules.md`
+
+Planned sprint sequence:
+
+### V.1 — Observability Boundary And Event Model
+
+Scope:
+- define the final daemon observability boundary
+- keep observability at the bottom of the stack
+- define subsystem-owned event semantics and per-event context fields
+
+Acceptance:
+- the final observability boundary and event model are documented and ready to
+  implement
+
+### V.2 — Observability Migration Into Subsystems
+
+Scope:
+- move event construction into daemon subsystems
+- keep shared observability infrastructure thin
+
+Acceptance:
+- subsystem-owned event emission replaces central daemon event reconstruction
+
+### V.3 — Observability Removal And Streamlining
+
+Scope:
+- reduce `crates/atm-daemon/src/daemon_observability.rs` to thin sink and
+  bootstrap responsibilities
+- remove obsolete mapping helpers and wrappers
+
+Acceptance:
+- the old central mapping model is removed and the remaining code is lean
+
+### V.4 — Recovery Context Hardening
+
+Scope:
+- require explicit recovery guidance on daemon-unavailable and related runtime
+  failure paths
+- define checklist or lint coverage for required `.with_recovery()` usage
+
+Acceptance:
+- the daemon/runtime paths that require recovery guidance are explicitly listed
+- their coverage is no longer a review-memory-only rule
+
+Deferred backlog:
+- runtime test isolation lint
+  - create GH issue from `FTQ-U9-001`
+  - GH issue: `#259`
+- workspace `#[path]` lint
+  - create GH issue for production cross-crate `#[path]` enforcement
+  - GH issue: `#260`
+- sprint-close hygiene gate
+  - create GH issue from `ATM-QA-PU-001` through `ATM-QA-PU-005`
+  - GH issue: `#261`
+
+## 27. Phase W Production Readiness Follow-Up
+
+Planning branch:
+- `feature/observability-findings-planning`
+
+Base branch:
+- `origin/develop`
+
+Integration branch:
+- `integrate/phase-W`
+
+Predecessor gate:
+- all Phase `V` implementation work is merged and validated on
+  `integrate/phase-V` before `integrate/phase-W` begins implementation
+
+Goal:
+- close the remaining production-readiness gaps identified after Phase V before
+  implementation starts
+- preserve one shared operator/diagnostic contract across ATM CLI, `atm-graft`,
+  and cross-daemon peer transport
+- collapse duplicate interface-specific error/reporting paths when the same
+  failure class is currently implemented in parallel
+
+Execution shape:
+- `W.1` daemon-side observability sink failure visibility
+- `W.2` same-host daemon traceability and interface parity
+- `W.3` SQLite subsystem observability and protocol parity
+- `W.4` peer replay recovery text and peer-side protocol parity
+
+Execution rules:
+- `W.1` defines the daemon-side sink-failure behavior for later emitted events
+- `W.2` owns same-host parity across `atm`, `atm-daemon-client`, and
+  `atm-graft`
+- `W.3` owns SQLite-backed doctor projection and non-CLI protocol-envelope
+  parity
+- `W.4` is independently executable from `W.2` and `W.3`; it owns peer replay
+  recovery text and peer-side parity through the shared protocol envelope
+
+Acceptance:
+- every critical failure class named in `docs/plan-phase-W.md` is assigned to a
+  specific sprint
+- each sprint has explicit hard dependencies, required work, acceptance
+  criteria, and required validation
+- each sprint names the shared ATM error / protocol / doctor paths it must
+  reuse and the current `main` CLI baseline it must preserve
+- duplicate interface-specific error/reporting implementations for the same
+  touched failure class are marked for consolidation rather than preservation
+- no Phase W scope item relies on an implicit discovery sprint
+- Phase `W` closes only when shared CLI / graft / peer ATM error-code parity
+  and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`

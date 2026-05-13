@@ -11,12 +11,12 @@ use atm_core::observability::{
     LogTailSession, ObservabilityPort,
 };
 
-use crate::DaemonRuntimeObservability;
+use crate::{DaemonEvent, DaemonRuntimeObservability};
 
 #[derive(Debug)]
 pub(crate) struct TestDaemonObservability {
     active_log_path: PathBuf,
-    detail: Mutex<Option<String>>,
+    detail: Option<String>,
     recorded_messages: (Mutex<Vec<String>>, Condvar),
 }
 
@@ -43,7 +43,7 @@ impl TestDaemonObservability {
             })?;
         Ok(Self {
             active_log_path,
-            detail: Mutex::new(None),
+            detail: None,
             recorded_messages: (Mutex::new(Vec::new()), Condvar::new()),
         })
     }
@@ -150,11 +150,7 @@ impl ObservabilityPort for TestDaemonObservability {
     }
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        let detail = self
-            .detail
-            .lock()
-            .expect("test observability detail")
-            .clone();
+        let detail = self.detail.clone();
         match OpenOptions::new().append(true).open(&self.active_log_path) {
             Ok(_) => Ok(AtmObservabilityHealth {
                 active_log_path: Some(self.active_log_path.clone()),
@@ -173,14 +169,13 @@ impl ObservabilityPort for TestDaemonObservability {
 }
 
 impl DaemonRuntimeObservability for TestDaemonObservability {
-    fn emit_runtime_event(
-        &self,
-        action: &'static str,
-        outcome: &'static str,
-        message: &'static str,
-    ) -> Result<(), AtmError> {
+    fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
         self.append_message(format!(
-            "{{\"action\":\"{action}\",\"outcome\":\"{outcome}\",\"message\":\"{message}\"}}"
+            "{{\"subsystem\":\"{}\",\"action\":\"{}\",\"outcome\":\"{}\",\"message\":\"{}\"}}",
+            event.subsystem.as_str(),
+            event.action,
+            event.outcome,
+            event.detail
         ))
     }
 

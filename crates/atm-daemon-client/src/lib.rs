@@ -141,7 +141,10 @@ impl DaemonSupervisor {
                 return Err(AtmError::daemon_auto_start_failed(format!(
                     "failed to connect to daemon local IPC endpoint at {} after auto-start",
                     self.endpoint.display()
-                )));
+                ))
+                .with_recovery(
+                    "Inspect atm-daemon startup logs, confirm the daemon publishes its local IPC endpoint, and retry only after the same-host socket becomes reachable.",
+                ));
             }
             if Instant::now() >= deadline {
                 return Err(LaunchGateGuard::rejected_error(&self.endpoint));
@@ -174,6 +177,9 @@ impl DaemonSupervisor {
                 "failed to spawn daemon binary at {}",
                 self.daemon_bin.display()
             ))
+            .with_recovery(
+                "Confirm ATM_DAEMON_BIN points to an executable atm-daemon binary and retry after fixing the daemon launch environment.",
+            )
             .with_source(source)
         })?;
         Ok(())
@@ -196,6 +202,9 @@ impl LaunchGateGuard {
             "daemon launch gate remained owned while connecting to {}",
             endpoint.display()
         ))
+        .with_recovery(
+            "Wait for the in-flight daemon launch to finish, then retry the same-host connection. If the launch gate stays owned, inspect the launch-lock owner and clear stale launch state before retrying.",
+        )
     }
 
     pub fn try_acquire_at(lock_path: PathBuf) -> Result<Option<Self>, AtmError> {
@@ -205,6 +214,9 @@ impl LaunchGateGuard {
                     "failed to create daemon launch lock directory at {}",
                     parent.display()
                 ))
+                .with_recovery(
+                    "Create or grant write access to the daemon launch-lock directory before retrying daemon auto-start.",
+                )
                 .with_source(source)
             })?;
         }
@@ -219,6 +231,9 @@ impl LaunchGateGuard {
                     "failed to open daemon launch gate at {}",
                     lock_path.display()
                 ))
+                .with_recovery(
+                    "Confirm the daemon launch-lock path is writable and not blocked by another process before retrying daemon auto-start.",
+                )
                 .with_source(source)
             })?;
 
@@ -229,6 +244,9 @@ impl LaunchGateGuard {
                 "failed to acquire daemon launch gate at {}",
                 lock_path.display()
             ))
+            .with_recovery(
+                "Inspect the daemon launch-lock owner and repair stale lock state before retrying daemon auto-start.",
+            )
             .with_source(source)),
         }
     }
