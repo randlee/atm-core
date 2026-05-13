@@ -8,7 +8,7 @@ highest_open_branch = "feature/pV-s2-observability-migration"
 promote_to_branch = "feature/pV-s2-observability-migration"
 occurrences = [
   { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/daemon_observability.rs", line = 465, status = "open" },
-  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/daemon_observability.rs", line = 465, status = "open" },
+  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/daemon_observability.rs", line = 465, status = "open (carry-forward, closes on V.3 merge-forward from integrate/phase-V after V.2 fix lands)" },
   { branch = "feature/pV-s4-recovery-hardening", file = "crates/atm-daemon/src/daemon_observability.rs", line = 478, status = "open" },
 ]
 dispatch_ready = true

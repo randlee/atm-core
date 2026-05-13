@@ -9,8 +9,8 @@ promote_to_branch = "feature/pV-s2-observability-migration"
 occurrences = [
   { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/daemon_observability.rs", line = 445, status = "open" },
   { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/daemon_observability.rs", line = 446, status = "open" },
-  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/daemon_observability.rs", line = 445, status = "open" },
-  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/daemon_observability.rs", line = 446, status = "open" },
+  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/daemon_observability.rs", line = 445, status = "open (carry-forward, closes on V.3 merge-forward from integrate/phase-V after V.2 fix lands)" },
+  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/daemon_observability.rs", line = 446, status = "open (carry-forward, closes on V.3 merge-forward from integrate/phase-V after V.2 fix lands)" },
   { branch = "feature/pV-s4-recovery-hardening", file = "crates/atm-daemon/src/daemon_observability.rs", line = 458, status = "open" },
   { branch = "feature/pV-s4-recovery-hardening", file = "crates/atm-daemon/src/daemon_observability.rs", line = 459, status = "open" },
 ]
