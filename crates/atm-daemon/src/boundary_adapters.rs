@@ -12,8 +12,6 @@ use atm_core::{
 };
 use std::sync::Arc;
 
-#[cfg(test)]
-use crate::DaemonSubsystem;
 use crate::SubsystemObservability;
 use crate::direct_boundaries;
 use crate::notification_runtime::NotificationRuntime;
@@ -32,13 +30,6 @@ impl std::fmt::Debug for DaemonNotificationSink {
 }
 
 impl DaemonNotificationSink {
-    #[cfg(test)]
-    pub(crate) fn new() -> Self {
-        Self::new_with_observability(SubsystemObservability::disabled(
-            DaemonSubsystem::NotificationRuntime,
-        ))
-    }
-
     pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self {
             runtime: NotificationRuntime::new_with_observability(observability),
@@ -81,13 +72,6 @@ impl std::fmt::Debug for FileWatchEventSource {
 }
 
 impl FileWatchEventSource {
-    #[cfg(test)]
-    pub(crate) fn new() -> Self {
-        Self::new_with_observability(SubsystemObservability::disabled(
-            DaemonSubsystem::WatchRuntime,
-        ))
-    }
-
     pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self {
             runtime: WatchRuntime::new_with_observability(observability),
@@ -123,20 +107,6 @@ impl std::fmt::Debug for DaemonReconcileCoordinator {
 }
 
 impl DaemonReconcileCoordinator {
-    #[cfg(test)]
-    pub(crate) fn new(
-        watch_event_source: FileWatchEventSource,
-        inbox_ingress: DaemonInboxIngress,
-        notification_sink: DaemonNotificationSink,
-    ) -> Self {
-        Self::new_with_observability(
-            watch_event_source,
-            inbox_ingress,
-            notification_sink,
-            SubsystemObservability::disabled(DaemonSubsystem::ReconcileRuntime),
-        )
-    }
-
     pub(crate) fn new_with_observability(
         watch_event_source: FileWatchEventSource,
         inbox_ingress: DaemonInboxIngress,

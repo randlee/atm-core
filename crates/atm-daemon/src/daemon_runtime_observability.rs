@@ -192,12 +192,3 @@ impl SubsystemObservability {
         self.emit_event(self.event(action, outcome, detail))
     }
 }
-
-#[cfg(test)]
-pub(crate) fn observability_test_event(
-    action: &'static str,
-    outcome: &'static str,
-    detail: impl Into<Cow<'static, str>>,
-) -> DaemonEvent {
-    DaemonEvent::new(DaemonSubsystem::Composition, action, outcome, detail)
-}

@@ -45,13 +45,6 @@ struct NotificationState {
 }
 
 impl NotificationRuntime {
-    #[cfg(test)]
-    pub(crate) fn new() -> Self {
-        Self::new_with_observability(SubsystemObservability::disabled(
-            DaemonSubsystem::NotificationRuntime,
-        ))
-    }
-
     pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self::new_with_path_factory(
             Arc::new(|| Ok(atm_core::home::host_runtime_dir()?.join("notifications.jsonl"))),

@@ -871,6 +871,7 @@ fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::active_connection_registry::TrackedDispatchHandle;
     #[cfg(unix)]
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
     #[cfg(unix)]

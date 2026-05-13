@@ -40,8 +40,6 @@ use std::time::Duration;
 
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_rusqlite::SqliteBoundaryAssembly;
-#[cfg(test)]
-pub(crate) use daemon_runtime_observability::observability_test_event;
 pub use daemon_runtime_observability::{
     DaemonEvent, DaemonRuntimeObservability, DaemonSubsystem, TeamScope,
 };

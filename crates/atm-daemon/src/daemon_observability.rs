@@ -26,6 +26,8 @@ use sc_observability_types::{
 };
 use serde_json::Map;
 
+#[cfg(test)]
+use atm_daemon::DaemonSubsystem;
 use atm_daemon::{DaemonEvent, TeamScope};
 
 const ATM_SERVICE_NAME: &str = "atm";
@@ -491,6 +493,26 @@ fn rename_if_present(src: &Path, dest: &Path) -> std::io::Result<()> {
     }
 }
 
+#[cfg(test)]
+fn observability_test_event(
+    action: &'static str,
+    outcome: &'static str,
+    detail: impl Into<std::borrow::Cow<'static, str>>,
+) -> DaemonEvent {
+    DaemonEvent {
+        subsystem: DaemonSubsystem::Composition,
+        action,
+        outcome,
+        team: TeamScope::None,
+        agent: None,
+        sender: None,
+        recipient: None,
+        message_id: None,
+        task_id: None,
+        detail: detail.into(),
+    }
+}
+
 fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
     let Some(value) = std::env::var(ATM_LOG_LEVEL_ENV)
         .ok()
@@ -864,8 +886,7 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::DaemonObservability;
-    use atm_daemon::observability_test_event;
+    use super::{DaemonObservability, observability_test_event};
 
     #[test]
     #[serial]
