@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W2-R2-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W2-R2-001" ;
+  triage:title "Missing publish_wait_continuing trace event in post-spawn wait loop" ;
+  triage:description "crates/atm-daemon-client/src/lib.rs: post-spawn publish wait loop emits publish_wait_started before the loop and timeout_exhausted after, but nothing inside the loop body per iteration. Sprint-W2.md lines 198-205 explicitly require a publish_wait_continuing traceability event. Fix: inside the while-loop body, after the failed try_connect(), emit traceability.emit(\"daemon_auto_start\", \"publish_wait_continuing\", None) per iteration." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W2-R2-001/pW-s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s2/cba69c7b58de2be7950f15691016c420b46335b0> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/90bdd47a24e2e4f9b2e3c0e3dbfa3ef38a56c0ac> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s2/cba69c7b58de2be7950f15691016c420b46335b0> .
+
+<urn:atm:triage:occurrence/ATM-QA-W2-R2-001/pW-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 370 ;
+  triage:snippet "while Instant::now() < deadline { if try_connect().is_ok() { ... } thread::sleep(poll_interval); } // missing: traceability.emit(\"daemon_auto_start\", \"publish_wait_continuing\", None)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "cba69c7b58de2be7950f15691016c420b46335b0" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/cba69c7b58de2be7950f15691016c420b46335b0> .
+
+<urn:atm:triage:occurrence/ATM-QA-W2-R2-001/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 135 ;
+  triage:snippet "while Instant::now() < deadline { if try_connect().is_ok() { return Ok(()); } thread::sleep(poll_interval); } // no traceability instrumentation present on integrate branch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "90bdd47a24e2e4f9b2e3c0e3dbfa3ef38a56c0ac" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/90bdd47a24e2e4f9b2e3c0e3dbfa3ef38a56c0ac> .
+
+<urn:atm:triage:worktree/pW-s2/cba69c7b58de2be7950f15691016c420b46335b0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "cba69c7b58de2be7950f15691016c420b46335b0" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/90bdd47a24e2e4f9b2e3c0e3dbfa3ef38a56c0ac>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "90bdd47a24e2e4f9b2e3c0e3dbfa3ef38a56c0ac" ;
+  triage:orderIndex 2 .
