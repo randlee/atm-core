@@ -273,7 +273,13 @@ impl LifecycleControlSourceAdapter {
             .spawn(move || {
                 let _ = result_tx.send(worker.join_handle.join());
             })
-            .expect("failed to spawn lifecycle join helper");
+            .map_err(|source| {
+                AtmError::daemon_unavailable("failed to spawn lifecycle join helper")
+                    .with_recovery(
+                        "Restart the daemon; the lifecycle worker could not create its bounded shutdown join helper.",
+                    )
+                    .with_source(source)
+            })?;
         match result_rx.recv_timeout(LIFECYCLE_WORKER_JOIN_DEADLINE) {
             Ok(Ok(())) => {
                 let _ = join_helper.join();
