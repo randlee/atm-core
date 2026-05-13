@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W4-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W4-004" ;
+  triage:title "Sprint doc CLI/doctor split AC lacks concrete doctor surface reference" ;
+  triage:description "docs/phase-W/sprint-W4.md CLI/doctor split section: the doctor bullet says 'atm doctor should remain able to explain replay-store configuration' but names no concrete function/path (e.g., DaemonRequestDispatcher::project_doctor_report or runtime_health.rs). Fix: add reference to the shared doctor projection surface that carries this information." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W4-004/pW-s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+
+<urn:atm:triage:occurrence/ATM-QA-W4-004/pW-s4/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-W/sprint-W4.md" ;
+  triage:line 151 ;
+  triage:snippet "`atm doctor` should remain able to explain replay-store configuration and" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+
+<urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/d43ded3fa97873e8e18773bbc67dd5de465dce37>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
+  triage:orderIndex 2 .
