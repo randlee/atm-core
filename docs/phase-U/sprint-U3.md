@@ -6,7 +6,7 @@ phase: U
 sprint: "U.3"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening
 branch: feature/pU-u3-thread-update-hardening
-status: planned
+status: completed
 estimated_scope: M
 ```
 
@@ -14,6 +14,9 @@ estimated_scope: M
 
 Make `add-details` and `supersede` explicit, distinct, and fully tested across
 validation, selection, ack, and nudge behavior.
+
+Completion note:
+- completed; QA verified mode-specific thread/update behavior and nudge coverage on the merged U.3 branch.
 
 ## Scope Summary
 

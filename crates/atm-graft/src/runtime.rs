@@ -16,6 +16,8 @@ use atm_core::protocol::{self, ResponseEnvelope};
 use crate::transport::ActiveAdvisoryStream;
 use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};
 
+const MAX_LIVE_RECONNECT_BACKOFF: std::time::Duration = std::time::Duration::from_secs(30);
+
 pub(crate) fn load_graft_config(workspace_root: &Path) -> Result<Option<GraftConfig>, AtmError> {
     let config = atm_core::load_atm_config(workspace_root)?;
     Ok(config.map(|config| config.graft))
@@ -102,6 +104,9 @@ pub(crate) fn join_receive_loop_with_deadline(
         Ok(result) => {
             join_helper.join().map_err(|_| {
                 AtmError::daemon_unavailable("graft receive-loop join helper panicked")
+                    .with_recovery(
+                        "Restart the embedding host and atm-daemon before retrying graft mode.",
+                    )
             })?;
             result
         }
@@ -121,13 +126,19 @@ pub(crate) fn join_receive_loop_with_deadline(
         }
         Err(RecvTimeoutError::Disconnected) => join_helper.join().map_or_else(
             |_| {
-                Err(AtmError::daemon_unavailable(
-                    "graft receive-loop join helper panicked",
-                ))
+                Err(
+                    AtmError::daemon_unavailable("graft receive-loop join helper panicked")
+                        .with_recovery(
+                            "Restart the embedding host and atm-daemon before retrying graft mode.",
+                        ),
+                )
             },
             |_| {
                 Err(AtmError::daemon_unavailable(
                     "graft receive-loop join helper disconnected unexpectedly",
+                )
+                .with_recovery(
+                    "Restart the embedding host and atm-daemon before retrying graft mode.",
                 ))
             },
         ),
@@ -243,6 +254,7 @@ pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> 
 }
 
 pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(), AtmError> {
+    let mut backoff = ctx.reconnect_backoff;
     loop {
         if stop_requested(&ctx.stop_rx) {
             return unregister_session_and_close(
@@ -274,7 +286,7 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
                     "advisory_stream",
                     &error,
                 );
-                let _ = ctx.stop_rx.recv_timeout(ctx.reconnect_backoff);
+                let _ = ctx.stop_rx.recv_timeout(backoff);
                 if stop_requested(&ctx.stop_rx) {
                     return unregister_session_and_close(
                         &*ctx.client,
@@ -295,6 +307,7 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
                     registration: ctx.registration_request.clone(),
                     limit: ctx.limit,
                 })?;
+                backoff = std::cmp::min(backoff.saturating_mul(2), MAX_LIVE_RECONNECT_BACKOFF);
                 set_session_state(
                     &ctx.snapshot,
                     AdvisorySessionState::Registered,
@@ -315,6 +328,7 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
         }
         match response {
             ResponseEnvelope::AdvisoryStream(batch) => {
+                backoff = ctx.reconnect_backoff;
                 if read_snapshot(&ctx.snapshot)?.state != AdvisorySessionState::Registered {
                     set_session_state(
                         &ctx.snapshot,

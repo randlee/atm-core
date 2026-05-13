@@ -6,7 +6,7 @@ phase: U
 sprint: "U.5"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover
 branch: feature/pU-u5-sqlite-query-cutover
-status: planned
+status: completed
 estimated_scope: L
 ```
 
@@ -15,6 +15,9 @@ estimated_scope: L
 Move normal mailbox query selection for `atm list` and `atm read` fully onto
 SQLite and simplify it to start from mutable state, only reading content rows
 that are actually needed.
+
+Completion note:
+- completed; QA verified `atm list` and `atm read` run on the SQLite-backed mailbox path.
 
 ## Scope Summary
 

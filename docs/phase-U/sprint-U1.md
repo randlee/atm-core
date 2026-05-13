@@ -6,7 +6,7 @@ phase: U
 sprint: "U.1"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup
 branch: feature/pU-u1-metadata-atm-read-cleanup
-status: planned
+status: completed
 estimated_scope: M
 ```
 
@@ -14,6 +14,9 @@ estimated_scope: M
 
 Remove ATM-owned read-path dependence on `metadata.atm.*` so Claude JSON is no
 longer an ATM-owned truth surface for mailbox/runtime state.
+
+Completion note:
+- completed; QA verified the `metadata.atm` read-path cleanup on the merged U.1 branch.
 
 ## Scope Summary
 

@@ -16,6 +16,7 @@ Execution model:
   branches
 - later sprints may assume earlier cleanup decisions are final
 - `U.8` through `U.10` assume `U.0` is already complete
+- `U.11` is the final `atm-graft` cleanup pass after `U.10`
 
 Authoritative sprint sequence:
 - `docs/phase-U/sprint-U0.md`
@@ -29,6 +30,7 @@ Authoritative sprint sequence:
 - `docs/phase-U/sprint-U8.md`
 - `docs/phase-U/sprint-U9.md`
 - `docs/phase-U/sprint-U10.md`
+- `docs/phase-U/sprint-U11.md`
 - `docs/phase-U/removal-inventory.md`
 
 Sprint summary:
@@ -59,6 +61,11 @@ Sprint summary:
   - complete
 - `U.10` generic daemon advisory-notification surface kept intentionally lean
   - completed on `feature/pU-u10-generic-advisory-notification`
+- `U.11` atm-graft API cleanup
+  - narrows `with_poll_interval()` / `from_transport()`
+  - removes redundant atm-graft alias surface
+  - consolidates daemon bootstrap resolution in `atm-daemon-bootstrap`
+  - hardens timing-sensitive test waits without changing product behavior
 
 Graft ownership split:
 - `U.8` owns shared ICD family and naming/DTO planning

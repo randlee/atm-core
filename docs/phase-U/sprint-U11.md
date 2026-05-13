@@ -14,6 +14,9 @@ estimated_scope: S
 
 Tighten `atm-graft` after `U.10` with targeted cleanup only.
 
+Deferred finding note:
+- `ARCH-PU-002` deferred: `crates/atm-daemon/src/daemon_observability.rs` `emit_runtime_event` remains pre-existing RULE-002 debt from Phase S/T. Phase U made zero changes to that file, so the end-gate records it as deferred rather than reopened in-scope work.
+
 ## Scope Summary
 
 This sprint narrows test-only API seams, removes redundant aliases,

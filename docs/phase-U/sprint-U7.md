@@ -6,7 +6,7 @@ phase: U
 sprint: "U.7"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification
 branch: feature/pU-u7-roster-simplification
-status: planned
+status: completed
 estimated_scope: M
 ```
 
@@ -14,6 +14,9 @@ estimated_scope: M
 
 Replace the duplicated roster truth model with one canonical member store and
 make member lifecycle and harness behavior explicit in first-class fields.
+
+Completion note:
+- completed; QA verified the roster acceptance criteria on the merged U.7 branch.
 
 ## Scope Summary
 

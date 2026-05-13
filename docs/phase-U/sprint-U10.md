@@ -17,6 +17,7 @@ advisory-notification surface rather than graft-specific daemon ownership.
 
 Completion note:
 - completed on `feature/pU-u10-generic-advisory-notification`
+- `crates/atm-daemon/src/advisory_runtime.rs` was retained as the generic advisory runtime; no surviving daemon `Graft*` type names remain in the final U.10 line.
 
 ## Scope Summary
 

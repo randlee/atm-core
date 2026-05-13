@@ -6,7 +6,7 @@ phase: U
 sprint: "U.8"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd
 branch: feature/pU-u8-shared-thin-client-icd
-status: implemented
+status: completed
 estimated_scope: M
 ```
 

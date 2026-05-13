@@ -56,9 +56,8 @@ pub use atm_core::{
 /// Preferred host-facing imports for embedding `atm-graft`.
 pub mod prelude {
     pub use super::{
-        AtmConfig, DrainRequest, Event, FetchRequest, GraftClient, GraftConfig, GraftObservability,
-        GraftSession, GraftSessionOptions, HostNudgeInjector, NoopGraftObservability, SessionId,
-        SessionSnapshot,
+        GraftClient, GraftObservability, GraftSession, GraftSessionOptions, HostNudgeInjector,
+        NoopGraftObservability,
     };
 }
 
@@ -137,20 +136,10 @@ impl GraftSessionOptions {
     }
 
     #[cfg(test)]
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] when the poll interval is zero.
-    fn with_poll_interval(mut self, poll_interval: Duration) -> Result<Self, AtmError> {
-        if poll_interval.is_zero() {
-            return Err(AtmError::validation(
-                "graft session poll interval must be greater than zero",
-            )
-            .with_recovery(
-                "Configure a positive receive-loop poll interval before activating graft mode.",
-            ));
-        }
+    fn with_poll_interval(mut self, poll_interval: Duration) -> Self {
+        assert!(!poll_interval.is_zero(), "poll_interval must be non-zero");
         self.poll_interval = poll_interval;
-        Ok(self)
+        self
     }
 
     fn activation_state(&self) -> SessionSnapshot {
@@ -958,8 +947,7 @@ mod tests {
                 TEST_LEAD.parse().expect("agent"),
             )
             .with_batch_limit(AdvisoryBatchLimit::new(16).expect("limit"))
-            .with_poll_interval(Duration::from_millis(10))
-            .expect("poll interval"),
+            .with_poll_interval(Duration::from_millis(10)),
             Arc::clone(&injected) as Arc<dyn HostNudgeInjector>,
             observability,
         )
@@ -1117,8 +1105,7 @@ mod tests {
                 TEST_LEAD.parse().expect("agent"),
             )
             .with_batch_limit(AdvisoryBatchLimit::new(16).expect("limit"))
-            .with_poll_interval(Duration::from_millis(10))
-            .expect("poll interval"),
+            .with_poll_interval(Duration::from_millis(10)),
             Arc::new(CollectingInjector::default()),
             observability,
         )
