@@ -173,7 +173,7 @@ impl LifecycleControlSourceAdapter {
                 &shared.state_change,
             )?);
         }
-        let _ = observability.emit(
+        observability.emit_or_warn(
             "install_hooks",
             "ok",
             "daemon lifecycle-control hooks are installed",
@@ -283,7 +283,7 @@ impl LifecycleControlSourceAdapter {
         match result_rx.recv_timeout(LIFECYCLE_WORKER_JOIN_DEADLINE) {
             Ok(Ok(())) => {
                 let _ = join_helper.join();
-                let _ = self.observability.emit(
+                self.observability.emit_or_warn(
                     "shutdown_worker",
                     "ok",
                     "daemon lifecycle-control worker shut down cleanly",
@@ -292,7 +292,7 @@ impl LifecycleControlSourceAdapter {
             }
             Ok(Err(_)) => {
                 let _ = join_helper.join();
-                let _ = self.observability.emit(
+                self.observability.emit_or_warn(
                     "shutdown_worker",
                     "failed",
                     "daemon lifecycle-control worker panicked during shutdown",
@@ -306,7 +306,7 @@ impl LifecycleControlSourceAdapter {
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 let _ = join_helper.join();
-                let _ = self.observability.emit(
+                self.observability.emit_or_warn(
                     "shutdown_worker",
                     "degraded",
                     "daemon lifecycle-control worker exceeded its shutdown deadline",
@@ -320,7 +320,7 @@ impl LifecycleControlSourceAdapter {
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 let _ = join_helper.join();
-                let _ = self.observability.emit(
+                self.observability.emit_or_warn(
                     "shutdown_worker",
                     "failed",
                     "daemon lifecycle-control join coordination disconnected during shutdown",

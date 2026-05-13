@@ -167,7 +167,7 @@ impl RuntimeStatusCache {
             )
             .with_team(request.team.clone())
             .with_agent(request.member.clone());
-        let _ = self.observability.emit_event(event);
+        self.observability.emit_event_or_warn(event);
         Ok(())
     }
 
@@ -195,13 +195,14 @@ impl RuntimeStatusCache {
                 cache.sqlite_ready = false;
                 // Emit failure is intentionally best-effort here because the in-memory sqlite
                 // readiness downgrade is the source of truth for doctor/status consumers.
-                let _ = self.observability.emit(
+                self.observability.emit_or_warn(
                     "mark_sqlite_unavailable",
                     "degraded",
                     "runtime status cache marked sqlite unavailable",
                 );
             }
             Err(_) => {
+                // Cannot propagate: fn returns (), tracing::error! is max-severity available at this boundary.
                 tracing::error!(
                     "runtime status cache lock poisoned while marking sqlite unavailable"
                 );
@@ -267,7 +268,7 @@ fn evict_status_cache_entry_if_needed(
             )
             .with_team(evicted_key.team.clone())
             .with_agent(evicted_key.member.clone());
-        let _ = observability.emit_event(event);
+        observability.emit_event_or_warn(event);
         tracing::warn!(
             team = %evicted_key.team,
             member = %evicted_key.member,

@@ -180,7 +180,7 @@ impl PeerClientTransport {
                         replay_attempt_count = record.attempt_count,
                         "daemon remote replay delivered successfully"
                     );
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "resume_pending_replay",
                         "ok",
                         "daemon remote replay delivered a retained record",
@@ -199,7 +199,7 @@ impl PeerClientTransport {
                         error_message = %error.message,
                         "daemon remote replay delivery attempt failed; retaining record"
                     );
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "resume_pending_replay",
                         "degraded",
                         "daemon remote replay delivery failed and retained the record for retry",
@@ -298,7 +298,7 @@ impl PeerClientTransport {
                         attempt,
                         "daemon peer delivery succeeded"
                     );
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "send_to_endpoint",
                         "ok",
                         "daemon peer delivery succeeded",
@@ -315,7 +315,7 @@ impl PeerClientTransport {
                             error_message = %failure.error.message,
                             "daemon peer delivery exhausted retry budget"
                         );
-                        let _ = self.observability.emit(
+                        self.observability.emit_or_warn(
                             "send_to_endpoint",
                             "failed",
                             "daemon peer delivery exhausted its retry budget",
@@ -333,7 +333,7 @@ impl PeerClientTransport {
                         error_message = %failure.error.message,
                         "daemon peer delivery hit retryable failure"
                     );
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "send_to_endpoint",
                         "degraded",
                         "daemon peer delivery hit a retryable failure",
@@ -365,7 +365,7 @@ impl PeerClientTransport {
                         error_message = %failure.error.message,
                         "daemon peer delivery failed"
                     );
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "send_to_endpoint",
                         "failed",
                         "daemon peer delivery failed with a non-retryable or outcome-unknown error",
