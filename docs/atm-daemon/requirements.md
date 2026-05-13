@@ -17,6 +17,12 @@ The crate-local machine-readable boundary inventory lives in:
 The canonical daemon transport wire contract lives in:
 - [`./protocol-icd.md`](./protocol-icd.md)
 
+The canonical daemon observability boundary contract lives in:
+- [`./observability.md`](./observability.md)
+
+The canonical daemon/client recovery text rule set lives in:
+- [`./recovery-text-rules.md`](./recovery-text-rules.md)
+
 ## 2. Ownership
 
 `atm-daemon` owns:
@@ -190,6 +196,17 @@ Initial crate requirement IDs:
   If S.9 introduces any public retained-logging trait or sink boundary, that
   trait must be sealed by default per the product architecture trait-extension
   policy.
+- `REQ-DAEMON-OBS-003` daemon observability remains bottom-of-stack:
+  the shared daemon observability layer must not import daemon subsystem types
+  or reconstruct subsystem meaning centrally. Subsystems emit already-shaped
+  daemon event payloads through the injected daemon observability trait.
+  Satisfies:
+  `REQ-CORE-BOUNDARY-001`, `REQ-CORE-OBS-001`, `REQ-CORE-OBS-002`.
+- `REQ-DAEMON-OBS-004` the daemon-injected observability trait must remain
+  sealed and object-safe, and its event model must use typed semantic
+  identifiers rather than raw strings for subsystem, message-id, and task-id
+  meaning. Satisfies:
+  `REQ-CORE-BOUNDARY-001`, `REQ-CORE-OBS-001`.
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
   consumed by `atm doctor`. Satisfies:
   `REQ-CORE-DOCTOR-002`.
@@ -245,8 +262,10 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../atm-core/requirements.md`](../atm-core/requirements.md)
 - [`../atm-core/architecture.md`](../atm-core/architecture.md)
 - [`./boundaries.md`](./boundaries.md)
+- [`./observability.md`](./observability.md)
 - [`./protocol-icd.md`](./protocol-icd.md)
 - [`./logging.md`](./logging.md)
+- [`./recovery-text-rules.md`](./recovery-text-rules.md)
 
 ## 5. Phase R Runtime Requirements
 

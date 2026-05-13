@@ -1,0 +1,356 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-V4-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-V4-001" ;
+  triage:title "emit_composition_event() private emit wrapper violates RULE-002" ;
+  triage:description "emit_composition_event() is a private method in composition.rs that wraps self.composition_observability.emit(). This is a custom emit_* wrapper — exactly the pattern RULE-002 prohibits. Called at 7 sites within the same impl block. Introduced in commit 84cacb0 (TASK-1462). Fix: delete emit_composition_event and replace all 7 call sites with direct self.composition_observability.emit(action, outcome, detail) calls." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-V" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/13> ;
+  triage:openOn <urn:atm:triage:worktree/pV-s3/75ac70b> ;
+  triage:openOn <urn:atm:triage:worktree/pV-s4/84cacb0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+# pV-s3 occurrences (13 matches in composition.rs)
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 280 ;
+  triage:snippet "fn emit_composition_event(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 290 ;
+  triage:snippet "self.emit_composition_event(\"start_requested\", \"ok\", \"daemon start requested\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 297 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 314 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 327 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 334 ;
+  triage:snippet "self.emit_composition_event(\"startup_completed\", \"ok\", \"daemon startup completed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 359 ;
+  triage:snippet "self.emit_composition_event(\"start_requested\", \"ok\", \"daemon start requested\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 364 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 381 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 397 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 404 ;
+  triage:snippet "self.emit_composition_event(\"startup_completed\", \"ok\", \"daemon startup completed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 461 ;
+  triage:snippet "self.emit_composition_event(\"shutdown_completed\", \"ok\", \"daemon shutdown completed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s3/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 464 ;
+  triage:snippet "self.emit_composition_event(\"shutdown_failed\", \"failed\", \"daemon shutdown failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s3/75ac70b> .
+
+# pV-s4 occurrences (13 matches in composition.rs)
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 290 ;
+  triage:snippet "fn emit_composition_event(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 300 ;
+  triage:snippet "self.emit_composition_event(\"start_requested\", \"ok\", \"daemon start requested\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 307 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 324 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 337 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 344 ;
+  triage:snippet "self.emit_composition_event(\"startup_completed\", \"ok\", \"daemon startup completed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 369 ;
+  triage:snippet "self.emit_composition_event(\"start_requested\", \"ok\", \"daemon start requested\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 374 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 391 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 407 ;
+  triage:snippet "self.emit_composition_event(\"startup_failed\", \"failed\", \"daemon startup failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 414 ;
+  triage:snippet "self.emit_composition_event(\"startup_completed\", \"ok\", \"daemon startup completed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 471 ;
+  triage:snippet "self.emit_composition_event(\"shutdown_completed\", \"ok\", \"daemon shutdown completed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ARCH-V4-001/pV-s4/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 474 ;
+  triage:snippet "self.emit_composition_event(\"shutdown_failed\", \"failed\", \"daemon shutdown failed\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+# WorktreeSnapshot nodes
+<urn:atm:triage:worktree/pV-s2/46c703f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pV-s2-observability-migration" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s2-observability-migration" ;
+  triage:headSha "46c703f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pV-s3/75ac70b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pV-s4/84cacb0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:orderIndex 4 .

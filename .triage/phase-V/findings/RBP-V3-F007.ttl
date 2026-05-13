@@ -1,0 +1,21 @@
+finding_id = "RBP-V3-F007"
+title = ".expect() on thread::spawn() in spawn_shutdown_step() production shutdown path"
+severity = "important"
+pattern = "expect-on-spawn-production"
+repeatable = true
+sweep_scope = "crates/atm-daemon/src/"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/runtime_health.rs", line = 120, status = "open" },
+  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/runtime_health.rs", line = 122, status = "open (carry-forward, closes on V.3 merge-forward from integrate/phase-V after V.2 fix lands)" },
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = """
+spawn_shutdown_step() spawns a daemon shutdown finalizer thread via thread::Builder::new().spawn().expect("spawn daemon shutdown finalizer step").
+Confirmed present on V.2 branch at line 120; V.3 carries it at line 122 (line offset from V.3-only additions).
+Fix must land on V.2 (highest_open_branch); merge-forward closes the V.3 occurrence.
+Spawn failure under OS resource exhaustion (EAGAIN) is a realistic production concern for a long-running daemon;
+fix should propagate spawn error as Err or log-and-degrade consistent with sibling subsystem pattern.
+"""

@@ -40,9 +40,19 @@ impl DaemonRequestDispatcher {
             )
             .expect("daemon test observability"),
         );
+        let advisory_runtime_observability = crate::SubsystemObservability::new(
+            crate::DaemonSubsystem::AdvisoryRuntime,
+            Arc::clone(&observability) as Arc<dyn crate::DaemonRuntimeObservability>,
+        );
+        let runtime_health_observability = crate::SubsystemObservability::new(
+            crate::DaemonSubsystem::RuntimeHealth,
+            Arc::clone(&observability) as Arc<dyn crate::DaemonRuntimeObservability>,
+        );
         Self {
             home_dir: home_dir.clone(),
             observability,
+            advisory_runtime_observability: advisory_runtime_observability.clone(),
+            runtime_health_observability,
             status_cache,
             sqlite_boundary,
             advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new(),
