@@ -2994,6 +2994,19 @@ Execution shape:
 - `ARCH-PU-002` / `RULE-002` are owned end-to-end by `V.1` through `V.3`,
   not deferred
 
+Phase V deliverables:
+- `SubsystemObservability` newtype and per-subsystem injection across the
+  daemon runtime line, including explicit ownership in
+  `RuntimeHealthMonitor` and `RuntimeComposition`
+- deletion of the old central observability delegation helpers:
+  `map_command_event`, `map_daemon_event`, `map_runtime_event`,
+  `emit_runtime_event`, and `record_daemon_event`
+- `.with_recovery()` hardening on the four required runtime error categories:
+  `ATM_DAEMON_UNAVAILABLE`, `ATM_SOCKET_CONNECT_FAILED`,
+  `ATM_DAEMON_START_FAILED`, and `ATM_IPC_RUNTIME_FAILED`
+- stable recovery/error-code namespace documented in
+  `docs/atm-daemon/recovery-text-rules.md`
+
 Planned sprint sequence:
 
 ### V.1 — Observability Boundary And Event Model

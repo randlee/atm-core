@@ -13,6 +13,12 @@ The canonical daemon wire contract lives in:
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
+The daemon observability boundary contract lives in:
+- [`./observability.md`](./observability.md)
+
+The daemon/client recovery text rule set lives in:
+- [`./recovery-text-rules.md`](./recovery-text-rules.md)
+
 This crate remains part of the current workspace.
 
 ## 1.1 ADRs
@@ -191,6 +197,12 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc
   debug-only runtime path replaces it in production.
+- daemon observability is bottom-of-stack:
+  - the shared daemon observability layer imports no daemon subsystem types
+  - daemon subsystems emit already-shaped daemon event payloads through the
+    injected trait
+  - central daemon observability must not reconstruct subsystem semantics after
+    the fact
 - plugin-local observability does not replace daemon-owned runtime/transport
   sinks; daemon-owned events stay daemon-owned.
 - daemon retained-log reporting must use the host-scoped ATM log contract:
@@ -387,6 +399,45 @@ Privacy boundary:
 - observability submodules expose only the daemon-owned event sink façade used
   by runtime composition; sink plumbing and field-shaping helpers remain
   crate-private
+
+## 3.1.0 Daemon Observability Boundary
+
+The final daemon observability contract is defined in
+[`./observability.md`](./observability.md).
+
+Required architectural decisions:
+- the injected daemon observability trait remains object-safe and sealed
+- the daemon lifecycle stays modeled as an explicit runtime state machine
+  rather than a typestate API in Phase V
+- `LaunchGateGuard` remains a launch/admission coordination primitive, not a
+  typestate token
+- daemon event payloads use typed semantic identifiers:
+  - `DaemonSubsystem` enum
+  - `AtmMessageId`
+  - `TaskId`
+- `team`, `agent`, `sender`, `recipient`, `message_id`, and `task_id` are
+  event payload fields, not injected logger state
+
+V.2 migration targets:
+- `daemon_runtime_observability.rs`
+- `daemon_observability.rs`
+- `runtime_health.rs`
+- `local_ipc_transport.rs`
+- `advisory_runtime.rs`
+- `notification_runtime.rs`
+- `peer_transport.rs`
+- `watch_runtime.rs`
+- `reconcile_runtime.rs`
+- `host_ownership.rs`
+- `lifecycle_control.rs`
+- `runtime_status_cache.rs`
+
+V.3 deletion targets:
+- `emit_runtime_event(...)`
+- `map_command_event(...)`
+- `map_runtime_event(...)`
+- any central daemon helper path that exists only to reconstruct subsystem
+  meaning after the fact
 
 Transport dispatcher rule:
 - local-IPC and TCP/TLS listener/connection receive loops are deliberately tiny

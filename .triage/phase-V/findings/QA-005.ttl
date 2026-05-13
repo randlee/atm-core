@@ -1,0 +1,14 @@
+finding_id = "QA-005"
+title = "cargo fmt failure in watch_runtime.rs"
+severity = "blocking"
+pattern = "fmt-failure"
+repeatable = false
+sweep_scope = "crates/atm-daemon/src/watch_runtime.rs"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/watch_runtime.rs", lines = "205,254", status = "open" }
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = "Fixed in a single pass with: cargo fmt --manifest-path crates/atm-daemon/Cargo.toml (shared fix with QA-001 through QA-004)."

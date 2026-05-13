@@ -1,0 +1,15 @@
+finding_id = "ARCH-001"
+title = "RULE-003 violation: local_ipc_transport.rs exceeds 1000 non-test production lines"
+severity = "blocking"
+pattern = "rule-003-file-size"
+repeatable = false
+sweep_scope = "crates/atm-daemon/src/local_ipc_transport.rs"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/local_ipc_transport.rs", lines = "1-1031", status = "open" },
+  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/local_ipc_transport.rs", lines = "1-end", status = "open (carry-forward, closes on V.3 merge-forward from integrate/phase-V after V.2 fix lands)" },
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = "1031 non-test production lines; ceiling is 1000. Extract ~31+ lines to a new sibling file to bring the module under ceiling."

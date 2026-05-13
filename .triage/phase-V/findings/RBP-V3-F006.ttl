@@ -1,0 +1,22 @@
+finding_id = "RBP-V3-F006"
+title = ".expect() on thread::spawn() in shutdown_lane_with_deadline() production shutdown path"
+severity = "important"
+pattern = "expect-on-spawn-production"
+repeatable = true
+sweep_scope = "crates/atm-daemon/src/"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/composition.rs", line = 632, status = "open" },
+  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/composition.rs", line = 587, status = "open (carry-forward, closes on V.3 merge-forward from integrate/phase-V after V.2 fix lands)" },
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = """
+shutdown_lane_with_deadline() spawns a deadline helper thread via thread::Builder::new().spawn().expect("spawn shutdown lane deadline helper").
+The function signature returns Result<(), AtmError>; a spawn failure should return Err rather than panic.
+This .expect() was introduced by the VQ2-002 fix in TASK-1463-ADD (0fa0345 on V.3); it also propagated
+back to V.2 (line 632). Both branches are open; fix must land on V.2 first so merge-forward closes V.3.
+Consistent with sibling subsystem pattern (see RBP-F005 in WatchRuntime::shutdown): propagate spawn
+error as Err or log-and-degrade.
+"""

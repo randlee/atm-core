@@ -2613,6 +2613,12 @@ Architectural rules:
 - `atm-daemon` owns daemon/runtime/transport `sc-observability` emission
 - `atm-core` owns ATM event and error models above the shared observability
   boundary
+- daemon-side observability remains bottom-of-stack:
+  - the shared daemon observability layer imports no daemon subsystem types
+  - daemon subsystems emit typed daemon event payloads through a sealed,
+    object-safe injected trait
+  - `AtmMessageId` and `TaskId` remain typed identifiers in daemon event
+    payloads; raw string semantic identifiers are not the Phase V target shape
 - native plugins may emit plugin-local diagnostics, but daemon-owned runtime,
   store, ingest, and transport events remain daemon-owned observability sinks
 - production runtime diagnostics must not collapse into ad hoc stdout/stderr
