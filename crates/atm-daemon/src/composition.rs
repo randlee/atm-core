@@ -288,9 +288,11 @@ impl RuntimeComposition {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        let _ =
-            self.composition_observability
-                .emit("start_requested", "ok", "daemon start requested");
+        self.composition_observability.emit_or_warn(
+            "start_requested",
+            "ok",
+            "daemon start requested",
+        );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         // Startup replay must finish before the daemon binds its socket so
         // crash-recovered work cannot race newly accepted requests.
@@ -375,9 +377,11 @@ impl RuntimeComposition {
         socket_path: PathBuf,
         ready_signal: Option<std::sync::mpsc::SyncSender<()>>,
     ) -> Result<(), AtmError> {
-        let _ =
-            self.composition_observability
-                .emit("start_requested", "ok", "daemon start requested");
+        self.composition_observability.emit_or_warn(
+            "start_requested",
+            "ok",
+            "daemon start requested",
+        );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,

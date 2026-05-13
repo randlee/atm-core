@@ -226,10 +226,9 @@ impl WatchRuntime {
             }
         };
         state.worker = Some(handle);
-        let _ = self
-            .inner
+        self.inner
             .observability
-            .emit("start", "ok", "watch runtime worker started");
+            .emit_or_warn("start", "ok", "watch runtime worker started");
         Ok(())
     }
 

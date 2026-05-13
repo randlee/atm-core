@@ -200,15 +200,6 @@ impl SubsystemObservability {
         }
     }
 
-    pub(crate) fn emit(
-        &self,
-        action: &'static str,
-        outcome: &'static str,
-        detail: impl Into<Cow<'static, str>>,
-    ) -> Result<(), AtmError> {
-        self.emit_event(self.event(action, outcome, detail))
-    }
-
     pub(crate) fn emit_or_warn(
         &self,
         action: &'static str,

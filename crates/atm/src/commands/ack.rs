@@ -29,7 +29,7 @@ impl AckCommand {
     pub fn run(self, observability: &CliObservability) -> Result<()> {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
-        let composition = CliComposition::bootstrap(observability)?;
+        let composition = CliComposition::bootstrap("ack", observability)?;
         let json = self.json;
         let outcome = composition.ack(self.build_request(home_dir, current_dir)?)?;
 
