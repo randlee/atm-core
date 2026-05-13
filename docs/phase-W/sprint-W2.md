@@ -45,10 +45,6 @@ worktree: TBD
   CLI bootstrap handling
 - attempt-level events exist for connect retry, launch-gate contention,
   successful spawn attempt, publish wait, and exhaustion
-- final daemon-start/connect failures preserve concise operator-facing ATM
-  errors
-- `atm doctor` has a documented way to expose the richer daemon-start/connect
-  diagnostic trail
 - the sprint distinguishes between paths that already satisfy the contract and
   paths that regressed into under-instrumented final failures
 - any ATM CLI integration point needed to keep command failures and doctor
@@ -65,6 +61,9 @@ worktree: TBD
   become the single source of truth for each touched same-host failure class
 - `W.1` is a hard gate for any new same-host traceability emit site; `W.2`
   cannot land new emit paths against a silent-discard daemon sink policy
+- any new `emit()` call introduced by this sprint in
+  `crates/atm-daemon-client/src/lib.rs` must apply the `W.1` fallback rule; no
+  silent `let _ =` discard is permitted in the added traceability sites
 - the sprint reconciles its local code inventory with the shared Phase `W`
   ATM code inventory in `docs/plan-phase-W.md`
 - the sprint documents the LaunchGateGuard ownership decision explicitly:
@@ -245,7 +244,11 @@ Plan-auditable now:
 Implementation validation later:
 - same ATM code/recovery semantics demonstrated for equivalent same-host
   failure classes across CLI and `atm-graft`
+- final daemon-start/connect failures preserve concise operator-facing ATM
+  errors
 - runtime proof that doctor exposes the deeper daemon-start/connect trail
+- `atm doctor` has a documented way to expose the richer daemon-start/connect
+  diagnostic trail
 - proof that duplicate same-host mapping/reporting logic was collapsed onto the
   shared ATM error / doctor paths where the touched failure class existed in
   parallel before

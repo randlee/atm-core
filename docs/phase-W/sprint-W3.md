@@ -52,12 +52,6 @@ worktree: TBD
   - shared reader-budget exhaustion
 - the sprint identifies the daemon wiring needed to expose SQLite health
   through doctor
-- the sprint makes the reporting split explicit:
-  - CLI gets concise failure output
-  - doctor gets the fuller diagnostic surface
-- the sprint identifies where the current implementation already returns
-  adequate ATM errors versus where the doctor/observability side regressed or
-  never completed
 - the sprint keeps SQLite observability bottom-of-stack and does not re-create
   daemon-side semantic reconstruction
 - `W.1` is a hard gate for any new SQLite observability emit site; `W.3`
@@ -241,6 +235,12 @@ Plan-auditable now:
 - explicit separation from same-host daemon-client tracing and peer replay text
 
 Implementation validation later:
+- the reporting split remains intact:
+  - CLI gets concise failure output
+  - doctor gets the fuller diagnostic surface
+- the sprint identifies where the current implementation already returns
+  adequate ATM errors versus where the doctor/observability side regressed or
+  never completed
 - runtime proof that doctor exposes queue backlog, reply timeout, WAL, and
   reader-budget diagnostics
 - parity proof that equivalent SQLite-backed failures preserve the same ATM
