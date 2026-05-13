@@ -2969,3 +2969,81 @@ Acceptance:
 Phase U inventory note:
 - the authoritative current file/line removal inventory for U.0 through U.11
   lives in `docs/phase-U/removal-inventory.md`
+
+## 26. Phase V Daemon Hardening And Boundary Cleanup
+
+Planning branch:
+- `feature/daemon-hardening-plan`
+
+Goal:
+- close the daemon hardening follow-on work identified by the Phase U
+  post-mortem before daemon observability and runtime failure handling are
+  treated as settled enough for system testing
+- close the carried-forward daemon observability boundary issue and remove the
+  remaining central event-reconstruction shape
+- keep only testing-critical work on this line; defer the rest to backlog
+
+Execution shape:
+- `V.1` defines the observability boundary and event model
+- `V.2` migrates observability ownership into the daemon subsystems
+- `V.3` removes old central observability mapping code and streamlines the
+  final shape
+- `V.4` hardens daemon/client/runtime recovery guidance after the observability
+  line is in place
+- system testing should begin after `V.4`
+- `ARCH-PU-002` / `RULE-002` are owned end-to-end by `V.1` through `V.3`,
+  not deferred
+
+Planned sprint sequence:
+
+### V.1 — Observability Boundary And Event Model
+
+Scope:
+- define the final daemon observability boundary
+- keep observability at the bottom of the stack
+- define subsystem-owned event semantics and per-event context fields
+
+Acceptance:
+- the final observability boundary and event model are documented and ready to
+  implement
+
+### V.2 — Observability Migration Into Subsystems
+
+Scope:
+- move event construction into daemon subsystems
+- keep shared observability infrastructure thin
+
+Acceptance:
+- subsystem-owned event emission replaces central daemon event reconstruction
+
+### V.3 — Observability Removal And Streamlining
+
+Scope:
+- reduce `crates/atm-daemon/src/daemon_observability.rs` to thin sink and
+  bootstrap responsibilities
+- remove obsolete mapping helpers and wrappers
+
+Acceptance:
+- the old central mapping model is removed and the remaining code is lean
+
+### V.4 — Recovery Context Hardening
+
+Scope:
+- require explicit recovery guidance on daemon-unavailable and related runtime
+  failure paths
+- define checklist or lint coverage for required `.with_recovery()` usage
+
+Acceptance:
+- the daemon/runtime paths that require recovery guidance are explicitly listed
+- their coverage is no longer a review-memory-only rule
+
+Deferred backlog:
+- runtime test isolation lint
+  - create GH issue from `FTQ-U9-001`
+  - GH issue: `#259`
+- workspace `#[path]` lint
+  - create GH issue for production cross-crate `#[path]` enforcement
+  - GH issue: `#260`
+- sprint-close hygiene gate
+  - create GH issue from `ATM-QA-PU-001` through `ATM-QA-PU-005`
+  - GH issue: `#261`
