@@ -8,6 +8,12 @@ It is the design contract that `V.2` and `V.3` implement:
 - `V.2` moves event ownership into daemon subsystems
 - `V.3` deletes the old central mapping path
 
+Carry-forward obligations:
+- `ARCH-PU-002` and `RULE-002` remain open obligations, not closed historical
+  notes
+- `V.2` is the CI-enforcement sprint for this boundary
+- `V.3` is the deletion and closure sprint for the old central mapper path
+
 ## Bottom-Of-Stack Rule
 
 Observability is bottom-of-stack.
@@ -197,6 +203,10 @@ It must not own:
 
 Shared wiring and test/support surfaces that must follow the final boundary:
 - `crates/atm-daemon/src/daemon_runtime_observability.rs`
+  - `V.2` required action: refactor this file to the final injected trait and
+    daemon event surface used by subsystem-owned emission
+  - `V.3` follow-through: delete any compatibility shims that exist only to
+    preserve the old central mapper path
 - `crates/atm-daemon/src/daemon_observability.rs`
 - `crates/atm-daemon/src/composition.rs`
 - `crates/atm-daemon/src/main.rs`
@@ -220,4 +230,3 @@ First CI-checkable enforcement target for `V.2`:
   - `map_runtime_event(...)`
   - centralized wording/field policy for subsystem-owned events
 - any test-support shaping that exists only to preserve the central mapper
-

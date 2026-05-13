@@ -24,6 +24,20 @@ Recovery text is mandatory for:
 - daemon start failures
 - local IPC runtime failures
 
+Stable error code namespace is mandatory for each required recovery category.
+`V.1` reserves the namespace and `V.4` must bind each category to concrete
+codes in the final daemon/client error surface.
+
+Reserved category codes:
+- `ATM_DAEMON_UNAVAILABLE`
+- `ATM_SOCKET_CONNECT_FAILED`
+- `ATM_DAEMON_START_FAILED`
+- `ATM_IPC_RUNTIME_FAILED`
+
+If existing `ErrorCode` enum variants already cover a category, `V.4` may bind
+that category to the established variant instead of inventing a second name.
+What is forbidden is category drift or ad hoc string-only recovery labels.
+
 Recovery text may be omitted only when:
 - the failure is purely internal and no user action exists
 - a lower boundary already emitted the exact actionable recovery guidance and
@@ -74,4 +88,6 @@ Bad examples:
 ## Phase Ownership
 
 - `V.1` establishes this persistent rule set and file ownership map
+- `V.1` reserves the stable recovery code namespace for the mandatory
+  categories listed above
 - `V.4` hardens the concrete rule set, checklist, and enforcement strategy
