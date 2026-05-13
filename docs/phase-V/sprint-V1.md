@@ -19,6 +19,9 @@ Carry-forward reference:
 - `RULE-002` / `ARCH-PU-002` from `docs/phase-U/sprint-U11.md` are the direct
   source findings for this sprint.
 
+Dependency note:
+- `V.1` is the prerequisite for `V.2` and `V.3`.
+
 ## Scope
 
 - define the injected daemon observability trait shape
@@ -30,6 +33,20 @@ Carry-forward reference:
   observability depends on no daemon subsystem types
 - update daemon requirements, architecture, and boundary docs to the final
   ownership model
+- identify the concrete migration and deletion set in the current daemon line,
+  including:
+  - `crates/atm-daemon/src/daemon_runtime_observability.rs`
+  - `crates/atm-daemon/src/daemon_observability.rs`
+  - `crates/atm-daemon/src/runtime_health.rs`
+  - `crates/atm-daemon/src/local_ipc_transport.rs`
+  - `crates/atm-daemon/src/advisory_runtime.rs`
+  - `crates/atm-daemon/src/notification_runtime.rs`
+  - `crates/atm-daemon/src/peer_transport.rs`
+  - `crates/atm-daemon/src/watch_runtime.rs`
+  - `crates/atm-daemon/src/reconcile_runtime.rs`
+  - `crates/atm-daemon/src/host_ownership.rs`
+  - `crates/atm-daemon/src/lifecycle_control.rs`
+  - `crates/atm-daemon/src/runtime_status_cache.rs`
 
 ## Acceptance Criteria
 
@@ -41,6 +58,10 @@ Carry-forward reference:
   documented as per-event fields when relevant
 - the final subsystem/event model is clear enough to implement without central
   daemon event reconstruction
+- the sprint doc or resulting architecture docs name the concrete code
+  touchpoints that `V.2` and `V.3` must migrate or delete
+- the sprint output makes it explicit that `ARCH-PU-002` / `RULE-002` stay
+  in-scope and move forward into `V.2` / `V.3`
 
 ## Out Of Scope
 

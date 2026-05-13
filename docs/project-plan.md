@@ -2991,6 +2991,8 @@ Execution shape:
 - `V.4` hardens daemon/client/runtime recovery guidance after the observability
   line is in place
 - system testing should begin after `V.4`
+- `ARCH-PU-002` / `RULE-002` are owned end-to-end by `V.1` through `V.3`,
+  not deferred
 
 Planned sprint sequence:
 
@@ -3038,7 +3040,10 @@ Acceptance:
 Deferred backlog:
 - runtime test isolation lint
   - create GH issue from `FTQ-U9-001`
+  - GH issue: `#259`
 - workspace `#[path]` lint
   - create GH issue for production cross-crate `#[path]` enforcement
+  - GH issue: `#260`
 - sprint-close hygiene gate
   - create GH issue from `ATM-QA-PU-001` through `ATM-QA-PU-005`
+  - GH issue: `#261`

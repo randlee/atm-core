@@ -15,6 +15,14 @@ estimated_scope: M
 Move daemon observability semantics into the owning subsystems while keeping
 shared observability infrastructure thin.
 
+Carry-forward reference:
+- `RULE-002` / `ARCH-PU-002` continue here as the migration step after `V.1`;
+  this sprint is where subsystem-owned event semantics replace the central
+  daemon mapping path in practice.
+
+Dependency note:
+- `V.2` depends on `V.1`.
+
 ## Scope
 
 - inject the thin observability trait into daemon subsystems
@@ -24,6 +32,29 @@ shared observability infrastructure thin.
 - preserve structured event coverage needed for system testing
 - add any required enforcement note for the bottom-of-stack dependency
   direction
+- itemize the current subsystem migration set explicitly:
+  - `crates/atm-daemon/src/local_ipc_transport.rs`
+  - `crates/atm-daemon/src/advisory_runtime.rs`
+  - `crates/atm-daemon/src/notification_runtime.rs`
+  - `crates/atm-daemon/src/peer_transport.rs`
+  - `crates/atm-daemon/src/watch_runtime.rs`
+  - `crates/atm-daemon/src/reconcile_runtime.rs`
+  - `crates/atm-daemon/src/runtime_health.rs`
+  - `crates/atm-daemon/src/host_ownership.rs`
+  - `crates/atm-daemon/src/lifecycle_control.rs`
+  - `crates/atm-daemon/src/runtime_status_cache.rs`
+- update the shared composition and test-support surfaces that wire or exercise
+  daemon observability:
+  - `crates/atm-daemon/src/daemon_runtime_observability.rs`
+  - `crates/atm-daemon/src/composition.rs`
+  - `crates/atm-daemon/src/main.rs`
+  - `crates/atm-daemon/src/lib.rs`
+  - `crates/atm-daemon/src/test_observability.rs`
+  - `crates/atm-daemon/src/runtime_health_test_support.rs`
+  - `crates/atm-daemon/src/test_support.rs`
+  - `crates/atm-daemon/src/tests.rs`
+  - `crates/atm-daemon/src/tests_advisory.rs`
+  - `crates/atm-daemon/src/tests_lifecycle.rs`
 
 ## Acceptance Criteria
 
@@ -32,6 +63,10 @@ shared observability infrastructure thin.
 - the daemon observability path remains suitable for system testing and runtime
   diagnosis
 - no daemon subsystem type is required by the shared observability layer
+- the sprint plan identifies every subsystem file where logging ownership must
+  move so the migration does not stop at `runtime_health`
+- `ARCH-PU-002` / `RULE-002` are advanced materially by moving event ownership
+  out of the central daemon layer
 
 ## Out Of Scope
 
