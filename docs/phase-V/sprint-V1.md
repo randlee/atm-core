@@ -21,6 +21,9 @@ Carry-forward reference:
 
 Dependency note:
 - `V.1` is the prerequisite for `V.2` and `V.3`.
+- `V.1` is a pure design sprint. The first CI-checkable enforcement for this
+  observability line lands in `V.2`, which must prove the shared
+  observability layer no longer requires daemon subsystem types.
 
 ## Scope
 
@@ -62,6 +65,9 @@ Dependency note:
   touchpoints that `V.2` and `V.3` must migrate or delete
 - the sprint output makes it explicit that `ARCH-PU-002` / `RULE-002` stay
   in-scope and move forward into `V.2` / `V.3`
+- the sprint output explicitly points `V.2` at the first CI-checkable
+  enforcement point for this line: the shared observability layer must not
+  require daemon subsystem types
 
 ## Out Of Scope
 

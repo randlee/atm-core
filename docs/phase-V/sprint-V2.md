@@ -46,6 +46,7 @@ Dependency note:
 - update the shared composition and test-support surfaces that wire or exercise
   daemon observability:
   - `crates/atm-daemon/src/daemon_runtime_observability.rs`
+  - `crates/atm-daemon/src/daemon_observability.rs`
   - `crates/atm-daemon/src/composition.rs`
   - `crates/atm-daemon/src/main.rs`
   - `crates/atm-daemon/src/lib.rs`
@@ -55,6 +56,9 @@ Dependency note:
   - `crates/atm-daemon/src/tests.rs`
   - `crates/atm-daemon/src/tests_advisory.rs`
   - `crates/atm-daemon/src/tests_lifecycle.rs`
+- reduce `crates/atm-daemon/src/daemon_observability.rs` during migration so it
+  stops owning subsystem semantics, while leaving final wrapper/helper deletion
+  to `V.3`
 
 ## Acceptance Criteria
 
@@ -67,6 +71,8 @@ Dependency note:
   move so the migration does not stop at `runtime_health`
 - `ARCH-PU-002` / `RULE-002` are advanced materially by moving event ownership
   out of the central daemon layer
+- `crates/atm-daemon/src/daemon_observability.rs` is explicitly accounted for
+  as an in-scope reduction target in preparation for `V.3` removal/streamlining
 
 ## Out Of Scope
 
