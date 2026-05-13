@@ -2704,6 +2704,7 @@ Execution shape:
 - later sprints may assume earlier cleanup decisions are final; they should
   delete redirected code rather than preserve fallback branches
 - `U.8` through `U.10` assume `U.0` is already complete
+- `U.11` assumes `U.10` is complete
 
 Planned sprint sequence:
 
@@ -2941,6 +2942,30 @@ Acceptance:
 - U.10 owns the daemon-side generic replacement for the remaining graft-named
   advisory-session surfaces listed in `docs/phase-U/removal-inventory.md`
 
+### U.11 — ATM-Graft API Cleanup
+
+Scope:
+- tighten the post-`U.10` `atm-graft` API surface without adding product
+  capability
+- narrow `with_poll_interval()` and `from_transport()` to `#[cfg(test)]`
+  seams
+- remove redundant convenience aliases including
+  `fetch_pending_nudges` / `drain_pending_nudges`
+- consolidate daemon-binary and same-host endpoint resolution into the
+  `atm-daemon-bootstrap` workspace crate
+- harden timing-sensitive test waits without changing production behavior
+
+Status:
+- completed
+
+Acceptance:
+- the remaining `atm-graft` public surface matches the lean client/runtime
+  contract from `U.9` / `U.10`
+- daemon bootstrap resolution is shared through
+  `atm-daemon-bootstrap` rather than duplicated path helpers
+- timing-sensitive waits are reduced or explicitly justified in tests
+- no new boundary expansion or product behavior change is introduced
+
 Phase U inventory note:
-- the authoritative current file/line removal inventory for U.0 through U.10
+- the authoritative current file/line removal inventory for U.0 through U.11
   lives in `docs/phase-U/removal-inventory.md`
