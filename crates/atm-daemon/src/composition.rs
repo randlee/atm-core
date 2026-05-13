@@ -584,7 +584,15 @@ where
         .spawn(move || {
             let _ = result_tx.send(shutdown(lane));
         })
-        .expect("spawn shutdown lane deadline helper");
+        .map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to spawn daemon {lane_name} shutdown deadline helper"
+            ))
+            .with_recovery(
+                "Restart atm-daemon; the bounded background-lane shutdown helper could not be created.",
+            )
+            .with_source(source)
+        })?;
     let shutdown_thread_id = shutdown_handle.thread().id();
     match result_rx.recv_timeout(deadline) {
         Ok(result) => {

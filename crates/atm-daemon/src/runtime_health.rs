@@ -111,7 +111,7 @@ impl DaemonRequestDispatcher {
     fn spawn_shutdown_step(
         label: &'static str,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
-    ) -> std::thread::JoinHandle<()> {
+    ) -> Result<std::thread::JoinHandle<()>, AtmError> {
         std::thread::Builder::new()
             .name(format!("shutdown-finalizer-{label}"))
             .spawn(move || {
@@ -119,7 +119,15 @@ impl DaemonRequestDispatcher {
                     tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
                 });
             })
-            .expect("spawn daemon shutdown finalizer step")
+            .map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to spawn daemon shutdown finalizer step `{label}`"
+                ))
+                .with_recovery(
+                    "Restart atm-daemon; the bounded shutdown finalizer helper could not be created.",
+                )
+                .with_source(source)
+            })
     }
 
     fn complete_shutdown_step(label: &'static str, shutdown_handle: std::thread::JoinHandle<()>) {
@@ -163,7 +171,17 @@ impl DaemonRequestDispatcher {
         deadline: Duration,
         step: impl FnOnce() -> Result<(), AtmError> + Send + 'static,
     ) {
-        let shutdown_handle = Self::spawn_shutdown_step(label, step);
+        let shutdown_handle = match Self::spawn_shutdown_step(label, step) {
+            Ok(handle) => handle,
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    step = label,
+                    "daemon shutdown finalizer step could not start"
+                );
+                return;
+            }
+        };
         let started = std::time::Instant::now();
         loop {
             if shutdown_handle.is_finished() {

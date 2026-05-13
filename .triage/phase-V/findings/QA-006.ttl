@@ -1,0 +1,14 @@
+finding_id = "QA-006"
+title = "Naked #[allow(dead_code)] on unreachable constructors in boundary_adapters.rs"
+severity = "important"
+pattern = "naked-dead-code-allow"
+repeatable = true
+sweep_scope = "crates/atm-daemon/src/boundary_adapters.rs"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/boundary_adapters.rs", lines = "33,82,124", status = "open" }
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = "Three constructors became unreachable after the _with_observability migration. Remove dead constructors or gate with #[cfg(test)] where test-only usage is the intent. Naked #[allow(dead_code)] suppresses a real signal; fix the root cause instead."

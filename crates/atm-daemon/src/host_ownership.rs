@@ -7,7 +7,9 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use atm_core::error::AtmError;
 use fs2::FileExt;
 
-use crate::{DaemonSubsystem, SubsystemObservability};
+#[cfg(test)]
+use crate::DaemonSubsystem;
+use crate::SubsystemObservability;
 
 #[cfg_attr(windows, allow(dead_code))]
 const STALE_OWNER_RECOVERY_RETRY_ATTEMPTS: usize = 3;
@@ -40,7 +42,7 @@ pub(crate) struct HostOwnershipGuard {
 
 #[cfg_attr(windows, allow(dead_code))]
 impl HostOwnershipAdapter {
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self::new_with_observability(SubsystemObservability::disabled(
             DaemonSubsystem::HostOwnership,
@@ -57,7 +59,7 @@ impl HostOwnershipAdapter {
         )?)
     }
 
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn acquire_at(
         lock_path: std::path::PathBuf,
     ) -> Result<HostOwnershipGuard, AtmError> {

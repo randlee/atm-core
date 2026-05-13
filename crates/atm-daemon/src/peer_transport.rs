@@ -105,14 +105,6 @@ struct PeerClientTransport {
 }
 
 impl PeerClientTransport {
-    #[allow(dead_code)]
-    fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
-        Self::new_with_observability(
-            replay_store,
-            SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
-        )
-    }
-
     fn new_with_observability(
         replay_store: Option<Arc<dyn RemoteReplayStore>>,
         observability: SubsystemObservability,
@@ -551,7 +543,6 @@ impl Default for PeerTransportRuntime {
 }
 
 impl PeerTransportRuntime {
-    #[cfg_attr(not(test), allow(dead_code))]
     pub(crate) fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
         Self::new_with_observability(
             replay_store,
@@ -569,7 +560,6 @@ impl PeerTransportRuntime {
     }
 
     #[cfg(test)]
-    #[allow(dead_code)]
     pub(crate) fn client_transport(&self) -> &dyn ClientTransport {
         &self.client
     }

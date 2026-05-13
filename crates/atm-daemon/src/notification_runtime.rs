@@ -9,7 +9,9 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use crate::{DaemonSubsystem, SubsystemObservability};
+#[cfg(test)]
+use crate::DaemonSubsystem;
+use crate::SubsystemObservability;
 
 const DEFAULT_NOTIFICATION_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
@@ -43,13 +45,6 @@ struct NotificationState {
 }
 
 impl NotificationRuntime {
-    #[allow(dead_code)]
-    pub(crate) fn new() -> Self {
-        Self::new_with_observability(SubsystemObservability::disabled(
-            DaemonSubsystem::NotificationRuntime,
-        ))
-    }
-
     pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self::new_with_path_factory(
             Arc::new(|| Ok(atm_core::home::host_runtime_dir()?.join("notifications.jsonl"))),

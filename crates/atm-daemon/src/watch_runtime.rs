@@ -251,7 +251,20 @@ impl WatchRuntime {
                 .spawn(move || {
                     let _ = result_tx.send(handle.join());
                 })
-                .expect("failed to spawn watch join helper");
+                .map_err(|source| {
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "failed",
+                        "failed to spawn watch runtime join helper",
+                    );
+                    AtmError::daemon_unavailable(
+                        "failed to spawn watch runtime join helper during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; watch shutdown could not create its bounded join helper.",
+                    )
+                    .with_source(source)
+                })?;
             match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();

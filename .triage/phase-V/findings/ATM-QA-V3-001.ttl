@@ -1,0 +1,33 @@
+finding_id = "ATM-QA-V3-001"
+title = "sprint-V3.md AC5 unsatisfied: deletion record absent and YAML frontmatter stale"
+severity = "important"
+pattern = "ac-unsatisfied-deletion-record"
+repeatable = false
+sweep_scope = "docs/phase-V/"
+highest_open_branch = "feature/pV-s3-observability-cleanup"
+promote_to_branch = "feature/pV-s3-observability-cleanup"
+occurrences = [
+  { branch = "feature/pV-s3-observability-cleanup", file = "docs/phase-V/sprint-V3.md", lines = "1-end", status = "open" },
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = """
+Two defects folded into a single fix (ATM-QA-V3-002 is a minor sub-finding handled here):
+
+1. AC5 unsatisfied — no deletion record identifying what was deleted vs rewritten.
+   Five helpers removed in V.3 are not documented:
+     - map_command_event
+     - map_daemon_event
+     - map_runtime_event
+     - emit_runtime_event
+     - record_daemon_event
+   Sprint doc must identify each deleted symbol, confirm it was genuinely removed (not
+   renamed), and note whether any callsite migration was required.
+
+2. YAML frontmatter stale — sprint-V3.md metadata still shows planning-time values:
+     status: planned        → fix to: implemented
+     worktree: TBD          → fix to: /Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s3-observability-cleanup
+     branch: TBD            → fix to: feature/pV-s3-observability-cleanup
+
+Fix target: feature/pV-s3-observability-cleanup (V.3-only doc, not present on V.2).
+"""

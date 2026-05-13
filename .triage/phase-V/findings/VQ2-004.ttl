@@ -1,0 +1,14 @@
+finding_id = "VQ2-004"
+title = "SubsystemObservability::emit() always passes TeamScope::None in daemon_runtime_observability.rs"
+severity = "minor"
+pattern = "hardcoded-scope"
+repeatable = false
+sweep_scope = "crates/atm-daemon/src/daemon_runtime_observability.rs"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/daemon_runtime_observability.rs", lines = "", status = "open" }
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = "emit() unconditionally passes TeamScope::None, discarding any team-scope context the caller may have. Wire through actual team scope from the call site or document explicitly why None is the correct invariant here."
