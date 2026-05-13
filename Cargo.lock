@@ -141,6 +141,8 @@ version = "1.2.0"
 dependencies = [
  "agent-team-mail-core",
  "fs2",
+ "tempfile",
+ "tracing",
 ]
 
 [[package]]

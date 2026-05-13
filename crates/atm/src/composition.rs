@@ -142,7 +142,7 @@ impl ClientTransport for LocalIpcClientTransportAdapter {
 
 pub(crate) struct CliComposition<'a> {
     transport: Arc<dyn ClientTransport + Send + Sync + 'a>,
-    observability_port: &'a (dyn ObservabilityPort + Send + Sync),
+    observability_port: &'a CliObservability,
     send_command: SendCommandEntryPoint,
     receive_command: ReceiveCommandEntryPoint,
 }
@@ -161,7 +161,7 @@ impl fmt::Debug for CliComposition<'_> {
 impl<'a> CliComposition<'a> {
     pub(crate) fn from_transport(
         transport: Arc<dyn ClientTransport + Send + Sync + 'a>,
-        observability_port: &'a (dyn ObservabilityPort + Send + Sync),
+        observability_port: &'a CliObservability,
     ) -> Self {
         Self {
             transport,
@@ -204,7 +204,7 @@ impl<'a> CliComposition<'a> {
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Send(SendRequestEnvelope::Compose(request)))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
-                let _ = self.observability_port.emit(CommandEvent {
+                self.observability_port.emit_command_event(CommandEvent {
                     command: "send",
                     action: "send",
                     outcome: if outcome.dry_run { "dry_run" } else { "sent" },
@@ -229,7 +229,7 @@ impl<'a> CliComposition<'a> {
             request,
         )))? {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
-                let _ = self.observability_port.emit(CommandEvent {
+                self.observability_port.emit_command_event(CommandEvent {
                     command: "ack",
                     action: "ack",
                     outcome: "ok",
@@ -252,7 +252,7 @@ impl<'a> CliComposition<'a> {
     pub(crate) fn receive(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Receive(query))? {
             ResponseEnvelope::Receive(outcome) => {
-                let _ = self.observability_port.emit(CommandEvent {
+                self.observability_port.emit_command_event(CommandEvent {
                     command: "read",
                     action: "read",
                     outcome: "ok",
@@ -275,7 +275,7 @@ impl<'a> CliComposition<'a> {
     pub(crate) fn list(&self, query: ListQuery) -> Result<ListOutcome, AtmError> {
         match self.send_request(RequestEnvelope::List(query))? {
             ResponseEnvelope::List(outcome) => {
-                let _ = self.observability_port.emit(CommandEvent {
+                self.observability_port.emit_command_event(CommandEvent {
                     command: "list",
                     action: "list",
                     outcome: "ok",
@@ -298,7 +298,7 @@ impl<'a> CliComposition<'a> {
     pub(crate) fn clear(&self, query: ClearQuery) -> Result<ClearOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Clear(query))? {
             ResponseEnvelope::Clear(outcome) => {
-                let _ = self.observability_port.emit(CommandEvent {
+                self.observability_port.emit_command_event(CommandEvent {
                     command: "clear",
                     action: "clear",
                     outcome: "ok",
@@ -365,12 +365,17 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    pub(crate) fn bootstrap(observability: &'a CliObservability) -> Result<Self, AtmError> {
+    pub(crate) fn bootstrap(
+        command: &'static str,
+        observability: &'a CliObservability,
+    ) -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
         let daemon_bin = resolve_daemon_bin("atm")?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
-        supervisor.ensure_daemon_available(|| transport.try_connect().map(|_| ()))?;
+        supervisor.ensure_daemon_available_with_traceability(command, observability, || {
+            transport.try_connect().map(|_| ())
+        })?;
         Ok(Self::from_transport(transport, observability))
     }
 }
