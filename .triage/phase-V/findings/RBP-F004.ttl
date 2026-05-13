@@ -1,0 +1,23 @@
+finding_id = "RBP-F004"
+title = ".expect() on Mutex::lock() in LogSink::health() production path"
+severity = "important"
+pattern = "expect-on-lock-production"
+repeatable = true
+sweep_scope = "crates/atm-daemon/src/"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/daemon_observability.rs", line = 465, status = "open" },
+  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/daemon_observability.rs", line = 465, status = "open (carry-forward, closes on V.3 merge-forward from integrate/phase-V after V.2 fix lands)" },
+  { branch = "feature/pV-s4-recovery-hardening", file = "crates/atm-daemon/src/daemon_observability.rs", line = 478, status = "open" },
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = """
+LogSink::health() acquires self.health via .expect(\"file sink health poisoned\").
+health() is a polling/inspection method called in production health-check paths.
+A poisoned mutex here should return a degraded SinkHealth or propagate Err, not panic.
+pV-s3 is at the same SHA (513d832) as pV-s2; identical line number.
+pV-s4 base SHA 8ecd999 carries the same code at line 478.
+Fix on feature/pV-s2-observability-migration; merge-forward closes occurrences on s3 and s4.
+"""
