@@ -1,6 +1,5 @@
 use std::fmt;
 use std::io::Write;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use atm_core::ack::{AckOutcome, AckRequest};
@@ -21,7 +20,8 @@ use atm_core::protocol::{
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
-use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor};
+use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
+use atm_daemon_client::{DaemonLocalIpcEndpoint, DaemonSupervisor};
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
 use interprocess::local_socket::Stream as LocalSocketStream;
@@ -78,6 +78,8 @@ impl LocalIpcClientTransportAdapter {
         })
     }
 
+    /// This function performs blocking IPC I/O. Callers in async contexts must
+    /// wrap this in `tokio::task::spawn_blocking`.
     fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let mut stream = self.try_connect()?;
         stream
@@ -365,29 +367,12 @@ impl<'a> CliComposition<'a> {
 
     pub(crate) fn bootstrap(observability: &'a CliObservability) -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
-        let daemon_bin = resolve_daemon_bin()?;
+        let daemon_bin = resolve_daemon_bin("atm")?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
         supervisor.ensure_daemon_available(|| transport.try_connect().map(|_| ()))?;
         Ok(Self::from_transport(transport, observability))
     }
-}
-
-fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    DaemonLocalIpcEndpoint::new(atm_core::protocol::daemon_socket_path()?)
-}
-
-fn resolve_daemon_bin() -> Result<DaemonBinaryPath, AtmError> {
-    if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
-        return DaemonBinaryPath::new(PathBuf::from(path));
-    }
-    let current = std::env::current_exe().map_err(|source| {
-        AtmError::daemon_unavailable("failed to resolve the current atm executable path")
-            .with_source(source)
-    })?;
-    DaemonBinaryPath::new(
-        current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
-    )
 }
 
 fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
@@ -468,13 +453,14 @@ mod tests {
         FakeClientTransport, HealthyObservability, LoopbackClientTransport,
     };
     use atm_core::types::{AckActivationMode, ReadSelection};
+    use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
     use serde_json::Value;
     use tempfile::TempDir;
 
     use super::{
-        CliComposition, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalIpcClientTransportAdapter,
+        CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
+        LaunchGateGuard, LocalIpcClientTransportAdapter,
     };
     use crate::observability::CliObservability;
 

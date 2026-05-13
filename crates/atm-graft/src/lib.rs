@@ -26,6 +26,7 @@ use atm_core::protocol::{
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
 use atm_daemon_client::DaemonSupervisor;
 
 mod runtime;
@@ -36,10 +37,7 @@ use runtime::{
     read_snapshot, run_live_receive_loop, run_receive_loop, set_session_state,
     validate_batch_limit_against_capacity,
 };
-use transport::{
-    ActiveAdvisoryStream, GraftLocalIpcClientTransport, resolve_daemon_bin,
-    resolve_daemon_local_ipc_endpoint, unexpected_response,
-};
+use transport::{ActiveAdvisoryStream, GraftLocalIpcClientTransport, unexpected_response};
 
 const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 const ADVISORY_STREAM_READ_DEADLINE: Duration = Duration::from_millis(250);
@@ -138,10 +136,11 @@ impl GraftSessionOptions {
         self
     }
 
+    #[cfg(test)]
     /// # Errors
     ///
     /// Returns [`AtmError`] when the poll interval is zero.
-    pub fn with_poll_interval(mut self, poll_interval: Duration) -> Result<Self, AtmError> {
+    fn with_poll_interval(mut self, poll_interval: Duration) -> Result<Self, AtmError> {
         if poll_interval.is_zero() {
             return Err(AtmError::validation(
                 "graft session poll interval must be greater than zero",
@@ -205,7 +204,7 @@ impl GraftClient {
     /// be resolved or the same-host daemon cannot be reached or started.
     pub fn connect() -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
-        let daemon_bin = resolve_daemon_bin()?;
+        let daemon_bin = resolve_daemon_bin("graft host")?;
         let advisory_transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
         let transport = Arc::clone(&advisory_transport) as Arc<dyn ClientTransport + Send + Sync>;
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
@@ -216,7 +215,8 @@ impl GraftClient {
         })
     }
 
-    pub fn from_transport(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
+    #[cfg(test)]
+    fn from_transport(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
         Self {
             transport,
             advisory_transport: None,
@@ -249,20 +249,6 @@ impl GraftClient {
             ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
             response => Ok(response),
         }
-    }
-
-    pub fn fetch_pending_nudges(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        self.fetch_nudges(request)
-    }
-
-    pub fn drain_pending_nudges(
-        &self,
-        request: AdvisoryDrainRequest,
-    ) -> Result<AdvisoryDrainResponse, AtmError> {
-        self.drain_nudges(request)
     }
 }
 
@@ -357,6 +343,8 @@ impl GraftSessionClient for GraftClient {
 /// Concrete embedded graft session runtime.
 pub struct GraftSession {
     client: Arc<dyn GraftSessionClient>,
+    // Snapshot state is shared between the host thread and the receive loop; poisoned locks are
+    // mapped into AtmError by read_snapshot()/set_session_state() instead of panicking.
     snapshot: Arc<RwLock<SessionSnapshot>>,
     observability: Arc<dyn GraftObservability>,
     stop_tx: Option<Sender<()>>,
@@ -556,20 +544,6 @@ impl GraftSession {
         self.client.acknowledge_message(request)
     }
 
-    pub fn fetch_pending_nudges(
-        &self,
-        request: AdvisoryFetchRequest,
-    ) -> Result<AdvisoryFetchResponse, AtmError> {
-        self.client.fetch_nudges(request)
-    }
-
-    pub fn drain_pending_nudges(
-        &self,
-        request: AdvisoryDrainRequest,
-    ) -> Result<AdvisoryDrainResponse, AtmError> {
-        self.client.drain_nudges(request)
-    }
-
     /// # Errors
     ///
     /// Returns [`AtmError`] when the receive loop cannot join cleanly or the
@@ -681,6 +655,8 @@ mod tests {
 
     #[derive(Debug, Default)]
     struct CollectingInjector {
+        // Test threads inject nudges concurrently with assertions, so collected events need
+        // one shared mutable buffer behind a Mutex.
         nudges: Mutex<Vec<AdvisoryEvent>>,
     }
 
@@ -693,7 +669,11 @@ mod tests {
 
     #[derive(Debug)]
     struct StateNotifyingObservability {
+        // Registration state changes are emitted from the receive loop thread, so the optional
+        // one-shot sender must be shared mutably behind a Mutex.
         registered_tx: Mutex<Option<mpsc::Sender<()>>>,
+        // Disconnect notifications are emitted from the receive loop thread, so the optional
+        // one-shot sender must be shared mutably behind a Mutex.
         disconnected_tx: Mutex<Option<mpsc::Sender<()>>>,
     }
 
