@@ -205,10 +205,11 @@ impl WatchRuntime {
             .name("atm-daemon-watch".to_string())
             .spawn(move || watch_worker_loop(inner))
             .map_err(|source| {
-                let _ = self
-                    .inner
-                    .observability
-                    .emit("start", "failed", "failed to spawn watch runtime worker");
+                let _ = self.inner.observability.emit(
+                    "start",
+                    "failed",
+                    "failed to spawn watch runtime worker",
+                );
                 AtmError::daemon_unavailable("failed to spawn watch runtime worker")
                     .with_source(source)
             })?;
@@ -254,10 +255,11 @@ impl WatchRuntime {
             match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
-                    let _ = self
-                        .inner
-                        .observability
-                        .emit("shutdown", "ok", "watch runtime worker shut down cleanly");
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "ok",
+                        "watch runtime worker shut down cleanly",
+                    );
                 }
                 Ok(Err(_)) => {
                     let _ = join_helper.join();

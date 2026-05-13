@@ -58,7 +58,9 @@ impl HostOwnershipAdapter {
     }
 
     #[allow(dead_code)]
-    pub(crate) fn acquire_at(lock_path: std::path::PathBuf) -> Result<HostOwnershipGuard, AtmError> {
+    pub(crate) fn acquire_at(
+        lock_path: std::path::PathBuf,
+    ) -> Result<HostOwnershipGuard, AtmError> {
         Self::new().acquire_at_with_observability(lock_path)
     }
 

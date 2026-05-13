@@ -92,10 +92,11 @@ impl NotificationRuntime {
             .name("atm-daemon-notifier".to_string())
             .spawn(move || notification_worker_loop(inner))
             .map_err(|source| {
-                let _ = self
-                    .inner
-                    .observability
-                    .emit("start", "failed", "failed to spawn notification runtime worker");
+                let _ = self.inner.observability.emit(
+                    "start",
+                    "failed",
+                    "failed to spawn notification runtime worker",
+                );
                 AtmError::daemon_unavailable("failed to spawn notification runtime worker")
                     .with_source(source)
             })?;
