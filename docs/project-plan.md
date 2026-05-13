@@ -2969,3 +2969,74 @@ Acceptance:
 Phase U inventory note:
 - the authoritative current file/line removal inventory for U.0 through U.11
   lives in `docs/phase-U/removal-inventory.md`
+
+## 26. Phase V Daemon Hardening And Boundary Cleanup
+
+Planning branch:
+- `feature/daemon-hardening-plan`
+
+Goal:
+- close the daemon hardening follow-on work identified by the Phase U
+  post-mortem before daemon internals are treated as settled
+- add hard gates for recurring release-blocking patterns instead of relying on
+  ad hoc review memory
+- close the carried-forward daemon observability boundary issue and remove the
+  remaining central event-reconstruction shape
+
+Planned sprint sequence:
+
+### V.1 — Runtime Test Isolation Lint
+
+Scope:
+- add a hard gate that forbids global mutable runtime/transport test seams
+- build on the lint-framework work already explored on
+  `arch-inj/feature/pQ-lint-tools`
+
+Acceptance:
+- production-bound runtime/transport code cannot add process-global mutable
+  test seams without failing the gate
+
+### V.2 — Workspace `#[path]` Lint
+
+Scope:
+- add a hard gate that forbids production cross-crate `#[path]` imports
+- build on the lint-framework work already explored on
+  `arch-inj/feature/pQ-lint-tools`
+
+Acceptance:
+- production cross-crate `#[path]` imports fail the gate
+
+### V.3 — Recovery Context Hardening
+
+Scope:
+- require explicit recovery guidance on daemon-unavailable and related runtime
+  failure paths
+- define checklist or lint coverage for required `.with_recovery()` usage
+
+Acceptance:
+- the daemon/runtime paths that require recovery guidance are explicitly listed
+- their coverage is no longer a review-memory-only rule
+
+### V.4 — Sprint-Close Hygiene Gate
+
+Scope:
+- require sprint doc status updates and plan-index updates before QA handoff
+
+Acceptance:
+- sprint-close documentation hygiene is enforced as an explicit gate
+
+### V.5 — Daemon Observability Boundary Cleanup
+
+Scope:
+- close `ARCH-PU-002` from `docs/phase-U/sprint-U11.md`
+- fix the boundary shape around
+  `crates/atm-daemon/src/daemon_observability.rs`
+- keep observability at the bottom of the stack with no daemon subsystem type
+  imports
+- move event semantics into the owning subsystem through an injected thin
+  logging boundary
+
+Acceptance:
+- daemon observability is a thin sink/bootstrap boundary
+- central daemon event reconstruction is removed
+- leftover code from the old mapping model is deleted or streamlined
