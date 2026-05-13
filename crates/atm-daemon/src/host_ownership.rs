@@ -7,6 +7,10 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 use atm_core::error::AtmError;
 use fs2::FileExt;
 
+#[cfg(test)]
+use crate::DaemonSubsystem;
+use crate::SubsystemObservability;
+
 #[cfg_attr(windows, allow(dead_code))]
 const STALE_OWNER_RECOVERY_RETRY_ATTEMPTS: usize = 3;
 #[cfg_attr(windows, allow(dead_code))]
@@ -25,8 +29,10 @@ static STALE_RECOVERY_OBSERVED_SIGNAL: std::sync::Mutex<Option<StaleRecoverySign
     std::sync::Mutex::new(None);
 
 #[cfg_attr(windows, allow(dead_code))]
-#[derive(Debug, Default, Clone, Copy)]
-pub(crate) struct HostOwnershipAdapter;
+#[derive(Debug, Clone)]
+pub(crate) struct HostOwnershipAdapter {
+    observability: SubsystemObservability,
+}
 
 #[cfg_attr(windows, allow(dead_code))]
 #[derive(Debug)]
@@ -36,17 +42,32 @@ pub(crate) struct HostOwnershipGuard {
 
 #[cfg_attr(windows, allow(dead_code))]
 impl HostOwnershipAdapter {
-    pub(crate) const fn new() -> Self {
-        Self
+    #[cfg(test)]
+    pub(crate) fn new() -> Self {
+        Self::new_with_observability(SubsystemObservability::disabled(
+            DaemonSubsystem::HostOwnership,
+        ))
+    }
+
+    pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
+        Self { observability }
     }
 
     pub(crate) fn acquire(&self) -> Result<HostOwnershipGuard, AtmError> {
-        Self::acquire_at(atm_core::home::host_runtime_lock_path(
+        self.acquire_at_with_observability(atm_core::home::host_runtime_lock_path(
             HOST_RUNTIME_OWNER_LOCK_FILE,
         )?)
     }
 
+    #[cfg(test)]
     pub(crate) fn acquire_at(
+        lock_path: std::path::PathBuf,
+    ) -> Result<HostOwnershipGuard, AtmError> {
+        Self::new().acquire_at_with_observability(lock_path)
+    }
+
+    fn acquire_at_with_observability(
+        &self,
         lock_path: std::path::PathBuf,
     ) -> Result<HostOwnershipGuard, AtmError> {
         let mut lock_file = open_lock_file(&lock_path)?;
@@ -64,8 +85,18 @@ impl HostOwnershipAdapter {
                     drop(lock_file);
                     lock_file = recover_stale_owner_lock(&lock_path, pid, &token)?;
                     recovered = true;
+                    let _ = self.observability.emit(
+                        "recover_stale_owner",
+                        "degraded",
+                        "daemon recovered a stale host-runtime owner lock",
+                    );
                 }
                 if !recovered {
+                    let _ = self.observability.emit(
+                        "acquire_owner_lock",
+                        "rejected",
+                        "daemon host-runtime owner lock is already held by a live process",
+                    );
                     return Err(AtmError::daemon_serving_state_rejected(format!(
                         "a live ATM daemon already owns {}",
                         lock_path.display()
@@ -77,6 +108,11 @@ impl HostOwnershipAdapter {
                 }
             }
             Err(source) => {
+                let _ = self.observability.emit(
+                    "acquire_owner_lock",
+                    "failed",
+                    "daemon failed to acquire the host-runtime owner lock",
+                );
                 return Err(AtmError::daemon_unavailable(format!(
                     "failed to acquire daemon ownership lock at {}",
                     lock_path.display()
@@ -85,6 +121,11 @@ impl HostOwnershipAdapter {
             }
         }
         write_owner_record(&mut lock_file)?;
+        let _ = self.observability.emit(
+            "acquire_owner_lock",
+            "ok",
+            "daemon acquired the host-runtime owner lock",
+        );
         Ok(HostOwnershipGuard { lock_file })
     }
 }
