@@ -63,6 +63,11 @@ worktree: TBD
 - where SQLite-backed error mapping/reporting has duplicated interface-specific
   handling, the sprint should collapse those paths onto one shared
   implementation
+- the sprint names the concrete collapse pairs
+  `SqliteWriter::submit(...)` / `SharedDb::acquire_connection_guard(...)` and
+  `SharedDb::checkpoint_wal(...)` / `DaemonRequestDispatcher::finalize_shutdown(...)`,
+  and verifies parity for the three consumer interfaces:
+  CLI, `atm-graft` host, and peer-triggered daemon work
 - the sprint identifies the shared ATM error/protocol/doctor functions that
   become the single source of truth for each touched SQLite-backed failure
   class
@@ -217,6 +222,9 @@ Doctor/CLI reporting contract:
 Cross-sprint dependency:
 - if `atm-rusqlite` needs a new thin observability port, it must follow the
   Phase V bottom-of-stack rule and stay free of daemon-owned semantic types
+- any new SQLite observability emit site must also satisfy the `W.1`
+  non-silent emit-fallback rule in addition to the Phase V bottom-of-stack
+  constraint
 - if `W.4` is running in parallel, any `crates/atm-core/src/protocol.rs`
   change here must stay limited to SQLite-backed envelope parity and be
   merge-forwarded before either branch pushes a final head

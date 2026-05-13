@@ -43,8 +43,9 @@ worktree: TBD
   the current path inventory
 - each uncovered branch gains `.with_recovery(...)` coverage or an explicit
   ruling that the lower layer already preserves the exact operator guidance
-- the sprint reuses the Phase V recovery-text rules and does not invent a
-  parallel policy
+- the sprint applies the `V.4 Category Binding` table and satisfies the
+  `Recovery Text Checklist` in `docs/atm-daemon/recovery-text-rules.md` for
+  each covered branch; it does not invent a parallel policy
 - the sprint verifies protocol-envelope parity so cross-daemon failures preserve
   the same ATM error code and recovery intent seen by other participants
 - where peer transport currently duplicates shared error-mapping/reporting
