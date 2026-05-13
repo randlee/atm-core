@@ -1,0 +1,25 @@
+finding_id = "RBP-F002"
+title = "Two .expect() on Mutex::lock() in LogSink::write() production path"
+severity = "important"
+pattern = "expect-on-lock-production"
+repeatable = true
+sweep_scope = "crates/atm-daemon/src/"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/daemon_observability.rs", line = 445, status = "open" },
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/daemon_observability.rs", line = 446, status = "open" },
+  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/daemon_observability.rs", line = 445, status = "open" },
+  { branch = "feature/pV-s3-observability-cleanup", file = "crates/atm-daemon/src/daemon_observability.rs", line = 446, status = "open" },
+  { branch = "feature/pV-s4-recovery-hardening", file = "crates/atm-daemon/src/daemon_observability.rs", line = 458, status = "open" },
+  { branch = "feature/pV-s4-recovery-hardening", file = "crates/atm-daemon/src/daemon_observability.rs", line = 459, status = "open" },
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = """
+LogSink::write() acquires two mutexes via .expect(): last_written_file (line 445) and health (line 446).
+Both are in a production write path and should propagate error or log-and-skip on mutex poison.
+pV-s3 is at the same SHA (513d832) as pV-s2; identical line numbers.
+pV-s4 base SHA 8ecd999 carries the same code at lines 458 and 459.
+Fix on feature/pV-s2-observability-migration; merge-forward closes occurrences on s3 and s4.
+"""

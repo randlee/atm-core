@@ -1,0 +1,33 @@
+finding_id = "VQ2-001"
+title = "RuntimeHealthMonitor delegates event construction to DaemonRequestDispatcher instead of owning SubsystemObservability"
+severity = "blocking"
+qa_round = 2
+source_file = "crates/atm-daemon/src/runtime_health.rs"
+source_line = 221
+pattern = "subsystem-delegation-violation"
+ac_violated = "AC2"
+ac_text = "Daemon subsystems emit their own structured events through the injected trait"
+repeatable = true
+sweep_scope = "crates/atm-daemon/src/"
+description = """
+DaemonRequestDispatcher::record_daemon_event() is a central event-construction
+proxy. RuntimeHealthMonitor calls it with DaemonSubsystem as a caller-supplied
+parameter rather than constructing DaemonEvent via its own injected
+SubsystemObservability instance. The monitor holds no SubsystemObservability
+field; event construction is fully delegated outward.
+
+Fix: inject SubsystemObservability into RuntimeHealthMonitor and have it emit
+events directly through the trait, removing the DaemonSubsystem parameter
+thread through record_daemon_event.
+"""
+highest_open_branch = "feature/pV-s3-observability-cleanup"
+promote_to_branch = "feature/pV-s3-observability-cleanup"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/runtime_health.rs", line = 221, status = "open" },
+  { branch = "feature/pV-s3-observability-cleanup",   file = "crates/atm-daemon/src/runtime_health.rs", line = 221, status = "open" },
+]
+not_present_in = [
+  { branch = "feature/pV-s4-recovery-hardening", reason = "branch predates V.2 migration (SHA 8ecd999); does not contain record_daemon_event" },
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
