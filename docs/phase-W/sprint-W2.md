@@ -18,6 +18,8 @@ worktree: TBD
   - richer `atm doctor` diagnostics and degraded-health evidence
 - keep emission/reporting on shared paths rather than creating a daemon-client
   specific reporting stack
+- preserve interface parity so the same daemon-availability failure class uses
+  the same ATM code/recovery semantics on CLI and `atm-graft` same-host flows
 
 ## Acceptance Criteria
 
@@ -36,6 +38,12 @@ worktree: TBD
   output aligned is treated as required scope, not a deferred follow-up
 - the sprint reuses shared observability and doctor reporting paths; only the
   daemon-client event semantics and insertion points are local
+- the sprint verifies same-host interface parity between CLI and `atm-graft`
+  for daemon-unavailable, auto-start-failed, launch-gate, and advisory-stream
+  setup failures
+- where CLI and `atm-graft` currently duplicate error-mapping or reporting
+  code for the same same-host failure class, the sprint should collapse those
+  paths onto one shared implementation
 
 ## Implementation Notes
 
@@ -53,6 +61,13 @@ Primary insertion points:
   - `CliComposition::bootstrap(...)`
   - command entrypoints that already surface final ATM errors for
     `send/read/ack/clear/list`
+- `crates/atm-graft/src/lib.rs`
+  - same-host bootstrap through `DaemonSupervisor`
+  - live advisory stream setup and receive-loop startup
+- `crates/atm-graft/src/transport.rs`
+  - advisory-stream connect / write / flush / timeout setup
+- `crates/atm-graft/src/runtime.rs`
+  - advisory-stream receive / reconnect / response validation failures
 
 Current path inventory:
 - `crates/atm-daemon-client/src/lib.rs`
@@ -85,6 +100,17 @@ Current path inventory:
     - response `request_id` mismatch
   - `CliComposition::bootstrap(...)`
     - end-to-end daemon-availability bootstrap failure before command dispatch
+- `crates/atm-graft/src/lib.rs`
+  - same-host daemon-availability bootstrap before graft runtime start
+  - advisory-stream unsupported-path failure
+- `crates/atm-graft/src/transport.rs`
+  - advisory-stream write-timeout failure
+  - advisory-stream flush failure
+  - advisory-stream bounded read-timeout failure
+- `crates/atm-graft/src/runtime.rs`
+  - advisory-stream frame read failure
+  - advisory-stream request-id mismatch
+  - advisory-stream reconnect/open failure
 - CLI command surface that must preserve concise failure output:
   - `atm send`
   - `atm read`
@@ -114,6 +140,9 @@ CLI / doctor split required by this sprint:
   - keep concise returned failure output with stable error code and next action
   - close any drift where the final ATM failure is present but the path-specific
     signal is no longer available
+- `atm-graft` host:
+  - must receive the same ATM error code and aligned recovery intent for the
+    same same-host daemon/connect failure classes
 - `atm doctor`:
   - expose the deeper connect / launch / publish trail so operators can
     distinguish “daemon absent,” “daemon spawn failed,” “daemon started but

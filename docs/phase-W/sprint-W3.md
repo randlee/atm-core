@@ -19,6 +19,9 @@ worktree: TBD
     health, and reader-budget exhaustion
 - keep emission/reporting on shared paths; SQLite-specific work should be about
   event content and insertion points, not a separate reporting implementation
+- preserve interface parity so the same SQLite-backed failure class returns the
+  same ATM error code/recovery semantics whether reached from CLI, graft host,
+  or peer-transport-triggered daemon work
 
 ## Acceptance Criteria
 
@@ -41,6 +44,11 @@ worktree: TBD
   daemon-side semantic reconstruction
 - the sprint preserves one shared doctor/reporting pipeline rather than
   introducing SQLite-specific output plumbing
+- the sprint verifies that shared ATM errors returned from SQLite-backed paths
+  are preserved consistently through protocol envelopes and non-CLI consumers
+- where SQLite-backed error mapping/reporting has duplicated interface-specific
+  handling, the sprint should collapse those paths onto one shared
+  implementation
 
 ## Implementation Notes
 
@@ -56,6 +64,8 @@ Primary SQLite insertion points:
 - `crates/atm-rusqlite/src/lib.rs`
   - `SqliteBoundaryAssembly::new(...)`
   - `SqliteBoundaryAssembly::checkpoint_wal(...)`
+- `crates/atm-core/src/protocol.rs`
+  - protocol error-envelope preservation for SQLite-backed failures
 
 Current path inventory:
 - `crates/atm-rusqlite/src/writer/mod.rs`
@@ -89,6 +99,9 @@ Current path inventory:
   - replay-store assembly failure currently logged as warning-only
 - `crates/atm-daemon/src/runtime_health.rs`
   - `finalize_shutdown()` bounded `sqlite_wal_checkpoint` step
+- `crates/atm-core/src/protocol.rs`
+  - `ProtocolErrorEnvelope::{from_error,into_atm_error}` parity for non-CLI
+    consumers
 
 Daemon-side integration points:
 - `crates/atm-daemon/src/composition.rs`
@@ -116,6 +129,8 @@ Critical issue classes covered directly by this sprint:
 Doctor/CLI reporting contract:
 - ATM CLI must keep command failure concise and actionable for SQLite-backed
   failures
+- `atm-graft` host and peer-triggered consumers must receive the same ATM error
+  code/recovery intent for the same SQLite-backed failure class
 - `atm doctor` must expose the deeper subsystem details so an operator can tell
   whether the problem is queue saturation, reply timeout, checkpoint failure,
   or connection-budget exhaustion

@@ -33,7 +33,7 @@ worktree: TBD
   policy; silent loss is forbidden
 - the fix uses shared observability/reporting behavior rather than
   subsystem-specific custom fallback pipelines
-- the sprint defines which emit failures remain best-effort warnings versus
+- the sprint defines which emit failures remain non-blocking warnings versus
   which failures must mark runtime health degraded
 - the sprint names how doctor will surface observability impairment
 - the sprint verifies whether any ATM CLI commands already surface an adequate

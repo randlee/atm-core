@@ -33,6 +33,33 @@ Critical issue reporting contract:
   - logging emission, retained observability output, and doctor-facing
     reporting stay on shared paths
   - Phase W must not create separate per-subsystem reporting stacks
+  - if duplicate interface-specific error/reporting paths already exist, Phase
+    W should collapse them onto one shared implementation rather than preserve
+    parallel code
+- interface parity rule:
+  - same critical failures must preserve the same ATM error codes and the same
+    recovery intent across:
+    - same-host ATM CLI
+    - same-host `atm-graft` host flows
+    - cross-daemon socket / peer transport flows
+  - doctor/runtimե-health diagnostics remain one shared diagnostic surface even
+    when the failing interface differs
+
+Interface parity matrix:
+- same-host CLI:
+  - `crates/atm/src/composition.rs`
+  - `crates/atm-daemon-client/src/lib.rs`
+- same-host graft host:
+  - `crates/atm-graft/src/lib.rs`
+  - `crates/atm-graft/src/runtime.rs`
+  - `crates/atm-graft/src/transport.rs`
+- cross-daemon socket / peer transport:
+  - `crates/atm-daemon/src/peer_transport.rs`
+- shared error-envelope / doctor surfaces:
+  - `crates/atm-core/src/error.rs`
+  - `crates/atm-core/src/protocol.rs`
+  - `crates/atm-daemon/src/runtime_health.rs`
+  - `crates/atm-daemon/src/runtime_status_cache.rs`
 
 Execution shape:
 - `W.1` removes daemon-side silent `emit()` discards and defines the fallback
@@ -84,6 +111,12 @@ Cross-sprint dependencies:
   - shared observability trait for event emission
   - shared ATM CLI error surface for concise operator failures
   - shared `atm doctor` / runtime-health path for deeper diagnostics
+- every sprint must preserve one shared error contract across interfaces:
+  - no interface-specific replacement error taxonomy
+  - no drift where CLI, graft, and peer transport describe the same failure
+    class with incompatible ATM codes or contradictory recovery guidance
+  - duplicate error-mapping or reporting code paths for the same failure class
+    should be collapsed when the sprint touches them
 
 Current path inventory requirement:
 - every Phase W sprint doc must itemize the current log/error paths it will
