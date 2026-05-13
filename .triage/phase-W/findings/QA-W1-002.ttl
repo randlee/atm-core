@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/QA-W1-002>
+  a triage:Finding ;
+  triage:findingId "QA-W1-002" ;
+  triage:title "Unstructured tracing::warn! in local_ipc_transport.rs" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs:902 has tracing::warn! with no structured fields. Must add: tracing::warn!(subsystem = \"local_ipc\", action = \"dispatch\", deadline_ms = REQUEST_DEADLINE.as_millis(), \"daemon request dispatcher exceeded the runtime deadline\")" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-W1-002/pW-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-W1-002/pW-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-W1-002/integrate-phase-W/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-W1-002/integrate-phase-W/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s1/17bcf24> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/8f62794> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s1/17bcf24> .
+
+<urn:atm:triage:occurrence/QA-W1-002/pW-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 902 ;
+  triage:snippet "tracing::warn!(\"daemon request dispatcher exceeded the runtime deadline\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "17bcf24b7229cc06a98756b49375c2d464344275" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1/17bcf24> .
+
+<urn:atm:triage:occurrence/QA-W1-002/pW-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 55 ;
+  triage:snippet "tracing::warn!(\"ignoring non-unicode ATM_DAEMON_PEER_ADDR value\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "17bcf24b7229cc06a98756b49375c2d464344275" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1/17bcf24> .
+
+<urn:atm:triage:occurrence/QA-W1-002/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 902 ;
+  triage:snippet "tracing::warn!(\"daemon request dispatcher exceeded the runtime deadline\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8f627947bf1d6d15f46a8f8ab044c95b13d78e62" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8f62794> .
+
+<urn:atm:triage:occurrence/QA-W1-002/integrate-phase-W/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 55 ;
+  triage:snippet "tracing::warn!(\"ignoring non-unicode ATM_DAEMON_PEER_ADDR value\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8f627947bf1d6d15f46a8f8ab044c95b13d78e62" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8f62794> .
+
+<urn:atm:triage:worktree/pW-s1/17bcf24>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s1-emit-fallback" ;
+  triage:headSha "17bcf24b7229cc06a98756b49375c2d464344275" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/8f62794>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "8f627947bf1d6d15f46a8f8ab044c95b13d78e62" ;
+  triage:orderIndex 2 .

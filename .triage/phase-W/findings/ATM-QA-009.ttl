@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-009>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-009" ;
+  triage:title "exchange() IPC helper duplicated across crates/atm and crates/atm-graft" ;
+  triage:description "exchange() is duplicated in crates/atm/src/composition.rs:83-133 and crates/atm-graft/src/transport.rs:42-92. Must be consolidated into atm-daemon-client." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pW-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/pW-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/integrate-pW/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-009/integrate-pW/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s2/f3c1b3d> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-pW/fc2c8ae> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-pW/fc2c8ae> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pW-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 83 ;
+  triage:snippet "fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/pW-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub(crate) fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/integrate-pW/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 83 ;
+  triage:snippet "fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-pW/fc2c8ae> .
+
+<urn:atm:triage:occurrence/ATM-QA-009/integrate-pW/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 42 ;
+  triage:snippet "pub(crate) fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-pW/fc2c8ae> .
+
+<urn:atm:triage:worktree/pW-s2/f3c1b3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-pW/fc2c8ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:orderIndex 2 .
