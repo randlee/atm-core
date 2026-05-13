@@ -111,8 +111,10 @@ Coverage strategy for `V.4`:
 - require `.with_recovery(...)` on every daemon-unavailable, socket-connect,
   daemon-start, and local-IPC runtime path in those files unless a lower layer
   already preserves the exact same actionable guidance
-- verify coverage in QA with code review of the enumerated paths plus
-  workspace `cargo clippy -- -D warnings`
+- verify `.with_recovery(...)` coverage in QA with checklist review of the
+  enumerated paths
+- use workspace `cargo clippy -- -D warnings` only for Rust hygiene after the
+  recovery-text edits land
 
 ## Phase Ownership
 
