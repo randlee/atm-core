@@ -4,9 +4,9 @@
 plan_type: sprint_plan
 phase: V
 sprint: "V.3"
-status: planned
-worktree: TBD
-branch: TBD
+status: implemented
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s3-observability-cleanup
+branch: feature/pV-s3-observability-cleanup
 estimated_scope: M
 ```
 
@@ -30,7 +30,9 @@ Dependency note:
   reviewing:
   - `emit_runtime_event(...)`
   - `map_command_event(...)`
+  - `map_daemon_event(...)`
   - `map_runtime_event(...)`
+  - `record_daemon_event(...)`
   - any remaining daemon-wide wording/field-policy helper that exists only to
     rebuild subsystem semantics centrally
 - consolidate any now-redundant event-shaping paths left over from the old
@@ -53,6 +55,41 @@ Dependency note:
   rewritten
 - the sprint closes the remaining `ARCH-PU-002` / `RULE-002` implementation
   debt rather than carrying it forward again
+
+## Implementation Record
+
+### AC5 Deletion Record
+
+Confirmed removed from the final `V.3` code path:
+- `map_command_event(...)`
+- `map_daemon_event(...)`
+- `map_runtime_event(...)`
+- `emit_runtime_event(...)`
+- `record_daemon_event(...)`
+
+Callsite migration record:
+- command-side ATM observability emission now stays on
+  `ObservabilityPort::emit(...)` in
+  `crates/atm-daemon/src/daemon_observability.rs`
+- daemon subsystem emission now routes through
+  `SubsystemObservability::emit(...)` /
+  `SubsystemObservability::emit_event(...)` in
+  `crates/atm-daemon/src/daemon_runtime_observability.rs`
+- the injected daemon sink trait now receives fully shaped subsystem events via
+  `DaemonRuntimeObservability::emit_daemon_event(...)`
+- shared observability sink shaping remains only in
+  `DaemonObservability::emit_log_event(...)` as bottom-of-stack retained-log
+  output, not as a daemon-wide semantic reconstruction layer
+
+Deletion-vs-rewrite summary:
+- deleted:
+  - old central mapper helpers listed above
+  - the central daemon event reconstruction path they supported
+- rewritten:
+  - daemon subsystem callsites to emit already-shaped `DaemonEvent` payloads
+    through injected subsystem observability handles
+  - retained sink emission to operate on final shaped payloads instead of
+    subsystem-specific reconstruction helpers
 
 ## Out Of Scope
 

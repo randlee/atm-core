@@ -14,7 +14,6 @@ use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort, RetainedSinkFaultMode,
 };
-use atm_core::schema::AtmMessageId;
 use sc_observability::{
     LogSink, Logger, LoggerConfig, RetentionPolicy, RotationPolicy, SinkRegistration,
 };
@@ -116,13 +115,67 @@ impl DaemonObservability {
     }
 
     pub(crate) fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
-        let event = map_daemon_event(&self.service_name, &self.target_category, event)?;
-        self.logger.emit(event).map_err(|source| {
-            let code = source.diagnostic().code.as_str().to_string();
-            AtmError::observability_emit(format!(
-                "shared daemon observability emit failed ({code})"
-            ))
-            .with_source(source)
+        let mut fields = Map::new();
+        fields.insert(
+            "subsystem".to_string(),
+            serde_json::Value::String(event.subsystem.as_str().to_string()),
+        );
+        match &event.team {
+            TeamScope::Team(team) => {
+                fields.insert(
+                    "team".to_string(),
+                    serde_json::Value::String(team.to_string()),
+                );
+            }
+            TeamScope::None => {
+                fields.insert(
+                    "team_scope".to_string(),
+                    serde_json::Value::String("none".to_string()),
+                );
+            }
+        }
+        if let Some(agent) = event.agent.as_ref() {
+            fields.insert(
+                "agent".to_string(),
+                serde_json::Value::String(agent.to_string()),
+            );
+        }
+        if let Some(sender) = event.sender.as_ref() {
+            fields.insert(
+                "sender".to_string(),
+                serde_json::Value::String(sender.to_string()),
+            );
+        }
+        if let Some(recipient) = event.recipient.as_ref() {
+            fields.insert(
+                "recipient".to_string(),
+                serde_json::Value::String(recipient.to_string()),
+            );
+        }
+        if let Some(message_id) = event.message_id.as_ref() {
+            fields.insert(
+                "message_id".to_string(),
+                serde_json::Value::String(message_id.to_string()),
+            );
+        }
+        if let Some(task_id) = event.task_id.as_ref() {
+            fields.insert(
+                "task_id".to_string(),
+                serde_json::Value::String(task_id.to_string()),
+            );
+        }
+
+        self.emit_log_event(EmitLogEvent {
+            scope: "lifecycle",
+            action: event.action,
+            outcome: event.outcome,
+            message: Some(event.detail.into_owned()),
+            request_id: event.message_id.as_ref().map(|value| value.to_string()),
+            correlation_id: event
+                .task_id
+                .as_ref()
+                .map(|value| value.as_str().to_string()),
+            fields,
         })
     }
 
@@ -149,13 +202,70 @@ impl atm_core::boundary::sealed::Sealed for DaemonObservability {}
 
 impl ObservabilityPort for DaemonObservability {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
-        let event = map_command_event(&self.service_name, &self.target_category, event)?;
-        self.logger.emit(event).map_err(|source| {
-            let code = source.diagnostic().code.as_str().to_string();
-            AtmError::observability_emit(format!(
-                "shared daemon observability emit failed ({code})"
-            ))
-            .with_source(source)
+        let mut fields = Map::new();
+        fields.insert(
+            "command".to_string(),
+            serde_json::Value::String(event.command.to_string()),
+        );
+        fields.insert(
+            "team".to_string(),
+            serde_json::Value::String(event.team.to_string()),
+        );
+        fields.insert(
+            "agent".to_string(),
+            serde_json::Value::String(event.agent.to_string()),
+        );
+        fields.insert(
+            "sender".to_string(),
+            serde_json::Value::String(event.sender.to_string()),
+        );
+        fields.insert(
+            "requires_ack".to_string(),
+            serde_json::Value::Bool(event.requires_ack),
+        );
+        fields.insert(
+            "dry_run".to_string(),
+            serde_json::Value::Bool(event.dry_run),
+        );
+        if let Some(message_id) = event.message_id {
+            fields.insert(
+                "message_id".to_string(),
+                serde_json::Value::String(message_id.to_string()),
+            );
+        }
+        if let Some(task_id) = &event.task_id {
+            fields.insert(
+                "task_id".to_string(),
+                serde_json::Value::String(task_id.to_string()),
+            );
+        }
+        if let Some(error_code) = event.error_code {
+            fields.insert(
+                "error_code".to_string(),
+                serde_json::Value::String(error_code.to_string()),
+            );
+        }
+        if let Some(error_message) = &event.error_message {
+            fields.insert(
+                "error_message".to_string(),
+                serde_json::Value::String(error_message.clone()),
+            );
+        }
+
+        self.emit_log_event(EmitLogEvent {
+            scope: "observability",
+            action: event.action,
+            outcome: event.outcome,
+            message: Some(format!(
+                "ATM daemon handled {} with outcome {}",
+                event.command, event.outcome
+            )),
+            request_id: event.message_id.map(|value| value.to_string()),
+            correlation_id: event
+                .task_id
+                .as_ref()
+                .map(|value| value.as_str().to_string()),
+            fields,
         })
     }
 
@@ -199,6 +309,82 @@ impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
 
     fn best_effort_flush_blocking(&self) -> Result<(), AtmError> {
         Self::best_effort_flush_blocking(self)
+    }
+}
+
+struct EmitLogEvent {
+    scope: &'static str,
+    action: &'static str,
+    outcome: &'static str,
+    message: Option<String>,
+    request_id: Option<String>,
+    correlation_id: Option<String>,
+    fields: Map<String, serde_json::Value>,
+}
+
+impl DaemonObservability {
+    fn emit_log_event(&self, event: EmitLogEvent) -> Result<(), AtmError> {
+        let event = LogEvent {
+            version: SchemaVersion::new(
+                sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION,
+            )
+            .map_err(|source| {
+                AtmError::observability_emit(format!(
+                    "failed to validate ATM daemon {} schema version",
+                    event.scope
+                ))
+                .with_source(source)
+            })?,
+            timestamp: Timestamp::now_utc(),
+            level: level_for_outcome(event.outcome),
+            service: self.service_name.clone(),
+            target: self.target_category.clone(),
+            action: ActionName::new(event.action).map_err(|source| {
+                AtmError::observability_emit(format!(
+                    "failed to validate ATM daemon {} action",
+                    event.scope
+                ))
+                .with_source(source)
+            })?,
+            message: event.message,
+            identity: ProcessIdentity::default(),
+            trace: None,
+            request_id: event
+                .request_id
+                .as_deref()
+                .map(CorrelationId::new)
+                .transpose()
+                .map_err(|source| {
+                    AtmError::observability_emit("failed to validate ATM daemon request id")
+                        .with_source(source)
+                })?,
+            correlation_id: event
+                .correlation_id
+                .as_deref()
+                .map(CorrelationId::new)
+                .transpose()
+                .map_err(|source| {
+                    AtmError::observability_emit("failed to validate ATM daemon correlation id")
+                        .with_source(source)
+                })?,
+            outcome: Some(OutcomeLabel::new(event.outcome).map_err(|source| {
+                AtmError::observability_emit(format!(
+                    "failed to validate ATM daemon {} outcome",
+                    event.scope
+                ))
+                .with_source(source)
+            })?),
+            diagnostic: None,
+            state_transition: None,
+            fields: event.fields,
+        };
+        self.logger.emit(event).map_err(|source| {
+            let code = source.diagnostic().code.as_str().to_string();
+            AtmError::observability_emit(format!(
+                "shared daemon observability emit failed ({code})"
+            ))
+            .with_source(source)
+        })
     }
 }
 
@@ -558,225 +744,6 @@ fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError>
             ))),
         }
     }
-}
-
-fn map_command_event(
-    service_name: &ServiceName,
-    target_category: &TargetCategory,
-    event: CommandEvent,
-) -> Result<LogEvent, AtmError> {
-    let schema_version =
-        SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
-            .map_err(|source| {
-                AtmError::observability_emit(
-                    "failed to validate ATM daemon observability schema version",
-                )
-                .with_source(source)
-            })?;
-    let action = ActionName::new(event.action).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM daemon observability action")
-            .with_source(source)
-    })?;
-    let request_id = event
-        .message_id
-        .map(|value| CorrelationId::new(value.to_string()))
-        .transpose()
-        .map_err(|source| {
-            AtmError::observability_emit("failed to validate ATM daemon request id")
-                .with_source(source)
-        })?;
-    let correlation_id = event
-        .task_id
-        .as_deref()
-        .map(CorrelationId::new)
-        .transpose()
-        .map_err(|source| {
-            AtmError::observability_emit("failed to validate ATM daemon correlation id")
-                .with_source(source)
-        })?;
-    let outcome = OutcomeLabel::new(event.outcome).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM daemon outcome label")
-            .with_source(source)
-    })?;
-
-    let mut fields = Map::new();
-    fields.insert(
-        "command".to_string(),
-        serde_json::Value::String(event.command.to_string()),
-    );
-    fields.insert(
-        "team".to_string(),
-        serde_json::Value::String(event.team.to_string()),
-    );
-    fields.insert(
-        "agent".to_string(),
-        serde_json::Value::String(event.agent.to_string()),
-    );
-    fields.insert(
-        "sender".to_string(),
-        serde_json::Value::String(event.sender.to_string()),
-    );
-    fields.insert(
-        "requires_ack".to_string(),
-        serde_json::Value::Bool(event.requires_ack),
-    );
-    fields.insert(
-        "dry_run".to_string(),
-        serde_json::Value::Bool(event.dry_run),
-    );
-    if let Some(message_id) = event.message_id {
-        fields.insert(
-            "message_id".to_string(),
-            serde_json::Value::String(message_id.to_string()),
-        );
-    }
-    if let Some(task_id) = &event.task_id {
-        fields.insert(
-            "task_id".to_string(),
-            serde_json::Value::String(task_id.to_string()),
-        );
-    }
-    if let Some(error_code) = event.error_code {
-        fields.insert(
-            "error_code".to_string(),
-            serde_json::Value::String(error_code.to_string()),
-        );
-    }
-    if let Some(error_message) = &event.error_message {
-        fields.insert(
-            "error_message".to_string(),
-            serde_json::Value::String(error_message.clone()),
-        );
-    }
-
-    Ok(LogEvent {
-        version: schema_version,
-        timestamp: Timestamp::now_utc(),
-        level: level_for_outcome(event.outcome),
-        service: service_name.clone(),
-        target: target_category.clone(),
-        action,
-        message: Some(format!(
-            "ATM daemon handled {} with outcome {}",
-            event.command, event.outcome
-        )),
-        identity: ProcessIdentity::default(),
-        trace: None,
-        request_id,
-        correlation_id,
-        outcome: Some(outcome),
-        diagnostic: None,
-        state_transition: None,
-        fields,
-    })
-}
-
-fn map_daemon_event(
-    service_name: &ServiceName,
-    target_category: &TargetCategory,
-    event: DaemonEvent,
-) -> Result<LogEvent, AtmError> {
-    let schema_version =
-        SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
-            .map_err(|source| {
-                AtmError::observability_emit(
-                    "failed to validate ATM daemon lifecycle schema version",
-                )
-                .with_source(source)
-            })?;
-    let action = ActionName::new(event.action).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM daemon lifecycle action")
-            .with_source(source)
-    })?;
-    let outcome = OutcomeLabel::new(event.outcome).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM daemon lifecycle outcome")
-            .with_source(source)
-    })?;
-    let request_id = event
-        .message_id
-        .as_ref()
-        .map(|value: &AtmMessageId| CorrelationId::new(value.to_string()))
-        .transpose()
-        .map_err(|source| {
-            AtmError::observability_emit("failed to validate ATM daemon request id")
-                .with_source(source)
-        })?;
-    let correlation_id = event
-        .task_id
-        .as_ref()
-        .map(|value: &atm_core::types::TaskId| CorrelationId::new(value.as_str()))
-        .transpose()
-        .map_err(|source| {
-            AtmError::observability_emit("failed to validate ATM daemon correlation id")
-                .with_source(source)
-        })?;
-    let mut fields = Map::new();
-    fields.insert(
-        "subsystem".to_string(),
-        serde_json::Value::String(event.subsystem.as_str().to_string()),
-    );
-    match &event.team {
-        TeamScope::Team(team) => {
-            fields.insert(
-                "team".to_string(),
-                serde_json::Value::String(team.to_string()),
-            );
-        }
-        TeamScope::None => {
-            fields.insert(
-                "team_scope".to_string(),
-                serde_json::Value::String("none".to_string()),
-            );
-        }
-    }
-    if let Some(agent) = event.agent.as_ref() {
-        fields.insert(
-            "agent".to_string(),
-            serde_json::Value::String(agent.to_string()),
-        );
-    }
-    if let Some(sender) = event.sender.as_ref() {
-        fields.insert(
-            "sender".to_string(),
-            serde_json::Value::String(sender.to_string()),
-        );
-    }
-    if let Some(recipient) = event.recipient.as_ref() {
-        fields.insert(
-            "recipient".to_string(),
-            serde_json::Value::String(recipient.to_string()),
-        );
-    }
-    if let Some(message_id) = event.message_id.as_ref() {
-        fields.insert(
-            "message_id".to_string(),
-            serde_json::Value::String(message_id.to_string()),
-        );
-    }
-    if let Some(task_id) = event.task_id.as_ref() {
-        fields.insert(
-            "task_id".to_string(),
-            serde_json::Value::String(task_id.to_string()),
-        );
-    }
-
-    Ok(LogEvent {
-        version: schema_version,
-        timestamp: Timestamp::now_utc(),
-        level: level_for_outcome(event.outcome),
-        service: service_name.clone(),
-        target: target_category.clone(),
-        action,
-        message: Some(event.detail.into_owned()),
-        identity: ProcessIdentity::default(),
-        trace: None,
-        request_id,
-        correlation_id,
-        outcome: Some(outcome),
-        diagnostic: None,
-        state_transition: None,
-        fields,
-    })
 }
 
 fn map_logging_state(

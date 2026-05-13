@@ -125,6 +125,7 @@ pub(crate) struct RuntimeComposition {
     endpoint_guard: Mutex<Option<SocketEndpointGuard>>,
     server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
+    composition_observability: SubsystemObservability,
     _notification_sink: DaemonNotificationSink,
     _status_source: DaemonStatusSource,
     _watch_event_source: FileWatchEventSource,
@@ -204,6 +205,10 @@ impl RuntimeComposition {
                 status_cache.clone(),
                 Arc::clone(&observability),
             )),
+            composition_observability: SubsystemObservability::new(
+                DaemonSubsystem::Composition,
+                Arc::clone(&observability),
+            ),
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
             _watch_event_source: watch_event_source.clone(),
@@ -255,8 +260,7 @@ impl RuntimeComposition {
     }
 
     fn begin_shutdown(&self) -> Result<(), AtmError> {
-        self.request_dispatcher.record_daemon_event(
-            DaemonSubsystem::Composition,
+        let _ = self.composition_observability.emit(
             "shutdown_requested",
             "ok",
             "daemon shutdown requested",
@@ -273,25 +277,24 @@ impl RuntimeComposition {
         self.request_dispatcher.finalize_shutdown();
     }
 
+    fn emit_composition_event(
+        &self,
+        action: &'static str,
+        outcome: &'static str,
+        detail: &'static str,
+    ) {
+        let _ = self.composition_observability.emit(action, outcome, detail);
+    }
+
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        self.request_dispatcher.record_daemon_event(
-            DaemonSubsystem::Composition,
-            "start_requested",
-            "ok",
-            "daemon start requested",
-        );
+        self.emit_composition_event("start_requested", "ok", "daemon start requested");
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         // Startup replay must finish before the daemon binds its socket so
         // crash-recovered work cannot race newly accepted requests.
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
-                self.request_dispatcher.record_daemon_event(
-                    DaemonSubsystem::Composition,
-                    "startup_failed",
-                    "failed",
-                    "daemon startup failed",
-                );
+                self.emit_composition_event("startup_failed", "failed", "daemon startup failed");
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
@@ -308,12 +311,7 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
-            self.request_dispatcher.record_daemon_event(
-                DaemonSubsystem::Composition,
-                "startup_failed",
-                "failed",
-                "daemon startup failed",
-            );
+            self.emit_composition_event("startup_failed", "failed", "daemon startup failed");
             self.lifecycle.force_stopped()?;
             return Err(error);
         }
@@ -326,24 +324,14 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during runtime preparation rollback"
                     );
                 }
-                self.request_dispatcher.record_daemon_event(
-                    DaemonSubsystem::Composition,
-                    "startup_failed",
-                    "failed",
-                    "daemon startup failed",
-                );
+                self.emit_composition_event("startup_failed", "failed", "daemon startup failed");
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
         };
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        self.request_dispatcher.record_daemon_event(
-            DaemonSubsystem::Composition,
-            "startup_completed",
-            "ok",
-            "daemon startup completed",
-        );
+        self.emit_composition_event("startup_completed", "ok", "daemon startup completed");
         let request_dispatcher = Arc::clone(&self.request_dispatcher);
         let endpoint_guard = self.take_endpoint_guard()?;
         let result = runtime.serve_with_runtime_hooks(
@@ -368,22 +356,12 @@ impl RuntimeComposition {
         socket_path: PathBuf,
         ready_signal: Option<std::sync::mpsc::SyncSender<()>>,
     ) -> Result<(), AtmError> {
-        self.request_dispatcher.record_daemon_event(
-            DaemonSubsystem::Composition,
-            "start_requested",
-            "ok",
-            "daemon start requested",
-        );
+        self.emit_composition_event("start_requested", "ok", "daemon start requested");
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
-                self.request_dispatcher.record_daemon_event(
-                    DaemonSubsystem::Composition,
-                    "startup_failed",
-                    "failed",
-                    "daemon startup failed",
-                );
+                self.emit_composition_event("startup_failed", "failed", "daemon startup failed");
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
@@ -400,12 +378,7 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
-            self.request_dispatcher.record_daemon_event(
-                DaemonSubsystem::Composition,
-                "startup_failed",
-                "failed",
-                "daemon startup failed",
-            );
+            self.emit_composition_event("startup_failed", "failed", "daemon startup failed");
             self.lifecycle.force_stopped()?;
             return Err(error);
         }
@@ -421,24 +394,14 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during test runtime preparation rollback"
                     );
                 }
-                self.request_dispatcher.record_daemon_event(
-                    DaemonSubsystem::Composition,
-                    "startup_failed",
-                    "failed",
-                    "daemon startup failed",
-                );
+                self.emit_composition_event("startup_failed", "failed", "daemon startup failed");
                 self.lifecycle.force_stopped()?;
                 return Err(error);
             }
         };
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        self.request_dispatcher.record_daemon_event(
-            DaemonSubsystem::Composition,
-            "startup_completed",
-            "ok",
-            "daemon startup completed",
-        );
+        self.emit_composition_event("startup_completed", "ok", "daemon startup completed");
         let request_dispatcher = Arc::clone(&self.request_dispatcher);
         let endpoint_guard = self.take_endpoint_guard()?;
         let result = runtime.serve_with_runtime_hooks(
@@ -494,18 +457,12 @@ impl RuntimeComposition {
             };
         }
         match result.as_ref() {
-            Ok(()) => self.request_dispatcher.record_daemon_event(
-                DaemonSubsystem::Composition,
-                "shutdown_completed",
-                "ok",
-                "daemon shutdown completed",
-            ),
-            Err(_) => self.request_dispatcher.record_daemon_event(
-                DaemonSubsystem::Composition,
-                "shutdown_failed",
-                "failed",
-                "daemon shutdown failed",
-            ),
+            Ok(()) => {
+                self.emit_composition_event("shutdown_completed", "ok", "daemon shutdown completed")
+            }
+            Err(_) => {
+                self.emit_composition_event("shutdown_failed", "failed", "daemon shutdown failed")
+            }
         }
         result
     }
