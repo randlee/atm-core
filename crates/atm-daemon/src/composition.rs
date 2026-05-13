@@ -65,7 +65,12 @@ impl RuntimeLifecycle {
         let mut state = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime lifecycle state lock poisoned"))?;
+            .map_err(|_| {
+                AtmError::daemon_unavailable("runtime lifecycle state lock poisoned")
+                    .with_recovery(
+                        "Restart atm-daemon; runtime lifecycle transitions can no longer be trusted after the poisoned state lock.",
+                    )
+            })?;
         let current = *state;
         if !matches!(
             (current, next),
@@ -106,7 +111,12 @@ impl RuntimeLifecycle {
         let mut state = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime lifecycle state lock poisoned"))?;
+            .map_err(|_| {
+                AtmError::daemon_unavailable("runtime lifecycle state lock poisoned")
+                    .with_recovery(
+                        "Restart atm-daemon; runtime lifecycle transitions can no longer be trusted after the poisoned state lock.",
+                    )
+            })?;
         *state = RuntimeLifecycleState::Stopped;
         Ok(())
     }
@@ -600,6 +610,9 @@ where
                 AtmError::daemon_unavailable(format!(
                     "daemon {lane_name} shutdown worker panicked unexpectedly"
                 ))
+                .with_recovery(
+                    "Restart atm-daemon; one shutdown lane crashed while the runtime was draining background work.",
+                )
             })?;
             result
         }
@@ -612,18 +625,27 @@ where
             );
             Err(AtmError::daemon_unavailable(format!(
                 "daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"
-            )))
+            ))
+            .with_recovery(
+                "Restart atm-daemon after the stalled background lane stops holding runtime shutdown open.",
+            ))
         }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => shutdown_handle.join().map_or_else(
             |_| {
                 Err(AtmError::daemon_unavailable(format!(
                     "daemon {lane_name} shutdown worker panicked unexpectedly"
-                )))
+                ))
+                .with_recovery(
+                    "Restart atm-daemon; one shutdown lane crashed while the runtime was draining background work.",
+                ))
             },
             |_| {
                 Err(AtmError::daemon_unavailable(format!(
                     "daemon {lane_name} shutdown worker disconnected unexpectedly"
-                )))
+                ))
+                .with_recovery(
+                    "Restart atm-daemon; one shutdown lane stopped reporting progress during runtime teardown.",
+                ))
             },
         ),
     }

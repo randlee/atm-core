@@ -4,9 +4,9 @@
 plan_type: sprint_plan
 phase: V
 sprint: "V.4"
-status: planned
-worktree: TBD
-branch: TBD
+status: implemented
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s4-recovery-hardening
+branch: feature/pV-s4-recovery-hardening
 estimated_scope: M
 ```
 
@@ -80,6 +80,17 @@ Concrete targets:
 - the sprint plan names the concrete daemon-client and daemon source files that
   own the prioritized daemon-unavailable, socket-connect, daemon-start, and
   local-IPC runtime failure paths
+
+## Implementation Record
+
+Concrete V.4 closures:
+- `RBP-PU-001`: disconnected and publish-timeout daemon-unavailable paths now
+  carry path-specific recovery text in daemon-client auto-start/connect flows
+- `RBP-PU-002`: lifecycle join-helper spawn now degrades through typed
+  `AtmError` recovery instead of panicking
+- `QA-U-002`: daemon-unavailable and launch-gate retry/backoff failures now
+  document the exact operator action instead of relying on generic default
+  daemon guidance
 
 ## Out Of Scope
 
