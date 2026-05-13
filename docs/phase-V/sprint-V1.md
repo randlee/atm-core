@@ -1,4 +1,4 @@
-# Sprint V.1 — Runtime Test Isolation Lint
+# Sprint V.1 — Observability Boundary And Event Model
 
 ```yaml
 plan_type: sprint_plan
@@ -7,36 +7,43 @@ sprint: "V.1"
 status: planned
 worktree: TBD
 branch: TBD
-estimated_scope: S
+estimated_scope: M
 ```
 
 ## Goal
 
-Add a hard lint gate that forbids process-global mutable test seams in daemon
-runtime and transport code.
+Define the final daemon observability boundary so observability sits at the
+bottom of the stack and subsystem semantics stay in the owning subsystem.
+
+Carry-forward reference:
+- `RULE-002` / `ARCH-PU-002` from `docs/phase-U/sprint-U11.md` are the direct
+  source findings for this sprint.
 
 ## Scope
 
-- build on the existing lint-framework direction from `arch-inj` on
-  `feature/pQ-lint-tools`
-- detect and reject runtime or transport test hooks that use process-global
-  mutable state
-- scope enforcement first to the daemon/runtime/transport line where the Phase U
-  findings recurred
-- document approved alternatives:
-  instance-owned seams, constructor injection, and explicit test doubles
+- define the injected daemon observability trait shape
+- define the daemon subsystem event model
+- make `subsystem` explicit on daemon events
+- make `team` and message-context fields per-event payload rather than injected
+  logger state
+- define the hard boundary rule:
+  observability depends on no daemon subsystem types
+- update daemon requirements, architecture, and boundary docs to the final
+  ownership model
 
 ## Acceptance Criteria
 
-- a lint or equivalent hard gate exists for global mutable runtime test seams
-- the gate is documented with examples of forbidden and allowed patterns
-- the daemon/runtime code path can be checked without relying on manual review
-  only
-- no new production behavior is introduced
+- the final daemon observability boundary is documented
+- observability is explicitly bottom-of-stack
+- daemon subsystems depend on the injected observability trait, never the
+  reverse
+- `team`, `agent`, `sender`, `recipient`, `message_id`, and `task_id` are
+  documented as per-event fields when relevant
+- the final subsystem/event model is clear enough to implement without central
+  daemon event reconstruction
 
 ## Out Of Scope
 
-- broad test-style cleanup outside runtime/transport
-- converting every historical test seam in one sprint if the lint can land
-  first with a bounded remediation list
-- non-daemon workspace lint work unrelated to runtime seam isolation
+- code migration into subsystems
+- deleting old mapping code
+- general runtime failure recovery work outside observability

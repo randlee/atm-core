@@ -1,4 +1,4 @@
-# Sprint V.4 — Sprint-Close Hygiene Gate
+# Sprint V.4 — Recovery Context Hardening
 
 ```yaml
 plan_type: sprint_plan
@@ -7,38 +7,43 @@ sprint: "V.4"
 status: planned
 worktree: TBD
 branch: TBD
-estimated_scope: S
+estimated_scope: M
 ```
 
 ## Goal
 
-Turn recurring sprint-close bookkeeping misses into an explicit gate before QA
-handoff.
+Make daemon-unavailable and adjacent runtime failure paths consistently carry
+actionable recovery guidance so system testing is diagnosable.
 
 Carry-forward reference:
-- `ATM-QA-PU-001` through `ATM-QA-PU-005` are the motivating Phase U findings
-  for this sprint-close gate.
+- `RBP-PU-001` disconnected-arm handling and `RBP-PU-002` `join_helper`
+  recovery/context findings from the Phase U end-gate are concrete source
+  evidence for this sprint.
+- `QA-U-002` is the concrete daemon-unavailable recovery/backoff gap this
+  sprint must close.
 
 ## Scope
 
-- require sprint doc status updates before QA handoff
-- require relevant plan index or project-plan updates before QA handoff
-- define the minimum closeout checklist for a sprint branch:
-  status, references, merge-forward notes, and validation state
-- document whether enforcement is doc-check, lint, CI policy, or a combined
-  gate
+- define which daemon/client/runtime errors must carry explicit recovery text
+- add a checklist or lint strategy for `.with_recovery()` coverage on the
+  required paths
+- prioritize:
+  - daemon unavailable
+  - socket connect failures
+  - daemon start failures
+  - local IPC runtime failures
+- document when recovery text is mandatory versus optional
 
 ## Acceptance Criteria
 
-- the required sprint-close documentation updates are explicitly listed
-- QA handoff requirements are documented as a hard gate rather than a soft
-  reminder
-- the project-plan / sprint-doc relationship is clear enough that later phases
-  do not drift silently
-- no new product behavior is introduced
+- the required daemon-unavailable error paths are explicitly enumerated
+- `.with_recovery()` coverage is checked through a documented checklist, lint,
+  or both
+- required recovery text is specific and actionable rather than generic
+- the resulting rule set is documented for future daemon and client work
 
 ## Out Of Scope
 
-- general project-management process changes outside sprint-close hygiene
-- rewriting historical sprint docs unless needed to establish the rule
-- non-document release engineering unrelated to the documented gate
+- redesigning the full ATM error model
+- rewriting unrelated error messages with no daemon/runtime relevance
+- process-only sprint-close hygiene

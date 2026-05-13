@@ -1,4 +1,4 @@
-# Sprint V.3 — Recovery Context Hardening
+# Sprint V.3 — Observability Removal And Streamlining
 
 ```yaml
 plan_type: sprint_plan
@@ -12,34 +12,28 @@ estimated_scope: M
 
 ## Goal
 
-Make daemon-unavailable and adjacent runtime failure paths consistently carry
-actionable recovery guidance.
-
-Carry-forward reference:
-- `RBP-PU-001` disconnected-arm handling and `RBP-PU-002` `join_helper`
-  recovery/context findings from the Phase U end-gate are concrete source
-  evidence for the checklist or lint this sprint must establish.
+Delete the old central daemon observability mapping shape and streamline the
+final implementation so the system is ready for testing.
 
 ## Scope
 
-- define the daemon/client/runtime error classes that must carry explicit
-  recovery guidance
-- add a checklist or lint strategy for `.with_recovery()` coverage on the
-  required paths
-- prioritize daemon-unavailable, socket-connect, daemon-start, and local IPC
-  runtime failures
-- document when recovery text is mandatory versus optional
+- reduce `crates/atm-daemon/src/daemon_observability.rs` to thin sink and
+  bootstrap responsibilities
+- remove central daemon event reconstruction helpers and wrappers
+- consolidate any now-redundant event-shaping paths left over from the old
+  model
+- make the final implementation lean without losing useful runtime visibility
 
 ## Acceptance Criteria
 
-- the required daemon-unavailable error paths are explicitly enumerated
-- `.with_recovery()` coverage is checked through a documented checklist, lint,
-  or both
-- required recovery text is specific and actionable rather than generic
-- the resulting rule set is documented for future daemon and client work
+- `crates/atm-daemon/src/daemon_observability.rs` is thin and bottom-of-stack
+- obsolete mapping code introduced by the old central model is removed
+- duplicate event-shaping paths are consolidated
+- the resulting code shape is lean enough to support system testing without
+  carrying transitional observability baggage
 
 ## Out Of Scope
 
-- redesigning the full ATM error model
-- rewriting unrelated error messages with no daemon/runtime relevance
-- adding new user-facing features beyond better failure guidance
+- defining the event model from scratch
+- general daemon cleanup outside observability
+- broader runtime recovery work

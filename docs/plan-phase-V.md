@@ -2,67 +2,54 @@
 
 Goal:
 - close the daemon hardening follow-on work identified in the Phase U
-  post-mortem before daemon internals are treated as settled
-- add hard lint gates for runtime test seams and production cross-crate
-  `#[path]` imports
-- tighten daemon-unavailable recovery contracts and sprint-close hygiene
+  post-mortem before daemon observability and runtime failure handling are
+  treated as settled enough for system testing
 - close `ARCH-PU-002` by redesigning daemon observability as a bottom-of-stack
   sink boundary rather than a daemon-wide event reconstruction layer
+- migrate and streamline observability so the system has clear runtime signals
+  during testing
+- tighten daemon-unavailable recovery contracts so failures are actionable
 
 Planning branch:
 - `feature/daemon-hardening-plan`
 
 Expected execution shape:
-- `V.1` and `V.2` build hard lint gates on top of the existing lint-framework
-  direction from `arch-inj` on `feature/pQ-lint-tools`
-- `V.3` and `V.4` convert recurring release-gate findings into explicit
-  checklist or linted requirements
-- `V.5` closes the carried-forward daemon observability boundary issue and must
-  delete or streamline obsolete mapping code rather than preserve it
+- `V.1` defines the final observability boundary and event model
+- `V.2` migrates event ownership into the daemon subsystems
+- `V.3` removes old central mapping code and streamlines the final shape
+- `V.4` hardens daemon/client/runtime recovery guidance for testing-critical
+  failures
 
 Rationale:
-- `FTQ-U9-001` global static `Mutex` test seam recurrence closes under `V.1`
-  runtime test isolation lint
-- workspace `#[path]` boundary enforcement closes under `V.2` so production
-  cross-crate path imports stop depending on manual review
-- `QA-U-002` missing exponential backoff and related daemon-unavailable
-  recovery guidance closes under `V.3` recovery context hardening
-- sprint-close hygiene drift evidenced by `ATM-QA-PU-001` through
-  `ATM-QA-PU-005` closes under `V.4`
 - `RULE-002` / `ARCH-PU-002` around
   `crates/atm-daemon/src/daemon_observability.rs` `emit_runtime_event`
-  closes under `V.5`
+  drive the observability boundary/model, migration, and cleanup sequence in
+  `V.1` through `V.3`
+- `QA-U-002` plus `RBP-PU-001` / `RBP-PU-002` drive `V.4` recovery context
+  hardening because system testing needs actionable daemon/runtime failures
 
 Authoritative sprint sequence:
 - `docs/phase-V/sprint-V1.md`
 - `docs/phase-V/sprint-V2.md`
 - `docs/phase-V/sprint-V3.md`
 - `docs/phase-V/sprint-V4.md`
-- `docs/phase-V/sprint-V5.md`
 
 Sprint summary:
-- `V.1` runtime test isolation lint
-  - forbid global mutable test seams in runtime or transport code
-- `V.2` workspace `#[path]` lint
-  - forbid production cross-crate `#[path]` imports
-- `V.3` recovery context hardening
-  - require daemon-unavailable recovery guidance and consistent
-    `.with_recovery()` coverage on the daemon/client/runtime path
-- `V.4` sprint-close hygiene gate
-  - require doc status, plan index, and sprint-close bookkeeping before QA
-    handoff
-- `V.5` daemon observability boundary cleanup
-  - close `ARCH-PU-002`
-  - keep observability at the bottom of the stack
-  - remove central daemon event reconstruction
-  - move subsystem event semantics to the owning subsystem through an injected
-    thin logging trait
+- `V.1` observability boundary and event model
+- `V.2` observability migration into subsystems
+- `V.3` observability removal and streamlining
+- `V.4` recovery context hardening
+
+Deferred backlog items:
+- runtime test isolation lint
+  - source finding: `FTQ-U9-001`
+- workspace `#[path]` lint
+- sprint-close hygiene gate
+  - source findings: `ATM-QA-PU-001` through `ATM-QA-PU-005`
+- these items should be tracked as backlog GH issues rather than kept on the
+  critical path to system testing
 
 Phase rules:
-- no Phase V sprint may preserve a known-bad runtime seam or boundary shortcut
-  as an indefinite compatibility path
-- lint sprints should prefer hard failure for production-bound violations over
-  documentation-only warnings
 - observability cleanup must treat subsystem meaning as subsystem-owned:
   observability may emit structured events, but it must not import subsystem
   types or reconstruct subsystem semantics centrally
@@ -71,3 +58,5 @@ Phase rules:
 - daemon observability infrastructure may own bootstrap, sink setup, emit,
   query, follow, and health only; it must not become a backdoor coordination
   layer
+- system-testing-critical work stays on the Phase V execution line; other
+  post-mortem hardening items move to backlog unless they block testing

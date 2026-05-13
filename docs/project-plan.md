@@ -2977,47 +2977,54 @@ Planning branch:
 
 Goal:
 - close the daemon hardening follow-on work identified by the Phase U
-  post-mortem before daemon internals are treated as settled
-- add hard gates for recurring release-blocking patterns instead of relying on
-  ad hoc review memory
+  post-mortem before daemon observability and runtime failure handling are
+  treated as settled enough for system testing
 - close the carried-forward daemon observability boundary issue and remove the
   remaining central event-reconstruction shape
+- keep only testing-critical work on this line; defer the rest to backlog
 
 Execution shape:
-- `V.1` and `V.2` may proceed in parallel because both are lint-framework
-  extensions on top of the same general enforcement direction
-- `V.3` should follow `V.1` so recovery-context checks can reuse the newly
-  established runtime-hardening enforcement lane where possible
-- `V.4` may run once the final sprint-close hygiene contract is agreed, but it
-  should land before later daemon cleanup sprints start handing work to QA
-- `V.5` depends on the `V.1` / `V.2` lint-framework groundwork for any hard
-  observability boundary enforcement, even though the subsystem-owned event
-  model itself is a distinct cleanup line
+- `V.1` defines the observability boundary and event model
+- `V.2` migrates observability ownership into the daemon subsystems
+- `V.3` removes old central observability mapping code and streamlines the
+  final shape
+- `V.4` hardens daemon/client/runtime recovery guidance after the observability
+  line is in place
+- system testing should begin after `V.4`
 
 Planned sprint sequence:
 
-### V.1 — Runtime Test Isolation Lint
+### V.1 — Observability Boundary And Event Model
 
 Scope:
-- add a hard gate that forbids global mutable runtime/transport test seams
-- build on the lint-framework work already explored on
-  `arch-inj/feature/pQ-lint-tools`
+- define the final daemon observability boundary
+- keep observability at the bottom of the stack
+- define subsystem-owned event semantics and per-event context fields
 
 Acceptance:
-- production-bound runtime/transport code cannot add process-global mutable
-  test seams without failing the gate
+- the final observability boundary and event model are documented and ready to
+  implement
 
-### V.2 — Workspace `#[path]` Lint
+### V.2 — Observability Migration Into Subsystems
 
 Scope:
-- add a hard gate that forbids production cross-crate `#[path]` imports
-- build on the lint-framework work already explored on
-  `arch-inj/feature/pQ-lint-tools`
+- move event construction into daemon subsystems
+- keep shared observability infrastructure thin
 
 Acceptance:
-- production cross-crate `#[path]` imports fail the gate
+- subsystem-owned event emission replaces central daemon event reconstruction
 
-### V.3 — Recovery Context Hardening
+### V.3 — Observability Removal And Streamlining
+
+Scope:
+- reduce `crates/atm-daemon/src/daemon_observability.rs` to thin sink and
+  bootstrap responsibilities
+- remove obsolete mapping helpers and wrappers
+
+Acceptance:
+- the old central mapping model is removed and the remaining code is lean
+
+### V.4 — Recovery Context Hardening
 
 Scope:
 - require explicit recovery guidance on daemon-unavailable and related runtime
@@ -3028,26 +3035,10 @@ Acceptance:
 - the daemon/runtime paths that require recovery guidance are explicitly listed
 - their coverage is no longer a review-memory-only rule
 
-### V.4 — Sprint-Close Hygiene Gate
-
-Scope:
-- require sprint doc status updates and plan-index updates before QA handoff
-
-Acceptance:
-- sprint-close documentation hygiene is enforced as an explicit gate
-
-### V.5 — Daemon Observability Boundary Cleanup
-
-Scope:
-- close `ARCH-PU-002` from `docs/phase-U/sprint-U11.md`
-- fix the boundary shape around
-  `crates/atm-daemon/src/daemon_observability.rs`
-- keep observability at the bottom of the stack with no daemon subsystem type
-  imports
-- move event semantics into the owning subsystem through an injected thin
-  logging boundary
-
-Acceptance:
-- daemon observability is a thin sink/bootstrap boundary
-- central daemon event reconstruction is removed
-- leftover code from the old mapping model is deleted or streamlined
+Deferred backlog:
+- runtime test isolation lint
+  - create GH issue from `FTQ-U9-001`
+- workspace `#[path]` lint
+  - create GH issue for production cross-crate `#[path]` enforcement
+- sprint-close hygiene gate
+  - create GH issue from `ATM-QA-PU-001` through `ATM-QA-PU-005`
