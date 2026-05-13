@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-001" ;
+  triage:title "unexpected_response error construction duplicated across crates" ;
+  triage:description "unexpected_response error construction logic appears in both crates/atm-graft/src/transport.rs:149 and crates/atm/src/composition.rs:383. Must be consolidated into atm-daemon-client as single source of truth." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T19:54:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/pW-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/pW-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/integrate-phase-W/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001/integrate-phase-W/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s2/f3c1b3d> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/fc2c8ae> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/ARCH-001/pW-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 149 ;
+  triage:snippet "pub(crate) fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/ARCH-001/pW-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 383 ;
+  triage:snippet "fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/ARCH-001/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 149 ;
+  triage:snippet "pub(crate) fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/fc2c8ae> .
+
+<urn:atm:triage:occurrence/ARCH-001/integrate-phase-W/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 378 ;
+  triage:snippet "fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/fc2c8ae> .
+
+<urn:atm:triage:worktree/pW-s2/f3c1b3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/fc2c8ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:orderIndex 2 .
