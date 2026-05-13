@@ -1,7 +1,7 @@
 //! Phase R boundary skeleton contracts.
 
 use crate::error::AtmError;
-use crate::graft::GraftAdvisoryStreamRequest;
+use crate::graft::AdvisoryStreamRequest;
 use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
 pub use crate::protocol::{
     NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
@@ -227,11 +227,11 @@ pub trait RequestDispatcher: sealed::Sealed + Send + Sync {
 
     /// # Errors
     ///
-    /// Returns `AtmError` when a long-lived graft advisory stream cannot be
+    /// Returns `AtmError` when a long-lived advisory stream cannot be
     /// established or when advisory delivery cannot continue reliably.
-    fn dispatch_graft_advisory_stream(
+    fn dispatch_advisory_stream(
         &self,
-        request: GraftAdvisoryStreamRequest,
+        request: AdvisoryStreamRequest,
         sink: &mut dyn AdvisoryStreamSink,
     ) -> Result<(), AtmError>;
 }

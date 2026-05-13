@@ -47,12 +47,11 @@ Current request/response packet families owned by the daemon transport line:
 - clear
 - doctor
 - heartbeat
-- temporary graft session/advisory packet family during `U.9`/`U.10` restack:
-  - graft register
-  - graft unregister
-  - graft fetch
-  - graft drain
-  - `GraftAdvisoryStream`
+- advisory register
+- advisory unregister
+- advisory fetch
+- advisory drain
+- advisory stream
   - production requirement: one live advisory stream per active embedded
     client session
   - the live advisory stream is the production nudge-delivery path whenever the

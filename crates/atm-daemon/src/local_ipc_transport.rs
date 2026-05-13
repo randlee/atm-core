@@ -140,8 +140,6 @@ pub(crate) struct PreparedRuntimeServer {
     registry: Arc<ActiveConnectionRegistry>,
     force_shutdown: Arc<AtomicBool>,
     codec: JsonAtmProtocolCodec,
-    #[cfg(test)]
-    injected_accept_error_signal: Option<std::sync::mpsc::SyncSender<()>>,
     // The endpoint guard must drop after the listener and connection registry have been torn
     // down so same-host endpoint unpublication never races a still-live serving resource.
     endpoint_guard: Option<SocketEndpointGuard>,
@@ -232,18 +230,7 @@ impl PreparedRuntimeServer {
             registry: Arc::new(ActiveConnectionRegistry::default()),
             force_shutdown: Arc::new(AtomicBool::new(false)),
             codec: JsonAtmProtocolCodec,
-            #[cfg(test)]
-            injected_accept_error_signal: None,
         })
-    }
-
-    #[cfg(test)]
-    #[cfg_attr(not(unix), allow(dead_code))]
-    pub(crate) fn install_injected_accept_error_for_test(
-        &mut self,
-        signal: std::sync::mpsc::SyncSender<()>,
-    ) {
-        self.injected_accept_error_signal = Some(signal);
     }
 
     pub(crate) fn serve_with_runtime_hooks<
@@ -299,8 +286,6 @@ impl PreparedRuntimeServer {
             registry,
             force_shutdown,
             codec,
-            #[cfg(test)]
-            mut injected_accept_error_signal,
         } = self;
         thread::scope(|scope| -> Result<(), AtmError> {
             // Each serving invocation owns its own shutdown beacon. The beacon must not survive a
@@ -420,16 +405,10 @@ impl PreparedRuntimeServer {
                     continue;
                 }
                 #[cfg(test)]
-                if let Some(sender) = injected_accept_error_signal.take() {
-                    let _ = sender.send(());
+                if let Some(error) = take_injected_accept_error_for_test() {
                     shutdown_beacon.trip();
                     let _ = lifecycle_control.notify_state_change();
-                    serve_error = Some(
-                        AtmError::daemon_unavailable(
-                            "injected daemon local IPC accept error for test",
-                        )
-                        .with_recovery("Test-only injected accept failure."),
-                    );
+                    serve_error = Some(error);
                     break;
                 }
 
@@ -783,6 +762,47 @@ fn write_shutdown_response(
     Ok(ShutdownResponseOutcome::RejectedRequest)
 }
 
+#[cfg(test)]
+static INJECTED_ACCEPT_ERROR_FOR_TEST: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>> =
+    std::sync::Mutex::new(None);
+
+#[cfg(test)]
+#[cfg_attr(not(unix), allow(dead_code))]
+pub(crate) fn install_injected_accept_error_for_test(
+    signal: std::sync::mpsc::SyncSender<()>,
+) -> InjectAcceptErrorGuard {
+    *INJECTED_ACCEPT_ERROR_FOR_TEST
+        .lock()
+        .expect("accept error injection lock") = Some(signal);
+    InjectAcceptErrorGuard
+}
+
+#[cfg(test)]
+#[cfg_attr(not(unix), allow(dead_code))]
+pub(crate) struct InjectAcceptErrorGuard;
+
+#[cfg(test)]
+impl Drop for InjectAcceptErrorGuard {
+    fn drop(&mut self) {
+        *INJECTED_ACCEPT_ERROR_FOR_TEST
+            .lock()
+            .expect("accept error injection lock") = None;
+    }
+}
+
+#[cfg(test)]
+fn take_injected_accept_error_for_test() -> Option<AtmError> {
+    let sender = INJECTED_ACCEPT_ERROR_FOR_TEST
+        .lock()
+        .expect("accept error injection lock")
+        .take()?;
+    let _ = sender.send(());
+    Some(
+        AtmError::daemon_unavailable("injected daemon local IPC accept error for test")
+            .with_recovery("Test-only injected accept failure."),
+    )
+}
+
 fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
     if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
         return Ok(());
@@ -849,7 +869,7 @@ fn handle_connection(
         "daemon request frame accepted under configured size cap"
     );
     let (request_id, request) = codec.request_from_frame(frame)?;
-    if let RequestEnvelope::GraftAdvisoryStream(request) = request {
+    if let RequestEnvelope::AdvisoryStream(request) = request {
         stream.set_send_timeout(None).map_err(|source| {
             AtmError::daemon_unavailable(
                 "failed to clear daemon advisory-stream write deadline",
@@ -865,7 +885,7 @@ fn handle_connection(
             request_id,
             force_shutdown,
         };
-        return dispatcher.dispatch_graft_advisory_stream(request, &mut sink);
+        return dispatcher.dispatch_advisory_stream(request, &mut sink);
     }
 
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
@@ -937,7 +957,7 @@ struct LocalIpcAdvisoryStreamSink<'a> {
     stream: &'a mut LocalSocketStream,
     codec: &'a JsonAtmProtocolCodec,
     request_id: RequestId,
-    force_shutdown: &'a AtomicBool,
+    force_shutdown: &'a std::sync::atomic::AtomicBool,
 }
 
 impl boundary::AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
@@ -958,7 +978,8 @@ impl boundary::AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
     }
 
     fn stop_requested(&self) -> bool {
-        self.force_shutdown.load(Ordering::SeqCst)
+        self.force_shutdown
+            .load(std::sync::atomic::Ordering::SeqCst)
     }
 }
 
@@ -1006,9 +1027,9 @@ mod tests {
             panic!("intentional dispatcher panic for test: {request:?}");
         }
 
-        fn dispatch_graft_advisory_stream(
+        fn dispatch_advisory_stream(
             &self,
-            request: atm_core::graft::GraftAdvisoryStreamRequest,
+            request: atm_core::graft::AdvisoryStreamRequest,
             _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
         ) -> Result<(), atm_core::error::AtmError> {
             panic!("intentional dispatcher panic for advisory stream test: {request:?}");
@@ -1046,7 +1067,7 @@ mod tests {
     #[cfg(unix)]
     #[test]
     #[serial]
-    fn accept_error_without_lifecycle_signal_exits_within_deadline() {
+    fn accept_error_without_lifecycle_signal_exits_within_one_second() {
         let tempdir = TempDir::new().expect("tempdir");
         let atm_home = tempdir.path().join("atm-home");
         std::fs::create_dir_all(&atm_home).expect("atm home dir");
@@ -1064,7 +1085,7 @@ mod tests {
         let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
         let (serve_result_tx, serve_result_rx) = mpsc::channel();
         let (inject_tx, inject_rx) = mpsc::sync_channel(1);
-        runtime.install_injected_accept_error_for_test(inject_tx);
+        let _inject_guard = install_injected_accept_error_for_test(inject_tx);
 
         let join = std::thread::spawn(move || {
             // These shortened deadlines validate immediate shutdown-beacon wake correctness, not
@@ -1085,16 +1106,16 @@ mod tests {
         });
 
         inject_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("accept error should inject within 5s");
+            .recv_timeout(Duration::from_secs(1))
+            .expect("accept error should inject within 1s");
         let shutdown_started = Instant::now();
         let error = serve_result_rx
-            .recv_timeout(Duration::from_secs(5))
-            .expect("serve result should arrive within 5s")
+            .recv_timeout(Duration::from_secs(1))
+            .expect("serve result should arrive within 1s")
             .expect_err("serve should fail after injected accept error");
         assert!(
-            shutdown_started.elapsed() <= Duration::from_secs(5),
-            "lifecycle waiter should observe the shutdown beacon and exit within 5s"
+            shutdown_started.elapsed() <= Duration::from_secs(1),
+            "lifecycle waiter should observe the shutdown beacon and exit within 1s"
         );
         assert!(error.message.contains("accept error") || error.message.contains("accepting"));
         join.join().expect("join serve thread");
@@ -1309,7 +1330,7 @@ mod tests {
         )
         .expect_err("bounded drain should fail once the forced-cancel deadline elapses");
         assert!(
-            shutdown_started.elapsed() < Duration::from_secs(5),
+            shutdown_started.elapsed() < Duration::from_secs(1),
             "forced cancel should bound shutdown even when tracked request work never completes"
         );
         assert!(force_shutdown.load(Ordering::SeqCst));

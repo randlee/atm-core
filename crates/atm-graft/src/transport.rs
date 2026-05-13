@@ -1,18 +1,15 @@
 use std::io::Write;
 use std::path::PathBuf;
-use std::time::Duration;
 
 use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::error::AtmError;
-use atm_core::graft::GraftAdvisoryStreamRequest;
 use atm_core::protocol::{RequestEnvelope, RequestId, ResponseEnvelope};
 use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint};
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 
-const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
-pub(crate) const LIVE_ADVISORY_RECV_TIMEOUT: Duration = Duration::from_secs(1);
+use crate::{ADVISORY_STREAM_READ_DEADLINE, SAME_HOST_REQUEST_DEADLINE};
 
 #[derive(Debug)]
 pub(crate) struct GraftLocalIpcClientTransport {
@@ -42,7 +39,7 @@ impl GraftLocalIpcClientTransport {
         })
     }
 
-    fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    pub(crate) fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let mut stream = self.try_connect()?;
         stream
             .set_send_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
@@ -96,7 +93,7 @@ impl GraftLocalIpcClientTransport {
 
     pub(crate) fn open_advisory_stream(
         &self,
-        request: GraftAdvisoryStreamRequest,
+        request: atm_core::graft::AdvisoryStreamRequest,
     ) -> Result<ActiveAdvisoryStream, AtmError> {
         let mut stream = self.try_connect()?;
         stream
@@ -110,7 +107,7 @@ impl GraftLocalIpcClientTransport {
         let request_id = atm_core::protocol::next_request_id();
         let frame = atm_core::protocol::request_to_frame_payload(
             request_id,
-            RequestEnvelope::GraftAdvisoryStream(request),
+            RequestEnvelope::AdvisoryStream(request),
         )?;
         atm_core::protocol::write_frame(
             &mut stream,
@@ -128,10 +125,10 @@ impl GraftLocalIpcClientTransport {
             .with_source(source)
         })?;
         stream
-            .set_recv_timeout(Some(LIVE_ADVISORY_RECV_TIMEOUT))
+            .set_recv_timeout(Some(ADVISORY_STREAM_READ_DEADLINE))
             .map_err(|source| {
                 AtmError::daemon_unavailable(
-                    "failed to configure graft advisory-stream read timeout after request publish",
+                    "failed to configure bounded graft advisory-stream read timeout",
                 )
                 .with_source(source)
             })?;
@@ -161,5 +158,14 @@ pub(crate) fn resolve_daemon_bin() -> Result<DaemonBinaryPath, AtmError> {
     })?;
     DaemonBinaryPath::new(
         current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
+    )
+}
+
+pub(crate) fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
+    AtmError::validation(format!(
+        "transport returned an unexpected response for `{command}`: {response:?}"
+    ))
+    .with_recovery(
+        "Retry the graft operation once. If the mismatch persists, inspect daemon/client version alignment and retained daemon logs before retrying again.",
     )
 }

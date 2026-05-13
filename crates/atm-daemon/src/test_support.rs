@@ -24,7 +24,7 @@ impl Drop for LifecycleFlagResetGuard {
     fn drop(&mut self) {
         self.lifecycle.set_terminate_for_test(false);
         self.lifecycle.set_reload_for_test(false);
-        if let Err(error) = self.lifecycle.shutdown_worker_with_timeout() {
+        if let Err(error) = self.lifecycle.reset_shared_state_for_test() {
             tracing::warn!(
                 %error,
                 "failed to drain shared lifecycle worker during test reset"
@@ -73,9 +73,9 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
         }
     }
 
-    fn dispatch_graft_advisory_stream(
+    fn dispatch_advisory_stream(
         &self,
-        _request: atm_core::graft::GraftAdvisoryStreamRequest,
+        _request: atm_core::graft::AdvisoryStreamRequest,
         _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
     ) -> Result<(), atm_core::error::AtmError> {
         panic!("unexpected advisory stream request in DoctorOnlyDispatcher");

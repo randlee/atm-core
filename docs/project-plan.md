@@ -2929,6 +2929,9 @@ Scope:
 - keep `atm-graft` as one consumer of that surface rather than a daemon-owned
   subsystem
 
+Status:
+- completed on `feature/pU-u10-generic-advisory-notification`
+
 Acceptance:
 - the daemon owns only a generic advisory-notification surface
 - any message family needed for advisory delivery remains part of the same

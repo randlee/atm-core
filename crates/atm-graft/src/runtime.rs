@@ -1,49 +1,77 @@
 use std::io;
-use std::sync::mpsc::{self, RecvTimeoutError};
+use std::path::Path;
+use std::sync::mpsc::{self, Receiver, RecvTimeoutError, TryRecvError};
 use std::sync::{Arc, RwLock};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
 
+use atm_core::GraftConfig;
 use atm_core::error::AtmError;
-use atm_core::error_codes::AtmErrorCode;
 use atm_core::graft::{
-    GraftAdvisoryStreamRequest, GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeFetchRequest,
-    GraftSessionRegistrationRequest, GraftSessionState, GraftSessionUnregistrationRequest,
-    MAX_GRAFT_BATCH_LIMIT,
+    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisorySessionPort,
+    AdvisorySessionRegistrationRequest, AdvisorySessionState, AdvisorySessionUnregistrationRequest,
+    AdvisoryStreamRequest,
 };
-use atm_core::protocol::ResponseEnvelope;
+use atm_core::protocol::{self, ResponseEnvelope};
 
-use crate::local_ipc::ActiveAdvisoryStream;
-use crate::{
-    GraftObservability, GraftSessionClient, HostNudgeInjector, SessionSnapshot, read_snapshot,
-    set_session_state, validate_batch_limit_against_capacity,
-};
+use crate::transport::ActiveAdvisoryStream;
+use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};
 
-const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
-const MAX_LIVE_RECONNECT_BACKOFF: Duration = Duration::from_secs(5);
-const MAX_LIVE_RECONNECT_ATTEMPTS: usize = 16;
-
-pub(crate) struct ReceiveLoopContext {
-    pub(crate) client: Arc<dyn GraftSessionClient>,
-    pub(crate) registration_request: GraftSessionRegistrationRequest,
-    pub(crate) drain_request: GraftNudgeDrainRequest,
-    pub(crate) poll_interval: Duration,
-    pub(crate) snapshot: Arc<RwLock<SessionSnapshot>>,
-    pub(crate) injector: Arc<dyn HostNudgeInjector>,
-    pub(crate) observability: Arc<dyn GraftObservability>,
-    pub(crate) stop_rx: mpsc::Receiver<()>,
+pub(crate) fn load_graft_config(workspace_root: &Path) -> Result<Option<GraftConfig>, AtmError> {
+    let config = atm_core::load_atm_config(workspace_root)?;
+    Ok(config.map(|config| config.graft))
 }
 
-pub(crate) struct LiveReceiveLoopContext {
-    pub(crate) client: Arc<dyn GraftSessionClient>,
-    pub(crate) registration_request: GraftSessionRegistrationRequest,
-    pub(crate) advisory_stream: ActiveAdvisoryStream,
-    pub(crate) limit: GraftBatchLimit,
-    pub(crate) reconnect_backoff: Duration,
-    pub(crate) snapshot: Arc<RwLock<SessionSnapshot>>,
-    pub(crate) injector: Arc<dyn HostNudgeInjector>,
-    pub(crate) observability: Arc<dyn GraftObservability>,
-    pub(crate) stop_rx: mpsc::Receiver<()>,
+pub(crate) fn read_snapshot(
+    snapshot: &Arc<RwLock<SessionSnapshot>>,
+) -> Result<SessionSnapshot, AtmError> {
+    snapshot
+        .read()
+        .map(|snapshot| snapshot.clone())
+        .map_err(|_| {
+            AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
+                "Restart the embedding host before retrying graft session lifecycle operations.",
+            )
+        })
+}
+
+fn write_snapshot(
+    snapshot: &Arc<RwLock<SessionSnapshot>>,
+    state: AdvisorySessionState,
+) -> Result<(), AtmError> {
+    let mut snapshot = snapshot.write().map_err(|_| {
+        AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
+            "Restart the embedding host before retrying graft session lifecycle operations.",
+        )
+    })?;
+    snapshot.state = state;
+    Ok(())
+}
+
+pub(crate) fn set_session_state(
+    snapshot: &Arc<RwLock<SessionSnapshot>>,
+    state: AdvisorySessionState,
+    observability: &dyn GraftObservability,
+) -> Result<(), AtmError> {
+    write_snapshot(snapshot, state)?;
+    observability.session_state_changed(&read_snapshot(snapshot)?);
+    Ok(())
+}
+
+pub(crate) fn validate_batch_limit_against_capacity(
+    batch_limit: AdvisoryBatchLimit,
+    queue_capacity: usize,
+) -> Result<(), AtmError> {
+    if batch_limit.get() > queue_capacity {
+        return Err(AtmError::validation(format!(
+            "graft batch limit {} exceeds daemon queue capacity {}",
+            batch_limit.get(),
+            queue_capacity
+        ))
+        .with_recovery(
+            "Lower the graft batch limit or restart against a daemon that advertises a larger graft nudge queue before retrying session activation.",
+        ));
+    }
+    Ok(())
 }
 
 pub(crate) fn join_receive_loop_with_deadline(
@@ -106,15 +134,38 @@ pub(crate) fn join_receive_loop_with_deadline(
     }
 }
 
+pub(crate) struct ReceiveLoopContext {
+    pub(crate) client: Arc<dyn GraftSessionClient>,
+    pub(crate) registration_request: AdvisorySessionRegistrationRequest,
+    pub(crate) drain_request: AdvisoryDrainRequest,
+    pub(crate) poll_interval: std::time::Duration,
+    pub(crate) snapshot: Arc<RwLock<SessionSnapshot>>,
+    pub(crate) injector: Arc<dyn crate::HostNudgeInjector>,
+    pub(crate) observability: Arc<dyn GraftObservability>,
+    pub(crate) stop_rx: Receiver<()>,
+}
+
+pub(crate) struct LiveReceiveLoopContext {
+    pub(crate) client: Arc<dyn GraftSessionClient>,
+    pub(crate) registration_request: AdvisorySessionRegistrationRequest,
+    pub(crate) advisory_stream: ActiveAdvisoryStream,
+    pub(crate) limit: AdvisoryBatchLimit,
+    pub(crate) reconnect_backoff: std::time::Duration,
+    pub(crate) snapshot: Arc<RwLock<SessionSnapshot>>,
+    pub(crate) injector: Arc<dyn crate::HostNudgeInjector>,
+    pub(crate) observability: Arc<dyn GraftObservability>,
+    pub(crate) stop_rx: Receiver<()>,
+}
+
 pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> {
     let session_id = ctx.drain_request.session_id.clone();
     loop {
         match ctx.stop_rx.recv_timeout(ctx.poll_interval) {
             Ok(()) => {
-                return close_receive_loop_session(
-                    &ctx.snapshot,
-                    &ctx.client,
+                return unregister_session_and_close(
+                    &*ctx.client,
                     &session_id,
+                    &ctx.snapshot,
                     ctx.observability.as_ref(),
                 );
             }
@@ -122,7 +173,7 @@ pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> 
             Err(RecvTimeoutError::Disconnected) => {
                 set_session_state(
                     &ctx.snapshot,
-                    GraftSessionState::Closed,
+                    AdvisorySessionState::Closed,
                     ctx.observability.as_ref(),
                 )?;
                 return Ok(());
@@ -131,10 +182,10 @@ pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> 
 
         match ctx.client.drain_nudges(ctx.drain_request.clone()) {
             Ok(response) => {
-                if read_snapshot(&ctx.snapshot)?.state != GraftSessionState::Registered {
+                if read_snapshot(&ctx.snapshot)?.state != AdvisorySessionState::Registered {
                     set_session_state(
                         &ctx.snapshot,
-                        GraftSessionState::Registered,
+                        AdvisorySessionState::Registered,
                         ctx.observability.as_ref(),
                     )?;
                 }
@@ -146,7 +197,7 @@ pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> 
             Err(error) => {
                 set_session_state(
                     &ctx.snapshot,
-                    GraftSessionState::Disconnected,
+                    AdvisorySessionState::Disconnected,
                     ctx.observability.as_ref(),
                 )?;
                 ctx.observability
@@ -164,14 +215,14 @@ pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> 
                         )?;
                         set_session_state(
                             &ctx.snapshot,
-                            GraftSessionState::Registered,
+                            AdvisorySessionState::Registered,
                             ctx.observability.as_ref(),
                         )?;
                     }
                     Err(register_error) if is_duplicate_registration(&register_error) => {
                         set_session_state(
                             &ctx.snapshot,
-                            GraftSessionState::Registered,
+                            AdvisorySessionState::Registered,
                             ctx.observability.as_ref(),
                         )?;
                     }
@@ -192,73 +243,70 @@ pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> 
 }
 
 pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(), AtmError> {
-    let session_id = ctx.registration_request.session_id.clone();
-    let mut reconnect_attempts = 0usize;
-    let mut reconnect_backoff = ctx.reconnect_backoff;
-
     loop {
         if stop_requested(&ctx.stop_rx) {
-            return close_receive_loop_session(
+            return unregister_session_and_close(
+                &*ctx.client,
+                &ctx.registration_request.session_id,
                 &ctx.snapshot,
-                &ctx.client,
-                &session_id,
                 ctx.observability.as_ref(),
             );
         }
 
-        let frame = match atm_core::protocol::read_frame(
+        let frame = match protocol::read_frame(
             &mut ctx.advisory_stream.stream,
             "failed to read graft advisory-stream frame",
             "graft advisory-stream frame exceeded the maximum supported size",
         ) {
-            Ok(Some(frame)) => {
-                reconnect_attempts = 0;
-                reconnect_backoff = ctx.reconnect_backoff;
-                frame
-            }
+            Ok(Some(frame)) => frame,
             Ok(None) => return Ok(()),
-            Err(error) if is_timeout_error(&error) => continue,
+            Err(error) if is_socket_timeout_error(&error) => {
+                continue;
+            }
             Err(error) => {
                 set_session_state(
                     &ctx.snapshot,
-                    GraftSessionState::Disconnected,
+                    AdvisorySessionState::Disconnected,
                     ctx.observability.as_ref(),
                 )?;
-                ctx.observability
-                    .session_error(&session_id, "advisory_stream", &error);
-
-                reconnect_attempts = reconnect_attempts.saturating_add(1);
-                if reconnect_attempts > MAX_LIVE_RECONNECT_ATTEMPTS {
-                    return Err(AtmError::daemon_unavailable(format!(
-                        "graft advisory stream exceeded the reconnect cap of {MAX_LIVE_RECONNECT_ATTEMPTS} attempts"
-                    ))
-                    .with_recovery(
-                        "Restart the embedding host or atm-daemon after the advisory stream exceeds the bounded reconnect budget.",
-                    )
-                    .with_source(error));
-                }
-                if wait_for_stop_or_timeout(&ctx.stop_rx, reconnect_backoff) {
-                    return close_receive_loop_session(
+                ctx.observability.session_error(
+                    &ctx.registration_request.session_id,
+                    "advisory_stream",
+                    &error,
+                );
+                let _ = ctx.stop_rx.recv_timeout(ctx.reconnect_backoff);
+                if stop_requested(&ctx.stop_rx) {
+                    return unregister_session_and_close(
+                        &*ctx.client,
+                        &ctx.registration_request.session_id,
                         &ctx.snapshot,
-                        &ctx.client,
-                        &session_id,
                         ctx.observability.as_ref(),
                     );
                 }
-                ctx.advisory_stream = reopen_advisory_stream(&ctx)?;
-                reconnect_backoff = next_reconnect_backoff(reconnect_backoff);
+                match ctx
+                    .client
+                    .register_session(ctx.registration_request.clone())
+                {
+                    Ok(_) => {}
+                    Err(register_error) if is_duplicate_registration(&register_error) => {}
+                    Err(register_error) => return Err(register_error),
+                }
+                ctx.advisory_stream = ctx.client.open_advisory_stream(AdvisoryStreamRequest {
+                    registration: ctx.registration_request.clone(),
+                    limit: ctx.limit,
+                })?;
                 set_session_state(
                     &ctx.snapshot,
-                    GraftSessionState::Registered,
+                    AdvisorySessionState::Registered,
                     ctx.observability.as_ref(),
                 )?;
                 continue;
             }
         };
-        let (response_id, response) = atm_core::protocol::response_from_frame_payload(frame)?;
+        let (response_id, response) = protocol::response_from_frame_payload(frame)?;
         if response_id != ctx.advisory_stream.request_id {
             return Err(AtmError::daemon_unavailable(format!(
-                "graft advisory stream response request_id {} did not match request_id {}",
+                "advisory stream response request_id {} did not match request_id {}",
                 response_id, ctx.advisory_stream.request_id
             ))
             .with_recovery(
@@ -266,119 +314,66 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
             ));
         }
         match response {
-            ResponseEnvelope::GraftAdvisoryStream(batch) => {
-                if read_snapshot(&ctx.snapshot)?.state != GraftSessionState::Registered {
+            ResponseEnvelope::AdvisoryStream(batch) => {
+                if read_snapshot(&ctx.snapshot)?.state != AdvisorySessionState::Registered {
                     set_session_state(
                         &ctx.snapshot,
-                        GraftSessionState::Registered,
+                        AdvisorySessionState::Registered,
                         ctx.observability.as_ref(),
                     )?;
                 }
                 for nudge in batch.nudges {
                     ctx.injector.inject_nudge(nudge.clone())?;
-                    ctx.observability.nudge_delivered(&session_id, &nudge);
+                    ctx.observability
+                        .nudge_delivered(&ctx.registration_request.session_id, &nudge);
                 }
             }
             ResponseEnvelope::Error(error) => return Err(error.into_atm_error()),
             other => {
-                return Err(AtmError::validation(format!(
-                    "transport returned an unexpected response for `graft advisory stream`: {other:?}"
-                ))
-                .with_recovery(
-                    "Retry the graft operation once. If the mismatch persists, inspect daemon/client version alignment and retained daemon logs before retrying again.",
+                return Err(crate::transport::unexpected_response(
+                    "advisory stream",
+                    other,
                 ));
             }
         }
     }
 }
 
-fn reopen_advisory_stream(ctx: &LiveReceiveLoopContext) -> Result<ActiveAdvisoryStream, AtmError> {
-    match ctx
-        .client
-        .register_session(ctx.registration_request.clone())
-    {
-        Ok(response) => {
-            validate_batch_limit_against_capacity(ctx.limit, response.queue_capacity)?;
-        }
-        Err(error) if is_duplicate_registration(&error) => {}
-        Err(error) => return Err(error),
-    }
-
-    let readiness_probe = GraftNudgeFetchRequest {
-        session_id: ctx.registration_request.session_id.clone(),
-        limit: GraftBatchLimit::new(MAX_GRAFT_BATCH_LIMIT.min(ctx.limit.get()))
-            .expect("bounded readiness limit"),
-    };
-    match ctx.client.fetch_nudges(readiness_probe) {
-        Ok(_) => {}
-        Err(error) if is_session_not_registered(&error) => {
-            return Err(error);
-        }
-        Err(error) => return Err(error),
-    }
-
-    ctx.client.open_advisory_stream(GraftAdvisoryStreamRequest {
-        registration: ctx.registration_request.clone(),
-        limit: ctx.limit,
-    })
-}
-
-fn close_receive_loop_session(
+fn unregister_session_and_close(
+    client: &dyn AdvisorySessionPort,
+    session_id: &atm_core::graft::AdvisorySessionId,
     snapshot: &Arc<RwLock<SessionSnapshot>>,
-    client: &Arc<dyn GraftSessionClient>,
-    session_id: &atm_core::graft::GraftSessionId,
     observability: &dyn GraftObservability,
 ) -> Result<(), AtmError> {
-    match client.unregister_session(GraftSessionUnregistrationRequest {
+    match client.unregister_session(AdvisorySessionUnregistrationRequest {
         session_id: session_id.clone(),
     }) {
-        Ok(_) => {
-            set_session_state(snapshot, GraftSessionState::Closed, observability)?;
-            Ok(())
-        }
+        Ok(_) => set_session_state(snapshot, AdvisorySessionState::Closed, observability),
         Err(error) => {
-            set_session_state(snapshot, GraftSessionState::CloseFailed, observability)?;
+            set_session_state(snapshot, AdvisorySessionState::CloseFailed, observability)?;
             observability.session_error(session_id, "unregister_session", &error);
             Err(error)
         }
     }
 }
 
-fn wait_for_stop_or_timeout(stop_rx: &mpsc::Receiver<()>, timeout: Duration) -> bool {
-    match stop_rx.recv_timeout(timeout) {
-        Ok(()) | Err(RecvTimeoutError::Disconnected) => true,
-        Err(RecvTimeoutError::Timeout) => false,
-    }
+fn is_duplicate_registration(error: &AtmError) -> bool {
+    error.code == atm_core::error_codes::AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
 }
 
-fn stop_requested(stop_rx: &mpsc::Receiver<()>) -> bool {
-    match stop_rx.try_recv() {
-        Ok(()) | Err(mpsc::TryRecvError::Disconnected) => true,
-        Err(mpsc::TryRecvError::Empty) => false,
-    }
+fn stop_requested(stop_rx: &Receiver<()>) -> bool {
+    matches!(stop_rx.try_recv(), Ok(()) | Err(TryRecvError::Disconnected))
 }
 
-fn next_reconnect_backoff(current: Duration) -> Duration {
-    current.saturating_mul(2).min(MAX_LIVE_RECONNECT_BACKOFF)
-}
-
-fn is_timeout_error(error: &AtmError) -> bool {
+fn is_socket_timeout_error(error: &AtmError) -> bool {
     error
         .source
         .as_ref()
         .and_then(|source| source.downcast_ref::<io::Error>())
-        .is_some_and(|io_error| {
+        .is_some_and(|source| {
             matches!(
-                io_error.kind(),
+                source.kind(),
                 io::ErrorKind::TimedOut | io::ErrorKind::WouldBlock
             )
         })
-}
-
-fn is_duplicate_registration(error: &AtmError) -> bool {
-    error.code == AtmErrorCode::DaemonGraftSessionAlreadyRegistered
-}
-
-fn is_session_not_registered(error: &AtmError) -> bool {
-    error.code == AtmErrorCode::DaemonGraftSessionNotRegistered
 }

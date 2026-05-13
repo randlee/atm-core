@@ -51,7 +51,7 @@ Reusable generic current-develop building blocks:
 Current `develop @ b6506ef` graft-specific discovery references:
 - `crates/atm-core/src/graft.rs`
 - `crates/atm-core/src/protocol.rs`
-- `crates/atm-daemon/src/graft_runtime.rs`
+- `crates/atm-daemon/src/advisory_runtime.rs`
 - `crates/atm-daemon/src/tests.rs`
 - `crates/atm-graft/src/lib.rs`
 - `crates/atm/src/composition.rs`
@@ -156,7 +156,7 @@ Deliverables:
 - shared unary `atm-core` client/request/response models used by embedded
   consumers
 - explicit `atm-core` ownership of the generic thin-client naming line,
-  including `ClientSessionId`
+  including `AdvisorySessionId`
 - `atm` CLI continues to use the same shared ICD family rather than a separate
   client-specific protocol line
 - no `atm-daemon` crate dependency required for external graft consumers

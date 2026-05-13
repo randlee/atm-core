@@ -233,6 +233,11 @@ Phase R redesign notes:
   - clear
   - doctor
   - heartbeat
+  - advisory register
+  - advisory unregister
+  - advisory fetch
+  - advisory drain
+  - advisory stream
 - thin-client workflow surfaces should center on `send` and `receive`
 - `ack` remains a workflow/state concern, but thin-client protocol shape
   should carry it inside send-shaped requests rather than a separate top-level

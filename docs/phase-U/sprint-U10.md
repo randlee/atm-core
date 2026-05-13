@@ -6,7 +6,7 @@ phase: U
 sprint: "U.10"
 worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification
 branch: feature/pU-u10-generic-advisory-notification
-status: planned
+status: completed
 estimated_scope: M
 ```
 
@@ -14,6 +14,9 @@ estimated_scope: M
 
 Restack the abandoned earlier graft-notification work as a generic daemon
 advisory-notification surface rather than graft-specific daemon ownership.
+
+Completion note:
+- completed on `feature/pU-u10-generic-advisory-notification`
 
 ## Scope Summary
 
@@ -70,7 +73,7 @@ Lean-design rule:
      the top-priority deliverable of `U.10`; all other work is secondary to
      this removal
    - `U.9` was granted a conditional architectural exception to reference
-     `atm-daemon`'s `graft_runtime`; `U.10` must unconditionally close that
+     `atm-daemon`'s temporary graft-named advisory runtime; `U.10` must unconditionally close that
      exception by removing all `atm-graft` -> `atm-daemon` references before
      this sprint is considered complete
    - describe the daemon-owned post-commit advisory event flow
@@ -86,8 +89,8 @@ Lean-design rule:
      - `GraftNudgeDrainRequest`
    - explicitly clean up the daemon-owned graft-specific implementation line
      that `U.9` temporarily depends on:
-     - `crates/atm-daemon/src/graft_runtime.rs`
-     - `crates/atm-daemon/src/tests_graft.rs`
+     - `crates/atm-daemon/src/advisory_runtime.rs`
+     - `crates/atm-daemon/src/tests_advisory.rs`
      - graft-named daemon handling in `crates/atm-daemon/src/runtime_health.rs`
      - graft-named request/response variants and message kinds in
        `crates/atm-core/src/protocol.rs`
@@ -100,7 +103,7 @@ Lean-design rule:
      - `crates/atm-core/src/protocol.rs`
      - `docs/atm-daemon/protocol-icd.md`
      - current `develop @ b6506ef` reusable references:
-       - `crates/atm-daemon/src/graft_runtime.rs`
+       - `crates/atm-daemon/src/advisory_runtime.rs`
        - `crates/atm-daemon/src/tests.rs`
        - `docs/atm-daemon/protocol-icd.md`
    Required tests:

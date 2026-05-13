@@ -58,6 +58,7 @@ Sprint summary:
   pending queue until host consumption, and one host wake/event path
   - complete
 - `U.10` generic daemon advisory-notification surface kept intentionally lean
+  - completed on `feature/pU-u10-generic-advisory-notification`
 
 Graft ownership split:
 - `U.8` owns shared ICD family and naming/DTO planning

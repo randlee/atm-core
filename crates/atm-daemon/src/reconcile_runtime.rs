@@ -3,7 +3,7 @@ use atm_core::boundary::{
     WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
-use atm_core::protocol::{NotificationEvent, ProtocolErrorEnvelope};
+use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex, mpsc};
@@ -189,7 +189,7 @@ impl ReconcileRuntime {
                     notification_fingerprints_for_executor.as_ref(),
                 )? {
                     notification_sink.deliver(NotificationEvent {
-                        kind: "reconcile_complete".to_string(),
+                        kind: NotificationKind::ReconcileComplete,
                         detail: format!(
                             "observed_paths={} imported_sources={}",
                             batch.paths.len(),
@@ -965,7 +965,10 @@ mod tests {
 
         let delivered = delivered.lock().expect("delivered");
         assert_eq!(delivered.len(), 1);
-        assert_eq!(delivered[0].kind, "reconcile_complete");
+        assert_eq!(
+            delivered[0].kind,
+            atm_core::protocol::NotificationKind::ReconcileComplete
+        );
 
         runtime.shutdown().expect("shutdown");
     }
@@ -1003,7 +1006,10 @@ mod tests {
 
         let delivered = delivered.lock().expect("delivered");
         assert_eq!(delivered.len(), 1);
-        assert_eq!(delivered[0].kind, "reconcile_complete");
+        assert_eq!(
+            delivered[0].kind,
+            atm_core::protocol::NotificationKind::ReconcileComplete
+        );
 
         runtime.shutdown().expect("shutdown");
     }

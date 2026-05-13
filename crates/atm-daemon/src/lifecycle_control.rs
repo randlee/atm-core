@@ -292,6 +292,25 @@ impl LifecycleControlSourceAdapter {
     }
 
     #[cfg(test)]
+    pub(crate) fn reset_shared_state_for_test(&self) -> Result<(), AtmError> {
+        self.shutdown_worker_with_timeout()?;
+        let _guard = INSTALL_LOCK.lock().map_err(|_| {
+            AtmError::daemon_unavailable("daemon lifecycle install lock poisoned")
+                .with_recovery(
+                    "Restart the daemon; lifecycle hook installation cannot complete after the poisoned lock.",
+                )
+        })?;
+        let mut shared = SHARED_LIFECYCLE.lock().map_err(|_| {
+            AtmError::daemon_unavailable("daemon lifecycle control state lock poisoned")
+                .with_recovery(
+                    "Restart the daemon; shared lifecycle control state may be inconsistent.",
+                )
+        })?;
+        *shared = None;
+        Ok(())
+    }
+
+    #[cfg(test)]
     pub(crate) fn set_terminate_for_test(&self, value: bool) {
         self.terminate.store(value, Ordering::SeqCst);
         self.state_change

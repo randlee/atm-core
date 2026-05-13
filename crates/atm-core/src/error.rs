@@ -216,25 +216,25 @@ impl AtmError {
         )
     }
 
-    pub fn daemon_graft_session_already_registered(message: impl Into<String>) -> Self {
+    pub fn daemon_advisory_session_already_registered(message: impl Into<String>) -> Self {
         Self::new_with_code(
-            AtmErrorCode::DaemonGraftSessionAlreadyRegistered,
+            AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered,
             AtmErrorKind::DaemonUnavailable,
             message,
         )
         .with_recovery(
-            "Unregister the existing graft session or choose a fresh session id before retrying embedded graft activation.",
+            "Unregister the existing advisory session or choose a fresh session id before retrying embedded advisory activation.",
         )
     }
 
-    pub fn daemon_graft_session_not_registered(message: impl Into<String>) -> Self {
+    pub fn daemon_advisory_session_not_registered(message: impl Into<String>) -> Self {
         Self::new_with_code(
-            AtmErrorCode::DaemonGraftSessionNotRegistered,
+            AtmErrorCode::DaemonAdvisorySessionNotRegistered,
             AtmErrorKind::DaemonUnavailable,
             message,
         )
         .with_recovery(
-            "Register the graft session again before retrying the daemon-owned advisory operation.",
+            "Register the advisory session before fetching or draining daemon-owned advisory state.",
         )
     }
 
