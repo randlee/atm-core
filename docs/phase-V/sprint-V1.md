@@ -4,9 +4,9 @@
 plan_type: sprint_plan
 phase: V
 sprint: "V.1"
-status: planned
-worktree: TBD
-branch: TBD
+status: implemented
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s1-observability-boundary
+branch: feature/pV-s1-observability-boundary
 estimated_scope: M
 ```
 
@@ -50,6 +50,8 @@ Dependency note:
   - `crates/atm-daemon/src/host_ownership.rs`
   - `crates/atm-daemon/src/lifecycle_control.rs`
   - `crates/atm-daemon/src/runtime_status_cache.rs`
+- commit the V.4 recovery text rule set to a persistent reference file so
+  daemon/client runtime recovery guidance does not live only in sprint notes
 
 ## Acceptance Criteria
 
@@ -57,8 +59,8 @@ Dependency note:
 - observability is explicitly bottom-of-stack
 - daemon subsystems depend on the injected observability trait, never the
   reverse
-- the observability trait is object-safe; `dyn DaemonObservability` must be a
-  valid, unrestricted target shape for the final design
+- the observability trait is object-safe; `Arc<dyn DaemonRuntimeObservability>`
+  is the final unrestricted consumption shape for the design
 - the observability trait sealing decision is documented; it is either sealed
   by default or explicitly left open with rationale
 - the daemon lifecycle typestate decision is documented; if lifecycle states do
@@ -80,9 +82,21 @@ Dependency note:
 - the sprint output explicitly points `V.2` at the first CI-checkable
   enforcement point for this line: the shared observability layer must not
   require daemon subsystem types
+- the daemon/client recovery text rule set is committed as a persistent
+  reference file rather than living only in sprint notes
 
 ## Out Of Scope
 
 - code migration into subsystems
 - deleting old mapping code
 - general runtime failure recovery work outside observability
+
+## Sprint Output
+
+- `docs/atm-daemon/observability.md`
+- `docs/atm-daemon/recovery-text-rules.md`
+- aligned updates in:
+  - `docs/atm-daemon/requirements.md`
+  - `docs/atm-daemon/architecture.md`
+  - `docs/atm-daemon/boundaries.md`
+  - `docs/architecture.md`
