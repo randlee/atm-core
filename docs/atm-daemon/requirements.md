@@ -9,8 +9,7 @@ Product behavior remains defined in [`../requirements.md`](../requirements.md).
 `atm-daemon` must satisfy those product requirements without re-owning
 `atm-core` business logic.
 
-This crate was introduced on the Phase Q implementation line and remains part
-of the current workspace.
+This crate remains part of the current workspace.
 
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
@@ -48,10 +47,15 @@ Current request/response packet families owned by the daemon transport line:
 - clear
 - doctor
 - heartbeat
-- graft register
-- graft unregister
-- graft fetch
-- graft drain
+- advisory register
+- advisory unregister
+- advisory fetch
+- advisory drain
+- advisory stream
+  - production requirement: one live advisory stream per active embedded
+    client session
+  - the live advisory stream is the production nudge-delivery path whenever the
+    selected same-host transport supports streaming
 
 Current retained ATM surfaces not modeled as daemon request/response packets:
 - `atm log`
@@ -73,7 +77,6 @@ Initial allocation:
 - `REQ-DAEMON-HEALTH-*`
 - `REQ-DAEMON-SIGNAL-*`
 - `REQ-DAEMON-PLATFORM-*`
-- `REQ-DAEMON-GRAFT-*`
 
 Initial crate requirement IDs:
 
@@ -235,6 +238,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../project-plan.md`](../project-plan.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)
+- [`../plan-phase-U.md`](../plan-phase-U.md)
 - [`../testing-guidelines.md`](../testing-guidelines.md)
 - [`../team-member-state.md`](../team-member-state.md)
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
@@ -275,14 +279,6 @@ Requirement IDs:
 - `REQ-DAEMON-SIGNAL-001`
 - `REQ-DAEMON-PLATFORM-001`
 - `REQ-DAEMON-PLATFORM-002`
-- `REQ-DAEMON-GRAFT-001` `atm-daemon` owns graft-session registration,
-  unregistration, and bounded queued nudge state, and must expose those
-  surfaces only through the shared daemon request/response contract. Satisfies:
-  `REQ-GRAFT-RUNTIME-001`, `REQ-CORE-GRAFT-001`.
-- `REQ-DAEMON-GRAFT-002` `atm-daemon` owns graft queue saturation behavior,
-  FIFO drain order, and dropped-count projection for advisory nudge delivery
-  without affecting durable ATM mailbox truth. Satisfies:
-  `REQ-GRAFT-NOTIFY-001`, `REQ-CORE-GRAFT-001`.
 
 Required runtime rules:
 - exactly one daemon process may be active on a host at a time
@@ -409,20 +405,10 @@ Required runtime rules:
   - bounded remote retry queue depth: `256`
   - SQLite handle/pool budget: min `1`, max `4`
   - live status-cache cap: `4096`
-  - bounded reconcile fingerprint entries per key:
-    `MAX_RECONCILE_FINGERPRINTS_PER_KEY = 256`, drop-oldest-and-log
   - reconcile notification fingerprint registry cap:
     `MAX_RECONCILE_FINGERPRINT_KEYS = 1024`, evict-oldest-and-log
   - watch subscription cap: `256`
-  - notification work queue depth:
-    `DEFAULT_NOTIFICATION_QUEUE_CAPACITY = 64`
-- authoritative bounded shutdown deadlines:
-  - graceful singleton drain deadline: `2s`
-  - force-cancel deadline: `3s`
-  - reconcile lane shutdown deadline:
-    `RECONCILE_SHUTDOWN_DEADLINE = 2s` in production
-  - notification lane shutdown deadline:
-    `NOTIFICATION_SHUTDOWN_DEADLINE = 3s`
+  - notification work queue depth: `256`
 - request work launched from the server path must remain tracked by runtime
   shutdown accounting until it completes or is cancelled
 - the current Phase R transport remains single-request-per-connection, so the
@@ -432,12 +418,10 @@ Required runtime rules:
 - daemon memory is the live truth for agent status
 - daemon memory must also retain `last_active_at` for each known active agent
 - daemon memory must retain the current agent `pid` as a first-class liveness
-  field, cached from SQLite; `pid` is durable roster truth rather than
-  advisory metadata
+  field, but `pid` is transient runtime state rather than durable roster truth
 - `pid` is a semantic newtype candidate and must not remain an unvalidated raw
   integer at the daemon boundary once the runtime API hardening slice lands
-- SQLite must not own live `last_active_at`; it owns durable roster state and
-  the current per-member `pid`
+- SQLite must not own live `last_active_at` or the current process `pid`
 - the daemon-managed member fields (`pid`, `last_active_at`, `state`) must
   update only through one documented heartbeat socket handler shared by ATM CLI
   and hook/runtime producers; see `docs/team-member-state.md`
@@ -455,7 +439,7 @@ Required runtime rules:
 - if a heartbeat reports a different pid while the stored pid is still alive,
   the daemon must reject the update unless the explicit admin takeover path
   documented in `docs/team-member-state.md` is active
-- accepted pid changes must update SQLite and emit `AgentPidChanged`
+- accepted pid changes must update daemon memory and emit `AgentPidChanged`
 - crash recovery must preserve the ordering rule `SQLite commit -> export`
   and any retry/re-export state needed after daemon crash must be durable rather
   than RAM-only
@@ -491,6 +475,14 @@ Required runtime rules:
   family business logic
 - the socket receive loop must not perform SQL, watcher, notifier, or
   workflow/state-transition logic inline
+- the daemon must not own client-specific runtime behavior for any plugin crate
+  (e.g., `atm-graft`); client-specific receive loops, injection paths, and
+  host-integration logic belong in the client plugin crate, not in `atm-daemon`;
+  the daemon's responsibility is request serving, post-commit notification, and
+  generic runtime composition only (REQ-CORE-DAEMON-003)
+- Phase U.8 keeps the shared daemon packet family limited to the existing CLI-
+  shaped unary envelopes; `atm-graft` must consume that shared family rather
+  than reopening graft-private request/response packets in the daemon crate
 - any violation of these daemon boundary rules is a direct QA failure
 - daemon tests must not become the normal mechanism for validating core ATM
   correctness
@@ -498,19 +490,5 @@ Required runtime rules:
   rather than collapsing into panic/unwrap control flow
 - daemon runtime and transport paths must emit structured observability events
 - daemon must expose one explicit health/status query interface for `atm doctor`
-- graft-session registration, unregistration, and bounded queued nudge state
-  must remain daemon-owned rather than migrating into `atm-graft` or CLI-only
-  helper storage
-- graft register, unregister, fetch, and drain must use typed shared ATM frame
-  packets defined in `docs/atm-daemon/protocol-icd.md`
-- successful mailbox send completion may enqueue advisory graft nudges for
-  matching registered sessions, but failure or overflow in that advisory path
-  must not alter durable ATM mailbox truth
-- queued graft nudges must remain concretely bounded per session, preserve FIFO
-  drain order, and surface dropped-count projection when oldest-entry eviction
-  occurs
-- the daemon companion CLI path for graft fetch/drain must use the same daemon
-  API contract as the future embedded `atm-graft` crate rather than a second
-  private transport or direct-store path
 - no `atm-daemon` crate API, helper, or test support path may bless daemon
   spawning as a routine correctness strategy

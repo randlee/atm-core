@@ -26,35 +26,28 @@ CREATE TABLE IF NOT EXISTS mail_messages (
     message_text TEXT NOT NULL,
     summary TEXT NULL,
     message_at TEXT NOT NULL,
-    legacy_message_id TEXT NULL,
+    message_id TEXT NULL,
     parent_message_id TEXT NULL,
     thread_mode TEXT NULL CHECK(thread_mode IS NULL OR thread_mode IN ('add-details', 'supersede')),
-    stale_at TEXT NULL,
-    imported_from TEXT,
     recorded_at TEXT,
     CHECK(message_key GLOB 'atm:*' OR message_key GLOB 'ext:*'),
     PRIMARY KEY (team, agent, message_key)
 );
 
-CREATE TABLE IF NOT EXISTS ack_state (
+CREATE TABLE IF NOT EXISTS mail_message_states (
     team TEXT NOT NULL,
     agent TEXT NOT NULL,
     message_key TEXT NOT NULL,
+    read INTEGER NOT NULL DEFAULT 0 CHECK(read IN (0, 1)),
     pending_ack_at TEXT NULL,
     acknowledged_at TEXT NULL,
+    expires_at TEXT NULL,
+    deleted_at TEXT NULL,
     updated_at TEXT NULL,
     PRIMARY KEY (team, agent, message_key),
     FOREIGN KEY (team, agent, message_key)
         REFERENCES mail_messages(team, agent, message_key)
         ON DELETE CASCADE
-);
-
-CREATE TABLE IF NOT EXISTS mail_visibility_states (
-    team TEXT NOT NULL,
-    agent TEXT NOT NULL,
-    message_key TEXT NOT NULL,
-    state_json TEXT NOT NULL,
-    PRIMARY KEY (team, agent, message_key)
 );
 
 CREATE TABLE IF NOT EXISTS mail_ingest_replay_states (
@@ -88,22 +81,16 @@ CREATE TABLE IF NOT EXISTS task_ack_transitions (
     PRIMARY KEY (team, task_id, transition_index)
 );
 
-CREATE TABLE IF NOT EXISTS rosters (
-    team TEXT PRIMARY KEY,
-    roster_json TEXT NOT NULL,
-    source TEXT,
-    recipient_pane_id TEXT NULL,
-    pid INTEGER NULL,
-    updated_at TEXT NOT NULL
-);
-
 CREATE TABLE IF NOT EXISTS team_roster (
     team_name TEXT NOT NULL,
     agent_name TEXT NOT NULL,
-    member_json TEXT NOT NULL,
+    member_kind TEXT NOT NULL CHECK(member_kind IN ('permanent', 'ephemeral')),
+    harness TEXT NOT NULL CHECK(harness IN ('claude-code', 'codex-cli', 'gemini-cli', 'opencode')),
+    agent_type TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    metadata_json TEXT NOT NULL DEFAULT '{}',
     source TEXT,
     recipient_pane_id TEXT NULL,
-    pid INTEGER NULL,
     updated_at TEXT NOT NULL,
     PRIMARY KEY (team_name, agent_name)
 );
@@ -112,15 +99,15 @@ CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_single_successor
     ON mail_messages(team, agent, parent_message_id)
     WHERE parent_message_id IS NOT NULL;
 
-CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_legacy_identity
-    ON mail_messages(team, agent, legacy_message_id)
-    WHERE legacy_message_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uq_mail_messages_message_id
+    ON mail_messages(team, agent, message_id)
+    WHERE message_id IS NOT NULL;
 
 CREATE INDEX IF NOT EXISTS idx_mail_messages_mailbox
     ON mail_messages(team, agent);
 
-CREATE INDEX IF NOT EXISTS idx_mail_visibility_mailbox
-    ON mail_visibility_states(team, agent);
+CREATE INDEX IF NOT EXISTS idx_mail_message_states_mailbox
+    ON mail_message_states(team, agent);
 
 CREATE INDEX IF NOT EXISTS idx_mail_ingest_mailbox
     ON mail_ingest_replay_states(team, agent);
@@ -134,8 +121,8 @@ CREATE INDEX IF NOT EXISTS idx_task_records_lookup
 CREATE INDEX IF NOT EXISTS idx_team_roster_team_name
     ON team_roster(team_name);
 "#;
-// `rosters` remains the canonical per-team `TeamConfig` snapshot, while
-// `team_roster` is the per-member durable projection that runtime lookup uses.
+// `team_roster` is the single canonical durable roster truth. Runtime pid
+// continuity is transient daemon-owned state and must not be persisted here.
 
 pub(crate) type SqliteConnection = Connection;
 
@@ -211,6 +198,8 @@ impl SharedDb {
     pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
+            // Accepted risk: durable-state root creation happens during boundary
+            // assembly and is allowed to block on the host filesystem once.
             std::fs::create_dir_all(parent).map_err(|error| {
                 AtmError::mailbox_write(format!(
                     "failed to create sqlite parent directory {}: {error}",
@@ -238,6 +227,12 @@ impl SharedDb {
         })
     }
 
+    /// Call only from blocking code paths; async callers must enter
+    /// `spawn_blocking` before borrowing a sqlite connection.
+    ///
+    /// Accepted risk: this is enforced as a crate-internal contract rather
+    /// than a runtime assert because `SharedDb` is only called from owned
+    /// blocking code paths inside `atm-rusqlite`.
     pub(crate) fn with_connection<T>(
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
@@ -247,6 +242,12 @@ impl SharedDb {
         operation(&mut connection)
     }
 
+    /// Call only from blocking code paths; async callers must enter
+    /// `spawn_blocking` before opening a sqlite transaction.
+    ///
+    /// Accepted risk: this is enforced as a crate-internal contract rather
+    /// than a runtime assert because `SharedDb` is only called from owned
+    /// blocking code paths inside `atm-rusqlite`.
     pub(crate) fn with_transaction<T>(
         &self,
         operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>,
@@ -277,7 +278,9 @@ impl SharedDb {
     ) -> Result<atm_core::boundary::MailStoreUpsertMessageResponse, AtmError> {
         validate_upsert_message_request(&request)?;
         let record = request.record.clone();
-        let result = self.writer.submit(WriteOp::UpsertMessage(request))?;
+        let result = self
+            .writer
+            .submit(WriteOp::UpsertMessage(Box::new(request)))?;
         match result {
             WriteOpResult::UpsertMessage { inserted } => {
                 Ok(atm_core::boundary::MailStoreUpsertMessageResponse { record, inserted })
@@ -291,20 +294,20 @@ impl SharedDb {
         }
     }
 
-    pub(crate) fn submit_upsert_visibility_state(
+    pub(crate) fn submit_upsert_message_state(
         &self,
-        request: atm_core::boundary::MailStoreUpsertVisibilityStateRequest,
-    ) -> Result<atm_core::boundary::MailStoreUpsertVisibilityStateResponse, AtmError> {
+        request: atm_core::boundary::UpsertMailMessageStateRequest,
+    ) -> Result<atm_core::boundary::UpsertMailMessageStateResponse, AtmError> {
         let state = request.state.clone();
         let result = self
             .writer
-            .submit(WriteOp::UpsertVisibilityState(request))?;
+            .submit(WriteOp::UpsertMessageState(Box::new(request)))?;
         match result {
-            WriteOpResult::Unit => Ok(atm_core::boundary::MailStoreUpsertVisibilityStateResponse {
+            WriteOpResult::Unit => Ok(atm_core::boundary::UpsertMailMessageStateResponse {
                 state,
             }),
             other => Err(AtmError::daemon_unavailable(format!(
-                "sqlite writer returned unexpected result for upsert_visibility_state: {other:?}"
+                "sqlite writer returned unexpected result for upsert_message_state: {other:?}"
             ))
             .with_recovery(
                 "Inspect the sqlite writer operation routing and retry after correcting the mismatched result contract.",
@@ -405,6 +408,9 @@ pub(crate) fn configure_connection(
 pub(crate) fn open_connection_for_target(target: &SharedDbTarget) -> Result<Connection, AtmError> {
     let mut connection = match target {
         SharedDbTarget::Path(path) => {
+            // Accepted risk: sqlite connection open is a process-init boundary
+            // operation and may block on the host filesystem before runtime
+            // request handling starts.
             Connection::open(path).map_err(|error| sqlite_open_error(target, error))?
         }
         #[cfg(test)]
@@ -457,22 +463,43 @@ pub(crate) fn ensure_schema(
         connection,
         target,
         "mail_messages",
-        "legacy_message_id",
-        "ALTER TABLE mail_messages ADD COLUMN legacy_message_id TEXT NULL;",
+        "message_id",
+        "ALTER TABLE mail_messages ADD COLUMN message_id TEXT NULL;",
     )?;
     ensure_column(
         connection,
         target,
-        "rosters",
-        "recipient_pane_id",
-        "ALTER TABLE rosters ADD COLUMN recipient_pane_id TEXT NULL;",
+        "team_roster",
+        "member_kind",
+        "ALTER TABLE team_roster ADD COLUMN member_kind TEXT NOT NULL DEFAULT 'permanent';",
     )?;
     ensure_column(
         connection,
         target,
-        "rosters",
-        "pid",
-        "ALTER TABLE rosters ADD COLUMN pid INTEGER NULL;",
+        "team_roster",
+        "harness",
+        "ALTER TABLE team_roster ADD COLUMN harness TEXT NOT NULL DEFAULT 'claude-code';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "team_roster",
+        "agent_type",
+        "ALTER TABLE team_roster ADD COLUMN agent_type TEXT NOT NULL DEFAULT '';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "team_roster",
+        "model",
+        "ALTER TABLE team_roster ADD COLUMN model TEXT NOT NULL DEFAULT '';",
+    )?;
+    ensure_column(
+        connection,
+        target,
+        "team_roster",
+        "metadata_json",
+        "ALTER TABLE team_roster ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';",
     )?;
     Ok(())
 }
@@ -502,17 +529,20 @@ fn ensure_column(
                 error,
             )
         })?;
-    for entry in columns {
-        if entry.map_err(|error| {
-            sqlite_error(
-                target,
-                format!("failed to read sqlite column metadata for {table}"),
-                error,
-            )
-        })? == column
-        {
-            return Ok(());
-        }
+    let collected = columns
+        .into_iter()
+        .map(|entry| {
+            entry.map_err(|error| {
+                sqlite_error(
+                    target,
+                    format!("failed to read sqlite column metadata for {table}"),
+                    error,
+                )
+            })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    if collected.into_iter().any(|value| value == column) {
+        return Ok(());
     }
     connection.execute_batch(ddl).map_err(|error| {
         sqlite_error(

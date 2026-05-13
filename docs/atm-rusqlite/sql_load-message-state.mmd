@@ -1,0 +1,39 @@
+%% title: `Load Message State`
+%% summary: SQLite boundary method `MailStore::load_message_state`.
+%% commentary: This SQL-boundary path reads one unified `mail_message_states` row and returns `None` when no row exists.
+%% read_tables: mail_message_states
+%% write_tables:
+%% notes: reads: 1 | writes: 0 | joins: 0 | transactions: 0
+%% sets: query
+flowchart TD
+    A["<b>Load Message State</b><br/>MailStore::load_message_state"]
+    A --> I["Input
+team
+agent
+actor
+message_key"]
+    I --> R["Read unified state row
+SELECT read, pending_ack_at, acknowledged_at,
+       expires_at, deleted_at, updated_at
+FROM mail_message_states
+WHERE team, agent, message_key"]
+    R -->|row found| M["Materialize state
+parse optional timestamps
+rebuild MailMessageState"]
+    R -->|no row| O0["Output
+state: None"]
+    M --> O1["Output
+state: Some(state)"]
+    R --> ER["Read failed
+Mailbox lock timeout
+Mailbox read failed"]
+    M --> EM["Materialization failed
+Validation failed"]
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,O0,O1 happy;
+    class ER,EM error;
+    class I,R,M neutral;

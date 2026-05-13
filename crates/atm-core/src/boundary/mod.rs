@@ -1,6 +1,7 @@
 //! Phase R boundary skeleton contracts.
 
 use crate::error::AtmError;
+use crate::graft::AdvisoryStreamRequest;
 use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
 pub use crate::protocol::{
     NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
@@ -223,6 +224,29 @@ pub trait RequestDispatcher: sealed::Sealed + Send + Sync {
     /// Returns `AtmError` when protocol request routing or handler dispatch
     /// cannot produce a valid response.
     fn dispatch(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a long-lived advisory stream cannot be
+    /// established or when advisory delivery cannot continue reliably.
+    fn dispatch_advisory_stream(
+        &self,
+        request: AdvisoryStreamRequest,
+        sink: &mut dyn AdvisoryStreamSink,
+    ) -> Result<(), AtmError>;
+}
+
+/// Shared framed response sink used by same-host advisory stream transports.
+pub trait AdvisoryStreamSink {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the next advisory response frame cannot be
+    /// delivered to the connected client.
+    fn emit(&mut self, response: ResponseEnvelope) -> Result<(), AtmError>;
+
+    fn stop_requested(&self) -> bool {
+        false
+    }
 }
 
 /// BOUNDARY-NotificationSink — see docs/atm-core/boundaries.md.

@@ -205,7 +205,7 @@ mod tests {
             team: TEST_TEAM.parse().expect("team"),
             agent: TEST_SENDER.parse().expect("agent"),
             sender: TEST_SENDER.parse().expect("agent"),
-            message_id: message_id.map(|value| value.parse().expect("legacy message id")),
+            message_id: message_id.map(|value| value.parse().expect("message id")),
             requires_ack: false,
             dry_run: false,
             task_id: Some("TASK-1".parse().expect("task id")),
@@ -295,6 +295,10 @@ mod tests {
             .emit(event(Some("550e8400-e29b-41d4-a716-446655440001")))
             .expect("emit followed");
 
+        let followed_message_id = "550e8400-e29b-41d4-a716-446655440001"
+            .parse::<atm_core::schema::AtmMessageId>()
+            .expect("message id")
+            .to_string();
         let followed = follow.poll().expect("follow poll");
         assert!(
             followed.records.iter().any(|record| {
@@ -302,9 +306,9 @@ mod tests {
                     .fields
                     .get("message_id")
                     .and_then(atm_core::observability::LogFieldValue::as_str)
-                    == Some("550e8400-e29b-41d4-a716-446655440001")
+                    == Some(followed_message_id.as_str())
             }),
-            "follow poll should include the newly emitted record even if the shared tail surface also returns the prior backlog entry"
+            "follow poll should include the newly emitted normalized message id even if the shared tail surface also returns the prior backlog entry"
         );
     }
 

@@ -1,0 +1,43 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-U8-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-U8-F001" ;
+  triage:title "local_ipc_transport.rs Mutex missing rationale comment" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs:40 — QA reported Mutex at line 40 lacks a rationale comment. TRIAGE VERDICT: INVALID. Lines 37-39 contain an explicit rationale comment: 'The serve loop needs to retain the full typed accept failure for later propagation, so a mutex-backed slot is required here; an atomic flag alone could not carry the original AtmError across the lifecycle/accept thread boundary.' Invariant and reasoning are both documented. No fix required. Workspace sweep found zero additional unrationed Mutex usages in non-test production code." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "all Mutex usages in workspace Rust source" ;
+  triage:status "closed" ;
+  triage:resolution "invalid" ;
+  triage:resolutionNote "Rationale comment exists at lines 37-39 immediately preceding the Mutex field declaration. Finding does not hold." ;
+  triage:dispatchReady false ;
+  triage:dispatchBlockedPendingTriageCommit false ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U8-F001/U8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/633c34c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/633c34c> .
+
+<urn:atm:triage:occurrence/RBP-U8-F001/U8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 40 ;
+  triage:snippet "accept_error: Mutex<Option<AtmError>>," ;
+  triage:rationale "Lines 37-39: 'The serve loop needs to retain the full typed accept failure for later propagation, so a mutex-backed slot is required here; an atomic flag alone could not carry the original AtmError across the lifecycle/accept thread boundary.'" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/633c34c> .
+
+<urn:atm:triage:worktree/pU-u8-shared-thin-client-icd/633c34c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .

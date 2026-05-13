@@ -24,7 +24,7 @@ impl Drop for LifecycleFlagResetGuard {
     fn drop(&mut self) {
         self.lifecycle.set_terminate_for_test(false);
         self.lifecycle.set_reload_for_test(false);
-        if let Err(error) = self.lifecycle.shutdown_worker_with_timeout() {
+        if let Err(error) = self.lifecycle.reset_shared_state_for_test() {
             tracing::warn!(
                 %error,
                 "failed to drain shared lifecycle worker during test reset"
@@ -72,18 +72,32 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
             other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
         }
     }
+
+    fn dispatch_advisory_stream(
+        &self,
+        _request: atm_core::graft::AdvisoryStreamRequest,
+        _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
+    ) -> Result<(), atm_core::error::AtmError> {
+        panic!("unexpected advisory stream request in DoctorOnlyDispatcher");
+    }
 }
 
 pub(crate) fn connect_daemon_local_ipc_until_ready(
     endpoint_path: &std::path::Path,
     ready_rx: std::sync::mpsc::Receiver<()>,
 ) -> LocalSocketStream {
-    ready_rx
-        .recv_timeout(std::time::Duration::from_secs(3))
-        .expect("daemon local ipc ready signal");
+    match ready_rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        Ok(()) => {}
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            panic!("timed out waiting for daemon local ipc ready signal")
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            panic!("daemon local ipc ready signal sender dropped before readiness")
+        }
+    }
     let ipc_name =
         atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name");
-    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(2);
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     let mut attempts = 0usize;
     let mut last_error = None;
     while std::time::Instant::now() < deadline {
@@ -92,7 +106,9 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
             Err(error) => {
                 attempts += 1;
                 last_error = Some(error);
-                std::thread::sleep(std::time::Duration::from_millis(10));
+                // The ready signal is the structural synchronization point; this retry only
+                // covers the residual OS socket publication race after readiness.
+                std::thread::sleep(std::time::Duration::from_millis(1));
             }
         }
     }

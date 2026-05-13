@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F001-U2>
+  a triage:Finding ;
+  triage:findingId "RBP-F001-U2" ;
+  triage:title "WorkflowStateFile::messages keyed on raw String instead of typed newtype" ;
+  triage:description "crates/atm-core/src/workflow.rs — WorkflowStateFile::messages is BTreeMap<String, WorkflowMessageState> keyed on format!(\"legacy:{message_id}\"). AtmMessageId newtype exists and this sprint unifies identity, but the sidecar key downgrades to raw String. Fix: introduce WorkflowMessageKey(AtmMessageId) newtype with single constructor owning the prefix encoding; move format!() logic there." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-U2/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-U2/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-U2/pU-u2/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/d6390795352a96ec50c197fee2a61e55a2253860> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/a4285c7f4fbddfd18961d2d816b81367963e202b> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310> .
+
+<urn:atm:triage:occurrence/RBP-F001-U2/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 26 ;
+  triage:snippet "pub messages: BTreeMap<String, WorkflowMessageState>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/d6390795352a96ec50c197fee2a61e55a2253860> .
+
+<urn:atm:triage:occurrence/RBP-F001-U2/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 24 ;
+  triage:snippet "pub messages: BTreeMap<String, WorkflowMessageState>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/a4285c7f4fbddfd18961d2d816b81367963e202b> .
+
+<urn:atm:triage:occurrence/RBP-F001-U2/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 24 ;
+  triage:snippet "pub messages: BTreeMap<String, WorkflowMessageState>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310> .
+
+<urn:atm:triage:worktree/integrate-phase-U/d6390795352a96ec50c197fee2a61e55a2253860>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u1/a4285c7f4fbddfd18961d2d816b81367963e202b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d022e02597accfab9d49de284b8627e9310>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:orderIndex 2 .

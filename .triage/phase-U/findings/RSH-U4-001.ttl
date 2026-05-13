@@ -1,0 +1,104 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Sweep notes:
+# Pattern: with_connection|with_transaction|spawn_blocking in shared_db.rs
+# U2: shared_db.rs lines 241, 250 — with_connection and with_transaction definitions present.
+#     No spawn_blocking doc comment visible at those lines (no /// doc block above the fn).
+# U3: shared_db.rs lines 241, 250 — same as U2; no spawn_blocking documentation.
+# U4: shared_db.rs lines 235, 244 — same pattern; no spawn_blocking documentation.
+# Finding is open on all three branches (same baseline — no doc comments added on any branch).
+
+<urn:atm:triage:finding/RSH-U4-001>
+  a triage:Finding ;
+  triage:findingId "RSH-U4-001" ;
+  triage:title "with_connection()/with_transaction() no spawn_blocking documentation" ;
+  triage:description "crates/atm-rusqlite/src/shared_db.rs:235 — with_connection() and with_transaction() have no spawn_blocking documentation. Blocking callers from async context would stall the executor for 5s busy-timeout." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #249" , "TASK-1380 QA-1 verdict at 335fe3d" ;
+  triage:hasOccurrence
+    <urn:atm:triage:occurrence/RSH-U4-001/pU-u4-unified-message-state/1> ,
+    <urn:atm:triage:occurrence/RSH-U4-001/pU-u4-unified-message-state/2> ,
+    <urn:atm:triage:occurrence/RSH-U4-001/pU-u3-thread-update-hardening/1> ,
+    <urn:atm:triage:occurrence/RSH-U4-001/pU-u2-one-message-identity/1> ;
+  triage:openOn
+    <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> ,
+    <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> ,
+    <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/RSH-U4-001/pU-u4-unified-message-state/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 235 ;
+  triage:snippet "pub(crate) fn with_connection<T>( &self, operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>, ) -> Result<T, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/RSH-U4-001/pU-u4-unified-message-state/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 244 ;
+  triage:snippet "pub(crate) fn with_transaction<T>( &self, operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>, ) -> Result<T, AtmError> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/RSH-U4-001/pU-u3-thread-update-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 241 ;
+  triage:snippet "pub(crate) fn with_connection<T>( ... ) — no spawn_blocking doc" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/RSH-U4-001/pU-u2-one-message-identity/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 241 ;
+  triage:snippet "pub(crate) fn with_connection<T>( ... ) — no spawn_blocking doc" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .

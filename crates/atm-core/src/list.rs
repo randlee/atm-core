@@ -1,4 +1,3 @@
-use std::collections::HashMap;
 use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
@@ -6,19 +5,20 @@ use serde::{Deserialize, Serialize};
 use crate::address::AgentAddress;
 use crate::error::AtmError;
 use crate::identity;
-use crate::mailbox::source::{SummarySourceFile, resolve_target};
-use crate::mailbox::surface::dedupe_legacy_message_id_surface;
+use crate::mailbox::source::resolve_target;
 use crate::observability::ObservabilityPort;
 use crate::read::{
-    BucketCounts, ClassifiedMessage, filters, normalize_contains_filter, sort_and_limit_selected,
-    state,
+    BucketCounts, ClassifiedMessage, filters,
+    metadata_selection::{
+        bucket_counts_for, classify_mailbox_metadata_rows, logical_current_messages,
+        select_messages, sort_and_limit_selected,
+    },
+    normalize_contains_filter,
 };
-use crate::schema::{LegacyMessageId, MessageEnvelope};
+use crate::schema::AtmMessageId;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::threading::{ThreadIndex, is_ephemeral, is_expired_ephemeral};
+use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, ReadSelection, TaskId, TeamName};
-use crate::workflow;
 
 const DEFAULT_LIST_LIMIT: usize = 200;
 const MAX_LIST_LIMIT: usize = 10_000;
@@ -97,7 +97,7 @@ fn normalize_limit(limit: Option<usize>) -> Result<Option<usize>, AtmError> {
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ListRow {
     #[serde(default)]
-    pub message_id: Option<LegacyMessageId>,
+    pub message_id: Option<AtmMessageId>,
     pub summary: String,
     pub from: AgentName,
     pub timestamp: IsoTimestamp,
@@ -122,26 +122,19 @@ pub fn list_mail(
     query: ListQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ListOutcome, AtmError> {
-    let runtime = LocalServiceRuntime::default();
-    list_mail_with_runtime(query, observability, &runtime)
+    let runtime = default_runtime()?;
+    list_mail_with_runtime_impl(query, observability, &runtime)
 }
 
-#[derive(Debug, Clone)]
-struct SummaryProjection {
-    summary_preview: String,
-    body_contains_match: bool,
-    idle_notification_sender: Option<AgentName>,
+pub fn list_mail_with_runtime(
+    query: ListQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<ListOutcome, AtmError> {
+    list_mail_with_runtime_impl(query, observability, runtime)
 }
 
-#[derive(Debug, Clone)]
-struct SummarySourcedMessage {
-    projection: SummaryProjection,
-    envelope: MessageEnvelope,
-    source_path: PathBuf,
-    source_index: crate::types::SourceIndex,
-}
-
-fn list_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     query: ListQuery,
     _observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -181,21 +174,25 @@ fn list_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         None
     };
 
-    let workflow_state =
-        runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
-    let source_files = runtime.observe_summary_source_files(
-        &query.home_dir,
-        &target.team,
-        &target.agent,
-        query.contains_filter.as_deref(),
-    )?;
-    let projection_index = projection_index(&source_files);
-    let classified_all = classify_summary_source_files(&source_files, &workflow_state);
+    let metadata_rows =
+        runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
+    if !runtime.allows_legacy_mailbox_files()
+        && metadata_rows
+            .iter()
+            .any(|row| row.message_key.as_ref().starts_with("legacy:"))
+    {
+        return Err(AtmError::validation(
+            "sqlite mailbox metadata returned legacy-prefixed message keys in non-legacy runtime mode",
+        )
+        .with_recovery(
+            "Repair or remove the malformed mailbox rows before retrying `atm list`; production runtimes must not downgrade back to file-backed mailbox metadata reads.",
+        ));
+    }
+    let classified_all = classify_mailbox_metadata_rows(&metadata_rows);
     let logical_current = logical_current_messages(classified_all);
     let bucket_counts = bucket_counts_for(&logical_current);
     let filtered = apply_list_filters(
         logical_current,
-        &projection_index,
         query.sender_filter.as_ref(),
         query.timestamp_filter,
         query.task_filter.as_ref(),
@@ -206,7 +203,7 @@ fn list_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
     let rows = selected
         .iter()
-        .map(|message| list_row_from_message(message, &projection_index))
+        .map(list_row_from_message)
         .collect::<Vec<_>>();
     let history_collapsed = query.selection_mode != ReadSelection::All && bucket_counts.history > 0;
 
@@ -222,136 +219,8 @@ fn list_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     })
 }
 
-fn projection_index(
-    source_files: &[SummarySourceFile],
-) -> HashMap<(PathBuf, usize), SummaryProjection> {
-    source_files
-        .iter()
-        .flat_map(|source| {
-            source
-                .messages
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(index, message)| {
-                    (
-                        (source.path.clone(), index),
-                        SummaryProjection {
-                            summary_preview: message.summary_preview,
-                            body_contains_match: message.body_contains_match,
-                            idle_notification_sender: message.idle_notification_sender,
-                        },
-                    )
-                })
-        })
-        .collect()
-}
-
-fn classify_summary_source_files(
-    source_files: &[SummarySourceFile],
-    workflow_state: &workflow::WorkflowStateFile,
-) -> Vec<ClassifiedMessage> {
-    let deduped = dedupe_legacy_message_id_surface(
-        merged_summary_surface(source_files),
-        |message: &SummarySourcedMessage| message.envelope.message_id,
-        |message: &SummarySourcedMessage| message.envelope.timestamp,
-    );
-    let projected = apply_idle_notification_dedup(deduped);
-    let envelopes = projected
-        .iter()
-        .map(|message| workflow::project_envelope(&message.envelope, workflow_state))
-        .collect::<Vec<_>>();
-    let thread_index = ThreadIndex::new(&envelopes);
-
-    projected
-        .into_iter()
-        .zip(envelopes.iter().cloned())
-        .map(|(message, projected)| {
-            let effective = effective_display_envelope(&projected, &thread_index);
-            let class = state::classify_message(&effective);
-            let bucket = state::display_bucket_for_class(class);
-            ClassifiedMessage {
-                source_index: message.source_index,
-                source_path: message.source_path,
-                bucket,
-                class,
-                envelope: effective,
-            }
-        })
-        .collect()
-}
-
-fn merged_summary_surface(source_files: &[SummarySourceFile]) -> Vec<SummarySourcedMessage> {
-    source_files
-        .iter()
-        .flat_map(|source| {
-            source
-                .messages
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(source_index, message)| SummarySourcedMessage {
-                    projection: SummaryProjection {
-                        summary_preview: message.summary_preview,
-                        body_contains_match: message.body_contains_match,
-                        idle_notification_sender: message.idle_notification_sender,
-                    },
-                    envelope: message.envelope,
-                    source_path: source.path.clone(),
-                    source_index: source_index.into(),
-                })
-        })
-        .collect()
-}
-
-fn apply_idle_notification_dedup(
-    messages: Vec<SummarySourcedMessage>,
-) -> Vec<SummarySourcedMessage> {
-    let mut latest_idle_for_sender = HashMap::new();
-    for (index, message) in messages.iter().enumerate() {
-        if !message.envelope.read
-            && let Some(sender) = message.projection.idle_notification_sender.as_ref()
-        {
-            latest_idle_for_sender.insert(sender.clone(), index);
-        }
-    }
-
-    messages
-        .into_iter()
-        .enumerate()
-        .filter_map(|(index, message)| {
-            if message.envelope.read {
-                return Some(message);
-            }
-            match message.projection.idle_notification_sender.as_ref() {
-                Some(sender) if latest_idle_for_sender.get(sender) != Some(&index) => None,
-                _ => Some(message),
-            }
-        })
-        .collect()
-}
-
-fn logical_current_messages(messages: Vec<ClassifiedMessage>) -> Vec<ClassifiedMessage> {
-    let projected = messages
-        .iter()
-        .map(|message| message.envelope.clone())
-        .collect::<Vec<_>>();
-    let thread_index = ThreadIndex::new(&projected);
-
-    messages
-        .into_iter()
-        .filter(|message| {
-            message
-                .envelope
-                .message_id
-                .is_none_or(|message_id| thread_index.is_terminal(message_id))
-        })
-        .collect()
-}
-
 fn apply_list_filters(
     messages: Vec<ClassifiedMessage>,
-    projection_index: &HashMap<(PathBuf, usize), SummaryProjection>,
     sender_filter: Option<&AgentName>,
     timestamp_filter: Option<IsoTimestamp>,
     task_filter: Option<&TaskId>,
@@ -365,113 +234,18 @@ fn apply_list_filters(
         task_filter,
     );
 
-    match contains_filter {
-        Some(needle) => filtered
-            .into_iter()
-            .filter(|message| contains_projection_match(message, projection_index, needle))
-            .collect(),
-        None => filtered,
-    }
+    filters::apply_contains_filter(filtered, contains_filter)
 }
 
-fn contains_projection_match(
-    message: &ClassifiedMessage,
-    projection_index: &HashMap<(PathBuf, usize), SummaryProjection>,
-    needle: &str,
-) -> bool {
-    let Some(projection) =
-        projection_index.get(&(message.source_path.clone(), message.source_index.get()))
-    else {
-        return false;
-    };
-
-    projection.body_contains_match
-        || ascii_case_insensitive_contains(&projection.summary_preview, needle)
-}
-
-fn select_messages(
-    messages: &[ClassifiedMessage],
-    selection_mode: ReadSelection,
-    seen_watermark: Option<IsoTimestamp>,
-) -> Vec<ClassifiedMessage> {
-    let watermark = if selection_mode == ReadSelection::All {
-        None
-    } else {
-        seen_watermark
-    };
-
-    let visible = messages
-        .iter()
-        .filter(|message| !hidden_for_selection(&message.envelope, selection_mode))
-        .cloned()
-        .collect::<Vec<_>>();
-
-    filters::apply_selection_mode(visible, selection_mode, watermark)
-}
-
-fn bucket_counts_for(messages: &[ClassifiedMessage]) -> BucketCounts {
-    messages.iter().fold(
-        BucketCounts {
-            unread: 0,
-            pending_ack: 0,
-            history: 0,
-        },
-        |mut counts, message| {
-            if hidden_from_normal_views(&message.envelope) {
-                return counts;
-            }
-            match message.bucket {
-                crate::types::DisplayBucket::Unread => counts.unread += 1,
-                crate::types::DisplayBucket::PendingAck => counts.pending_ack += 1,
-                crate::types::DisplayBucket::History => counts.history += 1,
-            }
-            counts
-        },
-    )
-}
-
-fn hidden_from_normal_views(envelope: &MessageEnvelope) -> bool {
-    let now = IsoTimestamp::now();
-    is_expired_ephemeral(envelope, now) || (is_ephemeral(envelope) && envelope.read)
-}
-
-fn hidden_for_selection(envelope: &MessageEnvelope, selection_mode: ReadSelection) -> bool {
-    let now = IsoTimestamp::now();
-    if is_expired_ephemeral(envelope, now) {
-        return true;
-    }
-    selection_mode != ReadSelection::All && is_ephemeral(envelope) && envelope.read
-}
-
-fn effective_display_envelope(
-    envelope: &MessageEnvelope,
-    thread_index: &ThreadIndex<'_>,
-) -> MessageEnvelope {
-    let Some(message_id) = envelope.message_id else {
-        return envelope.clone();
-    };
-    if thread_index.is_terminal(message_id) {
-        return envelope.clone();
-    }
-
-    let mut historical = envelope.clone();
-    historical.read = true;
-    historical.pending_ack_at = None;
-    historical
-}
-
-fn list_row_from_message(
-    message: &ClassifiedMessage,
-    projection_index: &HashMap<(PathBuf, usize), SummaryProjection>,
-) -> ListRow {
-    let summary = projection_index
-        .get(&(message.source_path.clone(), message.source_index.get()))
-        .map(|projection| projection.summary_preview.clone())
-        .unwrap_or_default();
-
+fn list_row_from_message(message: &ClassifiedMessage) -> ListRow {
     ListRow {
         message_id: message.envelope.message_id,
-        summary,
+        summary: message
+            .envelope
+            .summary
+            .as_deref()
+            .unwrap_or_default()
+            .to_string(),
         from: message.envelope.from.clone(),
         timestamp: message.envelope.timestamp,
         read: message.envelope.read,
@@ -481,15 +255,87 @@ fn list_row_from_message(
     }
 }
 
-fn ascii_case_insensitive_contains(haystack: &str, needle: &str) -> bool {
-    let needle = needle.as_bytes();
-    if needle.is_empty() {
-        return true;
+#[cfg(test)]
+mod tests {
+    use std::path::PathBuf;
+
+    use serde_json::Map;
+
+    use super::{apply_list_filters, logical_current_messages};
+    use crate::read::ClassifiedMessage;
+    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::types::{AgentName, DisplayBucket, IsoTimestamp, MessageClass, TaskId, TeamName};
+
+    fn classified_message(
+        text: &str,
+        message_id: AtmMessageId,
+        parent_message_id: Option<AtmMessageId>,
+        thread_mode: Option<ThreadMode>,
+        source_index: usize,
+    ) -> ClassifiedMessage {
+        ClassifiedMessage {
+            source_index: source_index.into(),
+            source_path: PathBuf::from("recipient.json"),
+            bucket: DisplayBucket::Unread,
+            class: MessageClass::Unread,
+            envelope: MessageEnvelope {
+                from: TEST_SENDER.parse::<AgentName>().expect("agent"),
+                text: text.to_string(),
+                timestamp: IsoTimestamp::now(),
+                read: false,
+                source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+                summary: None,
+                message_id: Some(message_id),
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id,
+                thread_mode,
+                expires_at: None,
+                task_id: None::<TaskId>,
+                extra: Map::new(),
+            },
+        }
     }
-    haystack.as_bytes().windows(needle.len()).any(|window| {
-        window
-            .iter()
-            .zip(needle.iter())
-            .all(|(left, right)| left.eq_ignore_ascii_case(right))
-    })
+
+    #[test]
+    fn logical_current_messages_preserves_parent_context_for_add_details() {
+        let root_id = AtmMessageId::new();
+        let detail_id = AtmMessageId::new();
+        let current = logical_current_messages(vec![
+            classified_message("root context", root_id, None, None, 0),
+            classified_message(
+                "follow-up detail",
+                detail_id,
+                Some(root_id),
+                Some(ThreadMode::AddDetails),
+                1,
+            ),
+        ]);
+
+        assert_eq!(current.len(), 1);
+        assert_eq!(current[0].envelope.message_id, Some(detail_id));
+        assert_eq!(current[0].envelope.text, "root context\n\nfollow-up detail");
+    }
+
+    #[test]
+    fn list_contains_filter_drops_superseded_parent_context() {
+        let root_id = AtmMessageId::new();
+        let supersede_id = AtmMessageId::new();
+        let current = logical_current_messages(vec![
+            classified_message("root context", root_id, None, None, 0),
+            classified_message(
+                "replacement instruction",
+                supersede_id,
+                Some(root_id),
+                Some(ThreadMode::Supersede),
+                1,
+            ),
+        ]);
+
+        let filtered = apply_list_filters(current, None, None, None, Some("root context"));
+
+        assert!(filtered.is_empty());
+    }
 }

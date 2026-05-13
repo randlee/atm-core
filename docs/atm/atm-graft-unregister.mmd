@@ -1,0 +1,10 @@
+%% title: `unregister session`
+%% summary: Remove one advisory-nudge consumer session.
+%% commentary: This teardown path should remove bounded consumer state cleanly and report not-found or runtime errors explicitly.
+%% sets: client
+flowchart TD
+    A[registered-consumer unregister request] --> B[Daemon unregister handler]
+    B --> C1[Remove session from bounded daemon runtime]
+    C1 -->|not found| E1[ValidationFailed or NotFound]
+    C1 -->|runtime error| E2[DaemonUnavailable]
+    C1 --> O1[Return unregistration accepted]

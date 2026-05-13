@@ -1,12 +1,14 @@
 # ATM-Rusqlite Boundary Inventory
 
-This document captures the concrete SQLite adapters for Phase R.
+This document captures the concrete SQLite adapters for the approved store
+line.
 
 Current design assumption:
 - concrete sqlite adapters stay private to this crate
 - no external crate should depend on `atm-rusqlite` directly
-- any future runtime composition must go through boundary traits/facades rather
-  than a direct daemon-to-sqlite crate edge
+- runtime composition must go through `atm-core` boundary traits/facades
+- client crates such as `atm`, `atm-graft`, and future harness-specific clients
+  must not depend on this crate directly
 
 Canonical machine-readable boundary sources:
 - [`boundaries/atm-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-sqlite.toml)
@@ -18,13 +20,14 @@ Canonical machine-readable boundary sources:
 Important crate-private assembly/state-root structs that must stay visible in
 review:
 - `SqliteBoundaryAssembly`
-  - owns composition of the three store adapters over one shared SQLite root
+  - owns composition of the approved SQLite store adapters over one shared
+    SQLite root
 - `SharedDb`
   - owns connection/bootstrap/transaction policy for the shared host-scoped
     database
 
 These are not public boundary traits, but they are important private
-implementation surfaces for `R.14` and later closeout review.
+implementation surfaces for review.
 
 ## SqliteBoundaryAssembly
 
@@ -32,8 +35,8 @@ Canonical machine-readable boundary source:
 - [../../boundaries/atm-rusqlite/sqlite-boundary-assembly.toml](../../boundaries/atm-rusqlite/sqlite-boundary-assembly.toml)
 
 Purpose:
-- Own the crate-private assembly seam that composes the three SQLite-backed
-  boundary adapters over one shared host-scoped database root.
+- Own the crate-private assembly seam that composes the SQLite-backed boundary
+  adapters over one shared host-scoped database root.
 
 Notes:
 - This record exists so the assembly seam remains review-visible even though it
@@ -55,54 +58,42 @@ Notes:
 - This record exists so the host-scoped durable-state root and transaction
   policy are enforced as a private boundary surface rather than informal crate
   internals.
-- The owned production path resolves to `~/.atm/db/mail.db` and must not be
-  derived from `ATM_HOME` or test-only compatibility state roots.
-- The owned state-root policy includes:
-  - one-time deterministic schema bootstrap per database root
-  - per-connection runtime pragma enforcement
-  - concurrent open-handle budget capped at 4 SQLite connections
-  - no full migration/bootstrap rerun on every connection acquisition
-
-## BOUNDARY-001 SharedDbTarget
-
-Canonical machine-readable boundary source:
-- [../../boundaries/atm-rusqlite/shared-db.toml](../../boundaries/atm-rusqlite/shared-db.toml)
-
-Purpose:
-- Own the validated `SharedDbTarget` seam used by the crate-private writer lane
-  and SQLite test fixtures so helper APIs do not accept raw
-  `rusqlite::Connection` handles across the boundary.
-
-Notes:
-- This record exists to keep the writer-lane boundary from regressing into
-  `rusqlite::Connection` parameter leakage across helper APIs.
-- See `docs/adr/ADR-ATM-RUSQLITE-002.md` for the single-writer lane contract
-  that requires this boundary to stay crate-private and type-directed.
+- The owned production path resolves to `~/.atm/db/mail.db`.
+- Schema changes are lock-step architectural changes and require explicit user
+  approval plus matching updates to requirements, architecture, and boundary
+  docs before implementation is accepted.
 
 ## SqliteMailStoreAdapter
 
 Purpose:
-- Owns the SQLite-backed implementation of the MailStore contract.
+- Own the SQLite-backed implementation of the `MailStore` contract.
 
 Notes:
-- Caller crates should know only the MailStore trait, never this concrete type.
+- Caller crates should know only the `MailStore` trait, never this concrete
+  type.
 
 ## SqliteTaskStoreAdapter
 
 Purpose:
-- Owns the SQLite-backed implementation of the TaskStore contract.
+- Historical SQLite implementation surface for the `TaskStore` contract.
 
 Notes:
-- This remains separate from mail and roster persistence to preserve ownership clarity.
+- Task persistence is not an approved SQLite schema line today.
+- The trait may remain upstream as a contract placeholder, but this crate must
+  not grow or preserve an unapproved durable task schema.
 
 ## SqliteRosterStoreAdapter
 
 Purpose:
-- Owns the SQLite-backed implementation of the RosterStore contract.
+- Own the SQLite-backed implementation of the `RosterStore` contract.
 
 Notes:
-- Thin extensions such as atm-graft must not depend on this crate directly.
-- The concrete implementation currently maintains both:
-  - a crate-private `rosters` snapshot table as the canonical `TeamConfig`
-    round-trip record
-  - a per-member `team_roster` durable projection for runtime-facing lookup
+- The approved target is one canonical member store, not a whole-roster JSON
+  snapshot plus a second per-member truth table.
+- Explicit behavioral member fields belong in the canonical roster store:
+  - `member_kind`
+  - `harness`
+  - `agent_type`
+  - `model`
+  - `metadata_json`
+- Durable roster truth must not carry daemon-owned `pid` continuity.

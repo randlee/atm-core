@@ -68,6 +68,7 @@ review_gates = [
 state = "active"
 notes = [
   "durable roster truth remains distinct from live status caches",
+  "the canonical table is explicit member rows; daemon-owned pid continuity is not persisted here",
   "crate-root implementation remains temporary; module split is still deferred",
   "assembled through atm_rusqlite::SqliteBoundaryAssembly",
 ]

@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U8-R2-CF001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U8-R2-CF001" ;
+  triage:title "boundaries/atm-graft/shared-client-consumer.toml missing atm-daemon-client distinction note" ;
+  triage:description "boundaries/atm-graft/shared-client-consumer.toml is missing a [status] notes entry clarifying that atm-daemon-client is a distinct crate from atm-daemon runtime. Fix: add one-line [status] notes entry." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-R2-CF001/pU-u8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-R2-CF001/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-R2-CF001/pU-u10/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u8/b82ecf9> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/3a36435> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u10/7bc28ff> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u10/7bc28ff> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-R2-CF001/pU-u8/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-graft/shared-client-consumer.toml" ;
+  triage:line 69 ;
+  triage:snippet "notes = [\"U.8 keeps atm-graft on the shared atm-core client transport and request/response envelopes only\", ...]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/b82ecf9> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-R2-CF001/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-graft/shared-client-consumer.toml" ;
+  triage:line 69 ;
+  triage:snippet "notes = [\"U.8 keeps atm-graft on the shared atm-core client transport and request/response envelopes only\", ...]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/3a36435> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-R2-CF001/pU-u10/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-graft/shared-client-consumer.toml" ;
+  triage:line 69 ;
+  triage:snippet "notes = [\"U.8 keeps atm-graft on the shared atm-core client transport and request/response envelopes only\", ...]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/7bc28ff> .
+
+<urn:atm:triage:worktree/pU-u8/b82ecf9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "b82ecf9" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pU-u9/3a36435>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "3a36435" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/7bc28ff>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "7bc28ff" ;
+  triage:orderIndex 10 .

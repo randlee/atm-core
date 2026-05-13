@@ -3,10 +3,11 @@ use crate::error::AtmError;
 use crate::schema::{AgentMember, MessageEnvelope, TeamConfig};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use serde::{Deserialize, Serialize};
+use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
 
-use super::{AckTransition, MessageKey, TaskState, sealed};
+use super::{AckTransition, MessageKey, ReplaySource, TaskState, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct TaskStoreTaskMetadata {
@@ -39,6 +40,68 @@ pub struct RosterStoreHealthSnapshot {
     pub stale: bool,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub refreshed_at: Option<IsoTimestamp>,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum RosterMemberKind {
+    Permanent,
+    Ephemeral,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum RosterHarness {
+    ClaudeCode,
+    CodexCli,
+    GeminiCli,
+    Opencode,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterMemberRecord {
+    pub team_name: TeamName,
+    pub agent_name: AgentName,
+    pub member_kind: RosterMemberKind,
+    pub harness: RosterHarness,
+    #[serde(default)]
+    pub agent_type: String,
+    #[serde(default)]
+    pub model: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recipient_pane_id: Option<String>,
+    #[serde(default)]
+    pub metadata_json: Map<String, Value>,
+}
+
+impl RosterMemberRecord {
+    pub fn from_claude_code_member(team_name: TeamName, member: AgentMember) -> Self {
+        let recipient_pane_id = (!member.tmux_pane_id.is_empty()).then_some(member.tmux_pane_id);
+        let mut metadata_json = member.extra;
+        if !member.agent_id.is_empty() {
+            metadata_json.insert("agentId".to_string(), Value::String(member.agent_id));
+        }
+        if let Some(joined_at) = member.joined_at {
+            metadata_json.insert(
+                "joinedAt".to_string(),
+                Value::Number(serde_json::Number::from(joined_at)),
+            );
+        }
+        if !member.cwd.is_empty() {
+            metadata_json.insert("cwd".to_string(), Value::String(member.cwd));
+        }
+
+        Self {
+            team_name,
+            agent_name: member.name,
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: member.agent_type.to_string(),
+            model: member.model,
+            recipient_pane_id,
+            metadata_json,
+        }
+    }
 }
 
 /// Stub task-store request for the Phase R skeleton.
@@ -171,11 +234,11 @@ pub struct TaskStoreResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RosterStoreReplaceRosterRequest {
     pub team: TeamName,
-    pub roster: TeamConfig,
+    pub members: Vec<RosterMemberRecord>,
     /// Invariant: when present, source names one concrete roster-ingest origin
     /// and must not be synthesized from an empty or whitespace-only string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
+    pub source: Option<ReplaySource>,
 }
 
 /// Stub roster-store response for the Phase R skeleton.
@@ -197,7 +260,7 @@ pub struct RosterStoreLoadRosterRequest {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RosterStoreLoadRosterResponse {
     pub team: TeamName,
-    pub roster: TeamConfig,
+    pub members: Vec<RosterMemberRecord>,
 }
 
 /// Stub roster-store query-membership request for the Phase R skeleton.
@@ -212,32 +275,9 @@ pub struct RosterStoreQueryMembershipRequest {
 pub struct RosterStoreQueryMembershipResponse {
     pub team: TeamName,
     #[serde(default)]
-    pub member: Option<AgentMember>,
+    pub member: Option<RosterMemberRecord>,
     #[serde(default)]
     pub is_member: bool,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub pid: Option<u32>,
-}
-
-/// Typed roster-store heartbeat write request for durable pid continuity.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreRecordHeartbeatRequest {
-    pub team: TeamName,
-    pub member: AgentName,
-    pub pid: u32,
-    pub observed_at: IsoTimestamp,
-}
-
-/// Typed roster-store heartbeat write response for durable pid continuity.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreRecordHeartbeatResponse {
-    pub team: TeamName,
-    pub member: AgentName,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub previous_pid: Option<u32>,
-    pub current_pid: u32,
-    #[serde(default)]
-    pub pid_changed: bool,
 }
 
 /// Stub roster-store health-snapshot request for the Phase R skeleton.
@@ -256,11 +296,11 @@ pub struct RosterStoreHealthSnapshotResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RosterStoreRequest {
     pub team: TeamName,
-    pub roster: TeamConfig,
+    pub members: Vec<RosterMemberRecord>,
     /// Invariant: when present, source names one concrete roster-ingest origin
     /// and must not be synthesized from an empty or whitespace-only string.
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub source: Option<String>,
+    pub source: Option<ReplaySource>,
 }
 
 /// Canonical Phase R roster-store response entrypoint payload.
@@ -340,7 +380,7 @@ pub struct InboxIngressDiagnosticsRequest {
 /// Stub inbox-ingress diagnostics response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InboxIngressDiagnosticsResponse {
-    pub duplicate_legacy_message_ids: usize,
+    pub duplicate_message_ids: usize,
     pub messages_without_ids: usize,
 }
 
@@ -462,14 +502,6 @@ pub trait RosterStore: sealed::Sealed {
         &self,
         request: RosterStoreQueryMembershipRequest,
     ) -> Result<RosterStoreQueryMembershipResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when durable pid continuity cannot be updated
-    /// through the roster-store boundary.
-    fn record_heartbeat(
-        &self,
-        request: RosterStoreRecordHeartbeatRequest,
-    ) -> Result<RosterStoreRecordHeartbeatResponse, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when roster health cannot be collected.

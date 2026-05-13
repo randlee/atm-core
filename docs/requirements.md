@@ -15,7 +15,7 @@ Satisfied by:
 The product is a local command-line tool named `atm`.
 
 The current target architecture no longer treats daemon removal as a product
-goal. Phase Q reintroduces a tightly-bounded singleton daemon runtime because
+goal. The current SQLite/daemon architecture uses a tightly-bounded singleton daemon runtime because
 mail routing, native agent notification, and cross-host transport need one
 coordinating process, while ATM command behavior remains the user-facing
 surface.
@@ -44,13 +44,16 @@ Schema ownership references:
   [`atm-message-schema.md`](./atm-message-schema.md)
 - legacy ATM read-compatibility schema:
   [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+  (historical only; Phase U removed its `metadata.atm` coverage from the
+  active compatibility design)
 - `sc-observability` schema ownership pointer:
   [`sc-observability-schema.md`](./sc-observability-schema.md)
 - ATM-owned error-code registry:
   [`atm-error-codes.md`](./atm-error-codes.md)
 - schema enforcement models:
   `tools/schema_models/claude_code_message_schema.py` and
-  `tools/schema_models/atm_message_schema.py` and
+  `tools/schema_models/atm_message_schema.py`
+- historical/read-compatibility schema record only:
   `tools/schema_models/legacy_atm_message_schema.py`
 
 ## 1.1 Documentation Structure
@@ -67,13 +70,10 @@ Crate-local ownership docs live under:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
-- [`docs/atm-graft/requirements.md`](./atm-graft/requirements.md)
-- [`docs/atm-graft/architecture.md`](./atm-graft/architecture.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
-- [`docs/atm-graft/boundaries.md`](./atm-graft/boundaries.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 - [`docs/atm/boundaries.md`](./atm/boundaries.md)
 
@@ -123,6 +123,10 @@ Phase-S portability note:
 - the thin-client extension surface should center on `send` and `receive`
   over the shared ATM protocol, while the retained CLI may continue to expose
   `ack` as a user-facing workflow
+- Phase U removed the active `metadata.atm` namespace from the approved
+  compatibility schema; the authoritative schema is
+  [`atm-message-schema.md`](./atm-message-schema.md) and the planning record is
+  [`plan-phase-U.md`](./plan-phase-U.md)
 
 ## 2. Scope
 
@@ -193,10 +197,6 @@ Satisfied by:
     release
   - partial lane failure must not leave the runtime in ambiguous ownership
     state
-  - `GAP-T5-001`: current code uses a `2s` graceful-drain budget and `3s`
-    force-cancel budget; older operator docs still referenced `5s` / `10s`,
-    so the authoritative shutdown contract must be accepted explicitly rather
-    than inferred from stale prose
 
 - `REQ-P-PLATFORM-001` ATM `1.0` supports macOS, Linux, and Windows as
   first-class operating systems for the retained product surface.
@@ -418,38 +418,27 @@ Required rules:
 - ATM must not redefine Claude-native fields as if ATM owned them
 - ATM read must accept:
   - Claude Code-native messages
-  - legacy ATM top-level additive messages
-  - future ATM metadata-based messages
-- new ATM-only machine-readable fields must not be added as new top-level inbox
-  fields
-- forward ATM machine-readable fields must live in `metadata.atm`
-- forward ATM-authored alert and repair metadata, including legacy
-  `atmAlertKind` and `missingConfigPath`, must migrate to `metadata.atm`
-  fields such as `metadata.atm.alertKind` and
-  `metadata.atm.missingConfigPath`
-- ATM may enrich a Claude-native message in place by adding ATM-owned metadata
-  without rewriting native Claude fields except for the explicitly documented
-  cross-team alias projection carve-out on `from`, which also requires
-  `metadata.atm.fromIdentity`
-- locally owned schema enforcement must distinguish legacy top-level UUID-based
-  ATM identifiers from forward metadata-based ULID identifiers
-- write-path validation may reject wrong-format ATM-owned identifiers with
-  descriptive errors
-- read-path validation failure for ATM-owned fields must trigger warning +
+  - ATM top-level additive compatibility messages
+- no normal ATM runtime/query path may depend on ATM-owned machine-state reads
+  from Claude JSON
+- no `metadata.atm` namespace may survive in active compatibility output
+- shared inbox `message_id` is the compatibility wire encoding of the one
+  logical ATM message identity
+- ATM-owned workflow, delete/close, expiry, sender-projection, and repair
+  state must live in SQLite-owned state, not in shared JSON
+- write-path validation may reject wrong-format ATM-owned compatibility fields
+  with descriptive errors
+- read-path validation failure for additive ATM fields must trigger warning +
   degradation logic rather than failing the overall message read
-- a separate ATM-native inbox is explicitly deferred and must not be assumed by
-  the current live design
-
-Current compatibility rule:
-
-- existing runtime write/read behavior for legacy top-level alert fields
-  remains stable until a later compatibility-migration implementation changes
-  that persisted shape
+- a separate ATM-native inbox remains deferred; the current shared inbox
+  remains compatibility-only
 `REQ-P-SCHEMA-001` is owned by:
 
 - [`claude-code-message-schema.md`](./claude-code-message-schema.md)
 - [`atm-message-schema.md`](./atm-message-schema.md)
 - [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
+  (historical only; its `metadata.atm` coverage was superseded and removed
+  from the active compatibility design in Phase U)
 - [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
   §2.2 and §3.3 for forward ATM alert-field placement and sender-side dedup
   semantics
@@ -697,8 +686,8 @@ Alias rules:
   remains the routing and validation identity
 - same-team messages keep current canonical sender projection behavior
 - cross-team messages may project an alias-oriented sender in the persisted
-  `from` field only when ATM also stores canonical sender identity in
-  `metadata.atm.fromIdentity`
+  `from` field only when ATM also stores the canonical sender identity in
+  SQLite-owned state for routing, validation, and audit
 
 Post-send-hook rules:
 - `[[atm.post_send_hooks]]` is the only supported post-send hook shape in this
@@ -729,7 +718,7 @@ Post-send-hook rules:
   - optional `task_id` when present
   - optional `recipient_pane_id` when ATM has an authoritative pane mapping for
     the recipient
-- Phase Q addition: `is_ack` is part of the retained hook payload contract for
+- Current runtime addition: `is_ack` is part of the retained hook payload contract for
   the daemon-owned send/ack runtime path so hook implementations can
   distinguish `atm send` from `atm ack` without inspecting message text
 - the post-send hook must run after successful non-`dry-run` `atm send`
@@ -812,9 +801,8 @@ Retired from the current implementation:
 - resolve recipient address using the defined precedence
 - resolve aliases before mailbox lookup
 - when a cross-team alias-oriented sender is projected into `from`, also
-  persist canonical sender identity in `metadata.atm.fromIdentity` and use the
-  canonical sender identity for validation, self-send checks, routing, and
-  audit behavior
+  persist the canonical sender identity in SQLite-owned state and use it for
+  validation, self-send checks, routing, and audit behavior
 - verify target team existence and target agent membership as part of address
   resolution before mailbox path selection, except for the documented
   `missing-document` fallback in §6.3.1
@@ -845,16 +833,7 @@ Retired from the current implementation:
 - treat `post_send_hook` failure or timeout as best-effort diagnostics only; it
   must not roll back or fail an already-successful send
 - write a non-null `message_id` on every ATM-authored message
-- current live write compatibility may generate top-level `message_id` values
-  using UUID while the metadata-based schema is not yet implemented
-
-Forward schema requirements:
-
-- once ATM writes `messageId` under `metadata.atm`, it must use ULID rather
-  than UUID for newly-authored values
-- ATM must generate the ULID first and derive the persisted Claude-native
-  `timestamp` from that ULID creation instant
-- legacy UUID `message_id` remains read-compatible
+- `message_id` is the shared-wire form of the one logical ATM message identity
 
 `message_id` is required on every message written by `atm send`.
 
@@ -1323,6 +1302,11 @@ Phase R continuation semantics:
     valid historical context
   - `supersede` replaces the prior message as the effective current
     instruction
+  - logical-current selection keeps the terminal message id for both modes
+  - terminal `add-details` preserves still-valid predecessor context in the
+    effective current body used for matching and display
+  - terminal `supersede` uses only the replacement body as the effective
+    current instruction
   - if a successor arrives after the predecessor was already read, the
     successor still produces a new nudge so the current effective instruction
     is visible
@@ -1342,14 +1326,34 @@ Phase R continuation semantics:
 - `REQ-P-THREAD-005` Ephemeral messages are standalone, time-bounded records.
 
   Required behavior:
-  - compatibility/export payloads carry ephemeral expiry with `staleAt`
-  - ephemeral messages expire by time only, using `stale_at`
+  - ephemeral messages expire by time only, using SQLite-owned `expires_at`
+  - compatibility/export payloads carry ephemeral expiry with `expiresAt`
   - no product behavior may depend on first-read deletion semantics
   - periodic daemon cleanup deletes expired ephemeral rows
   - ephemeral messages are not updatable
   - ephemeral messages may not be parents or children in successor chains
   - once read, an ephemeral message becomes hidden from normal reads but
-    remains visible through `--view-all` until `stale_at`
+    remains visible through `--view-all` until `expires_at`
+
+- `REQ-CORE-MAILBOX-UNIFIED` Mutable mailbox/runtime state must be owned by one
+  canonical SQLite table, `mail_message_states`.
+
+  Required behavior:
+  - `mail_messages` remains the immutable message-content table
+  - `mail_message_states` is the only canonical owner for mutable mailbox
+    state:
+    - `read`
+    - `pending_ack_at`
+    - `acknowledged_at`
+    - `expires_at`
+    - `deleted_at`
+    - `updated_at`
+  - the retired split-state model (`mail_visibility_states` plus `ack_state`)
+    must not be reintroduced under old or new names
+  - normal mailbox queries must hide rows with `deleted_at`
+  - deleted rows may surface only through explicit admin/diagnostic paths
+  - time-bounded ephemeral retention uses `expires_at` from
+    `mail_message_states`, not a field on `mail_messages`
 
 ### 8.5 Output Contract
 
@@ -1517,7 +1521,7 @@ Satisfied by:
 
 Run local ATM diagnostics for the retained ATM runtime.
 
-`atm doctor` remains a local diagnostics command, but in the Phase Q target
+`atm doctor` remains a local diagnostics command, but in the current SQLite/daemon architecture
 architecture it must also report daemon/runtime availability because normal ATM
 mail behavior depends on the singleton daemon being present.
 
@@ -1535,7 +1539,7 @@ The initial doctor implementation must cover:
 - obsolete `[atm].identity` configuration drift detection
 - daemon control-socket existence and reachability
 - singleton daemon ownership health
-- SQLite mail-store path visibility and openability when Phase Q runtime is
+- SQLite mail-store path visibility and openability when the current runtime is
   active
 - baseline `[atm].team_members` coverage against `config.json.members`
 - team directory existence
@@ -1545,7 +1549,7 @@ The initial doctor implementation must cover:
   start-of-run and end-of-run snapshots; a lock present in both snapshots is
   stale and must be reported with `ATM_WARNING_STALE_MAILBOX_LOCK` as a
   transitional compatibility finding rather than a normal mail-correctness
-  dependency in the Phase Q target architecture
+  dependency in the current SQLite/daemon architecture
 - hook identity availability
 - `ATM_HOME`, `ATM_TEAM`, and `ATM_IDENTITY` override visibility
 - `sc-observability` initialization health
@@ -1765,17 +1769,18 @@ Optional fields:
 - `acknowledgesMessageId`
 - `parentMessageId`
 - `threadMode`
-- `staleAt`
 - `metadata`
 
 Unknown fields must be preserved.
 
 For ATM-authored messages:
 - ATM machine-readable identity is mandatory
-- current legacy top-level `message_id` values may be UUID
-- forward metadata `messageId` values must be ULID
+- ATM uses one logical message identity and exports it through `message_id` on
+  the shared compatibility surface
+- ATM service addressing may accept either ULID text or UUID-wire text, but
+  both must resolve to the same logical identity
 - thread/update metadata uses `parentMessageId` plus `threadMode`
-- time-bounded ephemeral retention uses `staleAt`
+- time-bounded ephemeral retention uses SQLite-owned `expires_at`
 - ATM-authored machine identifiers must not be null or blank
 
 Legacy or externally imported records may still omit `message_id`; the rewrite
@@ -1996,7 +2001,7 @@ Minimum error categories:
 - daemon singleton
 - daemon client
 
-Phase Q required families:
+Current runtime required families:
 - store:
   - SQLite bootstrap/open
   - schema/transaction
@@ -2149,10 +2154,10 @@ The rewrite is ready when:
 - `atm clear` works through the documented production runtime path
 - `atm log` works through shared `sc-observability` APIs
 - `atm doctor` works as a local diagnostics command with daemon/runtime
-  visibility in the Phase Q target architecture
+  visibility in the current SQLite/daemon architecture
 - `atm teams` provides the retained local team recovery surface
 - `atm members` provides the retained local roster verification surface
-- retained commands preserve documented behavior, and any Phase Q runtime-shape
+- retained commands preserve documented behavior, and any current-runtime shape
   changes are explicit in the requirements and architecture
 - workflow-axis classification is correct
 - workflow-axis transitions are encoded in implementation structure
@@ -2727,9 +2732,9 @@ The intentionally forbidden shape is:
     parse failure or unsupported exponent range instead of panicking
   - a library function must not panic on potentially untrusted input
 
-## 21. Phase Q: SQLite Mail SSOT, Runtime Boundaries, And Lock Elimination
+## 21. Current SQLite Mail SSOT, Runtime Boundaries, And Lock Elimination
 
-Phase Q supersedes the mailbox-lock line as the target architecture for ATM
+The current SQLite/daemon architecture supersedes the mailbox-lock line as the target architecture for ATM
 mail correctness. The `REQ-CORE-MAILBOX-LOCK-*` requirements remain
 transitional compatibility constraints only for the interim file-based line.
 The release-complete target is elimination of mailbox-lock dependence from ATM
@@ -2745,33 +2750,34 @@ mail correctness.
     - message records
     - read/unread state
     - ack-required / acknowledged state
-    - clear/visibility state
+    - clear/delete/message state
     - task linkage and task metadata
     - team roster
   - Claude-owned inbox JSONL files are compatibility ingress/export surfaces,
     not ATM's authoritative durable mail store
   - `config.json` becomes a roster-ingress source, not the durable roster truth
 
-- `REQ-CORE-STORE-001` The Phase Q SQLite store must use one documented schema
+- `REQ-CORE-STORE-001` The SQLite store must use one documented schema
   contract with stable keys, constraints, and indexes.
 
   Required behavior:
   - the authoritative schema must define at least:
     - `messages`
-    - `ack_state`
-    - `message_visibility`
-    - `tasks`
-    - `team_roster`
+    - one unified mutable message-state surface
+    - one canonical roster/member surface
     - `inbox_ingest`
   - `message_key` is the canonical ATM durable message identity
   - `message_key` format must be deterministic and typed by source family:
     - `atm:<ulid>` for ATM-authored durable rows
     - `ext:<fingerprint>` for imported external rows without ATM ids
   - schema constraints must forbid duplicate authoritative identities
+  - schema changes are contract changes and require explicit user approval plus
+    synchronized requirements, architecture, and boundary doc updates before
+    implementation is accepted
   - the schema must document the required lookup indexes for message lookup,
     task lookup, visibility projection, and ingest dedupe
 
-- `REQ-CORE-STORE-002` The Phase Q SQLite store must enforce WAL and explicit
+- `REQ-CORE-STORE-002` The SQLite store must enforce WAL and explicit
   transaction policy.
 
   Required behavior:
@@ -2808,8 +2814,9 @@ mail correctness.
 
   Required behavior:
   - live status is runtime-owned daemon state
-  - SQLite stores the current durable `pid` for each member as roster truth,
-    and daemon memory caches it as the primary liveness field
+  - SQLite stores canonical roster membership and optional routing metadata,
+    but not the current process `pid`
+  - daemon memory caches the current `pid` as the primary liveness field
   - daemon runtime state must include `last_active_at` for each known active
     agent/member entry
   - the shared protocol must expose typed heartbeat request/response DTOs for
@@ -2817,13 +2824,12 @@ mail correctness.
   - SQLite must not own live `last_active_at`; it remains daemon-memory-only
     runtime state
   - roster truth and live-status truth must remain distinct
-  - `pid` is not a diagnostic snapshot or advisory hint; it is the durable
-    roster-owned process identity until replaced by the documented heartbeat or
-    admin-takeover path
+- `pid` is transient daemon-owned runtime state rather than durable roster
+  truth and must not be persisted in SQLite
 
 ### 21.2 Singleton Daemon Runtime
 
-- `REQ-CORE-DAEMON-001` ATM must run exactly one daemon per host in the Phase Q
+- `REQ-CORE-DAEMON-001` ATM must run exactly one daemon per host in the current architecture
   runtime.
 
   Required behavior:
@@ -2919,7 +2925,7 @@ mail correctness.
 
 ### 21.3.1 Structured Error Boundaries
 
-- `REQ-CORE-BOUNDARY-002` Production Phase Q code must model fallible runtime
+- `REQ-CORE-BOUNDARY-002` Production runtime code must model fallible runtime
   behavior with discriminated error unions and explicit `Result` propagation.
 
   Required behavior:
@@ -2938,7 +2944,7 @@ mail correctness.
     perspective of feature/service code; subsystems consume codes from the
     registry and do not mint local alternatives
   - violation of these structured-error rules is a direct QA failure for the
-    Phase Q implementation line
+    current SQLite/daemon implementation line
 
 ### 21.4 Transport And Routing Model
 
@@ -2967,7 +2973,7 @@ mail correctness.
   - transport receive logic must not perform SQL, watcher, or notification
     business logic inline
   - any violation of this transport isolation rule is a direct QA failure for
-    the Phase Q implementation line
+    the current SQLite/daemon implementation line
   - subsystem and runtime tests must be able to replace local-IPC/TCP transport
     adapters with the `test-socket` transport without changing business logic
   - same-host daemon functionality must be production-complete on every
@@ -2979,9 +2985,6 @@ mail correctness.
   - shared test infrastructure must exercise the same handler/dispatcher
     contract on Unix and Windows rather than maintaining separate product-level
     transport semantics per platform
-  - Phase T extension: this same logical daemon API also underpins the embedded
-    `atm-graft` client line; see
-    [`docs/atm-graft/requirements.md`](./atm-graft/requirements.md)
 
 - `REQ-CORE-TRANSPORT-001B` Request routing must live behind one explicit
   dispatcher boundary with injectable typed handlers.
@@ -2994,7 +2997,7 @@ mail correctness.
   - adding a new request family must not require transport-adapter logic
     growth beyond decode + dispatch
   - any violation of this dispatcher/handler rule is a direct QA failure for
-    the Phase Q implementation line
+    the current SQLite/daemon implementation line
 
 - `REQ-CORE-TRANSPORT-001A` Filesystem watch/reconcile logic must remain a
   separate owned subsystem from transport, store, and notifier logic.
@@ -3007,7 +3010,7 @@ mail correctness.
     logic
   - the transport boundary must not absorb watcher responsibilities
   - any violation of this watcher isolation rule is a direct QA failure for
-    the Phase Q implementation line
+    the current SQLite/daemon implementation line
   - the daemon implementation may use a bounded polling watch registry instead
     of OS-native filesystem subscriptions, but the watch lifecycle must remain
     daemon-owned and long-lived rather than one-shot helper calls
@@ -3100,17 +3103,17 @@ mail correctness.
 
   Required behavior:
   - ATM-authored Claude inbox exports must remain Claude-native at the top
-    level with ATM machine fields under `metadata.atm`
+    level with only the limited additive compatibility fields ATM still
+    requires
   - Claude-native external writes must be importable into SQLite through one
     owned ingress boundary
   - once team roster and pane mapping truth move to SQLite, ATM-owned
     post-send-hook payloads must carry the authoritative `recipient_pane_id`
     from roster truth when known
 - post-send hooks must be able to rely on that payload field instead of
-  rediscovering pane mappings from local files once the Phase Q migration is
-  complete
-  - ATM-authored JSONL exports must remain valid JSONL records with ATM machine
-    fields under `metadata.atm`
+    rediscovering pane mappings from local files once roster migration is
+    complete
+  - ATM-authored JSONL exports must remain valid JSONL records
   - the default ATM-authored JSONL body export cap is `128 KiB`
   - ATM must expose config `[atm].claude_jsonl_body_export_max_bytes`; `0`
     means stub-only ATM-authored export
@@ -3133,22 +3136,6 @@ mail correctness.
   - the later agent plugin crate must align to this daemon API rather than
     introducing a parallel message transport
 
-- `REQ-P-GRAFT-001` First-party embedded Rust host-agent integration must use
-  one daemon-backed graft crate aligned to the Phase T runtime boundaries.
-
-  Required behavior:
-  - the first-party embedded Rust host-agent integration crate is `atm-graft`
-  - `atm-graft` uses the same-host daemon API for `send`, `read`, `ack`,
-    session registration, and automatic nudge delivery
-  - `atm-graft` must not access SQLite or inbox JSONL directly
-  - if no `.atm.toml` is discovered, `atm-graft` remains inactive
-  - when active, automatic daemon registration and automatic between-tool-call
-    context injection are enabled by default and may be disabled only by
-    explicit config or runtime opt-out
-  - the production target is a custom host CLI with `atm-graft` linked
-    in-process; production acceptance must not depend on `tmux send-keys` or
-    equivalent terminal automation
-
 ### 21.6 Lock Elimination Target
 
 - `REQ-CORE-LOCK-RETIRE-001` ATM mail correctness must stop depending on
@@ -3157,9 +3144,9 @@ mail correctness.
   Required behavior:
   - mailbox locks may remain only as transitional compatibility machinery for
     the interim file-based line
-  - the Phase Q target architecture must eliminate mailbox-lock dependence from
+  - the current SQLite/daemon architecture must eliminate mailbox-lock dependence from
     normal ATM mail correctness
-  - Phase Q completion requires that stale lock artifacts can no longer wedge
+  - completion of the current architecture requires that stale lock artifacts can no longer wedge
     normal ATM mail flows
 
 ### 21.7 Test Strategy Constraints
@@ -3218,7 +3205,7 @@ mail correctness.
 
 ### 21.9 QA Invariants
 
-- `REQ-CORE-QA-RUNTIME-001` Every QA pass for Phase Q must verify the daemon
+- `REQ-CORE-QA-RUNTIME-001` Every QA pass for the current runtime must verify the daemon
   and boundary invariants.
 
   Required behavior:
@@ -3238,8 +3225,8 @@ mail correctness.
   - live agent status remains runtime-owned state
   - structured `sc-observability` coverage remains present at both CLI and
     daemon layers
-  - Claude compatibility export remains Claude-native top-level plus
-    `metadata.atm`
+  - Claude compatibility export remains a compatibility projection only and is
+    never the ATM-owned runtime truth
 
 ### 21.10 Postmortem Lint Backfill
 

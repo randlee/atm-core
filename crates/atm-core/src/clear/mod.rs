@@ -8,16 +8,17 @@ use serde_json::Value;
 use tracing::debug;
 
 use crate::address::AgentAddress;
+use crate::boundary;
 use crate::error::AtmError;
 use crate::identity;
 use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
-use crate::mailbox::surface::dedupe_legacy_message_id_surface;
+use crate::mailbox::surface::dedupe_message_id_surface;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::MessageEnvelope;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::RetainedMailboxRuntime;
-use crate::types::{AgentName, CommandAction, MessageClass, SourceIndex, TeamName};
+use crate::service_runtime_store::{RetainedMailboxRuntime, legacy_runtime};
+use crate::types::{AgentName, CommandAction, IsoTimestamp, MessageClass, SourceIndex, TeamName};
 use crate::workflow;
 
 /// Parameters for clearing read or acknowledged mailbox messages.
@@ -73,11 +74,19 @@ pub fn clear_mail(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ClearOutcome, AtmError> {
-    let runtime = LocalServiceRuntime::default();
+    let runtime = legacy_runtime();
     clear_mail_with_runtime(query, observability, &runtime)
 }
 
-fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+pub fn clear_mail_with_runtime(
+    query: ClearQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<ClearOutcome, AtmError> {
+    clear_mail_with_runtime_impl(query, observability, runtime)
+}
+
+fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -113,59 +122,119 @@ fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     }
 
     let cutoff = cutoff_timestamp(query.older_than)?;
-    let workflow_path =
-        runtime.workflow_state_path(&query.home_dir, &target.team, &target.agent)?;
-
-    let (removed_total, remaining_total, removed_by_class) = if query.dry_run {
-        let workflow_state =
-            runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
-        let source_files =
-            runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?;
-        // Clear intentionally does not apply read-surface idle-notification dedup.
-        // Cleanup decisions must inspect the raw merged surface after legacy
-        // message_id canonicalization only.
-        let (removable, removed_by_class, merged_len) =
-            removable_messages(&source_files, &workflow_state, cutoff, query.idle_only);
-        (
-            removable.len(),
-            merged_len.saturating_sub(removable.len()),
-            removed_by_class,
-        )
-    } else {
-        runtime.with_locked_source_files(
-            &query.home_dir,
-            &target.team,
-            &target.agent,
-            [workflow_path],
-            runtime.mailbox_timeout_policy().workflow_lock_timeout,
-            |_source_paths, source_files| {
-                let mut workflow_state =
-                    runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
-                let (removable, removed_by_class, _) =
-                    removable_messages(source_files, &workflow_state, cutoff, query.idle_only);
-                let workflow_changed =
-                    remove_workflow_state_entries(&mut workflow_state, source_files, &removable);
-                apply_removals(source_files, &removable);
-                if !removable.is_empty() {
-                    runtime.commit_source_files(source_files)?;
-                }
-                if workflow_changed {
-                    runtime.save_workflow_state(
+    let (removed_total, remaining_total, removed_by_class) = if runtime
+        .allows_legacy_mailbox_files()
+    {
+        let workflow_path =
+            runtime.workflow_state_path(&query.home_dir, &target.team, &target.agent)?;
+        if query.dry_run {
+            let workflow_state =
+                runtime.load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
+            let source_files =
+                runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?;
+            // Clear intentionally does not apply read-surface idle-notification dedup.
+            // Cleanup decisions must inspect the raw merged surface after legacy
+            // message_id canonicalization only.
+            let (removable, removed_by_class, merged_len) =
+                removable_messages(&source_files, &workflow_state, cutoff, query.idle_only);
+            (
+                removable.len(),
+                merged_len.saturating_sub(removable.len()),
+                removed_by_class,
+            )
+        } else {
+            runtime.with_locked_source_files(
+                &query.home_dir,
+                &target.team,
+                &target.agent,
+                [workflow_path],
+                runtime.mailbox_timeout_policy().workflow_lock_timeout,
+                |_source_paths, source_files| {
+                    let mut workflow_state = runtime.load_workflow_state(
                         &query.home_dir,
                         &target.team,
                         &target.agent,
-                        &workflow_state,
                     )?;
-                }
-                let remaining_total = dedupe_legacy_message_id_surface(
-                    merged_surface(source_files, &workflow_state),
-                    |message: &SourcedMessage| message.envelope.message_id,
-                    |message: &SourcedMessage| message.envelope.timestamp,
-                )
-                .len();
-                Ok((removable.len(), remaining_total, removed_by_class))
-            },
-        )?
+                    let (removable, removed_by_class, _) =
+                        removable_messages(source_files, &workflow_state, cutoff, query.idle_only);
+                    let deleted_states = deletion_states_from_source_files(
+                        &target.team,
+                        &target.agent,
+                        source_files,
+                        &removable,
+                    )?;
+                    let workflow_changed = remove_workflow_state_entries(
+                        &mut workflow_state,
+                        source_files,
+                        &removable,
+                    );
+                    apply_removals(source_files, &removable);
+                    if !removable.is_empty() {
+                        runtime.commit_source_files(source_files)?;
+                        for state in deleted_states {
+                            runtime.persist_message_state(state)?;
+                        }
+                    }
+                    if workflow_changed {
+                        runtime.save_workflow_state(
+                            &query.home_dir,
+                            &target.team,
+                            &target.agent,
+                            &workflow_state,
+                        )?;
+                    }
+                    let remaining_total = dedupe_message_id_surface(
+                        merged_surface(source_files, &workflow_state),
+                        |message: &SourcedMessage| message.envelope.message_id,
+                        |message: &SourcedMessage| message.envelope.timestamp,
+                    )
+                    .len();
+                    Ok((removable.len(), remaining_total, removed_by_class))
+                },
+            )?
+        }
+    } else {
+        let metadata_rows = runtime.query_mailbox_metadata_rows(
+            &query.home_dir,
+            &target.team,
+            &target.agent,
+            None,
+        )?;
+        let removable = sqlite_removable_messages(
+            runtime,
+            &query.home_dir,
+            &target.team,
+            &target.agent,
+            &metadata_rows,
+            cutoff,
+            query.idle_only,
+        )?;
+        if !query.dry_run {
+            let deleted_at = IsoTimestamp::now();
+            for (message_key, envelope, _) in &removable {
+                runtime.persist_message_state(boundary::MailMessageState {
+                    team: target.team.clone(),
+                    agent: target.agent.clone(),
+                    actor: target.agent.clone(),
+                    message_key: message_key.clone(),
+                    read: envelope.read,
+                    pending_ack_at: envelope.pending_ack_at,
+                    acknowledged_at: envelope.acknowledged_at,
+                    expires_at: envelope.expires_at,
+                    deleted_at: Some(deleted_at),
+                    updated_at: Some(deleted_at),
+                })?;
+            }
+        }
+        let mut removed_by_class = RemovedByClass::default();
+        for (_, _, class) in &removable {
+            count_removed(&mut removed_by_class, *class);
+        }
+        (
+            removable.len(),
+            metadata_rows.len().saturating_sub(removable.len()),
+            removed_by_class,
+        )
     };
 
     let outcome = ClearOutcome {
@@ -193,6 +262,49 @@ fn clear_mail_with_runtime<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     });
 
     Ok(outcome)
+}
+
+fn sqlite_removable_messages<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &std::path::Path,
+    team: &TeamName,
+    agent: &AgentName,
+    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    cutoff: Option<DateTime<Utc>>,
+    idle_only: bool,
+) -> Result<Vec<(boundary::MessageKey, MessageEnvelope, MessageClass)>, AtmError> {
+    let mut removable = Vec::new();
+
+    for row in metadata_rows {
+        if cutoff
+            .map(|cutoff| row.message_at.into_inner() > cutoff)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
+        else {
+            return Err(AtmError::validation(format!(
+                "sqlite mailbox metadata row {} could not be reloaded for clear",
+                row.message_key
+            ))
+            .with_recovery(
+                "Repair or remove the malformed sqlite mailbox row before retrying `atm clear`.",
+            ));
+        };
+
+        let class = state::classify_message(&record.envelope);
+        if !matches!(class, MessageClass::Read | MessageClass::Acknowledged) {
+            continue;
+        }
+        if idle_only && !is_idle_notification(&record.envelope) {
+            continue;
+        }
+        removable.push((row.message_key.clone(), record.envelope, class));
+    }
+
+    Ok(removable)
 }
 
 fn merged_surface(
@@ -246,7 +358,7 @@ fn removable_messages(
     cutoff: Option<DateTime<Utc>>,
     idle_only: bool,
 ) -> (HashSet<(PathBuf, SourceIndex)>, RemovedByClass, usize) {
-    let merged = dedupe_legacy_message_id_surface(
+    let merged = dedupe_message_id_surface(
         merged_surface(source_files, workflow_state),
         |message: &SourcedMessage| message.envelope.message_id,
         |message: &SourcedMessage| message.envelope.timestamp,
@@ -324,6 +436,41 @@ fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf,
             })
             .collect();
     }
+}
+
+fn deletion_states_from_source_files(
+    team: &TeamName,
+    agent: &AgentName,
+    source_files: &[SourceFile],
+    removable: &HashSet<(PathBuf, SourceIndex)>,
+) -> Result<Vec<boundary::MailMessageState>, AtmError> {
+    let deleted_at = IsoTimestamp::now();
+    let mut states = Vec::new();
+
+    for source in source_files {
+        for (index, message) in source.messages.iter().enumerate() {
+            if !removable.contains(&(source.path.clone(), index.into())) {
+                continue;
+            }
+            let Some(message_id) = message.message_id else {
+                continue;
+            };
+            states.push(boundary::MailMessageState {
+                team: team.clone(),
+                agent: agent.clone(),
+                actor: agent.clone(),
+                message_key: boundary::MessageKey::new(format!("atm:{message_id}"))?,
+                read: message.read,
+                pending_ack_at: message.pending_ack_at,
+                acknowledged_at: message.acknowledged_at,
+                expires_at: message.expires_at,
+                deleted_at: Some(deleted_at),
+                updated_at: Some(deleted_at),
+            });
+        }
+    }
+
+    Ok(states)
 }
 
 #[cfg(test)]

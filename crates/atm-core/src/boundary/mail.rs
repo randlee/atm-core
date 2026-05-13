@@ -1,6 +1,6 @@
 use crate::error::AtmError;
-use crate::schema::{MessageEnvelope, TeamConfig};
-use crate::types::{AgentName, IsoTimestamp, TeamName};
+use crate::schema::{AtmMessageId, MessageEnvelope, TeamConfig, ThreadMode};
+use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::PathBuf;
@@ -53,14 +53,10 @@ pub struct MailStoreMessageRecord {
     pub agent: AgentName,
     pub message_key: MessageKey,
     pub envelope: MessageEnvelope,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub imported_from: Option<String>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recorded_at: Option<IsoTimestamp>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreVisibilityState {
+pub struct MailMessageState {
     pub team: TeamName,
     pub agent: AgentName,
     pub actor: AgentName,
@@ -70,6 +66,10 @@ pub struct MailStoreVisibilityState {
     pub pending_ack_at: Option<IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub acknowledged_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub deleted_at: Option<IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub updated_at: Option<IsoTimestamp>,
 }
@@ -99,6 +99,60 @@ pub struct MailStoreHealthSnapshot {
     pub read_messages: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latest_message_timestamp: Option<IsoTimestamp>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreMailboxMetadataRow {
+    pub message_key: MessageKey,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message_id: Option<AtmMessageId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent_message_id: Option<AtmMessageId>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thread_mode: Option<ThreadMode>,
+    pub from_agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub summary: Option<String>,
+    pub message_at: IsoTimestamp,
+    pub read: bool,
+    pub pending_ack: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub acknowledged_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires_at: Option<IsoTimestamp>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub task_id: Option<TaskId>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreQueryMailboxMetadataRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub limit: Option<usize>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreQueryMailboxMetadataResponse {
+    pub rows: Vec<MailStoreMailboxMetadataRow>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreMailboxMetadataCounts {
+    pub total_messages: u64,
+    pub unread_messages: u64,
+    pub pending_ack_messages: u64,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreQueryMailboxMetadataCountsRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreQueryMailboxMetadataCountsResponse {
+    pub counts: MailStoreMailboxMetadataCounts,
 }
 
 /// Stub mail-store request for the Phase R skeleton.
@@ -163,35 +217,35 @@ pub struct MailStoreLoadMessageResponse {
     pub record: Option<MailStoreMessageRecord>,
 }
 
-/// Stub mail-store upsert-visibility request for the Phase R skeleton.
+/// Stub mail-store upsert-message-state request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreUpsertVisibilityStateRequest {
+pub struct UpsertMailMessageStateRequest {
     pub team: TeamName,
     pub agent: AgentName,
     pub actor: AgentName,
-    pub state: MailStoreVisibilityState,
+    pub state: MailMessageState,
 }
 
-/// Stub mail-store upsert-visibility response for the Phase R skeleton.
+/// Stub mail-store upsert-message-state response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreUpsertVisibilityStateResponse {
-    pub state: MailStoreVisibilityState,
+pub struct UpsertMailMessageStateResponse {
+    pub state: MailMessageState,
 }
 
-/// Stub mail-store load-visibility request for the Phase R skeleton.
+/// Stub mail-store load-message-state request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreLoadVisibilityStateRequest {
+pub struct LoadMailMessageStateRequest {
     pub team: TeamName,
     pub agent: AgentName,
     pub actor: AgentName,
     pub message_key: MessageKey,
 }
 
-/// Stub mail-store load-visibility response for the Phase R skeleton.
+/// Stub mail-store load-message-state response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct MailStoreLoadVisibilityStateResponse {
+pub struct LoadMailMessageStateResponse {
     #[serde(default)]
-    pub state: Option<MailStoreVisibilityState>,
+    pub state: Option<MailMessageState>,
 }
 
 /// Stub mail-store record-ingest-replay request for the Phase R skeleton.
@@ -296,19 +350,35 @@ pub trait MailStore: sealed::Sealed {
 
     /// # Errors
     ///
-    /// Returns `AtmError` when visibility state persistence fails.
-    fn upsert_visibility_state(
+    /// Returns `AtmError` when mailbox metadata rows cannot be queried.
+    fn query_mailbox_metadata(
         &self,
-        request: MailStoreUpsertVisibilityStateRequest,
-    ) -> Result<MailStoreUpsertVisibilityStateResponse, AtmError>;
+        request: MailStoreQueryMailboxMetadataRequest,
+    ) -> Result<MailStoreQueryMailboxMetadataResponse, AtmError>;
 
     /// # Errors
     ///
-    /// Returns `AtmError` when visibility state cannot be loaded.
-    fn load_visibility_state(
+    /// Returns `AtmError` when mailbox metadata counts cannot be queried.
+    fn query_mailbox_metadata_counts(
         &self,
-        request: MailStoreLoadVisibilityStateRequest,
-    ) -> Result<MailStoreLoadVisibilityStateResponse, AtmError>;
+        request: MailStoreQueryMailboxMetadataCountsRequest,
+    ) -> Result<MailStoreQueryMailboxMetadataCountsResponse, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when message-state persistence fails.
+    fn upsert_message_state(
+        &self,
+        request: UpsertMailMessageStateRequest,
+    ) -> Result<UpsertMailMessageStateResponse, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when message state cannot be loaded.
+    fn load_message_state(
+        &self,
+        request: LoadMailMessageStateRequest,
+    ) -> Result<LoadMailMessageStateResponse, AtmError>;
 
     /// # Errors
     ///

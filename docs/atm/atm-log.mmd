@@ -1,0 +1,10 @@
+%% title: `atm log`
+%% summary: Observability query and follow service path.
+%% commentary: This flow should stay behind the observability boundary and must not add ad hoc CLI-side file parsing.
+%% sets: cli
+flowchart TD
+    A[atm log request] --> B[Observability query or follow service]
+    B --> C1[Read retained logs through observability boundary]
+    C1 -->|path or service error| E1[ObservabilityQueryFailed]
+    C1 --> O1[Render log rows or follow stream]
+    A -. forbidden .-> F1[ad hoc CLI file parsing]

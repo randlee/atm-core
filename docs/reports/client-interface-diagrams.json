@@ -1,0 +1,109 @@
+{
+  "title": "Client Interface",
+  "generated_at": "2026-05-12T14:13:18.030702+00:00",
+  "set": "client",
+  "output_path": "docs/reports/client-interface-diagrams.html",
+  "sections": [
+    {
+      "key": "atm-graft-drain",
+      "title": "drain nudges",
+      "summary": "FIFO advisory-nudge drain for one registered consumer.",
+      "commentary": "This drain path should preserve FIFO ordering and keep the daemon queue generic rather than client-specific.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-graft-drain.mmd",
+      "fragment_path": "docs/reports/panels/atm-graft-drain.html",
+      "sets": [
+        "client"
+      ]
+    },
+    {
+      "key": "atm-graft-fetch",
+      "title": "fetch nudges",
+      "summary": "Snapshot advisory-nudge fetch without draining.",
+      "commentary": "This snapshot path should read the current queued nudge state without draining it and keep client naming out of daemon ownership.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-graft-fetch.mmd",
+      "fragment_path": "docs/reports/panels/atm-graft-fetch.html",
+      "sets": [
+        "client"
+      ]
+    },
+    {
+      "key": "atm-graft-register",
+      "title": "register session",
+      "summary": "Register one advisory-nudge consumer session.",
+      "commentary": "This registration path should stay bounded and generic so client-specific naming does not leak into daemon ownership.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-graft-register.mmd",
+      "fragment_path": "docs/reports/panels/atm-graft-register.html",
+      "sets": [
+        "client"
+      ]
+    },
+    {
+      "key": "atm-graft-unregister",
+      "title": "unregister session",
+      "summary": "Remove one advisory-nudge consumer session.",
+      "commentary": "This teardown path should remove bounded consumer state cleanly and report not-found or runtime errors explicitly.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-graft-unregister.mmd",
+      "fragment_path": "docs/reports/panels/atm-graft-unregister.html",
+      "sets": [
+        "client"
+      ]
+    },
+    {
+      "key": "atm-read",
+      "title": "atm read",
+      "summary": "Single-message read with status-first selection.",
+      "commentary": "This read path selects a candidate row from SQLite mailbox metadata, loads full content only for the chosen message, and writes back read/ack state through unified message-state persistence when display mutations are required.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-read.mmd",
+      "fragment_path": "docs/reports/panels/atm-read.html",
+      "sets": [
+        "cli",
+        "client"
+      ]
+    },
+    {
+      "key": "atm-send-ack",
+      "title": "atm ack",
+      "summary": "Ack-state mutation and optional reply creation.",
+      "commentary": "This path should mutate only status plus any explicit reply row, then run post-commit effects without changing durable truth on hook or nudge failure.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-send-ack.mmd",
+      "fragment_path": "docs/reports/panels/atm-send-ack.html",
+      "sets": [
+        "cli",
+        "client"
+      ]
+    },
+    {
+      "key": "atm-send-compose",
+      "title": "atm send",
+      "summary": "Compose and persist one message, then run post-commit effects.",
+      "commentary": "This path should validate input, commit SQLite first, then run post-commit hooks or advisory nudges without letting any side effect outrun durable truth.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-send-compose.mmd",
+      "fragment_path": "docs/reports/panels/atm-send-compose.html",
+      "sets": [
+        "cli",
+        "client"
+      ]
+    }
+  ]
+}

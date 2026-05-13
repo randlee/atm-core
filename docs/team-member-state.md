@@ -1,6 +1,6 @@
 # Team Member State
 
-This document is the authoritative Phase Q reference for how every team-member
+This document is the authoritative current reference for how every team-member
 field is populated and updated.
 
 Goals:
@@ -144,7 +144,7 @@ pub struct TeamMemberHeartbeatResponse {
 
 ## Required State Machines
 
-These state machines are the complete Phase Q transition model for team-member
+These state machines are the complete current transition model for team-member
 runtime state. No additional state machines or hidden fallback transitions are
 permitted unless this document is updated first.
 

@@ -16,6 +16,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-009 — Bounded Queue Query Surface](./ADR-009-bounded-queue-query-surface.md)
 - [ADR-010 — Claude JSONL Compatibility Envelope](./ADR-010-claude-jsonl-compatibility-envelope.md)
 - [ADR-011 — Host-Scoped Retained Log Root](./ADR-011-host-scoped-retained-log-root.md)
+- [ADR-012 — One Message Identity](./ADR-012-one-message-identity.md)
 
 ## Extracted Crate-Local ADRs
 

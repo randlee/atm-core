@@ -8,7 +8,9 @@ use std::time::{Duration, Instant};
 
 use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
-use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
+use atm_core::protocol::{
+    JsonAtmProtocolCodec, ProtocolErrorEnvelope, RequestEnvelope, RequestId, ResponseEnvelope,
+};
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{
     Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
@@ -134,6 +136,8 @@ pub(crate) struct PreparedRuntimeServer {
     host_ownership_guard: HostOwnershipGuard,
     endpoint_path: PathBuf,
     listener: LocalSocketListener,
+    #[cfg(test)]
+    accept_error_inject: Option<std::sync::mpsc::SyncSender<()>>,
     lifecycle_control: LifecycleControlSourceAdapter,
     registry: Arc<ActiveConnectionRegistry>,
     force_shutdown: Arc<AtomicBool>,
@@ -224,6 +228,8 @@ impl PreparedRuntimeServer {
                 endpoint_preparation,
             )),
             listener,
+            #[cfg(test)]
+            accept_error_inject: None,
             lifecycle_control,
             registry: Arc::new(ActiveConnectionRegistry::default()),
             force_shutdown: Arc::new(AtomicBool::new(false)),
@@ -280,6 +286,8 @@ impl PreparedRuntimeServer {
             endpoint_path,
             endpoint_guard: _endpoint_guard,
             listener,
+            #[cfg(test)]
+            mut accept_error_inject,
             lifecycle_control,
             registry,
             force_shutdown,
@@ -403,10 +411,16 @@ impl PreparedRuntimeServer {
                     continue;
                 }
                 #[cfg(test)]
-                if let Some(error) = take_injected_accept_error_for_test() {
+                if let Some(sender) = accept_error_inject.take() {
+                    let _ = sender.send(());
                     shutdown_beacon.trip();
                     let _ = lifecycle_control.notify_state_change();
-                    serve_error = Some(error);
+                    serve_error = Some(
+                        AtmError::daemon_unavailable(
+                            "injected daemon local IPC accept error for test",
+                        )
+                        .with_recovery("Test-only injected accept failure."),
+                    );
                     break;
                 }
 
@@ -761,44 +775,12 @@ fn write_shutdown_response(
 }
 
 #[cfg(test)]
-static INJECTED_ACCEPT_ERROR_FOR_TEST: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>> =
-    std::sync::Mutex::new(None);
-
-#[cfg(test)]
 #[cfg_attr(not(unix), allow(dead_code))]
 pub(crate) fn install_injected_accept_error_for_test(
+    runtime: &mut PreparedRuntimeServer,
     signal: std::sync::mpsc::SyncSender<()>,
-) -> InjectAcceptErrorGuard {
-    *INJECTED_ACCEPT_ERROR_FOR_TEST
-        .lock()
-        .expect("accept error injection lock") = Some(signal);
-    InjectAcceptErrorGuard
-}
-
-#[cfg(test)]
-#[cfg_attr(not(unix), allow(dead_code))]
-pub(crate) struct InjectAcceptErrorGuard;
-
-#[cfg(test)]
-impl Drop for InjectAcceptErrorGuard {
-    fn drop(&mut self) {
-        *INJECTED_ACCEPT_ERROR_FOR_TEST
-            .lock()
-            .expect("accept error injection lock") = None;
-    }
-}
-
-#[cfg(test)]
-fn take_injected_accept_error_for_test() -> Option<AtmError> {
-    let sender = INJECTED_ACCEPT_ERROR_FOR_TEST
-        .lock()
-        .expect("accept error injection lock")
-        .take()?;
-    let _ = sender.send(());
-    Some(
-        AtmError::daemon_unavailable("injected daemon local IPC accept error for test")
-            .with_recovery("Test-only injected accept failure."),
-    )
+) {
+    runtime.accept_error_inject = Some(signal);
 }
 
 fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
@@ -867,6 +849,24 @@ fn handle_connection(
         "daemon request frame accepted under configured size cap"
     );
     let (request_id, request) = codec.request_from_frame(frame)?;
+    if let RequestEnvelope::AdvisoryStream(request) = request {
+        stream.set_send_timeout(None).map_err(|source| {
+            AtmError::daemon_unavailable(
+                "failed to clear daemon advisory-stream write deadline",
+            )
+            .with_recovery(
+                "Restart the daemon; the same-host advisory stream socket could not switch into long-lived streaming mode.",
+            )
+            .with_source(source)
+        })?;
+        let mut sink = LocalIpcAdvisoryStreamSink {
+            stream: &mut stream,
+            codec: &codec,
+            request_id,
+            force_shutdown,
+        };
+        return dispatcher.dispatch_advisory_stream(request, &mut sink);
+    }
 
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
     let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
@@ -933,6 +933,36 @@ fn handle_connection(
     Ok(())
 }
 
+struct LocalIpcAdvisoryStreamSink<'a> {
+    stream: &'a mut LocalSocketStream,
+    codec: &'a JsonAtmProtocolCodec,
+    request_id: RequestId,
+    force_shutdown: &'a std::sync::atomic::AtomicBool,
+}
+
+impl boundary::AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
+    fn emit(&mut self, response: ResponseEnvelope) -> Result<(), AtmError> {
+        let frame = self.codec.response_to_frame(self.request_id, response)?;
+        atm_core::protocol::write_frame(
+            self.stream,
+            &frame,
+            "failed to write daemon advisory-stream response frame",
+        )?;
+        self.stream.flush().map_err(|source| {
+            AtmError::daemon_unavailable("failed to flush daemon advisory-stream response frame")
+                .with_recovery(
+                    "Retry graft activation after atm-daemon returns to a healthy serving state.",
+                )
+                .with_source(source)
+        })
+    }
+
+    fn stop_requested(&self) -> bool {
+        self.force_shutdown
+            .load(std::sync::atomic::Ordering::SeqCst)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -975,6 +1005,14 @@ mod tests {
             request: RequestEnvelope,
         ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
             panic!("intentional dispatcher panic for test: {request:?}");
+        }
+
+        fn dispatch_advisory_stream(
+            &self,
+            request: atm_core::graft::AdvisoryStreamRequest,
+            _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
+        ) -> Result<(), atm_core::error::AtmError> {
+            panic!("intentional dispatcher panic for advisory stream test: {request:?}");
         }
     }
 
@@ -1027,7 +1065,7 @@ mod tests {
         let dispatcher: Arc<dyn RequestDispatcher + Send + Sync> = Arc::new(DoctorOnlyDispatcher);
         let (serve_result_tx, serve_result_rx) = mpsc::channel();
         let (inject_tx, inject_rx) = mpsc::sync_channel(1);
-        let _inject_guard = install_injected_accept_error_for_test(inject_tx);
+        install_injected_accept_error_for_test(&mut runtime, inject_tx);
 
         let join = std::thread::spawn(move || {
             // These shortened deadlines validate immediate shutdown-beacon wake correctness, not

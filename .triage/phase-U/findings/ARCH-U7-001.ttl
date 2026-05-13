@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-U7-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-U7-001" ;
+  triage:title "load_roster returns AtmError on empty roster instead of Ok(empty Vec); valid storage state treated as failure" ;
+  triage:description "crates/atm-rusqlite/src/roster_store.rs:136 — load_roster returns an error when the team_roster table is empty, but an empty roster is a valid state (a new team has zero persisted members). This causes daemon startup to incorrectly mark SQLite as unavailable for new teams." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U7-001/U7/1> ;
+  triage:openOn <urn:atm:triage:worktree/U7/8e37dd1> ;
+  triage:promoteTo <urn:atm:triage:worktree/U7/8e37dd1> .
+
+<urn:atm:triage:occurrence/ARCH-U7-001/U7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/roster_store.rs" ;
+  triage:line 136 ;
+  triage:snippet "if members.is_empty() { return Err(AtmError::validation(...)) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/U7/8e37dd1> .
+
+<urn:atm:triage:worktree/U4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/U5/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/U6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/U7/8e37dd1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:orderIndex 4 .

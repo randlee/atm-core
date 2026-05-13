@@ -68,6 +68,8 @@ pub(crate) mod threading;
 pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
+/// Transitional legacy placeholder adapters extracted from retained runtime glue.
+pub(crate) mod unsupported_adapters;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
@@ -78,22 +80,23 @@ pub use boundary::{
     InboxExportResponse, InboxIngress, InboxIngressDiagnosticsRequest,
     InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
     InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest, InboxIngressImportResponse,
-    InboxIngressRequest, InboxIngressResponse, InboxSourceFileRecord, MailStore,
-    MailStoreBootstrapRequest, MailStoreBootstrapResponse, MailStoreHealthSnapshot,
-    MailStoreHealthSnapshotRequest, MailStoreHealthSnapshotResponse, MailStoreIngestReplayState,
+    InboxIngressRequest, InboxIngressResponse, InboxSourceFileRecord, LoadMailMessageStateRequest,
+    LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreBootstrapRequest,
+    MailStoreBootstrapResponse, MailStoreHealthSnapshot, MailStoreHealthSnapshotRequest,
+    MailStoreHealthSnapshotResponse, MailStoreIngestReplayState,
     MailStoreLoadIngestReplayStateRequest, MailStoreLoadIngestReplayStateResponse,
-    MailStoreLoadMessageRequest, MailStoreLoadMessageResponse, MailStoreLoadVisibilityStateRequest,
-    MailStoreLoadVisibilityStateResponse, MailStoreMessageRecord,
+    MailStoreLoadMessageRequest, MailStoreLoadMessageResponse, MailStoreMailboxMetadataCounts,
+    MailStoreMailboxMetadataRow, MailStoreMessageRecord,
+    MailStoreQueryMailboxMetadataCountsRequest, MailStoreQueryMailboxMetadataCountsResponse,
+    MailStoreQueryMailboxMetadataRequest, MailStoreQueryMailboxMetadataResponse,
     MailStoreRecordIngestReplayStateRequest, MailStoreRecordIngestReplayStateResponse,
     MailStoreRequest, MailStoreResponse, MailStoreTransactionRequest, MailStoreTransactionResponse,
-    MailStoreUpsertMessageRequest, MailStoreUpsertMessageResponse,
-    MailStoreUpsertVisibilityStateRequest, MailStoreUpsertVisibilityStateResponse,
-    MailStoreVisibilityState, MessageKey, NotificationEvent, NotificationSink,
-    ReconcileCoordinator, ReconcileRequest, ReconcileResult, RequestDispatcher, RosterStore,
-    RosterStoreHealthSnapshot, RosterStoreHealthSnapshotRequest, RosterStoreHealthSnapshotResponse,
+    MailStoreUpsertMessageRequest, MailStoreUpsertMessageResponse, MessageKey, NotificationEvent,
+    NotificationSink, ReconcileCoordinator, ReconcileRequest, ReconcileResult, RequestDispatcher,
+    RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore, RosterStoreHealthSnapshot,
+    RosterStoreHealthSnapshotRequest, RosterStoreHealthSnapshotResponse,
     RosterStoreLoadRosterRequest, RosterStoreLoadRosterResponse, RosterStoreQueryMembershipRequest,
-    RosterStoreQueryMembershipResponse, RosterStoreRecordHeartbeatRequest,
-    RosterStoreRecordHeartbeatResponse, RosterStoreReplaceRosterRequest,
+    RosterStoreQueryMembershipResponse, RosterStoreReplaceRosterRequest,
     RosterStoreReplaceRosterResponse, RosterStoreRequest, RosterStoreResponse,
     RuntimeStatusSnapshot, ServerTransport, StatusSource, TaskState, TaskStore,
     TaskStoreAttachMessageLinkRequest, TaskStoreAttachMessageLinkResponse,
@@ -102,7 +105,8 @@ pub use boundary::{
     TaskStoreQueryTaskMetadataRequest, TaskStoreQueryTaskMetadataResponse,
     TaskStoreRecordAckTransitionRequest, TaskStoreRecordAckTransitionResponse, TaskStoreRequest,
     TaskStoreResponse, TaskStoreTaskMetadata, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
-    TaskStoreUpdateTaskResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
+    WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;
@@ -111,10 +115,14 @@ pub use config::types::GraftConfig;
 /// boundary. External consumers, including `atm-graft`, should import these
 /// types from `atm_core::...` rather than reaching into the module path.
 pub use graft::{
-    AtmGraftClient, GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeDrainResponse,
-    GraftNudgeFetchRequest, GraftNudgeFetchResponse, GraftSession, GraftSessionId,
-    GraftSessionPort, GraftSessionRegistrationRequest, GraftSessionRegistrationResponse,
-    GraftSessionState, GraftSessionUnregistrationRequest, GraftSessionUnregistrationResponse,
-    NudgeEvent,
+    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
+    AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySession, AdvisorySessionId,
+    AdvisorySessionPort, AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+    AdvisorySessionState, AdvisorySessionUnregistrationRequest,
+    AdvisorySessionUnregistrationResponse, AdvisoryStreamRequest, AdvisoryStreamResponse,
+    AtmGraftClient,
 };
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
+pub use service_runtime::LocalServiceRuntime;
+#[doc(hidden)]
+pub use service_runtime_store::install_default_runtime_factory;

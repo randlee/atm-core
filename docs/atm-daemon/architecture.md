@@ -13,8 +13,7 @@ The canonical daemon wire contract lives in:
 The crate-local machine-readable boundary inventory lives in:
 - [`./boundaries.md`](./boundaries.md)
 
-This crate was introduced on the Phase Q implementation line and remains part
-of the current workspace.
+This crate remains part of the current workspace.
 
 ## 1.1 ADRs
 
@@ -93,6 +92,20 @@ Current packet-supported daemon surface:
 - clear
 - doctor
 - heartbeat
+- advisory register
+- advisory unregister
+- advisory fetch
+- advisory drain
+- advisory stream
+
+Advisory-surface rule:
+- the daemon-owned advisory surface is generic, not graft-specific
+- the daemon may own:
+  - registration / unregistration
+  - one bounded pending advisory queue per active session
+  - optional fetch/drain inspection over the shared ICD
+  - one live advisory stream per active session
+- `atm-graft` is one consumer of that surface, not a daemon-owned subsystem
 
 Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm log`
@@ -127,6 +140,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   macOS, Linux, and Windows; service-control integration may exist inside the
   Windows lifecycle adapter, but Phase S parity does not depend on a separate
   SCM-only host model
+- client-specific runtime logic is owned by the client crate; `atm-daemon`
+  may serve the advisory transport but must not own embedded client receive
+  behavior
 - same-host transport and lifecycle control must remain platform-neutral above
   the adapter line:
   - platform-specific listener/stream/control types are allowed only inside
@@ -340,7 +356,7 @@ Lifecycle state model:
   - one worker instance may be reused across repeated installs while the daemon
     keeps the same process-global lifecycle adapter alive
   - runtime teardown must request worker stop, unregister the active signal
-    hooks, and join the worker within the documented `5s` bound
+    hooks, and join the worker within the documented `1s` bound
 - Windows keeps one accepted lifecycle polling exception:
   - `signal_hook::flag` exposes no matching blocking wake primitive for the
     console/service-control adapter
@@ -348,10 +364,6 @@ Lifecycle state model:
     only
   - that polling loop must stay isolated to `lifecycle_control.rs` and remain
     under the same explicit shutdown/join contract as the Unix wake worker
-- accepted same-host transport fault-injection inventory also includes the
-  test-only `INJECTED_ACCEPT_ERROR_FOR_TEST` hook in `local_ipc_transport.rs`
-  so both Unix and Windows test lanes can force the bounded fatal-accept path
-  without introducing a production-only OS behavior difference
 
 Privacy boundary:
 - the lifecycle state type and transport/runtime adapter internals remain
@@ -506,7 +518,7 @@ Force-cancel rule:
 |---|---|---|
 | Wedge recovery | `<= 1s` | fatal transport events or shutdown beacons must unblock the lifecycle waiter and serving path promptly |
 | Accept-error teardown | `<= 2s` | a fatal local-IPC accept failure must reach typed runtime exit after drain start and endpoint unpublication |
-| Clean shutdown | `<= 3s` current code / `<= 10s` historical target | `GAP-T5-001`: code currently drains for `2s` and force-cancels by `3s`, while older operator docs still referenced `5s` / `10s`; the accepted contract must be ruled explicitly rather than inferred |
+| Clean shutdown | `<= 5s` | orderly daemon shutdown, including tracked request drain and background-lane stop, stays bounded |
 | Socket cleanup | `<= 100ms` | same-host endpoint unpublication completes promptly once serving stops |
 
 Exit-code expectations tied to these SLOs:
@@ -516,15 +528,9 @@ Exit-code expectations tied to these SLOs:
   restart
 - lifecycle-wedge detection exits `71`
 
-Current implemented deadlines:
-- normal drain deadline: `2s`
-- force-cancel deadline after drain starts: `3s` total
-
-Open gap:
-- `GAP-T5-001`: historical Phase S / early Phase T operator docs used `5s`
-  and `10s`; until product/ops accepts or revises the current code budget,
-  treat that older pair as a tracked documentation gap rather than an active
-  acceptance contract
+Required deadlines:
+- normal drain deadline: `5s`
+- force-cancel deadline after drain starts: `10s` total
 
 Ordering rule:
 - singleton ownership is released only after listener shutdown and checkpoint
@@ -573,11 +579,8 @@ Required caps:
 - SQLite handle/pool budget: min `1`, max `4`
 - live status-cache cap: `4096` entries
 - reconcile notification fingerprint registry cap: `1024` keys
-- reconcile notification fingerprint per-key cap: `256` fingerprints
 - watch subscription cap: `256` active subscriptions
 - notification work queue depth: `256`
-- graft session cap: `128`
-- graft nudge queue depth per registered session: `256`
 
 Required saturation behavior:
 - connection cap exceeded: reject new accepts with a typed over-capacity error
@@ -592,38 +595,12 @@ Required saturation behavior:
 - reconcile notification fingerprint registry cap exceeded: evict the oldest
   tracked key before inserting the new key so the daemon preserves the latest
   active reconcile targets without retaining unbounded fingerprint state
-- reconcile fingerprint set for one key exceeded: truncate deterministically to
-  the bounded `256`-fingerprint set before storing the snapshot used for later
-  change detection
 - notification queue full: fail the enqueue with typed degraded delivery status
   rather than silently buffering beyond the cap
-- graft session cap exceeded: reject the registration with typed
-  daemon-unavailable failure rather than retaining unbounded session state
-- graft nudge queue full: evict the oldest queued nudge for that session,
-  increment a dropped-count projection, and emit structured warning output
 - status-cache cap exceeded: evict least-recently-updated noncritical entries
   from the live-member map so the retained map cardinality remains bounded;
-  removed entries project as explicit `unknown` on later snapshot/doctor reads;
-  when the cache is saturated entirely by identity-conflict records, evict the
-  oldest conflict entry rather than growing past the documented cap
+  removed entries project as explicit `unknown` on later snapshot/doctor reads
   and still emit structured warning output
-
-## 3.2.1 Graft Runtime Ownership
-
-The daemon owns the bounded graft registration and nudge queue runtime.
-
-Architectural rules:
-- queued graft nudges belong to daemon memory, not to `atm-graft`
-- T.7 exposes typed register/unregister/fetch/drain requests over the shared
-  ATM frame protocol
-- T.7 does not own the concrete `GraftSession` lifecycle type or
-  `[atm.graft]` config activation; those remain T.8 `atm-graft` crate
-  responsibilities
-- `atm graft fetch` and `atm graft drain` are companion CLI/debug paths built
-  on the same daemon API and must not be treated as the production embedded
-  delivery path
-- queue overflow must not affect durable ATM mailbox truth; it only degrades
-  the advisory nudge stream
 
 ## 3.3 Status Ownership
 
@@ -631,16 +608,16 @@ The daemon owns the live runtime view of agent status.
 
 Architectural rules:
 - live status remains in daemon memory
-- current agent `pid` is durable SQLite truth and is cached in daemon memory
-  as the primary liveness field
+- current agent `pid` is transient daemon-owned runtime state and is retained
+  in daemon memory as the primary liveness field
 - `last_active_at` remains in daemon memory alongside live status
 - daemon-managed team-member fields update only through the documented heartbeat
   socket handler in `docs/team-member-state.md`
-- SQLite does not own live status or `last_active_at`; it owns durable roster
-  state and the current per-member `pid`
+- SQLite does not own live status, `last_active_at`, or the current process
+  `pid`
 - status cache rebuild after restart hydrates configured roster members as
-  `unknown`, consults durable SQLite pid continuity only as startup fallback,
-  and refreshes thereafter through runtime events
+  `unknown` and refreshes thereafter through runtime events rather than through
+  persisted pid state
 - startup hydration records explicit `unknown` entries in the daemon cache so
   bounded eviction can demote live members back to `unknown` without silently
   deleting the member from runtime state
@@ -666,7 +643,7 @@ Required timeout defaults:
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`
-- lifecycle wake-worker join during runtime teardown: `5s` max
+- lifecycle wake-worker join during runtime teardown: `1s` max
 - reconcile runtime drain during runtime teardown: `2s` max
 - watch runtime drain during runtime teardown: `2s` max
 - retained-log flush and sync during runtime teardown: `2s` best-effort max

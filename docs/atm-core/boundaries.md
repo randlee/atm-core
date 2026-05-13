@@ -25,11 +25,16 @@ Purpose:
   thin extension clients.
 
 Notes:
-- This is the first boundary updated explicitly for `atm-graft`.
 - The canonical request/response family now includes:
   - send-shaped `Send` envelopes for compose and acknowledge
   - typed `Heartbeat` request/response envelopes for daemon runtime-state
     ownership
+  - typed advisory-session envelopes for:
+    - register
+    - unregister
+    - fetch
+    - drain
+    - live advisory stream
   - `HeartbeatActivity` / `TeamMemberHeartbeat{Request,Response}` as the
     canonical daemon-owned member-liveness DTO family added in `R.15`
   - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
@@ -47,26 +52,14 @@ Purpose:
 Notes:
 - The public workflow surface above this boundary should stay centered on send
   and receive.
-- Thin graft-facing clients should layer typed workflow/session DTOs above this
-  transport rather than publishing daemon-shaped transport details directly.
-- Shared same-host daemon bootstrap helpers used by transport consumers now
-  live in `atm-daemon-client`; this boundary still owns the request/response
-  transport contract itself.
-
-## AtmGraftClient / GraftSessionPort
-
-Purpose:
-- Own the thin embedded ATM client surface that `atm-graft` consumes without a
-  Rust dependency on `atm-daemon`.
-
-Notes:
-- These are intentionally open traits, not sealed boundary traits.
-- `AtmGraftClient` owns the unary `send` / `read` / `ack` daemon request
-  surface for embedded consumers.
-- `GraftSessionPort` owns graft-session registration plus nudge fetch/drain
-  session contracts.
-- The graft-facing public API must stay small and typed rather than exposing
-  raw `RequestEnvelope` / `ResponseEnvelope` values.
+- Thin clients must use this shared boundary and must not take a dependency on
+  `atm-daemon` internals.
+- `atm-graft` now lands as one such thin client crate and is expected to stay
+  on this boundary plus the shared ATM envelopes rather than on any daemon-
+  private request family.
+- Long-lived advisory registration, fetch/drain inspection, and live advisory
+  stream traffic are part of this shared boundary family rather than a
+  plugin-private daemon API.
 
 ## WatchEventSource
 
@@ -116,7 +109,7 @@ Purpose:
 Notes:
 - Transport-specific listeners should not embed request-family logic.
 
-## BOUNDARY-MailStore-Sqlite
+## MailStore
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/mail-store.toml](../../boundaries/atm-core/mail-store.toml)
@@ -128,7 +121,7 @@ Purpose:
 Notes:
 - This stays the canonical durable truth behind send and receive workflows.
 
-## BOUNDARY-TaskStore-Sqlite
+## TaskStore
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/task-store.toml](../../boundaries/atm-core/task-store.toml)
@@ -140,7 +133,7 @@ Purpose:
 Notes:
 - `ack` is not a top-level public method, but it still mutates task state.
 
-## BOUNDARY-RosterStore-Sqlite
+## RosterStore
 
 Canonical machine-readable boundary source:
 - [../../boundaries/atm-core/roster-store.toml](../../boundaries/atm-core/roster-store.toml)
@@ -151,6 +144,9 @@ Purpose:
 
 Notes:
 - Runtime status remains outside durable roster ownership.
+- Durable roster truth is the canonical member model only; `config.json`
+  documents are ingress inputs and daemon-owned live `pid` state stays outside
+  this boundary.
 
 ## ConfigIngress
 
@@ -162,7 +158,7 @@ Purpose:
 - Owns loading and validating persisted ATM/team configuration into typed models.
 
 Notes:
-- This is one of the main explicit corrections to the Phase Q leakage.
+- This is one of the main explicit corrections to earlier boundary leakage.
 
 ## InboxIngress
 

@@ -1,4 +1,4 @@
-# Sprint S.15 — SQLite Write-Worker / MessageAppendQueue Planning
+# Sprint S.15 — SQLite Write-Worker Plan
 
 **Branch**: feature/pS-s15-rusqlite-hardening  
 **Base**: integrate/phase-S @ 77badd5  
@@ -74,7 +74,7 @@ The follow-on implementation should not:
 
 Implementation-sprint acceptance:
 
-- `MailStore::upsert_message` and `MailStore::upsert_visibility_state` route
+- `MailStore::upsert_message` and `MailStore::upsert_message_state` route
   through `SqliteWriter`
 - `SharedDb::with_transaction(...)` keeps its current callable shape for
   remaining cold-path callers while the migrated hot-path writes use typed

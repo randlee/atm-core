@@ -9,8 +9,7 @@ use crate::error::AtmError;
 use crate::mailbox::atomic;
 use crate::mailbox::lock;
 use crate::mailbox::source::{
-    SourceFile, SummarySourceFile, discover_source_paths, load_source_files,
-    load_summary_source_files, rediscover_and_validate_source_paths,
+    SourceFile, discover_source_paths, load_source_files, rediscover_and_validate_source_paths,
 };
 use crate::schema::MessageEnvelope;
 use crate::schema::inbox_message::SharedInboxExportPolicy;
@@ -78,16 +77,6 @@ pub(crate) fn observe_source_files(
     load_source_files(&source_paths)
 }
 
-pub(crate) fn observe_summary_source_files(
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-    contains_filter: Option<&str>,
-) -> Result<Vec<SummarySourceFile>, AtmError> {
-    let source_paths = discover_source_paths(home_dir, team, agent)?;
-    load_summary_source_files(&source_paths, contains_filter)
-}
-
 /// Reload one mailbox source set under the deterministic mailbox lock plan
 /// without forcing the caller into an inbox rewrite.
 pub(crate) fn with_locked_source_files<T, I, F>(
@@ -145,7 +134,7 @@ mod tests {
     use crate::mailbox::read_messages;
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use crate::schema::{AtmMessageId, MessageEnvelope};
     use crate::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -179,7 +168,7 @@ mod tests {
         .expect("config");
         let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
         let mut message = sample_message(ROLE_TEAM_LEAD, "full body retained elsewhere");
-        let atm_message_id = message.atm_message_id().expect("atm message id");
+        let message_id = message.message_id.expect("message id");
         message.summary = Some("stub summary".to_string());
 
         commit_mailbox_state(&path, std::slice::from_ref(&message)).expect("commit mailbox");
@@ -188,7 +177,7 @@ mod tests {
         let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
         assert_eq!(
             encoded[0]["text"],
-            serde_json::Value::String(format!("atm read --message-id {atm_message_id}"))
+            serde_json::Value::String(format!("atm read --message-id {message_id}"))
         );
         assert_eq!(
             encoded[0]["summary"],
@@ -300,21 +289,7 @@ mod tests {
     }
 
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {
-        let atm_message_id = AtmMessageId::new();
-        let message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
-        let mut extra = serde_json::Map::new();
-        let mut metadata = serde_json::Map::new();
-        let mut atm = serde_json::Map::new();
-        atm.insert(
-            "messageId".to_string(),
-            serde_json::Value::String(atm_message_id.to_string()),
-        );
-        atm.insert(
-            "sourceTeam".to_string(),
-            serde_json::Value::String(TEST_TEAM.to_string()),
-        );
-        metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-        extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+        let message_id = AtmMessageId::new();
 
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent name"),
@@ -329,9 +304,9 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
-            extra,
+            extra: serde_json::Map::new(),
         }
     }
 }

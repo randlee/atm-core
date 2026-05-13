@@ -138,7 +138,7 @@ Out of scope:
 
 #### `S14-004`
 
-- File: `crates/atm-daemon/src/daemon_runtime_observability.rs:107-131`
+- File: `crates/atm-daemon/src/daemon_observability.rs:107-131`
 - Problem:
   - `best_effort_flush_blocking()` flushes the logger, then reopens
     `active_log_path` and `sync_all()`s that reopened file.

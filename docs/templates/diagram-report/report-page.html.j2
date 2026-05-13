@@ -1,0 +1,32 @@
+---
+required_variables:
+  - title
+  - intro
+  - stylesheet_href
+  - script_href
+  - sections_html
+defaults: {}
+metadata:
+  purpose: Main static HTML report page for one diagram set
+---
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{{ title }}</title>
+  <link rel="stylesheet" href="{{ stylesheet_href }}" />
+</head>
+<body>
+  <main class="page-shell">
+    <header class="page-header">
+      <h1>{{ title }}</h1>
+      <p>{{ intro }}</p>
+    </header>
+    <div class="panel-grid">
+      {{ sections_html | safe }}
+    </div>
+  </main>
+  <script src="{{ script_href }}"></script>
+</body>
+</html>

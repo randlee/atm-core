@@ -1,6 +1,5 @@
 use std::fmt;
 use std::io::Write;
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use atm_core::ack::{AckOutcome, AckRequest};
@@ -10,10 +9,9 @@ use atm_core::clear::{ClearOutcome, ClearQuery};
 use atm_core::doctor::{DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
 use atm_core::graft::{
-    AtmGraftClient, GraftNudgeDrainRequest, GraftNudgeDrainResponse, GraftNudgeFetchRequest,
-    GraftNudgeFetchResponse, GraftSessionPort, GraftSessionRegistrationRequest,
-    GraftSessionRegistrationResponse, GraftSessionUnregistrationRequest,
-    GraftSessionUnregistrationResponse,
+    AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
+    AdvisorySessionPort, AdvisorySessionRegistrationRequest, AdvisorySessionRegistrationResponse,
+    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse, AtmGraftClient,
 };
 use atm_core::list::{ListOutcome, ListQuery};
 use atm_core::observability::{CommandEvent, ObservabilityPort};
@@ -22,7 +20,8 @@ use atm_core::protocol::{
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
-use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor};
+use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
+use atm_daemon_client::{DaemonLocalIpcEndpoint, DaemonSupervisor};
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
 use interprocess::local_socket::Stream as LocalSocketStream;
@@ -79,6 +78,8 @@ impl LocalIpcClientTransportAdapter {
         })
     }
 
+    /// This function performs blocking IPC I/O. Callers in async contexts must
+    /// wrap this in `tokio::task::spawn_blocking`.
     fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let mut stream = self.try_connect()?;
         stream
@@ -326,69 +327,52 @@ impl<'a> CliComposition<'a> {
 
     pub(crate) fn register_graft_session(
         &self,
-        request: GraftSessionRegistrationRequest,
-    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftRegister(request))? {
-            ResponseEnvelope::GraftRegister(response) => Ok(response),
+        request: AdvisorySessionRegistrationRequest,
+    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+        match self.send_request(RequestEnvelope::AdvisoryRegister(request))? {
+            ResponseEnvelope::AdvisoryRegister(response) => Ok(response),
             other => Err(unexpected_response("graft register", other)),
         }
     }
 
     pub(crate) fn unregister_graft_session(
         &self,
-        request: GraftSessionUnregistrationRequest,
-    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftUnregister(request))? {
-            ResponseEnvelope::GraftUnregister(response) => Ok(response),
+        request: AdvisorySessionUnregistrationRequest,
+    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
+        match self.send_request(RequestEnvelope::AdvisoryUnregister(request))? {
+            ResponseEnvelope::AdvisoryUnregister(response) => Ok(response),
             other => Err(unexpected_response("graft unregister", other)),
         }
     }
 
     pub(crate) fn fetch_graft_nudges(
         &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftFetch(request))? {
-            ResponseEnvelope::GraftFetch(response) => Ok(response),
+        request: AdvisoryFetchRequest,
+    ) -> Result<AdvisoryFetchResponse, AtmError> {
+        match self.send_request(RequestEnvelope::AdvisoryFetch(request))? {
+            ResponseEnvelope::AdvisoryFetch(response) => Ok(response),
             other => Err(unexpected_response("graft fetch", other)),
         }
     }
 
     pub(crate) fn drain_graft_nudges(
         &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftDrain(request))? {
-            ResponseEnvelope::GraftDrain(response) => Ok(response),
+        request: AdvisoryDrainRequest,
+    ) -> Result<AdvisoryDrainResponse, AtmError> {
+        match self.send_request(RequestEnvelope::AdvisoryDrain(request))? {
+            ResponseEnvelope::AdvisoryDrain(response) => Ok(response),
             other => Err(unexpected_response("graft drain", other)),
         }
     }
 
     pub(crate) fn bootstrap(observability: &'a CliObservability) -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
-        let daemon_bin = resolve_daemon_bin()?;
+        let daemon_bin = resolve_daemon_bin("atm")?;
         let transport = Arc::new(LocalIpcClientTransportAdapter::new(endpoint.clone()));
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
         supervisor.ensure_daemon_available(|| transport.try_connect().map(|_| ()))?;
         Ok(Self::from_transport(transport, observability))
     }
-}
-
-fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    DaemonLocalIpcEndpoint::new(atm_core::protocol::daemon_socket_path()?)
-}
-
-fn resolve_daemon_bin() -> Result<DaemonBinaryPath, AtmError> {
-    if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
-        return DaemonBinaryPath::new(PathBuf::from(path));
-    }
-    let current = std::env::current_exe().map_err(|source| {
-        AtmError::daemon_unavailable("failed to resolve the current atm executable path")
-            .with_source(source)
-    })?;
-    DaemonBinaryPath::new(
-        current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
-    )
 }
 
 fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
@@ -414,32 +398,32 @@ impl AtmGraftClient for CliComposition<'_> {
     }
 }
 
-impl GraftSessionPort for CliComposition<'_> {
+impl AdvisorySessionPort for CliComposition<'_> {
     fn register_session(
         &self,
-        request: GraftSessionRegistrationRequest,
-    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
+        request: AdvisorySessionRegistrationRequest,
+    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
         CliComposition::register_graft_session(self, request)
     }
 
     fn unregister_session(
         &self,
-        request: GraftSessionUnregistrationRequest,
-    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
+        request: AdvisorySessionUnregistrationRequest,
+    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
         CliComposition::unregister_graft_session(self, request)
     }
 
     fn fetch_nudges(
         &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError> {
+        request: AdvisoryFetchRequest,
+    ) -> Result<AdvisoryFetchResponse, AtmError> {
         CliComposition::fetch_graft_nudges(self, request)
     }
 
     fn drain_nudges(
         &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError> {
+        request: AdvisoryDrainRequest,
+    ) -> Result<AdvisoryDrainResponse, AtmError> {
         CliComposition::drain_graft_nudges(self, request)
     }
 }
@@ -460,10 +444,7 @@ mod tests {
         ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope, SendRequestEnvelope,
     };
     use atm_core::read::ReadQuery;
-    use atm_core::schema::{
-        AgentMember, LegacyMessageId, MessageEnvelope, TeamConfig,
-        hydrate_legacy_fields_from_metadata,
-    };
+    use atm_core::schema::{AgentMember, AtmMessageId, MessageEnvelope, TeamConfig};
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{
         ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM,
@@ -472,13 +453,14 @@ mod tests {
         FakeClientTransport, HealthyObservability, LoopbackClientTransport,
     };
     use atm_core::types::{AckActivationMode, ReadSelection};
+    use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
     use serde_json::Value;
     use tempfile::TempDir;
 
     use super::{
-        CliComposition, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, LocalIpcClientTransportAdapter,
+        CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
+        LaunchGateGuard, LocalIpcClientTransportAdapter,
     };
     use crate::observability::CliObservability;
 
@@ -550,10 +532,7 @@ mod tests {
             let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
             values
                 .into_iter()
-                .map(|mut value| {
-                    hydrate_legacy_fields_from_metadata(&mut value);
-                    serde_json::from_value(value).expect("message envelope")
-                })
+                .map(|value| serde_json::from_value(value).expect("message envelope"))
                 .collect()
         }
 
@@ -602,7 +581,7 @@ mod tests {
             .expect("send request")
         }
 
-        fn ack_request(&self, message_id: LegacyMessageId, reply_body: &str) -> AckRequest {
+        fn ack_request(&self, message_id: AtmMessageId, reply_body: &str) -> AckRequest {
             AckRequest {
                 home_dir: self.home_dir.clone(),
                 current_dir: self.current_dir.clone(),
@@ -669,14 +648,14 @@ mod tests {
                 acknowledges_message_id: None,
                 parent_message_id: None,
                 thread_mode: None,
-                stale_at: None,
+                expires_at: None,
                 task_id: None,
                 extra: serde_json::Map::new(),
             }
         }
 
-        fn pending_ack_message(&self, text: &str) -> (LegacyMessageId, MessageEnvelope) {
-            let message_id = LegacyMessageId::new();
+        fn pending_ack_message(&self, text: &str) -> (AtmMessageId, MessageEnvelope) {
+            let message_id = AtmMessageId::new();
             let mut message = self.message(text, true);
             message.message_id = Some(message_id);
             message.pending_ack_at = Some(Utc::now().into());

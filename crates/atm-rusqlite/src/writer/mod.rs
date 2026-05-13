@@ -161,8 +161,11 @@ impl Drop for SqliteWriter {
         if let Some(sender) = sender {
             match sender.try_send(WriterMessage::Shutdown) {
                 Ok(()) | Err(TrySendError::Disconnected(_)) => {}
-                Err(TrySendError::Full(_)) => eprintln!(
-                    "warn: sqlite writer shutdown signal skipped because the bounded queue was full; relying on channel disconnect to let the writer exit once in-flight work drains"
+                // Accepted risk: std::sync::mpsc::SyncSender does not expose a
+                // queue-depth probe here, so shutdown logging cannot report an
+                // exact depth without replacing the channel primitive.
+                Err(TrySendError::Full(_)) => tracing::warn!(
+                    "sqlite writer shutdown signal skipped because the bounded queue was full; relying on channel disconnect to let the writer exit once in-flight work drains"
                 ),
             }
             drop(sender);
@@ -179,21 +182,21 @@ impl Drop for SqliteWriter {
                 }
                 Ok(Err(_)) => {
                     let _ = join_helper.join();
-                    eprintln!(
-                        "error: sqlite writer thread panicked while shutting down; the durable write lane may have exited mid-drain"
+                    tracing::warn!(
+                        "sqlite writer thread panicked while shutting down; the durable write lane may have exited mid-drain"
                     );
                 }
                 Err(RecvTimeoutError::Timeout) => {
                     drop(join_helper);
-                    eprintln!(
-                        "warn: sqlite writer shutdown exceeded the bounded join deadline of {}ms; detaching join helper",
-                        self.shutdown_join_deadline.as_millis()
+                    tracing::warn!(
+                        timeout_ms = self.shutdown_join_deadline.as_millis(),
+                        "sqlite writer shutdown exceeded the bounded join deadline; detaching join helper"
                     );
                 }
                 Err(RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
-                    eprintln!(
-                        "warn: sqlite writer join helper disconnected before reporting the worker shutdown result"
+                    tracing::warn!(
+                        "sqlite writer join helper disconnected before reporting the worker shutdown result"
                     );
                 }
             }
@@ -226,9 +229,10 @@ fn checkpoint_writer_connection(target: &SharedDbTarget, connection: &mut Sqlite
     }
 
     if let Err(error) = connection.query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(())) {
-        eprintln!(
-            "warn: sqlite writer final wal checkpoint failed after draining the write lane for {}: {error}",
-            target.display()
+        tracing::warn!(
+            path = %target.display(),
+            %error,
+            "sqlite writer final wal checkpoint failed after draining the write lane"
         );
     }
 }
@@ -452,7 +456,7 @@ mod tests {
     use super::*;
     use atm_core::MessageKey;
     use atm_core::boundary;
-    use atm_core::schema::{LegacyMessageId, MessageEnvelope};
+    use atm_core::schema::{AtmMessageId, MessageEnvelope};
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
     use rusqlite::OptionalExtension;
     use std::sync::atomic::{AtomicU64, Ordering};
@@ -504,7 +508,7 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: Some(task_id()),
             extra: serde_json::Map::new(),
         }
@@ -516,22 +520,18 @@ mod tests {
             agent: agent(),
             message_key: message_key(key),
             envelope: envelope(text),
-            imported_from: None,
-            recorded_at: Some(IsoTimestamp::now()),
         }
     }
 
     fn upsert_message_request(index: usize) -> WriteOp {
-        WriteOp::UpsertMessage(boundary::MailStoreUpsertMessageRequest {
+        WriteOp::UpsertMessage(Box::new(boundary::MailStoreUpsertMessageRequest {
             record: boundary::MailStoreMessageRecord {
                 team: team(),
                 agent: agent(),
                 message_key: message_key(&format!("atm:writer-{index}")),
                 envelope: envelope(&format!("writer message {index}")),
-                imported_from: Some("writer-test".to_string()),
-                recorded_at: Some(IsoTimestamp::now()),
             },
-        })
+        }))
     }
 
     fn message_count(target: &SharedDbTarget) -> i64 {
@@ -688,19 +688,19 @@ mod tests {
             &mut cache,
             vec![
                 QueuedWrite {
-                    op: Box::new(WriteOp::UpsertMessage(
+                    op: Box::new(WriteOp::UpsertMessage(Box::new(
                         boundary::MailStoreUpsertMessageRequest {
                             record: message_record("bad-key", "invalid"),
                         },
-                    )),
+                    ))),
                     reply: invalid_tx,
                 },
                 QueuedWrite {
-                    op: Box::new(WriteOp::UpsertMessage(
+                    op: Box::new(WriteOp::UpsertMessage(Box::new(
                         boundary::MailStoreUpsertMessageRequest {
                             record: message_record("atm:valid", "valid"),
                         },
-                    )),
+                    ))),
                     reply: valid_tx,
                 },
             ],
@@ -745,7 +745,7 @@ mod tests {
         let verify = open_connection_for_target(target.as_ref()).expect("open verifier");
         let mut cache = stmt_cache::WriterStatementCache;
 
-        let parent_message_id = LegacyMessageId::new();
+        let parent_message_id = AtmMessageId::new();
         let mut existing_successor = message_record("atm:existing-successor", "existing");
         existing_successor.envelope.parent_message_id = Some(parent_message_id);
 
@@ -755,11 +755,11 @@ mod tests {
             &mut connection,
             &mut cache,
             vec![QueuedWrite {
-                op: Box::new(WriteOp::UpsertMessage(
+                op: Box::new(WriteOp::UpsertMessage(Box::new(
                     boundary::MailStoreUpsertMessageRequest {
                         record: existing_successor,
                     },
-                )),
+                ))),
                 reply: seed_tx,
             }],
         );
@@ -779,19 +779,19 @@ mod tests {
             &mut cache,
             vec![
                 QueuedWrite {
-                    op: Box::new(WriteOp::UpsertMessage(
+                    op: Box::new(WriteOp::UpsertMessage(Box::new(
                         boundary::MailStoreUpsertMessageRequest {
                             record: message_record("atm:root", "root"),
                         },
-                    )),
+                    ))),
                     reply: root_tx,
                 },
                 QueuedWrite {
-                    op: Box::new(WriteOp::UpsertMessage(
+                    op: Box::new(WriteOp::UpsertMessage(Box::new(
                         boundary::MailStoreUpsertMessageRequest {
                             record: conflicting_successor,
                         },
-                    )),
+                    ))),
                     reply: conflict_tx,
                 },
             ],
@@ -840,20 +840,20 @@ mod tests {
         .expect("writer");
 
         let first = writer
-            .submit(WriteOp::UpsertMessage(
+            .submit(WriteOp::UpsertMessage(Box::new(
                 boundary::MailStoreUpsertMessageRequest {
                     record: message_record("atm:dup-test", "original"),
                 },
-            ))
+            )))
             .expect("first insert");
         assert_eq!(first, WriteOpResult::UpsertMessage { inserted: true });
 
         let second = writer
-            .submit(WriteOp::UpsertMessage(
+            .submit(WriteOp::UpsertMessage(Box::new(
                 boundary::MailStoreUpsertMessageRequest {
                     record: message_record("atm:dup-test", "overwrite"),
                 },
-            ))
+            )))
             .expect("duplicate insert");
         assert_eq!(second, WriteOpResult::UpsertMessage { inserted: false });
 

@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002" ;
+  triage:title "docs/atm-core/requirements.md missing Phase-U note for REQ-CORE-MAILBOX-001 and REQ-CORE-COMPAT-001" ;
+  triage:description "No Phase-U note documenting that REQ-CORE-MAILBOX-001 and REQ-CORE-COMPAT-001 are satisfied by the zero-metadata.atm constraint. Sprint-U1.md:129-137 explicitly lists docs/atm-core/requirements.md as required update." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/pU-u1/2> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/e45dc48> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 96 ;
+  triage:snippet "- `REQ-CORE-MAILBOX-001` `atm-core` owns transitional mailbox compatibility" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 102 ;
+  triage:snippet "- `REQ-CORE-COMPAT-001` `atm-core` owns the Claude JSONL compatibility" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 96 ;
+  triage:snippet "- `REQ-CORE-MAILBOX-001` `atm-core` owns transitional mailbox compatibility" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/pU-u1/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 102 ;
+  triage:snippet "- `REQ-CORE-COMPAT-001` `atm-core` owns the Claude JSONL compatibility" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+<urn:atm:triage:worktree/integrate-phase-U/8aa2aed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u1/e45dc48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:orderIndex 1 .

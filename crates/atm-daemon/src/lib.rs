@@ -2,11 +2,11 @@
 //! Daemon runtime composition and portability adapters.
 
 mod active_connection_registry;
+mod advisory_runtime;
 mod boundary_adapters;
 pub(crate) mod composition;
 mod daemon_runtime_observability;
 mod direct_boundaries;
-mod graft_runtime;
 // ADR-002 (`docs/adr/ADR-002-host-wide-daemon-singleton.md`) intentionally splits
 // launch.lock admission from owner.lock serving ownership so only one launcher can
 // fork while only one daemon can publish the local IPC endpoint; see
@@ -27,7 +27,7 @@ mod test_observability;
 #[cfg(test)]
 mod test_support;
 #[cfg(test)]
-mod tests_graft;
+mod tests_advisory;
 #[cfg(test)]
 mod tests_host_ownership;
 #[cfg(test)]

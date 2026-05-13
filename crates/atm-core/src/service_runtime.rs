@@ -82,10 +82,35 @@ pub(crate) trait RetainedServiceRuntime {
 }
 
 #[derive(Clone)]
-pub(crate) struct LocalServiceRuntime {
+pub struct LocalServiceRuntime {
     pub(crate) mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
     pub(crate) task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
     pub(crate) roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
+    pub(crate) allow_legacy_mailbox_files: bool,
+}
+
+impl LocalServiceRuntime {
+    pub fn new(
+        mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
+        task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
+        roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
+    ) -> Self {
+        Self {
+            mail_store,
+            task_store,
+            roster_store,
+            allow_legacy_mailbox_files: false,
+        }
+    }
+
+    pub(crate) fn with_legacy_mailbox_files(mut self) -> Self {
+        self.allow_legacy_mailbox_files = true;
+        self
+    }
+
+    pub(crate) const fn allows_legacy_mailbox_files(&self) -> bool {
+        self.allow_legacy_mailbox_files
+    }
 }
 
 impl fmt::Debug for LocalServiceRuntime {
@@ -94,6 +119,10 @@ impl fmt::Debug for LocalServiceRuntime {
             .field("mail_store", &std::sync::Arc::as_ptr(&self.mail_store))
             .field("task_store", &std::sync::Arc::as_ptr(&self.task_store))
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
+            .field(
+                "allow_legacy_mailbox_files",
+                &self.allow_legacy_mailbox_files,
+            )
             .finish()
     }
 }

@@ -1,0 +1,439 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ──────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/ATM-QA-U5-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U5-004" ;
+  triage:title "clear and ack remain fully file-backed — REQ-P-ACK-001 and REQ-P-CLEAR-001 unmet with no deferral note" ;
+  triage:description "crates/atm-core/src/clear/mod.rs and ack/mod.rs: clear and ack remain fully file-backed (observe_source_files, with_locked_source_files, commit_source_files). REQ-P-ACK-001 and REQ-P-CLEAR-001 are listed as governing requirements in sprint-U5.md with no implementation change and no explicit deferral note. Either implement the cutover or add an explicit approved deferral entry in sprint-U5.md and plan-phase-U.md naming the sprint that closes it." ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u1/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u1/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u1/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u1/6> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u2/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u2/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u2/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u2/6> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u3/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u3/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u3/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u3/6> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u4/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u4/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u4/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u4/6> ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u5/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u5/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u5/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U5-004/u5/6> ;
+
+  triage:openOn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 .
+
+# ── Occurrences: u1 (feature/pU-u1-metadata-atm-read-cleanup @ 6a692b40) ────
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 123 ;
+  triage:snippet "runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 135 ;
+  triage:snippet "runtime.with_locked_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 150 ;
+  triage:snippet "runtime.commit_source_files(source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u1/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 144 ;
+  triage:snippet "let source_files = runtime.observe_source_files(&request.home_dir, &team, &actor)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u1/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 229 ;
+  triage:snippet "runtime.with_locked_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u1/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 275 ;
+  triage:snippet "runtime.commit_source_files(source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b40> .
+
+# ── Occurrences: u2 (feature/pU-u2-one-message-identity @ 1b22524) ───────────
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 123 ;
+  triage:snippet "runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 135 ;
+  triage:snippet "runtime.with_locked_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 150 ;
+  triage:snippet "runtime.commit_source_files(source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u2/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 144 ;
+  triage:snippet "let source_files = runtime.observe_source_files(&request.home_dir, &team, &actor)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u2/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 229 ;
+  triage:snippet "runtime.with_locked_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u2/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 275 ;
+  triage:snippet "runtime.commit_source_files(source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+# ── Occurrences: u3 (feature/pU-u3-thread-update-hardening @ c1e0e06) ────────
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 144 ;
+  triage:snippet "let source_files = runtime.observe_source_files(&request.home_dir, &team, &actor)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 229 ;
+  triage:snippet "runtime.with_locked_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 275 ;
+  triage:snippet "runtime.commit_source_files(source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u3/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 123 ;
+  triage:snippet "runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u3/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 135 ;
+  triage:snippet "runtime.with_locked_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u3/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 150 ;
+  triage:snippet "runtime.commit_source_files(source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+# ── Occurrences: u4 (feature/pU-u4-unified-message-state @ 335fe3d) ──────────
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 123 ;
+  triage:snippet "runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 135 ;
+  triage:snippet "runtime.with_locked_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 150 ;
+  triage:snippet "runtime.commit_source_files(source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u4/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 144 ;
+  triage:snippet "let source_files = runtime.observe_source_files(&request.home_dir, &team, &actor)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u4/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 229 ;
+  triage:snippet "runtime.with_locked_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u4/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 275 ;
+  triage:snippet "runtime.commit_source_files(source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+# ── Occurrences: u5 (feature/pU-u5-sqlite-query-cutover @ ae75f1a) ───────────
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 153 ;
+  triage:snippet "let source_files = runtime.observe_source_files(&request.home_dir, &team, &actor)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 238 ;
+  triage:snippet "runtime.with_locked_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 284 ;
+  triage:snippet "runtime.commit_source_files(source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u5/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 132 ;
+  triage:snippet "runtime.observe_source_files(&query.home_dir, &target.team, &target.agent)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u5/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 144 ;
+  triage:snippet "runtime.with_locked_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U5-004/u5/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 165 ;
+  triage:snippet "runtime.commit_source_files(source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .

@@ -1,23 +1,24 @@
 //! Thin embedded ATM client crate for graft-aware host agents.
+//! Production nudge delivery uses one live advisory-stream receive loop when
+//! the selected transport supports same-host streaming.
 
 use std::fmt;
-use std::io::Write;
-use std::path::{Path, PathBuf};
-use std::sync::mpsc::{self, RecvTimeoutError, Sender};
+use std::path::PathBuf;
+use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, RwLock};
-use std::thread::{self, JoinHandle};
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::ack::{AckOutcome, AckRequest};
-use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::error::AtmError;
 use atm_core::graft::{
-    AtmGraftClient, GraftBatchLimit, GraftNudgeDrainRequest, GraftNudgeDrainResponse,
-    GraftNudgeFetchRequest, GraftNudgeFetchResponse, GraftSession as GraftSessionSnapshot,
-    GraftSessionId, GraftSessionPort, GraftSessionRegistrationRequest,
-    GraftSessionRegistrationResponse, GraftSessionState, GraftSessionUnregistrationRequest,
-    GraftSessionUnregistrationResponse, NudgeEvent,
+    AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryEvent,
+    AdvisoryFetchRequest, AdvisoryFetchResponse, AdvisorySession as AdvisorySessionSnapshot,
+    AdvisorySessionId, AdvisorySessionPort, AdvisorySessionRegistrationRequest,
+    AdvisorySessionRegistrationResponse, AdvisorySessionState,
+    AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse,
+    AdvisoryStreamRequest, AtmGraftClient,
 };
 use atm_core::protocol::{
     RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
@@ -25,29 +26,38 @@ use atm_core::protocol::{
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor};
-use interprocess::local_socket::Stream as LocalSocketStream;
-use interprocess::local_socket::traits::Stream as _;
+use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
+use atm_daemon_client::DaemonSupervisor;
+
+mod runtime;
+mod transport;
+
+use runtime::{
+    LiveReceiveLoopContext, ReceiveLoopContext, join_receive_loop_with_deadline, load_graft_config,
+    read_snapshot, run_live_receive_loop, run_receive_loop, set_session_state,
+    validate_batch_limit_against_capacity,
+};
+use transport::{ActiveAdvisoryStream, GraftLocalIpcClientTransport, unexpected_response};
 
 const SAME_HOST_REQUEST_DEADLINE: Duration = Duration::from_secs(3);
+const ADVISORY_STREAM_READ_DEADLINE: Duration = Duration::from_millis(250);
 const DEFAULT_POLL_INTERVAL: Duration = Duration::from_millis(250);
 const DEFAULT_BATCH_LIMIT: usize = 64;
 const RECEIVE_LOOP_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 /// Public alias for the ATM-core graft session projection DTO.
-pub type SessionSnapshot = GraftSessionSnapshot;
+pub type SessionSnapshot = AdvisorySessionSnapshot;
 
 pub use atm_core::{
-    AtmConfig, GraftConfig, GraftNudgeDrainRequest as DrainRequest,
-    GraftNudgeFetchRequest as FetchRequest, GraftSessionId as SessionId, NudgeEvent as Event,
+    AdvisoryDrainRequest as DrainRequest, AdvisoryEvent as Event,
+    AdvisoryFetchRequest as FetchRequest, AdvisorySessionId as SessionId, AtmConfig, GraftConfig,
 };
 
 /// Preferred host-facing imports for embedding `atm-graft`.
 pub mod prelude {
     pub use super::{
-        AtmConfig, DrainRequest, Event, FetchRequest, GraftClient, GraftConfig, GraftObservability,
-        GraftSession, GraftSessionOptions, HostNudgeInjector, NoopGraftObservability, SessionId,
-        SessionSnapshot,
+        GraftClient, GraftObservability, GraftSession, GraftSessionOptions, HostNudgeInjector,
+        NoopGraftObservability,
     };
 }
 
@@ -57,18 +67,18 @@ pub trait HostNudgeInjector: Send + Sync {
     ///
     /// Returns [`AtmError`] when the host cannot safely inject the nudge into
     /// its between-tool-call context flow.
-    fn inject_nudge(&self, nudge: NudgeEvent) -> Result<(), AtmError>;
+    fn inject_nudge(&self, nudge: AdvisoryEvent) -> Result<(), AtmError>;
 }
 
 /// ATM-owned graft observability boundary supplied by the embedding host.
 pub trait GraftObservability: Send + Sync {
     fn session_state_changed(&self, _snapshot: &SessionSnapshot) {}
 
-    fn nudge_delivered(&self, _session_id: &GraftSessionId, _nudge: &NudgeEvent) {}
+    fn nudge_delivered(&self, _session_id: &AdvisorySessionId, _nudge: &AdvisoryEvent) {}
 
     fn session_error(
         &self,
-        _session_id: &GraftSessionId,
+        _session_id: &AdvisorySessionId,
         _action: &'static str,
         _error: &AtmError,
     ) {
@@ -87,8 +97,8 @@ pub struct GraftSessionOptions {
     workspace_root: PathBuf,
     team: TeamName,
     agent: AgentName,
-    session_id: GraftSessionId,
-    batch_limit: GraftBatchLimit,
+    session_id: AdvisorySessionId,
+    batch_limit: AdvisoryBatchLimit,
     poll_interval: Duration,
 }
 
@@ -97,14 +107,14 @@ impl GraftSessionOptions {
         workspace_root: impl Into<PathBuf>,
         team: TeamName,
         agent: AgentName,
-        session_id: GraftSessionId,
+        session_id: AdvisorySessionId,
     ) -> Self {
         Self {
             workspace_root: workspace_root.into(),
             team,
             agent,
             session_id,
-            batch_limit: GraftBatchLimit::new(DEFAULT_BATCH_LIMIT)
+            batch_limit: AdvisoryBatchLimit::new(DEFAULT_BATCH_LIMIT)
                 .expect("default graft batch limit must be valid"),
             poll_interval: DEFAULT_POLL_INTERVAL,
         }
@@ -115,30 +125,21 @@ impl GraftSessionOptions {
         team: TeamName,
         agent: AgentName,
     ) -> Self {
-        let session_id = GraftSessionId::new(format!("{agent}-{}", std::process::id()))
+        let session_id = AdvisorySessionId::new(format!("{agent}-{}", std::process::id()))
             .expect("derived graft session id must be valid");
         Self::new(workspace_root, team, agent, session_id)
     }
 
-    pub fn with_batch_limit(mut self, batch_limit: GraftBatchLimit) -> Self {
+    pub fn with_batch_limit(mut self, batch_limit: AdvisoryBatchLimit) -> Self {
         self.batch_limit = batch_limit;
         self
     }
 
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] when the poll interval is zero.
-    pub fn with_poll_interval(mut self, poll_interval: Duration) -> Result<Self, AtmError> {
-        if poll_interval.is_zero() {
-            return Err(AtmError::validation(
-                "graft session poll interval must be greater than zero",
-            )
-            .with_recovery(
-                "Configure a positive receive-loop poll interval before activating graft mode.",
-            ));
-        }
+    #[cfg(test)]
+    fn with_poll_interval(mut self, poll_interval: Duration) -> Self {
+        assert!(!poll_interval.is_zero(), "poll_interval must be non-zero");
         self.poll_interval = poll_interval;
-        Ok(self)
+        self
     }
 
     fn activation_state(&self) -> SessionSnapshot {
@@ -146,12 +147,12 @@ impl GraftSessionOptions {
             team: self.team.clone(),
             agent: self.agent.clone(),
             session_id: self.session_id.clone(),
-            state: GraftSessionState::Inactive,
+            state: AdvisorySessionState::Inactive,
         }
     }
 
-    fn registration_request(&self) -> GraftSessionRegistrationRequest {
-        GraftSessionRegistrationRequest {
+    fn registration_request(&self) -> AdvisorySessionRegistrationRequest {
+        AdvisorySessionRegistrationRequest {
             team: self.team.clone(),
             agent: self.agent.clone(),
             session_id: self.session_id.clone(),
@@ -165,11 +166,17 @@ impl GraftSessionOptions {
 #[derive(Clone)]
 pub struct GraftClient {
     transport: Arc<dyn ClientTransport + Send + Sync>,
+    advisory_transport: Option<Arc<GraftLocalIpcClientTransport>>,
 }
 
-trait GraftSessionClient: AtmGraftClient + GraftSessionPort {}
+trait GraftSessionClient: AtmGraftClient + AdvisorySessionPort {
+    fn supports_live_advisory_stream(&self) -> bool;
 
-impl<T> GraftSessionClient for T where T: AtmGraftClient + GraftSessionPort + ?Sized {}
+    fn open_advisory_stream(
+        &self,
+        request: AdvisoryStreamRequest,
+    ) -> Result<ActiveAdvisoryStream, AtmError>;
+}
 
 impl fmt::Debug for GraftClient {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -186,15 +193,23 @@ impl GraftClient {
     /// be resolved or the same-host daemon cannot be reached or started.
     pub fn connect() -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
-        let daemon_bin = resolve_daemon_bin()?;
-        let transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
+        let daemon_bin = resolve_daemon_bin("graft host")?;
+        let advisory_transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
+        let transport = Arc::clone(&advisory_transport) as Arc<dyn ClientTransport + Send + Sync>;
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
-        supervisor.ensure_daemon_available(|| transport.try_connect().map(|_| ()))?;
-        Ok(Self::from_transport(transport))
+        supervisor.ensure_daemon_available(|| advisory_transport.try_connect().map(|_| ()))?;
+        Ok(Self {
+            transport,
+            advisory_transport: Some(advisory_transport),
+        })
     }
 
-    pub fn from_transport(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
-        Self { transport }
+    #[cfg(test)]
+    fn from_transport(transport: Arc<dyn ClientTransport + Send + Sync>) -> Self {
+        Self {
+            transport,
+            advisory_transport: None,
+        }
     }
 
     /// # Errors
@@ -224,20 +239,6 @@ impl GraftClient {
             response => Ok(response),
         }
     }
-
-    pub fn fetch_pending_nudges(
-        &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError> {
-        self.fetch_nudges(request)
-    }
-
-    pub fn drain_pending_nudges(
-        &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError> {
-        self.drain_nudges(request)
-    }
 }
 
 impl AtmGraftClient for GraftClient {
@@ -265,51 +266,74 @@ impl AtmGraftClient for GraftClient {
     }
 }
 
-impl GraftSessionPort for GraftClient {
+impl AdvisorySessionPort for GraftClient {
     fn register_session(
         &self,
-        request: GraftSessionRegistrationRequest,
-    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftRegister(request))? {
-            ResponseEnvelope::GraftRegister(response) => Ok(response),
+        request: AdvisorySessionRegistrationRequest,
+    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+        match self.send_request(RequestEnvelope::AdvisoryRegister(request))? {
+            ResponseEnvelope::AdvisoryRegister(response) => Ok(response),
             other => Err(unexpected_response("graft register", other)),
         }
     }
 
     fn unregister_session(
         &self,
-        request: GraftSessionUnregistrationRequest,
-    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftUnregister(request))? {
-            ResponseEnvelope::GraftUnregister(response) => Ok(response),
+        request: AdvisorySessionUnregistrationRequest,
+    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
+        match self.send_request(RequestEnvelope::AdvisoryUnregister(request))? {
+            ResponseEnvelope::AdvisoryUnregister(response) => Ok(response),
             other => Err(unexpected_response("graft unregister", other)),
         }
     }
 
     fn fetch_nudges(
         &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftFetch(request))? {
-            ResponseEnvelope::GraftFetch(response) => Ok(response),
+        request: AdvisoryFetchRequest,
+    ) -> Result<AdvisoryFetchResponse, AtmError> {
+        match self.send_request(RequestEnvelope::AdvisoryFetch(request))? {
+            ResponseEnvelope::AdvisoryFetch(response) => Ok(response),
             other => Err(unexpected_response("graft fetch", other)),
         }
     }
 
     fn drain_nudges(
         &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError> {
-        match self.send_request(RequestEnvelope::GraftDrain(request))? {
-            ResponseEnvelope::GraftDrain(response) => Ok(response),
+        request: AdvisoryDrainRequest,
+    ) -> Result<AdvisoryDrainResponse, AtmError> {
+        match self.send_request(RequestEnvelope::AdvisoryDrain(request))? {
+            ResponseEnvelope::AdvisoryDrain(response) => Ok(response),
             other => Err(unexpected_response("graft drain", other)),
         }
+    }
+}
+
+impl GraftSessionClient for GraftClient {
+    fn supports_live_advisory_stream(&self) -> bool {
+        self.advisory_transport.is_some()
+    }
+
+    fn open_advisory_stream(
+        &self,
+        request: AdvisoryStreamRequest,
+    ) -> Result<ActiveAdvisoryStream, AtmError> {
+        let transport = self.advisory_transport.as_ref().ok_or_else(|| {
+            AtmError::validation(
+                "live advisory streams require the same-host local IPC transport",
+            )
+            .with_recovery(
+                "Use the real same-host local IPC transport for production activation or keep injected transports limited to unit-test fallback paths.",
+            )
+        })?;
+        transport.open_advisory_stream(request)
     }
 }
 
 /// Concrete embedded graft session runtime.
 pub struct GraftSession {
     client: Arc<dyn GraftSessionClient>,
+    // Snapshot state is shared between the host thread and the receive loop; poisoned locks are
+    // mapped into AtmError by read_snapshot()/set_session_state() instead of panicking.
     snapshot: Arc<RwLock<SessionSnapshot>>,
     observability: Arc<dyn GraftObservability>,
     stop_tx: Option<Sender<()>>,
@@ -408,7 +432,7 @@ impl GraftSession {
 
         set_session_state(
             &snapshot,
-            GraftSessionState::Connecting,
+            AdvisorySessionState::Connecting,
             observability.as_ref(),
         )?;
 
@@ -419,7 +443,7 @@ impl GraftSession {
         )?;
         set_session_state(
             &snapshot,
-            GraftSessionState::Registered,
+            AdvisorySessionState::Registered,
             observability.as_ref(),
         )?;
 
@@ -427,32 +451,62 @@ impl GraftSession {
         let worker_snapshot = Arc::clone(&snapshot);
         let worker_observability = Arc::clone(&observability);
         let registration_request = options.registration_request();
-        let drain_request = GraftNudgeDrainRequest {
+        let drain_request = AdvisoryDrainRequest {
             session_id: options.session_id.clone(),
             limit: options.batch_limit,
         };
+        let advisory_stream_request = AdvisoryStreamRequest {
+            registration: registration_request.clone(),
+            limit: options.batch_limit,
+        };
         let (stop_tx, stop_rx) = mpsc::channel();
-        let join_handle = thread::Builder::new()
-            .name(format!("atm-graft-{}", options.session_id))
-            .spawn(move || {
-                run_receive_loop(ReceiveLoopContext {
-                    client: worker_client,
-                    registration_request,
-                    drain_request,
-                    poll_interval: options.poll_interval,
-                    snapshot: worker_snapshot,
-                    injector,
-                    observability: worker_observability,
-                    stop_rx,
+        let join_handle = if client.supports_live_advisory_stream() {
+            let stream = client.open_advisory_stream(advisory_stream_request)?;
+            std::thread::Builder::new()
+                .name(format!("atm-graft-{}", options.session_id))
+                .spawn(move || {
+                    run_live_receive_loop(LiveReceiveLoopContext {
+                        client: worker_client,
+                        registration_request,
+                        advisory_stream: stream,
+                        limit: options.batch_limit,
+                        reconnect_backoff: options.poll_interval,
+                        snapshot: worker_snapshot,
+                        injector,
+                        observability: worker_observability,
+                        stop_rx,
+                    })
                 })
-            })
-            .map_err(|source| {
-                AtmError::daemon_unavailable("failed to spawn graft receive loop")
-                    .with_source(source)
-                    .with_recovery(
-                        "Retry graft activation after the embedding host allows one live receive thread for the active session.",
-                    )
-            })?;
+                .map_err(|source| {
+                    AtmError::daemon_unavailable("failed to spawn graft receive loop")
+                        .with_source(source)
+                        .with_recovery(
+                            "Retry graft activation after the embedding host allows one live receive thread for the active session.",
+                        )
+                })?
+        } else {
+            std::thread::Builder::new()
+                .name(format!("atm-graft-{}", options.session_id))
+                .spawn(move || {
+                    run_receive_loop(ReceiveLoopContext {
+                        client: worker_client,
+                        registration_request,
+                        drain_request,
+                        poll_interval: options.poll_interval,
+                        snapshot: worker_snapshot,
+                        injector,
+                        observability: worker_observability,
+                        stop_rx,
+                    })
+                })
+                .map_err(|source| {
+                    AtmError::daemon_unavailable("failed to spawn graft receive loop")
+                        .with_source(source)
+                        .with_recovery(
+                            "Retry graft activation after the embedding host allows one live receive thread for the active session.",
+                        )
+                })?
+        };
 
         Ok(Self {
             client,
@@ -479,20 +533,6 @@ impl GraftSession {
         self.client.acknowledge_message(request)
     }
 
-    pub fn fetch_pending_nudges(
-        &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError> {
-        self.client.fetch_nudges(request)
-    }
-
-    pub fn drain_pending_nudges(
-        &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError> {
-        self.client.drain_nudges(request)
-    }
-
     /// # Errors
     ///
     /// Returns [`AtmError`] when the receive loop cannot join cleanly or the
@@ -510,14 +550,14 @@ impl GraftSession {
         {
             set_session_state(
                 &self.snapshot,
-                GraftSessionState::CloseFailed,
+                AdvisorySessionState::CloseFailed,
                 self.observability.as_ref(),
             )?;
             return Err(error);
         }
         set_session_state(
             &self.snapshot,
-            GraftSessionState::Closed,
+            AdvisorySessionState::Closed,
             self.observability.as_ref(),
         )?;
         Ok(())
@@ -526,7 +566,7 @@ impl GraftSession {
 
 impl Drop for GraftSession {
     fn drop(&mut self) {
-        // Drop-triggered teardown emits GraftSessionState::Closed, identical to explicit close().
+        // Drop-triggered teardown emits AdvisorySessionState::Closed, identical to explicit close().
         // Merged observable state is accepted by design: callers that need to distinguish
         // drop-driven shutdown from user-directed shutdown should call close() explicitly.
         let _ = self.close_internal();
@@ -547,405 +587,70 @@ impl AtmGraftClient for GraftSession {
     }
 }
 
-impl GraftSessionPort for GraftSession {
+impl AdvisorySessionPort for GraftSession {
     fn register_session(
         &self,
-        request: GraftSessionRegistrationRequest,
-    ) -> Result<GraftSessionRegistrationResponse, AtmError> {
+        request: AdvisorySessionRegistrationRequest,
+    ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
         self.client.register_session(request)
     }
 
     fn unregister_session(
         &self,
-        request: GraftSessionUnregistrationRequest,
-    ) -> Result<GraftSessionUnregistrationResponse, AtmError> {
+        request: AdvisorySessionUnregistrationRequest,
+    ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
         self.client.unregister_session(request)
     }
 
     fn fetch_nudges(
         &self,
-        request: GraftNudgeFetchRequest,
-    ) -> Result<GraftNudgeFetchResponse, AtmError> {
+        request: AdvisoryFetchRequest,
+    ) -> Result<AdvisoryFetchResponse, AtmError> {
         self.client.fetch_nudges(request)
     }
 
     fn drain_nudges(
         &self,
-        request: GraftNudgeDrainRequest,
-    ) -> Result<GraftNudgeDrainResponse, AtmError> {
+        request: AdvisoryDrainRequest,
+    ) -> Result<AdvisoryDrainResponse, AtmError> {
         self.client.drain_nudges(request)
     }
 }
 
-fn load_graft_config(workspace_root: &Path) -> Result<Option<GraftConfig>, AtmError> {
-    let config = atm_core::load_atm_config(workspace_root)?;
-    Ok(config.map(|config| config.graft))
-}
-
-fn read_snapshot(snapshot: &Arc<RwLock<SessionSnapshot>>) -> Result<SessionSnapshot, AtmError> {
-    snapshot
-        .read()
-        .map(|snapshot| snapshot.clone())
-        .map_err(|_| {
-            AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
-                "Restart the embedding host before retrying graft session lifecycle operations.",
-            )
-        })
-}
-
-fn write_snapshot(
-    snapshot: &Arc<RwLock<SessionSnapshot>>,
-    state: GraftSessionState,
-) -> Result<(), AtmError> {
-    let mut snapshot = snapshot.write().map_err(|_| {
-        AtmError::daemon_unavailable("graft session snapshot lock poisoned").with_recovery(
-            "Restart the embedding host before retrying graft session lifecycle operations.",
-        )
-    })?;
-    snapshot.state = state;
-    Ok(())
-}
-
-fn set_session_state(
-    snapshot: &Arc<RwLock<SessionSnapshot>>,
-    state: GraftSessionState,
-    observability: &dyn GraftObservability,
-) -> Result<(), AtmError> {
-    write_snapshot(snapshot, state)?;
-    observability.session_state_changed(&read_snapshot(snapshot)?);
-    Ok(())
-}
-
-fn validate_batch_limit_against_capacity(
-    batch_limit: GraftBatchLimit,
-    queue_capacity: usize,
-) -> Result<(), AtmError> {
-    if batch_limit.get() > queue_capacity {
-        return Err(AtmError::validation(format!(
-            "graft batch limit {} exceeds daemon queue capacity {}",
-            batch_limit.get(),
-            queue_capacity
-        ))
-        .with_recovery(
-            "Lower the graft batch limit or restart against a daemon that advertises a larger graft nudge queue before retrying session activation.",
-        ));
-    }
-    Ok(())
-}
-
-fn join_receive_loop_with_deadline(
-    join_handle: JoinHandle<Result<(), AtmError>>,
-) -> Result<(), AtmError> {
-    let (result_tx, result_rx) = mpsc::sync_channel(1);
-    let join_helper = thread::Builder::new()
-        .name("atm-graft-receive-loop-join".to_string())
-        .spawn(move || {
-            let result = match join_handle.join() {
-                Ok(result) => result,
-                Err(_) => Err(AtmError::daemon_unavailable("graft receive loop panicked")
-                    .with_recovery(
-                        "Restart the embedding host and atm-daemon before retrying graft mode.",
-                    )),
-            };
-            let _ = result_tx.send(result);
-        })
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to spawn graft receive-loop join helper")
-                .with_source(source)
-                .with_recovery(
-                    "Retry graft shutdown after the embedding host can spawn one bounded join helper thread.",
-                )
-        })?;
-    let join_helper_thread_id = join_helper.thread().id();
-    match result_rx.recv_timeout(RECEIVE_LOOP_JOIN_DEADLINE) {
-        Ok(result) => {
-            join_helper.join().map_err(|_| {
-                AtmError::daemon_unavailable("graft receive-loop join helper panicked")
-            })?;
-            result
-        }
-        Err(RecvTimeoutError::Timeout) => {
-            tracing::debug!(
-                timeout_ms = RECEIVE_LOOP_JOIN_DEADLINE.as_millis(),
-                thread_id = ?join_helper_thread_id,
-                "graft receive-loop join timed out; helper left detached after deadline"
-            );
-            Err(AtmError::daemon_unavailable(format!(
-                "graft receive loop shutdown exceeded the {:?} join deadline",
-                RECEIVE_LOOP_JOIN_DEADLINE
-            ))
-            .with_recovery(
-                "Restart the embedding host if the graft receive loop does not shut down within the bounded join deadline.",
-            ))
-        }
-        Err(RecvTimeoutError::Disconnected) => join_helper.join().map_or_else(
-            |_| {
-                Err(AtmError::daemon_unavailable(
-                    "graft receive-loop join helper panicked",
-                ))
-            },
-            |_| {
-                Err(AtmError::daemon_unavailable(
-                    "graft receive-loop join helper disconnected unexpectedly",
-                ))
-            },
-        ),
-    }
-}
-
-fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> {
-    let session_id = ctx.drain_request.session_id.clone();
-    loop {
-        match ctx.stop_rx.recv_timeout(ctx.poll_interval) {
-            Ok(()) => {
-                match ctx
-                    .client
-                    .unregister_session(GraftSessionUnregistrationRequest {
-                        session_id: session_id.clone(),
-                    }) {
-                    Ok(_) => set_session_state(
-                        &ctx.snapshot,
-                        GraftSessionState::Closed,
-                        ctx.observability.as_ref(),
-                    )?,
-                    Err(error) => {
-                        set_session_state(
-                            &ctx.snapshot,
-                            GraftSessionState::CloseFailed,
-                            ctx.observability.as_ref(),
-                        )?;
-                        ctx.observability
-                            .session_error(&session_id, "unregister_session", &error);
-                        return Err(error);
-                    }
-                }
-                return Ok(());
-            }
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => {
-                set_session_state(
-                    &ctx.snapshot,
-                    GraftSessionState::Closed,
-                    ctx.observability.as_ref(),
-                )?;
-                return Ok(());
-            }
-        }
-
-        match ctx.client.drain_nudges(ctx.drain_request.clone()) {
-            Ok(response) => {
-                if read_snapshot(&ctx.snapshot)?.state != GraftSessionState::Registered {
-                    set_session_state(
-                        &ctx.snapshot,
-                        GraftSessionState::Registered,
-                        ctx.observability.as_ref(),
-                    )?;
-                }
-                for nudge in response.nudges {
-                    ctx.injector.inject_nudge(nudge.clone())?;
-                    ctx.observability.nudge_delivered(&session_id, &nudge);
-                }
-            }
-            Err(error) => {
-                set_session_state(
-                    &ctx.snapshot,
-                    GraftSessionState::Disconnected,
-                    ctx.observability.as_ref(),
-                )?;
-                ctx.observability
-                    .session_error(&session_id, "drain_nudges", &error);
-                tracing::debug!(session_id = %session_id, error = %error.message, "graft receive loop will retry after drain failure");
-
-                match ctx
-                    .client
-                    .register_session(ctx.registration_request.clone())
-                {
-                    Ok(response) => {
-                        validate_batch_limit_against_capacity(
-                            ctx.drain_request.limit,
-                            response.queue_capacity,
-                        )?;
-                        set_session_state(
-                            &ctx.snapshot,
-                            GraftSessionState::Registered,
-                            ctx.observability.as_ref(),
-                        )?;
-                    }
-                    Err(register_error) if is_duplicate_registration(&register_error) => {
-                        set_session_state(
-                            &ctx.snapshot,
-                            GraftSessionState::Registered,
-                            ctx.observability.as_ref(),
-                        )?;
-                    }
-                    Err(register_error) => {
-                        ctx.observability.session_error(
-                            &session_id,
-                            "register_session",
-                            &register_error,
-                        );
-                        ctx.observability
-                            .session_state_changed(&read_snapshot(&ctx.snapshot)?);
-                        tracing::debug!(session_id = %session_id, error = %register_error.message, "graft receive loop failed to re-register session");
-                    }
-                }
-            }
-        }
-    }
-}
-
-struct ReceiveLoopContext {
-    client: Arc<dyn GraftSessionClient>,
-    registration_request: GraftSessionRegistrationRequest,
-    drain_request: GraftNudgeDrainRequest,
-    poll_interval: Duration,
-    snapshot: Arc<RwLock<SessionSnapshot>>,
-    injector: Arc<dyn HostNudgeInjector>,
-    observability: Arc<dyn GraftObservability>,
-    stop_rx: mpsc::Receiver<()>,
-}
-
-fn is_duplicate_registration(error: &AtmError) -> bool {
-    error.code == atm_core::error_codes::AtmErrorCode::DaemonGraftSessionAlreadyRegistered
-}
-
-// Parallel to `LocalIpcClientTransportAdapter` in crates/atm/src/composition.rs.
-// Kept separate: atm-graft must not depend on the atm crate; sharing via
-// atm-daemon-client would require exposing the IPC exchange internals as a
-// public API surface, which is out of scope for that boundary crate.
-#[derive(Debug)]
-struct GraftLocalIpcClientTransport {
-    endpoint: DaemonLocalIpcEndpoint,
-}
-
-impl GraftLocalIpcClientTransport {
-    fn new(endpoint: DaemonLocalIpcEndpoint) -> Self {
-        Self { endpoint }
-    }
-
-    fn try_connect(&self) -> Result<LocalSocketStream, AtmError> {
-        LocalSocketStream::connect(atm_core::protocol::daemon_local_ipc_name_from_path(
-            self.endpoint.as_ref(),
-        )?)
-        .map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to connect to daemon local IPC endpoint at {}",
-                self.endpoint.display()
-            ))
-            .with_source(source)
-        })
-    }
-
-    fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let mut stream = self.try_connect()?;
-        stream
-            .set_send_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
-            .map_err(|source| {
-                AtmError::daemon_unavailable("failed to configure graft local IPC write timeout")
-                    .with_source(source)
-            })?;
-        stream
-            .set_recv_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
-            .map_err(|source| {
-                AtmError::daemon_unavailable("failed to configure graft local IPC read timeout")
-                    .with_source(source)
-            })?;
-        let request_id = atm_core::protocol::next_request_id();
-        let frame = atm_core::protocol::request_to_frame_payload(request_id, request)?;
-        atm_core::protocol::write_frame(
-            &mut stream,
-            &frame,
-            "failed to write graft daemon request frame",
-        )?;
-        stream.flush().map_err(|source| {
-            AtmError::daemon_unavailable("failed to flush graft daemon request frame")
-                .with_source(source)
-        })?;
-        let response_frame = atm_core::protocol::read_frame(
-            &mut stream,
-            "failed to read graft daemon response frame",
-            "graft daemon response frame exceeded the maximum supported size",
-        )?
-        .ok_or_else(|| {
-            AtmError::daemon_unavailable(
-                "daemon closed the local IPC connection before returning a graft response frame",
-            )
-            .with_recovery(
-                "Retry the graft request after atm-daemon reaches serving state and inspect daemon logs if the problem persists.",
-            )
-        })?;
-        let (response_id, response) =
-            atm_core::protocol::response_from_frame_payload(response_frame)?;
-        if response_id != request_id {
-            return Err(AtmError::daemon_unavailable(format!(
-                "graft daemon response request_id {} did not match request_id {}",
-                response_id, request_id
-            ))
-            .with_recovery(
-                "Align the embedding host, atm-graft, and atm-daemon builds so both sides use the same ATM daemon protocol contract before retrying.",
-            ));
-        }
-        Ok(response)
-    }
-}
-
-impl boundary::sealed::Sealed for GraftLocalIpcClientTransport {}
-
-impl ClientTransport for GraftLocalIpcClientTransport {
-    fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        self.exchange(request)
-    }
-}
-
-fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, AtmError> {
-    DaemonLocalIpcEndpoint::new(atm_core::protocol::daemon_socket_path()?)
-}
-
-fn resolve_daemon_bin() -> Result<DaemonBinaryPath, AtmError> {
-    if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
-        return DaemonBinaryPath::new(PathBuf::from(path));
-    }
-    let current = std::env::current_exe().map_err(|source| {
-        AtmError::daemon_unavailable("failed to resolve the current graft host executable path")
-            .with_source(source)
-    })?;
-    DaemonBinaryPath::new(
-        current.with_file_name(format!("atm-daemon{}", std::env::consts::EXE_SUFFIX)),
-    )
-}
-
-fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
-    AtmError::validation(format!(
-        "transport returned an unexpected response for `{command}`: {response:?}"
-    ))
-    .with_recovery(
-        "Retry the graft operation once. If the mismatch persists, inspect daemon/client version alignment and retained daemon logs before retrying again.",
-    )
-}
-
 #[cfg(test)]
 mod tests {
+    use std::io::Write;
+    use std::path::Path;
     use std::sync::Arc;
     use std::sync::Mutex;
     use std::sync::mpsc;
     use std::time::Duration;
 
+    use atm_core::graft::{
+        AdvisoryMessage, AdvisorySessionRegistrationResponse,
+        AdvisorySessionUnregistrationResponse, AdvisoryStreamResponse,
+    };
+    use atm_core::protocol::{self, ResponseEnvelope};
     use atm_core::read::{BucketCounts, ReadOutcome};
-    use atm_core::schema::LegacyMessageId;
+    use atm_core::schema::AtmMessageId;
     use atm_core::test_support::{TEST_LEAD, TEST_TEAM};
     use atm_core::transport::testing::FakeClientTransport;
     use atm_core::types::{AckActivationMode, CommandAction, ReadSelection};
+    use interprocess::local_socket::prelude::*;
+    use interprocess::local_socket::{ListenerOptions, Stream as LocalSocketStream};
     use tempfile::TempDir;
 
     use super::*;
 
     #[derive(Debug, Default)]
     struct CollectingInjector {
-        nudges: Mutex<Vec<NudgeEvent>>,
+        // Test threads inject nudges concurrently with assertions, so collected events need
+        // one shared mutable buffer behind a Mutex.
+        nudges: Mutex<Vec<AdvisoryEvent>>,
     }
 
     impl HostNudgeInjector for CollectingInjector {
-        fn inject_nudge(&self, nudge: NudgeEvent) -> Result<(), AtmError> {
+        fn inject_nudge(&self, nudge: AdvisoryEvent) -> Result<(), AtmError> {
             self.nudges.lock().expect("nudges lock").push(nudge);
             Ok(())
         }
@@ -953,7 +658,11 @@ mod tests {
 
     #[derive(Debug)]
     struct StateNotifyingObservability {
+        // Registration state changes are emitted from the receive loop thread, so the optional
+        // one-shot sender must be shared mutably behind a Mutex.
         registered_tx: Mutex<Option<mpsc::Sender<()>>>,
+        // Disconnect notifications are emitted from the receive loop thread, so the optional
+        // one-shot sender must be shared mutably behind a Mutex.
         disconnected_tx: Mutex<Option<mpsc::Sender<()>>>,
     }
 
@@ -969,7 +678,7 @@ mod tests {
     impl GraftObservability for StateNotifyingObservability {
         fn session_state_changed(&self, snapshot: &SessionSnapshot) {
             match snapshot.state {
-                GraftSessionState::Registered => {
+                AdvisorySessionState::Registered => {
                     if let Some(tx) = self
                         .registered_tx
                         .lock()
@@ -979,7 +688,7 @@ mod tests {
                         let _ = tx.send(());
                     }
                 }
-                GraftSessionState::Disconnected => {
+                AdvisorySessionState::Disconnected => {
                     if let Some(tx) = self
                         .disconnected_tx
                         .lock()
@@ -991,6 +700,66 @@ mod tests {
                 }
                 _ => {}
             }
+        }
+    }
+
+    #[derive(Debug, Default)]
+    struct PanicLiveClient;
+
+    impl AtmGraftClient for PanicLiveClient {
+        fn send_message(&self, _request: SendRequest) -> Result<SendOutcome, AtmError> {
+            panic!("unexpected send_message call in live receive-loop test")
+        }
+
+        fn read_message(&self, _query: ReadQuery) -> Result<ReadOutcome, AtmError> {
+            panic!("unexpected read_message call in live receive-loop test")
+        }
+
+        fn acknowledge_message(&self, _request: AckRequest) -> Result<AckOutcome, AtmError> {
+            panic!("unexpected acknowledge_message call in live receive-loop test")
+        }
+    }
+
+    impl AdvisorySessionPort for PanicLiveClient {
+        fn register_session(
+            &self,
+            _request: AdvisorySessionRegistrationRequest,
+        ) -> Result<AdvisorySessionRegistrationResponse, AtmError> {
+            panic!("unexpected register_session call in live receive-loop test")
+        }
+
+        fn unregister_session(
+            &self,
+            _request: AdvisorySessionUnregistrationRequest,
+        ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
+            panic!("unexpected unregister_session call in live receive-loop test")
+        }
+
+        fn fetch_nudges(
+            &self,
+            _request: AdvisoryFetchRequest,
+        ) -> Result<AdvisoryFetchResponse, AtmError> {
+            panic!("unexpected fetch_nudges call in live receive-loop test")
+        }
+
+        fn drain_nudges(
+            &self,
+            _request: AdvisoryDrainRequest,
+        ) -> Result<AdvisoryDrainResponse, AtmError> {
+            panic!("unexpected drain_nudges call in live receive-loop test")
+        }
+    }
+
+    impl GraftSessionClient for PanicLiveClient {
+        fn supports_live_advisory_stream(&self) -> bool {
+            true
+        }
+
+        fn open_advisory_stream(
+            &self,
+            _request: AdvisoryStreamRequest,
+        ) -> Result<ActiveAdvisoryStream, AtmError> {
+            panic!("unexpected open_advisory_stream call in live receive-loop test")
         }
     }
 
@@ -1057,7 +826,7 @@ mod tests {
 
         assert_eq!(
             session.snapshot().expect("snapshot").state,
-            GraftSessionState::Inactive
+            AdvisorySessionState::Inactive
         );
     }
 
@@ -1084,7 +853,7 @@ mod tests {
 
         assert_eq!(
             session.snapshot().expect("snapshot").state,
-            GraftSessionState::Inactive
+            AdvisorySessionState::Inactive
         );
     }
 
@@ -1100,10 +869,10 @@ mod tests {
         let nudge_sent_for_handler = Arc::clone(&nudge_sent);
 
         let transport = Arc::new(FakeClientTransport::new(move |request| match request {
-            RequestEnvelope::GraftRegister(request) => {
+            RequestEnvelope::AdvisoryRegister(request) => {
                 *register_count_for_handler.lock().expect("register count") += 1;
-                Ok(ResponseEnvelope::GraftRegister(
-                    GraftSessionRegistrationResponse {
+                Ok(ResponseEnvelope::AdvisoryRegister(
+                    AdvisorySessionRegistrationResponse {
                         team: request.team,
                         agent: request.agent,
                         session_id: request.session_id,
@@ -1112,41 +881,41 @@ mod tests {
                     },
                 ))
             }
-            RequestEnvelope::GraftDrain(request) => {
+            RequestEnvelope::AdvisoryDrain(request) => {
                 *drain_count_for_handler.lock().expect("drain count") += 1;
                 let mut sent = nudge_sent_for_handler.lock().expect("nudge sent");
                 let nudges = if *sent {
                     Vec::new()
                 } else {
                     *sent = true;
-                    vec![NudgeEvent {
-                        message_id: LegacyMessageId::new(),
+                    vec![AdvisoryEvent {
+                        message_id: AtmMessageId::new(),
                         from: "sender".parse().expect("sender"),
-                        message: "hello graft".to_string(),
+                        message: AdvisoryMessage::new("hello graft").expect("message"),
                         received_at: IsoTimestamp::now(),
                         task_id: None,
                     }]
                 };
-                Ok(ResponseEnvelope::GraftDrain(GraftNudgeDrainResponse {
+                Ok(ResponseEnvelope::AdvisoryDrain(AdvisoryDrainResponse {
                     session_id: request.session_id,
                     nudges,
                     remaining: 0,
                     dropped_count: 0,
                 }))
             }
-            RequestEnvelope::GraftUnregister(request) => Ok(ResponseEnvelope::GraftUnregister(
-                GraftSessionUnregistrationResponse {
+            RequestEnvelope::AdvisoryUnregister(request) => Ok(
+                ResponseEnvelope::AdvisoryUnregister(AdvisorySessionUnregistrationResponse {
                     session_id: request.session_id,
                     closed: true,
-                },
-            )),
+                }),
+            ),
             other => panic!("unexpected request: {other:?}"),
         }));
         let client = GraftClient::from_transport(transport);
         let (delivered_tx, delivered_rx) = mpsc::channel();
         #[derive(Debug)]
         struct NotifyingInjector {
-            nudges: Mutex<Vec<NudgeEvent>>,
+            nudges: Mutex<Vec<AdvisoryEvent>>,
             delivered_tx: mpsc::Sender<()>,
         }
 
@@ -1157,7 +926,7 @@ mod tests {
         }
 
         impl HostNudgeInjector for NotifyingInjector {
-            fn inject_nudge(&self, nudge: NudgeEvent) -> Result<(), AtmError> {
+            fn inject_nudge(&self, nudge: AdvisoryEvent) -> Result<(), AtmError> {
                 self.nudges.lock().expect("nudges lock").push(nudge);
                 let _ = self.delivered_tx.send(());
                 Ok(())
@@ -1177,9 +946,8 @@ mod tests {
                 TEST_TEAM.parse().expect("team"),
                 TEST_LEAD.parse().expect("agent"),
             )
-            .with_batch_limit(GraftBatchLimit::new(16).expect("limit"))
-            .with_poll_interval(Duration::from_millis(10))
-            .expect("poll interval"),
+            .with_batch_limit(AdvisoryBatchLimit::new(16).expect("limit"))
+            .with_poll_interval(Duration::from_millis(10)),
             Arc::clone(&injected) as Arc<dyn HostNudgeInjector>,
             observability,
         )
@@ -1194,7 +962,7 @@ mod tests {
 
         assert_eq!(
             session.snapshot().expect("snapshot").state,
-            GraftSessionState::Registered
+            AdvisorySessionState::Registered
         );
         assert_eq!(injected.count(), 1);
         assert_eq!(*register_count.lock().expect("register count"), 1);
@@ -1206,7 +974,7 @@ mod tests {
     #[test]
     fn client_routes_send_read_and_ack_over_transport() {
         let root = TempDir::new().expect("tempdir");
-        let read_message_id = LegacyMessageId::new();
+        let read_message_id = AtmMessageId::new();
         let transport = Arc::new(FakeClientTransport::new(move |request| match request {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => Ok(
                 ResponseEnvelope::Send(SendResponseEnvelope::Sent(SendOutcome {
@@ -1215,7 +983,7 @@ mod tests {
                     agent: "agent-b".parse().expect("agent"),
                     sender: request.sender_override.expect("sender"),
                     outcome: "sent".to_string(),
-                    message_id: LegacyMessageId::new(),
+                    message_id: AtmMessageId::new(),
                     requires_ack: false,
                     task_id: None,
                     summary: Some("summary".to_string()),
@@ -1250,7 +1018,7 @@ mod tests {
                     task_id: None,
                     reply_target: serde_json::from_str("\"agent-b@test-team\"")
                         .expect("reply target"),
-                    reply_message_id: LegacyMessageId::new(),
+                    reply_message_id: AtmMessageId::new(),
                     reply_text: request.reply_body,
                     warnings: Vec::new(),
                 })),
@@ -1289,8 +1057,8 @@ mod tests {
         let (notify_tx, notify_rx) = mpsc::channel();
 
         let transport = Arc::new(FakeClientTransport::new(move |request| match request {
-            RequestEnvelope::GraftRegister(request) => Ok(ResponseEnvelope::GraftRegister(
-                GraftSessionRegistrationResponse {
+            RequestEnvelope::AdvisoryRegister(request) => Ok(ResponseEnvelope::AdvisoryRegister(
+                AdvisorySessionRegistrationResponse {
                     team: request.team,
                     agent: request.agent,
                     session_id: request.session_id,
@@ -1298,14 +1066,14 @@ mod tests {
                     queue_capacity: 16,
                 },
             )),
-            RequestEnvelope::GraftDrain(request) => {
+            RequestEnvelope::AdvisoryDrain(request) => {
                 let mut state = state_for_handler.lock().expect("state");
                 *state += 1;
                 if *state == 1 {
                     Err(AtmError::daemon_unavailable("temporary failure"))
                 } else {
                     let _ = notify_tx.send(());
-                    Ok(ResponseEnvelope::GraftDrain(GraftNudgeDrainResponse {
+                    Ok(ResponseEnvelope::AdvisoryDrain(AdvisoryDrainResponse {
                         session_id: request.session_id,
                         nudges: Vec::new(),
                         remaining: 0,
@@ -1313,12 +1081,12 @@ mod tests {
                     }))
                 }
             }
-            RequestEnvelope::GraftUnregister(request) => Ok(ResponseEnvelope::GraftUnregister(
-                GraftSessionUnregistrationResponse {
+            RequestEnvelope::AdvisoryUnregister(request) => Ok(
+                ResponseEnvelope::AdvisoryUnregister(AdvisorySessionUnregistrationResponse {
                     session_id: request.session_id,
                     closed: true,
-                },
-            )),
+                }),
+            ),
             other => panic!("unexpected request: {other:?}"),
         }));
 
@@ -1336,9 +1104,8 @@ mod tests {
                 TEST_TEAM.parse().expect("team"),
                 TEST_LEAD.parse().expect("agent"),
             )
-            .with_batch_limit(GraftBatchLimit::new(16).expect("limit"))
-            .with_poll_interval(Duration::from_millis(10))
-            .expect("poll interval"),
+            .with_batch_limit(AdvisoryBatchLimit::new(16).expect("limit"))
+            .with_poll_interval(Duration::from_millis(10)),
             Arc::new(CollectingInjector::default()),
             observability,
         )
@@ -1358,8 +1125,91 @@ mod tests {
             .expect("re-registration should publish registered after the snapshot write");
         assert_eq!(
             session.snapshot().expect("snapshot").state,
-            GraftSessionState::Registered
+            AdvisorySessionState::Registered
         );
         session.close().expect("close");
+    }
+
+    #[test]
+    fn live_receive_loop_injects_streamed_nudge_and_exits_on_eof() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let endpoint_path = tempdir.path().join("graft-live.sock");
+        let listener = ListenerOptions::new()
+            .name(protocol::daemon_local_ipc_name_from_path(&endpoint_path).expect("endpoint"))
+            .create_sync()
+            .expect("create listener");
+        let request_id = protocol::next_request_id();
+        let expected_session_id = AdvisorySessionId::new("live-session").expect("session id");
+        let server_session_id = expected_session_id.clone();
+        let server = std::thread::spawn(move || {
+            let mut stream = listener.accept().expect("accept");
+            let frame = protocol::response_to_frame_payload(
+                request_id,
+                ResponseEnvelope::AdvisoryStream(AdvisoryStreamResponse {
+                    session_id: server_session_id,
+                    nudges: vec![AdvisoryEvent {
+                        message_id: AtmMessageId::new(),
+                        from: "sender".parse().expect("sender"),
+                        message: AdvisoryMessage::new("hello live graft").expect("message"),
+                        received_at: IsoTimestamp::now(),
+                        task_id: None,
+                    }],
+                    remaining: 0,
+                    dropped_count: 0,
+                }),
+            )
+            .expect("response frame");
+            protocol::write_frame(&mut stream, &frame, "write advisory frame")
+                .expect("write advisory frame");
+            stream.flush().expect("flush advisory frame");
+        });
+
+        let stream = LocalSocketStream::connect(
+            protocol::daemon_local_ipc_name_from_path(&endpoint_path).expect("endpoint"),
+        )
+        .expect("connect");
+        let snapshot = Arc::new(std::sync::RwLock::new(SessionSnapshot {
+            team: TEST_TEAM.parse().expect("team"),
+            agent: TEST_LEAD.parse().expect("agent"),
+            session_id: expected_session_id.clone(),
+            state: AdvisorySessionState::Connecting,
+        }));
+        let injector = Arc::new(CollectingInjector::default());
+        let (registered_tx, registered_rx) = mpsc::channel();
+        let observability = Arc::new(StateNotifyingObservability::new(registered_tx, None));
+        let (_stop_tx, stop_rx) = mpsc::channel();
+
+        run_live_receive_loop(LiveReceiveLoopContext {
+            client: Arc::new(PanicLiveClient),
+            registration_request: AdvisorySessionRegistrationRequest {
+                team: TEST_TEAM.parse().expect("team"),
+                agent: TEST_LEAD.parse().expect("agent"),
+                session_id: expected_session_id,
+                pid: std::process::id(),
+                started_at: IsoTimestamp::now(),
+            },
+            advisory_stream: ActiveAdvisoryStream { stream, request_id },
+            limit: AdvisoryBatchLimit::new(8).expect("limit"),
+            reconnect_backoff: Duration::from_millis(10),
+            snapshot: Arc::clone(&snapshot),
+            injector: Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
+            observability,
+            stop_rx,
+        })
+        .expect("live receive loop");
+        server.join().expect("join server");
+
+        registered_rx
+            .recv_timeout(Duration::from_secs(2))
+            .expect("registered state notification");
+        assert_eq!(injector.nudges.lock().expect("nudges lock").len(), 1);
+        assert_eq!(
+            injector.nudges.lock().expect("nudges lock")[0].message,
+            "hello live graft"
+        );
+        assert_eq!(
+            read_snapshot(&snapshot).expect("snapshot").state,
+            AdvisorySessionState::Registered
+        );
     }
 }

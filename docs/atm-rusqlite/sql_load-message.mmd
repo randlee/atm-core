@@ -1,0 +1,42 @@
+%% title: `Load Message`
+%% summary: SQLite boundary method `MailStore::load_message`.
+%% commentary: This SQL-boundary path reads the immutable row from `mail_messages`, LEFT JOINs `mail_message_states`, applies the loaded mutable state projection to the envelope, and returns `None` when no row exists.
+%% read_tables: mail_messages, mail_message_states
+%% write_tables:
+%% notes: reads: 1 | writes: 0 | joins: 1 | transactions: 0
+%% sets: query
+flowchart TD
+    A["<b>Load Message</b><br/>MailStore::load_message"]
+    A --> I["Input
+team
+agent
+message_key"]
+    I --> R["Read message row + state
+SELECT envelope_json,
+       state.read, state.pending_ack_at,
+       state.acknowledged_at, state.expires_at,
+       state.deleted_at, state.updated_at
+FROM mail_messages
+LEFT JOIN mail_message_states ...
+WHERE team, agent, message_key"]
+    R -->|row found| M["Materialize record
+deserialize envelope_json
+apply_loaded_state
+rebuild MailStoreMessageRecord"]
+    R -->|no row| O0["Output
+record: None"]
+    M --> O1["Output
+record: Some(record)"]
+    R --> ER["Read failed
+Mailbox lock timeout
+Mailbox read failed"]
+    M --> EM["Materialization failed
+Validation failed"]
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,O0,O1 happy;
+    class ER,EM error;
+    class I,R,M neutral;

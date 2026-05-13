@@ -1,0 +1,42 @@
+%% title: `Save Message`
+%% summary: SQLite boundary method `MailStore::upsert_message`.
+%% commentary: This SQL-boundary path stores immutable content in `mail_messages`, lets the store stamp internal ingest timing, strips mutable fields out of the stored envelope, and writes the unified mutable projection into `mail_message_states`.
+%% read_tables: mail_messages
+%% write_tables: mail_messages, mail_message_states
+%% notes: reads before write: 0..2 | writes: 2 | transactions: 1
+%% sets: query
+flowchart TD
+    A["<b>Save Message</b><br/>MailStore::upsert_message"]
+    A --> I["Input
+team
+agent
+message_key
+envelope"]
+    I --> V["Validate request and invariants
+message_key has valid prefix?
+envelope size ok?
+if parent_message_id exists:
+  does mail_messages already contain a different successor?
+if message_id exists:
+  does mail_messages already assign that message_id to a different message?"]
+    V -->|ok| T["Transaction (1)
+INSERT mail_messages ... DO NOTHING
+UPSERT mail_message_states ..."]
+    T --> O["Output
+record
+inserted: true | false"]
+    V --> EV["Validation or lookup failed
+Validation failed
+Mailbox lock timeout
+Mailbox read failed"]
+    T --> ET["Transaction failed
+Mailbox lock timeout
+Mailbox write failed"]
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,O happy;
+    class EV,ET error;
+    class I,V,T neutral;

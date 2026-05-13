@@ -1,0 +1,15 @@
+%% title: `atm doctor`
+%% summary: Health and diagnostic flow.
+%% commentary: This diagnostic flow should report config, runtime, and optional store-health failures clearly without mutating mailbox state.
+%% sets: cli
+flowchart TD
+    A[atm doctor request] --> B[Daemon doctor handler]
+    B --> C1[Read config and team state]
+    C1 -->|config error| E1[ConfigFailed]
+    C1 --> C2[Read daemon runtime health and singleton state]
+    C2 -->|runtime error| E2[DaemonUnavailable or RuntimeDegraded]
+    C2 --> C3["Optional SQL health snapshot
+store open
+schema and lock checks"]
+    C3 -->|store error| E3[MailboxReadFailed]
+    C3 --> O1[Return doctor report]

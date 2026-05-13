@@ -75,7 +75,7 @@ code_references:
 ```
 
 Context:
-- Phase Q drift showed that letting CLI reach daemon internals or SQLite
+- Earlier SQLite/daemon drift showed that letting CLI reach daemon internals or SQLite
   adapters made architecture violations easy and review expensive.
 
 Decision:

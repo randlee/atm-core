@@ -229,9 +229,9 @@ mod tests {
         InboxExport, InboxExportReexportMessageRequest, InboxIngress,
         InboxIngressIdentityFingerprintRequest, InboxIngressImportRequest, NotificationSink,
     };
-    use atm_core::protocol::NotificationEvent;
+    use atm_core::protocol::{NotificationEvent, NotificationKind};
     use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::schema::{AtmMessageId, LegacyMessageId, MessageEnvelope};
+    use atm_core::schema::{AtmMessageId, MessageEnvelope};
     use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, IsoTimestamp};
     use std::sync::Arc;
@@ -247,7 +247,7 @@ mod tests {
         sink.start().expect("start");
         boundary
             .deliver(NotificationEvent {
-                kind: "delivery".to_string(),
+                kind: NotificationKind::Delivery,
                 detail: "boundary-only".to_string(),
                 team: None,
                 agent: None,
@@ -319,7 +319,7 @@ mod tests {
             imported.text,
             format!(
                 "atm read --message-id {}",
-                message.atm_message_id().expect("atm message id")
+                message.message_id.expect("message id")
             )
         );
 
@@ -394,17 +394,7 @@ mod tests {
     }
 
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {
-        let atm_message_id = AtmMessageId::new();
-        let message_id = LegacyMessageId::from_atm_message_id(atm_message_id);
-        let mut atm = serde_json::Map::new();
-        atm.insert(
-            "messageId".to_string(),
-            serde_json::Value::String(atm_message_id.to_string()),
-        );
-        let mut metadata = serde_json::Map::new();
-        metadata.insert("atm".to_string(), serde_json::Value::Object(atm));
-        let mut extra = serde_json::Map::new();
-        extra.insert("metadata".to_string(), serde_json::Value::Object(metadata));
+        let message_id = AtmMessageId::new();
 
         MessageEnvelope {
             from: from.parse::<AgentName>().expect("agent"),
@@ -419,9 +409,9 @@ mod tests {
             acknowledges_message_id: None,
             parent_message_id: None,
             thread_mode: None,
-            stale_at: None,
+            expires_at: None,
             task_id: None,
-            extra,
+            extra: serde_json::Map::new(),
         }
     }
 }
