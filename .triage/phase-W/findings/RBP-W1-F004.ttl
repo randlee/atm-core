@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W1-F004>
+  a triage:Finding ;
+  triage:findingId "RBP-W1-F004" ;
+  triage:title "No operator recovery hints in spawn_shutdown_step / complete_shutdown_step" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs:114 — spawn_shutdown_step / complete_shutdown_step swallow step errors and panics with only tracing::warn! and no recovery hints. Add operator-facing recovery hint to the warn! message." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W1-F004/pW-s1-emit-fallback/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W1-F004/pW-s1-emit-fallback/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W1-F004/integrate-phase-W/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W1-F004/integrate-phase-W/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s1-emit-fallback/17bcf24b7229cc06a98756b49375c2d464344275> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/8f627947bf1d6d15f46a8f8ab044c95b13d78e62> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/8f627947bf1d6d15f46a8f8ab044c95b13d78e62> .
+
+<urn:atm:triage:occurrence/RBP-W1-F004/pW-s1-emit-fallback/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 114 ;
+  triage:snippet "step().unwrap_or_else(|error| { tracing::warn!(%error, step = label, \"daemon shutdown finalizer step failed\"); });" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "17bcf24b7229cc06a98756b49375c2d464344275" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1-emit-fallback/17bcf24b7229cc06a98756b49375c2d464344275> .
+
+<urn:atm:triage:occurrence/RBP-W1-F004/pW-s1-emit-fallback/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 123 ;
+  triage:snippet "tracing::warn!(step = label, \"daemon shutdown finalizer step panicked before reporting completion\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "17bcf24b7229cc06a98756b49375c2d464344275" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1-emit-fallback/17bcf24b7229cc06a98756b49375c2d464344275> .
+
+<urn:atm:triage:occurrence/RBP-W1-F004/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 114 ;
+  triage:snippet "step().unwrap_or_else(|error| { tracing::warn!(%error, step = label, \"daemon shutdown finalizer step failed\"); });" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8f627947bf1d6d15f46a8f8ab044c95b13d78e62" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8f627947bf1d6d15f46a8f8ab044c95b13d78e62> .
+
+<urn:atm:triage:occurrence/RBP-W1-F004/integrate-phase-W/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 123 ;
+  triage:snippet "tracing::warn!(step = label, \"daemon shutdown finalizer step panicked before reporting completion\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8f627947bf1d6d15f46a8f8ab044c95b13d78e62" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8f627947bf1d6d15f46a8f8ab044c95b13d78e62> .
+
+<urn:atm:triage:worktree/pW-s1-emit-fallback/17bcf24b7229cc06a98756b49375c2d464344275>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s1-emit-fallback" ;
+  triage:headSha "17bcf24b7229cc06a98756b49375c2d464344275" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/8f627947bf1d6d15f46a8f8ab044c95b13d78e62>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "8f627947bf1d6d15f46a8f8ab044c95b13d78e62" ;
+  triage:orderIndex 2 .

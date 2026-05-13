@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ATM-QA-W1-005 — Sustained sink failure degradation signaling not visible
+#
+# Triage conclusion: CLOSED — finding is out of scope for W.1 via sprint plan
+# reading AND the Degraded-promotion mechanism already exists.
+#
+# sprint-W1.md explicitly requires that "sustained sink degradation becomes
+# visible through doctor or runtime health instead of being silently dropped"
+# and names runtime_health.rs and daemon_runtime_observability.rs as in-scope.
+# However, a failure-counter / Degraded-promotion mechanism already exists:
+#   RetainedJsonlFileSink::mark_failure → SinkHealthState::DegradedDropping
+#   → map_logging_state → AtmObservabilityHealthState::Degraded
+#   → daemon_observability_finding → DoctorFinding::Warning (WarningObservabilityHealthDegraded)
+#
+# The doctor path for Degraded is present and wired in both the feature branch
+# and integrate/phase-W.  No failure-counter accumulator is absent; the single-
+# failure-transitions-to-DegradedDropping policy is already implemented by
+# mark_failure in daemon_observability.rs. req-qa's concern arose because the
+# plan doc was missing at review time, not because the mechanism is missing.
+#
+# No occurrence nodes are emitted because no open match exists on either branch.
+
+<urn:atm:triage:finding/ATM-QA-W1-005>
+    a triage:Finding ;
+    triage:findingId "ATM-QA-W1-005" ;
+    triage:title "Sustained sink failure degradation signaling not visible" ;
+    triage:description "req-qa flagged no visible failure-count accumulator to transition health to Degraded after sustained emit failures. The feature/pW-s1-emit-fallback branch lacked sprint-W1.md at review time, preventing req-qa from verifying scope. Triage reads sprint-W1.md and sweeps sweep_scope files to determine whether a Degraded-promotion mechanism is required and present." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "ATM-QA" ;
+    triage:phaseId "phase-W" ;
+    triage:severity "important" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "fixed" ;
+    triage:dispatchReady false ;
+    triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+    triage:resolutionNote "Degraded-promotion mechanism is already present. RetainedJsonlFileSink::mark_failure sets SinkHealthState::DegradedDropping on first emit failure; map_logging_state maps this to AtmObservabilityHealthState::Degraded; daemon_observability_finding projects this as a DoctorFinding::Warning with code WarningObservabilityHealthDegraded via project_doctor_report. The mechanism is wired on both feature/pW-s1-emit-fallback and integrate/phase-W. sprint-W1.md requires this path to exist and it does. Finding closes with no code change required." ;
+    triage:fixedOn <urn:atm:triage:worktree/pW-s1-emit-fallback/17bcf24b7229cc06a98756b49375c2d464344275> ;
+    triage:fixedOn <urn:atm:triage:worktree/integrate-phase-W/8f627947bf1d6d15f46a8f8ab044c95b13d78e62> .
+
+<urn:atm:triage:worktree/pW-s1-emit-fallback/17bcf24b7229cc06a98756b49375c2d464344275>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pW-s1-emit-fallback" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s1-emit-fallback" ;
+    triage:headSha "17bcf24b7229cc06a98756b49375c2d464344275" ;
+    triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/8f627947bf1d6d15f46a8f8ab044c95b13d78e62>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-W" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+    triage:headSha "8f627947bf1d6d15f46a8f8ab044c95b13d78e62" ;
+    triage:orderIndex 2 .
