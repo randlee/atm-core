@@ -57,6 +57,17 @@ Dependency note:
 - observability is explicitly bottom-of-stack
 - daemon subsystems depend on the injected observability trait, never the
   reverse
+- the observability trait is object-safe; `dyn DaemonObservability` must be a
+  valid, unrestricted target shape for the final design
+- the observability trait sealing decision is documented; it is either sealed
+  by default or explicitly left open with rationale
+- the daemon lifecycle typestate decision is documented; if lifecycle states do
+  not use typestate, the rationale must say why `Starting` / `Serving` /
+  `Stopping` remain runtime-only and how `LaunchGateGuard` aligns with that
+  choice
+- the event model uses typed representations for semantic identifiers;
+  `subsystem`, `message_id`, and `task_id` must not be left as raw `String`
+  fields in the final design
 - `team`, `agent`, `sender`, `recipient`, `message_id`, and `task_id` are
   documented as per-event fields when relevant
 - the final subsystem/event model is clear enough to implement without central

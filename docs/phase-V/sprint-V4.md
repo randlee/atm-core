@@ -75,6 +75,8 @@ Concrete targets:
   or both
 - required recovery text is specific and actionable rather than generic
 - the resulting rule set is documented for future daemon and client work
+- the recovery text rule set is committed as a persistent reference file rather
+  than living only in the sprint doc
 - the sprint plan names the concrete daemon-client and daemon source files that
   own the prioritized daemon-unavailable, socket-connect, daemon-start, and
   local-IPC runtime failure paths
