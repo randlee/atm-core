@@ -9,11 +9,6 @@ use std::io::Write;
 
 use crate::{ADVISORY_STREAM_READ_DEADLINE, SAME_HOST_REQUEST_DEADLINE};
 
-#[path = "../../shared/daemon_bootstrap.rs"]
-mod daemon_bootstrap;
-
-pub(crate) use daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
-
 #[derive(Debug)]
 pub(crate) struct GraftLocalIpcClientTransport {
     endpoint: DaemonLocalIpcEndpoint,
@@ -42,6 +37,8 @@ impl GraftLocalIpcClientTransport {
         })
     }
 
+    /// This function performs blocking IPC I/O. Callers in async contexts must
+    /// wrap this in `tokio::task::spawn_blocking`.
     pub(crate) fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         let mut stream = self.try_connect()?;
         stream
@@ -121,6 +118,8 @@ impl GraftLocalIpcClientTransport {
             AtmError::daemon_unavailable("failed to flush graft advisory-stream request frame")
                 .with_source(source)
         })?;
+        // The live advisory stream is read-only after the registration
+        // handshake, so the write timeout is cleared before the receive loop.
         stream.set_send_timeout(None).map_err(|source| {
             AtmError::daemon_unavailable(
                 "failed to clear graft advisory-stream write timeout after request publish",

@@ -8,6 +8,7 @@ version = "1.2.0"
 dependencies = [
  "agent-team-mail-core",
  "anyhow",
+ "atm-daemon-bootstrap",
  "atm-daemon-client",
  "chrono",
  "clap",
@@ -127,6 +128,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-daemon-bootstrap"
+version = "1.2.0"
+dependencies = [
+ "agent-team-mail-core",
+ "atm-daemon-client",
+]
+
+[[package]]
 name = "atm-daemon-client"
 version = "1.2.0"
 dependencies = [
@@ -139,6 +148,7 @@ name = "atm-graft"
 version = "1.2.0"
 dependencies = [
  "agent-team-mail-core",
+ "atm-daemon-bootstrap",
  "atm-daemon-client",
  "interprocess",
  "serde_json",

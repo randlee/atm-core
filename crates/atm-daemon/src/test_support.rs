@@ -86,9 +86,15 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
     endpoint_path: &std::path::Path,
     ready_rx: std::sync::mpsc::Receiver<()>,
 ) -> LocalSocketStream {
-    ready_rx
-        .recv_timeout(std::time::Duration::from_secs(10))
-        .expect("daemon local ipc ready signal");
+    match ready_rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        Ok(()) => {}
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            panic!("timed out waiting for daemon local ipc ready signal")
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            panic!("daemon local ipc ready signal sender dropped before readiness")
+        }
+    }
     let ipc_name =
         atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name");
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
@@ -102,7 +108,7 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
                 last_error = Some(error);
                 // The ready signal is the structural synchronization point; this retry only
                 // covers the residual OS socket publication race after readiness.
-                std::thread::yield_now();
+                std::thread::sleep(std::time::Duration::from_millis(1));
             }
         }
     }

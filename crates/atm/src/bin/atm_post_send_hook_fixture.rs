@@ -34,7 +34,7 @@ fn main() -> ExitCode {
                     "payload": parsed_payload,
                     "args": extra_args,
                 }))
-                .unwrap_or_default(),
+                .expect("json!() macro output is always serializable"),
             );
             ExitCode::SUCCESS
         }
