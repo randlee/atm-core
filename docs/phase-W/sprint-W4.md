@@ -1,9 +1,9 @@
 ---
 id: W.4
 title: Peer Replay Recovery Text
-status: planned
-branch: TBD
-worktree: TBD
+status: complete
+branch: feature/pW-s4-peer-replay-recovery
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s4-peer-replay-recovery
 ---
 
 # Sprint W.4 — Peer Replay Recovery Text
@@ -148,8 +148,9 @@ CLI / doctor split:
 - cross-daemon consumers must receive the same ATM error code and aligned
   recovery intent for the same remote-delivery / replay-persistence failure
   class
-- `atm doctor` should remain able to explain replay-store configuration and
-  retained pending replay state if that information is already available
+- `DaemonRequestDispatcher::project_doctor_report` should remain able to
+  explain replay-store configuration and retained pending replay state when
+  that information is already available
 - this sprint is primarily a regression-closure check on uncovered recovery
   branches, not a redesign of how send failure is reported
 

@@ -414,6 +414,9 @@ impl PeerClientTransport {
                     error: AtmError::daemon_unavailable(format!(
                         "failed to connect to remote daemon peer at {endpoint}"
                     ))
+                    .with_recovery(
+                        "Confirm the remote daemon is reachable at the configured peer endpoint, then retry. If the remote daemon is intentionally offline, let durable replay resume the handoff after it recovers.",
+                    )
                     .with_source(source),
                 })
             })?;
@@ -425,6 +428,9 @@ impl PeerClientTransport {
                     error: AtmError::daemon_unavailable(
                         "failed to apply remote peer read deadline",
                     )
+                    .with_recovery(
+                        "Restart atm-daemon and retry after the peer socket can accept bounded read deadlines again.",
+                    )
                     .with_source(source),
                 })
             })?;
@@ -435,6 +441,9 @@ impl PeerClientTransport {
                     kind: AttemptFailureKind::Retryable,
                     error: AtmError::daemon_unavailable(
                         "failed to apply remote peer write deadline",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon and retry after the peer socket can accept bounded write deadlines again.",
                     )
                     .with_source(source),
                 })
@@ -489,6 +498,9 @@ impl PeerClientTransport {
                         kind: AttemptFailureKind::NonRetryable,
                         error: AtmError::daemon_unavailable(
                             "failed to decode remote peer response frame",
+                        )
+                        .with_recovery(
+                            "Align the peer daemon builds so both sides speak the same ATM daemon protocol before retrying the remote delivery.",
                         )
                         .with_source(error),
                     })
@@ -656,13 +668,17 @@ fn replay_metadata_for_request(
 }
 
 fn heartbeat_message_key(request: &TeamMemberHeartbeatRequest) -> Result<MessageKey, AtmError> {
-    MessageKey::new(format!(
+    // Team/member names are already validated ATM identifiers, pid is numeric, and RFC3339
+    // timestamps are never blank, so this synthetic replay key cannot violate MessageKey's
+    // non-empty invariant.
+    Ok(MessageKey::new(format!(
         "remote-heartbeat:{}:{}:{}:{}",
         request.team.as_str(),
         request.member.as_str(),
         request.pid,
         request.observed_at.into_inner().to_rfc3339(),
     ))
+    .expect("validated heartbeat replay keys are never blank"))
 }
 
 fn jittered_backoff(base: Duration, seed: u64) -> Duration {

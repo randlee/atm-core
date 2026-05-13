@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005" ;
+  triage:title "Missing 'launch-gate timeout exhausted' trace event" ;
+  triage:description "When the launch-gate contention deadline elapses, no distinct 'launch-gate timeout exhausted' event is emitted at lib.rs:302-308." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pW-s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s2/f3c1b3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-005/pW-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 302 ;
+  triage:snippet "if Instant::now() >= deadline { let error = LaunchGateGuard::rejected_error(&self.endpoint); traceability.emit(\"daemon_auto_start\", \"error\", Some(&error)); return Err(error); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:worktree/pW-s2/f3c1b3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/fc2c8ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:orderIndex 2 .
