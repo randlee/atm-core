@@ -2,13 +2,13 @@ use crate::boundary_adapters::{
     DaemonConfigIngress, DaemonInboxExport, DaemonInboxIngress, DaemonNotificationSink,
     DaemonReconcileCoordinator, FileWatchEventSource,
 };
-use crate::daemon_runtime_observability::DaemonRuntimeObservability;
+use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{RuntimeServeHooks, SocketEndpointGuard};
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::{
-    AtmHomeDir, LocalIpcServerTransportAdapter, PeerTransportRuntime,
+    AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
     sqlite_remote_replay_store_from_path,
 };
 use atm_core::boundary::RequestDispatcher;
@@ -153,9 +153,20 @@ impl RuntimeComposition {
         replay_store_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
-        let status_cache = RuntimeStatusCache::new();
-        let notification_sink = DaemonNotificationSink::new();
-        let watch_event_source = FileWatchEventSource::new();
+        let status_cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
+            DaemonSubsystem::RuntimeStatusCache,
+            Arc::clone(&observability),
+        ));
+        let notification_sink =
+            DaemonNotificationSink::new_with_observability(SubsystemObservability::new(
+                DaemonSubsystem::NotificationRuntime,
+                Arc::clone(&observability),
+            ));
+        let watch_event_source =
+            FileWatchEventSource::new_with_observability(SubsystemObservability::new(
+                DaemonSubsystem::WatchRuntime,
+                Arc::clone(&observability),
+            ));
         let inbox_ingress = DaemonInboxIngress::new();
         let replay_store = match sqlite_remote_replay_store_from_path(replay_store_path) {
             Ok(store) => Some(store),
@@ -169,26 +180,51 @@ impl RuntimeComposition {
         };
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
-            host_ownership_adapter: HostOwnershipAdapter::new(),
+            host_ownership_adapter: HostOwnershipAdapter::new_with_observability(
+                SubsystemObservability::new(
+                    DaemonSubsystem::HostOwnership,
+                    Arc::clone(&observability),
+                ),
+            ),
             endpoint_guard: Mutex::new(None),
-            server_transport: LocalIpcServerTransportAdapter::new(),
+            server_transport: LocalIpcServerTransportAdapter::new_with_observability(
+                SubsystemObservability::new(
+                    DaemonSubsystem::LocalIpcTransport,
+                    Arc::clone(&observability),
+                ),
+                SubsystemObservability::new(
+                    DaemonSubsystem::HostOwnership,
+                    Arc::clone(&observability),
+                ),
+                SubsystemObservability::new(
+                    DaemonSubsystem::LifecycleControl,
+                    Arc::clone(&observability),
+                ),
+            ),
             request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
                 home_dir,
                 status_cache.clone(),
-                observability,
+                Arc::clone(&observability),
             )),
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
             _watch_event_source: watch_event_source.clone(),
-            _reconcile_coordinator: DaemonReconcileCoordinator::new(
+            _reconcile_coordinator: DaemonReconcileCoordinator::new_with_observability(
                 watch_event_source,
                 inbox_ingress.clone(),
                 notification_sink,
+                SubsystemObservability::new(
+                    DaemonSubsystem::ReconcileRuntime,
+                    Arc::clone(&observability),
+                ),
             ),
             _config_ingress: DaemonConfigIngress::new(),
             _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
-            peer_transport_runtime: PeerTransportRuntime::new(replay_store),
+            peer_transport_runtime: PeerTransportRuntime::new_with_observability(
+                replay_store,
+                SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
+            ),
         })
     }
 
@@ -221,7 +257,8 @@ impl RuntimeComposition {
     }
 
     fn begin_shutdown(&self) -> Result<(), AtmError> {
-        self.request_dispatcher.record_runtime_event(
+        self.request_dispatcher.record_daemon_event(
+            DaemonSubsystem::Composition,
             "shutdown_requested",
             "ok",
             "daemon shutdown requested",
@@ -239,7 +276,8 @@ impl RuntimeComposition {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        self.request_dispatcher.record_runtime_event(
+        self.request_dispatcher.record_daemon_event(
+            DaemonSubsystem::Composition,
             "start_requested",
             "ok",
             "daemon start requested",
@@ -250,7 +288,8 @@ impl RuntimeComposition {
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
-                self.request_dispatcher.record_runtime_event(
+                self.request_dispatcher.record_daemon_event(
+                    DaemonSubsystem::Composition,
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -271,7 +310,8 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
-            self.request_dispatcher.record_runtime_event(
+            self.request_dispatcher.record_daemon_event(
+                DaemonSubsystem::Composition,
                 "startup_failed",
                 "failed",
                 "daemon startup failed",
@@ -288,7 +328,8 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during runtime preparation rollback"
                     );
                 }
-                self.request_dispatcher.record_runtime_event(
+                self.request_dispatcher.record_daemon_event(
+                    DaemonSubsystem::Composition,
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -299,7 +340,8 @@ impl RuntimeComposition {
         };
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        self.request_dispatcher.record_runtime_event(
+        self.request_dispatcher.record_daemon_event(
+            DaemonSubsystem::Composition,
             "startup_completed",
             "ok",
             "daemon startup completed",
@@ -328,7 +370,8 @@ impl RuntimeComposition {
         socket_path: PathBuf,
         ready_signal: Option<std::sync::mpsc::SyncSender<()>>,
     ) -> Result<(), AtmError> {
-        self.request_dispatcher.record_runtime_event(
+        self.request_dispatcher.record_daemon_event(
+            DaemonSubsystem::Composition,
             "start_requested",
             "ok",
             "daemon start requested",
@@ -337,7 +380,8 @@ impl RuntimeComposition {
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
-                self.request_dispatcher.record_runtime_event(
+                self.request_dispatcher.record_daemon_event(
+                    DaemonSubsystem::Composition,
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -358,7 +402,8 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
-            self.request_dispatcher.record_runtime_event(
+            self.request_dispatcher.record_daemon_event(
+                DaemonSubsystem::Composition,
                 "startup_failed",
                 "failed",
                 "daemon startup failed",
@@ -378,7 +423,8 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during test runtime preparation rollback"
                     );
                 }
-                self.request_dispatcher.record_runtime_event(
+                self.request_dispatcher.record_daemon_event(
+                    DaemonSubsystem::Composition,
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -389,7 +435,8 @@ impl RuntimeComposition {
         };
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        self.request_dispatcher.record_runtime_event(
+        self.request_dispatcher.record_daemon_event(
+            DaemonSubsystem::Composition,
             "startup_completed",
             "ok",
             "daemon startup completed",
@@ -449,12 +496,14 @@ impl RuntimeComposition {
             };
         }
         match result.as_ref() {
-            Ok(()) => self.request_dispatcher.record_runtime_event(
+            Ok(()) => self.request_dispatcher.record_daemon_event(
+                DaemonSubsystem::Composition,
                 "shutdown_completed",
                 "ok",
                 "daemon shutdown completed",
             ),
-            Err(_) => self.request_dispatcher.record_runtime_event(
+            Err(_) => self.request_dispatcher.record_daemon_event(
+                DaemonSubsystem::Composition,
                 "shutdown_failed",
                 "failed",
                 "daemon shutdown failed",

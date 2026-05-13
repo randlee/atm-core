@@ -9,6 +9,8 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
+use crate::{DaemonSubsystem, SubsystemObservability};
+
 const DEFAULT_NOTIFICATION_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 const NOTIFICATION_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
@@ -28,6 +30,7 @@ struct NotificationRuntimeInner {
     wake: Condvar,
     path_factory: NotificationPathFactory,
     queue_capacity: usize,
+    observability: SubsystemObservability,
 }
 
 #[derive(Default)]
@@ -40,20 +43,33 @@ struct NotificationState {
 }
 
 impl NotificationRuntime {
+    #[allow(dead_code)]
     pub(crate) fn new() -> Self {
+        Self::new_with_observability(SubsystemObservability::disabled(
+            DaemonSubsystem::NotificationRuntime,
+        ))
+    }
+
+    pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self::new_with_path_factory(
             Arc::new(|| Ok(atm_core::home::host_runtime_dir()?.join("notifications.jsonl"))),
             DEFAULT_NOTIFICATION_QUEUE_CAPACITY,
+            observability,
         )
     }
 
-    fn new_with_path_factory(path_factory: NotificationPathFactory, queue_capacity: usize) -> Self {
+    fn new_with_path_factory(
+        path_factory: NotificationPathFactory,
+        queue_capacity: usize,
+        observability: SubsystemObservability,
+    ) -> Self {
         Self {
             inner: Arc::new(NotificationRuntimeInner {
                 state: Mutex::new(NotificationState::default()),
                 wake: Condvar::new(),
                 path_factory,
                 queue_capacity,
+                observability,
             }),
         }
     }
@@ -76,6 +92,10 @@ impl NotificationRuntime {
             .name("atm-daemon-notifier".to_string())
             .spawn(move || notification_worker_loop(inner))
             .map_err(|source| {
+                let _ = self
+                    .inner
+                    .observability
+                    .emit("start", "failed", "failed to spawn notification runtime worker");
                 AtmError::daemon_unavailable("failed to spawn notification runtime worker")
                     .with_source(source)
             })?;
@@ -92,6 +112,10 @@ impl NotificationRuntime {
             }
         };
         state.worker = Some(handle);
+        let _ = self
+            .inner
+            .observability
+            .emit("start", "ok", "notification runtime worker started");
         Ok(())
     }
 
@@ -127,9 +151,19 @@ impl NotificationRuntime {
             match result_rx.recv_timeout(NOTIFICATION_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "ok",
+                        "notification runtime worker shut down cleanly",
+                    );
                 }
                 Ok(Err(_)) => {
                     let _ = join_helper.join();
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "failed",
+                        "notification runtime worker panicked during shutdown",
+                    );
                     return Err(AtmError::daemon_unavailable(
                         "notification runtime worker panicked during shutdown",
                     )
@@ -139,6 +173,11 @@ impl NotificationRuntime {
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     drop(join_helper);
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "degraded",
+                        "notification runtime worker exceeded its shutdown deadline",
+                    );
                     tracing::warn!(
                         thread_id = ?worker_thread_id,
                         timeout_ms = NOTIFICATION_SHUTDOWN_DEADLINE.as_millis(),
@@ -154,6 +193,11 @@ impl NotificationRuntime {
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "failed",
+                        "notification runtime join helper disconnected during shutdown",
+                    );
                     tracing::warn!(
                         thread_id = ?worker_thread_id,
                         "notification runtime join helper exited before reporting shutdown status"
@@ -187,9 +231,19 @@ impl NotificationRuntime {
             ));
         }
         if let Some(message) = &state.degraded_message {
+            let _ = self.inner.observability.emit(
+                "deliver",
+                "degraded",
+                "notification runtime is degraded and rejecting delivery",
+            );
             return Err(AtmError::daemon_unavailable(message.as_str()));
         }
         if state.queue.len() >= self.inner.queue_capacity {
+            let _ = self.inner.observability.emit(
+                "deliver",
+                "rejected",
+                "notification runtime queue is full",
+            );
             return Err(AtmError::daemon_unavailable(
                 "notification runtime queue is full; delivery is backpressured",
             ));
@@ -201,7 +255,11 @@ impl NotificationRuntime {
 
     #[cfg(test)]
     pub(crate) fn new_for_test_with_path(path: PathBuf, queue_capacity: usize) -> Self {
-        Self::new_with_path_factory(Arc::new(move || Ok(path.clone())), queue_capacity)
+        Self::new_with_path_factory(
+            Arc::new(move || Ok(path.clone())),
+            queue_capacity,
+            SubsystemObservability::disabled(DaemonSubsystem::NotificationRuntime),
+        )
     }
 }
 
@@ -236,6 +294,11 @@ fn notification_worker_loop(inner: Arc<NotificationRuntimeInner>) {
                 state.degraded_message = Some(error.message);
                 state.queue.clear();
             }
+            let _ = inner.observability.emit(
+                "persist_notification",
+                "degraded",
+                "notification runtime persistence failed and the runtime entered a degraded state",
+            );
             return;
         }
     }

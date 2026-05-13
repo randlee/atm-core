@@ -30,7 +30,9 @@ use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
 use crate::AtmHomeDir;
 use crate::advisory_runtime::AdvisoryRuntime;
-use crate::daemon_runtime_observability::DaemonRuntimeObservability;
+use crate::daemon_runtime_observability::{
+    DaemonEvent, DaemonRuntimeObservability, DaemonSubsystem,
+};
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -204,22 +206,28 @@ impl DaemonRequestDispatcher {
         };
         Self {
             home_dir: home_dir.clone(),
-            observability,
+            observability: Arc::clone(&observability),
             status_cache,
             sqlite_boundary,
-            advisory_runtime: AdvisoryRuntime::new(),
+            advisory_runtime: AdvisoryRuntime::new_with_observability(
+                crate::SubsystemObservability::new(
+                    crate::DaemonSubsystem::AdvisoryRuntime,
+                    Arc::clone(&observability),
+                ),
+            ),
         }
     }
 
-    pub(crate) fn record_runtime_event(
+    pub(crate) fn record_daemon_event(
         &self,
+        subsystem: DaemonSubsystem,
         action: &'static str,
         outcome: &'static str,
         message: &'static str,
     ) {
         if let Err(error) = self
             .observability
-            .emit_runtime_event(action, outcome, message)
+            .emit_daemon_event(DaemonEvent::new(subsystem, action, outcome, message))
         {
             tracing::warn!(%error, action, outcome, "daemon runtime lifecycle emission failed");
         }
@@ -251,7 +259,8 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
                 let outcome = send_mail(request, self.observability.as_ref())?;
                 if let Err(error) = self.advisory_runtime.enqueue_nudge_for_recipient(&outcome) {
-                    self.record_runtime_event(
+                    self.record_daemon_event(
+                        DaemonSubsystem::AdvisoryRuntime,
                         "advisory_enqueue",
                         "degraded",
                         "advisory queue overflowed",

@@ -10,6 +10,7 @@ use std::{fs, fs::OpenOptions};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
+use atm_core::schema::AtmMessageId;
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort, RetainedSinkFaultMode,
@@ -24,6 +25,8 @@ use sc_observability_types::{
     Timestamp,
 };
 use serde_json::Map;
+
+use atm_daemon::{DaemonEvent, TeamScope};
 
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_DAEMON_TARGET: &str = "atm.daemon";
@@ -110,19 +113,8 @@ impl DaemonObservability {
         Self::bootstrap_at_log_dir_with_rotation(log_dir, rotation_max_bytes)
     }
 
-    pub(crate) fn emit_runtime_event(
-        &self,
-        action: &'static str,
-        outcome: &'static str,
-        message: &'static str,
-    ) -> Result<(), AtmError> {
-        let event = map_runtime_event(
-            &self.service_name,
-            &self.target_category,
-            action,
-            outcome,
-            message,
-        )?;
+    pub(crate) fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
+        let event = map_daemon_event(&self.service_name, &self.target_category, event)?;
         self.logger.emit(event).map_err(|source| {
             let code = source.diagnostic().code.as_str().to_string();
             AtmError::observability_emit(format!(
@@ -199,13 +191,8 @@ impl ObservabilityPort for DaemonObservability {
 }
 
 impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
-    fn emit_runtime_event(
-        &self,
-        action: &'static str,
-        outcome: &'static str,
-        message: &'static str,
-    ) -> Result<(), AtmError> {
-        Self::emit_runtime_event(self, action, outcome, message)
+    fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
+        Self::emit_daemon_event(self, event)
     }
 
     fn best_effort_flush_blocking(&self) -> Result<(), AtmError> {
@@ -646,12 +633,10 @@ fn map_command_event(
     })
 }
 
-fn map_runtime_event(
+fn map_daemon_event(
     service_name: &ServiceName,
     target_category: &TargetCategory,
-    action: &'static str,
-    outcome: &'static str,
-    message: &'static str,
+    event: DaemonEvent,
 ) -> Result<LogEvent, AtmError> {
     let schema_version =
         SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
@@ -661,31 +646,88 @@ fn map_runtime_event(
                 )
                 .with_source(source)
             })?;
-    let action = ActionName::new(action).map_err(|source| {
+    let action = ActionName::new(event.action).map_err(|source| {
         AtmError::observability_emit("failed to validate ATM daemon lifecycle action")
             .with_source(source)
     })?;
-    let outcome = OutcomeLabel::new(outcome).map_err(|source| {
+    let outcome = OutcomeLabel::new(event.outcome).map_err(|source| {
         AtmError::observability_emit("failed to validate ATM daemon lifecycle outcome")
             .with_source(source)
     })?;
-    let fields = Map::from_iter([(
-        "component".to_string(),
-        serde_json::Value::String("daemon_runtime".to_string()),
-    )]);
+    let request_id = event
+        .message_id
+        .as_ref()
+        .map(|value: &AtmMessageId| CorrelationId::new(value.to_string()))
+        .transpose()
+        .map_err(|source| {
+            AtmError::observability_emit("failed to validate ATM daemon request id")
+                .with_source(source)
+        })?;
+    let correlation_id = event
+        .task_id
+        .as_ref()
+        .map(|value: &atm_core::types::TaskId| CorrelationId::new(value.as_str()))
+        .transpose()
+        .map_err(|source| {
+            AtmError::observability_emit("failed to validate ATM daemon correlation id")
+                .with_source(source)
+        })?;
+    let mut fields = Map::new();
+    fields.insert(
+        "subsystem".to_string(),
+        serde_json::Value::String(event.subsystem.as_str().to_string()),
+    );
+    match &event.team {
+        TeamScope::Team(team) => {
+            fields.insert("team".to_string(), serde_json::Value::String(team.to_string()));
+        }
+        TeamScope::None => {
+            fields.insert("team_scope".to_string(), serde_json::Value::String("none".to_string()));
+        }
+    }
+    if let Some(agent) = event.agent.as_ref() {
+        fields.insert(
+            "agent".to_string(),
+            serde_json::Value::String(agent.to_string()),
+        );
+    }
+    if let Some(sender) = event.sender.as_ref() {
+        fields.insert(
+            "sender".to_string(),
+            serde_json::Value::String(sender.to_string()),
+        );
+    }
+    if let Some(recipient) = event.recipient.as_ref() {
+        fields.insert(
+            "recipient".to_string(),
+            serde_json::Value::String(recipient.to_string()),
+        );
+    }
+    if let Some(message_id) = event.message_id.as_ref() {
+        fields.insert(
+            "message_id".to_string(),
+            serde_json::Value::String(message_id.to_string()),
+        );
+    }
+    if let Some(task_id) = event.task_id.as_ref() {
+        fields.insert(
+            "task_id".to_string(),
+            serde_json::Value::String(task_id.to_string()),
+        );
+    }
 
     Ok(LogEvent {
         version: schema_version,
         timestamp: Timestamp::now_utc(),
-        level: level_for_outcome(outcome.as_str()),
+        level: level_for_outcome(event.outcome),
         service: service_name.clone(),
         target: target_category.clone(),
         action,
-        message: Some(message.to_string()),
+        message: Some(event.detail.into_owned()),
         identity: ProcessIdentity::default(),
         trace: None,
-        request_id: None,
-        correlation_id: None,
+        request_id,
+        correlation_id,
         outcome: Some(outcome),
         diagnostic: None,
         state_transition: None,
@@ -721,7 +763,7 @@ fn level_for_outcome(outcome: &str) -> Level {
         "error" | "failed" => Level::Error,
         other => {
             // No global tracing subscriber is installed in production; daemon lifecycle records
-            // route through emit_runtime_event(), so this unknown-outcome warning is intentionally silent.
+            // route through emit_daemon_event(), so this unknown-outcome warning is intentionally silent.
             tracing::warn!(
                 code = %AtmErrorCode::ObservabilityEmitFailed,
                 outcome = other,
@@ -801,6 +843,7 @@ mod tests {
     use tempfile::TempDir;
 
     use super::DaemonObservability;
+    use atm_daemon::{DaemonEvent, DaemonSubsystem, TeamScope};
 
     #[test]
     #[serial]
@@ -816,10 +859,32 @@ mod tests {
 
         let observability = DaemonObservability::bootstrap().expect("bootstrap");
         observability
-            .emit_runtime_event("start_requested", "ok", "daemon start requested")
+            .emit_daemon_event(DaemonEvent {
+                subsystem: DaemonSubsystem::Composition,
+                action: "start_requested",
+                outcome: "ok",
+                team: TeamScope::None,
+                agent: None,
+                sender: None,
+                recipient: None,
+                message_id: None,
+                task_id: None,
+                detail: "daemon start requested".into(),
+            })
             .expect("emit start");
         observability
-            .emit_runtime_event("shutdown_completed", "ok", "daemon shutdown completed")
+            .emit_daemon_event(DaemonEvent {
+                subsystem: DaemonSubsystem::Composition,
+                action: "shutdown_completed",
+                outcome: "ok",
+                team: TeamScope::None,
+                agent: None,
+                sender: None,
+                recipient: None,
+                message_id: None,
+                task_id: None,
+                detail: "daemon shutdown completed".into(),
+            })
             .expect("emit shutdown");
         observability
             .best_effort_flush_blocking()
@@ -923,7 +988,18 @@ mod tests {
             )
             .expect("bootstrap");
         observability
-            .emit_runtime_event("start_requested", "ok", "daemon start requested")
+            .emit_daemon_event(DaemonEvent {
+                subsystem: DaemonSubsystem::Composition,
+                action: "start_requested",
+                outcome: "ok",
+                team: TeamScope::None,
+                agent: None,
+                sender: None,
+                recipient: None,
+                message_id: None,
+                task_id: None,
+                detail: "daemon start requested".into(),
+            })
             .expect("emit");
 
         let active_log_path = log_dir.join("atm.log.jsonl");

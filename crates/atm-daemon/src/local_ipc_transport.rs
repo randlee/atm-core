@@ -22,6 +22,7 @@ use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener};
 use crate::shutdown_beacon::ShutdownBeacon;
+use crate::{DaemonSubsystem, SubsystemObservability};
 
 #[cfg(unix)]
 use std::fs;
@@ -142,6 +143,7 @@ pub(crate) struct PreparedRuntimeServer {
     registry: Arc<ActiveConnectionRegistry>,
     force_shutdown: Arc<AtomicBool>,
     codec: JsonAtmProtocolCodec,
+    observability: SubsystemObservability,
     // The endpoint guard must drop after the listener and connection registry have been torn
     // down so same-host endpoint unpublication never races a still-live serving resource.
     endpoint_guard: Option<SocketEndpointGuard>,
@@ -189,13 +191,30 @@ impl std::fmt::Debug for PreparedRuntimeServer {
 }
 
 impl PreparedRuntimeServer {
+    #[allow(dead_code)]
     fn bind(endpoint_path: PathBuf) -> Result<Self, AtmError> {
+        Self::bind_with_observability(
+            endpoint_path,
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            SubsystemObservability::disabled(DaemonSubsystem::HostOwnership),
+            SubsystemObservability::disabled(DaemonSubsystem::LifecycleControl),
+        )
+    }
+
+    fn bind_with_observability(
+        endpoint_path: PathBuf,
+        observability: SubsystemObservability,
+        host_ownership_observability: SubsystemObservability,
+        lifecycle_observability: SubsystemObservability,
+    ) -> Result<Self, AtmError> {
         // Install lifecycle control before singleton ownership so daemon startup never
         // claims the host-wide owner lock unless shutdown/reload hooks are ready too.
         // Reversing this order can transiently block a healthy daemon restart behind an
         // instance that failed before it could service lifecycle-control requests.
-        let lifecycle_control = LifecycleControlSourceAdapter::install()?;
-        let ownership = HostOwnershipAdapter::new().acquire()?;
+        let lifecycle_control =
+            LifecycleControlSourceAdapter::install_with_observability(lifecycle_observability)?;
+        let ownership =
+            HostOwnershipAdapter::new_with_observability(host_ownership_observability).acquire()?;
         let endpoint_preparation = prepare_local_ipc_endpoint(&endpoint_path)?;
         let listener = ListenerOptions::new()
             .name(atm_core::protocol::daemon_local_ipc_name_from_path(
@@ -219,6 +238,11 @@ impl PreparedRuntimeServer {
             endpoint_preparation = ?endpoint_preparation,
             "daemon local IPC transport limits configured"
         );
+        let _ = observability.emit(
+            "bind_listener",
+            "ok",
+            "daemon local IPC transport prepared the runtime listener",
+        );
         emit_ready_signal_if_requested()?;
         Ok(Self {
             host_ownership_guard: ownership,
@@ -234,6 +258,7 @@ impl PreparedRuntimeServer {
             registry: Arc::new(ActiveConnectionRegistry::default()),
             force_shutdown: Arc::new(AtomicBool::new(false)),
             codec: JsonAtmProtocolCodec,
+            observability,
         })
     }
 
@@ -292,6 +317,7 @@ impl PreparedRuntimeServer {
             registry,
             force_shutdown,
             codec,
+            observability,
         } = self;
         thread::scope(|scope| -> Result<(), AtmError> {
             // Each serving invocation owns its own shutdown beacon. The beacon must not survive a
@@ -399,9 +425,16 @@ impl PreparedRuntimeServer {
                 // races a partially-applied runtime view update.
                 if signals.take_reload() {
                     match reload_runtime_view() {
-                        Ok(()) => tracing::info!(
-                            "bounded lifecycle-control-triggered config/roster reload applied"
-                        ),
+                        Ok(()) => {
+                            let _ = observability.emit(
+                                "reload_runtime_view",
+                                "ok",
+                                "bounded lifecycle-control-triggered config or roster reload applied",
+                            );
+                            tracing::info!(
+                                "bounded lifecycle-control-triggered config/roster reload applied"
+                            )
+                        }
                         Err(error) => tracing::warn!(
                             error_code = %error.code,
                             error_message = %error.message,
@@ -460,9 +493,16 @@ impl PreparedRuntimeServer {
                 if signals.take_reload() {
                     drop(stream);
                     match reload_runtime_view() {
-                        Ok(()) => tracing::info!(
-                            "bounded lifecycle-control-triggered config/roster reload applied"
-                        ),
+                        Ok(()) => {
+                            let _ = observability.emit(
+                                "reload_runtime_view",
+                                "ok",
+                                "bounded lifecycle-control-triggered config or roster reload applied",
+                            );
+                            tracing::info!(
+                                "bounded lifecycle-control-triggered config/roster reload applied"
+                            )
+                        }
                         Err(error) => tracing::warn!(
                             error_code = %error.code,
                             error_message = %error.message,
@@ -655,12 +695,33 @@ impl PreparedRuntimeServer {
     }
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct LocalIpcServerTransportAdapter;
+#[derive(Debug, Clone)]
+pub(crate) struct LocalIpcServerTransportAdapter {
+    observability: SubsystemObservability,
+    host_ownership_observability: SubsystemObservability,
+    lifecycle_observability: SubsystemObservability,
+}
 
 impl LocalIpcServerTransportAdapter {
-    pub(crate) const fn new() -> Self {
-        Self
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn new() -> Self {
+        Self::new_with_observability(
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            SubsystemObservability::disabled(DaemonSubsystem::HostOwnership),
+            SubsystemObservability::disabled(DaemonSubsystem::LifecycleControl),
+        )
+    }
+
+    pub(crate) fn new_with_observability(
+        observability: SubsystemObservability,
+        host_ownership_observability: SubsystemObservability,
+        lifecycle_observability: SubsystemObservability,
+    ) -> Self {
+        Self {
+            observability,
+            host_ownership_observability,
+            lifecycle_observability,
+        }
     }
 
     pub(crate) fn prepare_runtime(&self) -> Result<PreparedRuntimeServer, AtmError> {
@@ -672,7 +733,12 @@ impl LocalIpcServerTransportAdapter {
         &self,
         endpoint_path: PathBuf,
     ) -> Result<PreparedRuntimeServer, AtmError> {
-        PreparedRuntimeServer::bind(endpoint_path)
+        PreparedRuntimeServer::bind_with_observability(
+            endpoint_path,
+            self.observability.clone(),
+            self.host_ownership_observability.clone(),
+            self.lifecycle_observability.clone(),
+        )
     }
 }
 

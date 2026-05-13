@@ -5,6 +5,8 @@ use std::time::Duration;
 use atm_core::error::AtmError;
 use signal_hook::SigId;
 
+use crate::{DaemonSubsystem, SubsystemObservability};
+
 const LIFECYCLE_WORKER_JOIN_DEADLINE: Duration = Duration::from_secs(5);
 
 // Installation takes this global slot only after the outer install lock so concurrent daemon
@@ -24,6 +26,7 @@ pub(crate) struct LifecycleControlSourceAdapter {
     reload: Arc<AtomicBool>,
     #[cfg_attr(windows, allow(dead_code))]
     state_change: Arc<LifecycleStateChange>,
+    observability: SubsystemObservability,
 }
 
 #[derive(Debug)]
@@ -124,6 +127,14 @@ impl LifecycleStateChange {
 
 impl LifecycleControlSourceAdapter {
     pub(crate) fn install() -> Result<Self, AtmError> {
+        Self::install_with_observability(SubsystemObservability::disabled(
+            DaemonSubsystem::LifecycleControl,
+        ))
+    }
+
+    pub(crate) fn install_with_observability(
+        observability: SubsystemObservability,
+    ) -> Result<Self, AtmError> {
         let _guard = INSTALL_LOCK
             .lock()
             .map_err(|_| {
@@ -162,10 +173,16 @@ impl LifecycleControlSourceAdapter {
                 &shared.state_change,
             )?);
         }
+        let _ = observability.emit(
+            "install_hooks",
+            "ok",
+            "daemon lifecycle-control hooks are installed",
+        );
         Ok(Self {
             terminate: Arc::clone(&shared.terminate),
             reload: Arc::clone(&shared.reload),
             state_change: Arc::clone(&shared.state_change),
+            observability,
         })
     }
 
@@ -176,6 +193,7 @@ impl LifecycleControlSourceAdapter {
             terminate: Arc::new(AtomicBool::new(false)),
             reload: Arc::new(AtomicBool::new(false)),
             state_change,
+            observability: SubsystemObservability::disabled(DaemonSubsystem::LifecycleControl),
         }
     }
 
@@ -259,10 +277,20 @@ impl LifecycleControlSourceAdapter {
         match result_rx.recv_timeout(LIFECYCLE_WORKER_JOIN_DEADLINE) {
             Ok(Ok(())) => {
                 let _ = join_helper.join();
+                let _ = self.observability.emit(
+                    "shutdown_worker",
+                    "ok",
+                    "daemon lifecycle-control worker shut down cleanly",
+                );
                 Ok(())
             }
             Ok(Err(_)) => {
                 let _ = join_helper.join();
+                let _ = self.observability.emit(
+                    "shutdown_worker",
+                    "failed",
+                    "daemon lifecycle-control worker panicked during shutdown",
+                );
                 Err(AtmError::daemon_unavailable(
                     "daemon lifecycle wake worker panicked during runtime teardown",
                 )
@@ -272,6 +300,11 @@ impl LifecycleControlSourceAdapter {
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 let _ = join_helper.join();
+                let _ = self.observability.emit(
+                    "shutdown_worker",
+                    "degraded",
+                    "daemon lifecycle-control worker exceeded its shutdown deadline",
+                );
                 Err(AtmError::daemon_unavailable(
                     "daemon lifecycle wake worker exceeded the bounded shutdown deadline",
                 )
@@ -281,6 +314,11 @@ impl LifecycleControlSourceAdapter {
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                 let _ = join_helper.join();
+                let _ = self.observability.emit(
+                    "shutdown_worker",
+                    "failed",
+                    "daemon lifecycle-control join coordination disconnected during shutdown",
+                );
                 Err(AtmError::daemon_unavailable(
                     "daemon lifecycle wake worker join coordination disconnected during runtime teardown",
                 )
