@@ -374,6 +374,9 @@ impl DaemonSupervisor {
                         }
                         return Ok(());
                     }
+                    if let Some(traceability) = traceability {
+                        traceability.emit("daemon_auto_start", "publish_wait_continuing", None);
+                    }
                     thread::sleep(poll_interval);
                 }
                 let error = AtmError::daemon_auto_start_failed(format!(

@@ -198,6 +198,9 @@ impl GraftClient {
         let advisory_transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
         let transport = Arc::clone(&advisory_transport) as Arc<dyn ClientTransport + Send + Sync>;
         let supervisor = DaemonSupervisor::new(endpoint, daemon_bin);
+        // GraftClient::connect() has no host-supplied observability port yet, so bootstrap
+        // traceability currently preserves typed caller-facing errors but intentionally drops the
+        // retained bootstrap event stream until a shared graft-host observability sink exists.
         let observability = NullObservability;
         let traceability = BootstrapTraceability::new(
             "graft_connect",
