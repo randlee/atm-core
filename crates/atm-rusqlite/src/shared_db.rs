@@ -1,4 +1,8 @@
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
+use crate::{
+    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
+    emit_sqlite_event_or_warn,
+};
 use atm_core::error::AtmError;
 use atm_core::home;
 #[cfg(test)]
@@ -149,12 +153,14 @@ impl SharedDbTarget {
 pub(crate) struct SharedDb {
     target: Arc<SharedDbTarget>,
     writer: Arc<SqliteWriter>,
+    observability: Arc<dyn SqliteObservability>,
     // Reader handles are budgeted across cloned SharedDb adapters, so the
     // counter must be shared and synchronized independently of any one
     // connection instance.
     connection_count: Arc<Mutex<usize>>,
 }
 
+#[derive(Debug)]
 struct SharedDbConnectionGuard {
     // Connection release can happen on whichever clone drops the guard, so the
     // shared counter uses the same synchronized ownership model as SharedDb.
@@ -180,22 +186,31 @@ impl SharedDb {
     }
 
     #[cfg(test)]
-    pub(crate) fn open_in_memory() -> Result<Self, AtmError> {
+    pub(crate) fn open_in_memory_with_observability(
+        observability: Arc<dyn SqliteObservability>,
+    ) -> Result<Self, AtmError> {
         let target = Arc::new(SharedDbTarget::InMemory {
             uri: format!(
                 "file:atm-rusqlite-{}?mode=memory&cache=shared",
                 NEXT_IN_MEMORY_DB_ID.fetch_add(1, Ordering::Relaxed)
             ),
         });
-        let writer = Arc::new(SqliteWriter::start(Arc::clone(&target))?);
+        let writer = Arc::new(SqliteWriter::start(
+            Arc::clone(&target),
+            Arc::clone(&observability),
+        )?);
         Ok(Self {
             target,
             writer,
+            observability,
             connection_count: Arc::new(Mutex::new(0)),
         })
     }
 
-    pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> {
+    pub(crate) fn open_with_observability(
+        path: impl AsRef<Path>,
+        observability: Arc<dyn SqliteObservability>,
+    ) -> Result<Self, AtmError> {
         let path = path.as_ref().to_path_buf();
         if let Some(parent) = path.parent() {
             // Accepted risk: durable-state root creation happens during boundary
@@ -213,7 +228,10 @@ impl SharedDb {
         }
 
         let target = Arc::new(SharedDbTarget::Path(path));
-        let writer = Arc::new(SqliteWriter::start(Arc::clone(&target))?);
+        let writer = Arc::new(SqliteWriter::start(
+            Arc::clone(&target),
+            Arc::clone(&observability),
+        )?);
         tracing::debug!(
             writer_handles = 1,
             reader_budget = MAX_SQLITE_READER_CONNECTIONS,
@@ -223,6 +241,7 @@ impl SharedDb {
         Ok(Self {
             target,
             writer,
+            observability,
             connection_count: Arc::new(Mutex::new(0)),
         })
     }
@@ -329,7 +348,7 @@ impl SharedDb {
             return Ok(());
         }
 
-        self.with_connection(|connection| {
+        let result = self.with_connection(|connection| {
             connection
                 .query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(()))
                 .map_err(|error| {
@@ -339,7 +358,20 @@ impl SharedDb {
                         error,
                     )
                 })
-        })
+        });
+        match &result {
+            Ok(()) => {}
+            Err(error) => emit_sqlite_event_or_warn(
+                self.observability.as_ref(),
+                SqliteObservabilityEvent::new(
+                    "wal_checkpoint",
+                    SqliteObservabilityOutcome::Failed,
+                    error.message.clone(),
+                    Some(error.code),
+                ),
+            ),
+        }
+        result
     }
 
     fn acquire_connection_guard(&self) -> Result<SharedDbConnectionGuard, AtmError> {
@@ -355,12 +387,22 @@ impl SharedDb {
                 current = %connection_count,
                 "sqlite reader connection budget exhausted"
             );
-            return Err(AtmError::daemon_unavailable(format!(
+            let error = AtmError::daemon_unavailable(format!(
                 "sqlite connection budget exceeded (max {MAX_SQLITE_READER_CONNECTIONS} concurrent reader handles with one permanent writer handle)"
             ))
             .with_recovery(
                 "Reduce concurrent daemon SQLite work or raise the documented SQLite handle budget before retrying.",
-            ));
+            );
+            emit_sqlite_event_or_warn(
+                self.observability.as_ref(),
+                SqliteObservabilityEvent::new(
+                    "reader_budget_acquire",
+                    SqliteObservabilityOutcome::Failed,
+                    error.message.clone(),
+                    Some(error.code),
+                ),
+            );
+            return Err(error);
         }
         *connection_count += 1;
         Ok(SharedDbConnectionGuard {
@@ -640,5 +682,52 @@ pub(crate) fn sqlite_thread_mode(
         Some(atm_core::schema::ThreadMode::AddDetails) => Some("add-details"),
         Some(atm_core::schema::ThreadMode::Supersede) => Some("supersede"),
         None => None,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
+    use atm_core::error_codes::AtmErrorCode;
+    use std::sync::Mutex;
+
+    #[derive(Default)]
+    struct RecordingSqliteObservability {
+        events: Mutex<Vec<SqliteObservabilityEvent>>,
+    }
+
+    impl SqliteObservability for RecordingSqliteObservability {
+        fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError> {
+            self.events
+                .lock()
+                .expect("sqlite observability events")
+                .push(event);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn acquire_connection_guard_emits_budget_exhaustion() {
+        let observability = Arc::new(RecordingSqliteObservability::default());
+        let db = SharedDb::open_in_memory_with_observability(observability.clone()).expect("db");
+
+        let first = db.acquire_connection_guard().expect("first guard");
+        let second = db.acquire_connection_guard().expect("second guard");
+        let third = db.acquire_connection_guard().expect("third guard");
+        let error = db
+            .acquire_connection_guard()
+            .expect_err("budget exhaustion should fail");
+
+        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        let events = observability
+            .events
+            .lock()
+            .expect("sqlite observability events");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].action, "reader_budget_acquire");
+        assert_eq!(events[0].outcome, SqliteObservabilityOutcome::Failed);
+
+        drop((first, second, third));
     }
 }

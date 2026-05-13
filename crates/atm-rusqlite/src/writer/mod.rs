@@ -6,6 +6,10 @@ pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 use crate::shared_db::{
     SharedDbTarget, SqliteConnection, ensure_schema, open_connection_for_target, sqlite_error,
 };
+use crate::{
+    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
+    emit_sqlite_event_or_warn,
+};
 use atm_core::error::{AtmError, AtmErrorCode};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
@@ -32,18 +36,33 @@ struct QueuedWrite {
     reply: ReplyTx,
 }
 
-#[derive(Debug)]
 pub(crate) struct SqliteWriter {
     sender: Option<SyncSender<WriterMessage>>,
     worker: Option<JoinHandle<()>>,
+    observability: Arc<dyn SqliteObservability>,
     write_op_deadline: Duration,
     shutdown_join_deadline: Duration,
 }
 
+impl std::fmt::Debug for SqliteWriter {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("SqliteWriter")
+            .field("sender_present", &self.sender.is_some())
+            .field("worker_present", &self.worker.is_some())
+            .field("write_op_deadline", &self.write_op_deadline)
+            .field("shutdown_join_deadline", &self.shutdown_join_deadline)
+            .finish()
+    }
+}
+
 impl SqliteWriter {
-    pub(crate) fn start(target: Arc<SharedDbTarget>) -> Result<Self, AtmError> {
+    pub(crate) fn start(
+        target: Arc<SharedDbTarget>,
+        observability: Arc<dyn SqliteObservability>,
+    ) -> Result<Self, AtmError> {
         Self::start_with_settings(
             target,
+            observability,
             CHANNEL_CAPACITY,
             WRITE_OP_DEADLINE,
             WRITER_SHUTDOWN_JOIN_DEADLINE,
@@ -52,6 +71,7 @@ impl SqliteWriter {
 
     fn start_with_settings(
         target: Arc<SharedDbTarget>,
+        observability: Arc<dyn SqliteObservability>,
         channel_capacity: usize,
         write_op_deadline: Duration,
         shutdown_join_deadline: Duration,
@@ -60,9 +80,10 @@ impl SqliteWriter {
         ensure_schema(&mut connection, target.as_ref())?;
 
         let (sender, receiver) = mpsc::sync_channel(channel_capacity);
+        let worker_observability = Arc::clone(&observability);
         let worker = thread::Builder::new()
             .name("atm-sqlite-writer".to_string())
-            .spawn(move || writer_loop(target, connection, receiver))
+            .spawn(move || writer_loop(target, connection, receiver, worker_observability))
             .map_err(|error| {
                 AtmError::daemon_unavailable(format!(
                     "failed to start sqlite writer thread: {error}"
@@ -75,6 +96,7 @@ impl SqliteWriter {
         Ok(Self {
             sender: Some(sender),
             worker: Some(worker),
+            observability,
             write_op_deadline,
             shutdown_join_deadline,
         })
@@ -97,13 +119,23 @@ impl SqliteWriter {
                 Ok(()) => break,
                 Err(TrySendError::Full(returned)) => {
                     if Instant::now() >= deadline {
-                        return Err(AtmError::daemon_unavailable(format!(
+                        let error = AtmError::daemon_unavailable(format!(
                     "sqlite writer submission queue did not accept a write within {:?}",
                     self.write_op_deadline
                 ))
                 .with_recovery(
                     "Retry after the sqlite writer backlog drains or restart the ATM daemon if the writer lane is stalled.",
-                ));
+                );
+                        emit_sqlite_event_or_warn(
+                            self.observability.as_ref(),
+                            SqliteObservabilityEvent::new(
+                                "writer_submit",
+                                SqliteObservabilityOutcome::Timeout,
+                                error.message.clone(),
+                                Some(error.code),
+                            ),
+                        );
+                        return Err(error);
                     }
                     message = returned;
                     thread::park_timeout(SUBMIT_RETRY_INTERVAL);
@@ -118,34 +150,58 @@ impl SqliteWriter {
                 }
             }
         }
-        reply_rx
-            .recv_timeout(self.write_op_deadline)
-            .map_err(|error| match error {
-                RecvTimeoutError::Timeout => AtmError::daemon_unavailable(format!(
-                    "sqlite writer reply did not arrive within {:?}",
-                    self.write_op_deadline
-                ))
-                .with_recovery(
-                    "Retry after the sqlite writer backlog drains or restart the ATM daemon if the writer lane is stalled.",
-                ),
+        reply_rx.recv_timeout(self.write_op_deadline).map_err(|error| {
+            match error {
+                RecvTimeoutError::Timeout => {
+                    let error = AtmError::daemon_unavailable(format!(
+                        "sqlite writer reply did not arrive within {:?}",
+                        self.write_op_deadline
+                    ))
+                    .with_recovery(
+                        "Retry after the sqlite writer backlog drains or restart the ATM daemon if the writer lane is stalled.",
+                    );
+                    emit_sqlite_event_or_warn(
+                        self.observability.as_ref(),
+                        SqliteObservabilityEvent::new(
+                            "writer_reply",
+                            SqliteObservabilityOutcome::Timeout,
+                            error.message.clone(),
+                            Some(error.code),
+                        ),
+                    );
+                    error
+                }
                 RecvTimeoutError::Disconnected => {
-                    AtmError::daemon_unavailable("sqlite writer reply channel closed")
+                    let error = AtmError::daemon_unavailable("sqlite writer reply channel closed")
                         .with_recovery(
                             "Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.",
-                        )
+                        );
+                    emit_sqlite_event_or_warn(
+                        self.observability.as_ref(),
+                        SqliteObservabilityEvent::new(
+                            "writer_reply",
+                            SqliteObservabilityOutcome::Failed,
+                            error.message.clone(),
+                            Some(error.code),
+                        ),
+                    );
+                    error
                 }
-            })?
+            }
+        })?
     }
 
     #[cfg(test)]
     fn start_for_test(
         target: Arc<SharedDbTarget>,
+        observability: Arc<dyn SqliteObservability>,
         channel_capacity: usize,
         write_op_deadline: Duration,
         shutdown_join_deadline: Duration,
     ) -> Result<Self, AtmError> {
         Self::start_with_settings(
             target,
+            observability,
             channel_capacity,
             write_op_deadline,
             shutdown_join_deadline,
@@ -222,17 +278,35 @@ fn drain_submit_replies(receiver: &Receiver<WriterMessage>) {
     }
 }
 
-fn checkpoint_writer_connection(target: &SharedDbTarget, connection: &mut SqliteConnection) {
+fn checkpoint_writer_connection(
+    target: &SharedDbTarget,
+    connection: &mut SqliteConnection,
+    observability: &dyn SqliteObservability,
+) {
     #[cfg(test)]
     if matches!(target, SharedDbTarget::InMemory { .. }) {
         return;
     }
 
     if let Err(error) = connection.query_row("PRAGMA wal_checkpoint(PASSIVE);", [], |_row| Ok(())) {
+        let error = sqlite_error(
+            target,
+            "sqlite writer final wal checkpoint failed after draining the write lane",
+            error,
+        );
         tracing::warn!(
             path = %target.display(),
             %error,
             "sqlite writer final wal checkpoint failed after draining the write lane"
+        );
+        emit_sqlite_event_or_warn(
+            observability,
+            SqliteObservabilityEvent::new(
+                "writer_shutdown_checkpoint",
+                SqliteObservabilityOutcome::Failed,
+                error.message.clone(),
+                Some(error.code),
+            ),
         );
     }
 }
@@ -241,6 +315,7 @@ fn writer_loop(
     target: Arc<SharedDbTarget>,
     mut connection: SqliteConnection,
     receiver: Receiver<WriterMessage>,
+    observability: Arc<dyn SqliteObservability>,
 ) {
     let mut cache = stmt_cache::WriterStatementCache;
     let mut shutting_down = false;
@@ -254,7 +329,7 @@ fn writer_loop(
         }
         process_batch(&target, &mut connection, &mut cache, batch);
     }
-    checkpoint_writer_connection(target.as_ref(), &mut connection);
+    checkpoint_writer_connection(target.as_ref(), &mut connection, observability.as_ref());
 }
 
 fn receive_first_message(
@@ -459,6 +534,7 @@ mod tests {
     use atm_core::schema::{AtmMessageId, MessageEnvelope};
     use atm_core::types::{AgentName, IsoTimestamp, TaskId, TeamName};
     use rusqlite::OptionalExtension;
+    use std::sync::Mutex;
     use std::sync::atomic::{AtomicU64, Ordering};
     use std::sync::mpsc;
     use std::thread;
@@ -523,6 +599,21 @@ mod tests {
         }
     }
 
+    #[derive(Default)]
+    struct RecordingSqliteObservability {
+        events: Mutex<Vec<crate::SqliteObservabilityEvent>>,
+    }
+
+    impl crate::SqliteObservability for RecordingSqliteObservability {
+        fn emit(&self, event: crate::SqliteObservabilityEvent) -> Result<(), AtmError> {
+            self.events
+                .lock()
+                .expect("sqlite observability events")
+                .push(event);
+            Ok(())
+        }
+    }
+
     fn upsert_message_request(index: usize) -> WriteOp {
         WriteOp::UpsertMessage(Box::new(boundary::MailStoreUpsertMessageRequest {
             record: boundary::MailStoreMessageRecord {
@@ -550,6 +641,7 @@ mod tests {
         let target = in_memory_target();
         let writer = SqliteWriter::start_for_test(
             Arc::clone(&target),
+            Arc::new(crate::NullSqliteObservability),
             CHANNEL_CAPACITY,
             Duration::from_millis(50),
             Duration::from_secs(1),
@@ -585,6 +677,7 @@ mod tests {
         let target = in_memory_target();
         let writer = SqliteWriter::start_for_test(
             Arc::clone(&target),
+            Arc::new(crate::NullSqliteObservability),
             CHANNEL_CAPACITY,
             Duration::from_millis(50),
             Duration::from_secs(1),
@@ -646,6 +739,7 @@ mod tests {
     fn submit_times_out_when_the_queue_is_full() {
         let (sender, receiver) = mpsc::sync_channel(1);
         let (reply_tx, _reply_rx) = mpsc::sync_channel(1);
+        let observability = Arc::new(RecordingSqliteObservability::default());
         sender
             .send(WriterMessage::Submit {
                 op: Box::new(upsert_message_request(0)),
@@ -656,6 +750,7 @@ mod tests {
         let writer = SqliteWriter {
             sender: Some(sender),
             worker: None,
+            observability: observability.clone(),
             write_op_deadline: Duration::from_millis(10),
             shutdown_join_deadline: Duration::from_millis(10),
         };
@@ -667,6 +762,16 @@ mod tests {
             error
                 .message
                 .contains("sqlite writer submission queue did not accept a write")
+        );
+        let events = observability
+            .events
+            .lock()
+            .expect("sqlite observability events");
+        assert_eq!(events.len(), 1);
+        assert_eq!(events[0].action, "writer_submit");
+        assert_eq!(
+            events[0].outcome,
+            crate::SqliteObservabilityOutcome::Timeout
         );
 
         drop(receiver);
@@ -833,6 +938,7 @@ mod tests {
         let target = in_memory_target();
         let writer = SqliteWriter::start_for_test(
             Arc::clone(&target),
+            Arc::new(crate::NullSqliteObservability),
             CHANNEL_CAPACITY,
             Duration::from_millis(50),
             Duration::from_secs(1),
@@ -875,6 +981,7 @@ mod tests {
         let target = in_memory_target();
         let writer = SqliteWriter::start_for_test(
             Arc::clone(&target),
+            Arc::new(crate::NullSqliteObservability),
             CHANNEL_CAPACITY,
             Duration::from_millis(50),
             Duration::from_secs(1),

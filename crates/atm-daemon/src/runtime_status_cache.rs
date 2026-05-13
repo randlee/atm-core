@@ -36,6 +36,7 @@ pub(crate) struct RuntimeStatusCacheState {
     // torn doctor snapshots.
     members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
     sqlite_ready: bool,
+    sqlite_detail: Option<String>,
     degraded_ingest: bool,
 }
 
@@ -56,6 +57,7 @@ impl RuntimeStatusCache {
             state: Arc::new(Mutex::new(RuntimeStatusCacheState {
                 members: HashMap::new(),
                 sqlite_ready: true,
+                sqlite_detail: None,
                 degraded_ingest: false,
             })),
         }
@@ -106,6 +108,7 @@ impl RuntimeStatusCache {
             },
         );
         cache.sqlite_ready = true;
+        cache.sqlite_detail = None;
         Ok(TeamMemberHeartbeatResponse {
             team: request.team.clone(),
             member: request.member.clone(),
@@ -169,6 +172,20 @@ impl RuntimeStatusCache {
             Err(_) => {
                 tracing::error!(
                     "runtime status cache lock poisoned while marking sqlite unavailable"
+                );
+            }
+        }
+    }
+
+    pub(crate) fn mark_sqlite_unavailable_with_detail(&self, detail: impl Into<String>) {
+        match self.state.lock() {
+            Ok(mut cache) => {
+                cache.sqlite_ready = false;
+                cache.sqlite_detail = Some(detail.into());
+            }
+            Err(_) => {
+                tracing::error!(
+                    "runtime status cache lock poisoned while recording sqlite degradation detail"
                 );
             }
         }
@@ -296,10 +313,10 @@ fn finish_runtime_snapshot(
     };
     let mut details = Vec::new();
     if !cache.sqlite_ready {
-        details.push(
+        details.push(cache.sqlite_detail.clone().unwrap_or_else(|| {
             "sqlite-backed roster truth is unavailable; runtime cache updates are degraded"
-                .to_string(),
-        );
+                .to_string()
+        }));
     }
     if cache.degraded_ingest {
         details.push("runtime heartbeat ingest is degraded".to_string());
@@ -332,6 +349,7 @@ pub(crate) fn build_runtime_status_cache_state(
     let mut next_state = RuntimeStatusCacheState {
         members: HashMap::new(),
         sqlite_ready: true,
+        sqlite_detail: None,
         degraded_ingest: current_state.is_some_and(|state| state.degraded_ingest),
     };
     let teams_root = home_dir.join(".claude").join("teams");

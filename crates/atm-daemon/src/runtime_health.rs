@@ -26,7 +26,7 @@ use atm_core::{
     read::read_mail,
     send::send_mail,
 };
-use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
+use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary_with_observability};
 
 use crate::AtmHomeDir;
 use crate::advisory_runtime::AdvisoryRuntime;
@@ -35,6 +35,7 @@ use crate::daemon_runtime_observability::DaemonRuntimeObservability;
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
+use crate::sqlite_observability::DaemonSqliteObservability;
 
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
@@ -185,7 +186,13 @@ impl DaemonRequestDispatcher {
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Self {
         let home_dir = home_dir.into_inner();
-        let sqlite_boundary = match assemble_default_boundary() {
+        let sqlite_observability = Arc::new(DaemonSqliteObservability::new(
+            Arc::clone(&observability),
+            status_cache.clone(),
+        ));
+        let sqlite_boundary = match assemble_default_boundary_with_observability(
+            sqlite_observability,
+        ) {
             Ok(boundary) => {
                 if let Err(error) =
                     build_runtime_status_cache_state(None, &home_dir, boundary.roster_store())

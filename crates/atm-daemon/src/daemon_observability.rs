@@ -132,6 +132,32 @@ impl DaemonObservability {
         })
     }
 
+    pub(crate) fn emit_subsystem_event(
+        &self,
+        subsystem: &'static str,
+        action: &'static str,
+        outcome: &'static str,
+        message: &str,
+        error_code: Option<AtmErrorCode>,
+    ) -> Result<(), AtmError> {
+        let event = map_subsystem_event(
+            &self.service_name,
+            &self.target_category,
+            subsystem,
+            action,
+            outcome,
+            message,
+            error_code,
+        )?;
+        self.logger.emit(event).map_err(|source| {
+            let code = source.diagnostic().code.as_str().to_string();
+            AtmError::observability_emit(format!(
+                "shared daemon observability emit failed ({code})"
+            ))
+            .with_source(source)
+        })
+    }
+
     pub(crate) fn best_effort_flush_blocking(&self) -> Result<(), AtmError> {
         self.logger.flush().map_err(|source| {
             AtmError::observability_health(
@@ -206,6 +232,17 @@ impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
         message: &'static str,
     ) -> Result<(), AtmError> {
         Self::emit_runtime_event(self, action, outcome, message)
+    }
+
+    fn emit_subsystem_event(
+        &self,
+        subsystem: &'static str,
+        action: &'static str,
+        outcome: &'static str,
+        message: &str,
+        error_code: Option<AtmErrorCode>,
+    ) -> Result<(), AtmError> {
+        Self::emit_subsystem_event(self, subsystem, action, outcome, message, error_code)
     }
 
     fn best_effort_flush_blocking(&self) -> Result<(), AtmError> {
@@ -673,6 +710,61 @@ fn map_runtime_event(
         "component".to_string(),
         serde_json::Value::String("daemon_runtime".to_string()),
     )]);
+
+    Ok(LogEvent {
+        version: schema_version,
+        timestamp: Timestamp::now_utc(),
+        level: level_for_outcome(outcome.as_str()),
+        service: service_name.clone(),
+        target: target_category.clone(),
+        action,
+        message: Some(message.to_string()),
+        identity: ProcessIdentity::default(),
+        trace: None,
+        request_id: None,
+        correlation_id: None,
+        outcome: Some(outcome),
+        diagnostic: None,
+        state_transition: None,
+        fields,
+    })
+}
+
+fn map_subsystem_event(
+    service_name: &ServiceName,
+    target_category: &TargetCategory,
+    subsystem: &'static str,
+    action: &'static str,
+    outcome: &'static str,
+    message: &str,
+    error_code: Option<AtmErrorCode>,
+) -> Result<LogEvent, AtmError> {
+    let schema_version =
+        SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
+            .map_err(|source| {
+                AtmError::observability_emit(
+                    "failed to validate ATM daemon subsystem-event schema version",
+                )
+                .with_source(source)
+            })?;
+    let action = ActionName::new(action).map_err(|source| {
+        AtmError::observability_emit("failed to validate ATM daemon subsystem action")
+            .with_source(source)
+    })?;
+    let outcome = OutcomeLabel::new(outcome).map_err(|source| {
+        AtmError::observability_emit("failed to validate ATM daemon subsystem outcome")
+            .with_source(source)
+    })?;
+    let mut fields = Map::from_iter([(
+        "component".to_string(),
+        serde_json::Value::String(subsystem.to_string()),
+    )]);
+    if let Some(error_code) = error_code {
+        fields.insert(
+            "error_code".to_string(),
+            serde_json::Value::String(error_code.to_string()),
+        );
+    }
 
     Ok(LogEvent {
         version: schema_version,

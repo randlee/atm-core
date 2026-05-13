@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use super::DaemonRequestDispatcher;
 use crate::runtime_status_cache::{RuntimeStatusCache, build_runtime_status_cache_state};
+use crate::sqlite_observability::DaemonSqliteObservability;
 
 impl DaemonRequestDispatcher {
     pub(crate) fn new_for_test(
@@ -10,7 +11,20 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         roster_db_path: PathBuf,
     ) -> Self {
-        let sqlite_boundary = match atm_rusqlite::assemble_boundary(&roster_db_path) {
+        let observability = Arc::new(
+            crate::test_observability::TestDaemonObservability::new(
+                atm_core::home::host_log_dir_from_home(&home_dir),
+            )
+            .expect("daemon test observability"),
+        );
+        let sqlite_observability = Arc::new(DaemonSqliteObservability::new(
+            observability.clone(),
+            status_cache.clone(),
+        ));
+        let sqlite_boundary = match atm_rusqlite::assemble_boundary_with_observability(
+            &roster_db_path,
+            sqlite_observability,
+        ) {
             Ok(boundary) => {
                 if let Err(error) =
                     build_runtime_status_cache_state(None, &home_dir, boundary.roster_store())
@@ -34,12 +48,6 @@ impl DaemonRequestDispatcher {
                 None
             }
         };
-        let observability = Arc::new(
-            crate::test_observability::TestDaemonObservability::new(
-                atm_core::home::host_log_dir_from_home(&home_dir),
-            )
-            .expect("daemon test observability"),
-        );
         Self {
             home_dir: home_dir.clone(),
             observability,

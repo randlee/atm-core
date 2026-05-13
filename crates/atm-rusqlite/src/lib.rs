@@ -9,7 +9,7 @@ mod writer;
 
 use atm_core::LocalServiceRuntime;
 use atm_core::boundary;
-use atm_core::error::AtmError;
+use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::RequestEnvelope;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use mailbox_metadata::{query_mailbox_metadata_counts, query_mailbox_metadata_rows};
@@ -22,6 +22,75 @@ use std::path::Path;
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqliteObservabilityOutcome {
+    Ok,
+    Failed,
+    Timeout,
+}
+
+impl SqliteObservabilityOutcome {
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Ok => "ok",
+            Self::Failed => "failed",
+            Self::Timeout => "timeout",
+        }
+    }
+}
+
+#[derive(Debug, Clone)]
+pub struct SqliteObservabilityEvent {
+    pub action: &'static str,
+    pub outcome: SqliteObservabilityOutcome,
+    pub message: String,
+    pub error_code: Option<AtmErrorCode>,
+}
+
+impl SqliteObservabilityEvent {
+    pub fn new(
+        action: &'static str,
+        outcome: SqliteObservabilityOutcome,
+        message: impl Into<String>,
+        error_code: Option<AtmErrorCode>,
+    ) -> Self {
+        Self {
+            action,
+            outcome,
+            message: message.into(),
+            error_code,
+        }
+    }
+}
+
+pub trait SqliteObservability: Send + Sync {
+    fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError>;
+}
+
+#[derive(Debug, Default)]
+pub struct NullSqliteObservability;
+
+impl SqliteObservability for NullSqliteObservability {
+    fn emit(&self, _event: SqliteObservabilityEvent) -> Result<(), AtmError> {
+        Ok(())
+    }
+}
+
+pub(crate) fn emit_sqlite_event_or_warn(
+    observability: &dyn SqliteObservability,
+    event: SqliteObservabilityEvent,
+) {
+    if let Err(error) = observability.emit(event.clone()) {
+        tracing::warn!(
+            %error,
+            action = event.action,
+            outcome = event.outcome.as_str(),
+            error_code = ?event.error_code,
+            "sqlite subsystem observability emission failed"
+        );
+    }
+}
 
 #[derive(Debug)]
 struct SqliteRosterStore {
@@ -61,7 +130,14 @@ pub struct SqliteBoundaryAssembly {
 
 impl SqliteBoundaryAssembly {
     pub fn new(path: impl AsRef<Path>) -> Result<Self, AtmError> {
-        let db = Arc::new(SharedDb::open(path)?);
+        Self::new_with_observability(path, Arc::new(NullSqliteObservability))
+    }
+
+    pub fn new_with_observability(
+        path: impl AsRef<Path>,
+        observability: Arc<dyn SqliteObservability>,
+    ) -> Result<Self, AtmError> {
+        let db = Arc::new(SharedDb::open_with_observability(path, observability)?);
         Ok(Self {
             mail_store: Arc::new(SqliteMailStore::new(db.clone())),
             task_store: Arc::new(SqliteTaskStore::new(db.clone())),
@@ -70,12 +146,20 @@ impl SqliteBoundaryAssembly {
     }
 
     pub fn default_production() -> Result<Self, AtmError> {
-        Self::new(SharedDb::production_path()?)
+        Self::default_production_with_observability(Arc::new(NullSqliteObservability))
+    }
+
+    pub fn default_production_with_observability(
+        observability: Arc<dyn SqliteObservability>,
+    ) -> Result<Self, AtmError> {
+        Self::new_with_observability(SharedDb::production_path()?, observability)
     }
 
     #[cfg(test)]
     fn in_memory_for_test() -> Result<Self, AtmError> {
-        let db = Arc::new(SharedDb::open_in_memory()?);
+        let db = Arc::new(SharedDb::open_in_memory_with_observability(Arc::new(
+            NullSqliteObservability,
+        ))?);
         Ok(Self {
             mail_store: Arc::new(SqliteMailStore::new(db.clone())),
             task_store: Arc::new(SqliteTaskStore::new(db.clone())),
@@ -237,8 +321,21 @@ pub fn assemble_boundary(path: impl AsRef<Path>) -> Result<SqliteBoundaryAssembl
     SqliteBoundaryAssembly::new(path)
 }
 
+pub fn assemble_boundary_with_observability(
+    path: impl AsRef<Path>,
+    observability: Arc<dyn SqliteObservability>,
+) -> Result<SqliteBoundaryAssembly, AtmError> {
+    SqliteBoundaryAssembly::new_with_observability(path, observability)
+}
+
 pub fn assemble_default_boundary() -> Result<SqliteBoundaryAssembly, AtmError> {
     SqliteBoundaryAssembly::default_production()
+}
+
+pub fn assemble_default_boundary_with_observability(
+    observability: Arc<dyn SqliteObservability>,
+) -> Result<SqliteBoundaryAssembly, AtmError> {
+    SqliteBoundaryAssembly::default_production_with_observability(observability)
 }
 
 pub fn default_local_runtime() -> Result<LocalServiceRuntime, AtmError> {

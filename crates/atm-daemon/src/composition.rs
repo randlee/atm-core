@@ -7,9 +7,10 @@ use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{RuntimeServeHooks, SocketEndpointGuard};
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
+use crate::sqlite_observability::DaemonSqliteObservability;
 use crate::{
     AtmHomeDir, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    sqlite_remote_replay_store_from_path,
+    sqlite_remote_replay_store_from_path_with_observability,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::error::AtmError;
@@ -154,10 +155,17 @@ impl RuntimeComposition {
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
         let status_cache = RuntimeStatusCache::new();
+        let sqlite_observability = Arc::new(DaemonSqliteObservability::new(
+            Arc::clone(&observability),
+            status_cache.clone(),
+        ));
         let notification_sink = DaemonNotificationSink::new();
         let watch_event_source = FileWatchEventSource::new();
         let inbox_ingress = DaemonInboxIngress::new();
-        let replay_store = match sqlite_remote_replay_store_from_path(replay_store_path) {
+        let replay_store = match sqlite_remote_replay_store_from_path_with_observability(
+            replay_store_path,
+            sqlite_observability,
+        ) {
             Ok(store) => Some(store),
             Err(error) => {
                 tracing::warn!(
