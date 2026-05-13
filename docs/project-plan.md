@@ -2983,6 +2983,17 @@ Goal:
 - close the carried-forward daemon observability boundary issue and remove the
   remaining central event-reconstruction shape
 
+Execution shape:
+- `V.1` and `V.2` may proceed in parallel because both are lint-framework
+  extensions on top of the same general enforcement direction
+- `V.3` should follow `V.1` so recovery-context checks can reuse the newly
+  established runtime-hardening enforcement lane where possible
+- `V.4` may run once the final sprint-close hygiene contract is agreed, but it
+  should land before later daemon cleanup sprints start handing work to QA
+- `V.5` depends on the `V.1` / `V.2` lint-framework groundwork for any hard
+  observability boundary enforcement, even though the subsystem-owned event
+  model itself is a distinct cleanup line
+
 Planned sprint sequence:
 
 ### V.1 — Runtime Test Isolation Lint

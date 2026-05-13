@@ -15,6 +15,11 @@ estimated_scope: M
 Make daemon-unavailable and adjacent runtime failure paths consistently carry
 actionable recovery guidance.
 
+Carry-forward reference:
+- `RBP-PU-001` disconnected-arm handling and `RBP-PU-002` `join_helper`
+  recovery/context findings from the Phase U end-gate are concrete source
+  evidence for the checklist or lint this sprint must establish.
+
 ## Scope
 
 - define the daemon/client/runtime error classes that must carry explicit

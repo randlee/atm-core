@@ -20,6 +20,19 @@ Expected execution shape:
 - `V.5` closes the carried-forward daemon observability boundary issue and must
   delete or streamline obsolete mapping code rather than preserve it
 
+Rationale:
+- `FTQ-U9-001` global static `Mutex` test seam recurrence closes under `V.1`
+  runtime test isolation lint
+- workspace `#[path]` boundary enforcement closes under `V.2` so production
+  cross-crate path imports stop depending on manual review
+- `QA-U-002` missing exponential backoff and related daemon-unavailable
+  recovery guidance closes under `V.3` recovery context hardening
+- sprint-close hygiene drift evidenced by `ATM-QA-PU-001` through
+  `ATM-QA-PU-005` closes under `V.4`
+- `RULE-002` / `ARCH-PU-002` around
+  `crates/atm-daemon/src/daemon_observability.rs` `emit_runtime_event`
+  closes under `V.5`
+
 Authoritative sprint sequence:
 - `docs/phase-V/sprint-V1.md`
 - `docs/phase-V/sprint-V2.md`

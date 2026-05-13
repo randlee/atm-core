@@ -15,6 +15,10 @@ estimated_scope: S
 Turn recurring sprint-close bookkeeping misses into an explicit gate before QA
 handoff.
 
+Carry-forward reference:
+- `ATM-QA-PU-001` through `ATM-QA-PU-005` are the motivating Phase U findings
+  for this sprint-close gate.
+
 ## Scope
 
 - require sprint doc status updates before QA handoff

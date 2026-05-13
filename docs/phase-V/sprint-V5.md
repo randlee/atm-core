@@ -18,6 +18,17 @@ boundary with subsystem-owned event semantics.
 Carry-forward reference:
 - `docs/phase-U/sprint-U11.md` records the `ARCH-PU-002` deferral note that
   this sprint is required to close.
+- `RULE-002` is the concrete carried-forward violation:
+  `crates/atm-daemon/src/daemon_observability.rs` `emit_runtime_event`
+  centralizes daemon event reconstruction in the bottom-of-stack observability
+  layer.
+
+Dependency note:
+- the observability ownership redesign is independent of `V.1` runtime test
+  isolation and `V.2` workspace `#[path]` enforcement at the design level, but
+  `V.5` should build on the lint framework they establish when adding any hard
+  boundary rule that prevents observability from importing subsystem-owned
+  types.
 
 ## Scope
 
