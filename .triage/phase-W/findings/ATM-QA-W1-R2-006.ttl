@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W1-R2-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W1-R2-006" ;
+  triage:title "local_ipc_transport.rs:532 new warn! missing subsystem/action/deadline_ms fields" ;
+  triage:description "New tracing::warn!(%error, path=%endpoint_path.display(), ...) at crates/atm-daemon/src/local_ipc_transport.rs 'failed to schedule delayed listener wake during shutdown probe' — missing subsystem, action, and deadline_ms structured fields. Fix: add subsystem='local_ipc_transport', action='shutdown_probe_wake', deadline_ms=TERMINATE_REJECTION_GRACE_DEADLINE.as_millis()." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W1-R2-006/pW-s1-emit-fallback/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W1-R2-006/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s1-emit-fallback/c21ec05> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/b2298e3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s1-emit-fallback/c21ec05> .
+
+<urn:atm:triage:occurrence/ATM-QA-W1-R2-006/pW-s1-emit-fallback/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 532 ;
+  triage:snippet "tracing::warn!(%error, path = %endpoint_path.display(), \"failed to schedule delayed listener wake during shutdown probe\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1-emit-fallback/c21ec05> .
+
+<urn:atm:triage:occurrence/ATM-QA-W1-R2-006/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 486 ;
+  triage:snippet "tracing::warn!(%error, path = %endpoint_path.display(), \"failed to schedule delayed listener wake during shutdown probe\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "b2298e3" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/b2298e3> .
+
+<urn:atm:triage:worktree/pW-s1-emit-fallback/c21ec05>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/b2298e3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "b2298e3" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,33 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W1-R2-007>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W1-R2-007" ;
+  triage:title "warn_emit_fallback accepts &'static str instead of DaemonSubsystem" ;
+  triage:description "daemon_runtime_observability.rs warn_emit_fallback signature used subsystem: &'static str. Sprint AC requires typed subsystem/action identifiers from a shared enum/newtype. Fix: change parameter to accept DaemonSubsystem (or &DaemonSubsystem) and call .as_str() internally. Update call sites in runtime_health.rs from literal 'daemon_runtime' to DaemonSubsystem::RuntimeHealth.as_str()." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-13T20:04:40Z"^^xsd:dateTime ;
+  triage:fixedOn <urn:atm:triage:worktree/pW-s1-emit-fallback/c21ec05> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s1-emit-fallback/17bcf24> .
+
+<urn:atm:triage:worktree/pW-s1-emit-fallback/c21ec05>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/b2298e3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "b2298e3" ;
+  triage:orderIndex 2 .
