@@ -31,7 +31,7 @@ use std::fs;
 use std::thread;
 
 use request_worker::handle_connection;
-#[cfg(test)]
+#[cfg(all(test, unix))]
 use request_worker::install_injected_accept_error_for_test;
 
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
@@ -197,7 +197,7 @@ impl std::fmt::Debug for PreparedRuntimeServer {
 }
 
 impl PreparedRuntimeServer {
-    #[cfg(test)]
+    #[cfg(all(test, unix))]
     fn bind(endpoint_path: PathBuf) -> Result<Self, AtmError> {
         Self::bind_with_observability(
             endpoint_path,
