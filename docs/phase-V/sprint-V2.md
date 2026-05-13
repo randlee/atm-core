@@ -4,9 +4,9 @@
 plan_type: sprint_plan
 phase: V
 sprint: "V.2"
-status: planned
-worktree: TBD
-branch: TBD
+status: implemented
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s2-observability-migration
+branch: feature/pV-s2-observability-migration
 estimated_scope: M
 ```
 
@@ -79,3 +79,23 @@ Dependency note:
 - final deletion of all old wrappers and mapping helpers
 - unrelated daemon runtime cleanup
 - broader recovery hardening outside observability
+
+## Implementation Record
+
+- `VQ2-001` closed: `RuntimeHealthMonitor` now owns its own
+  `SubsystemObservability` and emits runtime-health events directly instead of
+  routing them through central daemon event reconstruction.
+- `VQ2-002` closed: `RuntimeComposition` now owns its own
+  `SubsystemObservability` and emits composition lifecycle events directly
+  instead of delegating through a shared daemon mapper.
+- `V.2` materially advanced the `V.3` deletion set by removing the central
+  delegation helpers rather than renaming them:
+  - `map_command_event`
+  - `map_daemon_event`
+  - `map_runtime_event`
+  - `emit_runtime_event`
+  - `record_daemon_event`
+- No additional callsite migration was required for those deleted helpers
+  beyond the direct subsystem-observability injection work, because they were
+  internal delegation points inside the old central daemon observability path
+  rather than independent product-facing APIs.

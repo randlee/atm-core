@@ -100,3 +100,17 @@ Dependency note:
   - `docs/atm-daemon/architecture.md`
   - `docs/atm-daemon/boundaries.md`
   - `docs/architecture.md`
+
+## Implementation Record
+
+- `V.1` established `SubsystemObservability` as the daemon-side observability
+  boundary shape that later sprints would inject into the owning runtime
+  subsystems.
+- `V.1` documented the scoping decision that `SubsystemObservability`
+  injection is daemon-only work; `atm-daemon-client` stays outside that
+  subsystem boundary and therefore does not consume the daemon-side injection
+  surface.
+- `V.1` fixed the shared wiring approach for `V.2` and `V.3`: subsystem-owned
+  event construction moves into daemon runtime modules while
+  `daemon_observability.rs` is reduced to thin sink/bootstrap responsibilities
+  and cleanup/deletion follows in the later sprint.
