@@ -60,6 +60,8 @@ worktree: TBD
   never completed
 - the sprint keeps SQLite observability bottom-of-stack and does not re-create
   daemon-side semantic reconstruction
+- `W.1` is a hard gate for any new SQLite observability emit site; `W.3`
+  cannot land SQLite event emission against a silent-discard daemon sink policy
 - the sprint preserves one shared doctor/reporting pipeline rather than
   introducing SQLite-specific output plumbing
 - the sprint verifies that shared ATM errors returned from SQLite-backed paths
@@ -70,6 +72,8 @@ worktree: TBD
 - the sprint identifies the shared ATM error/protocol/doctor functions that
   become the single source of truth for each touched SQLite-backed failure
   class
+- the sprint reconciles its local code inventory with the shared Phase `W`
+  ATM code inventory in `docs/plan-phase-W.md`
 - req-qa can verify from the sprint doc that SQLite-backed parity and protocol
   envelope preservation are explicitly owned here
 
@@ -91,6 +95,9 @@ Primary SQLite insertion points:
   - protocol error-envelope preservation for SQLite-backed failures
 
 Current path inventory:
+- `crates/atm-core/src/error.rs`
+  - shared daemon-unavailable / lifecycle-wedge constructors and stable code
+    bindings reused by SQLite-backed command/runtime failures
 - `crates/atm-rusqlite/src/writer/mod.rs`
   - `SqliteWriter::start_with_settings(...)`
     - writer thread spawn failure
@@ -125,6 +132,9 @@ Current path inventory:
 - `crates/atm-core/src/protocol.rs`
   - `ProtocolErrorEnvelope::{from_error,into_atm_error}` parity for non-CLI
     consumers
+- `crates/atm-daemon/src/peer_transport.rs`
+  - remote peer request/response propagation where SQLite-backed daemon errors
+    must survive protocol-envelope projection unchanged
 
 Daemon-side integration points:
 - `crates/atm-daemon/src/composition.rs`
@@ -151,6 +161,38 @@ Current main CLI baseline to preserve:
   code and recovery intent when surfaced to CLI, graft host, or peer-triggered
   consumers
 
+Concrete duplicate-path collapse sites to resolve:
+- `crates/atm-rusqlite/src/writer/mod.rs::submit(...)`
+  and `crates/atm-rusqlite/src/shared_db.rs::acquire_connection_guard(...)`
+  both mint queue/budget `DaemonUnavailable` failures with SQLite-specific
+  wording; where the recovery contract is the same, they should converge on one
+  shared ATM error/recovery helper instead of duplicated strings
+- `crates/atm-rusqlite/src/shared_db.rs::checkpoint_wal(...)`
+  and `crates/atm-daemon/src/runtime_health.rs::finalize_shutdown(...)`
+  both describe shutdown-time WAL degradation; doctor/runtime-health projection
+  should be shared rather than independently narrated
+- `crates/atm-core/src/protocol.rs::ProtocolErrorEnvelope::{from_error,into_atm_error}`
+  and CLI/peer response handling must remain the single mapping path for
+  SQLite-backed ATM errors; `W.3` must not leave a second interface-specific
+  SQLite error envelope
+
+Stable ATM code inventory for this sprint:
+- sqlite writer thread spawn failure:
+  - `AtmErrorCode::DaemonUnavailable`
+- sqlite writer submission queue timeout:
+  - `AtmErrorCode::DaemonUnavailable`
+- sqlite writer reply timeout or reply channel disconnect:
+  - `AtmErrorCode::DaemonUnavailable`
+- sqlite writer shutdown / final WAL checkpoint degradation:
+  - operator-facing returned error remains `AtmErrorCode::DaemonUnavailable`
+    where the current shared path returns one; doctor/runtime health carries the
+    deeper checkpoint degradation detail
+- sqlite reader-budget exhaustion:
+  - `AtmErrorCode::DaemonUnavailable`
+- sqlite boundary assembly / replay-store assembly unavailable:
+  - `AtmErrorCode::DaemonUnavailable`
+- no new `AtmErrorKind` or `AtmErrorCode` variants are planned for `W.3`
+
 Event families required:
 - writer queue backlog / timeout
 - writer reply timeout
@@ -174,10 +216,16 @@ Doctor/CLI reporting contract:
 - `atm doctor` must expose the deeper subsystem details so an operator can tell
   whether the problem is queue saturation, reply timeout, checkpoint failure,
   or connection-budget exhaustion
+- peer-triggered daemon work must preserve the same SQLite-backed ATM code
+  through `ProtocolErrorEnvelope::{from_error,into_atm_error}` as the same
+  failure class would on same-host CLI
 
 Cross-sprint dependency:
 - if `atm-rusqlite` needs a new thin observability port, it must follow the
   Phase V bottom-of-stack rule and stay free of daemon-owned semantic types
+- if `W.4` is running in parallel, any `crates/atm-core/src/protocol.rs`
+  change here must stay limited to SQLite-backed envelope parity and be
+  merge-forwarded before either branch pushes a final head
 
 ## Out of Scope
 

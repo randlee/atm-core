@@ -3053,6 +3053,16 @@ Deferred backlog:
 Planning branch:
 - `feature/observability-findings-planning`
 
+Base branch:
+- `origin/develop`
+
+Integration branch:
+- `integrate/phase-W`
+
+Predecessor gate:
+- all Phase `V` implementation work is merged and validated on
+  `integrate/phase-V` before `integrate/phase-W` begins implementation
+
 Goal:
 - close the remaining production-readiness gaps identified after Phase V before
   implementation starts
@@ -3086,3 +3096,5 @@ Acceptance:
 - duplicate interface-specific error/reporting implementations for the same
   touched failure class are marked for consolidation rather than preservation
 - no Phase W scope item relies on an implicit discovery sprint
+- Phase `W` closes only when shared CLI / graft / peer ATM error-code parity
+  and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`

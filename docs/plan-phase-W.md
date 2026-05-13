@@ -19,6 +19,17 @@ Phase scope note:
 Planning branch:
 - `feature/observability-findings-planning`
 
+Base branch:
+- `origin/develop`
+
+Integration branch:
+- `integrate/phase-W`
+
+Predecessor gate:
+- all Phase `V` implementation branches are merged and validated on
+  `integrate/phase-V` before `integrate/phase-W` starts taking implementation
+  work
+
 Critical issue reporting contract:
 - Phase W treats the following as critical issue classes that must already be
   identified explicitly and surfaced in both operator and diagnostic channels:
@@ -73,6 +84,22 @@ Shared implementation boundary:
   - separate doctor reporting logic per participant
   - duplicate per-interface string formatting for the same failure class when a
     shared ATM error or protocol-envelope path can own it once
+
+Shared observability trait decision:
+- Phase `W` keeps `atm_core::observability::ObservabilityPort` as the one
+  shared observability boundary for CLI, daemon, graft, and doctor-facing
+  paths.
+- Dispatch model:
+  - object-safe trait
+  - `dyn ObservabilityPort` / `Arc<dyn ObservabilityPort>` style runtime
+    dispatch remains the shared model
+  - Phase `W` must not fork into generic per-subsystem logger traits
+- Sealing/open decision:
+  - keep the existing `crate::boundary::sealed::Sealed` supertrait model in
+    `atm-core`
+  - Phase `W` does not widen the implementation surface or change the sealing
+    decision
+  - any sealing redesign is out of scope and would require ADR review
 
 Interface parity matrix:
 - same-host CLI:
@@ -149,6 +176,34 @@ Critical failure ownership matrix:
     - `crates/atm-core/src/doctor/mod.rs`
     - `crates/atm-daemon/src/runtime_health.rs`
 
+Shared ATM error inventory:
+- `W.1` sink degradation uses existing ATM codes:
+  - `ATM_OBSERVABILITY_EMIT_FAILED`
+  - `ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED`
+  - `ATM_OBSERVABILITY_HEALTH_FAILED`
+- `W.2` same-host daemon bootstrap/connect uses existing ATM codes:
+  - `ATM_DAEMON_UNAVAILABLE`
+  - `ATM_DAEMON_AUTO_START_FAILED`
+  - `ATM_DAEMON_LAUNCH_GATE_REJECTED`
+  - `ATM_DAEMON_LIFECYCLE_WEDGE` when the current shared error surface already
+    routes a lifecycle wedge rather than a generic unavailable failure
+- `W.3` SQLite-backed command/runtime failures reuse existing ATM codes:
+  - `ATM_DAEMON_UNAVAILABLE` for queue, reply, WAL, budget, and assembly
+    failures that currently project through daemon/runtime availability
+  - `ATM_DAEMON_LIFECYCLE_WEDGE` only where the existing shared error path
+    already promotes the failure to a lifecycle wedge
+- `W.4` remote replay persistence uses existing ATM codes:
+  - `ATM_REMOTE_OUTCOME_UNKNOWN` for final operator-facing send failures where
+    delivery outcome cannot be proven
+  - `ATM_DAEMON_UNAVAILABLE` for lower-layer persistence prerequisites that are
+    wrapped into the final remote-outcome-unknown error
+- Phase `W` default decision:
+  - no new `AtmErrorKind` variants are planned
+  - no new `AtmErrorCode` variants are planned unless implementation proves an
+    existing shared code cannot express the failure class without ambiguity
+  - if that proof appears, the owning sprint must update this inventory and its
+    own sprint-local error table in the same change
+
 Execution shape:
 - `W.1` removes daemon-side silent `emit()` discards and defines the fallback
   rule for sink degradation
@@ -210,6 +265,12 @@ Cross-sprint dependencies:
   ordinary merge-forward discipline.
 - `W.1` does not own daemon-client tracing or CLI-side path narration; those
   same-host path gaps are owned by `W.2`.
+- if `W.3` and `W.4` run in parallel, `crates/atm-core/src/protocol.rs`
+  changes must be partitioned by failure family:
+  - `W.3` owns SQLite-backed envelope parity
+  - `W.4` owns peer replay / remote-delivery envelope parity
+  - both branches must merge-forward before push if `protocol.rs` changed on
+    the other line; no parallel fork of protocol error taxonomy is allowed
 - if audit finds any critical-failure path not assignable to `W.1` through
   `W.4`, the plan must add the missing sprint rather than leave it implicit.
 
@@ -229,6 +290,16 @@ Plan QA boundary:
   daemon only if each sprint doc clearly separates:
   - document-auditable acceptance criteria
   - implementation/runtime validation that the future sprint must run
+
+Phase closeout gate:
+- Phase `W` is not complete until:
+  - all critical failure classes above are implemented on `integrate/phase-W`
+  - shared CLI / graft / peer ATM error-code parity is revalidated
+  - `atm doctor` coverage for the touched failure classes is revalidated
+  - no duplicate interface-specific reporting path remains for the touched
+    failure classes
+  - the final Phase `W` sprint docs and `docs/project-plan.md` status reflect
+    the merged implementation state
 
 Out of scope for Phase W:
 - unrelated daemon redesign work

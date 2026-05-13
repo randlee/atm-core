@@ -53,6 +53,11 @@ worktree: TBD
 - the sprint identifies the shared ATM error/protocol/doctor functions that
   become the single source of truth for each touched replay-persistence
   failure class
+- the sprint reconciles its local code inventory with the shared Phase `W`
+  ATM code inventory in `docs/plan-phase-W.md`
+- the sprint makes the CLI / doctor split verifiable in acceptance criteria:
+  concise send failure at the command surface, deeper replay durability detail
+  through the shared doctor/runtime-health surfaces
 - req-qa can verify from the sprint doc that `W.4` is independently executable
   and does not hide an undocumented dependency on `W.2` or `W.3`
 
@@ -82,6 +87,24 @@ Current main CLI baseline to preserve:
   persisted, that guidance must stay aligned across CLI, cross-daemon
   consumers, and doctor follow-through
 
+Stable ATM code inventory for this sprint:
+- replay store missing during outcome-unknown persistence:
+  - final operator-facing ATM code remains
+    `AtmErrorCode::RemoteDeliveryOutcomeUnknown`
+  - lower-layer persistence prerequisite failure remains
+    `AtmErrorCode::DaemonUnavailable` as the wrapped source
+- peer endpoint missing during outcome-unknown persistence:
+  - final operator-facing ATM code remains
+    `AtmErrorCode::RemoteDeliveryOutcomeUnknown`
+  - lower-layer persistence prerequisite failure remains
+    `AtmErrorCode::DaemonUnavailable` as the wrapped source
+- retry-budget to expiry conversion failure during replay persistence:
+  - final operator-facing ATM code remains
+    `AtmErrorCode::RemoteDeliveryOutcomeUnknown`
+  - lower-layer persistence prerequisite failure remains
+    `AtmErrorCode::DaemonUnavailable` as the wrapped source
+- no new `AtmErrorKind` or `AtmErrorCode` variants are planned for `W.4`
+
 Targeted functions:
 - `PeerClientTransport::persist_replay_request(...)`
 - `PeerClientTransport::persist_outcome_unknown_request(...)`
@@ -92,6 +115,9 @@ Current branch-level insertion candidates:
 - retry-budget to expiry conversion failure branch
 
 Current path inventory:
+- `crates/atm-core/src/error.rs`
+  - remote-delivery-outcome-unknown and daemon-unavailable constructors/stable
+    code bindings reused by replay-persistence failures
 - `crates/atm-daemon/src/peer_transport.rs`
   - `PeerClientTransport::persist_replay_request(...)`
     - replay store missing
@@ -125,6 +151,11 @@ CLI / doctor split:
   retained pending replay state if that information is already available
 - this sprint is primarily a regression-closure check on uncovered recovery
   branches, not a redesign of how send failure is reported
+
+Cross-sprint dependency:
+- if `W.3` is running in parallel, any `crates/atm-core/src/protocol.rs`
+  change here must stay limited to peer replay / remote-delivery envelope
+  parity and be merge-forwarded before either branch pushes a final head
 
 ## Out of Scope
 

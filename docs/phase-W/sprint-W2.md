@@ -63,6 +63,14 @@ worktree: TBD
   paths onto one shared implementation
 - the sprint identifies the shared ATM error/protocol/doctor functions that
   become the single source of truth for each touched same-host failure class
+- `W.1` is a hard gate for any new same-host traceability emit site; `W.2`
+  cannot land new emit paths against a silent-discard daemon sink policy
+- the sprint reconciles its local code inventory with the shared Phase `W`
+  ATM code inventory in `docs/plan-phase-W.md`
+- the sprint documents the LaunchGateGuard ownership decision explicitly:
+  `W.2` does not introduce a new public typestate/`PhantomData` guard; it keeps
+  the existing single-owner runtime lock model and limits scope to reporting
+  parity and duplicate-path consolidation
 - req-qa can verify from the sprint doc exactly which same-host surfaces are
   in scope and that CLI-side path tracing is explicitly owned here
 
@@ -114,7 +122,31 @@ Current main CLI baseline to preserve:
   - current ATM error constructors and recovery text remain the baseline for
     daemon-unavailable and auto-start failure classes
 
+Stable ATM code inventory for this sprint:
+- `validate_daemon_path(...)`
+  - existing validation failures remain on the current validation code path; no
+    daemon-specific reclassification is planned
+- initial or repeated same-host connect miss:
+  - `AtmErrorCode::DaemonUnavailable`
+- daemon binary missing before spawn:
+  - `AtmErrorCode::DaemonUnavailable`
+- daemon spawn failure:
+  - `AtmErrorCode::DaemonAutoStartFailed`
+- publish wait exhausted after spawn:
+  - `AtmErrorCode::DaemonAutoStartFailed`
+- launch-gate remained owned until timeout:
+  - `AtmErrorCode::DaemonLaunchGateRejected`
+- launch-gate create/open/acquire I/O failure:
+  - `AtmErrorCode::DaemonUnavailable`
+- advisory-stream open / write / read / request-id mismatch failure on
+  same-host graft path:
+  - `AtmErrorCode::DaemonUnavailable`
+- no new `AtmErrorKind` or `AtmErrorCode` variants are planned for `W.2`
+
 Current path inventory:
+- `crates/atm-core/src/error.rs`
+  - daemon-unavailable / auto-start / launch-gate constructors and stable code
+    bindings used by same-host CLI and graft flows
 - `crates/atm-daemon-client/src/lib.rs`
   - `validate_daemon_path(...)`
     - empty-path validation

@@ -49,6 +49,9 @@ worktree: TBD
 - the final rule replaces silent discard with
   `if let Err(error) = ... { tracing::warn!(...) }` or a stricter approved
   policy; silent loss is forbidden
+- any `tracing::warn!(...)` fallback is daemon-local reporting about a failed
+  shared-port emit; it must not become a replacement observability pipeline or
+  bypass successful `ObservabilityPort` emission
 - the fix uses shared observability/reporting behavior rather than
   subsystem-specific custom fallback pipelines
 - the sprint defines which emit failures remain non-blocking warnings versus
@@ -57,6 +60,8 @@ worktree: TBD
 - the sprint verifies whether any ATM CLI commands already surface an adequate
   warning/failure and names the exact regressions that must be restored where
   they do not
+- the sprint reconciles its local code inventory with the shared Phase `W`
+  ATM code inventory in `docs/plan-phase-W.md`
 - the sprint names the shared runtime-health / doctor projection points that
   carry observability impairment across CLI, graft, and peer-triggered
   diagnostics
@@ -64,6 +69,12 @@ worktree: TBD
   not as an optional review target
 - req-qa can verify from the sprint doc alone that daemon-client tracing is
   intentionally owned by `W.2`, not omitted from Phase W
+- the sprint documents the shared observability trait decision explicitly:
+  object-safe `dyn ObservabilityPort` dispatch remains the model and the
+  existing sealed/open boundary is unchanged
+- fallback metadata for the 68 daemon emit sites is typed:
+  stable subsystem and action identifiers must come from a shared enum/newtype
+  set rather than ad hoc per-callsite strings
 
 ## Implementation Notes
 
@@ -124,11 +135,26 @@ Required execution shape:
 Files in scope:
 - all files listed in the inventory above
 - `crates/atm-daemon/src/daemon_observability.rs`
+  - `DaemonObservability::emit_runtime_event(...)`
+  - `impl ObservabilityPort for DaemonObservability::emit(...)`
+  - `impl ObservabilityPort for DaemonObservability::health(...)`
+  - `RetainedLogEmitter::mark_failure(...)`
 - `crates/atm-daemon/src/daemon_runtime_observability.rs`
+  - `DaemonRuntimeObservability::emit_runtime_event(...)`
 - `crates/atm-daemon/src/runtime_health.rs`
+  - `DaemonRequestDispatcher::project_doctor_report(...)`
 - `crates/atm-daemon/src/runtime_status_cache.rs`
+  - `RuntimeStatusCache::replace_state(...)`
+  - `RuntimeStatusCache::mark_sqlite_unavailable(...)`
+- `crates/atm-core/src/error.rs`
+  - observability emit / health constructors and stable code bindings
 - `crates/atm-daemon/src/tests.rs`
+  - doctor / degraded runtime projection tests covering observability health
 - `crates/atm-daemon/src/test_observability.rs`
+  - `TestDaemonObservability::append_message(...)`
+  - `impl ObservabilityPort for TestDaemonObservability::emit(...)`
+  - `impl ObservabilityPort for TestDaemonObservability::health(...)`
+  - `impl DaemonRuntimeObservability for TestDaemonObservability::emit_runtime_event(...)`
 
 Shared reporting paths that must be reused:
 - `crates/atm-daemon/src/daemon_observability.rs`
@@ -146,6 +172,13 @@ Current main baseline to preserve:
 - this sprint must verify whether any CLI-facing command currently reports
   observability impairment directly or only through doctor/runtime health, and
   must preserve that behavior while removing silent discard
+
+Stable ATM code inventory for this sprint:
+- final operator/doctor-visible sink degradation uses existing codes:
+  - `AtmErrorCode::ObservabilityEmitFailed`
+  - `AtmErrorCode::WarningObservabilityHealthDegraded`
+  - `AtmErrorCode::ObservabilityHealthFailed`
+- no new `AtmErrorKind` or `AtmErrorCode` variants are planned for `W.1`
 
 Critical issue classes covered directly by this sprint:
 - observability sink degradation
