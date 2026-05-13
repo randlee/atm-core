@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W4-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-W4-F001" ;
+  triage:title "heartbeat_message_key structurally unreachable Result" ;
+  triage:description "crates/atm-daemon/src/peer_transport.rs: heartbeat_message_key returns Result<MessageKey, AtmError> but the error arm is structurally unreachable given current call site — misleads callers about fallibility. Fix: return MessageKey directly, or document the invariant with a comment if the Result is kept for future extensibility." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W4-F001/pW-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W4-F001/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/d43ded3fa97873e8e18773bbc67dd5de465dce37> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+
+<urn:atm:triage:occurrence/RBP-W4-F001/pW-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 658 ;
+  triage:snippet "fn heartbeat_message_key(request: &TeamMemberHeartbeatRequest) -> Result<MessageKey, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+
+<urn:atm:triage:occurrence/RBP-W4-F001/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 587 ;
+  triage:snippet "fn heartbeat_message_key(request: &TeamMemberHeartbeatRequest) -> Result<MessageKey, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/d43ded3fa97873e8e18773bbc67dd5de465dce37> .
+
+<urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/d43ded3fa97873e8e18773bbc67dd5de465dce37>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
+  triage:orderIndex 2 .

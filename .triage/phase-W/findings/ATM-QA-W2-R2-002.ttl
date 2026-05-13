@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W2-R2-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W2-R2-002" ;
+  triage:title "GraftClient::connect() uses NullObservability — graft bootstrap traceability silently discarded" ;
+  triage:description "crates/atm-graft/src/lib.rs line 201: BootstrapTraceability is constructed and ensure_daemon_available_with_traceability is called correctly, but the observability sink is NullObservability which always returns Ok(()) with no output. CLI bootstrap path uses a live CliObservability sink. Sprint-W2.md AC requires same-host interface parity for daemon-unavailable/auto-start/launch-gate failure classes across CLI and atm-graft. Fix: supply a non-null observability sink, or add an explicit comment acknowledging this as an accepted limitation so doc-auditing can verify it is intentional." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "observability" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W2-R2-002/pW-s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s2/cba69c7b58de2be7950f15691016c420b46335b0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s2/cba69c7b58de2be7950f15691016c420b46335b0> .
+
+<urn:atm:triage:occurrence/ATM-QA-W2-R2-002/pW-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 201 ;
+  triage:snippet "let observability = NullObservability;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "cba69c7b58de2be7950f15691016c420b46335b0" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/cba69c7b58de2be7950f15691016c420b46335b0> .
+
+<urn:atm:triage:worktree/pW-s2/cba69c7b58de2be7950f15691016c420b46335b0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "cba69c7b58de2be7950f15691016c420b46335b0" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/90bdd47a24e2e4f9b2e3c0e3dbfa3ef38a56c0ac>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "90bdd47a24e2e4f9b2e3c0e3dbfa3ef38a56c0ac" ;
+  triage:orderIndex 2 .
