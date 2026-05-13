@@ -12,11 +12,13 @@ use atm_core::{
 };
 use std::sync::Arc;
 
+#[cfg(test)]
+use crate::DaemonSubsystem;
+use crate::SubsystemObservability;
 use crate::direct_boundaries;
 use crate::notification_runtime::NotificationRuntime;
 use crate::reconcile_runtime::ReconcileRuntime;
 use crate::watch_runtime::WatchRuntime;
-use crate::{DaemonSubsystem, SubsystemObservability};
 
 #[derive(Clone)]
 pub(crate) struct DaemonNotificationSink {
@@ -30,7 +32,7 @@ impl std::fmt::Debug for DaemonNotificationSink {
 }
 
 impl DaemonNotificationSink {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self::new_with_observability(SubsystemObservability::disabled(
             DaemonSubsystem::NotificationRuntime,
@@ -79,7 +81,7 @@ impl std::fmt::Debug for FileWatchEventSource {
 }
 
 impl FileWatchEventSource {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self::new_with_observability(SubsystemObservability::disabled(
             DaemonSubsystem::WatchRuntime,
@@ -121,7 +123,7 @@ impl std::fmt::Debug for DaemonReconcileCoordinator {
 }
 
 impl DaemonReconcileCoordinator {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn new(
         watch_event_source: FileWatchEventSource,
         inbox_ingress: DaemonInboxIngress,

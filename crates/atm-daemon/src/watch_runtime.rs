@@ -205,10 +205,11 @@ impl WatchRuntime {
             .name("atm-daemon-watch".to_string())
             .spawn(move || watch_worker_loop(inner))
             .map_err(|source| {
-                let _ = self
-                    .inner
-                    .observability
-                    .emit("start", "failed", "failed to spawn watch runtime worker");
+                let _ = self.inner.observability.emit(
+                    "start",
+                    "failed",
+                    "failed to spawn watch runtime worker",
+                );
                 AtmError::daemon_unavailable("failed to spawn watch runtime worker")
                     .with_source(source)
             })?;
@@ -250,14 +251,28 @@ impl WatchRuntime {
                 .spawn(move || {
                     let _ = result_tx.send(handle.join());
                 })
-                .expect("failed to spawn watch join helper");
+                .map_err(|source| {
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "failed",
+                        "failed to spawn watch runtime join helper",
+                    );
+                    AtmError::daemon_unavailable(
+                        "failed to spawn watch runtime join helper during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; watch shutdown could not create its bounded join helper.",
+                    )
+                    .with_source(source)
+                })?;
             match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
-                    let _ = self
-                        .inner
-                        .observability
-                        .emit("shutdown", "ok", "watch runtime worker shut down cleanly");
+                    let _ = self.inner.observability.emit(
+                        "shutdown",
+                        "ok",
+                        "watch runtime worker shut down cleanly",
+                    );
                 }
                 Ok(Err(_)) => {
                     let _ = join_helper.join();

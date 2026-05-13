@@ -9,7 +9,9 @@ use std::thread;
 use std::thread::JoinHandle;
 use std::time::Duration;
 
-use crate::{DaemonSubsystem, SubsystemObservability};
+#[cfg(test)]
+use crate::DaemonSubsystem;
+use crate::SubsystemObservability;
 
 const DEFAULT_NOTIFICATION_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
@@ -43,7 +45,7 @@ struct NotificationState {
 }
 
 impl NotificationRuntime {
-    #[allow(dead_code)]
+    #[cfg(test)]
     pub(crate) fn new() -> Self {
         Self::new_with_observability(SubsystemObservability::disabled(
             DaemonSubsystem::NotificationRuntime,
@@ -92,10 +94,11 @@ impl NotificationRuntime {
             .name("atm-daemon-notifier".to_string())
             .spawn(move || notification_worker_loop(inner))
             .map_err(|source| {
-                let _ = self
-                    .inner
-                    .observability
-                    .emit("start", "failed", "failed to spawn notification runtime worker");
+                let _ = self.inner.observability.emit(
+                    "start",
+                    "failed",
+                    "failed to spawn notification runtime worker",
+                );
                 AtmError::daemon_unavailable("failed to spawn notification runtime worker")
                     .with_source(source)
             })?;

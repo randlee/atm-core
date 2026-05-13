@@ -162,11 +162,9 @@ impl RuntimeComposition {
                 DaemonSubsystem::NotificationRuntime,
                 Arc::clone(&observability),
             ));
-        let watch_event_source =
-            FileWatchEventSource::new_with_observability(SubsystemObservability::new(
-                DaemonSubsystem::WatchRuntime,
-                Arc::clone(&observability),
-            ));
+        let watch_event_source = FileWatchEventSource::new_with_observability(
+            SubsystemObservability::new(DaemonSubsystem::WatchRuntime, Arc::clone(&observability)),
+        );
         let inbox_ingress = DaemonInboxIngress::new();
         let replay_store = match sqlite_remote_replay_store_from_path(replay_store_path) {
             Ok(store) => Some(store),

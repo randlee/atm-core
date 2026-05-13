@@ -170,6 +170,9 @@ impl SubsystemObservability {
         outcome: &'static str,
         detail: impl Into<Cow<'static, str>>,
     ) -> DaemonEvent {
+        // Shared subsystem emit helpers deliberately start with no team scope because the thin
+        // sink cannot infer mailbox ownership; callers that know team context attach it
+        // explicitly on the returned event instead of relying on logger-held mutable state.
         DaemonEvent::new(self.subsystem(), action, outcome, detail)
     }
 
@@ -188,4 +191,13 @@ impl SubsystemObservability {
     ) -> Result<(), AtmError> {
         self.emit_event(self.event(action, outcome, detail))
     }
+}
+
+#[cfg(test)]
+pub(crate) fn observability_test_event(
+    action: &'static str,
+    outcome: &'static str,
+    detail: impl Into<Cow<'static, str>>,
+) -> DaemonEvent {
+    DaemonEvent::new(DaemonSubsystem::Composition, action, outcome, detail)
 }
