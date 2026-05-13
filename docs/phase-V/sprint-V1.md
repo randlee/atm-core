@@ -65,9 +65,10 @@ Dependency note:
   not use typestate, the rationale must say why `Starting` / `Serving` /
   `Stopping` remain runtime-only and how `LaunchGateGuard` aligns with that
   choice
-- the event model uses typed representations for semantic identifiers;
-  `subsystem`, `message_id`, and `task_id` must not be left as raw `String`
-  fields in the final design
+- the event model documents the chosen typed representation for each semantic
+  identifier and the rationale for that choice; `subsystem`, `message_id`, and
+  `task_id` must each name the intended enum, newtype, or domain type and must
+  not be left as raw `String` fields in the final design
 - `team`, `agent`, `sender`, `recipient`, `message_id`, and `task_id` are
   documented as per-event fields when relevant
 - the final subsystem/event model is clear enough to implement without central
