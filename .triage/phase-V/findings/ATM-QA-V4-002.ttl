@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-V4-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-V4-002" ;
+  triage:title "recovery-text-rules.md coverage strategy misattributes clippy enforcement" ;
+  triage:description "docs/atm-daemon/recovery-text-rules.md line 115: coverage strategy states 'cargo clippy -- -D warnings verifies .with_recovery() coverage'. Clippy does not enforce recovery-text presence — it enforces general Rust hygiene only. This misleads future maintainers about how .with_recovery() coverage is validated. Fix: clarify that clippy verifies Rust hygiene only; .with_recovery() coverage is enforced by QA checklist review, not clippy." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-V" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-V4-002/pV-s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/pV-s4/84cacb0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:occurrence/ATM-QA-V4-002/pV-s4/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/recovery-text-rules.md" ;
+  triage:line 115 ;
+  triage:snippet "workspace `cargo clippy -- -D warnings`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/pV-s4/84cacb0> .
+
+<urn:atm:triage:worktree/pV-s2/46c703f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pV-s2-observability-migration" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s2-observability-migration" ;
+  triage:headSha "46c703f" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pV-s3/75ac70b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pV-s3-observability-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s3-observability-cleanup" ;
+  triage:headSha "75ac70b" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pV-s4/84cacb0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pV-s4-recovery-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s4-recovery-hardening" ;
+  triage:headSha "84cacb0" ;
+  triage:orderIndex 4 .

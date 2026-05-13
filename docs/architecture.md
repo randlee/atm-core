@@ -53,8 +53,8 @@ Phase-R redesign note:
 - the Phase R redesign starts from crate-local boundary inventories and ADRs,
   then rebuilds the implementation under lint/visibility guardrails
 - Phase R treats thin-client extension pressure as a first-class architectural
-  input (`atm-graft` was implemented in T.6–T.8 and removed in pU-s0 as
-  out-of-scope for the 1.0 surface)
+  input (`atm-graft` was implemented in T.6–T.8, then completed and narrowed
+  through Phase U as the supported thin-client host line rather than removed)
 - for the boundary / adapter model, Phase R supersedes any earlier
   pre-Phase-R architecture statements in this document that conflict with the
   crate-local boundary inventories, ADRs, or `docs/plan-phase-R.md`
@@ -108,7 +108,8 @@ Product-level boundary rules:
   machine-readable contract used to drive architectural linting and review
 - thin-client workflow surfaces should be modeled around `send` and `receive`
   rather than a broad command inventory
-- Phase T added `atm-graft` as a thin-client line (T.6–T.8); removed in pU-s0
+- Phase T added `atm-graft` as a thin-client line (T.6–T.8); Phase U later
+  completed and tightened that supported line rather than deleting it
   as out-of-scope for the 1.0 surface
 - `ack` may remain a retained CLI/user workflow, but thin-client protocol
   surfaces should carry it through send-shaped request data rather than a
@@ -2613,6 +2614,12 @@ Architectural rules:
 - `atm-daemon` owns daemon/runtime/transport `sc-observability` emission
 - `atm-core` owns ATM event and error models above the shared observability
   boundary
+- daemon-side observability remains bottom-of-stack:
+  - the shared daemon observability layer imports no daemon subsystem types
+  - daemon subsystems emit typed daemon event payloads through a sealed,
+    object-safe injected trait
+  - `AtmMessageId` and `TaskId` remain typed identifiers in daemon event
+    payloads; raw string semantic identifiers are not the Phase V target shape
 - native plugins may emit plugin-local diagnostics, but daemon-owned runtime,
   store, ingest, and transport events remain daemon-owned observability sinks
 - production runtime diagnostics must not collapse into ad hoc stdout/stderr

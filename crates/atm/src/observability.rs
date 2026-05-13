@@ -84,6 +84,17 @@ impl CliObservability {
         }
     }
 
+    pub(crate) fn emit_command_event(&self, event: CommandEvent) {
+        let command = event.command;
+        let action = event.action;
+        if let Err(emit_error) = self.emit(event) {
+            eprintln!(
+                "{}",
+                command_emit_failure_message(command, action, &emit_error)
+            );
+        }
+    }
+
     /// Test-only helper for injecting a synthetic observability port without
     /// exposing the boxed inner field to production callers.
     #[cfg(test)]
@@ -139,6 +150,10 @@ fn fatal_emit_failure_message(stage: &str, emit_error: &AtmError) -> String {
     format!("ATM fatal diagnostic emission failed during {stage}: {emit_error}")
 }
 
+fn command_emit_failure_message(command: &str, action: &str, emit_error: &AtmError) -> String {
+    format!("ATM command observability emit failed for {command}/{action}: {emit_error}")
+}
+
 #[cfg(test)]
 mod tests {
     use atm_core::error::AtmError;
@@ -150,7 +165,10 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::{CliObservability, CliObservabilityOptions, fatal_emit_failure_message};
+    use super::{
+        CliObservability, CliObservabilityOptions, command_emit_failure_message,
+        fatal_emit_failure_message,
+    };
 
     const TEST_TEAM: &str = "test-team";
     const TEST_SENDER: &str = "sender-a";
@@ -343,6 +361,17 @@ mod tests {
             &AtmError::observability_emit("synthetic emit failure"),
         );
         assert!(message.contains("ATM fatal diagnostic emission failed during service"));
+        assert!(message.contains("synthetic emit failure"));
+    }
+
+    #[test]
+    fn command_emit_failure_message_mentions_command_action_and_error() {
+        let message = command_emit_failure_message(
+            "send",
+            "send",
+            &AtmError::observability_emit("synthetic emit failure"),
+        );
+        assert!(message.contains("send/send"));
         assert!(message.contains("synthetic emit failure"));
     }
 

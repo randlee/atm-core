@@ -52,7 +52,7 @@ impl ListCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let json = self.json;
-        let composition = CliComposition::bootstrap(observability)?;
+        let composition = CliComposition::bootstrap("list", observability)?;
         let query = self.build_query(home_dir, current_dir)?;
         let outcome = composition.list(query)?;
         output::print_list_result(&outcome, json)
