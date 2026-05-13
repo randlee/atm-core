@@ -30,7 +30,7 @@ use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
 
 use crate::AtmHomeDir;
 use crate::advisory_runtime::AdvisoryRuntime;
-use crate::daemon_runtime_observability::DaemonRuntimeObservability;
+use crate::daemon_runtime_observability::{DaemonRuntimeObservability, warn_emit_fallback};
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -221,7 +221,7 @@ impl DaemonRequestDispatcher {
             .observability
             .emit_runtime_event(action, outcome, message)
         {
-            tracing::warn!(%error, action, outcome, "daemon runtime lifecycle emission failed");
+            warn_emit_fallback("daemon_runtime", action, outcome, &error);
         }
     }
 }

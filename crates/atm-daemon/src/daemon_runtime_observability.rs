@@ -1,5 +1,6 @@
 use atm_core::error::AtmError;
 use atm_core::observability::ObservabilityPort;
+use tracing::warn;
 
 /// Daemon-runtime observability operations that stay daemon-specific above the
 /// shared ATM observability boundary.
@@ -14,4 +15,24 @@ pub trait DaemonRuntimeObservability: ObservabilityPort + Send + Sync {
 
     /// Attempt one best-effort synchronous flush during daemon shutdown.
     fn best_effort_flush_blocking(&self) -> Result<(), AtmError>;
+}
+
+/// Daemon-local fallback when shared observability emission fails.
+///
+/// This warning is intentionally local to the daemon runtime. It records that
+/// a shared [`ObservabilityPort`] emit failed, but it does not become a second
+/// reporting pipeline or bypass the shared observability boundary.
+pub(crate) fn warn_emit_fallback(
+    subsystem: &'static str,
+    action: &'static str,
+    outcome: &'static str,
+    error: &AtmError,
+) {
+    warn!(
+        subsystem,
+        action,
+        outcome,
+        error = ?error,
+        "emit failed"
+    );
 }
