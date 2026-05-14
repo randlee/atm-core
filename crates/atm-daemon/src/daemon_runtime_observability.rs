@@ -70,16 +70,14 @@ pub struct DaemonEvent {
 impl DaemonEvent {
     pub(crate) fn new(
         subsystem: DaemonSubsystem,
-        action: &'static str,
-        outcome: &'static str,
+        action: ActionName,
+        outcome: OutcomeLabel,
         detail: impl Into<Cow<'static, str>>,
     ) -> Self {
         Self {
             subsystem,
-            action: ActionName::new(action)
-                .expect("daemon subsystem action literals must satisfy ActionName validation"),
-            outcome: OutcomeLabel::new(outcome)
-                .expect("daemon subsystem outcome literals must satisfy OutcomeLabel validation"),
+            action,
+            outcome,
             team: TeamScope::None,
             agent: None,
             sender: None,
@@ -195,7 +193,14 @@ impl SubsystemObservability {
         // Shared subsystem emit helpers deliberately start with no team scope because the thin
         // sink cannot infer mailbox ownership; callers that know team context attach it
         // explicitly on the returned event instead of relying on logger-held mutable state.
-        DaemonEvent::new(self.subsystem(), action, outcome, detail)
+        DaemonEvent::new(
+            self.subsystem(),
+            ActionName::new(action)
+                .expect("daemon subsystem action literals must satisfy ActionName validation"),
+            OutcomeLabel::new(outcome)
+                .expect("daemon subsystem outcome literals must satisfy OutcomeLabel validation"),
+            detail,
+        )
     }
 
     pub(crate) fn emit_event(&self, event: DaemonEvent) -> Result<(), AtmError> {

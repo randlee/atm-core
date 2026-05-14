@@ -212,6 +212,10 @@ impl RuntimeStatusCache {
         }
     }
 
+    /// Record SQLite degradation detail after the caller has decided which
+    /// higher-level subsystem event to emit. Callers must emit the associated
+    /// observability event independently; this helper only updates the cached
+    /// doctor/runtime-health projection state.
     pub(crate) fn mark_sqlite_unavailable_with_detail(&self, detail: impl Into<String>) {
         match self.state.lock() {
             Ok(mut cache) => {
@@ -508,6 +512,8 @@ pub(crate) fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> Doctor
         },
         RuntimeReadinessState::Degraded => DoctorFinding {
             severity: DoctorSeverity::Warning,
+            // SQLite readiness takes priority over ingest degradation in the combined case so
+            // doctor surfaces the most actionable operator code first.
             code: if !snapshot.sqlite_ready {
                 atm_core::error_codes::AtmErrorCode::WarningSqliteHealthDegraded
             } else {
