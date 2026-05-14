@@ -234,3 +234,46 @@ Phase X planning must include sprint(s) to resolve ARCH-W-001/002/003 before the
 | Add Phase X sprint for IPC helper deduplication | project_plan_update | team-lead | docs/project-plan.md |
 | Add infallible-result check to rust-qa-agent checklist | test_hardening | arch-ctm | sc-rust templates |
 | Add structured-logging advisory to dev guidelines | new_lint (advisory) | arch-ctm | rust-development/guidelines.txt |
+
+---
+
+## Phase X Priority Inputs (from post-merge product-readiness review)
+
+arch-ctm reviewed integrate/phase-W @ 9efa7cd against the broader SQLite SSOT product goal
+and identified three pre-existing conditions that Phase W did not introduce but did not close:
+
+### PX-001 [BLOCKING for SSOT] — SQLite not yet sole durable mailbox SSOT
+
+`crates/atm-core/src/service_runtime_store.rs` still exposes `DefaultMailboxRuntime::{Sqlite,Legacy}`;
+`default_runtime()` falls back to Legacy (lines 19–22, 51–55); retained runtime still fronts
+file-backed mailbox operations (lines 299–345, 606–689). `crates/atm-core/src/ack/mod.rs:154–328`
+branches into the legacy file-backed path. SQLite SSOT is not closed while production-capable runtime
+APIs still read/write mailbox files.
+
+**Phase X action**: `architecture_update` — sprint to remove `DefaultMailboxRuntime::Legacy`,
+route all mailbox read/write through SQLite runtime, gate `ack` and related commands on daemon SSOT.
+
+### PX-002 [HIGH] — Daemon runtime health assembled from hybrid filesystem + SQLite model
+
+`crates/atm-daemon/src/runtime_status_cache.rs:393–494` enumerates `ATM_HOME/.claude/teams` for
+team discovery (filesystem-owned), then loads member truth from SQLite roster store. For a strict
+SSOT bar, daemon runtime view is split.
+
+**Phase X action**: `architecture_update` — sprint to make team discovery SQLite-owned (roster
+store as single source for both team list and member list); remove filesystem enumeration from
+`build_runtime_status_cache_state`.
+
+### PX-003 [MEDIUM] — Replay persistence optional at daemon startup
+
+`crates/atm-daemon/src/composition.rs:186–202` logs/marks degraded on sqlite replay-store assembly
+failure but continues with `replay_store = None`. If remote outcome tracking is part of the
+correctness contract, this is reduced-capability startup rather than strict fail-closed persistence.
+
+**Phase X action**: `requirements_update` — decide the correctness contract for replay persistence
+(fail-closed vs. reduced-capability) and enforce it in composition startup.
+
+---
+
+These three findings predate Phase W. Phase W improved observability over these paths
+(ATM_WARNING_SQLITE_HEALTH_DEGRADED aligned, sqlite_observability marks degraded before sink emit)
+but did not close the SSOT gap. They are mandatory Phase X inputs before any SSOT-complete claim.
