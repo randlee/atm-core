@@ -12,12 +12,15 @@
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W4-F002/pW-s4/1> ;
   triage:openOn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> ;
-  triage:promoteTo <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+  triage:promoteTo <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> ;
+  triage:resolutionNote "Verified fixed on the W.7 merge-forward head. RuntimeStatusCache::mark_sqlite_unavailable drops the Mutex guard before calling emit_or_warn, so sqlite degradation no longer holds the cache lock across observability emission." ;
+  triage:fixedOn <urn:atm:triage:worktree/pW-s7/4540ef2> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-W/4540ef2> .
 
 <urn:atm:triage:occurrence/RBP-W4-F002/pW-s4/1>
   a triage:Occurrence ;
@@ -43,3 +46,17 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
   triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pW-s7/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 4 .
