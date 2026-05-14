@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/NEW-EMIT-001>
+  a triage:Finding ;
+  triage:findingId "NEW-EMIT-001" ;
+  triage:title "let _ = composition_observability.emit(...) — silent discard of emit Result at composition.rs:200" ;
+  triage:description "crates/atm-daemon/src/composition.rs:200: let _ = composition_observability.emit(...) — silent discard of emit Result. This is a W.1-class violation (prohibited let _ = pattern on emit calls). The observability call for ATM-QA-W3-001 fix was placed correctly but uses the prohibited let _ = pattern instead of emit_or_warn. Fix: replace with composition_observability.emit_or_warn(...) at composition.rs:200." ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-daemon/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NEW-EMIT-001/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
+
+<urn:atm:triage:occurrence/NEW-EMIT-001/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 200 ;
+  triage:snippet "let _ = composition_observability.emit(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
+
+<urn:atm:triage:worktree/integrate-phase-W/8104e6a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:orderIndex 1 .

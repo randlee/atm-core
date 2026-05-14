@@ -4,69 +4,79 @@
 <urn:atm:triage:finding/RBP-W3-F001>
   a triage:Finding ;
   triage:findingId "RBP-W3-F001" ;
-  triage:title "DaemonRuntimeObservability trait uses bare &'static str instead of newtypes" ;
-  triage:description """DaemonRuntimeObservability trait (crates/atm-daemon/src/daemon_runtime_observability.rs:9-26) accepts action, outcome, and subsystem as &'static str. The impl (DaemonObservability) immediately validates these inside map_runtime_event/map_subsystem_event using ActionName::new() and OutcomeLabel::new(), returning Err on invalid values — so invalid values do NOT pass silently. The 'static lifetime bound also prevents runtime-constructed strings from reaching the trait boundary. Risk is therefore lower than described: the actual validation firewall exists in the private mapping helpers, not the trait. The trait has two implementors (DaemonObservability and TestDaemonObservability); promoting newtypes to the trait boundary would require test doubles to construct them, increasing coupling. Triage verdict: genuine finding — the trait boundary does not enforce correctness — but severity is downgraded to minor because the impl enforces it consistently and &'static str prevents dynamic injection. Fix: change trait signature to accept ActionName/OutcomeLabel newtypes directly, removing the internal validation from the mapping helpers. Assign to feature/pW-s3-sqlite-observability (pW-s3 is the origin sprint).""" ;
+  triage:title "emit_subsystem_event uses bare &'static str for subsystem/action/outcome parameters" ;
+  triage:description """DaemonRuntimeObservability trait (crates/atm-daemon/src/daemon_runtime_observability.rs:130-137) uses bare &'static str for subsystem, action, and outcome parameters in emit_subsystem_event. RBP Newtype/Zero-Cost Abstraction pattern requires ActionName/OutcomeLabel/SubsystemName newtypes where they exist, or explicit documentation of why &'static str is acceptable if newtypes are unavailable. Open from W.3 QA-1; carried forward unfixed through W.3 fix-R1. Per initial triage: impl validates via ActionName::new/OutcomeLabel::new inside mapping helpers and &'static str prevents dynamic-string injection, so risk is lower — but the trait boundary itself does not enforce correctness. Severity: minor. Four occurrences confirmed on integrate/phase-W at 8104e6a: trait definition (daemon_runtime_observability.rs:130), pub(crate) helper (daemon_observability.rs:182), DaemonObservability impl (daemon_observability.rs:336), and TestDaemonObservability impl (test_observability.rs:183). All four must be updated together when the fix is applied.""" ;
   triage:triageMode "initial_pass" ;
   triage:category "RBP" ;
   triage:phaseId "phase-W" ;
   triage:severity "minor" ;
   triage:severityDowngradedFrom "important" ;
-  triage:severityDowngradeReason "impl validates via ActionName::new/OutcomeLabel::new and returns Err; &'static str prevents dynamic-string injection; no silent pass possible in practice" ;
+  triage:severityDowngradeReason "impl validates via ActionName::new/OutcomeLabel::new mapping helpers and returns Err; &'static str prevents dynamic-string injection; no silent pass possible in practice" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-daemon/src" ;
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W3-F001/pW-s3/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W3-F001/pW-s3/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W3-F001/pW-s3/3> ;
-  triage:openOn <urn:atm:triage:worktree/pW-s3/2f245dc> ;
-  triage:promoteTo <urn:atm:triage:worktree/pW-s3/2f245dc> .
+  triage:references "TASK-1505 quality-mgr verdict W.3 QA-2 carry-forward" ;
+  triage:references "RBP-W3-F001.ttl prior record at pW-s3/2f245dc" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W3-F001/integrate-phase-W/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W3-F001/integrate-phase-W/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W3-F001/integrate-phase-W/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W3-F001/integrate-phase-W/4> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
 
-<urn:atm:triage:occurrence/RBP-W3-F001/pW-s3/1>
+<urn:atm:triage:occurrence/RBP-W3-F001/integrate-phase-W/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
-  triage:line 9 ;
-  triage:snippet "fn emit_runtime_event(&self, action: &'static str, outcome: &'static str, message: &'static str) -> Result<(), AtmError>;" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pW-s3-sqlite-observability" ;
-  triage:headSha "2f245dc" ;
-  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
-
-<urn:atm:triage:occurrence/RBP-W3-F001/pW-s3/2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
-  triage:line 19 ;
+  triage:line 130 ;
   triage:snippet "fn emit_subsystem_event(&self, subsystem: &'static str, action: &'static str, outcome: &'static str, message: &str, error_code: Option<AtmErrorCode>) -> Result<(), AtmError>;" ;
+  triage:note "Trait definition: bare &'static str at the trait boundary for subsystem, action, and outcome" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pW-s3-sqlite-observability" ;
-  triage:headSha "2f245dc" ;
-  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
 
-<urn:atm:triage:occurrence/RBP-W3-F001/pW-s3/3>
+<urn:atm:triage:occurrence/RBP-W3-F001/integrate-phase-W/2>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
-  triage:line 228 ;
-  triage:snippet "fn emit_runtime_event(&self, action: &'static str, outcome: &'static str, message: &'static str) -> Result<(), AtmError> { Self::emit_runtime_event(self, action, outcome, message) }" ;
-  triage:note "DaemonObservability impl of the trait — also the TestDaemonObservability impl at test_observability.rs:183 and the pub(crate) helpers at lines 113 and 135 all carry bare &'static str; all would need updating" ;
+  triage:line 182 ;
+  triage:snippet "pub(crate) fn emit_subsystem_event(&self, subsystem: &'static str, action: &'static str, outcome: &'static str, message: &str, error_code: Option<AtmErrorCode>)" ;
+  triage:note "pub(crate) helper on DaemonObservability — the internal function all trait impls delegate to; also carries bare &'static str" ;
   triage:status "open" ;
   triage:closed false ;
-  triage:branch "feature/pW-s3-sqlite-observability" ;
-  triage:headSha "2f245dc" ;
-  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
 
-<urn:atm:triage:worktree/pW-s3/2f245dc>
-  a triage:WorktreeSnapshot ;
-  triage:branch "feature/pW-s3-sqlite-observability" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
-  triage:headSha "2f245dc" ;
-  triage:orderIndex 1 .
+<urn:atm:triage:occurrence/RBP-W3-F001/integrate-phase-W/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 336 ;
+  triage:snippet "fn emit_subsystem_event(&self, subsystem: &'static str, action: &'static str, outcome: &'static str, message: &str, error_code: Option<AtmErrorCode>)" ;
+  triage:note "DaemonObservability impl of DaemonRuntimeObservability trait — delegates to Self::emit_subsystem_event" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
 
-<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+<urn:atm:triage:occurrence/RBP-W3-F001/integrate-phase-W/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/test_observability.rs" ;
+  triage:line 183 ;
+  triage:snippet "fn emit_subsystem_event(&self, subsystem: &'static str, action: &'static str, outcome: &'static str, message: &str, error_code: Option<AtmErrorCode>)" ;
+  triage:note "TestDaemonObservability impl of DaemonRuntimeObservability trait — carries bare &'static str; updating trait signature requires updating this test double" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
+
+<urn:atm:triage:worktree/integrate-phase-W/8104e6a>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-W" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
-  triage:headSha "6df690b" ;
-  triage:orderIndex 2 .
+  triage:headSha "8104e6a" ;
+  triage:orderIndex 1 .

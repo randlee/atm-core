@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/NEW-W4-001>
+  a triage:Finding ;
+  triage:findingId "NEW-W4-001" ;
+  triage:title "record_heartbeat unconditionally resets sqlite_ready=true, masking prior failure signals" ;
+  triage:description "crates/atm-daemon/src/runtime_status_cache.rs:126-127: record_heartbeat unconditionally sets sqlite_ready=true and clears sqlite_detail=None on every successful heartbeat. Any prior mark_sqlite_unavailable_with_detail() signal (e.g., writer_shutdown_join failure, writer_submit timeout) is permanently masked by the next heartbeat. Sprint-W4.md:82-88 requires shared doctor/runtime-health surfaces to accurately reflect SQLite subsystem state. Fix: remove the unconditional sqlite_ready=true / sqlite_detail=None reset from record_heartbeat. Only mark_sqlite_available() or full boundary reassembly should reset the sqlite_ready flag." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NEW-W4-001/integrate-phase-W/1> ,
+                       <urn:atm:triage:occurrence/NEW-W4-001/integrate-phase-W/2> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
+
+<urn:atm:triage:occurrence/NEW-W4-001/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 126 ;
+  triage:snippet "cache.sqlite_ready = true;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "8104e6a" ;
+  triage:branch "integrate/phase-W" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
+
+<urn:atm:triage:occurrence/NEW-W4-001/integrate-phase-W/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 127 ;
+  triage:snippet "cache.sqlite_detail = None;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "8104e6a" ;
+  triage:branch "integrate/phase-W" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
+
+<urn:atm:triage:worktree/integrate-phase-W/8104e6a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:orderIndex 1 .

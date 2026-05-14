@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/NEW-W4-002>
+  a triage:Finding ;
+  triage:findingId "NEW-W4-002" ;
+  triage:title "PeerTransportRuntime::persist_replay_request is #[cfg(test)]-only but sprint-W4.md lists as production path" ;
+  triage:description "crates/atm-daemon/src/peer_transport.rs:618-628: PeerTransportRuntime::persist_replay_request is #[cfg(test)]-only. Sprint-W4.md:130-132 lists it as a targeted production path. Production replay persistence runs through PeerClientTransport::persist_replay_request (non-test, lines 249-280) which works correctly, but the sprint doc is misleading. Fix: either expose the method as non-test with production delegation, or update sprint-W4.md to clarify this is test-only scaffolding and production path is PeerClientTransport::send." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NEW-W4-002/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
+
+<urn:atm:triage:occurrence/NEW-W4-002/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 618 ;
+  triage:snippet "#[cfg(test)] pub(crate) fn persist_replay_request(...) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
+
+<urn:atm:triage:worktree/integrate-phase-W/8104e6a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:orderIndex 1 .
