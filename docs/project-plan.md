@@ -3179,7 +3179,8 @@ Execution shape:
 - `X.3` daemon runtime truth unification and runtime-status-cache refactor
 - `X.4` replay-persistence startup contract, peer-transport decomposition, and
   same-host helper deduplication
-- `X.5` systemic guardrails, typed-observability docs, and CI/lint follow-up
+- `X.5` systemic guardrails, dependency-ownership validation, and closeout
+  verification
 
 Execution rules:
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path

@@ -20,7 +20,7 @@ Planning branch:
 - `feature/pX-s0-planning`
 
 Baseline:
-- `integrate/phase-W` at `96f197e`
+- `integrate/phase-W` at `9016eed`
 - authoritative inputs:
   - `docs/phase-W/post-mortem.md`
   - `crates/atm-core/src/service_runtime_store.rs`
@@ -39,6 +39,12 @@ Baseline:
   - `crates/atm-graft/src/lib.rs`
   - `crates/atm-graft/src/runtime.rs`
   - `crates/atm-graft/src/transport.rs`
+  - `docs/requirements.md`
+  - `docs/architecture.md`
+  - `.claude/assets/sc-rust/quality-mgr/templates/rust-qa-assignment.json.j2`
+  - `.claude/skills/rust-development/guidelines.txt`
+  - `.claude/skills/codex-orchestration/dev-template.xml.j2`
+  - `.claude/skills/codex-orchestration/qa-template.xml.j2`
 
 Target integration branch:
 - `integrate/phase-X`
@@ -167,16 +173,9 @@ Phase `W` post-mortem assigned these follow-ups to `arch-ctm`:
   manifest entries behind
 
 The silent-emit and RULE-002 lint gates are pre-phase develop-targeting
-prerequisites. The remaining items are included in `X.5` below.
-
-### Parallel Process Items Owned By `team-lead`
-
-The following post-mortem actions remain outside the engineering sprint line:
-- dev-template sprint-doc/project-plan gate updates
-- qa-template sprint-doc verification updates
-- any team-lead-owned planning-process changes not implemented in repo code
-
-Phase `X` does not absorb those into `arch-ctm` sprint scope.
+prerequisites. The remaining items are already-landed baseline verification
+inputs or active `X.5` closeout work; they are not separate new typed-doc
+deliverables on `integrate/phase-X`.
 
 ## Execution Shape
 
@@ -185,8 +184,10 @@ Phase `X` does not absorb those into `arch-ctm` sprint scope.
 - `X.1` mailbox runtime cutover and dual-mode surface deletion
 - `X.2` command-path simplification and legacy mailbox path deletion
 - `X.3` daemon runtime truth unification and runtime-status-cache refactor
-- `X.4` replay-persistence startup contract and peer-transport decomposition
-- `X.5` systemic guardrails, typed-observability docs, and CI/lint follow-up
+- `X.4` replay-persistence startup contract, peer-transport decomposition, and
+  same-host IPC helper consolidation
+- `X.5` systemic guardrails, dependency-ownership validation, and closeout
+  verification
 
 ## Sprint Ownership
 
@@ -368,6 +369,7 @@ Primary file scope:
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon-client/boundaries.md`
+- `boundaries/atm-daemon-client/daemon-bootstrap.toml`
 
 Required deliverables:
 - document the replay-store startup contract:
@@ -385,6 +387,8 @@ Required deliverables:
   explicitly allows daemon-client to own the shared same-host transport helpers
   (`try_connect`, `exchange`, and `unexpected_response`) after the
   consolidation
+- update `boundaries/atm-daemon-client/daemon-bootstrap.toml` so the
+  machine-readable boundary contract matches that helper ownership change
 
 Acceptance criteria:
 - one replay-persistence startup contract is documented in product and
@@ -405,7 +409,7 @@ Required validation:
 - `cargo clippy --workspace -- -D warnings`
 - `git diff --check`
 
-### `X.5` — Guardrails And Typed-Observability Follow-Through
+### `X.5` — Guardrails, Dependency Ownership, And Closeout Verification
 
 Goal:
 - close the `arch-ctm` systemic follow-ups from the Phase `W` post-mortem
@@ -416,8 +420,6 @@ Primary file scope:
 - `scripts/check-legacy-mailbox-paths.sh`
 - `scripts/check-capability-degradation.sh`
 - CI workflow files that own repository gate execution
-- `docs/requirements.md`
-- `docs/architecture.md`
 - `.claude/assets/sc-rust/quality-mgr/templates/`
 - `.claude/skills/rust-development/guidelines.txt`
 
@@ -439,12 +441,12 @@ Required deliverables:
 - add dependency-ownership validation to the local lint/CI path, including
   `cargo-shear`, so helper relocation or `#[path = ...]` indirection cannot
   leave stale dependency declarations until end-of-phase review
-- update `docs/requirements.md` with the remaining typed observability migration
-  requirement
-- update `docs/architecture.md` with the phased typed observability migration
-  strategy and upstream dependency note
-- update the rust QA checklist to scan for infallible `Result<T, E>` shapes
-- add the structured-logging advisory for daemon `warn!` / `error!` fields
+- verify the following already-landed baseline artifacts from `TASK-1515`
+  remain present and aligned with the final Phase `X` closeout:
+  - `docs/requirements.md` typed observability migration requirement
+  - `docs/architecture.md` phased typed observability migration note
+  - rust QA checklist coverage for infallible `Result<T, E>` review
+  - structured-logging advisory for daemon `warn!` / `error!` fields
 - update QA/checklist language so deletion sprints must search the entire
   workspace for the removed legacy pattern family, not only the touched files
 
@@ -454,11 +456,12 @@ Acceptance criteria:
 - the pre-phase silent-emit and RULE-002 gates are referenced as already-live
   branch prerequisites for all Phase `X` sprint branches
 - the local lint entrypoints include dependency-ownership validation
-- typed observability completion is explicitly captured in requirements and
-  architecture docs
-- the rust QA checklist includes the infallible-result review step
-- daemon structured-logging guidance is documented in the Rust development
-  guidelines
+- the already-landed `TASK-1515` baseline artifacts remain present and
+  consistent with the final Phase `X` closeout:
+  - typed observability requirement in `docs/requirements.md`
+  - phased typed observability note in `docs/architecture.md`
+  - infallible-result review step in the rust QA checklist
+  - daemon structured-logging guidance in the Rust development guidelines
 - deletion-sprint QA instructions explicitly require whole-workspace pattern
   searches for removed legacy constructs
 
