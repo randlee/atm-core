@@ -5,7 +5,6 @@ from pathlib import Path
 import argparse
 import re
 import sys
-import tomllib
 
 
 PATTERN = re.compile(
@@ -21,6 +20,8 @@ def discover_repo_root(explicit_root: str | None = None) -> Path:
 
 
 def workspace_manifest_paths(repo_root: Path) -> list[Path]:
+    import tomllib
+
     root_manifest = tomllib.loads((repo_root / "Cargo.toml").read_text(encoding="utf-8"))
     workspace = root_manifest.get("workspace", {})
     if not isinstance(workspace, dict):

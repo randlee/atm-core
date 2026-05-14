@@ -33,9 +33,9 @@ class FunctionSpan:
 
 @dataclass(frozen=True)
 class FunctionClassification:
-    advisories: list[FunctionSpan]
-    grandfathered_failures: list[FunctionSpan]
-    new_failures: list[FunctionSpan]
+    advisories: tuple[FunctionSpan, ...]
+    grandfathered_failures: tuple[FunctionSpan, ...]
+    new_failures: tuple[FunctionSpan, ...]
 
 
 def discover_repo_root(explicit_root: str | None = None) -> Path:
@@ -222,9 +222,9 @@ def classify_functions(
             advisories.append(function)
 
     return FunctionClassification(
-        advisories=advisories,
-        grandfathered_failures=grandfathered_failures,
-        new_failures=new_failures,
+        advisories=tuple(advisories),
+        grandfathered_failures=tuple(grandfathered_failures),
+        new_failures=tuple(new_failures),
     )
 
 
