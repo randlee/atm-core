@@ -27,6 +27,13 @@ required_variables:
 
   <acceptance-criteria>
 {{ acceptance_criteria }}
+- sprint doc deliverables gate:
+  - `docs/phase-X/sprint-XN.md` exists
+  - sprint doc frontmatter sets `status: complete`
+  - sprint doc frontmatter sets `branch:`
+  - sprint doc frontmatter sets `worktree:`
+- planning index gate:
+  - `docs/project-plan.md` includes the sprint entry before closeout
   </acceptance-criteria>
 
   <references>

@@ -314,6 +314,19 @@ Deferred from the initial retained-command integration scope:
 - `sc-observe`
 - `sc-observability-otlp`
 
+Phase W typed observability migration note:
+- `DaemonSubsystem` and the typed `emit_subsystem_event(...)` boundary are
+  complete on the current line.
+- The remaining migration from raw `&'static str` labels to validated
+  `ActionName` / `OutcomeLabel` values at `DaemonEvent` fields,
+  `SubsystemLogger` helpers, and `SubsystemObservability::event()` call sites
+  is intentionally deferred pending upstream `sc-observability-types`
+  support for a validated static-construction helper such as
+  `validated_static!` or `const new_static()`.
+- The deferred scope is still tracked architecture work across roughly
+  76 call sites in 10 files; it is not an approved permanent mixed-typing
+  end state.
+
 The controlling ATM-side implementation design is:
 - [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
 
