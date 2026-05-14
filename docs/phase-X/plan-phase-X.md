@@ -25,9 +25,20 @@ Baseline:
   - `docs/phase-W/post-mortem.md`
   - `crates/atm-core/src/service_runtime_store.rs`
   - `crates/atm-core/src/ack/mod.rs`
+  - `crates/atm-core/src/read/mod.rs`
+  - `crates/atm-core/src/read/legacy_path.rs`
+  - `crates/atm-core/src/clear/mod.rs`
+  - `crates/atm-core/src/send/mod.rs`
+  - `crates/atm-core/src/boundary_support.rs`
+  - `crates/atm-core/src/mailbox/store.rs`
   - `crates/atm-daemon/src/runtime_status_cache.rs`
   - `crates/atm-daemon/src/composition.rs`
   - `crates/atm-daemon/src/peer_transport.rs`
+  - `crates/atm-daemon-client/src/lib.rs`
+  - `crates/atm/src/composition.rs`
+  - `crates/atm-graft/src/lib.rs`
+  - `crates/atm-graft/src/runtime.rs`
+  - `crates/atm-graft/src/transport.rs`
 
 Target integration branch:
 - `integrate/phase-X`
@@ -40,10 +51,23 @@ Boundary rules for Phase `X`:
 - SQLite/store is the only durable ATM mailbox implementation
 - daemon/store unavailability must return shared ATM errors; no runtime path may
   downgrade to file-backed mailbox reads or writes
+- no retained command/runtime path may call source-file mailbox helpers directly
+  once the SQLite cutover sprint line begins
+- `legacy:` mailbox-key handling is not an allowed production compatibility
+  branch after the Phase `X` deletion line lands
 - file watchers may remain only as ingress/reconcile edges; they must not remain
   a parallel mailbox implementation behind command/runtime traits
 - daemon runtime health must not assemble team truth from filesystem discovery
   plus SQLite membership; ownership must be explicit and singular
+- same-host daemon client connection/exchange/error helpers must have one shared
+  implementation line; `atm` and `atm-graft` may not retain duplicate helper
+  stacks after the Phase `X` closeout
+- any sprint that touches shared CLI / graft / peer failure paths must name the
+  shared ATM error / protocol / doctor surface it is preserving and the current
+  baseline behavior it must not regress
+- dependency manifests must reflect real target ownership; helper relocation or
+  `#[path = ...]` indirection may not leave stale dependencies hidden until
+  `cargo-shear` catches them at the end of a sprint
 
 ## Current-State Analysis
 
@@ -88,6 +112,25 @@ Required outcome:
 - decide whether replay persistence is fail-closed or allowed reduced-capability
 - encode that decision in requirements/architecture and startup behavior
 
+### PX-004 [HIGH] — Same-host client helper duplication still exists
+
+Current code still keeps duplicated same-host daemon helper logic across the
+CLI and graft surfaces:
+- `crates/atm/src/composition.rs`
+  - local `try_connect(...)`
+  - local `exchange(...)`
+  - local `unexpected_response(...)`
+- `crates/atm-graft/src/transport.rs`
+  - duplicated `try_connect(...)`
+  - duplicated `exchange(...)`
+  - duplicated `unexpected_response(...)`
+
+Required outcome:
+- one shared same-host client helper line
+- one shared error/envelope mapping line for these interfaces
+- no drift between CLI and graft behavior for daemon unavailable or unexpected
+  response handling
+
 ### Deferred Phase W Structural Findings
 
 The following deferred findings are mandatory Phase `X` obligations:
@@ -112,6 +155,8 @@ Phase `W` post-mortem assigned these follow-ups to `arch-ctm`:
 - RULE-002 function-length CI lint
 - infallible-result rust-qa-agent checklist update
 - structured-logging guidelines advisory
+- dependency-ownership validation so helper relocation does not leave stale
+  manifest entries behind
 
 These are included in `X.5` below.
 
@@ -147,19 +192,33 @@ Primary file scope:
 - `crates/atm-core/src/read/mod.rs`
 - `crates/atm-core/src/clear/mod.rs`
 - `crates/atm-core/src/send/mod.rs`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-core/architecture.md`
 
 Required deliverables:
 - delete `LegacyMailboxRuntime`
 - delete `DefaultMailboxRuntime::Legacy`
 - delete `legacy_runtime()`
+- delete the internal legacy-only helpers in
+  `service_runtime_store.rs:112-185`:
+  - `encode_legacy_message_key()`
+  - `decode_legacy_message_key()`
+  - `legacy_query_mailbox_metadata_rows()`
+  - `legacy_load_message_record()`
 - change `default_runtime()` so it never selects a legacy mailbox runtime
 - remove `allows_legacy_mailbox_files()` from the runtime-facing mailbox
   contract
 - replace file-backed mailbox trait methods on `RetainedMailboxRuntime` with
   store-shaped operations needed by command logic
+- remove `LEGACY_MESSAGE_KEY_PREFIX` and any production runtime dependency on a
+  dual mailbox-runtime discriminant
+- update `docs/atm-core/boundaries.md` and `docs/atm-core/architecture.md` so
+  the retained runtime boundary documents one durable mailbox backend only
 
 Acceptance criteria:
 - `rg -n "LegacyMailboxRuntime|DefaultMailboxRuntime::Legacy|legacy_runtime\\(|allows_legacy_mailbox_files"` returns no production-code matches in
+  `crates/atm-core/src`
+- `rg -n "LEGACY_MESSAGE_KEY_PREFIX"` returns no production-code matches in
   `crates/atm-core/src`
 - `default_runtime()` no longer returns a legacy mailbox implementation
 - command/runtime mailbox interfaces no longer expose backend-choice branching
@@ -186,6 +245,7 @@ Primary file scope:
 - `crates/atm-core/src/send/mod.rs`
 - `crates/atm-core/src/boundary_support.rs`
 - `crates/atm-core/src/mailbox/store.rs`
+- `docs/atm-core/boundaries.md`
 
 Required deliverables:
 - delete `crates/atm-core/src/read/legacy_path.rs`
@@ -193,10 +253,18 @@ Required deliverables:
   control-flow path
 - remove direct source-file lock/read/write branches from `ack`, `read`,
   `clear`, and any shared mailbox append helpers
-- keep file-watcher or ingress helpers, if still needed, behind a dedicated
-  daemon/private ingress boundary rather than the general command runtime trait
+- if any file-watcher or ingress helpers survive the sprint, move them behind a
+  dedicated daemon-private ingress boundary rather than the general command
+  runtime trait
 - delete or narrow `boundary_support.rs` file-backed import/export helpers if
   they remain on the production mailbox path
+- delete store-facing helpers from the retained runtime surface when they only
+  exist to support legacy file-backed mailbox mutation
+- remove the retained boundary-adapter stubs in
+  `service_runtime_store.rs:305-315`; they are deletion targets, not
+  documentation anchors to preserve after the store-only cutover
+- document any remaining source-file helper ownership as daemon-private
+  ingress/migration-only scope rather than retained runtime scope
 
 Acceptance criteria:
 - `crates/atm-core/src/read/legacy_path.rs` is removed
@@ -206,6 +274,12 @@ Acceptance criteria:
   - `crates/atm-core/src/read/mod.rs`
   - `crates/atm-core/src/clear/mod.rs`
   - `crates/atm-core/src/send/mod.rs`
+- `rg -n "legacy:" crates/atm-core/src` returns no production compatibility
+  branch matches outside explicitly retained test fixtures
+- `rg -n "observe_source_files|commit_source_files|with_locked_source_files|commit_mailbox_state|read_messages" crates/atm-core/src` finds no
+  production use outside:
+  - explicitly retained daemon-private ingress or migration modules, or
+  - tests
 - command logic no longer branches on mailbox backend selection
 - mailbox command behavior remains routed through one store-backed path
 
@@ -224,9 +298,11 @@ Goal:
 Primary file scope:
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
-- `crates/atm-core/src/boundary.rs` or the owning roster boundary module
+- `crates/atm-core/src/boundary/store.rs`
 - `crates/atm-rusqlite/src/lib.rs` and any roster-store implementation files
-- `crates/atm-daemon/src/composition.rs` if runtime-state wiring changes
+- `crates/atm-daemon/src/composition.rs`
+- `docs/atm-daemon/boundaries.md`
+- `docs/atm-daemon/architecture.md`
 
 Required deliverables:
 - add the boundary operation needed to enumerate daemon teams from the
@@ -235,8 +311,17 @@ Required deliverables:
   `build_runtime_status_cache_state(...)`
 - make `build_runtime_status_cache_state(...)` explicitly SQLite-owned for both
   team discovery and member discovery
+- keep `evict_status_cache_entry_if_needed()` in the named refactor surface so
+  helper extraction does not silently change the existing bounded-cap eviction
+  and conflict-preservation behavior
 - refactor `build_runtime_status_cache_state(...)` below the RULE-002 `80`-line
   limit
+- explicitly treat the `runtime_health.rs:47-110` shutdown-finalizer thread
+  registry as out of scope for `X.3` unless the runtime-truth rewiring forces a
+  lifecycle integration change; QA should not flag that registry as missing
+  `X.3` work by default
+- update daemon boundary docs so runtime health/status ownership no longer
+  implies direct filesystem discovery
 
 Acceptance criteria:
 - no `read_dir(.../.claude/teams...)` based team discovery remains in
@@ -262,10 +347,16 @@ Goal:
 Primary file scope:
 - `crates/atm-daemon/src/composition.rs`
 - `crates/atm-daemon/src/peer_transport.rs`
+- `crates/atm-daemon-client/src/lib.rs`
+- `crates/atm/src/composition.rs`
+- `crates/atm-graft/src/lib.rs`
+- `crates/atm-graft/src/runtime.rs`
+- `crates/atm-graft/src/transport.rs`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon-client/boundaries.md`
 
 Required deliverables:
 - document the replay-store startup contract:
@@ -275,6 +366,14 @@ Required deliverables:
   `replay_store = None` as implicit behavior
 - refactor `send_to_endpoint(...)` below `80` lines
 - refactor `send_once(...)` below `80` lines
+- consolidate same-host `try_connect(...)`, `exchange(...)`, and
+  `unexpected_response(...)` ownership onto the shared daemon-client line
+- consolidate duplicate daemon-unavailable / unexpected-response behavior across
+  `atm` and `atm-graft`
+- update `docs/atm-daemon-client/boundaries.md` so the boundary contract
+  explicitly allows daemon-client to own the shared same-host transport helpers
+  (`try_connect`, `exchange`, and `unexpected_response`) after the
+  consolidation
 
 Acceptance criteria:
 - one replay-persistence startup contract is documented in product and
@@ -284,6 +383,10 @@ Acceptance criteria:
 - `send_once(...)` is under `80` lines
 - peer transport preserves the shared ATM error / recovery contract after the
   refactor
+- `rg -n "fn try_connect\\(|fn exchange\\(|fn unexpected_response\\(" crates/atm crates/atm-graft crates/atm-daemon-client`
+  finds one shared helper definition per helper name after the refactor
+- CLI and graft same-host paths share the same daemon-unavailable and
+  unexpected-response behavior
 
 Required validation:
 - `cargo build --workspace`
@@ -301,6 +404,7 @@ Goal:
 Primary file scope:
 - `scripts/check-silent-emit.sh`
 - `scripts/check-function-length.py`
+- `scripts/check-legacy-mailbox-paths.sh`
 - CI workflow files that own repository gate execution
 - `docs/requirements.md`
 - `docs/architecture.md`
@@ -312,25 +416,48 @@ Required deliverables:
 - add a CI gate for RULE-002 function length with:
   - warning posture for grandfathered existing violations
   - hard fail for new violations introduced by a PR diff
+- add a CI gate for mailbox-legacy deletion regressions covering:
+  - `LegacyMailboxRuntime`
+  - `DefaultMailboxRuntime::Legacy`
+  - `legacy_runtime()`
+  - `allows_legacy_mailbox_files()`
+  - `legacy:` production mailbox-key branches
+  - command/runtime use of source-file mailbox helper APIs
+- add a CI gate preventing replay-capability degradation regressions after
+  `X.4`, with a no-production-match search for:
+  - `replay_store = None`
+  - `replay_store: None`
+- add dependency-ownership validation to the local lint/CI path, including
+  `cargo-shear`, so helper relocation or `#[path = ...]` indirection cannot
+  leave stale dependency declarations until end-of-phase review
 - update `docs/requirements.md` with the remaining typed observability migration
   requirement
 - update `docs/architecture.md` with the phased typed observability migration
   strategy and upstream dependency note
 - update the rust QA checklist to scan for infallible `Result<T, E>` shapes
 - add the structured-logging advisory for daemon `warn!` / `error!` fields
+- update QA/checklist language so deletion sprints must search the entire
+  workspace for the removed legacy pattern family, not only the touched files
 
 Acceptance criteria:
 - the silent-emit-discard gate is runnable in CI
 - the RULE-002 gate is runnable in CI
+- the legacy-mailbox-regression gate is runnable in CI
+- the replay-capability-degradation regression gate is runnable in CI
+- the local lint entrypoints include dependency-ownership validation
 - typed observability completion is explicitly captured in requirements and
   architecture docs
 - the rust QA checklist includes the infallible-result review step
 - daemon structured-logging guidance is documented in the Rust development
   guidelines
+- deletion-sprint QA instructions explicitly require whole-workspace pattern
+  searches for removed legacy constructs
 
 Required validation:
 - execute each new script locally in its intended mode
-- run the affected CI/lint entrypoints locally if available
+- run the affected CI/lint entrypoints locally, or record the exact entrypoint
+  that is unavailable in the sprint validation report
+- run `cargo-shear`
 - `git diff --check`
 
 ## Phase Acceptance
@@ -340,6 +467,9 @@ Phase `X` planning is complete when:
 - `ARCH-W-001`, `ARCH-W-002`, and `ARCH-W-003` each have sprint ownership
 - every `arch-ctm` systemic follow-up item from the Phase `W` post-mortem has
   sprint ownership
+- same-host CLI/graft helper deduplication has explicit sprint ownership
+- shared ATM error / protocol / doctor reuse points are named where a sprint
+  changes multi-interface behavior
 - sprint scopes are deletion-oriented and file-specific rather than generic
   cleanup language
 - acceptance criteria are concrete enough for QA to verify without reopening

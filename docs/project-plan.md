@@ -3143,12 +3143,66 @@ Acceptance:
   specific sprint
 - each sprint has explicit hard dependencies, required work, acceptance
   criteria, and required validation
+
+## 28. Phase X SQLite SSOT And Daemon Boundary Simplification
+
+Planning branch:
+- `feature/pX-s0-planning`
+
+Base branch:
+- `integrate/phase-W`
+
+Integration branch:
+- `integrate/phase-X`
+
+Goal:
+- remove the dual mailbox/runtime implementation so ATM has one durable
+  mailbox path
+- make daemon runtime truth align with the SQLite SSOT claim
+- make replay persistence startup behavior explicit and enforceable
+- add the guardrails needed to catch legacy-path regressions and stale code
+  earlier in development
+
+Execution shape:
+- `X.1` mailbox runtime cutover and dual-mode surface deletion
+- `X.2` command-path simplification and legacy mailbox path deletion
+- `X.3` daemon runtime truth unification and runtime-status-cache refactor
+- `X.4` replay-persistence startup contract, peer-transport decomposition, and
+  same-host helper deduplication
+- `X.5` systemic guardrails, typed-observability docs, and CI/lint follow-up
+
+Execution rules:
+- no Phase `X` sprint may preserve or add a mailbox durability fallback path
+- SQLite/store is the only durable retained mailbox implementation after the
+  cutover line lands
+- file watchers may remain only as ingress/reconcile edges, not as a parallel
+  mailbox backend
+- CLI and graft same-host daemon helper behavior must collapse onto one shared
+  implementation line before Phase `X` closeout
+- when helper ownership moves across crate boundaries, the owning boundary docs
+  must be updated in the same sprint so plan and boundary rules do not
+  contradict each other
+- deletion sprints must include explicit whole-workspace searches for removed
+  legacy constructs, not only touched-file verification
+
+Acceptance:
+- every live legacy mailbox/runtime path named in `docs/phase-X/plan-phase-X.md`
+  maps to one explicit sprint deliverable and acceptance criterion
+- same-host helper duplication across `atm`, `atm-graft`, and
+  `atm-daemon-client` has explicit sprint ownership
+- Phase `X` includes CI or QA gates for:
+  - silent emit discard regression
+  - RULE-002 function length regression
+  - legacy mailbox-path regression
+  - replay-capability-degradation regression
+  - dependency-ownership validation via `cargo-shear`
 - each sprint names the shared ATM error / protocol / doctor paths it must
   reuse and the current `main` CLI baseline it must preserve
 - duplicate interface-specific error/reporting implementations for the same
   touched failure class are marked for consolidation rather than preservation
-- no Phase W scope item relies on an implicit discovery sprint
-- Phase `W` closes only when shared CLI / graft / peer ATM error-code parity
-  and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`
-- the Phase `W` closeout gate in `docs/plan-phase-W.md` remains authoritative
-  for final merged-state certification
+- no Phase `X` scope item relies on an implicit discovery sprint
+- Phase `X` closes only when the legacy mailbox/runtime deletion gates,
+  same-host helper deduplication, and daemon SQLite-runtime truth rules are
+  revalidated on `integrate/phase-X`
+- `docs/phase-X/plan-phase-X.md` remains the authoritative execution plan for
+  the Phase `X` sprint line
