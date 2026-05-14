@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DESIGN-003-W>
+  a triage:Finding ;
+  triage:findingId "DESIGN-003-W" ;
+  triage:title "W.3 sqlite degraded runtime maps to wrong health code: WarningObservabilityHealthDegraded" ;
+  triage:description "crates/atm-daemon/src/runtime_status_cache.rs maps sqlite degraded runtime state to WarningObservabilityHealthDegraded instead of the shared sqlite/daemon availability code inventory. This means sqlite-specific degradation is not distinguishable from generic degradation at the health level." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "DESIGN" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DESIGN-003-W/integrate-phase-W/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DESIGN-003-W/integrate-phase-W/2> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:occurrence/DESIGN-003-W/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 511 ;
+  triage:snippet "code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:occurrence/DESIGN-003-W/integrate-phase-W/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 354 ;
+  triage:snippet "} else if !cache.sqlite_ready || cache.degraded_ingest || conflict_count > 0 {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:worktree/integrate-phase-W/f6a6b19>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:orderIndex 1 .
