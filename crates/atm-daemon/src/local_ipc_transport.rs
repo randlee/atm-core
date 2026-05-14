@@ -244,7 +244,7 @@ impl PreparedRuntimeServer {
             endpoint_preparation = ?endpoint_preparation,
             "daemon local IPC transport limits configured"
         );
-        let _ = observability.emit(
+        observability.emit_or_warn(
             "bind_listener",
             "ok",
             "daemon local IPC transport prepared the runtime listener",
@@ -432,7 +432,7 @@ impl PreparedRuntimeServer {
                 if signals.take_reload() {
                     match reload_runtime_view() {
                         Ok(()) => {
-                            let _ = observability.emit(
+                            observability.emit_or_warn(
                                 "reload_runtime_view",
                                 "ok",
                                 "bounded lifecycle-control-triggered config or roster reload applied",
@@ -500,7 +500,7 @@ impl PreparedRuntimeServer {
                     drop(stream);
                     match reload_runtime_view() {
                         Ok(()) => {
-                            let _ = observability.emit(
+                            observability.emit_or_warn(
                                 "reload_runtime_view",
                                 "ok",
                                 "bounded lifecycle-control-triggered config or roster reload applied",
@@ -531,6 +531,9 @@ impl PreparedRuntimeServer {
                             ) {
                                 tracing::warn!(
                                     %error,
+                                    subsystem = "local_ipc_transport",
+                                    action = "shutdown_probe_wake",
+                                    deadline_ms = TERMINATE_REJECTION_GRACE_DEADLINE.as_millis(),
                                     path = %endpoint_path.display(),
                                     "failed to schedule delayed listener wake during shutdown probe"
                                 );

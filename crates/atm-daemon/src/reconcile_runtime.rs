@@ -266,7 +266,7 @@ impl ReconcileRuntime {
             .name("atm-daemon-reconcile".to_string())
             .spawn(move || reconcile_worker_loop(inner))
             .map_err(|source| {
-                let _ = self.inner.observability.emit(
+                self.inner.observability.emit_or_warn(
                     "start",
                     "failed",
                     "failed to spawn reconcile runtime worker",
@@ -287,10 +287,9 @@ impl ReconcileRuntime {
             }
         };
         state.worker = Some(handle);
-        let _ = self
-            .inner
+        self.inner
             .observability
-            .emit("start", "ok", "reconcile runtime worker started");
+            .emit_or_warn("start", "ok", "reconcile runtime worker started");
         Ok(())
     }
 
@@ -325,7 +324,7 @@ impl ReconcileRuntime {
             match result_rx.recv_timeout(RECONCILE_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "ok",
                         "reconcile runtime worker shut down cleanly",
@@ -333,7 +332,7 @@ impl ReconcileRuntime {
                 }
                 Ok(Err(_)) => {
                     let _ = join_helper.join();
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "failed",
                         "reconcile runtime worker panicked during shutdown",
@@ -354,7 +353,7 @@ impl ReconcileRuntime {
                         timeout_ms = RECONCILE_SHUTDOWN_DEADLINE.as_millis(),
                         "reconcile runtime worker exceeded shutdown deadline; detaching join helper"
                     );
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "degraded",
                         "reconcile runtime worker exceeded its shutdown deadline",
@@ -368,7 +367,7 @@ impl ReconcileRuntime {
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "failed",
                         "reconcile runtime join helper disconnected during shutdown",
@@ -409,7 +408,7 @@ impl ReconcileRuntime {
                     )
                     .with_team(request_team.clone())
                     .with_agent(request_agent.clone());
-                let _ = self.inner.observability.emit_event(event);
+                self.inner.observability.emit_event_or_warn(event);
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime is unavailable before daemon startup",
                 ));
@@ -425,7 +424,7 @@ impl ReconcileRuntime {
                     )
                     .with_team(request_team.clone())
                     .with_agent(request_agent.clone());
-                let _ = self.inner.observability.emit_event(event);
+                self.inner.observability.emit_event_or_warn(event);
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime is unavailable during daemon shutdown",
                 ));
@@ -472,7 +471,7 @@ impl ReconcileRuntime {
                     )
                     .with_team(request_team.clone())
                     .with_agent(request_agent.clone());
-                let _ = self.inner.observability.emit_event(event);
+                self.inner.observability.emit_event_or_warn(event);
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime shut down before completion",
                 ));
@@ -504,7 +503,7 @@ impl ReconcileRuntime {
                     )
                     .with_team(request_team.clone())
                     .with_agent(request_agent.clone());
-                let _ = self.inner.observability.emit_event(event);
+                self.inner.observability.emit_event_or_warn(event);
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime timed out waiting for background completion",
                 ));

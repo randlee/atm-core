@@ -104,7 +104,12 @@ pub(super) fn handle_connection(
         Ok(Ok(response)) => response,
         Ok(Err(error)) => ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error)),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-            tracing::warn!("daemon request dispatcher exceeded the runtime deadline");
+            tracing::warn!(
+                subsystem = "local_ipc",
+                action = "dispatch",
+                deadline_ms = REQUEST_DEADLINE.as_millis(),
+                "daemon request dispatcher exceeded the runtime deadline"
+            );
             ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
                 &AtmError::daemon_unavailable(
                     "daemon request exceeded the 3s runtime deadline; the operation may still complete in the background",

@@ -16,7 +16,7 @@ use crate::{DaemonEvent, DaemonRuntimeObservability};
 #[derive(Debug)]
 pub(crate) struct TestDaemonObservability {
     active_log_path: PathBuf,
-    detail: Mutex<Option<String>>,
+    detail: Option<String>,
     recorded_messages: (Mutex<Vec<String>>, Condvar),
 }
 
@@ -43,7 +43,7 @@ impl TestDaemonObservability {
             })?;
         Ok(Self {
             active_log_path,
-            detail: Mutex::new(None),
+            detail: None,
             recorded_messages: (Mutex::new(Vec::new()), Condvar::new()),
         })
     }
@@ -150,11 +150,7 @@ impl ObservabilityPort for TestDaemonObservability {
     }
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        let detail = self
-            .detail
-            .lock()
-            .expect("test observability detail")
-            .clone();
+        let detail = self.detail.clone();
         match OpenOptions::new().append(true).open(&self.active_log_path) {
             Ok(_) => Ok(AtmObservabilityHealth {
                 active_log_path: Some(self.active_log_path.clone()),
