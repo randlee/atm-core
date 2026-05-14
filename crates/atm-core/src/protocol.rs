@@ -819,10 +819,12 @@ pub struct ReconcileResult {
 #[cfg(test)]
 mod tests {
     use super::{
-        HeartbeatActivity, RequestEnvelope, ResponseEnvelope, RuntimeLivenessState,
-        RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts, RuntimeStatusSnapshot,
-        TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
+        HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
+        RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusCounts,
+        RuntimeStatusSnapshot, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     };
+    use crate::error::AtmError;
+    use crate::error_codes::AtmErrorCode;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     #[test]
@@ -903,5 +905,23 @@ mod tests {
             serde_json::from_slice(&encoded).expect("decode runtime snapshot");
 
         assert_eq!(decoded, snapshot);
+    }
+
+    #[test]
+    fn protocol_error_envelope_preserves_remote_delivery_outcome_unknown_recovery() {
+        let error = AtmError::remote_delivery_outcome_unknown(
+            "remote peer delivery outcome is unknown and replay persistence failed",
+        )
+        .with_source(
+            AtmError::daemon_unavailable("remote replay store is not configured").with_recovery(
+                "Restore the host-scoped ATM durable replay store before retrying remote delivery so atm-daemon can resume unknown peer handoffs safely.",
+            ),
+        );
+        let envelope = ProtocolErrorEnvelope::from_error(&error);
+        let round_trip = envelope.into_atm_error();
+
+        assert_eq!(round_trip.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
+        assert_eq!(round_trip.message, error.message);
+        assert_eq!(round_trip.recovery, error.recovery);
     }
 }

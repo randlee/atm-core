@@ -196,6 +196,19 @@ impl SubsystemObservability {
         Ok(())
     }
 
+    pub(crate) fn emit_event_or_warn(&self, event: DaemonEvent) {
+        if let Err(error) = self.emit_event(event.clone()) {
+            tracing::warn!(
+                subsystem = event.subsystem.as_str(),
+                action = event.action,
+                outcome = event.outcome,
+                error_code = %error.code,
+                error_message = %error.message,
+                "daemon subsystem observability emit failed"
+            );
+        }
+    }
+
     pub(crate) fn emit(
         &self,
         action: &'static str,
@@ -203,5 +216,14 @@ impl SubsystemObservability {
         detail: impl Into<Cow<'static, str>>,
     ) -> Result<(), AtmError> {
         self.emit_event(self.event(action, outcome, detail))
+    }
+
+    pub(crate) fn emit_or_warn(
+        &self,
+        action: &'static str,
+        outcome: &'static str,
+        detail: impl Into<Cow<'static, str>>,
+    ) {
+        self.emit_event_or_warn(self.event(action, outcome, detail));
     }
 }

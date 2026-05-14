@@ -35,7 +35,6 @@ use crate::advisory_runtime::AdvisoryRuntime;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -118,7 +117,11 @@ impl DaemonRequestDispatcher {
             .name(format!("shutdown-finalizer-{label}"))
             .spawn(move || {
                 step().unwrap_or_else(|error| {
-                    tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
+                    tracing::warn!(
+                        %error,
+                        step = label,
+                        "daemon shutdown finalizer step failed; restart atm-daemon and inspect the retained observability log before retrying shutdown-sensitive work"
+                    );
                 });
             })
             .map_err(|source| {
@@ -136,7 +139,7 @@ impl DaemonRequestDispatcher {
         if shutdown_handle.join().is_err() {
             tracing::warn!(
                 step = label,
-                "daemon shutdown finalizer step panicked before reporting completion"
+                "daemon shutdown finalizer step panicked before reporting completion; restart atm-daemon and inspect the retained observability log for the failing shutdown step"
             );
         }
     }
@@ -179,7 +182,7 @@ impl DaemonRequestDispatcher {
                 tracing::warn!(
                     %error,
                     step = label,
-                    "daemon shutdown finalizer step could not start"
+                    "daemon shutdown finalizer step could not start; restart atm-daemon because shutdown cleanup could not be scheduled"
                 );
                 return;
             }

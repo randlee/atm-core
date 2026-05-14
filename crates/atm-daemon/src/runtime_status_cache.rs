@@ -197,6 +197,8 @@ impl RuntimeStatusCache {
             Ok(mut cache) => {
                 cache.sqlite_ready = false;
                 drop(cache);
+                // Emit failure is intentionally best-effort here because the in-memory sqlite
+                // readiness downgrade is the source of truth for doctor/status consumers.
                 let _ = self.observability.emit(
                     "mark_sqlite_unavailable",
                     "degraded",

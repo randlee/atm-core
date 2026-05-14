@@ -408,7 +408,8 @@ mod tests {
     use atm_core::schema::{AgentMember, AtmMessageId, MessageEnvelope, TeamConfig};
     use atm_core::send::{SendMessageSource, SendRequest};
     use atm_core::test_support::{
-        ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER, TEST_TEAM,
+        EnvGuard, ROLE_TEAM_LEAD, TEST_LEAD, TEST_RECIPIENT, TEST_RECIPIENT_ADDRESS, TEST_SENDER,
+        TEST_TEAM,
     };
     use atm_core::transport::testing::{
         FakeClientTransport, HealthyObservability, LoopbackClientTransport,
@@ -801,6 +802,13 @@ mod tests {
     #[test]
     fn loopback_transport_doctor_reports_health_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", None),
+            ("ATM_TEAM", Some(TEST_TEAM)),
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            ("ATM_LOG", None),
+            ("ATM_LOG_DIR", None),
+        ]);
         let observability = Arc::new(HealthyObservability);
         let composition_observability = CliObservability::fallback();
         let composition = CliComposition::from_transport(

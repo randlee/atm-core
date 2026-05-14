@@ -23,6 +23,9 @@ const STREAM_IDLE_WAIT: Duration = Duration::from_millis(100);
 
 #[derive(Debug)]
 pub(crate) struct AdvisoryRuntime {
+    // Advisory fetch/drain/read operations are read-heavy and independent per session, so an
+    // RwLock keeps concurrent readers off the registration/drain write path without requiring
+    // broader actor-style coordination for this bounded in-process runtime cache.
     state: RwLock<AdvisoryRuntimeState>,
     max_sessions: usize,
     max_nudges_per_session: usize,

@@ -49,12 +49,45 @@ impl PeerTransportConfig {
     }
 }
 
+fn remote_replay_store_not_configured_error() -> AtmError {
+    AtmError::daemon_unavailable("remote replay store is not configured").with_recovery(
+        "Restore the host-scoped ATM durable replay store before retrying remote delivery so atm-daemon can resume unknown peer handoffs safely.",
+    )
+}
+
+fn remote_peer_endpoint_not_configured_error() -> AtmError {
+    AtmError::daemon_unavailable("remote peer endpoint is not configured").with_recovery(
+        "Set ATM_DAEMON_PEER_ADDR or configure the daemon peer transport before retrying remote delivery or replay persistence.",
+    )
+}
+
+fn remote_retry_budget_expiry_error(
+    source: impl std::error::Error + Send + Sync + 'static,
+) -> AtmError {
+    AtmError::daemon_unavailable("failed to convert remote retry budget into a replay expiry")
+        .with_recovery(
+            "Fix the daemon remote retry budget configuration and restart atm-daemon before retrying remote delivery so replay expiry can be computed deterministically.",
+        )
+        .with_source(source)
+}
+
+fn remote_replay_persistence_failed_error(source: AtmError) -> AtmError {
+    AtmError::remote_delivery_outcome_unknown(
+        "remote peer delivery outcome is unknown and replay persistence failed",
+    )
+    .with_source(source)
+}
+
 fn daemon_peer_endpoint_from_env() -> Option<SocketAddr> {
     match std::env::var("ATM_DAEMON_PEER_ADDR") {
         Ok(raw) => parse_peer_endpoint(&raw),
         Err(std::env::VarError::NotPresent) => None,
         Err(std::env::VarError::NotUnicode(_)) => {
-            tracing::warn!("ignoring non-unicode ATM_DAEMON_PEER_ADDR value");
+            tracing::warn!(
+                subsystem = "peer_transport",
+                action = "env_parse",
+                "ignoring non-unicode ATM_DAEMON_PEER_ADDR value"
+            );
             None
         }
     }
@@ -176,7 +209,7 @@ impl PeerClientTransport {
                         replay_attempt_count = record.attempt_count,
                         "daemon remote replay delivered successfully"
                     );
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "resume_pending_replay",
                         "ok",
                         "daemon remote replay delivered a retained record",
@@ -195,7 +228,7 @@ impl PeerClientTransport {
                         error_message = %error.message,
                         "daemon remote replay delivery attempt failed; retaining record"
                     );
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "resume_pending_replay",
                         "degraded",
                         "daemon remote replay delivery failed and retained the record for retry",
@@ -221,22 +254,16 @@ impl PeerClientTransport {
         request: RequestEnvelope,
     ) -> Result<(), AtmError> {
         let Some(replay_store) = &self.replay_store else {
-            return Err(AtmError::daemon_unavailable(
-                "remote replay store is not configured",
-            ));
+            return Err(remote_replay_store_not_configured_error());
         };
-        let endpoint = self.endpoint.ok_or_else(|| {
-            AtmError::daemon_unavailable("remote peer endpoint is not configured")
-        })?;
+        let endpoint = self
+            .endpoint
+            .ok_or_else(remote_peer_endpoint_not_configured_error)?;
         let recorded_at = IsoTimestamp::now();
         let expires_at = IsoTimestamp::from_datetime(
             recorded_at.into_inner()
-                + chrono::Duration::from_std(self.config.remote_retry_budget).map_err(|error| {
-                    AtmError::daemon_unavailable(
-                        "failed to convert remote retry budget into a replay expiry",
-                    )
-                    .with_source(error)
-                })?,
+                + chrono::Duration::from_std(self.config.remote_retry_budget)
+                    .map_err(remote_retry_budget_expiry_error)?,
         );
         replay_store.enqueue(RemoteReplayStateRecord {
             team,
@@ -258,6 +285,9 @@ impl PeerClientTransport {
                 request = ?request,
                 "remote delivery outcome is unknown but this request family does not support durable replay persistence",
             );
+            // The original RemoteDeliveryOutcomeUnknown already carries the shared operator
+            // guidance for retry-vs-resume, so unsupported request families intentionally avoid
+            // fabricating a second replay-specific wrapper here.
             return Ok(());
         };
         self.persist_replay_request(team, agent, message_key, request.clone())
@@ -294,7 +324,7 @@ impl PeerClientTransport {
                         attempt,
                         "daemon peer delivery succeeded"
                     );
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "send_to_endpoint",
                         "ok",
                         "daemon peer delivery succeeded",
@@ -311,7 +341,7 @@ impl PeerClientTransport {
                             error_message = %failure.error.message,
                             "daemon peer delivery exhausted retry budget"
                         );
-                        let _ = self.observability.emit(
+                        self.observability.emit_or_warn(
                             "send_to_endpoint",
                             "failed",
                             "daemon peer delivery exhausted its retry budget",
@@ -329,7 +359,7 @@ impl PeerClientTransport {
                         error_message = %failure.error.message,
                         "daemon peer delivery hit retryable failure"
                     );
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "send_to_endpoint",
                         "degraded",
                         "daemon peer delivery hit a retryable failure",
@@ -361,7 +391,7 @@ impl PeerClientTransport {
                         error_message = %failure.error.message,
                         "daemon peer delivery failed"
                     );
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "send_to_endpoint",
                         "failed",
                         "daemon peer delivery failed with a non-retryable or outcome-unknown error",
@@ -384,6 +414,9 @@ impl PeerClientTransport {
                     error: AtmError::daemon_unavailable(format!(
                         "failed to connect to remote daemon peer at {endpoint}"
                     ))
+                    .with_recovery(
+                        "Confirm the remote daemon is reachable at the configured peer endpoint, then retry. If the remote daemon is intentionally offline, let durable replay resume the handoff after it recovers.",
+                    )
                     .with_source(source),
                 })
             })?;
@@ -395,6 +428,9 @@ impl PeerClientTransport {
                     error: AtmError::daemon_unavailable(
                         "failed to apply remote peer read deadline",
                     )
+                    .with_recovery(
+                        "Restart atm-daemon and retry after the peer socket can accept bounded read deadlines again.",
+                    )
                     .with_source(source),
                 })
             })?;
@@ -405,6 +441,9 @@ impl PeerClientTransport {
                     kind: AttemptFailureKind::Retryable,
                     error: AtmError::daemon_unavailable(
                         "failed to apply remote peer write deadline",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon and retry after the peer socket can accept bounded write deadlines again.",
                     )
                     .with_source(source),
                 })
@@ -460,6 +499,9 @@ impl PeerClientTransport {
                         error: AtmError::daemon_unavailable(
                             "failed to decode remote peer response frame",
                         )
+                        .with_recovery(
+                            "Align the peer daemon builds so both sides speak the same ATM daemon protocol before retrying the remote delivery.",
+                        )
                         .with_source(error),
                     })
                 })?;
@@ -510,20 +552,14 @@ impl boundary::sealed::Sealed for PeerClientTransport {}
 
 impl ClientTransport for PeerClientTransport {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        let endpoint = self.endpoint.ok_or_else(|| {
-            AtmError::daemon_unavailable("remote peer endpoint is not configured")
-                .with_recovery("Set ATM_DAEMON_PEER_ADDR or configure the daemon peer transport before retrying remote delivery.")
-        })?;
+        let endpoint = self
+            .endpoint
+            .ok_or_else(remote_peer_endpoint_not_configured_error)?;
         match self.send_to_endpoint(endpoint, request.clone()) {
             Ok(response) => Ok(response),
             Err(error) if error.code == AtmErrorCode::RemoteDeliveryOutcomeUnknown => {
                 self.persist_outcome_unknown_request(&request)
-                    .map_err(|persist_error| {
-                        AtmError::remote_delivery_outcome_unknown(
-                            "remote peer delivery outcome is unknown and replay persistence failed",
-                        )
-                        .with_source(persist_error)
-                    })?;
+                    .map_err(remote_replay_persistence_failed_error)?;
                 Err(error)
             }
             Err(error) => Err(error),
@@ -632,13 +668,17 @@ fn replay_metadata_for_request(
 }
 
 fn heartbeat_message_key(request: &TeamMemberHeartbeatRequest) -> Result<MessageKey, AtmError> {
-    MessageKey::new(format!(
+    // Team/member names are already validated ATM identifiers, pid is numeric, and RFC3339
+    // timestamps are never blank, so this synthetic replay key cannot violate MessageKey's
+    // non-empty invariant.
+    Ok(MessageKey::new(format!(
         "remote-heartbeat:{}:{}:{}:{}",
         request.team.as_str(),
         request.member.as_str(),
         request.pid,
         request.observed_at.into_inner().to_rfc3339(),
     ))
+    .expect("validated heartbeat replay keys are never blank"))
 }
 
 fn jittered_backoff(base: Duration, seed: u64) -> Duration {
@@ -684,12 +724,15 @@ fn parse_peer_endpoint(raw: &str) -> Option<SocketAddr> {
 #[cfg(test)]
 mod tests {
     use super::{
-        AttemptFailureKind, PeerTransportConfig, PeerTransportRuntime, classify_io_error,
-        jittered_backoff,
+        AttemptFailureKind, PeerClientTransport, PeerTransportConfig, PeerTransportRuntime,
+        classify_io_error, jittered_backoff, remote_peer_endpoint_not_configured_error,
+        remote_replay_persistence_failed_error, remote_replay_store_not_configured_error,
     };
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
     use crate::test_support::LifecycleFlagResetGuard;
+    use crate::{DaemonSubsystem, SubsystemObservability};
     use atm_core::boundary::{AtmProtocol, ClientTransport, MessageKey};
+    use atm_core::doctor::DoctorQuery;
     use atm_core::error::AtmErrorCode;
     use atm_core::protocol::{
         HeartbeatActivity, ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope,
@@ -770,6 +813,127 @@ mod tests {
             classify_io_error(&io::Error::other("non-retryable")),
             AttemptFailureKind::NonRetryable
         );
+    }
+
+    #[test]
+    fn persist_replay_request_requires_configured_replay_store_with_recovery() {
+        let team: TeamName = "test-team".parse().expect("team");
+        let agent: AgentName = "test-agent".parse().expect("agent");
+        let client = PeerClientTransport {
+            endpoint: Some(SocketAddr::from((Ipv4Addr::LOCALHOST, 7001))),
+            config: PeerTransportConfig::default(),
+            replay_store: None,
+            codec: super::JsonAtmProtocolCodec,
+            observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        };
+        let error = client
+            .persist_replay_request(
+                team.clone(),
+                agent.clone(),
+                MessageKey::new("atm:test-remote-replay-store-missing").expect("message key"),
+                RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                    team,
+                    member: agent,
+                    pid: 42,
+                    observed_at: IsoTimestamp::now(),
+                    activity: HeartbeatActivity::Idle,
+                }),
+            )
+            .expect_err("missing replay store should fail closed");
+        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert!(
+            error
+                .recovery
+                .as_deref()
+                .expect("recovery guidance")
+                .contains("host-scoped ATM durable replay store")
+        );
+    }
+
+    #[test]
+    fn persist_replay_request_missing_endpoint_matches_send_surface_contract() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team: TeamName = "test-team".parse().expect("team");
+        let agent: AgentName = "test-agent".parse().expect("agent");
+        let replay_store =
+            crate::sqlite_remote_replay_store_from_path(tempdir.path().join("mail.db"))
+                .expect("replay store");
+        let client = PeerClientTransport {
+            endpoint: None,
+            config: PeerTransportConfig::default(),
+            replay_store: Some(replay_store),
+            codec: super::JsonAtmProtocolCodec,
+            observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        };
+        let persist_error = client
+            .persist_replay_request(
+                team.clone(),
+                agent.clone(),
+                MessageKey::new("atm:test-remote-peer-endpoint-missing").expect("message key"),
+                RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                    team,
+                    member: agent,
+                    pid: 43,
+                    observed_at: IsoTimestamp::now(),
+                    activity: HeartbeatActivity::Idle,
+                }),
+            )
+            .expect_err("missing endpoint should fail closed");
+        let send_error = remote_peer_endpoint_not_configured_error();
+        assert_eq!(persist_error.code, send_error.code);
+        assert_eq!(persist_error.recovery, send_error.recovery);
+    }
+
+    #[test]
+    fn persist_replay_request_invalid_retry_budget_reports_actionable_recovery() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team: TeamName = "test-team".parse().expect("team");
+        let agent: AgentName = "test-agent".parse().expect("agent");
+        let replay_store =
+            crate::sqlite_remote_replay_store_from_path(tempdir.path().join("mail.db"))
+                .expect("replay store");
+        let client = PeerClientTransport {
+            endpoint: Some(SocketAddr::from((Ipv4Addr::LOCALHOST, 7002))),
+            config: PeerTransportConfig {
+                remote_retry_budget: Duration::MAX,
+            },
+            replay_store: Some(replay_store),
+            codec: super::JsonAtmProtocolCodec,
+            observability: SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
+        };
+        let error = client
+            .persist_replay_request(
+                team.clone(),
+                agent.clone(),
+                MessageKey::new("atm:test-remote-retry-budget-invalid").expect("message key"),
+                RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
+                    team,
+                    member: agent,
+                    pid: 44,
+                    observed_at: IsoTimestamp::now(),
+                    activity: HeartbeatActivity::Idle,
+                }),
+            )
+            .expect_err("invalid retry budget should fail closed");
+        assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+        assert!(
+            error
+                .recovery
+                .as_deref()
+                .expect("recovery guidance")
+                .contains("remote retry budget configuration")
+        );
+    }
+
+    #[test]
+    fn protocol_envelope_preserves_replay_persistence_failure_contract() {
+        let error =
+            remote_replay_persistence_failed_error(remote_replay_store_not_configured_error());
+        let envelope = ProtocolErrorEnvelope::from_error(&error);
+        let round_trip = envelope.into_atm_error();
+        assert_eq!(round_trip.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
+        assert_eq!(round_trip.message, error.message);
+        assert_eq!(round_trip.recovery, error.recovery);
     }
 
     #[test]
@@ -1123,6 +1287,48 @@ mod tests {
         assert_eq!(pending.len(), 1);
         assert_eq!(pending[0].team, team);
         assert_eq!(pending[0].agent, member);
+    }
+
+    #[test]
+    #[serial]
+    fn unsupported_request_family_keeps_shared_outcome_unknown_recovery() {
+        let _reset = install_shared_lifecycle_reset_guard();
+        let tempdir = TempDir::new().expect("tempdir");
+        let listener = TcpListener::bind((Ipv4Addr::LOCALHOST, 0)).expect("listener");
+        let endpoint = listener.local_addr().expect("addr");
+        let db_path = tempdir.path().join("mail.db");
+        let transport = PeerTransportRuntime::new_for_test(
+            endpoint,
+            PeerTransportConfig::default(),
+            db_path.clone(),
+        );
+        let request = RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: tempdir.path().to_path_buf(),
+            current_dir: tempdir.path().to_path_buf(),
+            team_override: None,
+        });
+
+        thread::spawn(move || {
+            let (mut stream, _) = listener.accept().expect("accept");
+            let _ = read_request_frame(&mut stream);
+        });
+
+        let error = transport
+            .client_transport()
+            .send(request)
+            .expect_err("outcome unknown");
+        assert_eq!(error.code, AtmErrorCode::RemoteDeliveryOutcomeUnknown);
+        assert!(
+            error
+                .recovery
+                .as_deref()
+                .expect("recovery guidance")
+                .contains("let the daemon resume the pending handoff")
+        );
+        let pending = transport
+            .load_pending_replay_records()
+            .expect("load pending");
+        assert!(pending.is_empty());
     }
 
     #[test]
