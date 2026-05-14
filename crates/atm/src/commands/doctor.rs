@@ -111,6 +111,7 @@ mod tests {
                 detail: None,
             },
             runtime_status: None,
+            bootstrap_trace: None,
         }
     }
 

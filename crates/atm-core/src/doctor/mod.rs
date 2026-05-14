@@ -17,8 +17,9 @@ use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
 
 pub use report::{
-    DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary,
+    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+    BootstrapTraceReport, DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity,
+    DoctorStatus, DoctorSummary,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -126,6 +127,7 @@ pub fn run_doctor_with_runtime(
         member_roster,
         observability: observability_health,
         runtime_status: None,
+        bootstrap_trace: None,
     })
 }
 
