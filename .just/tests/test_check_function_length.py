@@ -45,6 +45,69 @@ fn production() {
         self.assertTrue(MODULE.overlaps_changed_lines(function, {20}))
         self.assertFalse(MODULE.overlaps_changed_lines(function, {21, 22}))
 
+    def test_classify_functions_marks_70_to_79_as_advisory(self) -> None:
+        repo_root = Path("/repo")
+        function = MODULE.FunctionSpan(
+            path=repo_root / "crates/atm-core/src/example.rs",
+            name="advisory",
+            start_line=10,
+            end_line=79,
+        )
+
+        classified = MODULE.classify_functions(
+            [function],
+            {},
+            warn_threshold=70,
+            fail_threshold=80,
+            repo_root=repo_root,
+        )
+
+        self.assertEqual(classified.advisories, [function])
+        self.assertEqual(classified.new_failures, [])
+        self.assertEqual(classified.grandfathered_failures, [])
+
+    def test_classify_functions_marks_80_plus_overlap_as_new_failure(self) -> None:
+        repo_root = Path("/repo")
+        function = MODULE.FunctionSpan(
+            path=repo_root / "crates/atm-core/src/example.rs",
+            name="new_failure",
+            start_line=10,
+            end_line=89,
+        )
+
+        classified = MODULE.classify_functions(
+            [function],
+            {"crates/atm-core/src/example.rs": {25}},
+            warn_threshold=70,
+            fail_threshold=80,
+            repo_root=repo_root,
+        )
+
+        self.assertEqual(classified.new_failures, [function])
+        self.assertEqual(classified.advisories, [])
+        self.assertEqual(classified.grandfathered_failures, [])
+
+    def test_classify_functions_grandfathers_unchanged_80_plus_function(self) -> None:
+        repo_root = Path("/repo")
+        function = MODULE.FunctionSpan(
+            path=repo_root / "crates/atm-core/src/example.rs",
+            name="grandfathered",
+            start_line=10,
+            end_line=89,
+        )
+
+        classified = MODULE.classify_functions(
+            [function],
+            {"crates/atm-core/src/example.rs": {100}},
+            warn_threshold=70,
+            fail_threshold=80,
+            repo_root=repo_root,
+        )
+
+        self.assertEqual(classified.grandfathered_failures, [function])
+        self.assertEqual(classified.advisories, [])
+        self.assertEqual(classified.new_failures, [])
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -103,7 +103,7 @@ resolver = "2"
             self.assertEqual(tasks["manifests"].command[-1], str(repo_root / ".just/lint_manifests.py"))
             self.assertEqual(
                 tasks["silent-emit"].command[-1],
-                str(repo_root / "scripts/check-silent-emit.sh"),
+                str(repo_root / "scripts/check-silent-emit.py"),
             )
             self.assertEqual(
                 tasks["function-length"].command[-1],
@@ -129,7 +129,7 @@ resolver = "2"
     def test_resolve_task_names_fast_is_low_latency_subset(self) -> None:
         self.assertEqual(
             resolve_task_names("fast"),
-            ["fmt", "version", "boundaries", "manifests", "silent-emit", "spell", "pytests"],
+            ["fmt", "version", "boundaries", "manifests", "silent-emit", "function-length", "spell", "pytests"],
         )
 
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:

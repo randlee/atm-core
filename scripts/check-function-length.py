@@ -31,6 +31,13 @@ class FunctionSpan:
         return self.end_line - self.start_line + 1
 
 
+@dataclass(frozen=True)
+class FunctionClassification:
+    advisories: list[FunctionSpan]
+    grandfathered_failures: list[FunctionSpan]
+    new_failures: list[FunctionSpan]
+
+
 def discover_repo_root(explicit_root: str | None = None) -> Path:
     if explicit_root is not None:
         return Path(explicit_root).resolve()
@@ -191,6 +198,36 @@ def overlaps_changed_lines(function: FunctionSpan, changed_lines: set[int]) -> b
     return any(line in changed_lines for line in range(function.start_line, function.end_line + 1))
 
 
+def classify_functions(
+    functions: list[FunctionSpan],
+    changed_by_file: dict[str, set[int]],
+    *,
+    warn_threshold: int,
+    fail_threshold: int,
+    repo_root: Path,
+) -> FunctionClassification:
+    new_failures: list[FunctionSpan] = []
+    grandfathered_failures: list[FunctionSpan] = []
+    advisories: list[FunctionSpan] = []
+
+    for function in functions:
+        relative_path = function.path.relative_to(repo_root).as_posix()
+        changed_lines = changed_by_file.get(relative_path, set())
+        if function.line_count >= fail_threshold:
+            if overlaps_changed_lines(function, changed_lines):
+                new_failures.append(function)
+            else:
+                grandfathered_failures.append(function)
+        elif function.line_count >= warn_threshold:
+            advisories.append(function)
+
+    return FunctionClassification(
+        advisories=advisories,
+        grandfathered_failures=grandfathered_failures,
+        new_failures=new_failures,
+    )
+
+
 def render(repo_root: Path, function: FunctionSpan) -> str:
     return (
         f"{function.path.relative_to(repo_root)}:{function.start_line}-{function.end_line}: "
@@ -210,39 +247,36 @@ def main(argv: list[str]) -> int:
     base_ref = resolve_base_ref(args.base_ref)
     changed_by_file = changed_lines_by_file(repo_root, base_ref)
 
-    new_failures: list[FunctionSpan] = []
-    grandfathered_failures: list[FunctionSpan] = []
-    advisories: list[FunctionSpan] = []
-
+    functions: list[FunctionSpan] = []
     for rust_path in iter_workspace_rust_files(repo_root):
         relative_path = rust_path.relative_to(repo_root)
         if is_test_only_path(relative_path):
             continue
-        changed_lines = changed_by_file.get(relative_path.as_posix(), set())
-        for function in find_function_spans(rust_path):
-            if function.line_count >= args.fail_threshold:
-                if overlaps_changed_lines(function, changed_lines):
-                    new_failures.append(function)
-                else:
-                    grandfathered_failures.append(function)
-            elif function.line_count >= args.warn_threshold:
-                advisories.append(function)
+        functions.extend(find_function_spans(rust_path))
+
+    classification = classify_functions(
+        functions,
+        changed_by_file,
+        warn_threshold=args.warn_threshold,
+        fail_threshold=args.fail_threshold,
+        repo_root=repo_root,
+    )
 
     print(f"function-length base ref: {base_ref}")
 
-    if advisories:
+    if classification.advisories:
         print("RULE-002 advisory (70-79 lines):")
-        for function in advisories:
+        for function in classification.advisories:
             print(render(repo_root, function))
 
-    if grandfathered_failures:
+    if classification.grandfathered_failures:
         print("RULE-002 grandfathered hard violations (80+ lines, unchanged in this diff):")
-        for function in grandfathered_failures:
+        for function in classification.grandfathered_failures:
             print(render(repo_root, function))
 
-    if new_failures:
+    if classification.new_failures:
         print("RULE-002 failed: new hard violations (80+ lines) overlap the current diff:")
-        for function in new_failures:
+        for function in classification.new_failures:
             print(render(repo_root, function))
         return 1
 

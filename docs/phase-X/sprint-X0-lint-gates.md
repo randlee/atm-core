@@ -3,7 +3,7 @@ id: X.0
 title: Pre-Phase Lint Gates
 status: complete
 branch: feature/pX-lint-gates
-worktree: ../atm-core-worktrees/feature/pX-lint-gates
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pX-lint-gates
 target: develop
 ---
 
@@ -24,7 +24,7 @@ target: develop
 
 ## Exact Targets
 
-- `scripts/check-silent-emit.sh`
+- `scripts/check-silent-emit.py`
 - `scripts/check-function-length.py`
 - local lint entrypoints:
   - `.just/run_lint.py`

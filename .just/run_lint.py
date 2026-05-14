@@ -38,7 +38,7 @@ PYTHON_LINT_ORDER = (
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability")
 CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear")
-FAST_LINT_ORDER = ("fmt", "version", "boundaries", "manifests", "silent-emit", "spell", "pytests")
+FAST_LINT_ORDER = ("fmt", "version", "boundaries", "manifests", "silent-emit", "function-length", "spell", "pytests")
 HIGH_VOLUME_LINTS = {"identities", "lines"}
 CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "manifests"}
 COUNT_PATTERNS = (
@@ -98,7 +98,7 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "manifests": LintTask("manifests", [python_executable, str(repo_root / ".just/lint_manifests.py")]),
         "silent-emit": LintTask(
-            "silent-emit", ["bash", str(repo_root / "scripts/check-silent-emit.sh")]
+            "silent-emit", [python_executable, str(repo_root / "scripts/check-silent-emit.py")]
         ),
         "function-length": LintTask(
             "function-length", [python_executable, str(repo_root / "scripts/check-function-length.py")]

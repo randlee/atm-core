@@ -68,7 +68,7 @@ _lint-manifests:
 
 [private]
 _lint-silent-emit:
-    bash scripts/check-silent-emit.sh
+    {{python_cmd}} scripts/check-silent-emit.py
 
 [private]
 _lint-function-length:
