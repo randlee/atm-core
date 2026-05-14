@@ -28,7 +28,7 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s8-phase
   - `W.8` phase closeout: typed SQLite subsystem identity and ATM error
     inventory correction
 - this sprint closes the gap called out in
-  [sprint-W1.md](/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s8-phase-w-closeout/docs/phase-W/sprint-W1.md:75):
+  `docs/phase-W/sprint-W1.md` lines 75-78:
   `DaemonSubsystem::Sqlite` was added and
   `emit_subsystem_event(...)` was tightened from `&'static str` subsystem ids
   to typed `DaemonSubsystem` on the retained-log path
