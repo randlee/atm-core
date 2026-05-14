@@ -3,7 +3,7 @@ id: W.5
 title: Doctor Projection
 status: completed
 branch: feature/pW-s5-doctor-projection
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s5-doctor-projection
+worktree: ../atm-core-worktrees/feature/pW-s5-doctor-projection
 ---
 
 # Sprint W.5 — Doctor Projection Gap

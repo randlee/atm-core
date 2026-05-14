@@ -3,7 +3,7 @@ id: W.6
 title: SQLite Error Contract Cleanup
 status: completed
 branch: feature/pW-s6-sqlite-error-contract
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s6-sqlite-error-contract
+worktree: ../atm-core-worktrees/feature/pW-s6-sqlite-error-contract
 ---
 
 # Sprint W.6 — SQLite Error Contract Cleanup

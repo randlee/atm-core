@@ -3,7 +3,7 @@ id: W.8
 title: Phase W Closeout Gaps
 status: completed
 branch: feature/pW-s8-phase-w-closeout
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s8-phase-w-closeout
+worktree: ../atm-core-worktrees/feature/pW-s8-phase-w-closeout
 ---
 
 # Sprint W.8 — Phase W Closeout Gaps
