@@ -5,7 +5,7 @@ use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::boundary;
 use atm_core::boundary::ClientTransport;
 use atm_core::clear::{ClearOutcome, ClearQuery};
-use atm_core::doctor::{DoctorQuery, DoctorReport};
+use atm_core::doctor::{BootstrapTraceReport, DoctorQuery, DoctorReport};
 use atm_core::error::AtmError;
 use atm_core::graft::{
     AdvisoryDrainRequest, AdvisoryDrainResponse, AdvisoryFetchRequest, AdvisoryFetchResponse,
@@ -84,6 +84,7 @@ impl ClientTransport for LocalIpcClientTransportAdapter {
 pub(crate) struct CliComposition<'a> {
     transport: Arc<dyn ClientTransport + Send + Sync + 'a>,
     observability_port: &'a CliObservability,
+    bootstrap_trace: Option<BootstrapTraceReport>,
     send_command: SendCommandEntryPoint,
     receive_command: ReceiveCommandEntryPoint,
 }
@@ -93,6 +94,7 @@ impl fmt::Debug for CliComposition<'_> {
         f.debug_struct("CliComposition")
             .field("transport", &"dyn ClientTransport")
             .field("observability_port", &"dyn ObservabilityPort")
+            .field("bootstrap_trace", &self.bootstrap_trace)
             .field("send_command", &self.send_command)
             .field("receive_command", &self.receive_command)
             .finish()
@@ -107,6 +109,22 @@ impl<'a> CliComposition<'a> {
         Self {
             transport,
             observability_port,
+            bootstrap_trace: None,
+            send_command: SendCommandEntryPoint::new(),
+            receive_command: ReceiveCommandEntryPoint::new(),
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn from_transport_with_bootstrap_trace(
+        transport: Arc<dyn ClientTransport + Send + Sync + 'a>,
+        observability_port: &'a CliObservability,
+        bootstrap_trace: BootstrapTraceReport,
+    ) -> Self {
+        Self {
+            transport,
+            observability_port,
+            bootstrap_trace: Some(bootstrap_trace),
             send_command: SendCommandEntryPoint::new(),
             receive_command: ReceiveCommandEntryPoint::new(),
         }
@@ -261,7 +279,10 @@ impl<'a> CliComposition<'a> {
 
     pub(crate) fn doctor(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
         match self.send_request(RequestEnvelope::Doctor(query))? {
-            ResponseEnvelope::Doctor(report) => Ok(report),
+            ResponseEnvelope::Doctor(mut report) => {
+                report.bootstrap_trace = self.bootstrap_trace.clone();
+                Ok(report)
+            }
             other => Err(unexpected_response("doctor", other)),
         }
     }
@@ -323,7 +344,9 @@ impl<'a> CliComposition<'a> {
         supervisor.ensure_daemon_available_with_traceability(&traceability, || {
             transport.try_connect().map(|_| ())
         })?;
-        Ok(Self::from_transport(transport, observability))
+        let mut composition = Self::from_transport(transport, observability);
+        composition.bootstrap_trace = Some(traceability.snapshot());
+        Ok(composition)
     }
 }
 
@@ -398,7 +421,10 @@ mod tests {
     use atm_core::ack::AckRequest;
     use atm_core::boundary::ClientTransport;
     use atm_core::clear::ClearQuery;
-    use atm_core::doctor::{DoctorQuery, DoctorStatus};
+    use atm_core::doctor::{
+        BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+        BootstrapTraceReport, DoctorQuery, DoctorStatus,
+    };
     use atm_core::error::AtmError;
     use atm_core::graft::AtmGraftClient;
     use atm_core::protocol::{
@@ -822,6 +848,41 @@ mod tests {
 
         assert_eq!(report.summary.status, DoctorStatus::Healthy);
         assert_eq!(report.summary.error_count, 0);
+    }
+
+    #[test]
+    fn doctor_projects_bootstrap_trace_into_report() {
+        let fixture = LoopbackFixture::new(TEST_RECIPIENT);
+        let observability = Arc::new(HealthyObservability);
+        let composition_observability = CliObservability::fallback();
+        let composition = CliComposition::from_transport_with_bootstrap_trace(
+            Arc::new(LoopbackClientTransport::new(observability)),
+            &composition_observability,
+            BootstrapTraceReport {
+                daemon_connect: BootstrapConnectOutcome::Connected,
+                daemon_launch_gate: BootstrapLaunchGateOutcome::Skipped,
+                daemon_auto_start: BootstrapAutoStartOutcome::Skipped,
+                connect_detail: None,
+                launch_gate_detail: None,
+                auto_start_detail: None,
+            },
+        );
+
+        let report = composition
+            .doctor(fixture.doctor_query())
+            .expect("doctor report");
+
+        assert_eq!(
+            report.bootstrap_trace.as_ref().expect("bootstrap trace"),
+            &BootstrapTraceReport {
+                daemon_connect: BootstrapConnectOutcome::Connected,
+                daemon_launch_gate: BootstrapLaunchGateOutcome::Skipped,
+                daemon_auto_start: BootstrapAutoStartOutcome::Skipped,
+                connect_detail: None,
+                launch_gate_detail: None,
+                auto_start_detail: None,
+            }
+        );
     }
 
     #[test]
