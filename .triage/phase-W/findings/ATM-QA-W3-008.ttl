@@ -1,0 +1,26 @@
+@prefix atm: <https://atm-core.dev/triage#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+atm:ATM-QA-W3-008 a atm:Finding ;
+    atm:finding_id "ATM-QA-W3-008" ;
+    atm:title "sprint-W3.md header fields status/branch/worktree still planned/TBD/TBD; missing W.1 merge note" ;
+    atm:severity "important" ;
+    atm:status "open" ;
+    atm:highest_open_branch "feature/pW-s3-sqlite-observability" ;
+    atm:promote_to_branch "feature/pW-s3-sqlite-observability" ;
+    atm:dispatch_ready "true"^^xsd:boolean ;
+    atm:occurrences (
+        [
+            atm:branch "feature/pW-s3-sqlite-observability" ;
+            atm:file "docs/phase-W/sprint-W3.md" ;
+            atm:lines "1-6" ;
+            atm:status "open"
+        ]
+        [
+            atm:branch "integrate/phase-W" ;
+            atm:file "docs/phase-W/sprint-W3.md" ;
+            atm:lines "1-6" ;
+            atm:status "open"
+        ]
+    ) ;
+    atm:notes """Confirmed on both branches. On feature/pW-s3-sqlite-observability at 2f245dc: sprint-W3.md YAML frontmatter shows status=planned, branch=TBD, worktree=TBD. These must be updated to status=complete (or in-progress), branch=feature/pW-s3-sqlite-observability, worktree=atm-core-worktrees/feature/pW-s3-sqlite-observability. A note must also be added confirming W.1 was merged into integrate/phase-W before this branch was created. On integrate/phase-W at 6df690b: the same file has identical stale header values — this occurrence will be resolved by merge-forward when the feature branch is merged. Fix belongs on the feature branch; integrate occurrence closes automatically on merge.""" .

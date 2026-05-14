@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W3-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W3-003" ;
+  triage:title "DaemonSqliteObservability::emit discards event.action — doctor cannot distinguish failure classes" ;
+  triage:description "crates/atm-daemon/src/sqlite_observability.rs:44-49 (feature branch 2f245dc): emit() passes event.action to emit_subsystem_event (structured log) but calls mark_sqlite_unavailable_with_detail(event.message), discarding event.action from the doctor-visible RuntimeStatusCache detail string. Four distinct failure classes (writer_submit, writer_reply, wal_checkpoint, reader_budget_acquire) collapse into untagged message strings in atm doctor output. Sprint-W3.md:251-254 requires doctor to expose queue backlog, reply timeout, WAL, and reader-budget diagnostics as separately identifiable failure classes — not satisfiable with current implementation. Fix at sqlite_observability.rs:48: change to mark_sqlite_unavailable_with_detail(format!('[{}] {}', event.action, event.message)). Also tighten existing test assertion to assert action-class presence. ATM-QA-W3-010 reported the same issue from a different reviewer angle and is covered by this record." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteToWorktree "feature/pW-s3-sqlite-observability" ;
+  triage:verdict "CONFIRMED — event.action dropped in mark_sqlite_unavailable_with_detail call; four failure classes merge into untagged string; fix: format('[{}] {}', event.action, event.message); also tighten test; ATM-QA-W3-010 covered by this record" ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3-sqlite-observability/2f245dc> .
+
+<urn:atm:triage:worktree/pW-s3-sqlite-observability/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .

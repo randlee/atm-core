@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W3-013>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W3-013" ;
+  triage:title "Phase W entry absent from project-plan.md on feature branch" ;
+  triage:description "docs/project-plan.md on feature/pW-s3-sqlite-observability does not contain a Phase W section. The file ends at Phase U content (2971 lines). integrate/phase-W already has the Phase W entry at line 3064 (## 27. Phase W Production Readiness Follow-Up). Fix: cherry-pick or manually add the Phase W section from integrate/phase-W into the feature branch project-plan.md, consistent with prior phase entries (Phase T, Phase U, Phase V)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W3-013/pW-s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3/2f245dc> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:occurrence/ATM-QA-W3-013/pW-s3/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 2971 ;
+  triage:snippet "(end of file — Phase W section absent; last phase entry is Phase U)" ;
+  triage:note "integrate/phase-W has Phase W at line 3064; feature branch is missing this section" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:worktree/pW-s3/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .
