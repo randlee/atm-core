@@ -2,7 +2,7 @@ use std::sync::Arc;
 
 use atm_core::error::AtmError;
 
-#[path = "daemon_observability.rs"]
+#[path = "../bin_support/daemon_observability.rs"]
 mod daemon_observability;
 
 use daemon_observability::DaemonObservability;

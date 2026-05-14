@@ -6,7 +6,9 @@ use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::ObservabilityPort;
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, TaskId, TeamName};
-use sc_observability_types::{ActionName, OutcomeLabel};
+
+type ActionName = sc_observability_types::ActionName;
+type OutcomeLabel = sc_observability_types::OutcomeLabel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DaemonSubsystem {

@@ -2,10 +2,12 @@ use std::sync::Arc;
 
 use atm_core::error::AtmError;
 use atm_rusqlite::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
-use sc_observability_types::{ActionName, OutcomeLabel};
 
 use crate::DaemonRuntimeObservability;
 use crate::runtime_status_cache::RuntimeStatusCache;
+
+type ActionName = sc_observability_types::ActionName;
+type OutcomeLabel = sc_observability_types::OutcomeLabel;
 
 #[derive(Clone)]
 pub(crate) struct DaemonSqliteObservability {

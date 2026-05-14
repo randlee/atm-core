@@ -11,9 +11,11 @@ use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
 };
-use sc_observability_types::{ActionName, OutcomeLabel};
 
 use crate::{DaemonEvent, DaemonRuntimeObservability};
+
+type ActionName = sc_observability_types::ActionName;
+type OutcomeLabel = sc_observability_types::OutcomeLabel;
 
 #[derive(Debug)]
 pub(crate) struct TestDaemonObservability {

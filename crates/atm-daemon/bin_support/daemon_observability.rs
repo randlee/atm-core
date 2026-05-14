@@ -14,20 +14,30 @@ use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort, RetainedSinkFaultMode,
 };
-use sc_observability::{
-    LogSink, Logger, LoggerConfig, RetentionPolicy, RotationPolicy, SinkRegistration,
-};
-use sc_observability_types::{
-    ActionName, CorrelationId, DiagnosticInfo, DiagnosticSummary, ErrorCode, ErrorContext, Level,
-    LevelFilter as SharedLevelFilter, LogEvent, LogSinkError, OutcomeLabel, ProcessIdentity,
-    Remediation, SchemaVersion, ServiceName, SinkHealth, SinkHealthState, SinkName, TargetCategory,
-    Timestamp,
-};
 use serde_json::Map;
 
 #[cfg(test)]
 use atm_daemon::DaemonSubsystem;
 use atm_daemon::{DaemonEvent, TeamScope};
+
+type ActionName = sc_observability_types::ActionName;
+type CorrelationId = sc_observability_types::CorrelationId;
+type DiagnosticSummary = sc_observability_types::DiagnosticSummary;
+type ErrorCode = sc_observability_types::ErrorCode;
+type ErrorContext = sc_observability_types::ErrorContext;
+type Level = sc_observability_types::Level;
+type SharedLevelFilter = sc_observability_types::LevelFilter;
+type LogEvent = sc_observability_types::LogEvent;
+type OutcomeLabel = sc_observability_types::OutcomeLabel;
+type ProcessIdentity = sc_observability_types::ProcessIdentity;
+type Remediation = sc_observability_types::Remediation;
+type SchemaVersion = sc_observability_types::SchemaVersion;
+type ServiceName = sc_observability_types::ServiceName;
+type SinkHealth = sc_observability_types::SinkHealth;
+type SinkHealthState = sc_observability_types::SinkHealthState;
+type SinkName = sc_observability_types::SinkName;
+type TargetCategory = sc_observability_types::TargetCategory;
+type Timestamp = sc_observability_types::Timestamp;
 
 const ATM_SERVICE_NAME: &str = "atm";
 const ATM_DAEMON_TARGET: &str = "atm.daemon";
@@ -40,7 +50,7 @@ const RETAINED_LOG_PRUNE_INTERVAL: Duration = Duration::from_secs(60);
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 
 pub struct DaemonObservability {
-    logger: Arc<Logger>,
+    logger: Arc<sc_observability::Logger>,
     active_log_path: PathBuf,
     retained_sink: Arc<RetainedJsonlFileSink>,
     service_name: ServiceName,
@@ -197,7 +207,10 @@ impl DaemonObservability {
             error_code,
         )?;
         self.logger.emit(event).map_err(|source| {
-            let code = source.diagnostic().code.as_str().to_string();
+            let code = sc_observability_types::DiagnosticInfo::diagnostic(&source)
+                .code
+                .as_str()
+                .to_string();
             AtmError::observability_emit(format!(
                 "shared daemon observability emit failed ({code})"
             ))
@@ -416,7 +429,10 @@ impl DaemonObservability {
             fields: event.fields,
         };
         self.logger.emit(event).map_err(|source| {
-            let code = source.diagnostic().code.as_str().to_string();
+            let code = sc_observability_types::DiagnosticInfo::diagnostic(&source)
+                .code
+                .as_str()
+                .to_string();
             AtmError::observability_emit(format!(
                 "shared daemon observability emit failed ({code})"
             ))
@@ -430,14 +446,22 @@ fn build_logger(
     retained_sink_fault: Option<RetainedSinkFaultMode>,
     service_name: &ServiceName,
     rotation_max_bytes: u64,
-) -> Result<(Logger, PathBuf, Arc<RetainedJsonlFileSink>), AtmError> {
+) -> Result<
+    (
+        sc_observability::Logger,
+        PathBuf,
+        Arc<RetainedJsonlFileSink>,
+    ),
+    AtmError,
+> {
     let active_log_path = log_dir.join("atm.log.jsonl");
     ensure_retained_log_ready(log_dir, &active_log_path)?;
-    let mut config = LoggerConfig::default_for(service_name.clone(), PathBuf::new());
+    let mut config =
+        sc_observability::LoggerConfig::default_for(service_name.clone(), PathBuf::new());
     config.level = logger_level_override()?.unwrap_or(SharedLevelFilter::Info);
     config.enable_console_sink = false;
     config.enable_file_sink = false;
-    let mut builder = Logger::builder(config).map_err(|source| {
+    let mut builder = sc_observability::Logger::builder(config).map_err(|source| {
         AtmError::observability_bootstrap("failed to initialize shared daemon observability logger")
             .with_source(source)
     })?;
@@ -447,25 +471,25 @@ fn build_logger(
     // daemon OS threads, and shutdown flush runs on a dedicated finalizer thread.
     let retained_sink = Arc::new(RetainedJsonlFileSink::new(
         active_log_path.clone(),
-        RotationPolicy {
+        sc_observability::RotationPolicy {
             max_bytes: rotation_max_bytes,
             max_files: RETAINED_LOG_ROTATION_MAX_FILES,
         },
-        RetentionPolicy {
+        sc_observability::RetentionPolicy {
             max_age_days: RETAINED_LOG_RETENTION_MAX_AGE_DAYS,
         },
     ));
     #[cfg(test)]
-    let sink: Arc<dyn LogSink> = match retained_sink_fault {
+    let sink: Arc<dyn sc_observability::LogSink> = match retained_sink_fault {
         Some(mode) => Arc::new(RetainedSinkHealthOverride::new(retained_sink.clone(), mode)),
         None => retained_sink.clone(),
     };
     #[cfg(not(test))]
-    let sink: Arc<dyn LogSink> = {
+    let sink: Arc<dyn sc_observability::LogSink> = {
         let _ = retained_sink_fault;
         retained_sink.clone()
     };
-    builder.register_sink(SinkRegistration::new(sink));
+    builder.register_sink(sc_observability::SinkRegistration::new(sink));
     Ok((builder.build(), active_log_path, retained_sink))
 }
 
@@ -494,8 +518,8 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
 #[derive(Debug)]
 struct RetainedJsonlFileSink {
     path: PathBuf,
-    rotation: RotationPolicy,
-    retention: RetentionPolicy,
+    rotation: sc_observability::RotationPolicy,
+    retention: sc_observability::RetentionPolicy,
     health: Mutex<SinkHealth>,
     last_written_file: Mutex<Option<std::fs::File>>,
     prune_in_progress: Arc<AtomicBool>,
@@ -503,7 +527,11 @@ struct RetainedJsonlFileSink {
 }
 
 impl RetainedJsonlFileSink {
-    fn new(path: PathBuf, rotation: RotationPolicy, retention: RetentionPolicy) -> Self {
+    fn new(
+        path: PathBuf,
+        rotation: sc_observability::RotationPolicy,
+        retention: sc_observability::RetentionPolicy,
+    ) -> Self {
         Self {
             path,
             rotation,
@@ -597,7 +625,7 @@ impl RetainedJsonlFileSink {
         }
     }
 
-    fn mark_failure<E>(&self, error: E) -> LogSinkError
+    fn mark_failure<E>(&self, error: E) -> sc_observability_types::LogSinkError
     where
         E: std::error::Error + Send + Sync + 'static,
     {
@@ -617,11 +645,11 @@ impl RetainedJsonlFileSink {
         } else {
             tracing::warn!("file sink health lock poisoned while recording sink failure");
         }
-        LogSinkError(Box::new(diagnostic))
+        sc_observability_types::LogSinkError(Box::new(diagnostic))
     }
 }
 
-fn prune_old_files_at_path(path: &Path, retention: RetentionPolicy) {
+fn prune_old_files_at_path(path: &Path, retention: sc_observability::RetentionPolicy) {
     let Some(parent) = path.parent() else {
         return;
     };
@@ -651,8 +679,8 @@ fn prune_old_files_at_path(path: &Path, retention: RetentionPolicy) {
     }
 }
 
-impl LogSink for RetainedJsonlFileSink {
-    fn write(&self, event: &LogEvent) -> Result<(), LogSinkError> {
+impl sc_observability::LogSink for RetainedJsonlFileSink {
+    fn write(&self, event: &LogEvent) -> Result<(), sc_observability_types::LogSinkError> {
         if let Some(parent) = self.path.parent() {
             fs::create_dir_all(parent).map_err(|error| self.mark_failure(error))?;
         }
@@ -681,7 +709,7 @@ impl LogSink for RetainedJsonlFileSink {
         Ok(())
     }
 
-    fn flush(&self) -> Result<(), LogSinkError> {
+    fn flush(&self) -> Result<(), sc_observability_types::LogSinkError> {
         let mut last_written = self.last_written_file.lock().map_err(|_| {
             self.mark_failure(std::io::Error::other(
                 "retained sink file handle lock poisoned",
@@ -870,22 +898,22 @@ fn level_for_outcome(outcome: &str) -> Level {
 
 #[cfg(test)]
 struct RetainedSinkHealthOverride {
-    inner: Arc<dyn LogSink>,
+    inner: Arc<dyn sc_observability::LogSink>,
     mode: RetainedSinkFaultMode,
 }
 
 #[cfg(test)]
 impl RetainedSinkHealthOverride {
-    fn new(inner: Arc<dyn LogSink>, mode: RetainedSinkFaultMode) -> Self {
+    fn new(inner: Arc<dyn sc_observability::LogSink>, mode: RetainedSinkFaultMode) -> Self {
         Self { inner, mode }
     }
 }
 
 #[cfg(test)]
-impl LogSink for RetainedSinkHealthOverride {
-    fn write(&self, _event: &LogEvent) -> Result<(), LogSinkError> {
+impl sc_observability::LogSink for RetainedSinkHealthOverride {
+    fn write(&self, _event: &LogEvent) -> Result<(), sc_observability_types::LogSinkError> {
         match self.mode {
-            RetainedSinkFaultMode::Degraded => Err(LogSinkError(Box::new(
+            RetainedSinkFaultMode::Degraded => Err(sc_observability_types::LogSinkError(Box::new(
                 sc_observability_types::ErrorContext::new(
                     sc_observability_types::ErrorCode::new_static("SC_TEST_DAEMON_SINK_DEGRADED"),
                     "daemon retained sink degraded by test fault injection",
@@ -894,8 +922,8 @@ impl LogSink for RetainedSinkHealthOverride {
                     ),
                 ),
             ))),
-            RetainedSinkFaultMode::Unavailable => Err(LogSinkError(Box::new(
-                sc_observability_types::ErrorContext::new(
+            RetainedSinkFaultMode::Unavailable => Err(sc_observability_types::LogSinkError(
+                Box::new(sc_observability_types::ErrorContext::new(
                     sc_observability_types::ErrorCode::new_static(
                         "SC_TEST_DAEMON_SINK_UNAVAILABLE",
                     ),
@@ -903,12 +931,12 @@ impl LogSink for RetainedSinkHealthOverride {
                     sc_observability_types::Remediation::not_recoverable(
                         "clear the daemon retained sink fault injection mode before retrying",
                     ),
-                ),
-            ))),
+                )),
+            )),
         }
     }
 
-    fn flush(&self) -> Result<(), LogSinkError> {
+    fn flush(&self) -> Result<(), sc_observability_types::LogSinkError> {
         self.inner.flush()
     }
 
@@ -932,7 +960,6 @@ mod tests {
 
     use atm_core::observability::{AtmObservabilityHealthState, ObservabilityPort};
     use atm_core::test_support::EnvGuard;
-    use sc_observability::{RetentionPolicy, RotationPolicy};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -1094,11 +1121,11 @@ mod tests {
 
         let sink = super::RetainedJsonlFileSink::new(
             log_path,
-            RotationPolicy {
+            sc_observability::RotationPolicy {
                 max_bytes: 1024,
                 max_files: 5,
             },
-            RetentionPolicy { max_age_days: 0 },
+            sc_observability::RetentionPolicy { max_age_days: 0 },
         );
         sink.schedule_prune_old_files();
 
