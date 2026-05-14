@@ -3152,3 +3152,47 @@ Acceptance:
   and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`
 - the Phase `W` closeout gate in `docs/plan-phase-W.md` remains authoritative
   for final merged-state certification
+
+## 28. Phase X Planning And Pre-Phase Lint Prerequisite
+
+Planning branch:
+- `feature/pX-s0-planning`
+
+Pre-phase prerequisite branch:
+- `feature/pX-lint-gates`
+
+Base branch:
+- `integrate/phase-W`
+
+Integration branch:
+- `integrate/phase-X`
+
+Goal:
+- remove the remaining legacy mailbox/runtime branches behind the retained
+  boundary
+- tighten daemon runtime truth around the SQLite SSOT claim
+- make replay persistence startup behavior explicit and enforceable
+- add guardrails that catch stale legacy paths and silent regressions earlier
+
+Status note:
+- `X.0` in progress on `feature/pX-lint-gates`
+  - target: `develop`
+  - scope: silent-emit regression gate and RULE-002 function-length gate
+
+Execution shape:
+- pre-phase prerequisite:
+  - `X.0` shared lint gates on `develop` before `integrate/phase-X` starts
+- `X.1` mailbox runtime cutover and dual-mode surface deletion
+- `X.2` command-path simplification and legacy mailbox path deletion
+- `X.3` daemon runtime truth unification and runtime-status-cache refactor
+- `X.4` replay-persistence startup contract, peer-transport decomposition, and
+  same-host helper deduplication
+- `X.5` systemic guardrails, dependency-ownership validation, and closeout
+  verification
+
+Execution rules:
+- no Phase `X` sprint may preserve or add a mailbox durability fallback path
+- the silent-emit and RULE-002 gates are treated as already-live pre-phase
+  develop prerequisites, not delayed `integrate/phase-X` sprint work
+- file watchers may remain only as ingress/reconcile edges, not as a parallel
+  mailbox backend

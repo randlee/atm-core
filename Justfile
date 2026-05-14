@@ -66,6 +66,14 @@ _lint-runtime-waits:
 _lint-manifests:
     {{python_cmd}} .just/lint_manifests.py
 
+[private]
+_lint-silent-emit:
+    bash scripts/check-silent-emit.sh
+
+[private]
+_lint-function-length:
+    {{python_cmd}} scripts/check-function-length.py
+
 # Verify crate/release versions stay aligned.
 [private]
 _lint-version:

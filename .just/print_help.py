@@ -42,6 +42,8 @@ SECTIONS = (
             ("lint sc-boundary", "Run the preliminary syn-based boundary analyzer."),
             ("lint sc-portability", "Run the preliminary syn-based portability analyzer."),
             ("lint manifests", "Run the Cargo manifest policy checks."),
+            ("lint silent-emit", "Run the observability silent-discard regression gate."),
+            ("lint function-length", "Run the RULE-002 function-length gate."),
             ("lint version", "Run only the version alignment checks."),
             ("lint identities", "Run the identity literal guard."),
             ("lint fixed-sleep", "Run the fixed thread::sleep test-hygiene gate."),
