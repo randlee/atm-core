@@ -1,0 +1,35 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W3-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W3-004" ;
+  triage:title "submit() and acquire_connection_guard() duplicate DaemonUnavailable error strings" ;
+  triage:description "crates/atm-rusqlite/src/writer/mod.rs and shared_db.rs each construct DaemonUnavailable errors inline without a shared helper. Three concrete duplicate sites confirmed: (1) 'sqlite writer submission channel closed' with recovery 'Restart the ATM daemon or reopen the sqlite boundary assembly before retrying the write.' appears identically at writer/mod.rs:107-109 (ok_or_else guard) and writer/mod.rs:145-148 (TrySendError::Disconnected arm) — exact string duplicate within submit(). (2) The queue-full timeout error is built inline at writer/mod.rs:122-128 via format! with no named helper. (3) The reader-budget-exceeded error is built inline at shared_db.rs:390-395 via format! with no named helper. A writer_unavailable_reply() helper exists at writer/mod.rs:263 for the shutdown path only. Sprint-W3.md:163-168 explicitly requires submit() and acquire_connection_guard() queue/budget DaemonUnavailable paths to converge onto shared constructor helpers where the recovery contract overlaps. Fix: (a) extract the channel-closed message+recovery into a private helper (e.g. writer_channel_closed_error()) and call it at both lines 107 and 145, eliminating the exact string duplicate; (b) extract the queue-full timeout construction into a named helper (e.g. writer_queue_timeout_error(deadline: Duration)) called at line 122; (c) extract the budget-exceeded construction into a named helper (e.g. reader_budget_exceeded_error()) called at line 390. The recovery strings for (b) and (c) differ and must not be merged, but each should still be a named function rather than inline format!." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-rusqlite/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteToWorktree "feature/pW-s3-sqlite-observability" ;
+  triage:verdict "CONFIRMED — three inline DaemonUnavailable construction sites lack shared helpers: (1) 'sqlite writer submission channel closed' string duplicated at writer/mod.rs:107 and :145 with identical recovery — extract to writer_channel_closed_error(); (2) queue-full timeout at writer/mod.rs:122-128 — extract to writer_queue_timeout_error(duration); (3) budget-exceeded at shared_db.rs:390-395 — extract to reader_budget_exceeded_error(max). writer_unavailable_reply() at :263 is the prior art pattern to follow. Sprint-W3.md:163-168 is authoritative. Dispatch to arch-ctm on feature/pW-s3-sqlite-observability." ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3-sqlite-observability/2f245dc> ,
+               <urn:atm:triage:worktree/integrate-phase-W/6df690b> .
+
+<urn:atm:triage:worktree/pW-s3-sqlite-observability/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .

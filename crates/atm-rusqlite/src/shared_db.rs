@@ -1,7 +1,6 @@
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
 use crate::{
     SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
-    emit_sqlite_event_or_warn,
 };
 use atm_core::error::AtmError;
 use atm_core::home;
@@ -361,25 +360,30 @@ impl SharedDb {
         });
         match &result {
             Ok(()) => {}
-            Err(error) => emit_sqlite_event_or_warn(
-                self.observability.as_ref(),
-                SqliteObservabilityEvent::new(
-                    "wal_checkpoint",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
-                ),
-            ),
+            Err(error) => self.observability.emit_or_warn(SqliteObservabilityEvent::new(
+                "wal_checkpoint",
+                SqliteObservabilityOutcome::Failed,
+                error.message.clone(),
+                Some(error.code),
+            )),
         }
         result
     }
 
     fn acquire_connection_guard(&self) -> Result<SharedDbConnectionGuard, AtmError> {
         let mut connection_count = self.connection_count.lock().map_err(|_| {
-            AtmError::daemon_unavailable("sqlite connection budget state lock poisoned")
-                .with_recovery(
-                    "Restart the daemon or recreate the sqlite boundary assembly before retrying the shared connection budget path.",
-                )
+            let error =
+                AtmError::daemon_unavailable("sqlite connection budget state lock poisoned")
+                    .with_recovery(
+                        "Restart the daemon or recreate the sqlite boundary assembly before retrying the shared connection budget path.",
+                    );
+            self.observability.emit_or_warn(SqliteObservabilityEvent::new(
+                "reader_budget_state",
+                SqliteObservabilityOutcome::Failed,
+                error.message.clone(),
+                Some(error.code),
+            ));
+            error
         })?;
         if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {
             tracing::warn!(
@@ -387,21 +391,13 @@ impl SharedDb {
                 current = %connection_count,
                 "sqlite reader connection budget exhausted"
             );
-            let error = AtmError::daemon_unavailable(format!(
-                "sqlite connection budget exceeded (max {MAX_SQLITE_READER_CONNECTIONS} concurrent reader handles with one permanent writer handle)"
-            ))
-            .with_recovery(
-                "Reduce concurrent daemon SQLite work or raise the documented SQLite handle budget before retrying.",
-            );
-            emit_sqlite_event_or_warn(
-                self.observability.as_ref(),
-                SqliteObservabilityEvent::new(
-                    "reader_budget_acquire",
-                    SqliteObservabilityOutcome::Failed,
-                    error.message.clone(),
-                    Some(error.code),
-                ),
-            );
+            let error = reader_budget_exceeded_error();
+            self.observability.emit_or_warn(SqliteObservabilityEvent::new(
+                "reader_budget_acquire",
+                SqliteObservabilityOutcome::Failed,
+                error.message.clone(),
+                Some(error.code),
+            ));
             return Err(error);
         }
         *connection_count += 1;
@@ -413,6 +409,15 @@ impl SharedDb {
     fn open_connection(&self) -> Result<Connection, AtmError> {
         open_connection_for_target(self.target.as_ref())
     }
+}
+
+fn reader_budget_exceeded_error() -> AtmError {
+    AtmError::daemon_unavailable(format!(
+        "sqlite connection budget exceeded (max {MAX_SQLITE_READER_CONNECTIONS} concurrent reader handles with one permanent writer handle)"
+    ))
+    .with_recovery(
+        "Reduce concurrent daemon SQLite work or raise the documented SQLite handle budget before retrying.",
+    )
 }
 
 impl std::fmt::Debug for SharedDb {

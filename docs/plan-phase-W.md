@@ -258,3 +258,50 @@ Cross-sprint dependencies:
   - no interface-specific replacement error taxonomy
   - no drift where CLI, graft, and peer transport describe the same failure
     class with incompatible ATM codes or contradictory recovery guidance
+  - duplicate error-mapping or reporting code paths for the same failure class
+    should be collapsed when the sprint touches them
+- `W.4` is independently executable from `W.2` and `W.3` at the code-scope
+  level; it depends only on the existing shared protocol/error contract and on
+  ordinary merge-forward discipline.
+- `W.1` does not own daemon-client tracing or CLI-side path narration; those
+  same-host path gaps are owned by `W.2`.
+- if `W.3` and `W.4` run in parallel, `crates/atm-core/src/protocol.rs`
+  changes must be partitioned by failure family:
+  - `W.3` owns SQLite-backed envelope parity
+  - `W.4` owns peer replay / remote-delivery envelope parity
+  - both branches must merge-forward before push if `protocol.rs` changed on
+    the other line; no parallel fork of protocol error taxonomy is allowed
+- if audit finds any critical-failure path not assignable to `W.1` through
+  `W.4`, the plan must add the missing sprint rather than leave it implicit.
+
+Current path inventory requirement:
+- every Phase W sprint doc must itemize the current log/error paths it will
+  change
+- path inventories must name concrete files and current functions or branch
+  sites, not only modules
+- for every touched critical failure class, the sprint doc must also name the
+  current shared CLI/doctor/error baseline that exists on `main` so
+  implementation can verify no regression while collapsing duplicate paths
+- no separate discovery or planning sprint is part of Phase W; the sprint docs
+  themselves are the implementation-ready path inventories
+
+Plan QA boundary:
+- req-qa can fully validate this plan as a document set without running the
+  daemon only if each sprint doc clearly separates:
+  - document-auditable acceptance criteria
+  - implementation/runtime validation that the future sprint must run
+
+Phase closeout gate:
+- Phase `W` is not complete until:
+  - all critical failure classes above are implemented on `integrate/phase-W`
+  - shared CLI / graft / peer ATM error-code parity is revalidated
+  - `atm doctor` coverage for the touched failure classes is revalidated
+  - no duplicate interface-specific reporting path remains for the touched
+    failure classes
+  - the final Phase `W` sprint docs and `docs/project-plan.md` status reflect
+    the merged implementation state
+
+Out of scope for Phase W:
+- unrelated daemon redesign work
+- broad new ATM product features
+- replacing the current observability stack

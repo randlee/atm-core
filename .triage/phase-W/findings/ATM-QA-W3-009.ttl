@@ -1,0 +1,28 @@
+@prefix atm: <https://atm-core.dev/triage#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+atm:ATM-QA-W3-009 a atm:Finding ;
+    atm:finding_id "ATM-QA-W3-009" ;
+    atm:title "Two independent DaemonSqliteObservability instances — composition.rs and runtime_health.rs must share one instance" ;
+    atm:severity "important" ;
+    atm:status "open" ;
+    atm:highest_open_branch "feature/pW-s3-sqlite-observability" ;
+    atm:promote_to_branch "feature/pW-s3-sqlite-observability" ;
+    atm:dispatch_ready "true"^^xsd:boolean ;
+    atm:occurrences (
+        [
+            atm:branch "feature/pW-s3-sqlite-observability" ;
+            atm:file "crates/atm-daemon/src/composition.rs" ;
+            atm:lines "158-161" ;
+            atm:description "First DaemonSqliteObservability instance constructed for replay store path" ;
+            atm:status "open"
+        ]
+        [
+            atm:branch "feature/pW-s3-sqlite-observability" ;
+            atm:file "crates/atm-daemon/src/runtime_health.rs" ;
+            atm:lines "188-191" ;
+            atm:description "Second independent DaemonSqliteObservability instance constructed inside DaemonRequestDispatcher::new()" ;
+            atm:status "open"
+        ]
+    ) ;
+    atm:notes """Confirmed on feature branch at 2f245dc. composition.rs lines 158-161 constructs Arc::new(DaemonSqliteObservability::new(...)) for the replay store and passes it into sqlite_remote_replay_store_from_path_with_observability. runtime_health.rs lines 188-191 constructs a separate Arc::new(DaemonSqliteObservability::new(...)) inside DaemonRequestDispatcher::new() for the main SQLite boundary assembly. These are two independent instances backed by separate RuntimeStatusCache/observability wiring. Sprint W.3 requires WAL checkpoint and shutdown paths share one DaemonSqliteObservability instance constructed in composition and passed through to DaemonRequestDispatcher::new(). The fix is to construct the single shared instance in composition.rs new_with_replay_store_path(), Arc::clone it for the replay store, and pass the Arc into DaemonRequestDispatcher::new() as a parameter rather than constructing a second instance internally. integrate/phase-W at 6df690b does not contain W.3 observability code; this finding is absent on that branch.""" .

@@ -41,7 +41,11 @@ use std::time::Duration;
 
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_rusqlite::SqliteBoundaryAssembly;
-pub use daemon_runtime_observability::DaemonRuntimeObservability;
+pub use daemon_runtime_observability::{
+    DaemonEvent, DaemonRuntimeObservability, DaemonSubsystem, TeamScope,
+};
+
+pub(crate) use daemon_runtime_observability::SubsystemObservability;
 
 pub(crate) use atm_rusqlite::RemoteReplayStateRecord;
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;

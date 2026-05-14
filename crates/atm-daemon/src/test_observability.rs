@@ -12,7 +12,7 @@ use atm_core::observability::{
     LogTailSession, ObservabilityPort,
 };
 
-use crate::DaemonRuntimeObservability;
+use crate::{DaemonEvent, DaemonRuntimeObservability};
 
 #[derive(Debug)]
 pub(crate) struct TestDaemonObservability {
@@ -174,14 +174,13 @@ impl ObservabilityPort for TestDaemonObservability {
 }
 
 impl DaemonRuntimeObservability for TestDaemonObservability {
-    fn emit_runtime_event(
-        &self,
-        action: &'static str,
-        outcome: &'static str,
-        message: &'static str,
-    ) -> Result<(), AtmError> {
+    fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
         self.append_message(format!(
-            "{{\"action\":\"{action}\",\"outcome\":\"{outcome}\",\"message\":\"{message}\"}}"
+            "{{\"subsystem\":\"{}\",\"action\":\"{}\",\"outcome\":\"{}\",\"message\":\"{}\"}}",
+            event.subsystem.as_str(),
+            event.action,
+            event.outcome,
+            event.detail
         ))
     }
 

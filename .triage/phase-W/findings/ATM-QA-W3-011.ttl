@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W3-011>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W3-011" ;
+  triage:title "SqliteObservability trait missing cross-sprint dependency rule comment" ;
+  triage:description "crates/atm-rusqlite/src/lib.rs:67 and docs/phase-W/sprint-W3.md: SqliteObservability trait has no comment or sprint-doc note confirming it is permitted as a bottom-of-stack thin port under the Phase V/W cross-sprint dependency rule (plan-phase-W.md Shared observability trait decision). Sprint-W3.md notes the constraint at lines 55-57 and 223-225 but does not carry a corresponding code-side acknowledgement. Fix: add a doc comment on the trait referencing the thin-port constraint, or add a sprint-doc callout in sprint-W3.md confirming compliance." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W3-011/pW-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W3-011/pW-s3/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3/2f245dc> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:occurrence/ATM-QA-W3-011/pW-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 67 ;
+  triage:snippet "pub trait SqliteObservability: Send + Sync { fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError>; }" ;
+  triage:note "No doc comment referencing thin-port constraint or cross-sprint dependency rule" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:occurrence/ATM-QA-W3-011/pW-s3/2>
+  a triage:Occurrence ;
+  triage:file "docs/phase-W/sprint-W3.md" ;
+  triage:line 55 ;
+  triage:snippet "the sprint keeps SQLite observability bottom-of-stack and does not re-create" ;
+  triage:note "Constraint stated in sprint doc but not mirrored as a code-side acknowledgement on the trait" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:worktree/pW-s3/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W3-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-W3-F002" ;
+  triage:title "NullSqliteObservability::emit structurally infallible Result" ;
+  triage:description "crates/atm-rusqlite/src/lib.rs:74-77: NullSqliteObservability::emit returns Result<(), AtmError> but the implementation is always Ok(()) — structurally infallible. Either simplify the return type to () or add a doc comment explaining the deliberate infallibility (e.g. intentional no-op for test/null contexts, kept as Result to satisfy the trait contract for future real implementations)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W3-F002/pW-s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3/2f245dc> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:occurrence/RBP-W3-F002/pW-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 74 ;
+  triage:snippet "impl SqliteObservability for NullSqliteObservability { fn emit(&self, _event: SqliteObservabilityEvent) -> Result<(), AtmError> { Ok(()) } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:worktree/pW-s3/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .

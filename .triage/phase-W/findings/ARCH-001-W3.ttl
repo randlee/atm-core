@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-001-W3>
+  a triage:Finding ;
+  triage:findingId "ARCH-001-W3" ;
+  triage:title "Direct sc_observability import in atm-daemon library crate" ;
+  triage:description "QA-1 TASK-1502 flagged crates/atm-daemon/src/daemon_observability.rs for importing sc_observability directly. On inspection the finding is a FALSE POSITIVE: daemon_observability.rs is declared as `mod daemon_observability;` inside main.rs (the binary entry point), not in lib.rs. It is therefore binary-layer code. The atm-daemon library (lib.rs) exports only the DaemonRuntimeObservability trait and run_daemon_with_observability, which accepts Arc<dyn DaemonRuntimeObservability> — precisely the correct layering pattern. No library module imports sc_observability or sc_observability_types. The sc_observability import at line 891/852 (cfg(test)) is also binary-layer test code within the main.rs module tree. No fix required." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates" ;
+  triage:status "false_positive" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-W3/pW-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-W3/pW-s3/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3/2f245dc> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/6df690b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s3/2f245dc> ;
+  triage:falsePositiveReason "daemon_observability.rs is owned by main.rs (binary), not lib.rs (library); no library module uses sc_observability" ;
+  triage:verifiedByFiles "crates/atm-daemon/src/main.rs:5-8, crates/atm-daemon/src/lib.rs (no sc_observability), crates/atm-daemon/src/daemon_runtime_observability.rs (pure trait)" .
+
+<urn:atm:triage:occurrence/ARCH-001-W3/pW-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 17 ;
+  triage:snippet "use sc_observability::{LogSink, Logger, LoggerConfig, RetentionPolicy, RotationPolicy, SinkRegistration};" ;
+  triage:status "false_positive" ;
+  triage:closed true ;
+  triage:closureReason "File is a private module declared in main.rs (binary), not lib.rs; imports are legal at this layer" ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:occurrence/ARCH-001-W3/pW-s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 891 ;
+  triage:snippet "use sc_observability::{RetentionPolicy, RotationPolicy};" ;
+  triage:status "false_positive" ;
+  triage:closed true ;
+  triage:closureReason "Inside #[cfg(test)] block in binary-owned module; test code in binary layer, not library" ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+<urn:atm:triage:worktree/pW-s3/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .

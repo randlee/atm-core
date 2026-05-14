@@ -8,24 +8,31 @@ use std::time::{Duration, Instant};
 
 use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
-use atm_core::protocol::{
-    JsonAtmProtocolCodec, ProtocolErrorEnvelope, RequestEnvelope, RequestId, ResponseEnvelope,
-};
+use atm_core::protocol::{JsonAtmProtocolCodec, ProtocolErrorEnvelope, ResponseEnvelope};
 use interprocess::local_socket::prelude::*;
 use interprocess::local_socket::{
     Listener as LocalSocketListener, ListenerOptions, Stream as LocalSocketStream,
 };
 
-use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
+#[cfg(test)]
+use crate::DaemonSubsystem;
+use crate::SubsystemObservability;
+use crate::active_connection_registry::ActiveConnectionRegistry;
 use crate::host_ownership::{HostOwnershipAdapter, HostOwnershipGuard};
 use crate::lifecycle_control::LifecycleControlSourceAdapter;
 use crate::local_ipc_connection::drain_active_connections_for_shutdown;
 use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener};
 use crate::shutdown_beacon::ShutdownBeacon;
 
+mod request_worker;
+
 #[cfg(unix)]
 use std::fs;
 use std::thread;
+
+use request_worker::handle_connection;
+#[cfg(all(test, unix))]
+use request_worker::install_injected_accept_error_for_test;
 
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
@@ -142,6 +149,7 @@ pub(crate) struct PreparedRuntimeServer {
     registry: Arc<ActiveConnectionRegistry>,
     force_shutdown: Arc<AtomicBool>,
     codec: JsonAtmProtocolCodec,
+    observability: SubsystemObservability,
     // The endpoint guard must drop after the listener and connection registry have been torn
     // down so same-host endpoint unpublication never races a still-live serving resource.
     endpoint_guard: Option<SocketEndpointGuard>,
@@ -189,13 +197,30 @@ impl std::fmt::Debug for PreparedRuntimeServer {
 }
 
 impl PreparedRuntimeServer {
+    #[cfg(all(test, unix))]
     fn bind(endpoint_path: PathBuf) -> Result<Self, AtmError> {
+        Self::bind_with_observability(
+            endpoint_path,
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            SubsystemObservability::disabled(DaemonSubsystem::HostOwnership),
+            SubsystemObservability::disabled(DaemonSubsystem::LifecycleControl),
+        )
+    }
+
+    fn bind_with_observability(
+        endpoint_path: PathBuf,
+        observability: SubsystemObservability,
+        host_ownership_observability: SubsystemObservability,
+        lifecycle_observability: SubsystemObservability,
+    ) -> Result<Self, AtmError> {
         // Install lifecycle control before singleton ownership so daemon startup never
         // claims the host-wide owner lock unless shutdown/reload hooks are ready too.
         // Reversing this order can transiently block a healthy daemon restart behind an
         // instance that failed before it could service lifecycle-control requests.
-        let lifecycle_control = LifecycleControlSourceAdapter::install()?;
-        let ownership = HostOwnershipAdapter::new().acquire()?;
+        let lifecycle_control =
+            LifecycleControlSourceAdapter::install_with_observability(lifecycle_observability)?;
+        let ownership =
+            HostOwnershipAdapter::new_with_observability(host_ownership_observability).acquire()?;
         let endpoint_preparation = prepare_local_ipc_endpoint(&endpoint_path)?;
         let listener = ListenerOptions::new()
             .name(atm_core::protocol::daemon_local_ipc_name_from_path(
@@ -219,6 +244,11 @@ impl PreparedRuntimeServer {
             endpoint_preparation = ?endpoint_preparation,
             "daemon local IPC transport limits configured"
         );
+        let _ = observability.emit(
+            "bind_listener",
+            "ok",
+            "daemon local IPC transport prepared the runtime listener",
+        );
         emit_ready_signal_if_requested()?;
         Ok(Self {
             host_ownership_guard: ownership,
@@ -234,6 +264,7 @@ impl PreparedRuntimeServer {
             registry: Arc::new(ActiveConnectionRegistry::default()),
             force_shutdown: Arc::new(AtomicBool::new(false)),
             codec: JsonAtmProtocolCodec,
+            observability,
         })
     }
 
@@ -292,6 +323,7 @@ impl PreparedRuntimeServer {
             registry,
             force_shutdown,
             codec,
+            observability,
         } = self;
         thread::scope(|scope| -> Result<(), AtmError> {
             // Each serving invocation owns its own shutdown beacon. The beacon must not survive a
@@ -399,9 +431,16 @@ impl PreparedRuntimeServer {
                 // races a partially-applied runtime view update.
                 if signals.take_reload() {
                     match reload_runtime_view() {
-                        Ok(()) => tracing::info!(
-                            "bounded lifecycle-control-triggered config/roster reload applied"
-                        ),
+                        Ok(()) => {
+                            let _ = observability.emit(
+                                "reload_runtime_view",
+                                "ok",
+                                "bounded lifecycle-control-triggered config or roster reload applied",
+                            );
+                            tracing::info!(
+                                "bounded lifecycle-control-triggered config/roster reload applied"
+                            )
+                        }
                         Err(error) => tracing::warn!(
                             error_code = %error.code,
                             error_message = %error.message,
@@ -460,9 +499,16 @@ impl PreparedRuntimeServer {
                 if signals.take_reload() {
                     drop(stream);
                     match reload_runtime_view() {
-                        Ok(()) => tracing::info!(
-                            "bounded lifecycle-control-triggered config/roster reload applied"
-                        ),
+                        Ok(()) => {
+                            let _ = observability.emit(
+                                "reload_runtime_view",
+                                "ok",
+                                "bounded lifecycle-control-triggered config or roster reload applied",
+                            );
+                            tracing::info!(
+                                "bounded lifecycle-control-triggered config/roster reload applied"
+                            )
+                        }
                         Err(error) => tracing::warn!(
                             error_code = %error.code,
                             error_message = %error.message,
@@ -655,12 +701,33 @@ impl PreparedRuntimeServer {
     }
 }
 
-#[derive(Debug, Default)]
-pub(crate) struct LocalIpcServerTransportAdapter;
+#[derive(Debug, Clone)]
+pub(crate) struct LocalIpcServerTransportAdapter {
+    observability: SubsystemObservability,
+    host_ownership_observability: SubsystemObservability,
+    lifecycle_observability: SubsystemObservability,
+}
 
 impl LocalIpcServerTransportAdapter {
-    pub(crate) const fn new() -> Self {
-        Self
+    #[cfg(test)]
+    pub(crate) fn new() -> Self {
+        Self::new_with_observability(
+            SubsystemObservability::disabled(DaemonSubsystem::LocalIpcTransport),
+            SubsystemObservability::disabled(DaemonSubsystem::HostOwnership),
+            SubsystemObservability::disabled(DaemonSubsystem::LifecycleControl),
+        )
+    }
+
+    pub(crate) fn new_with_observability(
+        observability: SubsystemObservability,
+        host_ownership_observability: SubsystemObservability,
+        lifecycle_observability: SubsystemObservability,
+    ) -> Self {
+        Self {
+            observability,
+            host_ownership_observability,
+            lifecycle_observability,
+        }
     }
 
     pub(crate) fn prepare_runtime(&self) -> Result<PreparedRuntimeServer, AtmError> {
@@ -672,7 +739,12 @@ impl LocalIpcServerTransportAdapter {
         &self,
         endpoint_path: PathBuf,
     ) -> Result<PreparedRuntimeServer, AtmError> {
-        PreparedRuntimeServer::bind(endpoint_path)
+        PreparedRuntimeServer::bind_with_observability(
+            endpoint_path,
+            self.observability.clone(),
+            self.host_ownership_observability.clone(),
+            self.lifecycle_observability.clone(),
+        )
     }
 }
 
@@ -774,15 +846,6 @@ fn write_shutdown_response(
     Ok(ShutdownResponseOutcome::RejectedRequest)
 }
 
-#[cfg(test)]
-#[cfg_attr(not(unix), allow(dead_code))]
-pub(crate) fn install_injected_accept_error_for_test(
-    runtime: &mut PreparedRuntimeServer,
-    signal: std::sync::mpsc::SyncSender<()>,
-) {
-    runtime.accept_error_inject = Some(signal);
-}
-
 fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
     if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
         return Ok(());
@@ -805,167 +868,10 @@ fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
     Ok(())
 }
 
-fn handle_connection(
-    mut stream: LocalSocketStream,
-    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
-    force_shutdown: &AtomicBool,
-    registry: Arc<ActiveConnectionRegistry>,
-    codec: JsonAtmProtocolCodec,
-) -> Result<(), AtmError> {
-    if force_shutdown.load(Ordering::SeqCst) {
-        return write_shutdown_response(&mut stream, &codec).map(|_| ());
-    }
-    stream
-        .set_recv_timeout(Some(REQUEST_DEADLINE))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to apply daemon request read deadline")
-                .with_recovery(
-                    "Restart the daemon; the same-host request socket could not apply its bounded read deadline.",
-                )
-                .with_source(source)
-        })?;
-    stream
-        .set_send_timeout(Some(REQUEST_DEADLINE))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to apply daemon response write deadline")
-                .with_recovery(
-                    "Restart the daemon; the same-host request socket could not apply its bounded write deadline.",
-                )
-                .with_source(source)
-        })?;
-
-    // Phase S still enforces one request per accepted same-host connection even though the
-    // request runtime owns its execution separately from this socket receive loop.
-    let Some(frame) = atm_core::protocol::read_frame(
-        &mut stream,
-        "failed to read daemon request frame",
-        "daemon request frame exceeded the maximum supported size",
-    )?
-    else {
-        return Ok(());
-    };
-    tracing::debug!(
-        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
-        "daemon request frame accepted under configured size cap"
-    );
-    let (request_id, request) = codec.request_from_frame(frame)?;
-    if let RequestEnvelope::AdvisoryStream(request) = request {
-        stream.set_send_timeout(None).map_err(|source| {
-            AtmError::daemon_unavailable(
-                "failed to clear daemon advisory-stream write deadline",
-            )
-            .with_recovery(
-                "Restart the daemon; the same-host advisory stream socket could not switch into long-lived streaming mode.",
-            )
-            .with_source(source)
-        })?;
-        let mut sink = LocalIpcAdvisoryStreamSink {
-            stream: &mut stream,
-            codec: &codec,
-            request_id,
-            force_shutdown,
-        };
-        return dispatcher.dispatch_advisory_stream(request, &mut sink);
-    }
-
-    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-    let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-    let dispatch_registry = Arc::clone(&registry);
-    let dispatch_handle = std::thread::Builder::new()
-        .name("local-ipc-dispatch".to_string())
-        .spawn(move || {
-            let _dispatch_work = dispatch_registry.register_dispatch_work();
-            let _ = result_tx.send(dispatcher.dispatch(request));
-            let _ = completion_tx.send(());
-        })
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to spawn daemon local IPC dispatch worker")
-                .with_recovery(
-                    "Retry the ATM command after atm-daemon restarts; the same-host request worker could not be created.",
-                )
-                .with_source(source)
-        })?;
-    // The tracked-dispatch registry owns the eventual join. Timeouts can let a request worker run
-    // past this socket exchange, but the direct accept loop and bounded shutdown sweep still reap
-    // the handle before runtime teardown completes.
-    registry.push_dispatch_handle(
-        TrackedDispatchHandle {
-            completion_rx,
-            join_handle: dispatch_handle,
-        },
-        MAX_CONCURRENT_CONNECTIONS,
-    )?;
-    let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {
-        Ok(Ok(response)) => response,
-        Ok(Err(error)) => ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error)),
-        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-            tracing::warn!("daemon request dispatcher exceeded the runtime deadline");
-            ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-                &AtmError::daemon_unavailable(
-                    "daemon request exceeded the 3s runtime deadline; the operation may still complete in the background",
-                )
-                .with_recovery(
-                    "Check the destination mailbox or service-side effects before retrying this ATM command.",
-                ),
-            ))
-        }
-        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-            ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-                &AtmError::daemon_unavailable(
-                    "daemon request dispatcher stopped before returning a response",
-                )
-                .with_recovery(
-                    "Retry the ATM command after the daemon finishes recovering the request runtime.",
-                ),
-            ))
-        }
-    };
-    let frame = codec.response_to_frame(request_id, response)?;
-    atm_core::protocol::write_frame(&mut stream, &frame, "failed to write daemon response frame")?;
-    stream.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon response frame")
-            .with_recovery(
-                "Retry the ATM command after the daemon finishes recovering the same-host request runtime.",
-            )
-            .with_source(source)
-    })?;
-    registry.reap_finished_dispatches()?;
-    Ok(())
-}
-
-struct LocalIpcAdvisoryStreamSink<'a> {
-    stream: &'a mut LocalSocketStream,
-    codec: &'a JsonAtmProtocolCodec,
-    request_id: RequestId,
-    force_shutdown: &'a std::sync::atomic::AtomicBool,
-}
-
-impl boundary::AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
-    fn emit(&mut self, response: ResponseEnvelope) -> Result<(), AtmError> {
-        let frame = self.codec.response_to_frame(self.request_id, response)?;
-        atm_core::protocol::write_frame(
-            self.stream,
-            &frame,
-            "failed to write daemon advisory-stream response frame",
-        )?;
-        self.stream.flush().map_err(|source| {
-            AtmError::daemon_unavailable("failed to flush daemon advisory-stream response frame")
-                .with_recovery(
-                    "Retry graft activation after atm-daemon returns to a healthy serving state.",
-                )
-                .with_source(source)
-        })
-    }
-
-    fn stop_requested(&self) -> bool {
-        self.force_shutdown
-            .load(std::sync::atomic::Ordering::SeqCst)
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::active_connection_registry::TrackedDispatchHandle;
     #[cfg(unix)]
     use crate::lifecycle_control::LifecycleControlSourceAdapter;
     #[cfg(unix)]

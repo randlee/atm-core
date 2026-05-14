@@ -56,6 +56,13 @@ and to make those seams explicit enough for later QA and lint review.
 Observability note:
 - daemon-owned `sc-observability` sinks are cross-cutting runtime support, not
   a separate daemon-private partition
+- the shared daemon observability layer is bottom-of-stack and must not import
+  daemon subsystem types
+- daemon subsystems may depend on the injected daemon observability trait only
+- central daemon observability must not reconstruct subsystem semantics after
+  the fact
+- the authoritative design contract is
+  [`./observability.md`](./observability.md)
 
 ## RuntimeLifecycleController
 

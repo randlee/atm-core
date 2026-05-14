@@ -12,6 +12,8 @@ use atm_core::protocol::{
 };
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
+use crate::{DaemonSubsystem, SubsystemObservability};
+
 pub(crate) const MAX_STATUS_CACHE_ENTRIES: usize = 4096;
 const MAX_RELOAD_TEAMS: usize = 256;
 
@@ -46,13 +48,26 @@ impl RuntimeStatusCacheState {
     }
 }
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone)]
 pub(crate) struct RuntimeStatusCache {
     state: Arc<Mutex<RuntimeStatusCacheState>>,
+    observability: SubsystemObservability,
+}
+
+impl Default for RuntimeStatusCache {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl RuntimeStatusCache {
     pub(crate) fn new() -> Self {
+        Self::new_with_observability(SubsystemObservability::disabled(
+            DaemonSubsystem::RuntimeStatusCache,
+        ))
+    }
+
+    pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self {
             state: Arc::new(Mutex::new(RuntimeStatusCacheState {
                 members: HashMap::new(),
@@ -60,6 +75,7 @@ impl RuntimeStatusCache {
                 sqlite_detail: None,
                 degraded_ingest: false,
             })),
+            observability,
         }
     }
 
@@ -98,7 +114,7 @@ impl RuntimeStatusCache {
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        evict_status_cache_entry_if_needed(&mut cache, &key);
+        evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
         cache.members.insert(
             key,
             RuntimeMemberRecord {
@@ -132,7 +148,7 @@ impl RuntimeStatusCache {
             .state
             .lock()
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
-        evict_status_cache_entry_if_needed(&mut cache, &key);
+        evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
         let last_active_at = cache
             .members
             .get(&key)
@@ -145,6 +161,16 @@ impl RuntimeStatusCache {
                 last_active_at,
             },
         );
+        let event = self
+            .observability
+            .event(
+                "record_identity_conflict",
+                "degraded",
+                "runtime status cache recorded an identity conflict",
+            )
+            .with_team(request.team.clone())
+            .with_agent(request.member.clone());
+        let _ = self.observability.emit_event(event);
         Ok(())
     }
 
@@ -168,7 +194,15 @@ impl RuntimeStatusCache {
 
     pub(crate) fn mark_sqlite_unavailable(&self) {
         match self.state.lock() {
-            Ok(mut cache) => cache.sqlite_ready = false,
+            Ok(mut cache) => {
+                cache.sqlite_ready = false;
+                drop(cache);
+                let _ = self.observability.emit(
+                    "mark_sqlite_unavailable",
+                    "degraded",
+                    "runtime status cache marked sqlite unavailable",
+                );
+            }
             Err(_) => {
                 tracing::error!(
                     "runtime status cache lock poisoned while marking sqlite unavailable"
@@ -214,6 +248,7 @@ impl RuntimeStatusCache {
 fn evict_status_cache_entry_if_needed(
     cache: &mut RuntimeStatusCacheState,
     incoming_key: &RuntimeMemberKey,
+    observability: &SubsystemObservability,
 ) {
     let is_new_key = !cache.members.contains_key(incoming_key);
     if !is_new_key || cache.members.len() < MAX_STATUS_CACHE_ENTRIES {
@@ -240,6 +275,15 @@ fn evict_status_cache_entry_if_needed(
         .map(|(key, record)| (key.clone(), record.clone()));
     if let Some((evicted_key, evicted_record)) = eviction_candidate {
         cache.members.remove(&evicted_key);
+        let event = observability
+            .event(
+                "evict_entry",
+                "degraded",
+                "runtime status cache evicted an entry at the bounded cap",
+            )
+            .with_team(evicted_key.team.clone())
+            .with_agent(evicted_key.member.clone());
+        let _ = observability.emit_event(event);
         tracing::warn!(
             team = %evicted_key.team,
             member = %evicted_key.member,

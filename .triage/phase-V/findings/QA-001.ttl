@@ -1,0 +1,14 @@
+finding_id = "QA-001"
+title = "cargo fmt failure in daemon_observability.rs"
+severity = "blocking"
+pattern = "fmt-failure"
+repeatable = false
+sweep_scope = "crates/atm-daemon/src/daemon_observability.rs"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/daemon_observability.rs", lines = "10,17,679", status = "open" }
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = "Fixed in a single pass with: cargo fmt --manifest-path crates/atm-daemon/Cargo.toml (shared fix with QA-002 through QA-005)."

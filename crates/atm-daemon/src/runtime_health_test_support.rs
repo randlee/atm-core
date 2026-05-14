@@ -17,13 +17,16 @@ impl DaemonRequestDispatcher {
             )
             .expect("daemon test observability"),
         );
-        let sqlite_observability = Arc::new(DaemonSqliteObservability::new(
-            observability.clone(),
-            status_cache.clone(),
-        ));
+        let runtime_observability: Arc<dyn crate::DaemonRuntimeObservability> =
+            observability.clone();
+        let sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability> =
+            Arc::new(DaemonSqliteObservability::new(
+                Arc::clone(&runtime_observability),
+                status_cache.clone(),
+            ));
         let sqlite_boundary = match atm_rusqlite::assemble_boundary_with_observability(
             &roster_db_path,
-            sqlite_observability,
+            Arc::clone(&sqlite_observability),
         ) {
             Ok(boundary) => {
                 if let Err(error) =
@@ -48,12 +51,24 @@ impl DaemonRequestDispatcher {
                 None
             }
         };
+        let advisory_runtime_observability = crate::SubsystemObservability::new(
+            crate::DaemonSubsystem::AdvisoryRuntime,
+            Arc::clone(&runtime_observability),
+        );
+        let runtime_health_observability = crate::SubsystemObservability::new(
+            crate::DaemonSubsystem::RuntimeHealth,
+            Arc::clone(&runtime_observability),
+        );
         Self {
             home_dir: home_dir.clone(),
-            observability,
+            observability: runtime_observability,
+            advisory_runtime_observability: advisory_runtime_observability.clone(),
+            runtime_health_observability,
             status_cache,
             sqlite_boundary,
-            advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new(),
+            advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new_with_observability(
+                advisory_runtime_observability,
+            ),
         }
     }
 }

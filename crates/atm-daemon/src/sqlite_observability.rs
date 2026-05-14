@@ -45,7 +45,10 @@ impl SqliteObservability for DaemonSqliteObservability {
             SqliteObservabilityOutcome::Ok => {}
             SqliteObservabilityOutcome::Failed | SqliteObservabilityOutcome::Timeout => {
                 self.status_cache
-                    .mark_sqlite_unavailable_with_detail(event.message);
+                    .mark_sqlite_unavailable_with_detail(format!(
+                        "[{}] {}",
+                        event.action, event.message
+                    ));
             }
         }
         Ok(())
@@ -94,7 +97,7 @@ mod tests {
                 .detail
                 .as_ref()
                 .expect("sqlite detail")
-                .contains("sqlite writer submission queue did not accept a write")
+                .contains("[writer_submit] sqlite writer submission queue did not accept a write")
         );
 
         let finding = crate::runtime_status_cache::runtime_status_finding(&snapshot);
