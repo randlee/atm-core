@@ -3109,6 +3109,10 @@ Status note:
   - branch: `feature/pW-s6-sqlite-error-contract`
   - PR: `#275`
   - merge commit: `c8af6e7`
+- `W.7` merged to `integrate/phase-W`
+  - branch: `feature/pW-s7-triage-closeout`
+  - PR: `#276`
+  - merge commit: `d655d45`
 
 Execution shape:
 - `W.1` daemon-side observability sink failure visibility
