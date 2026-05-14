@@ -62,9 +62,9 @@ fn production() {
             repo_root=repo_root,
         )
 
-        self.assertEqual(classified.advisories, [function])
-        self.assertEqual(classified.new_failures, [])
-        self.assertEqual(classified.grandfathered_failures, [])
+        self.assertEqual(classified.advisories, (function,))
+        self.assertEqual(classified.new_failures, ())
+        self.assertEqual(classified.grandfathered_failures, ())
 
     def test_classify_functions_marks_80_plus_overlap_as_new_failure(self) -> None:
         repo_root = Path("/repo")
@@ -83,9 +83,9 @@ fn production() {
             repo_root=repo_root,
         )
 
-        self.assertEqual(classified.new_failures, [function])
-        self.assertEqual(classified.advisories, [])
-        self.assertEqual(classified.grandfathered_failures, [])
+        self.assertEqual(classified.new_failures, (function,))
+        self.assertEqual(classified.advisories, ())
+        self.assertEqual(classified.grandfathered_failures, ())
 
     def test_classify_functions_grandfathers_unchanged_80_plus_function(self) -> None:
         repo_root = Path("/repo")
@@ -104,9 +104,9 @@ fn production() {
             repo_root=repo_root,
         )
 
-        self.assertEqual(classified.grandfathered_failures, [function])
-        self.assertEqual(classified.advisories, [])
-        self.assertEqual(classified.new_failures, [])
+        self.assertEqual(classified.grandfathered_failures, (function,))
+        self.assertEqual(classified.advisories, ())
+        self.assertEqual(classified.new_failures, ())
 
 
 if __name__ == "__main__":
