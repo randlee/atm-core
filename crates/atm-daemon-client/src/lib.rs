@@ -5,6 +5,10 @@ use std::process::{Command, Stdio};
 use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
+use atm_core::doctor::{
+    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+    BootstrapTraceReport,
+};
 use atm_core::error::AtmError;
 use atm_core::observability::{CommandEvent, ObservabilityPort};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
@@ -12,6 +16,7 @@ use atm_core::types::{AgentName, TeamName};
 use fs2::FileExt;
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
+use std::sync::Mutex;
 
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
@@ -84,6 +89,9 @@ pub struct BootstrapTraceability<'a> {
     observability: &'a (dyn ObservabilityPort + Send + Sync),
     team: TeamName,
     agent: AgentName,
+    // Mutex required: BootstrapTraceability must be Sync (holds
+    // &'a dyn ObservabilityPort + Send + Sync); RefCell would be unsound.
+    state: Mutex<BootstrapTraceState>,
 }
 
 impl<'a> BootstrapTraceability<'a> {
@@ -98,10 +106,12 @@ impl<'a> BootstrapTraceability<'a> {
             observability,
             team,
             agent,
+            state: Mutex::new(BootstrapTraceState::default()),
         }
     }
 
     fn emit(&self, action: &'static str, outcome: &'static str, error: Option<&AtmError>) {
+        self.record(action, outcome, error);
         let event = CommandEvent {
             command: self.command,
             action,
@@ -125,6 +135,118 @@ impl<'a> BootstrapTraceability<'a> {
                 "emit failed"
             );
         }
+    }
+
+    pub fn snapshot(&self) -> BootstrapTraceReport {
+        let mut state = self
+            .state
+            .lock()
+            .expect("bootstrap trace state lock poisoned");
+        state.finalize()
+    }
+
+    fn record(&self, action: &'static str, outcome: &'static str, error: Option<&AtmError>) {
+        let mut state = self
+            .state
+            .lock()
+            .expect("bootstrap trace state lock poisoned");
+        match action {
+            "daemon_connect" => match outcome {
+                "connected" => {
+                    state.connect = Some(BootstrapConnectOutcome::Connected);
+                    state.connect_detail = None;
+                    if state.saw_spawn_requested {
+                        state.auto_start = Some(BootstrapAutoStartOutcome::AutoStarted);
+                        state.auto_start_detail = None;
+                    }
+                }
+                "initial_miss" | "retry_attempt" | "pending" => {
+                    if !matches!(state.connect, Some(BootstrapConnectOutcome::Connected)) {
+                        state.connect = Some(BootstrapConnectOutcome::NotFound);
+                    }
+                    if let Some(error) = error {
+                        state.connect_detail = Some(format_bootstrap_error_detail(error));
+                    }
+                }
+                "error" => {
+                    state.connect = Some(BootstrapConnectOutcome::Failed);
+                    state.connect_detail = error.map(format_bootstrap_error_detail);
+                }
+                _ => {}
+            },
+            "daemon_launch_gate" => match outcome {
+                "acquired" => {
+                    state.launch_gate = Some(BootstrapLaunchGateOutcome::Launched);
+                    state.launch_gate_detail = None;
+                }
+                "contended" => {
+                    if state.launch_gate.is_none() {
+                        state.launch_gate = Some(BootstrapLaunchGateOutcome::Skipped);
+                    }
+                }
+                "timeout_exhausted" => {
+                    state.launch_gate = Some(BootstrapLaunchGateOutcome::Failed);
+                    state.launch_gate_detail = error.map(format_bootstrap_error_detail);
+                    state.connect = Some(BootstrapConnectOutcome::Timeout);
+                    state.connect_detail = error.map(format_bootstrap_error_detail);
+                }
+                "error" => {
+                    state.launch_gate = Some(BootstrapLaunchGateOutcome::Failed);
+                    state.launch_gate_detail = error.map(format_bootstrap_error_detail);
+                }
+                _ => {}
+            },
+            "daemon_auto_start" => match outcome {
+                "spawn_requested" => {
+                    state.saw_spawn_requested = true;
+                }
+                "error" | "timeout_exhausted" => {
+                    state.auto_start = Some(BootstrapAutoStartOutcome::Failed);
+                    state.auto_start_detail = error.map(format_bootstrap_error_detail);
+                    if outcome == "timeout_exhausted" {
+                        state.connect = Some(BootstrapConnectOutcome::Timeout);
+                        state.connect_detail = error.map(format_bootstrap_error_detail);
+                    }
+                }
+                _ => {}
+            },
+            _ => {}
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+struct BootstrapTraceState {
+    connect: Option<BootstrapConnectOutcome>,
+    launch_gate: Option<BootstrapLaunchGateOutcome>,
+    auto_start: Option<BootstrapAutoStartOutcome>,
+    connect_detail: Option<String>,
+    launch_gate_detail: Option<String>,
+    auto_start_detail: Option<String>,
+    saw_spawn_requested: bool,
+}
+
+impl BootstrapTraceState {
+    fn finalize(&mut self) -> BootstrapTraceReport {
+        BootstrapTraceReport {
+            daemon_connect: self.connect.unwrap_or(BootstrapConnectOutcome::NotFound),
+            daemon_launch_gate: self
+                .launch_gate
+                .unwrap_or(BootstrapLaunchGateOutcome::Skipped),
+            daemon_auto_start: self
+                .auto_start
+                .unwrap_or(BootstrapAutoStartOutcome::Skipped),
+            connect_detail: self.connect_detail.clone(),
+            launch_gate_detail: self.launch_gate_detail.clone(),
+            auto_start_detail: self.auto_start_detail.clone(),
+        }
+    }
+}
+
+fn format_bootstrap_error_detail(error: &AtmError) -> String {
+    match &error.recovery {
+        Some(recovery) => format!("{} Recovery: {}", error.message, recovery),
+        None => error.message.clone(),
     }
 }
 
@@ -536,6 +658,10 @@ mod tests {
     use std::sync::{Arc, Mutex};
     use std::time::Duration;
 
+    use atm_core::doctor::{
+        BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+        BootstrapTraceReport,
+    };
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::observability::{
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
@@ -651,6 +777,17 @@ mod tests {
         assert_eq!(events[2].outcome, "connected");
         assert_eq!(events[2].team.as_str(), "trace-team");
         assert_eq!(events[2].agent.as_str(), "trace-agent");
+        assert_eq!(
+            traceability.snapshot(),
+            BootstrapTraceReport {
+                daemon_connect: BootstrapConnectOutcome::Connected,
+                daemon_launch_gate: BootstrapLaunchGateOutcome::Skipped,
+                daemon_auto_start: BootstrapAutoStartOutcome::Skipped,
+                connect_detail: None,
+                launch_gate_detail: None,
+                auto_start_detail: None,
+            }
+        );
     }
 
     #[test]
@@ -698,6 +835,18 @@ mod tests {
                 .as_deref()
                 .expect("error message")
                 .contains("daemon binary is missing")
+        );
+        assert_eq!(
+            traceability.snapshot().daemon_auto_start,
+            BootstrapAutoStartOutcome::Failed
+        );
+        assert!(
+            traceability
+                .snapshot()
+                .auto_start_detail
+                .as_deref()
+                .expect("auto-start detail")
+                .contains("Build or install atm-daemon")
         );
     }
 

@@ -68,6 +68,7 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                     detail: None,
                 },
                 runtime_status: None,
+                bootstrap_trace: None,
             })),
             other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
         }
