@@ -752,8 +752,10 @@ fn observability_test_event(
 ) -> DaemonEvent {
     DaemonEvent {
         subsystem: DaemonSubsystem::Composition,
-        action,
-        outcome,
+        action: ActionName::new(action)
+            .expect("daemon observability test actions must be valid ActionName literals"),
+        outcome: OutcomeLabel::new(outcome)
+            .expect("daemon observability test outcomes must be valid OutcomeLabel literals"),
         team: TeamScope::None,
         agent: None,
         sender: None,
