@@ -3163,7 +3163,17 @@ Goal:
 - add the guardrails needed to catch legacy-path regressions and stale code
   earlier in development
 
+Pre-phase prerequisite:
+- before `integrate/phase-X` starts, a standalone develop-targeting PR
+  (for example `feature/pX-lint-gates`) must land the shared:
+  - silent-emit regression gate
+  - RULE-002 function-length gate
+- those guards must already be live on every Phase `X` sprint branch from the
+  first push; they are not part of the `integrate/phase-X` sprint sequence
+
 Execution shape:
+- pre-phase prerequisite:
+  - standalone develop-targeting lint-gate PR before `integrate/phase-X`
 - `X.1` mailbox runtime cutover and dual-mode surface deletion
 - `X.2` command-path simplification and legacy mailbox path deletion
 - `X.3` daemon runtime truth unification and runtime-status-cache refactor
@@ -3191,11 +3201,11 @@ Acceptance:
 - same-host helper duplication across `atm`, `atm-graft`, and
   `atm-daemon-client` has explicit sprint ownership
 - Phase `X` includes CI or QA gates for:
-  - silent emit discard regression
-  - RULE-002 function length regression
   - legacy mailbox-path regression
   - replay-capability-degradation regression
   - dependency-ownership validation via `cargo-shear`
+- the silent-emit and RULE-002 gates are treated as already-live pre-phase
+  develop prerequisites, not delayed `integrate/phase-X` sprint work
 - each sprint names the shared ATM error / protocol / doctor paths it must
   reuse and the current `main` CLI baseline it must preserve
 - duplicate interface-specific error/reporting implementations for the same

@@ -47,6 +47,16 @@ Predecessor gate:
 - Phase `W` must remain merged and validated on `integrate/phase-W`
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
 
+Pre-phase prerequisite:
+- before `integrate/phase-X` is created, the following guardrails must land on
+  `develop` through a standalone branch such as `feature/pX-lint-gates`:
+  - `scripts/check-silent-emit.sh`
+  - `scripts/check-function-length.py`
+- reason:
+  - these gates must already be live on every Phase `X` sprint branch from its
+    first push
+  - they are not acceptable as a late sprint inside `integrate/phase-X`
+
 Boundary rules for Phase `X`:
 - SQLite/store is the only durable ATM mailbox implementation
 - daemon/store unavailability must return shared ATM errors; no runtime path may
@@ -150,15 +160,14 @@ The following deferred findings are mandatory Phase `X` obligations:
 ### Systemic Follow-Up Items Owned By `arch-ctm`
 
 Phase `W` post-mortem assigned these follow-ups to `arch-ctm`:
-- silent-emit-discard CI lint
 - typed observability migration requirements/architecture updates
-- RULE-002 function-length CI lint
 - infallible-result rust-qa-agent checklist update
 - structured-logging guidelines advisory
 - dependency-ownership validation so helper relocation does not leave stale
   manifest entries behind
 
-These are included in `X.5` below.
+The silent-emit and RULE-002 lint gates are pre-phase develop-targeting
+prerequisites. The remaining items are included in `X.5` below.
 
 ### Parallel Process Items Owned By `team-lead`
 
@@ -171,6 +180,8 @@ Phase `X` does not absorb those into `arch-ctm` sprint scope.
 
 ## Execution Shape
 
+- pre-phase prerequisite:
+  - standalone develop-targeting lint-gate PR before `integrate/phase-X`
 - `X.1` mailbox runtime cutover and dual-mode surface deletion
 - `X.2` command-path simplification and legacy mailbox path deletion
 - `X.3` daemon runtime truth unification and runtime-status-cache refactor
@@ -402,9 +413,8 @@ Goal:
   not re-enter the codebase
 
 Primary file scope:
-- `scripts/check-silent-emit.sh`
-- `scripts/check-function-length.py`
 - `scripts/check-legacy-mailbox-paths.sh`
+- `scripts/check-capability-degradation.sh`
 - CI workflow files that own repository gate execution
 - `docs/requirements.md`
 - `docs/architecture.md`
@@ -412,10 +422,6 @@ Primary file scope:
 - `.claude/skills/rust-development/guidelines.txt`
 
 Required deliverables:
-- add a CI gate for silent `emit()` discard patterns
-- add a CI gate for RULE-002 function length with:
-  - warning posture for grandfathered existing violations
-  - hard fail for new violations introduced by a PR diff
 - add a CI gate for mailbox-legacy deletion regressions covering:
   - `LegacyMailboxRuntime`
   - `DefaultMailboxRuntime::Legacy`
@@ -427,6 +433,9 @@ Required deliverables:
   `X.4`, with a no-production-match search for:
   - `replay_store = None`
   - `replay_store: None`
+- wire the pre-phase silent-emit and RULE-002 guards into the documented local
+  lint/CI entrypoints used by Phase `X` branches, rather than re-implementing
+  them on the integration line
 - add dependency-ownership validation to the local lint/CI path, including
   `cargo-shear`, so helper relocation or `#[path = ...]` indirection cannot
   leave stale dependency declarations until end-of-phase review
@@ -440,10 +449,10 @@ Required deliverables:
   workspace for the removed legacy pattern family, not only the touched files
 
 Acceptance criteria:
-- the silent-emit-discard gate is runnable in CI
-- the RULE-002 gate is runnable in CI
 - the legacy-mailbox-regression gate is runnable in CI
 - the replay-capability-degradation regression gate is runnable in CI
+- the pre-phase silent-emit and RULE-002 gates are referenced as already-live
+  branch prerequisites for all Phase `X` sprint branches
 - the local lint entrypoints include dependency-ownership validation
 - typed observability completion is explicitly captured in requirements and
   architecture docs
