@@ -293,8 +293,14 @@ impl ObservabilityPort for DaemonObservability {
 
         self.emit_log_event(EmitLogEvent {
             scope: "observability",
-            action: event.action,
-            outcome: event.outcome,
+            action: ActionName::new(event.action).map_err(|source| {
+                AtmError::observability_emit("failed to validate ATM daemon observability action")
+                    .with_source(source)
+            })?,
+            outcome: OutcomeLabel::new(event.outcome).map_err(|source| {
+                AtmError::observability_emit("failed to validate ATM daemon observability outcome")
+                    .with_source(source)
+            })?,
             message: Some(format!(
                 "ATM daemon handled {} with outcome {}",
                 event.command, event.outcome
@@ -364,8 +370,8 @@ impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
 
 struct EmitLogEvent {
     scope: &'static str,
-    action: &'static str,
-    outcome: &'static str,
+    action: ActionName,
+    outcome: OutcomeLabel,
     message: Option<String>,
     request_id: Option<String>,
     correlation_id: Option<String>,
@@ -386,16 +392,10 @@ impl DaemonObservability {
                 .with_source(source)
             })?,
             timestamp: Timestamp::now_utc(),
-            level: level_for_outcome(event.outcome),
+            level: level_for_outcome(event.outcome.as_str()),
             service: self.service_name.clone(),
             target: self.target_category.clone(),
-            action: ActionName::new(event.action).map_err(|source| {
-                AtmError::observability_emit(format!(
-                    "failed to validate ATM daemon {} action",
-                    event.scope
-                ))
-                .with_source(source)
-            })?,
+            action: event.action,
             message: event.message,
             identity: ProcessIdentity::default(),
             trace: None,
@@ -417,13 +417,7 @@ impl DaemonObservability {
                     AtmError::observability_emit("failed to validate ATM daemon correlation id")
                         .with_source(source)
                 })?,
-            outcome: Some(OutcomeLabel::new(event.outcome).map_err(|source| {
-                AtmError::observability_emit(format!(
-                    "failed to validate ATM daemon {} outcome",
-                    event.scope
-                ))
-                .with_source(source)
-            })?),
+            outcome: Some(event.outcome),
             diagnostic: None,
             state_transition: None,
             fields: event.fields,
@@ -516,6 +510,10 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
 }
 
 #[derive(Debug)]
+// The retained sink keeps three separate mutexes because the health state is read and updated on
+// the hot path, while the last-written file handle and prune timestamp are touched far less often.
+// Keeping them independent avoids serializing unrelated reads/writes behind one coarse lock.
+// Lock order matters when more than one is needed: write() updates last_written_file before health.
 struct RetainedJsonlFileSink {
     path: PathBuf,
     rotation: sc_observability::RotationPolicy,
@@ -752,8 +750,10 @@ fn observability_test_event(
 ) -> DaemonEvent {
     DaemonEvent {
         subsystem: DaemonSubsystem::Composition,
-        action,
-        outcome,
+        action: ActionName::new(action)
+            .expect("daemon observability test actions must be valid ActionName literals"),
+        outcome: OutcomeLabel::new(outcome)
+            .expect("daemon observability test outcomes must be valid OutcomeLabel literals"),
         team: TeamScope::None,
         agent: None,
         sender: None,

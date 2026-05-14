@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W6-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-W6-F001" ;
+  triage:title "EmitLogEvent action/outcome discards ActionName/OutcomeLabel at emit boundary" ;
+  triage:description "crates/atm-daemon/bin_support/daemon_observability.rs lines 365-368: EmitLogEvent stores action/outcome as String (W.6 branch) or &'static str (integrate). Callers holding validated ActionName/OutcomeLabel values (emit_daemon_event lines 180-181) stringify them, then emit_log_event re-validates via ActionName::new/OutcomeLabel::new at lines 392-398 and 420-426. Unnecessary stringify-then-revalidate round-trip discards type-system guarantees. Fix: change EmitLogEvent.action/outcome fields to ActionName/OutcomeLabel; remove re-validation map_err blocks at lines 392-398 and 420-426; update call sites to pass already-constructed newtypes." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:pattern "RBP-004" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W6-F001/pW-s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W6-F001/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> .
+
+<urn:atm:triage:occurrence/RBP-W6-F001/pW-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/bin_support/daemon_observability.rs" ;
+  triage:line 365 ;
+  triage:snippet "struct EmitLogEvent { action: String, outcome: String, ... } — callers stringify ActionName/OutcomeLabel at lines 180-181; re-validated via ActionName::new/OutcomeLabel::new at lines 392/420" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s6-sqlite-error-contract" ;
+  triage:headSha "d27de5a2c54db23b4576ca28d57d89b2681f971a" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> .
+
+<urn:atm:triage:occurrence/RBP-W6-F001/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/bin_support/daemon_observability.rs" ;
+  triage:line 365 ;
+  triage:snippet "struct EmitLogEvent { action: &'static str, outcome: &'static str, ... } — re-validated via ActionName::new/OutcomeLabel::new at lines 392/420; same round-trip without type guarantee" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "4540ef258505e629d6a1fb89f5ce3f672e215445" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/4540ef258505e629d6a1fb89f5ce3f672e215445> .
+
+<urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s6-sqlite-error-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s6-sqlite-error-contract" ;
+  triage:headSha "d27de5a2c54db23b4576ca28d57d89b2681f971a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef258505e629d6a1fb89f5ce3f672e215445>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "4540ef258505e629d6a1fb89f5ce3f672e215445" ;
+  triage:orderIndex 2 .

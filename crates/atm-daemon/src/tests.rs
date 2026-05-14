@@ -816,8 +816,7 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
                 .findings
                 .iter()
                 .find(|finding| {
-                    finding.code
-                        == atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded
+                    finding.code == atm_core::error_codes::AtmErrorCode::WarningSqliteHealthDegraded
                 })
                 .expect("runtime finding");
             assert!(finding.message.contains("sqlite_ready=false"));
