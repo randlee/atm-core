@@ -14,6 +14,7 @@ type OutcomeLabel = sc_observability_types::OutcomeLabel;
 pub enum DaemonSubsystem {
     Bootstrap,
     Composition,
+    Sqlite,
     LocalIpcTransport,
     AdvisoryRuntime,
     NotificationRuntime,
@@ -32,6 +33,7 @@ impl DaemonSubsystem {
         match self {
             Self::Bootstrap => "bootstrap",
             Self::Composition => "composition",
+            Self::Sqlite => "sqlite",
             Self::LocalIpcTransport => "local_ipc_transport",
             Self::AdvisoryRuntime => "advisory_runtime",
             Self::NotificationRuntime => "notification_runtime",
@@ -136,7 +138,7 @@ pub trait DaemonRuntimeObservability:
     /// action/outcome use the shared validated observability types.
     fn emit_subsystem_event(
         &self,
-        subsystem: &'static str,
+        subsystem: DaemonSubsystem,
         action: &ActionName,
         outcome: &OutcomeLabel,
         message: &str,

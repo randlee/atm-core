@@ -16,7 +16,6 @@ use atm_core::observability::{
 };
 use serde_json::Map;
 
-#[cfg(test)]
 use atm_daemon::DaemonSubsystem;
 use atm_daemon::{DaemonEvent, TeamScope};
 
@@ -191,7 +190,7 @@ impl DaemonObservability {
 
     pub(crate) fn emit_subsystem_event(
         &self,
-        subsystem: &'static str,
+        subsystem: DaemonSubsystem,
         action: &ActionName,
         outcome: &OutcomeLabel,
         message: &str,
@@ -354,7 +353,7 @@ impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
 
     fn emit_subsystem_event(
         &self,
-        subsystem: &'static str,
+        subsystem: DaemonSubsystem,
         action: &ActionName,
         outcome: &OutcomeLabel,
         message: &str,
@@ -814,7 +813,7 @@ fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError>
 fn map_subsystem_event(
     service_name: &ServiceName,
     target_category: &TargetCategory,
-    subsystem: &'static str,
+    subsystem: DaemonSubsystem,
     action: &ActionName,
     outcome: &OutcomeLabel,
     message: &str,
@@ -830,7 +829,7 @@ fn map_subsystem_event(
             })?;
     let mut fields = Map::from_iter([(
         "component".to_string(),
-        serde_json::Value::String(subsystem.to_string()),
+        serde_json::Value::String(subsystem.as_str().to_string()),
     )]);
     if let Some(error_code) = error_code {
         fields.insert(

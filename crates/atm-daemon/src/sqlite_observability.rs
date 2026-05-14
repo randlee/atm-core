@@ -3,6 +3,7 @@ use std::sync::Arc;
 use atm_core::error::AtmError;
 use atm_rusqlite::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
 
+use crate::DaemonSubsystem;
 use crate::DaemonRuntimeObservability;
 use crate::runtime_status_cache::RuntimeStatusCache;
 
@@ -56,7 +57,7 @@ impl SqliteObservability for DaemonSqliteObservability {
                 .with_source(source)
         })?;
         self.observability.emit_subsystem_event(
-            "sqlite",
+            DaemonSubsystem::Sqlite,
             &action,
             &outcome,
             &event.message,
