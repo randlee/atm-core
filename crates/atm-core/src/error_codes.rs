@@ -97,6 +97,8 @@ pub enum AtmErrorCode {
     WarningMalformedAtmFieldIgnored,
     /// Observability health is degraded.
     WarningObservabilityHealthDegraded,
+    /// SQLite-backed daemon runtime health is degraded.
+    WarningSqliteHealthDegraded,
     /// An origin inbox entry was skipped.
     WarningOriginInboxEntrySkipped,
     /// Send fell back because the team config was missing.
@@ -169,6 +171,7 @@ impl AtmErrorCode {
             Self::WarningMailboxRecordSkipped => "ATM_WARNING_MAILBOX_RECORD_SKIPPED",
             Self::WarningMalformedAtmFieldIgnored => "ATM_WARNING_MALFORMED_ATM_FIELD_IGNORED",
             Self::WarningObservabilityHealthDegraded => "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED",
+            Self::WarningSqliteHealthDegraded => "ATM_WARNING_SQLITE_HEALTH_DEGRADED",
             Self::WarningOriginInboxEntrySkipped => "ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED",
             Self::WarningMissingTeamConfigFallback => "ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK",
             Self::WarningSendAlertStateDegraded => "ATM_WARNING_SEND_ALERT_STATE_DEGRADED",
@@ -237,6 +240,7 @@ impl FromStr for AtmErrorCode {
             "ATM_WARNING_OBSERVABILITY_HEALTH_DEGRADED" => {
                 Ok(Self::WarningObservabilityHealthDegraded)
             }
+            "ATM_WARNING_SQLITE_HEALTH_DEGRADED" => Ok(Self::WarningSqliteHealthDegraded),
             "ATM_WARNING_ORIGIN_INBOX_ENTRY_SKIPPED" => Ok(Self::WarningOriginInboxEntrySkipped),
             "ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK" => {
                 Ok(Self::WarningMissingTeamConfigFallback)

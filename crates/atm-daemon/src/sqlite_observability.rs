@@ -37,6 +37,16 @@ impl DaemonSqliteObservability {
 
 impl SqliteObservability for DaemonSqliteObservability {
     fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError> {
+        match event.outcome {
+            SqliteObservabilityOutcome::Ok => {}
+            SqliteObservabilityOutcome::Failed | SqliteObservabilityOutcome::Timeout => {
+                self.status_cache
+                    .mark_sqlite_unavailable_with_detail(format!(
+                        "[{}] {}",
+                        event.action, event.message
+                    ));
+            }
+        }
         let action = ActionName::new(event.action).map_err(|source| {
             AtmError::observability_emit("failed to validate ATM daemon sqlite subsystem action")
                 .with_source(source)
@@ -51,18 +61,7 @@ impl SqliteObservability for DaemonSqliteObservability {
             &outcome,
             &event.message,
             event.error_code,
-        )?;
-        match event.outcome {
-            SqliteObservabilityOutcome::Ok => {}
-            SqliteObservabilityOutcome::Failed | SqliteObservabilityOutcome::Timeout => {
-                self.status_cache
-                    .mark_sqlite_unavailable_with_detail(format!(
-                        "[{}] {}",
-                        event.action, event.message
-                    ));
-            }
-        }
-        Ok(())
+        )
     }
 }
 

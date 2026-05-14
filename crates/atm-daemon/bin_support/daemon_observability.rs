@@ -177,8 +177,8 @@ impl DaemonObservability {
 
         self.emit_log_event(EmitLogEvent {
             scope: "lifecycle",
-            action: event.action,
-            outcome: event.outcome,
+            action: event.action.as_str().to_string(),
+            outcome: event.outcome.as_str().to_string(),
             message: Some(event.detail.into_owned()),
             request_id: event.message_id.as_ref().map(|value| value.to_string()),
             correlation_id: event
@@ -293,8 +293,8 @@ impl ObservabilityPort for DaemonObservability {
 
         self.emit_log_event(EmitLogEvent {
             scope: "observability",
-            action: event.action,
-            outcome: event.outcome,
+            action: event.action.to_string(),
+            outcome: event.outcome.to_string(),
             message: Some(format!(
                 "ATM daemon handled {} with outcome {}",
                 event.command, event.outcome
@@ -364,8 +364,8 @@ impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
 
 struct EmitLogEvent {
     scope: &'static str,
-    action: &'static str,
-    outcome: &'static str,
+    action: String,
+    outcome: String,
     message: Option<String>,
     request_id: Option<String>,
     correlation_id: Option<String>,
@@ -386,10 +386,10 @@ impl DaemonObservability {
                 .with_source(source)
             })?,
             timestamp: Timestamp::now_utc(),
-            level: level_for_outcome(event.outcome),
+            level: level_for_outcome(&event.outcome),
             service: self.service_name.clone(),
             target: self.target_category.clone(),
-            action: ActionName::new(event.action).map_err(|source| {
+            action: ActionName::new(&event.action).map_err(|source| {
                 AtmError::observability_emit(format!(
                     "failed to validate ATM daemon {} action",
                     event.scope
@@ -417,7 +417,7 @@ impl DaemonObservability {
                     AtmError::observability_emit("failed to validate ATM daemon correlation id")
                         .with_source(source)
                 })?,
-            outcome: Some(OutcomeLabel::new(event.outcome).map_err(|source| {
+            outcome: Some(OutcomeLabel::new(&event.outcome).map_err(|source| {
                 AtmError::observability_emit(format!(
                     "failed to validate ATM daemon {} outcome",
                     event.scope

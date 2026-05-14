@@ -56,8 +56,8 @@ pub enum TeamScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DaemonEvent {
     pub subsystem: DaemonSubsystem,
-    pub action: &'static str,
-    pub outcome: &'static str,
+    pub action: ActionName,
+    pub outcome: OutcomeLabel,
     pub team: TeamScope,
     pub agent: Option<AgentName>,
     pub sender: Option<AgentName>,
@@ -76,8 +76,10 @@ impl DaemonEvent {
     ) -> Self {
         Self {
             subsystem,
-            action,
-            outcome,
+            action: ActionName::new(action)
+                .expect("daemon subsystem action literals must satisfy ActionName validation"),
+            outcome: OutcomeLabel::new(outcome)
+                .expect("daemon subsystem outcome literals must satisfy OutcomeLabel validation"),
             team: TeamScope::None,
             agent: None,
             sender: None,
@@ -205,15 +207,15 @@ impl SubsystemObservability {
 
     pub(crate) fn emit_event_or_warn(&self, event: DaemonEvent) {
         let subsystem = event.subsystem.as_str();
-        let action = event.action;
-        let outcome = event.outcome;
+        let action = event.action.as_str().to_string();
+        let outcome = event.outcome.as_str().to_string();
         let detail = event.detail.clone();
         if let Err(error) = self.emit_event(event) {
             tracing::warn!(
                 %error,
                 subsystem,
-                action,
-                outcome,
+                action = %action,
+                outcome = %outcome,
                 detail = %detail,
                 "failed to emit daemon observability event"
             );

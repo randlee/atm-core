@@ -212,6 +212,8 @@ Execution shape:
 - `W.3` adds SQLite subsystem observability for writer queue, reply timeout,
   WAL lifecycle, and reader-budget exhaustion
 - `W.4` closes the remaining peer replay recovery-text holes
+- `W.6` closes the remaining SQLite error-contract and typed daemon-event gaps
+  discovered during the Phase `W` design review
 
 Execution sequence:
 - `W.1` must land first because the sink-failure rule affects every later
@@ -234,12 +236,14 @@ Authoritative sprint sequence:
 - `docs/phase-W/sprint-W2.md`
 - `docs/phase-W/sprint-W3.md`
 - `docs/phase-W/sprint-W4.md`
+- `docs/phase-W/sprint-W6.md`
 
 Deliverables:
 - `docs/phase-W/sprint-W1.md` — daemon `emit()` silent discard fix plan
 - `docs/phase-W/sprint-W2.md` — daemon-client traceability plan
 - `docs/phase-W/sprint-W3.md` — SQLite observability plan
 - `docs/phase-W/sprint-W4.md` — peer replay recovery-text plan
+- `docs/phase-W/sprint-W6.md` — SQLite error-contract and typed daemon-event cleanup
 
 Cross-sprint dependencies:
 - `W.2` and `W.3` must both define how new signals map to:

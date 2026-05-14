@@ -177,8 +177,8 @@ impl DaemonRuntimeObservability for TestDaemonObservability {
         self.append_message(format!(
             "{{\"subsystem\":\"{}\",\"action\":\"{}\",\"outcome\":\"{}\",\"message\":\"{}\"}}",
             event.subsystem.as_str(),
-            event.action,
-            event.outcome,
+            event.action.as_str(),
+            event.outcome.as_str(),
             event.detail
         ))
     }
