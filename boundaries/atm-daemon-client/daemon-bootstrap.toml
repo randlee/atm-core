@@ -31,7 +31,7 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-graft"]
+allowed_dependents = ["atm", "atm-daemon-bootstrap", "atm-graft"]
 allowed_dependencies = ["atm-core"]
 forbidden_edges = [
   "atm-daemon-client -> atm-daemon",
@@ -62,5 +62,5 @@ review_gates = [
 state = "active"
 notes = [
   "shared same-host daemon bootstrap helpers extracted from atm and atm-graft",
-  "transport adapters remain in their owning crates; this crate owns only launch/bootstrap helpers",
+  "transport adapters and request-dispatch wiring remain in their owning crates; this crate owns launch/bootstrap helpers and the X.4 connection-setup helpers try_connect, exchange, and unexpected_response",
 ]

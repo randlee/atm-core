@@ -69,6 +69,8 @@ target: integrate/phase-X
   finds one shared helper definition per helper name
 - CLI and graft same-host paths share the same daemon-unavailable and
   unexpected-response behavior
+- peer transport preserves the shared ATM error/recovery contract after
+  `send_to_endpoint(...)` and `send_once(...)` refactor
 
 ## Required Validation
 
