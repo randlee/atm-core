@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use atm_core::error::AtmError;
 use atm_rusqlite::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
+use sc_observability_types::{ActionName, OutcomeLabel};
 
 use crate::DaemonRuntimeObservability;
 use crate::runtime_status_cache::RuntimeStatusCache;
@@ -34,10 +35,18 @@ impl DaemonSqliteObservability {
 
 impl SqliteObservability for DaemonSqliteObservability {
     fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError> {
+        let action = ActionName::new(event.action).map_err(|source| {
+            AtmError::observability_emit("failed to validate ATM daemon sqlite subsystem action")
+                .with_source(source)
+        })?;
+        let outcome = OutcomeLabel::new(event.outcome.as_str()).map_err(|source| {
+            AtmError::observability_emit("failed to validate ATM daemon sqlite subsystem outcome")
+                .with_source(source)
+        })?;
         self.observability.emit_subsystem_event(
             "sqlite",
-            event.action,
-            event.outcome.as_str(),
+            &action,
+            &outcome,
             &event.message,
             event.error_code,
         )?;

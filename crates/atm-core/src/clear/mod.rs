@@ -246,7 +246,7 @@ fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRunti
         removed_by_class,
     };
 
-    let _ = observability.emit(CommandEvent {
+    if let Err(error) = observability.emit(CommandEvent {
         command: "clear",
         action: "clear",
         outcome: if query.dry_run { "dry_run" } else { "ok" },
@@ -259,7 +259,9 @@ fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRunti
         task_id: None,
         error_code: None,
         error_message: None,
-    });
+    }) {
+        tracing::warn!(%error, command = "clear", action = "clear", "failed to emit clear command event");
+    }
 
     Ok(outcome)
 }

@@ -383,7 +383,7 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         bucket_counts,
     };
 
-    let _ = observability.emit(CommandEvent {
+    if let Err(error) = observability.emit(CommandEvent {
         command: "read",
         action: "read",
         outcome: if timed_out { "timeout" } else { "ok" },
@@ -396,7 +396,9 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         task_id: None,
         error_code: None,
         error_message: None,
-    });
+    }) {
+        tracing::warn!(%error, command = "read", action = "read", "failed to emit read command event");
+    }
 
     Ok(outcome)
 }

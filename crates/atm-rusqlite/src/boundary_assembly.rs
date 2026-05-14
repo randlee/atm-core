@@ -72,17 +72,18 @@ impl SqliteBoundaryAssembly {
         path: impl AsRef<Path>,
         observability: Arc<dyn SqliteObservability>,
     ) -> Result<Self, AtmError> {
-        let db = Arc::new(SharedDb::open_with_observability(
-            path,
-            Arc::clone(&observability),
-        ).inspect_err(|error| {
-            observability.emit_or_warn(SqliteObservabilityEvent::new(
-                "boundary_assembly",
-                SqliteObservabilityOutcome::Failed,
-                error.message.clone(),
-                Some(error.code),
-            ));
-        })?);
+        let db = Arc::new(
+            SharedDb::open_with_observability(path, Arc::clone(&observability)).inspect_err(
+                |error| {
+                    observability.emit_or_warn(SqliteObservabilityEvent::new(
+                        "boundary_assembly",
+                        SqliteObservabilityOutcome::Failed,
+                        error.message.clone(),
+                        Some(error.code),
+                    ));
+                },
+            )?,
+        );
         Ok(Self {
             mail_store: Arc::new(SqliteMailStore::new(db.clone())),
             task_store: Arc::new(SqliteTaskStore::new(db.clone())),
@@ -141,12 +142,13 @@ impl SqliteBoundaryAssembly {
 
     pub fn checkpoint_wal(&self) -> Result<(), AtmError> {
         self.mail_store.db.checkpoint_wal().inspect_err(|error| {
-            self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                "boundary_checkpoint_wal",
-                SqliteObservabilityOutcome::Failed,
-                error.message.clone(),
-                Some(error.code),
-            ));
+            self.observability
+                .emit_or_warn(SqliteObservabilityEvent::new(
+                    "boundary_checkpoint_wal",
+                    SqliteObservabilityOutcome::Failed,
+                    error.message.clone(),
+                    Some(error.code),
+                ));
         })
     }
 

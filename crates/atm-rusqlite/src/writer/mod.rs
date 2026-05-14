@@ -6,9 +6,7 @@ pub(crate) use ops::{WriteOp, WriteOpResult, validate_upsert_message_request};
 use crate::shared_db::{
     SharedDbTarget, SqliteConnection, ensure_schema, open_connection_for_target, sqlite_error,
 };
-use crate::{
-    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
-};
+use crate::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
 use atm_core::error::{AtmError, AtmErrorCode};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::Arc;
@@ -111,12 +109,13 @@ impl SqliteWriter {
     pub(crate) fn submit(&self, op: WriteOp) -> Result<WriteOpResult, AtmError> {
         let sender = self.sender.as_ref().ok_or_else(|| {
             let error = writer_channel_closed_error();
-            self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                "writer_submit",
-                SqliteObservabilityOutcome::Failed,
-                error.message.clone(),
-                Some(error.code),
-            ));
+            self.observability
+                .emit_or_warn(SqliteObservabilityEvent::new(
+                    "writer_submit",
+                    SqliteObservabilityOutcome::Failed,
+                    error.message.clone(),
+                    Some(error.code),
+                ));
             error
         })?;
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
@@ -131,12 +130,13 @@ impl SqliteWriter {
                 Err(TrySendError::Full(returned)) => {
                     if Instant::now() >= deadline {
                         let error = writer_queue_timeout_error(self.write_op_deadline);
-                        self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                            "writer_submit",
-                            SqliteObservabilityOutcome::Timeout,
-                            error.message.clone(),
-                            Some(error.code),
-                        ));
+                        self.observability
+                            .emit_or_warn(SqliteObservabilityEvent::new(
+                                "writer_submit",
+                                SqliteObservabilityOutcome::Timeout,
+                                error.message.clone(),
+                                Some(error.code),
+                            ));
                         return Err(error);
                     }
                     message = returned;
@@ -144,40 +144,43 @@ impl SqliteWriter {
                 }
                 Err(TrySendError::Disconnected(_)) => {
                     let error = writer_channel_closed_error();
-                    self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_submit",
-                        SqliteObservabilityOutcome::Failed,
-                        error.message.clone(),
-                        Some(error.code),
-                    ));
+                    self.observability
+                        .emit_or_warn(SqliteObservabilityEvent::new(
+                            "writer_submit",
+                            SqliteObservabilityOutcome::Failed,
+                            error.message.clone(),
+                            Some(error.code),
+                        ));
                     return Err(error);
                 }
             }
         }
-        reply_rx.recv_timeout(self.write_op_deadline).map_err(|error| {
-            match error {
+        reply_rx
+            .recv_timeout(self.write_op_deadline)
+            .map_err(|error| match error {
                 RecvTimeoutError::Timeout => {
                     let error = writer_reply_timeout_error(self.write_op_deadline);
-                    self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_reply",
-                        SqliteObservabilityOutcome::Timeout,
-                        error.message.clone(),
-                        Some(error.code),
-                    ));
+                    self.observability
+                        .emit_or_warn(SqliteObservabilityEvent::new(
+                            "writer_reply",
+                            SqliteObservabilityOutcome::Timeout,
+                            error.message.clone(),
+                            Some(error.code),
+                        ));
                     error
                 }
                 RecvTimeoutError::Disconnected => {
                     let error = writer_reply_channel_closed_error();
-                    self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_reply",
-                        SqliteObservabilityOutcome::Failed,
-                        error.message.clone(),
-                        Some(error.code),
-                    ));
+                    self.observability
+                        .emit_or_warn(SqliteObservabilityEvent::new(
+                            "writer_reply",
+                            SqliteObservabilityOutcome::Failed,
+                            error.message.clone(),
+                            Some(error.code),
+                        ));
                     error
                 }
-            }
-        })?
+            })?
     }
 
     #[cfg(test)]
@@ -212,12 +215,13 @@ impl Drop for SqliteWriter {
                 Err(TrySendError::Full(_)) => {
                     let detail = "sqlite writer shutdown signal skipped because the bounded queue was full; relying on channel disconnect to let the writer exit once in-flight work drains";
                     tracing::warn!("{detail}");
-                    self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_shutdown_signal",
-                        SqliteObservabilityOutcome::Failed,
-                        detail,
-                        Some(AtmErrorCode::DaemonUnavailable),
-                    ));
+                    self.observability
+                        .emit_or_warn(SqliteObservabilityEvent::new(
+                            "writer_shutdown_signal",
+                            SqliteObservabilityOutcome::Failed,
+                            detail,
+                            Some(AtmErrorCode::DaemonUnavailable),
+                        ));
                 }
             }
             drop(sender);
@@ -236,12 +240,13 @@ impl Drop for SqliteWriter {
                     let _ = join_helper.join();
                     let detail = "sqlite writer thread panicked while shutting down; the durable write lane may have exited mid-drain";
                     tracing::warn!("{detail}");
-                    self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_shutdown_join",
-                        SqliteObservabilityOutcome::Failed,
-                        detail,
-                        Some(AtmErrorCode::DaemonUnavailable),
-                    ));
+                    self.observability
+                        .emit_or_warn(SqliteObservabilityEvent::new(
+                            "writer_shutdown_join",
+                            SqliteObservabilityOutcome::Failed,
+                            detail,
+                            Some(AtmErrorCode::DaemonUnavailable),
+                        ));
                 }
                 Err(RecvTimeoutError::Timeout) => {
                     drop(join_helper);
@@ -253,24 +258,25 @@ impl Drop for SqliteWriter {
                         timeout_ms = self.shutdown_join_deadline.as_millis(),
                         "{detail}"
                     );
-                    self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_shutdown_join",
-                        SqliteObservabilityOutcome::Timeout,
-                        detail,
-                        Some(AtmErrorCode::DaemonUnavailable),
-                    ));
+                    self.observability
+                        .emit_or_warn(SqliteObservabilityEvent::new(
+                            "writer_shutdown_join",
+                            SqliteObservabilityOutcome::Timeout,
+                            detail,
+                            Some(AtmErrorCode::DaemonUnavailable),
+                        ));
                 }
                 Err(RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
-                    let detail =
-                        "sqlite writer join helper disconnected before reporting the worker shutdown result";
+                    let detail = "sqlite writer join helper disconnected before reporting the worker shutdown result";
                     tracing::warn!("{detail}");
-                    self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                        "writer_shutdown_join",
-                        SqliteObservabilityOutcome::Failed,
-                        detail,
-                        Some(AtmErrorCode::DaemonUnavailable),
-                    ));
+                    self.observability
+                        .emit_or_warn(SqliteObservabilityEvent::new(
+                            "writer_shutdown_join",
+                            SqliteObservabilityOutcome::Failed,
+                            detail,
+                            Some(AtmErrorCode::DaemonUnavailable),
+                        ));
                 }
             }
         }

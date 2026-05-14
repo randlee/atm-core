@@ -6,6 +6,7 @@ use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::ObservabilityPort;
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, TaskId, TeamName};
+use sc_observability_types::{ActionName, OutcomeLabel};
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DaemonSubsystem {
@@ -127,11 +128,15 @@ pub trait DaemonRuntimeObservability:
     /// Emit one generic subsystem event into the retained sink without
     /// introducing daemon-subsystem type dependencies at the observability
     /// boundary.
+    ///
+    /// Shared observability has no validated subsystem-name newtype today, so
+    /// subsystem ids stay on a daemon-owned static string boundary while
+    /// action/outcome use the shared validated observability types.
     fn emit_subsystem_event(
         &self,
         subsystem: &'static str,
-        action: &'static str,
-        outcome: &'static str,
+        action: &ActionName,
+        outcome: &OutcomeLabel,
         message: &str,
         error_code: Option<AtmErrorCode>,
     ) -> Result<(), AtmError>;
@@ -211,15 +216,6 @@ impl SubsystemObservability {
                 "failed to emit daemon observability event"
             );
         }
-    }
-
-    pub(crate) fn emit(
-        &self,
-        action: &'static str,
-        outcome: &'static str,
-        detail: impl Into<Cow<'static, str>>,
-    ) -> Result<(), AtmError> {
-        self.emit_event(self.event(action, outcome, detail))
     }
 
     pub(crate) fn emit_or_warn(

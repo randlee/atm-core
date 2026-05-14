@@ -182,8 +182,8 @@ impl DaemonObservability {
     pub(crate) fn emit_subsystem_event(
         &self,
         subsystem: &'static str,
-        action: &'static str,
-        outcome: &'static str,
+        action: &ActionName,
+        outcome: &OutcomeLabel,
         message: &str,
         error_code: Option<AtmErrorCode>,
     ) -> Result<(), AtmError> {
@@ -336,8 +336,8 @@ impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
     fn emit_subsystem_event(
         &self,
         subsystem: &'static str,
-        action: &'static str,
-        outcome: &'static str,
+        action: &ActionName,
+        outcome: &OutcomeLabel,
         message: &str,
         error_code: Option<AtmErrorCode>,
     ) -> Result<(), AtmError> {
@@ -787,8 +787,8 @@ fn map_subsystem_event(
     service_name: &ServiceName,
     target_category: &TargetCategory,
     subsystem: &'static str,
-    action: &'static str,
-    outcome: &'static str,
+    action: &ActionName,
+    outcome: &OutcomeLabel,
     message: &str,
     error_code: Option<AtmErrorCode>,
 ) -> Result<LogEvent, AtmError> {
@@ -800,14 +800,6 @@ fn map_subsystem_event(
                 )
                 .with_source(source)
             })?;
-    let action = ActionName::new(action).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM daemon subsystem action")
-            .with_source(source)
-    })?;
-    let outcome = OutcomeLabel::new(outcome).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM daemon subsystem outcome")
-            .with_source(source)
-    })?;
     let mut fields = Map::from_iter([(
         "component".to_string(),
         serde_json::Value::String(subsystem.to_string()),
@@ -825,13 +817,13 @@ fn map_subsystem_event(
         level: level_for_outcome(outcome.as_str()),
         service: service_name.clone(),
         target: target_category.clone(),
-        action,
+        action: action.clone(),
         message: Some(message.to_string()),
         identity: ProcessIdentity::default(),
         trace: None,
         request_id: None,
         correlation_id: None,
-        outcome: Some(outcome),
+        outcome: Some(outcome.clone()),
         diagnostic: None,
         state_transition: None,
         fields,

@@ -1,7 +1,5 @@
 use crate::writer::{SqliteWriter, WriteOp, WriteOpResult, validate_upsert_message_request};
-use crate::{
-    SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome,
-};
+use crate::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
 use atm_core::error::AtmError;
 use atm_core::home;
 #[cfg(test)]
@@ -360,12 +358,14 @@ impl SharedDb {
         });
         match &result {
             Ok(()) => {}
-            Err(error) => self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                "wal_checkpoint",
-                SqliteObservabilityOutcome::Failed,
-                error.message.clone(),
-                Some(error.code),
-            )),
+            Err(error) => self
+                .observability
+                .emit_or_warn(SqliteObservabilityEvent::new(
+                    "wal_checkpoint",
+                    SqliteObservabilityOutcome::Failed,
+                    error.message.clone(),
+                    Some(error.code),
+                )),
         }
         result
     }
@@ -392,12 +392,13 @@ impl SharedDb {
                 "sqlite reader connection budget exhausted"
             );
             let error = reader_budget_exceeded_error();
-            self.observability.emit_or_warn(SqliteObservabilityEvent::new(
-                "reader_budget_acquire",
-                SqliteObservabilityOutcome::Failed,
-                error.message.clone(),
-                Some(error.code),
-            ));
+            self.observability
+                .emit_or_warn(SqliteObservabilityEvent::new(
+                    "reader_budget_acquire",
+                    SqliteObservabilityOutcome::Failed,
+                    error.message.clone(),
+                    Some(error.code),
+                ));
             return Err(error);
         }
         *connection_count += 1;

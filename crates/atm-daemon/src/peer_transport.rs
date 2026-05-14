@@ -661,24 +661,24 @@ fn replay_metadata_for_request(
         RequestEnvelope::Heartbeat(heartbeat) => Ok(Some((
             heartbeat.team.clone(),
             heartbeat.member.clone(),
-            heartbeat_message_key(heartbeat)?,
+            heartbeat_message_key(heartbeat),
         ))),
         _ => Ok(None),
     }
 }
 
-fn heartbeat_message_key(request: &TeamMemberHeartbeatRequest) -> Result<MessageKey, AtmError> {
+fn heartbeat_message_key(request: &TeamMemberHeartbeatRequest) -> MessageKey {
     // Team/member names are already validated ATM identifiers, pid is numeric, and RFC3339
     // timestamps are never blank, so this synthetic replay key cannot violate MessageKey's
     // non-empty invariant.
-    Ok(MessageKey::new(format!(
+    MessageKey::new(format!(
         "remote-heartbeat:{}:{}:{}:{}",
         request.team.as_str(),
         request.member.as_str(),
         request.pid,
         request.observed_at.into_inner().to_rfc3339(),
     ))
-    .expect("validated heartbeat replay keys are never blank"))
+    .expect("validated heartbeat replay keys are never blank")
 }
 
 fn jittered_backoff(base: Duration, seed: u64) -> Duration {

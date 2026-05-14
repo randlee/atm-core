@@ -185,7 +185,7 @@ pub(crate) fn read_mail_legacy_path<R: RetainedServiceRuntime + RetainedMailboxR
         bucket_counts,
     };
 
-    let _ = observability.emit(CommandEvent {
+    if let Err(error) = observability.emit(CommandEvent {
         command: "read",
         action: "read",
         outcome: if timed_out { "timeout" } else { "ok" },
@@ -198,7 +198,9 @@ pub(crate) fn read_mail_legacy_path<R: RetainedServiceRuntime + RetainedMailboxR
         task_id: None,
         error_code: None,
         error_message: None,
-    });
+    }) {
+        tracing::warn!(%error, command = "read", action = "read", "failed to emit read command event");
+    }
 
     Ok(outcome)
 }

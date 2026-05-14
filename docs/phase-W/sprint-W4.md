@@ -128,7 +128,8 @@ Current path inventory:
     - replay metadata unsupported branch
     - durable replay persistence follow-through
   - `PeerTransportRuntime::persist_replay_request(...)`
-    - runtime wrapper propagation path
+    - `#[cfg(test)]` scaffolding wrapper that delegates to the production
+      `PeerClientTransport::persist_replay_request(...)` path for verification only
 - `crates/atm-core/src/protocol.rs`
   - `ProtocolErrorEnvelope::{from_error,into_atm_error}` propagation for remote
     delivery / replay persistence failures

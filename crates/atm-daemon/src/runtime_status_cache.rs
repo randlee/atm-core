@@ -123,8 +123,6 @@ impl RuntimeStatusCache {
                 last_active_at,
             },
         );
-        cache.sqlite_ready = true;
-        cache.sqlite_detail = None;
         Ok(TeamMemberHeartbeatResponse {
             team: request.team.clone(),
             member: request.member.clone(),

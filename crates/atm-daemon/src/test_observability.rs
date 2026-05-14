@@ -11,6 +11,7 @@ use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
 };
+use sc_observability_types::{ActionName, OutcomeLabel};
 
 use crate::{DaemonEvent, DaemonRuntimeObservability};
 
@@ -183,14 +184,16 @@ impl DaemonRuntimeObservability for TestDaemonObservability {
     fn emit_subsystem_event(
         &self,
         subsystem: &'static str,
-        action: &'static str,
-        outcome: &'static str,
+        action: &ActionName,
+        outcome: &OutcomeLabel,
         message: &str,
         error_code: Option<AtmErrorCode>,
     ) -> Result<(), AtmError> {
         self.append_message(format!(
             "{{\"subsystem\":\"{subsystem}\",\"action\":\"{action}\",\"outcome\":\"{outcome}\",\"message\":\"{message}\",\"error_code\":{:?}}}",
-            error_code.map(|value| value.to_string())
+            error_code.map(|value| value.to_string()),
+            action = action.as_str(),
+            outcome = outcome.as_str()
         ))
     }
 
