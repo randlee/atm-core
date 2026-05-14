@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DESIGN-001-W>
+  a triage:Finding ;
+  triage:findingId "DESIGN-001-W" ;
+  triage:title "W.2 doctor projection gap: daemon-client trace events not projected to runtime health" ;
+  triage:description "Daemon-client connect/launch/publish trace events exist in crates/atm-daemon-client/src/lib.rs but are not projected back through atm doctor/runtime health. The doctor subcommand cannot surface connection/launch/publish trace state to the user. Actual symbol names: BootstrapTraceability, CommandEvent with action strings daemon_connect/daemon_launch_gate/daemon_auto_start. Zero pattern-sweep hits for configured pattern (trace_event|TraceEvent|connect_trace|launch_trace|publish_trace|emit_trace) — pattern does not match actual code vocabulary." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "DESIGN" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DESIGN-001-W/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:occurrence/DESIGN-001-W/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 82 ;
+  triage:snippet "pub struct BootstrapTraceability<'a> { ... emits CommandEvent with action daemon_connect/daemon_launch_gate/daemon_auto_start via ObservabilityPort::emit() }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> ;
+  triage:designNote "CommandEvent bootstrap events flow only into ObservabilityPort log sink (or NullObservability in GraftClient::connect). No projection path from these events into RuntimeStatusSnapshot or DoctorReport.runtime_status exists. DoctorReport.runtime_status is populated exclusively by atm-daemon runtime_health.rs via RuntimeStatusCache, which tracks liveness/readiness/sqlite/member counts but not bootstrap trace events. Pattern configured in finding does not match actual symbol vocabulary in code." .
+
+<urn:atm:triage:worktree/integrate-phase-W/f6a6b19>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:orderIndex 1 .

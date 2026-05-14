@@ -1,0 +1,45 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W6-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W6-002" ;
+  triage:title "sqlite_ready check priority over degraded_ingest undocumented at runtime_status_cache.rs:511" ;
+  triage:description "crates/atm-daemon/src/runtime_status_cache.rs:511 — When sqlite_ready=false AND degraded_ingest=true, WarningSqliteHealthDegraded is emitted because sqlite check is first. The combined case surfaces only the sqlite code, not ingest degradation. Correct per design, but the ordering is undocumented. Fix: Add a comment at line 511 explaining sqlite_ready check takes priority in the combined case so the most actionable code surfaces first." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "doc/comment" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W6-002/pW-s6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> .
+
+<urn:atm:triage:occurrence/ATM-QA-W6-002/pW-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 511 ;
+  triage:snippet "code: if !snapshot.sqlite_ready {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s6-sqlite-error-contract" ;
+  triage:headSha "d27de5a2c54db23b4576ca28d57d89b2681f971a" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> .
+
+<urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s6-sqlite-error-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s6-sqlite-error-contract" ;
+  triage:headSha "d27de5a2c54db23b4576ca28d57d89b2681f971a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef258505e629d6a1fb89f5ce3f672e215445>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "4540ef258505e629d6a1fb89f5ce3f672e215445" ;
+  triage:orderIndex 2 .

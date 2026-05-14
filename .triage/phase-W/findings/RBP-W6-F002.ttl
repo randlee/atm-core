@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W6-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-W6-F002" ;
+  triage:title "DaemonEvent::new takes &'static str params bypassing ActionName/OutcomeLabel at entry" ;
+  triage:description "crates/atm-daemon/src/daemon_runtime_observability.rs:72 — DaemonEvent::new takes action: &'static str, outcome: &'static str and .expect()s them into ActionName/OutcomeLabel at lines 79-81. Public-facing signature bypasses the newtype at entry, introduces two runtime panic sites for what are validated at construction anyway. Fix: Change DaemonEvent::new parameters to ActionName and OutcomeLabel directly. Update SubsystemObservability::event (line 190) to validate literals at that call site instead." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W6-F002/pW-s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W6-F002/pW-s6/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> .
+
+<urn:atm:triage:occurrence/RBP-W6-F002/pW-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
+  triage:line 72 ;
+  triage:snippet "pub(crate) fn new(subsystem: DaemonSubsystem, action: &'static str, outcome: &'static str, ...) -> Self { ... action: ActionName::new(action).expect(...), outcome: OutcomeLabel::new(outcome).expect(...) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s6-sqlite-error-contract" ;
+  triage:headSha "d27de5a2c54db23b4576ca28d57d89b2681f971a" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> .
+
+<urn:atm:triage:occurrence/RBP-W6-F002/pW-s6/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
+  triage:line 189 ;
+  triage:snippet "pub(crate) fn event(&self, action: &'static str, outcome: &'static str, ...) -> DaemonEvent { DaemonEvent::new(self.subsystem(), action, outcome, detail) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s6-sqlite-error-contract" ;
+  triage:headSha "d27de5a2c54db23b4576ca28d57d89b2681f971a" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> .
+
+<urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s6-sqlite-error-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s6-sqlite-error-contract" ;
+  triage:headSha "d27de5a2c54db23b4576ca28d57d89b2681f971a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef258505e629d6a1fb89f5ce3f672e215445>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "4540ef258505e629d6a1fb89f5ce3f672e215445" ;
+  triage:orderIndex 2 .

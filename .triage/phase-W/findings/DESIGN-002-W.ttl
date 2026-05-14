@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DESIGN-002-W>
+  a triage:Finding ;
+  triage:findingId "DESIGN-002-W" ;
+  triage:title "W.3 sqlite degradation still sink-dependent: emit before mark_sqlite_unavailable" ;
+  triage:description "crates/atm-daemon/src/sqlite_observability.rs emits the degradation event before marking runtime status. If the emit sink fails, the sqlite degradation state is never recorded in runtime status — the failure is silently hidden." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "DESIGN" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DESIGN-002-W/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:occurrence/DESIGN-002-W/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/sqlite_observability.rs" ;
+  triage:line 48 ;
+  triage:snippet "self.observability.emit_subsystem_event(...)?; // early-return on sink failure prevents mark_sqlite_unavailable_with_detail on line 59" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:worktree/integrate-phase-W/f6a6b19>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:orderIndex 1 .
