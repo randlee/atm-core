@@ -186,6 +186,12 @@ impl SubsystemObservability {
         self.subsystem.clone()
     }
 
+    /// Internal convenience builder for daemon-owned `'static` literals.
+    ///
+    /// This helper intentionally remains separate from the typed
+    /// `emit_subsystem_event(...)` boundary: it validates one internal static
+    /// literal at call time for subsystem-local event construction rather than
+    /// requiring pre-allocated typed labels at every internal call site.
     pub(crate) fn event(
         &self,
         action: &'static str,

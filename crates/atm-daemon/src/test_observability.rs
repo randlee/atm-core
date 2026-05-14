@@ -21,6 +21,9 @@ type OutcomeLabel = sc_observability_types::OutcomeLabel;
 pub(crate) struct TestDaemonObservability {
     active_log_path: PathBuf,
     detail: Option<String>,
+    // append_message() pushes under the Mutex while wait_for_message_contains()
+    // re-acquires it on each Condvar wake, so the pair stays co-located to keep
+    // the shared lock/wake discipline explicit in test support.
     recorded_messages: (Mutex<Vec<String>>, Condvar),
 }
 

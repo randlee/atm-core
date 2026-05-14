@@ -268,6 +268,7 @@ Authoritative sprint sequence:
 - `docs/phase-W/sprint-W5.md`
 - `docs/phase-W/sprint-W6.md`
 - `docs/phase-W/sprint-W7.md`
+- `docs/phase-W/sprint-W8.md`
 
 Deliverables:
 - `docs/phase-W/sprint-W1.md` — daemon `emit()` silent discard fix plan
@@ -279,6 +280,8 @@ Deliverables:
   cleanup
 - `docs/phase-W/sprint-W7.md` — final triage closeout and merged-status
   registry
+- `docs/phase-W/sprint-W8.md` — Phase `W` closeout audit fixes for typed
+  SQLite subsystem identity and shared ATM error inventory alignment
 
 Cross-sprint dependencies:
 - `W.2` and `W.3` must both define how new signals map to:

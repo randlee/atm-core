@@ -3,8 +3,8 @@ use std::sync::Arc;
 use atm_core::error::AtmError;
 use atm_rusqlite::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
 
-use crate::DaemonSubsystem;
 use crate::DaemonRuntimeObservability;
+use crate::DaemonSubsystem;
 use crate::runtime_status_cache::RuntimeStatusCache;
 
 type ActionName = sc_observability_types::ActionName;

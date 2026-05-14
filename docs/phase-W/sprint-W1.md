@@ -1,9 +1,9 @@
 ---
 id: W.1
 title: Daemon Emit Failure Visibility
-status: planned
-branch: TBD
-worktree: TBD
+status: complete
+branch: feature/pW-s1-emit-fallback
+worktree: ../atm-core-worktrees/feature/pW-s1-emit-fallback
 ---
 
 # Sprint W.1 — Emit Silent Discard Fix
