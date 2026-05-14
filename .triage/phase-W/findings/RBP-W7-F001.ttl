@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W7-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-W7-F001" ;
+  triage:title "replay_metadata_for_request unreachable Err variant" ;
+  triage:description "peer_transport.rs:657 — replay_metadata_for_request returns Result<Option<(TeamName, AgentName, MessageKey)>, AtmError> but both match arms produce Ok(...) — the AtmError Err variant is never constructed. Caller at line 283 propagates with ? that can never fire. Fix: Simplify return type to Option<(TeamName, AgentName, MessageKey)>. Update call site at line 283 accordingly." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "infallible-result" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W7-F001/pW-s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W7-F001/pW-s7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W7-F001/integrate-phase-W/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W7-F001/integrate-phase-W/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s7-triage-closeout/7a3927d> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/15267c0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s7-triage-closeout/7a3927d> .
+
+<urn:atm:triage:occurrence/RBP-W7-F001/pW-s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 657 ;
+  triage:snippet "fn replay_metadata_for_request(request: &RequestEnvelope) -> Result<Option<(TeamName, AgentName, MessageKey)>, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:headSha "7a3927d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s7-triage-closeout/7a3927d> .
+
+<urn:atm:triage:occurrence/RBP-W7-F001/pW-s7/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 283 ;
+  triage:snippet "let Some((team, agent, message_key)) = replay_metadata_for_request(request)? else {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:headSha "7a3927d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s7-triage-closeout/7a3927d> .
+
+<urn:atm:triage:occurrence/RBP-W7-F001/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 657 ;
+  triage:snippet "fn replay_metadata_for_request(request: &RequestEnvelope) -> Result<Option<(TeamName, AgentName, MessageKey)>, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "15267c0" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/15267c0> .
+
+<urn:atm:triage:occurrence/RBP-W7-F001/integrate-phase-W/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 283 ;
+  triage:snippet "let Some((team, agent, message_key)) = replay_metadata_for_request(request)? else {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "15267c0" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/15267c0> .
+
+<urn:atm:triage:worktree/pW-s7-triage-closeout/7a3927d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "7a3927d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/15267c0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "15267c0" ;
+  triage:orderIndex 2 .
