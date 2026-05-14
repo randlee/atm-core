@@ -18,6 +18,10 @@ target: integrate/phase-X
 ## Hard Dependencies
 
 - `X.0` merged on `develop`
+- `X.1` complete because this sprint touches `composition.rs` after the mailbox
+  runtime cutover
+- `X.2` complete because the same-host helper and replay-path consolidation
+  should land after command-path simplification removes legacy mailbox branches
 - `X.3` complete because same-host parity and replay behavior should be fixed
   against the unified daemon-runtime truth model
 

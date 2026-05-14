@@ -59,6 +59,10 @@ target: integrate/phase-X
 - the local lint entrypoints include dependency-ownership validation
 - the `TASK-1515` baseline artifacts remain present and consistent at Phase `X`
   closeout
+  - `docs/requirements.md` typed observability migration requirement
+  - `docs/architecture.md` phased typed observability migration note
+  - rust QA checklist infallible-result review step
+  - Rust development guidelines daemon structured-logging advisory
 - deletion-sprint QA instructions explicitly require whole-workspace pattern
   searches for removed legacy constructs
 

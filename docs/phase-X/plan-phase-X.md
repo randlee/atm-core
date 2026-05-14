@@ -475,8 +475,13 @@ Required validation:
 ## Phase Acceptance
 
 Phase `X` planning is complete when:
-- PX-001, PX-002, and PX-003 each map to one explicit implementation sprint
-- `ARCH-W-001`, `ARCH-W-002`, and `ARCH-W-003` each have sprint ownership
+- PX-001 maps to `X.1`
+- PX-002 maps to `X.3`
+- PX-003 maps to `X.4`
+- PX-004 maps to `X.4`
+- `ARCH-W-001` maps to `X.4`
+- `ARCH-W-002` maps to `X.4`
+- `ARCH-W-003` maps to `X.3`
 - every `arch-ctm` systemic follow-up item from the Phase `W` post-mortem has
   sprint ownership
 - same-host CLI/graft helper deduplication has explicit sprint ownership
