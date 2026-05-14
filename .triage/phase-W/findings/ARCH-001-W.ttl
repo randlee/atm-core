@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-001-W>
+  a triage:Finding ;
+  triage:findingId "ARCH-001-W" ;
+  triage:title "Direct sc_observability import in atm-daemon library crate module — RULE-001 violation" ;
+  triage:description "crates/atm-daemon/src/daemon_observability.rs:17-19: Direct `use sc_observability::` import in a library crate module. atm-daemon is a library crate (has lib.rs, no binary entry point). RULE-001 forbids library crate modules from importing sc_observability directly — that wiring belongs at the binary entry point. Remediation: Move DaemonObservability struct (and its sc_observability imports) to the binary crate (crates/atm/src/main.rs or a dedicated binary crate). The library surface already supports injection via run_daemon_with_observability — pass an Arc<dyn DaemonRuntimeObservability> factory from the binary. The atm-daemon library crate retains only the trait definitions (DaemonRuntimeObservability, DaemonRuntimeObservabilityExt), not the sc_observability-backed impl." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-daemon/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-W/integrate-phase-W/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-W/integrate-phase-W/2> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/2e83846> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/2e83846> .
+
+<urn:atm:triage:occurrence/ARCH-001-W/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 17 ;
+  triage:snippet "use sc_observability::{" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "2e83846" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/2e83846> .
+
+<urn:atm:triage:occurrence/ARCH-001-W/integrate-phase-W/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 935 ;
+  triage:snippet "use sc_observability::{RetentionPolicy, RotationPolicy};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "2e83846" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/2e83846> .
+
+<urn:atm:triage:worktree/integrate-phase-W/2e83846>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "2e83846" ;
+  triage:orderIndex 1 .
