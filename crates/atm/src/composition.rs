@@ -888,33 +888,20 @@ mod tests {
     #[test]
     fn bootstrap_propagates_daemon_availability_failure() {
         let tempdir = TempDir::new().expect("tempdir");
-        let _env = EnvGuard::set_many([
-            ("ATM_TEAM", Some(TEST_TEAM)),
-            ("ATM_IDENTITY", Some(TEST_SENDER)),
-            (
-                "ATM_DAEMON_SOCKET",
-                Some(
-                    tempdir
-                        .path()
-                        .join("daemon.sock")
-                        .to_string_lossy()
-                        .as_ref(),
-                ),
-            ),
-            (
-                "ATM_DAEMON_BIN",
-                Some(
-                    tempdir
-                        .path()
-                        .join("missing-atm-daemon")
-                        .to_string_lossy()
-                        .as_ref(),
-                ),
-            ),
-        ]);
-        let observability = CliObservability::fallback();
+        let supervisor = DaemonSupervisor::new(
+            DaemonLocalIpcEndpoint::new(tempdir.path().join("daemon.sock"))
+                .expect("daemon endpoint"),
+            DaemonBinaryPath::new(tempdir.path().join("missing-atm-daemon"))
+                .expect("daemon binary path"),
+        );
 
-        let error = CliComposition::bootstrap("doctor", &observability)
+        let error = supervisor
+            .ensure_daemon_available_with_lock_path(
+                || Err(AtmError::daemon_unavailable("daemon not running for test")),
+                Duration::from_millis(10),
+                Duration::from_millis(1),
+                tempdir.path().join(HOST_RUNTIME_LAUNCH_LOCK_FILE),
+            )
             .expect_err("bootstrap should fail when daemon auto-start cannot launch");
 
         assert_eq!(

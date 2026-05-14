@@ -1,4 +1,4 @@
-use crate::boundary_assembly::SqliteRosterStore;
+use super::SqliteRosterStore;
 use crate::{deserialize_json, serialize_json};
 use atm_core::boundary;
 use atm_core::error::AtmError;
