@@ -365,7 +365,7 @@ fn ack_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime
         .map(|warning| warning.render())
         .collect();
 
-    let _ = observability.emit(CommandEvent {
+    if let Err(error) = observability.emit(CommandEvent {
         command: "ack",
         action: "ack",
         outcome: "ok",
@@ -378,7 +378,9 @@ fn ack_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime
         task_id: source_task_id,
         error_code: None,
         error_message: None,
-    });
+    }) {
+        tracing::warn!(%error, command = "ack", action = "ack", "failed to emit ack command event");
+    }
 
     Ok(outcome)
 }
@@ -555,7 +557,7 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         .map(|warning| warning.render())
         .collect();
 
-    let _ = observability.emit(CommandEvent {
+    if let Err(error) = observability.emit(CommandEvent {
         command: "ack",
         action: "ack",
         outcome: "ok",
@@ -568,7 +570,9 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         task_id: source_task_id,
         error_code: None,
         error_message: None,
-    });
+    }) {
+        tracing::warn!(%error, command = "ack", action = "ack", "failed to emit ack command event");
+    }
 
     Ok(outcome)
 }

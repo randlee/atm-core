@@ -56,7 +56,7 @@ impl SendCommand {
         let current_dir = std::env::current_dir()?;
         let home_dir = home::atm_home()?;
         let json = self.json;
-        let composition = CliComposition::bootstrap(observability)?;
+        let composition = CliComposition::bootstrap("send", observability)?;
         let request = self.build_request(home_dir, current_dir)?;
         let outcome = composition.send(request)?;
 

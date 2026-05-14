@@ -1,0 +1,19 @@
+finding_id: NEW-003
+title: plan-phase-W.md Execution shape section omits W.8
+severity: important
+pattern: doc-incomplete
+phase: phase-W
+triage_mode: initial_pass
+status: open
+promote_to_branch: integrate/phase-W
+highest_open_branch: integrate/phase-W
+dispatch_ready: true
+repeatable: false
+sweep_scope: docs/plan-phase-W.md Execution shape section only
+occurrences:
+  - branch: integrate/phase-W
+    file: docs/plan-phase-W.md
+    detail: "Execution shape section (lines 217-231) ends at W.7; W.8 entry is absent"
+    state: open
+fix_description: "Add W.8 execution shape entry to docs/plan-phase-W.md after the W.7 line (line 231). The entry to add, matching project-plan.md section 27 lines 3128-3129: '- `W.8` phase closeout: typed SQLite subsystem identity and ATM error\n  inventory correction'"
+dispatch_blocked_pending_triage_commit: false

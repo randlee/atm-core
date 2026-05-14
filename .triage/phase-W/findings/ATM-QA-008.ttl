@@ -1,0 +1,88 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-008>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-008" ;
+  triage:title "try_connect() IPC helper duplicated across crates/atm and crates/atm-graft" ;
+  triage:description "try_connect() is duplicated in crates/atm/src/composition.rs:68-79 and crates/atm-graft/src/transport.rs:27-38. Must be consolidated into atm-daemon-client." ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pW-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pW-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/integrate-phase-W/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/integrate-phase-W/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s2/f3c1b3d> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/fc2c8ae> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+# --- Occurrences on feature/pW-s2-daemon-client-traceability ---
+
+<urn:atm:triage:occurrence/ATM-QA-008/pW-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 68 ;
+  triage:snippet "fn try_connect(&self) -> Result<LocalSocketStream, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-008/pW-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 27 ;
+  triage:snippet "pub(crate) fn try_connect(&self) -> Result<LocalSocketStream, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+# --- Occurrences on integrate/phase-W ---
+
+<urn:atm:triage:occurrence/ATM-QA-008/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 68 ;
+  triage:snippet "fn try_connect(&self) -> Result<LocalSocketStream, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/fc2c8ae> .
+
+<urn:atm:triage:occurrence/ATM-QA-008/integrate-phase-W/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/transport.rs" ;
+  triage:line 27 ;
+  triage:snippet "pub(crate) fn try_connect(&self) -> Result<LocalSocketStream, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/fc2c8ae> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/pW-s2/f3c1b3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/fc2c8ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:orderIndex 2 .

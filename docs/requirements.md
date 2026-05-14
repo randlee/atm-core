@@ -1923,6 +1923,16 @@ Emission is best-effort:
 - logging failures must never block retained command behavior
 - command correctness takes priority over observability delivery
 
+Typed observability migration requirement:
+- ATM must complete the phased migration from raw observability labels to
+  validated `ActionName` / `OutcomeLabel` values at every `DaemonEvent`
+  construction site and every `SubsystemObservability::event()` call site.
+- The current Phase W line intentionally stops short of that full migration.
+  The remaining call-site conversion is tracked work, not optional cleanup.
+- The final migration step depends on upstream `sc-observability-types`
+  support for a validated static-construction helper such as
+  `validated_static!` or `const new_static()`.
+
 Sink policy:
 - the shared file sink is required for retained ATM observability
 - default ATM-owned retained logs live at `~/.atm/logs/atm.log.jsonl`

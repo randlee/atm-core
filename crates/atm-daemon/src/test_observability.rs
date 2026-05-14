@@ -6,17 +6,24 @@ use std::time::{Duration, Instant};
 
 use atm_core::boundary;
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
 };
 
-use crate::{DaemonEvent, DaemonRuntimeObservability};
+use crate::{DaemonEvent, DaemonRuntimeObservability, DaemonSubsystem};
+
+type ActionName = sc_observability_types::ActionName;
+type OutcomeLabel = sc_observability_types::OutcomeLabel;
 
 #[derive(Debug)]
 pub(crate) struct TestDaemonObservability {
     active_log_path: PathBuf,
-    detail: Mutex<Option<String>>,
+    detail: Option<String>,
+    // append_message() pushes under the Mutex while wait_for_message_contains()
+    // re-acquires it on each Condvar wake, so the pair stays co-located to keep
+    // the shared lock/wake discipline explicit in test support.
     recorded_messages: (Mutex<Vec<String>>, Condvar),
 }
 
@@ -43,7 +50,7 @@ impl TestDaemonObservability {
             })?;
         Ok(Self {
             active_log_path,
-            detail: Mutex::new(None),
+            detail: None,
             recorded_messages: (Mutex::new(Vec::new()), Condvar::new()),
         })
     }
@@ -150,11 +157,7 @@ impl ObservabilityPort for TestDaemonObservability {
     }
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        let detail = self
-            .detail
-            .lock()
-            .expect("test observability detail")
-            .clone();
+        let detail = self.detail.clone();
         match OpenOptions::new().append(true).open(&self.active_log_path) {
             Ok(_) => Ok(AtmObservabilityHealth {
                 active_log_path: Some(self.active_log_path.clone()),
@@ -177,9 +180,26 @@ impl DaemonRuntimeObservability for TestDaemonObservability {
         self.append_message(format!(
             "{{\"subsystem\":\"{}\",\"action\":\"{}\",\"outcome\":\"{}\",\"message\":\"{}\"}}",
             event.subsystem.as_str(),
-            event.action,
-            event.outcome,
+            event.action.as_str(),
+            event.outcome.as_str(),
             event.detail
+        ))
+    }
+
+    fn emit_subsystem_event(
+        &self,
+        subsystem: DaemonSubsystem,
+        action: &ActionName,
+        outcome: &OutcomeLabel,
+        message: &str,
+        error_code: Option<AtmErrorCode>,
+    ) -> Result<(), AtmError> {
+        self.append_message(format!(
+            "{{\"subsystem\":\"{subsystem}\",\"action\":\"{action}\",\"outcome\":\"{outcome}\",\"message\":\"{message}\",\"error_code\":{:?}}}",
+            error_code.map(|value| value.to_string()),
+            subsystem = subsystem.as_str(),
+            action = action.as_str(),
+            outcome = outcome.as_str()
         ))
     }
 

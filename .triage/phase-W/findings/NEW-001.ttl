@@ -1,0 +1,19 @@
+finding_id: NEW-001
+title: sprint-W2.md frozen at planning state
+severity: blocking
+pattern: doc-frontmatter-stale
+phase: phase-W
+triage_mode: initial_pass
+status: open
+promote_to_branch: integrate/phase-W
+highest_open_branch: integrate/phase-W
+dispatch_ready: true
+repeatable: false
+sweep_scope: docs/phase-W/sprint-W2.md
+occurrences:
+  - branch: integrate/phase-W
+    file: docs/phase-W/sprint-W2.md
+    detail: "frontmatter status=planned, branch=TBD, worktree=TBD — should be status=complete, branch=feature/pW-s2-daemon-client-traceability, worktree=../atm-core-worktrees/feature/pW-s2-daemon-client-traceability"
+    state: open
+fix_description: "Update sprint-W2.md frontmatter: status: planned → complete, branch: TBD → feature/pW-s2-daemon-client-traceability, worktree: TBD → ../atm-core-worktrees/feature/pW-s2-daemon-client-traceability. Also update body to reflect completed implementation per project-plan.md W.2 entry (PR #270, merge commit 82142b0)."
+dispatch_blocked_pending_triage_commit: false

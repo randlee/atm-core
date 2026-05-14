@@ -321,7 +321,7 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         );
     }
 
-    let _ = observability.emit(CommandEvent {
+    if let Err(error) = observability.emit(CommandEvent {
         command: "send",
         action: "send",
         outcome: command_outcome,
@@ -334,7 +334,9 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         task_id,
         error_code: None,
         error_message: None,
-    });
+    }) {
+        warn!(%error, command = "send", action = "send", "failed to emit send command event");
+    }
 
     Ok(outcome)
 }

@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-003-W3>
+  a triage:Finding ;
+  triage:findingId "ARCH-003-W3" ;
+  triage:title "emit_sqlite_event_or_warn pub(crate) wrapper violates RULE-002 — fix via trait default method, not inline" ;
+  triage:description "crates/atm-rusqlite/src/lib.rs:80 declares pub(crate) fn emit_sqlite_event_or_warn, which matches the ^pub(crate) fn emit_ RULE-002 pattern. The finding is VALID: a free function named emit_* is prohibited regardless of what it wraps. However, the QA-suggested fix (inline at call sites) is incorrect — there are 5 call sites across 2 files (shared_db.rs:2, writer/mod.rs:3) and inlining would duplicate the 7-line error-fallback block at each site, which is a worse pattern. The correct fix mirrors the emit_or_warn default-method approach established in phase-W sprint W1 for SubsystemObservability: add emit_or_warn as a provided default method on the SqliteObservability trait (lib.rs:67), then replace all 5 emit_sqlite_event_or_warn call sites with observability.emit_or_warn(event) (passing &dyn SqliteObservability or Arc<dyn SqliteObservability> directly). The free function is then deleted. This eliminates the RULE-002 violation while keeping the error-fallback behavior without code duplication." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/def> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3/2f245dc> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/6df690b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s3/2f245dc> ;
+  triage:fixStrategy "Add emit_or_warn as a provided default method on SqliteObservability trait (crates/atm-rusqlite/src/lib.rs:67-68). Default body: if let Err(error) = self.emit(event.clone()) { tracing::warn!(%error, action=event.action, outcome=event.outcome.as_str(), error_code=?event.error_code, \"sqlite subsystem observability emission failed\"); }. Replace all 5 call sites (shared_db.rs:364,396; writer/mod.rs:129,163,179,302) with self.observability.emit_or_warn(event) or observability.emit_or_warn(event). Delete pub(crate) fn emit_sqlite_event_or_warn from lib.rs. Remove crate-local import of emit_sqlite_event_or_warn from shared_db.rs:4 and writer/mod.rs:11. Verify cargo check passes." ;
+  triage:qaFixNoteOverride "Do NOT inline. Add emit_or_warn default method to SqliteObservability trait; mirrors SubsystemObservability::emit_or_warn pattern from sprint W1." ;
+  triage:references "PR #272, QA-1 TASK-1502 verdict, ARCH-V4-001 (emit_composition_event precedent), sprint-W1 emit_or_warn pattern" .
+
+# Definition site — the free function itself
+<urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/def>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 80 ;
+  triage:snippet "pub(crate) fn emit_sqlite_event_or_warn(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+# Call site 1 — shared_db.rs:364
+<urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 364 ;
+  triage:snippet "Err(error) => emit_sqlite_event_or_warn(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+# Call site 2 — shared_db.rs:396
+<urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 396 ;
+  triage:snippet "emit_sqlite_event_or_warn(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+# Call site 3 — writer/mod.rs:129
+<urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 129 ;
+  triage:snippet "emit_sqlite_event_or_warn(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+# Call site 4 — writer/mod.rs:163
+<urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 163 ;
+  triage:snippet "emit_sqlite_event_or_warn(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+# Call site 5 — writer/mod.rs:179
+<urn:atm:triage:occurrence/ARCH-003-W3/pW-s3/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 179 ;
+  triage:snippet "emit_sqlite_event_or_warn(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s3/2f245dc> .
+
+# Note: writer/mod.rs:302 is the 6th call site (inside writer_thread_final_checkpoint free fn)
+# — also needs replacement; QA finding body listed only 5 but grep shows 6 total.
+
+<urn:atm:triage:worktree/pW-s3/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .

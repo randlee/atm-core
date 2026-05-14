@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W7-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W7-001" ;
+  triage:title "sprint-W7.md absent; no W.7 entry in plan-phase-W.md" ;
+  triage:description "docs/phase-W/sprint-W7.md does not exist in either worktree. docs/plan-phase-W.md sprint sequence lists only W.1-W.6 and deliverables list only sprint-W1.md-sprint-W6.md. W.7 has no plan-auditable doc baseline. Fix: Create docs/phase-W/sprint-W7.md (goals, AC, implementation notes) AND add W.7 entry to docs/plan-phase-W.md sprint sequence + deliverables." ;
+  triage:category "missing-sprint-doc" ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W7-001/pW-s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W7-001/pW-s7/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W7-001/integrate-pW/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W7-001/integrate-pW/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s7/7a3927d> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-pW/15267c0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s7/7a3927d> .
+
+<urn:atm:triage:occurrence/ATM-QA-W7-001/pW-s7/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-W/sprint-W7.md" ;
+  triage:line 0 ;
+  triage:snippet "File absent from worktree" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:headSha "7a3927d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s7/7a3927d> .
+
+<urn:atm:triage:occurrence/ATM-QA-W7-001/pW-s7/2>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-W.md" ;
+  triage:line 259 ;
+  triage:snippet "Sprint sequence ends at sprint-W6.md; no W.7 entry" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:headSha "7a3927d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s7/7a3927d> .
+
+<urn:atm:triage:occurrence/ATM-QA-W7-001/integrate-pW/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-W/sprint-W7.md" ;
+  triage:line 0 ;
+  triage:snippet "File absent from worktree" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "15267c0" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-pW/15267c0> .
+
+<urn:atm:triage:occurrence/ATM-QA-W7-001/integrate-pW/2>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-W.md" ;
+  triage:line 259 ;
+  triage:snippet "Sprint sequence ends at sprint-W6.md; no W.7 entry" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "15267c0" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-pW/15267c0> .
+
+<urn:atm:triage:worktree/pW-s7/7a3927d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "7a3927d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-pW/15267c0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "15267c0" ;
+  triage:orderIndex 2 .

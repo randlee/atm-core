@@ -49,6 +49,44 @@ pub struct DoctorEnvironmentVisibility {
     pub team_override: Option<TeamName>,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BootstrapConnectOutcome {
+    Connected,
+    NotFound,
+    Timeout,
+    Failed,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BootstrapLaunchGateOutcome {
+    Launched,
+    Failed,
+    Skipped,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum BootstrapAutoStartOutcome {
+    AutoStarted,
+    Failed,
+    Skipped,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct BootstrapTraceReport {
+    pub daemon_connect: BootstrapConnectOutcome,
+    pub daemon_launch_gate: BootstrapLaunchGateOutcome,
+    pub daemon_auto_start: BootstrapAutoStartOutcome,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub connect_detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub launch_gate_detail: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub auto_start_detail: Option<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
@@ -60,6 +98,8 @@ pub struct DoctorReport {
     pub observability: AtmObservabilityHealth,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime_status: Option<RuntimeStatusSnapshot>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bootstrap_trace: Option<BootstrapTraceReport>,
 }
 
 impl DoctorReport {

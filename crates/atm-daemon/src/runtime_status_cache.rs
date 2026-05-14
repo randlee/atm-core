@@ -38,6 +38,7 @@ pub(crate) struct RuntimeStatusCacheState {
     // torn doctor snapshots.
     members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
     sqlite_ready: bool,
+    sqlite_detail: Option<String>,
     degraded_ingest: bool,
 }
 
@@ -71,6 +72,7 @@ impl RuntimeStatusCache {
             state: Arc::new(Mutex::new(RuntimeStatusCacheState {
                 members: HashMap::new(),
                 sqlite_ready: true,
+                sqlite_detail: None,
                 degraded_ingest: false,
             })),
             observability,
@@ -121,7 +123,6 @@ impl RuntimeStatusCache {
                 last_active_at,
             },
         );
-        cache.sqlite_ready = true;
         Ok(TeamMemberHeartbeatResponse {
             team: request.team.clone(),
             member: request.member.clone(),
@@ -167,7 +168,7 @@ impl RuntimeStatusCache {
             )
             .with_team(request.team.clone())
             .with_agent(request.member.clone());
-        let _ = self.observability.emit_event(event);
+        self.observability.emit_event_or_warn(event);
         Ok(())
     }
 
@@ -193,15 +194,37 @@ impl RuntimeStatusCache {
         match self.state.lock() {
             Ok(mut cache) => {
                 cache.sqlite_ready = false;
-                let _ = self.observability.emit(
+                drop(cache);
+                // Emit failure is intentionally best-effort here because the in-memory sqlite
+                // readiness downgrade is the source of truth for doctor/status consumers.
+                self.observability.emit_or_warn(
                     "mark_sqlite_unavailable",
                     "degraded",
                     "runtime status cache marked sqlite unavailable",
                 );
             }
             Err(_) => {
+                // Cannot propagate: fn returns (), tracing::error! is max-severity available at this boundary.
                 tracing::error!(
                     "runtime status cache lock poisoned while marking sqlite unavailable"
+                );
+            }
+        }
+    }
+
+    /// Record SQLite degradation detail after the caller has decided which
+    /// higher-level subsystem event to emit. Callers must emit the associated
+    /// observability event independently; this helper only updates the cached
+    /// doctor/runtime-health projection state.
+    pub(crate) fn mark_sqlite_unavailable_with_detail(&self, detail: impl Into<String>) {
+        match self.state.lock() {
+            Ok(mut cache) => {
+                cache.sqlite_ready = false;
+                cache.sqlite_detail = Some(detail.into());
+            }
+            Err(_) => {
+                tracing::error!(
+                    "runtime status cache lock poisoned while recording sqlite degradation detail"
                 );
             }
         }
@@ -265,7 +288,7 @@ fn evict_status_cache_entry_if_needed(
             )
             .with_team(evicted_key.team.clone())
             .with_agent(evicted_key.member.clone());
-        let _ = observability.emit_event(event);
+        observability.emit_event_or_warn(event);
         tracing::warn!(
             team = %evicted_key.team,
             member = %evicted_key.member,
@@ -339,10 +362,10 @@ fn finish_runtime_snapshot(
     };
     let mut details = Vec::new();
     if !cache.sqlite_ready {
-        details.push(
+        details.push(cache.sqlite_detail.clone().unwrap_or_else(|| {
             "sqlite-backed roster truth is unavailable; runtime cache updates are degraded"
-                .to_string(),
-        );
+                .to_string()
+        }));
     }
     if cache.degraded_ingest {
         details.push("runtime heartbeat ingest is degraded".to_string());
@@ -374,7 +397,11 @@ pub(crate) fn build_runtime_status_cache_state(
 ) -> Result<RuntimeStatusCacheState, AtmError> {
     let mut next_state = RuntimeStatusCacheState {
         members: HashMap::new(),
+        // This constructor always resets SQLite readiness to the optimistic
+        // baseline; callers that detect assembly/open failure afterward own
+        // re-applying mark_sqlite_unavailable(...) before publishing state.
         sqlite_ready: true,
+        sqlite_detail: None,
         degraded_ingest: current_state.is_some_and(|state| state.degraded_ingest),
     };
     let teams_root = home_dir.join(".claude").join("teams");
@@ -488,7 +515,13 @@ pub(crate) fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> Doctor
         },
         RuntimeReadinessState::Degraded => DoctorFinding {
             severity: DoctorSeverity::Warning,
-            code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded,
+            // SQLite readiness takes priority over ingest degradation in the combined case so
+            // doctor surfaces the most actionable operator code first.
+            code: if !snapshot.sqlite_ready {
+                atm_core::error_codes::AtmErrorCode::WarningSqliteHealthDegraded
+            } else {
+                atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded
+            },
             message: summary,
             remediation: snapshot.detail.clone().or(Some(
                 "Restore daemon runtime backing services and rerun `atm doctor`.".to_string(),

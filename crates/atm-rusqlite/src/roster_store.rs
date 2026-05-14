@@ -1,5 +1,5 @@
 use super::SqliteRosterStore;
-use super::{deserialize_json, serialize_json};
+use crate::{deserialize_json, serialize_json};
 use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::types::IsoTimestamp;

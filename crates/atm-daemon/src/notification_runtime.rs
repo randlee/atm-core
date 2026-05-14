@@ -87,7 +87,7 @@ impl NotificationRuntime {
             .name("atm-daemon-notifier".to_string())
             .spawn(move || notification_worker_loop(inner))
             .map_err(|source| {
-                let _ = self.inner.observability.emit(
+                self.inner.observability.emit_or_warn(
                     "start",
                     "failed",
                     "failed to spawn notification runtime worker",
@@ -108,10 +108,9 @@ impl NotificationRuntime {
             }
         };
         state.worker = Some(handle);
-        let _ = self
-            .inner
+        self.inner
             .observability
-            .emit("start", "ok", "notification runtime worker started");
+            .emit_or_warn("start", "ok", "notification runtime worker started");
         Ok(())
     }
 
@@ -147,7 +146,7 @@ impl NotificationRuntime {
             match result_rx.recv_timeout(NOTIFICATION_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "ok",
                         "notification runtime worker shut down cleanly",
@@ -155,7 +154,7 @@ impl NotificationRuntime {
                 }
                 Ok(Err(_)) => {
                     let _ = join_helper.join();
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "failed",
                         "notification runtime worker panicked during shutdown",
@@ -169,7 +168,7 @@ impl NotificationRuntime {
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                     drop(join_helper);
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "degraded",
                         "notification runtime worker exceeded its shutdown deadline",
@@ -189,7 +188,7 @@ impl NotificationRuntime {
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "failed",
                         "notification runtime join helper disconnected during shutdown",
@@ -227,7 +226,7 @@ impl NotificationRuntime {
             ));
         }
         if let Some(message) = &state.degraded_message {
-            let _ = self.inner.observability.emit(
+            self.inner.observability.emit_or_warn(
                 "deliver",
                 "degraded",
                 "notification runtime is degraded and rejecting delivery",
@@ -235,7 +234,7 @@ impl NotificationRuntime {
             return Err(AtmError::daemon_unavailable(message.as_str()));
         }
         if state.queue.len() >= self.inner.queue_capacity {
-            let _ = self.inner.observability.emit(
+            self.inner.observability.emit_or_warn(
                 "deliver",
                 "rejected",
                 "notification runtime queue is full",
@@ -290,7 +289,7 @@ fn notification_worker_loop(inner: Arc<NotificationRuntimeInner>) {
                 state.degraded_message = Some(error.message);
                 state.queue.clear();
             }
-            let _ = inner.observability.emit(
+            inner.observability.emit_or_warn(
                 "persist_notification",
                 "degraded",
                 "notification runtime persistence failed and the runtime entered a degraded state",

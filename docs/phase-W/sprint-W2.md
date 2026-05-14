@@ -1,9 +1,9 @@
 ---
 id: W.2
 title: Daemon Client Traceability
-status: planned
-branch: TBD
-worktree: TBD
+status: complete
+branch: feature/pW-s2-daemon-client-traceability
+worktree: ../atm-core-worktrees/feature/pW-s2-daemon-client-traceability
 ---
 
 # Sprint W.2 — Daemon-Client Traceability
@@ -37,6 +37,21 @@ worktree: TBD
 - preserve one doctor-facing diagnostic story for same-host failures
 - compare every touched same-host failure class against the current `main` CLI
   contract before finalizing any refactor
+
+## Completion Summary
+
+- merged to `integrate/phase-W` via PR `#270`
+- merge commit: `82142b0`
+- centralized same-host connect / exchange / unexpected-response handling in
+  `atm-daemon-client` so CLI and `atm-graft` share one bootstrap/error path
+- added daemon bootstrap traceability for:
+  - initial connect miss
+  - retry attempts
+  - launch-gate contention
+  - spawn attempts
+  - publish wait exhaustion
+- closed the same-host parity gaps between ATM CLI and `atm-graft`
+- preserved the shared doctor/reporting follow-through later completed by `W.5`
 
 ## Acceptance Criteria
 
@@ -74,6 +89,19 @@ worktree: TBD
   in scope and that CLI-side path tracing is explicitly owned here
 
 ## Implementation Notes
+
+Completed implementation:
+- `crates/atm-daemon-client/src/lib.rs`
+  - added per-attempt bootstrap traceability events and consolidated same-host
+    connection / exchange helpers
+- `crates/atm/src/composition.rs`
+  - moved bootstrap identity ownership out of the daemon-client crate and onto
+    CLI composition
+- `crates/atm-graft/src/lib.rs`
+  - aligned same-host bootstrap ownership and parity with the CLI path
+- `crates/atm-graft/src/transport.rs`
+  - removed duplicate same-host IPC helper logic in favor of shared
+    daemon-client behavior
 
 Primary insertion points:
 - `crates/atm-daemon-client/src/lib.rs`
@@ -241,7 +269,13 @@ Plan-auditable now:
 - explicit duplicate-path collapse responsibility
 - explicit interface-parity contract
 
-Implementation validation later:
+Validation completed on the sprint branch before merge:
+- `cargo build --workspace`
+- `cargo test --workspace`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `git diff --check`
+
+Implementation validation carried forward:
 - same ATM code/recovery semantics demonstrated for equivalent same-host
   failure classes across CLI and `atm-graft`
 - final daemon-start/connect failures preserve concise operator-facing ATM

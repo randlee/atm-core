@@ -7,9 +7,10 @@ use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{RuntimeServeHooks, SocketEndpointGuard};
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
+use crate::sqlite_observability::DaemonSqliteObservability;
 use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    sqlite_remote_replay_store_from_path,
+    sqlite_remote_replay_store_from_path_with_observability,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::error::AtmError;
@@ -168,6 +169,9 @@ impl RuntimeComposition {
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
         ));
+        let sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability> = Arc::new(
+            DaemonSqliteObservability::new(Arc::clone(&observability), status_cache.clone()),
+        );
         let notification_sink =
             DaemonNotificationSink::new_with_observability(SubsystemObservability::new(
                 DaemonSubsystem::NotificationRuntime,
@@ -177,12 +181,22 @@ impl RuntimeComposition {
             SubsystemObservability::new(DaemonSubsystem::WatchRuntime, Arc::clone(&observability)),
         );
         let inbox_ingress = DaemonInboxIngress::new();
-        let replay_store = match sqlite_remote_replay_store_from_path(replay_store_path) {
+        let composition_observability =
+            SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
+        let replay_store = match sqlite_remote_replay_store_from_path_with_observability(
+            replay_store_path,
+            Arc::clone(&sqlite_observability),
+        ) {
             Ok(store) => Some(store),
             Err(error) => {
                 tracing::warn!(
                     %error,
                     "remote replay store unavailable; outcome-unknown delivery cannot be persisted"
+                );
+                composition_observability.emit_or_warn(
+                    "sqlite_replay_store_assembly",
+                    "degraded",
+                    "remote replay store unavailable; outcome-unknown delivery cannot be persisted",
                 );
                 None
             }
@@ -214,11 +228,9 @@ impl RuntimeComposition {
                 home_dir,
                 status_cache.clone(),
                 Arc::clone(&observability),
+                sqlite_observability,
             )),
-            composition_observability: SubsystemObservability::new(
-                DaemonSubsystem::Composition,
-                Arc::clone(&observability),
-            ),
+            composition_observability,
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
             _watch_event_source: watch_event_source.clone(),
@@ -270,7 +282,7 @@ impl RuntimeComposition {
     }
 
     fn begin_shutdown(&self) -> Result<(), AtmError> {
-        let _ = self.composition_observability.emit(
+        self.composition_observability.emit_or_warn(
             "shutdown_requested",
             "ok",
             "daemon shutdown requested",
@@ -288,16 +300,18 @@ impl RuntimeComposition {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        let _ =
-            self.composition_observability
-                .emit("start_requested", "ok", "daemon start requested");
+        self.composition_observability.emit_or_warn(
+            "start_requested",
+            "ok",
+            "daemon start requested",
+        );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         // Startup replay must finish before the daemon binds its socket so
         // crash-recovered work cannot race newly accepted requests.
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -318,7 +332,7 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
-            let _ = self.composition_observability.emit(
+            self.composition_observability.emit_or_warn(
                 "startup_failed",
                 "failed",
                 "daemon startup failed",
@@ -335,7 +349,7 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during runtime preparation rollback"
                     );
                 }
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -346,7 +360,7 @@ impl RuntimeComposition {
         };
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        let _ = self.composition_observability.emit(
+        self.composition_observability.emit_or_warn(
             "startup_completed",
             "ok",
             "daemon startup completed",
@@ -375,14 +389,16 @@ impl RuntimeComposition {
         socket_path: PathBuf,
         ready_signal: Option<std::sync::mpsc::SyncSender<()>>,
     ) -> Result<(), AtmError> {
-        let _ =
-            self.composition_observability
-                .emit("start_requested", "ok", "daemon start requested");
+        self.composition_observability.emit_or_warn(
+            "start_requested",
+            "ok",
+            "daemon start requested",
+        );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -403,7 +419,7 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
-            let _ = self.composition_observability.emit(
+            self.composition_observability.emit_or_warn(
                 "startup_failed",
                 "failed",
                 "daemon startup failed",
@@ -423,7 +439,7 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during test runtime preparation rollback"
                     );
                 }
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -434,7 +450,7 @@ impl RuntimeComposition {
         };
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        let _ = self.composition_observability.emit(
+        self.composition_observability.emit_or_warn(
             "startup_completed",
             "ok",
             "daemon startup completed",
@@ -495,14 +511,14 @@ impl RuntimeComposition {
         }
         match result.as_ref() {
             Ok(()) => {
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "shutdown_completed",
                     "ok",
                     "daemon shutdown completed",
                 );
             }
             Err(_) => {
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "shutdown_failed",
                     "failed",
                     "daemon shutdown failed",

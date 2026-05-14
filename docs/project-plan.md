@@ -3084,11 +3084,50 @@ Goal:
 - collapse duplicate interface-specific error/reporting paths when the same
   failure class is currently implemented in parallel
 
+Status note:
+- `W.1` merged to `integrate/phase-W`
+  - branch: `feature/pW-s1-emit-fallback`
+  - PR: `#269`
+  - merge commit: `0a2084e`
+- `W.2` merged to `integrate/phase-W`
+  - branch: `feature/pW-s2-daemon-client-traceability`
+  - PR: `#270`
+  - merge commit: `82142b0`
+- `W.3` merged to `integrate/phase-W`
+  - branch: `feature/pW-s3-sqlite-observability`
+  - PR: `#272`
+  - merge commit: `ae52c63`
+- `W.4` merged to `integrate/phase-W`
+  - branch: `feature/pW-s4-peer-replay-recovery`
+  - PR: `#271`
+  - merge commit: `c9d3984`
+- `W.5` merged to `integrate/phase-W`
+  - branch: `feature/pW-s5-doctor-projection`
+  - PR: `#274`
+  - merge commit: `2d2d482`
+- `W.6` merged to `integrate/phase-W`
+  - branch: `feature/pW-s6-sqlite-error-contract`
+  - PR: `#275`
+  - merge commit: `c8af6e7`
+- `W.7` merged to `integrate/phase-W`
+  - branch: `feature/pW-s7-triage-closeout`
+  - PR: `#276`
+  - merge commit: `d655d45`
+- `W.8` merged to `integrate/phase-W`
+  - branch: `feature/pW-s8-phase-w-closeout`
+  - PR: `#277`
+  - merge commit: `f404238`
+
 Execution shape:
 - `W.1` daemon-side observability sink failure visibility
 - `W.2` same-host daemon traceability and interface parity
 - `W.3` SQLite subsystem observability and protocol parity
 - `W.4` peer replay recovery text and peer-side protocol parity
+- `W.5` doctor projection of same-host bootstrap traceability
+- `W.6` SQLite degradation/error-contract cleanup and typed daemon event labels
+- `W.7` Phase `W` carry-forward triage loop and phase closeout record
+- `W.8` phase closeout: typed SQLite subsystem identity and ATM error
+  inventory correction
 
 Execution rules:
 - `W.1` defines the daemon-side sink-failure behavior for later emitted events
@@ -3111,3 +3150,5 @@ Acceptance:
 - no Phase W scope item relies on an implicit discovery sprint
 - Phase `W` closes only when shared CLI / graft / peer ATM error-code parity
   and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`
+- the Phase `W` closeout gate in `docs/plan-phase-W.md` remains authoritative
+  for final merged-state certification

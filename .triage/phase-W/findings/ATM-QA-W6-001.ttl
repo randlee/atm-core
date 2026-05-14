@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ATM-QA-W6-001 — mark_sqlite_unavailable_with_detail missing emit or explicit comment about caller responsibility
+#
+# Triage conclusion: OPEN — minor doc/comment gap confirmed on both worktrees.
+#
+# Verification (feature/pW-s6-sqlite-error-contract, runtime_status_cache.rs:215-227):
+#   mark_sqlite_unavailable_with_detail() sets cache.sqlite_ready = false and
+#   cache.sqlite_detail = Some(...) but does NOT call self.observability.emit_or_warn().
+#   Contrast: mark_sqlite_unavailable() (lines 193-213) calls emit_or_warn() and carries
+#   an explicit comment explaining the best-effort intent.
+#
+# Caller analysis (sqlite_observability.rs:38-65):
+#   DaemonSqliteObservability::emit() calls mark_sqlite_unavailable_with_detail() on
+#   Failed/Timeout outcomes, then immediately calls self.observability.emit_subsystem_event()
+#   — so the observability event is emitted by the caller, not the cache method.
+#   This is a deliberate split (cache update first, observability event after), but there is
+#   no doc comment on mark_sqlite_unavailable_with_detail() documenting this contract.
+#   A future caller could invoke the method and omit the observability emit, silently
+#   dropping the event.
+#
+# Same gap confirmed on integrate/phase-W (identical code, no comment present).
+#
+# Fix: Add a doc comment to mark_sqlite_unavailable_with_detail() stating that callers
+# are responsible for emitting the observability event independently, analogous to the
+# existing comment on mark_sqlite_unavailable(). A tracing::warn! inside the Ok arm is
+# an equally acceptable alternative if inline emit is preferred.
+#
+# highest_open_branch: feature/pW-s6-sqlite-error-contract (orderIndex 1)
+# promote_to_branch:   feature/pW-s6-sqlite-error-contract
+
+<urn:atm:triage:finding/ATM-QA-W6-001>
+    a triage:Finding ;
+    triage:findingId "ATM-QA-W6-001" ;
+    triage:title "mark_sqlite_unavailable_with_detail missing emit or explicit comment about caller responsibility" ;
+    triage:description "crates/atm-daemon/src/runtime_status_cache.rs:215-227 — mark_sqlite_unavailable_with_detail() does not call emit_or_warn() on state change, unlike mark_sqlite_unavailable() (lines 193-213) which calls emit_or_warn(). The caller (sqlite_observability.rs) compensates by emitting separately, but the divergence from the non-detail variant is unexplained. Risk: future maintainer removes caller-side emit without realising the detail variant has no cache-side emit. Fix: Add tracing::warn! inside mark_sqlite_unavailable_with_detail() on the Ok path, OR add a doc comment explicitly stating callers must emit independently." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "ATM-QA" ;
+    triage:phaseId "phase-W" ;
+    triage:severity "minor" ;
+    triage:pattern "doc/comment" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "open" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+    triage:highestOpenBranch "feature/pW-s6-sqlite-error-contract" ;
+    triage:promoteToBranch "feature/pW-s6-sqlite-error-contract" ;
+    triage:resolutionNote "Finding confirmed on both branches. mark_sqlite_unavailable_with_detail() has no emit_or_warn() call and no doc comment documenting the caller-responsibility contract. The current sole caller (DaemonSqliteObservability::emit) does emit separately, so no observability event is currently lost. The risk is purely forward-maintenance: a new caller could omit the emit. Fix is a one-line doc comment on the method or a tracing::warn! in the Ok arm. Assign to feature/pW-s6-sqlite-error-contract." ;
+    triage:openOn <urn:atm:triage:worktree/pW-s6-sqlite-error-contract/d27de5a2c54db23b4576ca28d57d89b2681f971a> ;
+    triage:openOn <urn:atm:triage:worktree/integrate-phase-W/4540ef258505e629d6a1fb89f5ce3f672e215445> .
+
+<urn:atm:triage:worktree/pW-s6-sqlite-error-contract/d27de5a2c54db23b4576ca28d57d89b2681f971a>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pW-s6-sqlite-error-contract" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s6-sqlite-error-contract" ;
+    triage:headSha "d27de5a2c54db23b4576ca28d57d89b2681f971a" ;
+    triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef258505e629d6a1fb89f5ce3f672e215445>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-W" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+    triage:headSha "4540ef258505e629d6a1fb89f5ce3f672e215445" ;
+    triage:orderIndex 2 .

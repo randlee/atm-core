@@ -26,7 +26,9 @@ use atm_core::{
     read::read_mail,
     send::send_mail,
 };
-use atm_rusqlite::{SqliteBoundaryAssembly, assemble_default_boundary};
+use atm_rusqlite::{
+    SqliteBoundaryAssembly, SqliteObservability, assemble_default_boundary_with_observability,
+};
 
 use crate::AtmHomeDir;
 use crate::advisory_runtime::AdvisoryRuntime;
@@ -37,7 +39,6 @@ use crate::daemon_runtime_observability::{
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
-
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -116,7 +117,11 @@ impl DaemonRequestDispatcher {
             .name(format!("shutdown-finalizer-{label}"))
             .spawn(move || {
                 step().unwrap_or_else(|error| {
-                    tracing::warn!(%error, step = label, "daemon shutdown finalizer step failed");
+                    tracing::warn!(
+                        %error,
+                        step = label,
+                        "daemon shutdown finalizer step failed; restart atm-daemon and inspect the retained observability log before retrying shutdown-sensitive work"
+                    );
                 });
             })
             .map_err(|source| {
@@ -134,7 +139,7 @@ impl DaemonRequestDispatcher {
         if shutdown_handle.join().is_err() {
             tracing::warn!(
                 step = label,
-                "daemon shutdown finalizer step panicked before reporting completion"
+                "daemon shutdown finalizer step panicked before reporting completion; restart atm-daemon and inspect the retained observability log for the failing shutdown step"
             );
         }
     }
@@ -177,7 +182,7 @@ impl DaemonRequestDispatcher {
                 tracing::warn!(
                     %error,
                     step = label,
-                    "daemon shutdown finalizer step could not start"
+                    "daemon shutdown finalizer step could not start; restart atm-daemon because shutdown cleanup could not be scheduled"
                 );
                 return;
             }
@@ -205,6 +210,7 @@ impl DaemonRequestDispatcher {
         home_dir: AtmHomeDir,
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
+        sqlite_observability: Arc<dyn SqliteObservability>,
     ) -> Self {
         let home_dir = home_dir.into_inner();
         let advisory_runtime_observability = SubsystemObservability::new(
@@ -213,14 +219,16 @@ impl DaemonRequestDispatcher {
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
-        let sqlite_boundary = match assemble_default_boundary() {
+        let sqlite_boundary = match assemble_default_boundary_with_observability(
+            sqlite_observability,
+        ) {
             Ok(boundary) => {
                 if let Err(error) =
                     build_runtime_status_cache_state(None, &home_dir, boundary.roster_store())
                         .and_then(|state| status_cache.replace_state(state))
                 {
                     tracing::warn!(%error, "failed to hydrate runtime status cache from sqlite roster state");
-                    let _ = runtime_health_observability.emit(
+                    runtime_health_observability.emit_or_warn(
                         "sqlite_cache_hydration",
                         "degraded",
                         "failed to hydrate runtime status cache from sqlite roster state",
@@ -231,7 +239,7 @@ impl DaemonRequestDispatcher {
             }
             Err(error) => {
                 tracing::warn!(%error, "failed to assemble default sqlite boundary for daemon runtime health");
-                let _ = runtime_health_observability.emit(
+                runtime_health_observability.emit_or_warn(
                     "sqlite_boundary_assembly",
                     "failed",
                     "failed to assemble sqlite boundary for daemon runtime health",
@@ -279,7 +287,7 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
                 let outcome = send_mail(request, self.observability.as_ref())?;
                 if let Err(error) = self.advisory_runtime.enqueue_nudge_for_recipient(&outcome) {
-                    let _ = self.advisory_runtime_observability.emit(
+                    self.advisory_runtime_observability.emit_or_warn(
                         "advisory_enqueue",
                         "degraded",
                         "advisory queue overflowed",
@@ -348,7 +356,7 @@ impl DaemonRequestDispatcher {
             .as_ref()
             .map(SqliteBoundaryAssembly::roster_store)
             .ok_or_else(|| {
-                let _ = self.runtime_health_observability.emit(
+                self.runtime_health_observability.emit_or_warn(
                     "reload_unavailable",
                     "failed",
                     "sqlite-backed daemon runtime reload is unavailable because the sqlite boundary is not assembled",
@@ -400,7 +408,7 @@ impl DaemonRequestDispatcher {
             .as_ref()
             .map(SqliteBoundaryAssembly::roster_store)
             .ok_or_else(|| {
-                let _ = self.runtime_health_observability.emit(
+                self.runtime_health_observability.emit_or_warn(
                     "heartbeat_unavailable",
                     "failed",
                     "sqlite-backed roster truth is unavailable for daemon heartbeats",

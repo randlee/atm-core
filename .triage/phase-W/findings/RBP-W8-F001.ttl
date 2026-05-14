@@ -1,0 +1,60 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W8-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-W8-F001" ;
+  triage:title "SubsystemObservability::event() takes raw &'static str params instead of typed ActionName/OutcomeLabel" ;
+  triage:description """daemon_runtime_observability.rs:189-206 — SubsystemObservability::event() takes action: &'static str, outcome: &'static str and validates them internally with .expect(). The finding requests alignment with emit_subsystem_event (line 139) which already accepts &ActionName / &OutcomeLabel. However, ActionName/OutcomeLabel wrap an owned String (no const constructor) and all 62 emit_or_warn / 14 .event() call sites pass &'static str literals. Migrating the signature to &ActionName / &OutcomeLabel would require either pre-allocated LazyLock statics at 76 call sites across 10 source files, or per-call heap allocation, for zero validation gain (literals are compile-time constants). The .expect() panic on a bad static literal is a real concern, but the risk is effectively catch-only-in-CI: any invalid literal would fail tests immediately. The two methods serve different roles: emit_subsystem_event is a typed-value-boundary API (callers already hold ActionName instances), while event() is an internal convenience builder for literal-string call sites. The asymmetry is intentional and documented. Severity downgraded from important to minor. Deferred pending a const-constructible or validated_static! variant in sc-observability-types that would let call sites move to typed statics without heap allocation.""" ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "deferred" ;
+  triage:dispatchReady false ;
+  triage:deferralReason "No const-constructible ActionName/OutcomeLabel exists in sc-observability-types-1.0.0; migration would require LazyLock statics at 76 call sites (10 files) for zero validation gain. Revisit when sc-observability-types adds validated_static! or const new_static constructor." ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #277" ;
+  triage:references "W.8 QA-1 TASK-1527" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W8-F001/pW-s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W8-F001/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s8-phase-w-closeout/a2358bd> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/a5aa8c4> .
+
+<urn:atm:triage:occurrence/RBP-W8-F001/pW-s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
+  triage:line 189 ;
+  triage:snippet "pub(crate) fn event(&self, action: &'static str, outcome: &'static str, detail: impl Into<Cow<'static, str>>) -> DaemonEvent" ;
+  triage:status "deferred" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s8-phase-w-closeout" ;
+  triage:headSha "a2358bd" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s8-phase-w-closeout/a2358bd> .
+
+<urn:atm:triage:occurrence/RBP-W8-F001/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
+  triage:line 189 ;
+  triage:snippet "pub(crate) fn event(&self, action: &'static str, outcome: &'static str, detail: impl Into<Cow<'static, str>>) -> DaemonEvent" ;
+  triage:status "deferred" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "a5aa8c4" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/a5aa8c4> .
+
+<urn:atm:triage:worktree/pW-s8-phase-w-closeout/a2358bd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s8-phase-w-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s8-phase-w-closeout" ;
+  triage:headSha "a2358bd" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-phase-W/a5aa8c4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "a5aa8c4" ;
+  triage:orderIndex 1 .

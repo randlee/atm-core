@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-006" ;
+  triage:title "GraftClient::connect() calls ensure_daemon_available() without traceability" ;
+  triage:description "GraftClient::connect() at crates/atm-graft/src/lib.rs:200 calls ensure_daemon_available() instead of ensure_daemon_available_with_traceability(). Direct parity violation — atm-graft host interface has no W.2 attempt-level traceability." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/pW-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s2/f3c1b3d> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/fc2c8ae> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-006/pW-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 200 ;
+  triage:snippet "supervisor.ensure_daemon_available(|| advisory_transport.try_connect().map(|_| ()))?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-006/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 200 ;
+  triage:snippet "supervisor.ensure_daemon_available(|| advisory_transport.try_connect().map(|_| ()))?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/fc2c8ae> .
+
+<urn:atm:triage:worktree/pW-s2/f3c1b3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/fc2c8ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:orderIndex 2 .

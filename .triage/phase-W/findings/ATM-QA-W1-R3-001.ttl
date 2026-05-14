@@ -1,0 +1,34 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W1-R3-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W1-R3-001" ;
+  triage:title "Multiline let _ = .emit() discards evading grep gate" ;
+  triage:description "Three multiline silent emit discards remained after fix-R2. Pattern: `let _ =` on one line, `.emit(...)` continuation on the next line. Grep gate `grep -r 'let _ = .*\\.emit'` missed these because the emit call is on the continuation line. Sites: (1) crates/atm-daemon/src/notification_runtime.rs:111-114, (2) crates/atm-daemon/src/reconcile_runtime.rs:290-293, (3) crates/atm-daemon/src/watch_runtime.rs:229-232. All three were start-event emit calls at the end of each runtime's start() method. Fixed by replacing `let _ = self.inner.observability.emit(...)` with `self.inner.observability.emit_or_warn(...)` at all three sites. Cargo check passes clean after fix." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-daemon/src" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:verdict "FIXED — all three multiline emit discard sites converted to emit_or_warn; cargo check clean; no further action required" ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:fixedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pW-s1-emit-fallback/0346b4c> .
+
+<urn:atm:triage:worktree/pW-s1-emit-fallback/0346b4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s1-emit-fallback" ;
+  triage:headSha "0346b4c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/f9ea465>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "f9ea465" ;
+  triage:orderIndex 2 .

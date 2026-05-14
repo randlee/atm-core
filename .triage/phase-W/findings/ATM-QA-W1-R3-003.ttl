@@ -1,0 +1,33 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W1-R3-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W1-R3-003" ;
+  triage:title "Sprint-W1.md acceptance criteria names warn_emit_fallback but impl uses emit_or_warn" ;
+  triage:description "QA finding claims sprint-W1.md AC mandates a warn_emit_fallback free function, but that name does not appear anywhere in docs/phase-W/sprint-W1.md. The term originates in QA agent commentary in R2 triage files (R2-001 through R2-005, R2-007), not in the authoritative sprint doc. The AC describes behavioral requirements only (no silent discard, if-let-Err fallback, shared observability path). The implementation satisfies those requirements via SubsystemObservability::emit_or_warn method (20+ call sites across atm-daemon crates). R2-007 (warn_emit_fallback typed-subsystem finding) is already marked status=fixed at c21ec05. No sprint doc edit and no wrapper shim is required." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/phase-W" ;
+  triage:status "invalid" ;
+  triage:dispatchReady false ;
+  triage:verdict "INVALID — finding premise is false; sprint-W1.md AC never names warn_emit_fallback; emit_or_warn satisfies the behavioral AC; no action required" ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pW-s1-emit-fallback/0346b4c> .
+
+<urn:atm:triage:worktree/pW-s1-emit-fallback/0346b4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s1-emit-fallback" ;
+  triage:headSha "0346b4c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/f9ea465>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "f9ea465" ;
+  triage:orderIndex 2 .

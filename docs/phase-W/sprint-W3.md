@@ -1,9 +1,9 @@
 ---
 id: W.3
 title: SQLite Subsystem Observability
-status: planned
-branch: TBD
-worktree: TBD
+status: complete
+branch: feature/pW-s3-sqlite-observability
+worktree: ../atm-core-worktrees/feature/pW-s3-sqlite-observability
 ---
 
 # Sprint W.3 — SQLite Observability

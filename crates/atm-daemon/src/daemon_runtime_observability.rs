@@ -2,14 +2,19 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::ObservabilityPort;
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, TaskId, TeamName};
+
+type ActionName = sc_observability_types::ActionName;
+type OutcomeLabel = sc_observability_types::OutcomeLabel;
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum DaemonSubsystem {
     Bootstrap,
     Composition,
+    Sqlite,
     LocalIpcTransport,
     AdvisoryRuntime,
     NotificationRuntime,
@@ -28,6 +33,7 @@ impl DaemonSubsystem {
         match self {
             Self::Bootstrap => "bootstrap",
             Self::Composition => "composition",
+            Self::Sqlite => "sqlite",
             Self::LocalIpcTransport => "local_ipc_transport",
             Self::AdvisoryRuntime => "advisory_runtime",
             Self::NotificationRuntime => "notification_runtime",
@@ -52,8 +58,8 @@ pub enum TeamScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DaemonEvent {
     pub subsystem: DaemonSubsystem,
-    pub action: &'static str,
-    pub outcome: &'static str,
+    pub action: ActionName,
+    pub outcome: OutcomeLabel,
     pub team: TeamScope,
     pub agent: Option<AgentName>,
     pub sender: Option<AgentName>,
@@ -66,8 +72,8 @@ pub struct DaemonEvent {
 impl DaemonEvent {
     pub(crate) fn new(
         subsystem: DaemonSubsystem,
-        action: &'static str,
-        outcome: &'static str,
+        action: ActionName,
+        outcome: OutcomeLabel,
         detail: impl Into<Cow<'static, str>>,
     ) -> Self {
         Self {
@@ -123,6 +129,22 @@ pub trait DaemonRuntimeObservability:
     /// Emit one daemon subsystem event into the retained sink.
     fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError>;
 
+    /// Emit one generic subsystem event into the retained sink without
+    /// introducing daemon-subsystem type dependencies at the observability
+    /// boundary.
+    ///
+    /// Shared observability has no validated subsystem-name newtype today, so
+    /// subsystem ids stay on a daemon-owned static string boundary while
+    /// action/outcome use the shared validated observability types.
+    fn emit_subsystem_event(
+        &self,
+        subsystem: DaemonSubsystem,
+        action: &ActionName,
+        outcome: &OutcomeLabel,
+        message: &str,
+        error_code: Option<AtmErrorCode>,
+    ) -> Result<(), AtmError>;
+
     /// Attempt one best-effort synchronous flush during daemon shutdown.
     fn best_effort_flush_blocking(&self) -> Result<(), AtmError>;
 }
@@ -164,6 +186,12 @@ impl SubsystemObservability {
         self.subsystem.clone()
     }
 
+    /// Internal convenience builder for daemon-owned `'static` literals.
+    ///
+    /// This helper intentionally remains separate from the typed
+    /// `emit_subsystem_event(...)` boundary: it validates one internal static
+    /// literal at call time for subsystem-local event construction rather than
+    /// requiring pre-allocated typed labels at every internal call site.
     pub(crate) fn event(
         &self,
         action: &'static str,
@@ -173,7 +201,14 @@ impl SubsystemObservability {
         // Shared subsystem emit helpers deliberately start with no team scope because the thin
         // sink cannot infer mailbox ownership; callers that know team context attach it
         // explicitly on the returned event instead of relying on logger-held mutable state.
-        DaemonEvent::new(self.subsystem(), action, outcome, detail)
+        DaemonEvent::new(
+            self.subsystem(),
+            ActionName::new(action)
+                .expect("daemon subsystem action literals must satisfy ActionName validation"),
+            OutcomeLabel::new(outcome)
+                .expect("daemon subsystem outcome literals must satisfy OutcomeLabel validation"),
+            detail,
+        )
     }
 
     pub(crate) fn emit_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
@@ -183,12 +218,29 @@ impl SubsystemObservability {
         Ok(())
     }
 
-    pub(crate) fn emit(
+    pub(crate) fn emit_event_or_warn(&self, event: DaemonEvent) {
+        let subsystem = event.subsystem.as_str();
+        let action = event.action.as_str().to_string();
+        let outcome = event.outcome.as_str().to_string();
+        let detail = event.detail.clone();
+        if let Err(error) = self.emit_event(event) {
+            tracing::warn!(
+                %error,
+                subsystem,
+                action = %action,
+                outcome = %outcome,
+                detail = %detail,
+                "failed to emit daemon observability event"
+            );
+        }
+    }
+
+    pub(crate) fn emit_or_warn(
         &self,
         action: &'static str,
         outcome: &'static str,
         detail: impl Into<Cow<'static, str>>,
-    ) -> Result<(), AtmError> {
-        self.emit_event(self.event(action, outcome, detail))
+    ) {
+        self.emit_event_or_warn(self.event(action, outcome, detail));
     }
 }

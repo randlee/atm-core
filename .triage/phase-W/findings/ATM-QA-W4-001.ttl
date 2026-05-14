@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W4-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W4-001" ;
+  triage:title "Sprint doc frontmatter stale" ;
+  triage:description "docs/phase-W/sprint-W4.md lines 2-6: status=planned, branch=TBD, worktree=TBD — never updated to reflect implementation. Fix: update frontmatter to status=complete, branch=feature/pW-s4-peer-replay-recovery, worktree=../atm-core-worktrees/feature/pW-s4-peer-replay-recovery" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "docs" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W4-001/pW-s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> ;
+  triage:resolutionNote "Verified fixed on the W.7 merge-forward head. sprint-W4.md frontmatter already records status=complete with the concrete W.4 branch and worktree path, so no further code change was required." ;
+  triage:fixedOn <urn:atm:triage:worktree/pW-s7/4540ef2> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-W/4540ef2> .
+
+<urn:atm:triage:occurrence/ATM-QA-W4-001/pW-s4/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-W/sprint-W4.md" ;
+  triage:line 2 ;
+  triage:snippet "status: planned\\nbranch: TBD\\nworktree: TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+
+<urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/d43ded3fa97873e8e18773bbc67dd5de465dce37>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pW-s7/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 4 .

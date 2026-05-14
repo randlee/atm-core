@@ -3,6 +3,7 @@ use std::sync::Arc;
 
 use super::DaemonRequestDispatcher;
 use crate::runtime_status_cache::{RuntimeStatusCache, build_runtime_status_cache_state};
+use crate::sqlite_observability::DaemonSqliteObservability;
 
 impl DaemonRequestDispatcher {
     pub(crate) fn new_for_test(
@@ -10,7 +11,23 @@ impl DaemonRequestDispatcher {
         status_cache: RuntimeStatusCache,
         roster_db_path: PathBuf,
     ) -> Self {
-        let sqlite_boundary = match atm_rusqlite::assemble_boundary(&roster_db_path) {
+        let observability = Arc::new(
+            crate::test_observability::TestDaemonObservability::new(
+                atm_core::home::host_log_dir_from_home(&home_dir),
+            )
+            .expect("daemon test observability"),
+        );
+        let runtime_observability: Arc<dyn crate::DaemonRuntimeObservability> =
+            observability.clone();
+        let sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability> =
+            Arc::new(DaemonSqliteObservability::new(
+                Arc::clone(&runtime_observability),
+                status_cache.clone(),
+            ));
+        let sqlite_boundary = match atm_rusqlite::assemble_boundary_with_observability(
+            &roster_db_path,
+            Arc::clone(&sqlite_observability),
+        ) {
             Ok(boundary) => {
                 if let Err(error) =
                     build_runtime_status_cache_state(None, &home_dir, boundary.roster_store())
@@ -34,28 +51,24 @@ impl DaemonRequestDispatcher {
                 None
             }
         };
-        let observability = Arc::new(
-            crate::test_observability::TestDaemonObservability::new(
-                atm_core::home::host_log_dir_from_home(&home_dir),
-            )
-            .expect("daemon test observability"),
-        );
         let advisory_runtime_observability = crate::SubsystemObservability::new(
             crate::DaemonSubsystem::AdvisoryRuntime,
-            Arc::clone(&observability) as Arc<dyn crate::DaemonRuntimeObservability>,
+            Arc::clone(&runtime_observability),
         );
         let runtime_health_observability = crate::SubsystemObservability::new(
             crate::DaemonSubsystem::RuntimeHealth,
-            Arc::clone(&observability) as Arc<dyn crate::DaemonRuntimeObservability>,
+            Arc::clone(&runtime_observability),
         );
         Self {
             home_dir: home_dir.clone(),
-            observability,
+            observability: runtime_observability,
             advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability,
             status_cache,
             sqlite_boundary,
-            advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new(),
+            advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new_with_observability(
+                advisory_runtime_observability,
+            ),
         }
     }
 }

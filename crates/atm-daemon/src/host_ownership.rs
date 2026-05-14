@@ -85,14 +85,14 @@ impl HostOwnershipAdapter {
                     drop(lock_file);
                     lock_file = recover_stale_owner_lock(&lock_path, pid, &token)?;
                     recovered = true;
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "recover_stale_owner",
                         "degraded",
                         "daemon recovered a stale host-runtime owner lock",
                     );
                 }
                 if !recovered {
-                    let _ = self.observability.emit(
+                    self.observability.emit_or_warn(
                         "acquire_owner_lock",
                         "rejected",
                         "daemon host-runtime owner lock is already held by a live process",
@@ -108,7 +108,7 @@ impl HostOwnershipAdapter {
                 }
             }
             Err(source) => {
-                let _ = self.observability.emit(
+                self.observability.emit_or_warn(
                     "acquire_owner_lock",
                     "failed",
                     "daemon failed to acquire the host-runtime owner lock",
@@ -121,7 +121,7 @@ impl HostOwnershipAdapter {
             }
         }
         write_owner_record(&mut lock_file)?;
-        let _ = self.observability.emit(
+        self.observability.emit_or_warn(
             "acquire_owner_lock",
             "ok",
             "daemon acquired the host-runtime owner lock",

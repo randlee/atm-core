@@ -205,7 +205,7 @@ impl WatchRuntime {
             .name("atm-daemon-watch".to_string())
             .spawn(move || watch_worker_loop(inner))
             .map_err(|source| {
-                let _ = self.inner.observability.emit(
+                self.inner.observability.emit_or_warn(
                     "start",
                     "failed",
                     "failed to spawn watch runtime worker",
@@ -226,10 +226,9 @@ impl WatchRuntime {
             }
         };
         state.worker = Some(handle);
-        let _ = self
-            .inner
+        self.inner
             .observability
-            .emit("start", "ok", "watch runtime worker started");
+            .emit_or_warn("start", "ok", "watch runtime worker started");
         Ok(())
     }
 
@@ -252,7 +251,7 @@ impl WatchRuntime {
                     let _ = result_tx.send(handle.join());
                 })
                 .map_err(|source| {
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "failed",
                         "failed to spawn watch runtime join helper",
@@ -268,7 +267,7 @@ impl WatchRuntime {
             match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "ok",
                         "watch runtime worker shut down cleanly",
@@ -276,7 +275,7 @@ impl WatchRuntime {
                 }
                 Ok(Err(_)) => {
                     let _ = join_helper.join();
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "failed",
                         "watch runtime worker panicked during shutdown",
@@ -296,7 +295,7 @@ impl WatchRuntime {
                         timeout_ms = WATCH_SHUTDOWN_DEADLINE.as_millis(),
                         "watch runtime worker exceeded shutdown deadline; detaching join helper"
                     );
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "degraded",
                         "watch runtime worker exceeded its shutdown deadline",
@@ -310,7 +309,7 @@ impl WatchRuntime {
                 }
                 Err(mpsc::RecvTimeoutError::Disconnected) => {
                     let _ = join_helper.join();
-                    let _ = self.inner.observability.emit(
+                    self.inner.observability.emit_or_warn(
                         "shutdown",
                         "failed",
                         "watch runtime join helper disconnected during shutdown",
@@ -364,7 +363,7 @@ impl WatchRuntime {
                         )
                         .with_team(request_team.clone())
                         .with_agent(request_agent.clone());
-                    let _ = self.inner.observability.emit_event(event);
+                    self.inner.observability.emit_event_or_warn(event);
                     return Err(
                         AtmError::daemon_unavailable(format!(
                             "watch runtime refused a new subscription because the bounded registry capacity of {MAX_WATCH_SUBSCRIPTIONS} entries was reached"
@@ -427,7 +426,7 @@ impl WatchRuntime {
                     )
                     .with_team(request_team.clone())
                     .with_agent(request_agent.clone());
-                let _ = self.inner.observability.emit_event(event);
+                self.inner.observability.emit_event_or_warn(event);
                 return Err(
                     AtmError::daemon_unavailable(
                         "watch runtime did not deliver an updated batch before the worker health timeout elapsed",
