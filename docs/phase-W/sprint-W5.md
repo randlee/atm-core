@@ -1,7 +1,7 @@
 ---
 id: W.5
 title: Doctor Projection
-status: completed
+status: complete
 branch: feature/pW-s5-doctor-projection
 worktree: ../atm-core-worktrees/feature/pW-s5-doctor-projection
 ---

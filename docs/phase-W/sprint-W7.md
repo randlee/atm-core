@@ -1,7 +1,7 @@
 ---
 id: W.7
 title: Triage Closeout
-status: completed
+status: complete
 branch: feature/pW-s7-triage-closeout
 worktree: ../atm-core-worktrees/feature/pW-s7-triage-closeout
 ---

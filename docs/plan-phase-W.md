@@ -229,6 +229,8 @@ Execution shape:
   discovered during the Phase `W` design review
 - `W.7` closes the Phase `W` carry-forward triage loop and updates the merged
   sprint/status record required by the phase closeout gate
+- `W.8` phase closeout: typed SQLite subsystem identity and ATM error
+  inventory correction
 
 Execution sequence:
 - `W.1` must land first because the sink-failure rule affects every later

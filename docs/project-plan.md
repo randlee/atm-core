@@ -3113,9 +3113,10 @@ Status note:
   - branch: `feature/pW-s7-triage-closeout`
   - PR: `#276`
   - merge commit: `d655d45`
-- `W.8` pending merge to `integrate/phase-W`
+- `W.8` merged to `integrate/phase-W`
   - branch: `feature/pW-s8-phase-w-closeout`
   - PR: `#277`
+  - merge commit: `f404238`
 
 Execution shape:
 - `W.1` daemon-side observability sink failure visibility
