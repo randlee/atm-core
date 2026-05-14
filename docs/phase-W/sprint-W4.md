@@ -3,7 +3,7 @@ id: W.4
 title: Peer Replay Recovery Text
 status: complete
 branch: feature/pW-s4-peer-replay-recovery
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s4-peer-replay-recovery
+worktree: ../atm-core-worktrees/feature/pW-s4-peer-replay-recovery
 ---
 
 # Sprint W.4 — Peer Replay Recovery Text

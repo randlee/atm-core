@@ -3109,6 +3109,13 @@ Status note:
   - branch: `feature/pW-s6-sqlite-error-contract`
   - PR: `#275`
   - merge commit: `c8af6e7`
+- `W.7` merged to `integrate/phase-W`
+  - branch: `feature/pW-s7-triage-closeout`
+  - PR: `#276`
+  - merge commit: `d655d45`
+- `W.8` pending merge to `integrate/phase-W`
+  - branch: `feature/pW-s8-phase-w-closeout`
+  - PR: `#277`
 
 Execution shape:
 - `W.1` daemon-side observability sink failure visibility
@@ -3117,6 +3124,9 @@ Execution shape:
 - `W.4` peer replay recovery text and peer-side protocol parity
 - `W.5` doctor projection of same-host bootstrap traceability
 - `W.6` SQLite degradation/error-contract cleanup and typed daemon event labels
+- `W.7` Phase `W` carry-forward triage loop and phase closeout record
+- `W.8` phase closeout: typed SQLite subsystem identity and ATM error
+  inventory correction
 
 Execution rules:
 - `W.1` defines the daemon-side sink-failure behavior for later emitted events

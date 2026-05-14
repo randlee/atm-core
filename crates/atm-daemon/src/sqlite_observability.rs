@@ -4,6 +4,7 @@ use atm_core::error::AtmError;
 use atm_rusqlite::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
 
 use crate::DaemonRuntimeObservability;
+use crate::DaemonSubsystem;
 use crate::runtime_status_cache::RuntimeStatusCache;
 
 type ActionName = sc_observability_types::ActionName;
@@ -56,7 +57,7 @@ impl SqliteObservability for DaemonSqliteObservability {
                 .with_source(source)
         })?;
         self.observability.emit_subsystem_event(
-            "sqlite",
+            DaemonSubsystem::Sqlite,
             &action,
             &outcome,
             &event.message,

@@ -1,9 +1,9 @@
 ---
 id: W.1
 title: Daemon Emit Failure Visibility
-status: planned
-branch: TBD
-worktree: TBD
+status: complete
+branch: feature/pW-s1-emit-fallback
+worktree: ../atm-core-worktrees/feature/pW-s1-emit-fallback
 ---
 
 # Sprint W.1 — Emit Silent Discard Fix
@@ -74,7 +74,8 @@ worktree: TBD
   existing sealed/open boundary is unchanged
 - fallback metadata for the 68 daemon emit sites is typed:
   stable subsystem and action identifiers must come from a shared enum/newtype
-  set rather than ad hoc per-callsite strings
+  set rather than ad hoc per-callsite strings, including the SQLite subsystem
+  observability path
 
 ## Implementation Notes
 

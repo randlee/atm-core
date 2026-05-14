@@ -3,7 +3,7 @@ id: W.3
 title: SQLite Subsystem Observability
 status: complete
 branch: feature/pW-s3-sqlite-observability
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability
+worktree: ../atm-core-worktrees/feature/pW-s3-sqlite-observability
 ---
 
 # Sprint W.3 — SQLite Observability

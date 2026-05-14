@@ -197,6 +197,9 @@ Shared ATM error inventory:
 - `W.3` SQLite-backed command/runtime failures reuse existing ATM codes:
   - `ATM_DAEMON_UNAVAILABLE` for queue, reply, WAL, budget, and assembly
     failures that currently project through daemon/runtime availability
+  - `ATM_WARNING_SQLITE_HEALTH_DEGRADED` for degraded SQLite readiness that
+    still leaves the daemon running but not fully healthy in doctor/runtime
+    health output
   - `ATM_DAEMON_LIFECYCLE_WEDGE` only where the existing shared error path
     already promotes the failure to a lifecycle wedge
 - `W.4` remote replay persistence uses existing ATM codes:
@@ -265,6 +268,7 @@ Authoritative sprint sequence:
 - `docs/phase-W/sprint-W5.md`
 - `docs/phase-W/sprint-W6.md`
 - `docs/phase-W/sprint-W7.md`
+- `docs/phase-W/sprint-W8.md`
 
 Deliverables:
 - `docs/phase-W/sprint-W1.md` — daemon `emit()` silent discard fix plan
@@ -276,6 +280,8 @@ Deliverables:
   cleanup
 - `docs/phase-W/sprint-W7.md` — final triage closeout and merged-status
   registry
+- `docs/phase-W/sprint-W8.md` — Phase `W` closeout audit fixes for typed
+  SQLite subsystem identity and shared ATM error inventory alignment
 
 Cross-sprint dependencies:
 - `W.2` and `W.3` must both define how new signals map to:
