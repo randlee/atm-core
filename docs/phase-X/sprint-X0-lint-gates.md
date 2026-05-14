@@ -1,9 +1,9 @@
 ---
 id: X.0
 title: Pre-Phase Lint Gates
-status: planned
+status: complete
 branch: feature/pX-lint-gates
-worktree: ../atm-core-worktrees/feature/pX-lint-gates
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pX-lint-gates
 target: develop
 ---
 
@@ -24,13 +24,18 @@ target: develop
 
 ## Exact Targets
 
-- `scripts/check-silent-emit.sh`
+- `scripts/check-silent-emit.py`
 - `scripts/check-function-length.py`
 - local lint entrypoints:
   - `.just/run_lint.py`
-  - `just` recipes that route to lint
-- CI workflow files that own the lint path
-- any related lint docs that name the active checks
+  - `justfile`
+  - `.just/print_help.py`
+- CI workflow files that own the lint path:
+  - `.github/workflows/ci.yml`
+- lint-tool unit tests:
+  - `.just/tests/test_run_lint.py`
+  - `.just/tests/test_print_help.py`
+  - `.just/tests/test_check_function_length.py`
 
 ## Required Work
 
@@ -38,19 +43,28 @@ target: develop
 - add the RULE-002 function-length gate to the shared lint/CI path
 - ensure both gates are reachable through the same entrypoints Phase `X`
   branches will use locally and in CI
-- document any grandfather or rollout behavior for pre-existing violations so
-  new Phase `X` diffs fail correctly without blocking on unrelated legacy debt
+- keep the silent-emit gate strict immediately because the merged Phase `W`
+  line is already clean
+- implement RULE-002 rollout as:
+  - advisory at `70` lines
+  - hard gate at `80` lines
+  - grandfather unchanged pre-existing `80+` violations by diff overlap against
+    the develop baseline
+- record the pre-phase prerequisite in `docs/project-plan.md`
 
 ## Acceptance Criteria
 
 - the silent-emit gate is runnable through the normal lint entrypoint
 - the RULE-002 gate is runnable through the normal lint entrypoint
 - both gates run on `develop` before `integrate/phase-X` is created
+- silent `let _ = ...emit(...)` discards fail immediately in non-test Rust
+- unchanged pre-existing `80+` RULE-002 violations do not block the pre-phase
+  gate, but any new diff-overlapping `80+` violation fails
 - Phase `X` planning docs treat these gates as pre-phase prerequisites, not
   internal `integrate/phase-X` sprint work
 
 ## Required Validation
 
 - run the local lint entrypoint that exercises both new gates
-- run any direct script invocation needed to prove both gates work in isolation
+- run direct script invocation to prove both gates work in isolation
 - `git diff --check`

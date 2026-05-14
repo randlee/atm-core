@@ -25,6 +25,8 @@ class PrintHelpTests(unittest.TestCase):
         self.assertIn("lint sc-boundary", output)
         self.assertIn("lint sc-portability", output)
         self.assertIn("lint manifests", output)
+        self.assertIn("lint silent-emit", output)
+        self.assertIn("lint function-length", output)
         self.assertIn("lint fixed-sleep", output)
         self.assertIn("lint ttl-triage", output)
         self.assertIn("lint pytests", output)

@@ -26,6 +26,8 @@ PYTHON_LINT_ORDER = (
     "same-host-portability",
     "runtime-waits",
     "manifests",
+    "silent-emit",
+    "function-length",
     "identities",
     "fixed-sleep",
     "ttl-triage",
@@ -36,7 +38,7 @@ PYTHON_LINT_ORDER = (
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability")
 CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear")
-FAST_LINT_ORDER = ("fmt", "version", "boundaries", "manifests", "spell", "pytests")
+FAST_LINT_ORDER = ("fmt", "version", "boundaries", "manifests", "silent-emit", "function-length", "spell", "pytests")
 HIGH_VOLUME_LINTS = {"identities", "lines"}
 CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "manifests"}
 COUNT_PATTERNS = (
@@ -95,6 +97,12 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
             "sc-portability", [python_executable, str(repo_root / ".just/lint_sc_portability.py")]
         ),
         "manifests": LintTask("manifests", [python_executable, str(repo_root / ".just/lint_manifests.py")]),
+        "silent-emit": LintTask(
+            "silent-emit", [python_executable, str(repo_root / "scripts/check-silent-emit.py")]
+        ),
+        "function-length": LintTask(
+            "function-length", [python_executable, str(repo_root / "scripts/check-function-length.py")]
+        ),
         "spell": LintTask("spell", [python_executable, str(repo_root / ".just/lint_codespell.py")]),
         "fixed-sleep": LintTask(
             "fixed-sleep", [python_executable, str(repo_root / ".just/check_fixed_sleep_hygiene.py")]
