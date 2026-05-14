@@ -1,0 +1,22 @@
+finding_id: ARCH-W-001
+title: peer_transport.rs send_to_endpoint exceeds RULE-002 80-line limit
+severity: blocking
+pattern: RULE-002-function-length
+phase: phase-W
+triage_mode: initial_pass
+status: deferred
+deferred_to: phase-X
+deferral_rationale: "Pre-existing violation before Phase W. Phase W reduced from ~109 to 108 lines (W.4 work). Non-trivial production network I/O refactor. Team-lead formally deferred to Phase X."
+promote_to_branch: integrate/phase-W
+highest_open_branch: integrate/phase-W
+dispatch_ready: false
+repeatable: true
+sweep_scope: crates/*/src/peer_transport.rs all functions
+occurrences:
+  - branch: integrate/phase-W
+    file: crates/atm-daemon/src/peer_transport.rs
+    line: 296
+    detail: "108 lines (lines 296-403) — exceeds 80-line limit"
+    state: deferred
+fix_description: "Extract helper functions to reduce send_to_endpoint to <80 lines. Deferred to Phase X."
+dispatch_blocked_pending_triage_commit: false

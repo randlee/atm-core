@@ -1,0 +1,20 @@
+finding_id: NEW-002
+title: project-plan.md W.8 entry still shows pending merge
+severity: important
+pattern: doc-status-stale
+phase: phase-W
+triage_mode: initial_pass
+status: open
+promote_to_branch: integrate/phase-W
+highest_open_branch: integrate/phase-W
+dispatch_ready: true
+repeatable: false
+sweep_scope: docs/project-plan.md W.8 entry only
+occurrences:
+  - branch: integrate/phase-W
+    file: docs/project-plan.md
+    line: 3116
+    detail: "W.8 entry shows '- `W.8` pending merge to `integrate/phase-W`' with no merge commit; should be 'merged to integrate/phase-W' with merge commit f404238, consistent with W.1-W.7 entry format"
+    state: open
+fix_description: "Update docs/project-plan.md line 3116: change '- `W.8` pending merge to `integrate/phase-W`' to '- `W.8` merged to `integrate/phase-W`', and add '  - merge commit: `f404238`' on line 3119 (after the PR: #277 line), consistent with W.1-W.7 entries."
+dispatch_blocked_pending_triage_commit: false

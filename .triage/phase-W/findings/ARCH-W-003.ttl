@@ -1,0 +1,22 @@
+finding_id: ARCH-W-003
+title: runtime_status_cache.rs build_runtime_status_cache_state exceeds RULE-002 80-line limit
+severity: blocking
+pattern: RULE-002-function-length
+phase: phase-W
+triage_mode: initial_pass
+status: deferred
+deferred_to: phase-X
+deferral_rationale: "Pre-existing violation before Phase W (~99 lines before, ~102 after W.3 additions). Non-trivial cache state builder. Team-lead formally deferred to Phase X."
+promote_to_branch: integrate/phase-W
+highest_open_branch: integrate/phase-W
+dispatch_ready: false
+repeatable: true
+sweep_scope: crates/*/src/runtime_status_cache.rs all functions
+occurrences:
+  - branch: integrate/phase-W
+    file: crates/atm-daemon/src/runtime_status_cache.rs
+    line: 393
+    detail: "102 lines (lines 393-494) — exceeds 80-line limit"
+    state: deferred
+fix_description: "Extract helper functions to reduce build_runtime_status_cache_state to <80 lines. Deferred to Phase X."
+dispatch_blocked_pending_triage_commit: false
