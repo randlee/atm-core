@@ -280,7 +280,7 @@ impl PeerClientTransport {
     }
 
     fn persist_outcome_unknown_request(&self, request: &RequestEnvelope) -> Result<(), AtmError> {
-        let Some((team, agent, message_key)) = replay_metadata_for_request(request)? else {
+        let Some((team, agent, message_key)) = replay_metadata_for_request(request) else {
             tracing::warn!(
                 request = ?request,
                 "remote delivery outcome is unknown but this request family does not support durable replay persistence",
@@ -656,14 +656,14 @@ fn classify_io_error(error: &io::Error) -> AttemptFailureKind {
 
 fn replay_metadata_for_request(
     request: &RequestEnvelope,
-) -> Result<Option<(TeamName, AgentName, MessageKey)>, AtmError> {
+) -> Option<(TeamName, AgentName, MessageKey)> {
     match request {
-        RequestEnvelope::Heartbeat(heartbeat) => Ok(Some((
+        RequestEnvelope::Heartbeat(heartbeat) => Some((
             heartbeat.team.clone(),
             heartbeat.member.clone(),
             heartbeat_message_key(heartbeat),
-        ))),
-        _ => Ok(None),
+        )),
+        _ => None,
     }
 }
 

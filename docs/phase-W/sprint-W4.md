@@ -149,9 +149,10 @@ CLI / doctor split:
 - cross-daemon consumers must receive the same ATM error code and aligned
   recovery intent for the same remote-delivery / replay-persistence failure
   class
-- `DaemonRequestDispatcher::project_doctor_report` should remain able to
-  explain replay-store configuration and retained pending replay state when
-  that information is already available
+- `DaemonRequestDispatcher::project_doctor_report` in
+  `crates/atm-daemon/src/runtime_health.rs` should remain able to explain
+  replay-store configuration and retained pending replay state when that
+  information is already available
 - this sprint is primarily a regression-closure check on uncovered recovery
   branches, not a redesign of how send failure is reported
 

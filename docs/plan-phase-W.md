@@ -224,6 +224,8 @@ Execution shape:
   retained-log inspection
 - `W.6` closes the remaining SQLite error-contract and typed daemon-event gaps
   discovered during the Phase `W` design review
+- `W.7` closes the Phase `W` carry-forward triage loop and updates the merged
+  sprint/status record required by the phase closeout gate
 
 Execution sequence:
 - `W.1` must land first because the sink-failure rule affects every later
@@ -262,6 +264,7 @@ Authoritative sprint sequence:
 - `docs/phase-W/sprint-W4.md`
 - `docs/phase-W/sprint-W5.md`
 - `docs/phase-W/sprint-W6.md`
+- `docs/phase-W/sprint-W7.md`
 
 Deliverables:
 - `docs/phase-W/sprint-W1.md` — daemon `emit()` silent discard fix plan
@@ -271,6 +274,8 @@ Deliverables:
 - `docs/phase-W/sprint-W5.md` — doctor projection of bootstrap traceability
 - `docs/phase-W/sprint-W6.md` — SQLite error-contract and typed daemon-event
   cleanup
+- `docs/phase-W/sprint-W7.md` — final triage closeout and merged-status
+  registry
 
 Cross-sprint dependencies:
 - `W.2` and `W.3` must both define how new signals map to:

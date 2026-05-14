@@ -397,6 +397,9 @@ pub(crate) fn build_runtime_status_cache_state(
 ) -> Result<RuntimeStatusCacheState, AtmError> {
     let mut next_state = RuntimeStatusCacheState {
         members: HashMap::new(),
+        // This constructor always resets SQLite readiness to the optimistic
+        // baseline; callers that detect assembly/open failure afterward own
+        // re-applying mark_sqlite_unavailable(...) before publishing state.
         sqlite_ready: true,
         sqlite_detail: None,
         degraded_ingest: current_state.is_some_and(|state| state.degraded_ingest),

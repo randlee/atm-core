@@ -13,8 +13,8 @@
   triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
 
   # occurrences on feature/pW-s4-peer-replay-recovery
@@ -31,7 +31,10 @@
 
   triage:openOn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> ;
   triage:openOn <urn:atm:triage:worktree/integrate-W/d43ded3fa97873e8e18773bbc67dd5de465dce37> ;
-  triage:promoteTo <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+  triage:promoteTo <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> ;
+  triage:resolutionNote "Verified fixed on the W.7 merge-forward head. peer_transport.rs now carries the required .with_recovery(...) guidance on the four send_once daemon_unavailable branches: connect, read-timeout setup, write-timeout setup, and response-frame decode." ;
+  triage:fixedOn <urn:atm:triage:worktree/pW-s7/4540ef2> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-W/4540ef2> .
 
 # ─── WorktreeSnapshots ───────────────────────────────────────────────────────
 <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da>
@@ -47,6 +50,20 @@
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
   triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
   triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pW-s7/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 4 .
 
 # ─── Occurrences: feature/pW-s4-peer-replay-recovery ────────────────────────
 # Occurrence 1: connect failure (the QA-reported primary instance)
