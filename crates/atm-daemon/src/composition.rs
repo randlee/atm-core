@@ -286,7 +286,7 @@ impl RuntimeComposition {
     }
 
     fn begin_shutdown(&self) -> Result<(), AtmError> {
-        let _ = self.composition_observability.emit(
+        self.composition_observability.emit_or_warn(
             "shutdown_requested",
             "ok",
             "daemon shutdown requested",
@@ -304,16 +304,18 @@ impl RuntimeComposition {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        let _ =
-            self.composition_observability
-                .emit("start_requested", "ok", "daemon start requested");
+        self.composition_observability.emit_or_warn(
+            "start_requested",
+            "ok",
+            "daemon start requested",
+        );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         // Startup replay must finish before the daemon binds its socket so
         // crash-recovered work cannot race newly accepted requests.
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -334,7 +336,7 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
-            let _ = self.composition_observability.emit(
+            self.composition_observability.emit_or_warn(
                 "startup_failed",
                 "failed",
                 "daemon startup failed",
@@ -351,7 +353,7 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during runtime preparation rollback"
                     );
                 }
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -362,7 +364,7 @@ impl RuntimeComposition {
         };
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        let _ = self.composition_observability.emit(
+        self.composition_observability.emit_or_warn(
             "startup_completed",
             "ok",
             "daemon startup completed",
@@ -391,14 +393,16 @@ impl RuntimeComposition {
         socket_path: PathBuf,
         ready_signal: Option<std::sync::mpsc::SyncSender<()>>,
     ) -> Result<(), AtmError> {
-        let _ =
-            self.composition_observability
-                .emit("start_requested", "ok", "daemon start requested");
+        self.composition_observability.emit_or_warn(
+            "start_requested",
+            "ok",
+            "daemon start requested",
+        );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
         let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
             Ok(summary) => summary,
             Err(error) => {
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -419,7 +423,7 @@ impl RuntimeComposition {
             );
         }
         if let Err(error) = self.start_background_lanes() {
-            let _ = self.composition_observability.emit(
+            self.composition_observability.emit_or_warn(
                 "startup_failed",
                 "failed",
                 "daemon startup failed",
@@ -439,7 +443,7 @@ impl RuntimeComposition {
                         "daemon background lane shutdown failed during test runtime preparation rollback"
                     );
                 }
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "startup_failed",
                     "failed",
                     "daemon startup failed",
@@ -450,7 +454,7 @@ impl RuntimeComposition {
         };
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        let _ = self.composition_observability.emit(
+        self.composition_observability.emit_or_warn(
             "startup_completed",
             "ok",
             "daemon startup completed",
@@ -511,14 +515,14 @@ impl RuntimeComposition {
         }
         match result.as_ref() {
             Ok(()) => {
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "shutdown_completed",
                     "ok",
                     "daemon shutdown completed",
                 );
             }
             Err(_) => {
-                let _ = self.composition_observability.emit(
+                self.composition_observability.emit_or_warn(
                     "shutdown_failed",
                     "failed",
                     "daemon shutdown failed",

@@ -90,7 +90,7 @@ impl AdvisoryRuntime {
                 )
                 .with_team(request.team.clone())
                 .with_agent(request.agent.clone());
-            let _ = self.observability.emit_event(event);
+            self.observability.emit_event_or_warn(event);
             return Err(AtmError::daemon_advisory_session_already_registered(format!(
                 "advisory session {} is already registered",
                 request.session_id
@@ -109,7 +109,7 @@ impl AdvisoryRuntime {
                 )
                 .with_team(request.team.clone())
                 .with_agent(request.agent.clone());
-            let _ = self.observability.emit_event(event);
+            self.observability.emit_event_or_warn(event);
             return Err(AtmError::daemon_unavailable(format!(
                 "advisory session registration rejected because the daemon session cap {} is exhausted",
                 self.max_sessions
@@ -137,7 +137,7 @@ impl AdvisoryRuntime {
             .event("register_session", "ok", "advisory session registered")
             .with_team(request.team.clone())
             .with_agent(request.agent.clone());
-        let _ = self.observability.emit_event(event);
+        self.observability.emit_event_or_warn(event);
 
         Ok(AdvisorySessionRegistrationResponse {
             team: request.team,
@@ -154,7 +154,7 @@ impl AdvisoryRuntime {
     ) -> Result<AdvisorySessionUnregistrationResponse, AtmError> {
         let mut state = self.lock_state_write()?;
         let closed = state.sessions.remove(&request.session_id).is_some();
-        let _ = self.observability.emit(
+        self.observability.emit_or_warn(
             "unregister_session",
             if closed { "ok" } else { "noop" },
             if closed {
@@ -302,7 +302,7 @@ impl AdvisoryRuntime {
                     if let Some(task_id) = outcome.task_id.clone() {
                         event = event.with_task_id(task_id);
                     }
-                    let _ = self.observability.emit_event(event);
+                    self.observability.emit_event_or_warn(event);
                     tracing::debug!(
                         session_id = %session_id,
                         team = %outcome.team,
@@ -336,7 +336,7 @@ impl AdvisoryRuntime {
             if let Some(task_id) = outcome.task_id.clone() {
                 event = event.with_task_id(task_id);
             }
-            let _ = self.observability.emit_event(event);
+            self.observability.emit_event_or_warn(event);
             tracing::debug!(
                 team = %outcome.team,
                 agent = %outcome.agent,

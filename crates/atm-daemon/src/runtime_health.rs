@@ -228,7 +228,7 @@ impl DaemonRequestDispatcher {
                         .and_then(|state| status_cache.replace_state(state))
                 {
                     tracing::warn!(%error, "failed to hydrate runtime status cache from sqlite roster state");
-                    let _ = runtime_health_observability.emit(
+                    runtime_health_observability.emit_or_warn(
                         "sqlite_cache_hydration",
                         "degraded",
                         "failed to hydrate runtime status cache from sqlite roster state",
@@ -239,7 +239,7 @@ impl DaemonRequestDispatcher {
             }
             Err(error) => {
                 tracing::warn!(%error, "failed to assemble default sqlite boundary for daemon runtime health");
-                let _ = runtime_health_observability.emit(
+                runtime_health_observability.emit_or_warn(
                     "sqlite_boundary_assembly",
                     "failed",
                     "failed to assemble sqlite boundary for daemon runtime health",
@@ -287,7 +287,7 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
             RequestEnvelope::Send(SendRequestEnvelope::Compose(request)) => {
                 let outcome = send_mail(request, self.observability.as_ref())?;
                 if let Err(error) = self.advisory_runtime.enqueue_nudge_for_recipient(&outcome) {
-                    let _ = self.advisory_runtime_observability.emit(
+                    self.advisory_runtime_observability.emit_or_warn(
                         "advisory_enqueue",
                         "degraded",
                         "advisory queue overflowed",
@@ -356,7 +356,7 @@ impl DaemonRequestDispatcher {
             .as_ref()
             .map(SqliteBoundaryAssembly::roster_store)
             .ok_or_else(|| {
-                let _ = self.runtime_health_observability.emit(
+                self.runtime_health_observability.emit_or_warn(
                     "reload_unavailable",
                     "failed",
                     "sqlite-backed daemon runtime reload is unavailable because the sqlite boundary is not assembled",
@@ -408,7 +408,7 @@ impl DaemonRequestDispatcher {
             .as_ref()
             .map(SqliteBoundaryAssembly::roster_store)
             .ok_or_else(|| {
-                let _ = self.runtime_health_observability.emit(
+                self.runtime_health_observability.emit_or_warn(
                     "heartbeat_unavailable",
                     "failed",
                     "sqlite-backed roster truth is unavailable for daemon heartbeats",

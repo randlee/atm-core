@@ -197,14 +197,18 @@ impl SubsystemObservability {
     }
 
     pub(crate) fn emit_event_or_warn(&self, event: DaemonEvent) {
-        if let Err(error) = self.emit_event(event.clone()) {
+        let subsystem = event.subsystem.as_str();
+        let action = event.action;
+        let outcome = event.outcome;
+        let detail = event.detail.clone();
+        if let Err(error) = self.emit_event(event) {
             tracing::warn!(
-                subsystem = event.subsystem.as_str(),
-                action = event.action,
-                outcome = event.outcome,
-                error_code = %error.code,
-                error_message = %error.message,
-                "daemon subsystem observability emit failed"
+                %error,
+                subsystem,
+                action,
+                outcome,
+                detail = %detail,
+                "failed to emit daemon observability event"
             );
         }
     }
