@@ -886,6 +886,45 @@ mod tests {
     }
 
     #[test]
+    fn bootstrap_propagates_daemon_availability_failure() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _env = EnvGuard::set_many([
+            ("ATM_TEAM", Some(TEST_TEAM)),
+            ("ATM_IDENTITY", Some(TEST_SENDER)),
+            (
+                "ATM_DAEMON_SOCKET",
+                Some(
+                    tempdir
+                        .path()
+                        .join("daemon.sock")
+                        .to_string_lossy()
+                        .as_ref(),
+                ),
+            ),
+            (
+                "ATM_DAEMON_BIN",
+                Some(
+                    tempdir
+                        .path()
+                        .join("missing-atm-daemon")
+                        .to_string_lossy()
+                        .as_ref(),
+                ),
+            ),
+        ]);
+        let observability = CliObservability::fallback();
+
+        let error = CliComposition::bootstrap("doctor", &observability)
+            .expect_err("bootstrap should fail when daemon auto-start cannot launch");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert!(error.to_string().contains("daemon binary is missing"));
+    }
+
+    #[test]
     fn loopback_transport_ack_appends_reply_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let (message_id, pending_ack) = fixture.pending_ack_message("please ack");

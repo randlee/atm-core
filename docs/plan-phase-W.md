@@ -131,24 +131,31 @@ Sprint ownership map:
   envelope parity for non-CLI consumers.
 - `W.4` owns cross-daemon peer replay recovery text and peer-side parity
   through the shared protocol envelope.
+- `W.5` owns doctor projection of same-host bootstrap traceability after `W.2`
+  established the emitted daemon connect / launch-gate / auto-start trail.
 
 Critical failure ownership matrix:
 - daemon startup / connect / publish failure:
-  - sprint owner: `W.2`
+  - sprint owner: `W.2` for emission and interface parity, `W.5` for shared
+    `atm doctor` projection
   - shared paths:
     - `crates/atm-daemon-client/src/lib.rs`
     - `crates/atm/src/composition.rs`
     - `crates/atm-core/src/error.rs`
     - `crates/atm-core/src/doctor/mod.rs`
     - `crates/atm/src/commands/doctor.rs`
+    - `crates/atm/src/output.rs`
     - `crates/atm-daemon/src/runtime_health.rs`
 - ATM command failure on same-host daemon path:
-  - sprint owner: `W.2`
+  - sprint owner: `W.2` for concise CLI parity, `W.5` where bootstrap failure
+    evidence must be projected through the shared doctor surface
   - shared paths:
     - `crates/atm/src/composition.rs`
     - `crates/atm-daemon-client/src/lib.rs`
     - `crates/atm-core/src/error.rs`
     - `crates/atm-core/src/doctor/mod.rs`
+    - `crates/atm/src/commands/doctor.rs`
+    - `crates/atm/src/output.rs`
 - SQLite writer / queue / reply / WAL / reader-budget failure:
   - sprint owner: `W.3`
   - shared paths:
@@ -212,6 +219,9 @@ Execution shape:
 - `W.3` adds SQLite subsystem observability for writer queue, reply timeout,
   WAL lifecycle, and reader-budget exhaustion
 - `W.4` closes the remaining peer replay recovery-text holes
+- `W.5` projects the `W.2` bootstrap trace trail through shared
+  `DoctorReport` / `atm doctor` output so the same evidence is visible without
+  retained-log inspection
 
 Execution sequence:
 - `W.1` must land first because the sink-failure rule affects every later
@@ -224,6 +234,12 @@ Critical path rationale:
 - without `W.1`, subsystem event loss is still silent
 - without `W.2`, daemon-start/connect failures still collapse into an end
   error without enough attempt-level evidence for system testing
+- DESIGN-001-W:
+  - `W.2` restored the emitted bootstrap trail, but that evidence still stayed
+    inside observability records rather than the shared doctor surface
+  - `W.5` exists because system testing needs the same daemon
+    connect/launch/publish trail available from `atm doctor`, not only from
+    retained-log inspection
 - without `W.3`, SQLite failures remain under-observed even though SQLite is
   the durable-state owner
 - `W.4` is narrower, but it closes the remaining actionable recovery gaps in
@@ -234,12 +250,14 @@ Authoritative sprint sequence:
 - `docs/phase-W/sprint-W2.md`
 - `docs/phase-W/sprint-W3.md`
 - `docs/phase-W/sprint-W4.md`
+- `docs/phase-W/sprint-W5.md`
 
 Deliverables:
 - `docs/phase-W/sprint-W1.md` — daemon `emit()` silent discard fix plan
 - `docs/phase-W/sprint-W2.md` — daemon-client traceability plan
 - `docs/phase-W/sprint-W3.md` — SQLite observability plan
 - `docs/phase-W/sprint-W4.md` — peer replay recovery-text plan
+- `docs/phase-W/sprint-W5.md` — doctor projection of bootstrap traceability
 
 Cross-sprint dependencies:
 - `W.2` and `W.3` must both define how new signals map to:
@@ -265,6 +283,8 @@ Cross-sprint dependencies:
   ordinary merge-forward discipline.
 - `W.1` does not own daemon-client tracing or CLI-side path narration; those
   same-host path gaps are owned by `W.2`.
+- `W.5` depends on `W.2`; it must project the bootstrap evidence that `W.2`
+  emits rather than invent a second same-host trace taxonomy.
 - if `W.3` and `W.4` run in parallel, `crates/atm-core/src/protocol.rs`
   changes must be partitioned by failure family:
   - `W.3` owns SQLite-backed envelope parity

@@ -497,29 +497,7 @@ fn print_runtime_status(runtime_status: &RuntimeStatusSnapshot) {
 }
 
 fn print_bootstrap_trace(trace: &BootstrapTraceReport) {
-    println!();
-    println!("Bootstrap trace:");
-    println!(
-        "  Daemon connect: {}",
-        render_bootstrap_connect(trace.daemon_connect)
-    );
-    println!(
-        "  Launch gate: {}",
-        render_bootstrap_launch_gate(trace.daemon_launch_gate)
-    );
-    println!(
-        "  Auto-start: {}",
-        render_bootstrap_auto_start(trace.daemon_auto_start)
-    );
-    if let Some(detail) = &trace.connect_detail {
-        println!("  Connect detail: {detail}");
-    }
-    if let Some(detail) = &trace.launch_gate_detail {
-        println!("  Launch-gate detail: {detail}");
-    }
-    if let Some(detail) = &trace.auto_start_detail {
-        println!("  Auto-start detail: {detail}");
-    }
+    print!("{}", render_bootstrap_trace_section(trace));
 }
 
 fn render_runtime_liveness(state: RuntimeLivenessState) -> &'static str {
@@ -575,4 +553,59 @@ fn render_runtime_member_state(state: RuntimeMemberState) -> &'static str {
 
 fn render_bool(value: bool) -> &'static str {
     if value { "yes" } else { "no" }
+}
+
+fn render_bootstrap_trace_section(trace: &BootstrapTraceReport) -> String {
+    let mut output = String::from("\nBootstrap trace:\n");
+    output.push_str(&format!(
+        "  Daemon connect: {}\n",
+        render_bootstrap_connect(trace.daemon_connect)
+    ));
+    output.push_str(&format!(
+        "  Launch gate: {}\n",
+        render_bootstrap_launch_gate(trace.daemon_launch_gate)
+    ));
+    output.push_str(&format!(
+        "  Auto-start: {}\n",
+        render_bootstrap_auto_start(trace.daemon_auto_start)
+    ));
+    if let Some(detail) = &trace.connect_detail {
+        output.push_str(&format!("  Connect detail: {detail}\n"));
+    }
+    if let Some(detail) = &trace.launch_gate_detail {
+        output.push_str(&format!("  Launch-gate detail: {detail}\n"));
+    }
+    if let Some(detail) = &trace.auto_start_detail {
+        output.push_str(&format!("  Auto-start detail: {detail}\n"));
+    }
+    output
+}
+
+#[cfg(test)]
+mod tests {
+    use atm_core::doctor::{
+        BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+        BootstrapTraceReport,
+    };
+
+    use super::render_bootstrap_trace_section;
+
+    #[test]
+    fn bootstrap_trace_section_renders_doctor_output_block() {
+        let rendered = render_bootstrap_trace_section(&BootstrapTraceReport {
+            daemon_connect: BootstrapConnectOutcome::Connected,
+            daemon_launch_gate: BootstrapLaunchGateOutcome::Launched,
+            daemon_auto_start: BootstrapAutoStartOutcome::AutoStarted,
+            connect_detail: Some("connect detail".to_string()),
+            launch_gate_detail: None,
+            auto_start_detail: Some("auto-start detail".to_string()),
+        });
+
+        assert!(rendered.contains("Bootstrap trace:"));
+        assert!(rendered.contains("Daemon connect: connected"));
+        assert!(rendered.contains("Launch gate: launched"));
+        assert!(rendered.contains("Auto-start: auto_started"));
+        assert!(rendered.contains("Connect detail: connect detail"));
+        assert!(rendered.contains("Auto-start detail: auto-start detail"));
+    }
 }

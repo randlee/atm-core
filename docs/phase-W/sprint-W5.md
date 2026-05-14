@@ -34,6 +34,8 @@ worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s5-docto
 - `crates/atm/src/output.rs`
 - `crates/atm/src/commands/doctor.rs`
 - `crates/atm-daemon/src/test_support.rs`
+  - keep `DoctorOnlyDispatcher` construction aligned with the extended
+    `DoctorReport` shape by setting `bootstrap_trace: None`
 
 ## Acceptance Criteria
 

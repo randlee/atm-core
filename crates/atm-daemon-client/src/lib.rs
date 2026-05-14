@@ -89,6 +89,8 @@ pub struct BootstrapTraceability<'a> {
     observability: &'a (dyn ObservabilityPort + Send + Sync),
     team: TeamName,
     agent: AgentName,
+    // Mutex required: BootstrapTraceability must be Sync (holds
+    // &'a dyn ObservabilityPort + Send + Sync); RefCell would be unsound.
     state: Mutex<BootstrapTraceState>,
 }
 
@@ -163,12 +165,12 @@ impl<'a> BootstrapTraceability<'a> {
                         state.connect = Some(BootstrapConnectOutcome::NotFound);
                     }
                     if let Some(error) = error {
-                        state.connect_detail = Some(error.message.clone());
+                        state.connect_detail = Some(format_bootstrap_error_detail(error));
                     }
                 }
                 "error" => {
                     state.connect = Some(BootstrapConnectOutcome::Failed);
-                    state.connect_detail = error.map(|value| value.message.clone());
+                    state.connect_detail = error.map(format_bootstrap_error_detail);
                 }
                 _ => {}
             },
@@ -184,13 +186,13 @@ impl<'a> BootstrapTraceability<'a> {
                 }
                 "timeout_exhausted" => {
                     state.launch_gate = Some(BootstrapLaunchGateOutcome::Failed);
-                    state.launch_gate_detail = error.map(|value| value.message.clone());
+                    state.launch_gate_detail = error.map(format_bootstrap_error_detail);
                     state.connect = Some(BootstrapConnectOutcome::Timeout);
-                    state.connect_detail = error.map(|value| value.message.clone());
+                    state.connect_detail = error.map(format_bootstrap_error_detail);
                 }
                 "error" => {
                     state.launch_gate = Some(BootstrapLaunchGateOutcome::Failed);
-                    state.launch_gate_detail = error.map(|value| value.message.clone());
+                    state.launch_gate_detail = error.map(format_bootstrap_error_detail);
                 }
                 _ => {}
             },
@@ -200,10 +202,10 @@ impl<'a> BootstrapTraceability<'a> {
                 }
                 "error" | "timeout_exhausted" => {
                     state.auto_start = Some(BootstrapAutoStartOutcome::Failed);
-                    state.auto_start_detail = error.map(|value| value.message.clone());
+                    state.auto_start_detail = error.map(format_bootstrap_error_detail);
                     if outcome == "timeout_exhausted" {
                         state.connect = Some(BootstrapConnectOutcome::Timeout);
-                        state.connect_detail = error.map(|value| value.message.clone());
+                        state.connect_detail = error.map(format_bootstrap_error_detail);
                     }
                 }
                 _ => {}
@@ -238,6 +240,13 @@ impl BootstrapTraceState {
             launch_gate_detail: self.launch_gate_detail.clone(),
             auto_start_detail: self.auto_start_detail.clone(),
         }
+    }
+}
+
+fn format_bootstrap_error_detail(error: &AtmError) -> String {
+    match &error.recovery {
+        Some(recovery) => format!("{} Recovery: {}", error.message, recovery),
+        None => error.message.clone(),
     }
 }
 
@@ -830,6 +839,14 @@ mod tests {
         assert_eq!(
             traceability.snapshot().daemon_auto_start,
             BootstrapAutoStartOutcome::Failed
+        );
+        assert!(
+            traceability
+                .snapshot()
+                .auto_start_detail
+                .as_deref()
+                .expect("auto-start detail")
+                .contains("Build or install atm-daemon")
         );
     }
 
