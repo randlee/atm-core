@@ -22,6 +22,7 @@ mod reconcile_runtime;
 mod runtime_health;
 mod runtime_status_cache;
 mod shutdown_beacon;
+mod sqlite_observability;
 #[cfg(test)]
 mod test_observability;
 #[cfg(test)]
@@ -117,9 +118,20 @@ struct SqliteRemoteReplayStore {
 }
 
 impl SqliteRemoteReplayStore {
+    #[cfg(test)]
     fn from_path(db_path: PathBuf) -> Result<Self, AtmError> {
+        Self::from_path_with_observability(db_path, Arc::new(atm_rusqlite::NullSqliteObservability))
+    }
+
+    fn from_path_with_observability(
+        db_path: PathBuf,
+        observability: Arc<dyn atm_rusqlite::SqliteObservability>,
+    ) -> Result<Self, AtmError> {
         Ok(Self {
-            assembly: Arc::new(SqliteBoundaryAssembly::new(db_path)?),
+            assembly: Arc::new(SqliteBoundaryAssembly::new_with_observability(
+                db_path,
+                observability,
+            )?),
         })
     }
 }
@@ -148,10 +160,20 @@ impl RemoteReplayStore for SqliteRemoteReplayStore {
     }
 }
 
+#[cfg(test)]
 pub(crate) fn sqlite_remote_replay_store_from_path(
     db_path: PathBuf,
 ) -> Result<Arc<dyn RemoteReplayStore>, AtmError> {
     Ok(Arc::new(SqliteRemoteReplayStore::from_path(db_path)?))
+}
+
+pub(crate) fn sqlite_remote_replay_store_from_path_with_observability(
+    db_path: PathBuf,
+    observability: Arc<dyn atm_rusqlite::SqliteObservability>,
+) -> Result<Arc<dyn RemoteReplayStore>, AtmError> {
+    Ok(Arc::new(
+        SqliteRemoteReplayStore::from_path_with_observability(db_path, observability)?,
+    ))
 }
 
 /// Run the daemon entrypoint with the currently assembled runtime composition.

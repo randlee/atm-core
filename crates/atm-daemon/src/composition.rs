@@ -7,9 +7,10 @@ use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{RuntimeServeHooks, SocketEndpointGuard};
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
+use crate::sqlite_observability::DaemonSqliteObservability;
 use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    sqlite_remote_replay_store_from_path,
+    sqlite_remote_replay_store_from_path_with_observability,
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::error::AtmError;
@@ -168,6 +169,11 @@ impl RuntimeComposition {
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
         ));
+        let sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability> =
+            Arc::new(DaemonSqliteObservability::new(
+                Arc::clone(&observability),
+                status_cache.clone(),
+            ));
         let notification_sink =
             DaemonNotificationSink::new_with_observability(SubsystemObservability::new(
                 DaemonSubsystem::NotificationRuntime,
@@ -177,12 +183,24 @@ impl RuntimeComposition {
             SubsystemObservability::new(DaemonSubsystem::WatchRuntime, Arc::clone(&observability)),
         );
         let inbox_ingress = DaemonInboxIngress::new();
-        let replay_store = match sqlite_remote_replay_store_from_path(replay_store_path) {
+        let composition_observability = SubsystemObservability::new(
+            DaemonSubsystem::Composition,
+            Arc::clone(&observability),
+        );
+        let replay_store = match sqlite_remote_replay_store_from_path_with_observability(
+            replay_store_path,
+            Arc::clone(&sqlite_observability),
+        ) {
             Ok(store) => Some(store),
             Err(error) => {
                 tracing::warn!(
                     %error,
                     "remote replay store unavailable; outcome-unknown delivery cannot be persisted"
+                );
+                let _ = composition_observability.emit(
+                    "sqlite_replay_store_assembly",
+                    "degraded",
+                    "remote replay store unavailable; outcome-unknown delivery cannot be persisted",
                 );
                 None
             }
@@ -214,11 +232,9 @@ impl RuntimeComposition {
                 home_dir,
                 status_cache.clone(),
                 Arc::clone(&observability),
+                sqlite_observability,
             )),
-            composition_observability: SubsystemObservability::new(
-                DaemonSubsystem::Composition,
-                Arc::clone(&observability),
-            ),
+            composition_observability,
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
             _watch_event_source: watch_event_source.clone(),

@@ -46,7 +46,7 @@ struct RegisteredAdvisorySession {
 }
 
 impl AdvisoryRuntime {
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(dead_code)]
     pub(crate) fn new() -> Self {
         Self::new_with_observability(SubsystemObservability::disabled(
             DaemonSubsystem::AdvisoryRuntime,

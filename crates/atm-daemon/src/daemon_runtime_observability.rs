@@ -2,6 +2,7 @@ use std::borrow::Cow;
 use std::sync::Arc;
 
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::ObservabilityPort;
 use atm_core::schema::AtmMessageId;
 use atm_core::types::{AgentName, TaskId, TeamName};
@@ -122,6 +123,18 @@ pub trait DaemonRuntimeObservability:
 {
     /// Emit one daemon subsystem event into the retained sink.
     fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError>;
+
+    /// Emit one generic subsystem event into the retained sink without
+    /// introducing daemon-subsystem type dependencies at the observability
+    /// boundary.
+    fn emit_subsystem_event(
+        &self,
+        subsystem: &'static str,
+        action: &'static str,
+        outcome: &'static str,
+        message: &str,
+        error_code: Option<AtmErrorCode>,
+    ) -> Result<(), AtmError>;
 
     /// Attempt one best-effort synchronous flush during daemon shutdown.
     fn best_effort_flush_blocking(&self) -> Result<(), AtmError>;

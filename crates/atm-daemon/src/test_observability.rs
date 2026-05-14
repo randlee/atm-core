@@ -6,6 +6,7 @@ use std::time::{Duration, Instant};
 
 use atm_core::boundary;
 use atm_core::error::AtmError;
+use atm_core::error_codes::AtmErrorCode;
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
@@ -180,6 +181,20 @@ impl DaemonRuntimeObservability for TestDaemonObservability {
             event.action,
             event.outcome,
             event.detail
+        ))
+    }
+
+    fn emit_subsystem_event(
+        &self,
+        subsystem: &'static str,
+        action: &'static str,
+        outcome: &'static str,
+        message: &str,
+        error_code: Option<AtmErrorCode>,
+    ) -> Result<(), AtmError> {
+        self.append_message(format!(
+            "{{\"subsystem\":\"{subsystem}\",\"action\":\"{action}\",\"outcome\":\"{outcome}\",\"message\":\"{message}\",\"error_code\":{:?}}}",
+            error_code.map(|value| value.to_string())
         ))
     }
 
