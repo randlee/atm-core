@@ -56,8 +56,8 @@ pub enum TeamScope {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DaemonEvent {
     pub subsystem: DaemonSubsystem,
-    pub action: &'static str,
-    pub outcome: &'static str,
+    pub action: ActionName,
+    pub outcome: OutcomeLabel,
     pub team: TeamScope,
     pub agent: Option<AgentName>,
     pub sender: Option<AgentName>,
@@ -70,8 +70,8 @@ pub struct DaemonEvent {
 impl DaemonEvent {
     pub(crate) fn new(
         subsystem: DaemonSubsystem,
-        action: &'static str,
-        outcome: &'static str,
+        action: ActionName,
+        outcome: OutcomeLabel,
         detail: impl Into<Cow<'static, str>>,
     ) -> Self {
         Self {
@@ -193,7 +193,14 @@ impl SubsystemObservability {
         // Shared subsystem emit helpers deliberately start with no team scope because the thin
         // sink cannot infer mailbox ownership; callers that know team context attach it
         // explicitly on the returned event instead of relying on logger-held mutable state.
-        DaemonEvent::new(self.subsystem(), action, outcome, detail)
+        DaemonEvent::new(
+            self.subsystem(),
+            ActionName::new(action)
+                .expect("daemon subsystem action literals must satisfy ActionName validation"),
+            OutcomeLabel::new(outcome)
+                .expect("daemon subsystem outcome literals must satisfy OutcomeLabel validation"),
+            detail,
+        )
     }
 
     pub(crate) fn emit_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
@@ -205,15 +212,15 @@ impl SubsystemObservability {
 
     pub(crate) fn emit_event_or_warn(&self, event: DaemonEvent) {
         let subsystem = event.subsystem.as_str();
-        let action = event.action;
-        let outcome = event.outcome;
+        let action = event.action.as_str().to_string();
+        let outcome = event.outcome.as_str().to_string();
         let detail = event.detail.clone();
         if let Err(error) = self.emit_event(event) {
             tracing::warn!(
                 %error,
                 subsystem,
-                action,
-                outcome,
+                action = %action,
+                outcome = %outcome,
                 detail = %detail,
                 "failed to emit daemon observability event"
             );

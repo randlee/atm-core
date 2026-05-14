@@ -222,6 +222,8 @@ Execution shape:
 - `W.5` projects the `W.2` bootstrap trace trail through shared
   `DoctorReport` / `atm doctor` output so the same evidence is visible without
   retained-log inspection
+- `W.6` closes the remaining SQLite error-contract and typed daemon-event gaps
+  discovered during the Phase `W` design review
 
 Execution sequence:
 - `W.1` must land first because the sink-failure rule affects every later
@@ -229,6 +231,10 @@ Execution sequence:
 - `W.2` and `W.3` both depend on `W.1`
 - `W.4` can land in parallel with late `W.3` work if the replay-recovery
   branches remain isolated
+- `W.5` depends on `W.2`
+- `W.6` depends on `W.3` and must merge-forward any shared doctor/runtime
+  projection changes from `W.5` before push when those lines touch the same
+  failure family
 
 Critical path rationale:
 - without `W.1`, subsystem event loss is still silent
@@ -242,6 +248,10 @@ Critical path rationale:
     retained-log inspection
 - without `W.3`, SQLite failures remain under-observed even though SQLite is
   the durable-state owner
+- DESIGN-002/003/004-W:
+  - `W.6` exists because Phase `W` still was not complete until SQLite
+    degradation projected through the right ATM warning code and daemon event
+    metadata stayed typed through the retained observability path
 - `W.4` is narrower, but it closes the remaining actionable recovery gaps in
   peer replay persistence and prevents ambiguous retry behavior
 
@@ -251,6 +261,7 @@ Authoritative sprint sequence:
 - `docs/phase-W/sprint-W3.md`
 - `docs/phase-W/sprint-W4.md`
 - `docs/phase-W/sprint-W5.md`
+- `docs/phase-W/sprint-W6.md`
 
 Deliverables:
 - `docs/phase-W/sprint-W1.md` — daemon `emit()` silent discard fix plan
@@ -258,6 +269,8 @@ Deliverables:
 - `docs/phase-W/sprint-W3.md` — SQLite observability plan
 - `docs/phase-W/sprint-W4.md` — peer replay recovery-text plan
 - `docs/phase-W/sprint-W5.md` — doctor projection of bootstrap traceability
+- `docs/phase-W/sprint-W6.md` — SQLite error-contract and typed daemon-event
+  cleanup
 
 Cross-sprint dependencies:
 - `W.2` and `W.3` must both define how new signals map to:
@@ -285,6 +298,9 @@ Cross-sprint dependencies:
   same-host path gaps are owned by `W.2`.
 - `W.5` depends on `W.2`; it must project the bootstrap evidence that `W.2`
   emits rather than invent a second same-host trace taxonomy.
+- `W.6` depends on `W.3`; it may tighten SQLite degradation projection and
+  daemon-event typing, but it must not fork a second SQLite warning taxonomy
+  or bypass the shared doctor/runtime-health reporting path.
 - if `W.3` and `W.4` run in parallel, `crates/atm-core/src/protocol.rs`
   changes must be partitioned by failure family:
   - `W.3` owns SQLite-backed envelope parity
