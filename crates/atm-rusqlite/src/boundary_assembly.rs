@@ -17,9 +17,12 @@ use crate::shared_db::{SharedDb, deserialize_json, serialize_json};
 use crate::{SqliteMailStore, SqliteTaskStore};
 
 #[derive(Debug)]
-pub(crate) struct SqliteRosterStore {
+struct SqliteRosterStore {
     pub(crate) db: Arc<SharedDb>,
 }
+
+#[path = "roster_store.rs"]
+mod roster_store_impl;
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct RemoteReplayStateRecord {
@@ -49,7 +52,7 @@ impl SqliteRosterStore {
 pub struct SqliteBoundaryAssembly {
     pub(crate) mail_store: Arc<SqliteMailStore>,
     pub(crate) task_store: Arc<SqliteTaskStore>,
-    pub(crate) roster_store: Arc<SqliteRosterStore>,
+    roster_store: Arc<SqliteRosterStore>,
     observability: Arc<dyn SqliteObservability>,
 }
 

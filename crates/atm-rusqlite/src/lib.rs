@@ -5,7 +5,6 @@
 mod boundary_assembly;
 mod mailbox_metadata;
 mod observability;
-mod roster_store;
 mod shared_db;
 mod writer;
 
