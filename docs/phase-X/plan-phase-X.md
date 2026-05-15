@@ -325,8 +325,12 @@ Primary file scope:
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-core/src/boundary/store.rs`
+- `crates/atm-core/src/doctor/mod.rs`
 - `crates/atm-rusqlite/src/lib.rs` and any roster-store implementation files
 - `crates/atm-daemon/src/composition.rs`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-core/architecture.md`
+- `docs/atm-core/requirements.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-daemon/architecture.md`
 

@@ -125,6 +125,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   boundary.
 - `atm-daemon` must not parse or write inbox JSONL except through the
   `atm-core` ingress/export boundaries.
+- daemon runtime-health/status assembly must discover teams and members only
+  through the installed `RosterStore`; `ATM_HOME/.claude/teams` is a config
+  ingress surface, not a runtime-truth discovery path
 - `atm-daemon` owns runtime implementations of one shared ATM protocol with
   multiple transport implementations:
   - cross-platform local IPC for same-host daemon access

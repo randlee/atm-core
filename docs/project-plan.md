@@ -3178,6 +3178,11 @@ Status note:
   - scope: removed the remaining production legacy-key branches, moved send
     threading/export to a store-backed projection load, and confined
     compatibility inbox file helpers to the hidden daemon ingress/export seam
+- `X.3` complete on `feature/pX-s3-runtime-truth-unification`
+  - target: `integrate/phase-X`
+  - scope: removed filesystem team discovery from daemon runtime hydration,
+    added explicit `RosterStore` team enumeration, and aligned core/daemon
+    boundary docs with store-owned team/member runtime truth
 
 Pre-phase prerequisite:
 - before `integrate/phase-X` starts, a standalone develop-targeting PR
@@ -3232,6 +3237,9 @@ Acceptance:
   and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`
 - the Phase `W` closeout gate in `docs/plan-phase-W.md` remains authoritative
   for final merged-state certification
+  same-host helper deduplication
+- `X.5` systemic guardrails, dependency-ownership validation, and closeout
+>>>>>>> feature/pX-s3-runtime-truth-unification
   verification
 
 Execution rules:
