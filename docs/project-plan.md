@@ -3250,6 +3250,11 @@ Status note:
   - scope: removed the remaining production legacy-key branches, moved send
     threading/export to a store-backed projection load, and confined
     compatibility inbox file helpers to the hidden daemon ingress/export seam
+- `X.3` complete on `feature/pX-s3-runtime-truth-unification`
+  - target: `integrate/phase-X`
+  - scope: removed filesystem team discovery from daemon runtime hydration,
+    added explicit `RosterStore` team enumeration, and aligned core/daemon
+    boundary docs with store-owned team/member runtime truth
 
 Execution shape:
 - pre-phase prerequisite:

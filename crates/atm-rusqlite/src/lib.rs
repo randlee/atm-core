@@ -2138,6 +2138,53 @@ mod tests {
     }
 
     #[test]
+    fn roster_store_list_teams_returns_sorted_distinct_team_names() {
+        let assembly = in_memory_assembly();
+        let store = assembly.roster_store();
+        let alpha_team: TeamName = "alpha".parse().expect("team name");
+        let bravo_team: TeamName = "bravo".parse().expect("team name");
+
+        store
+            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
+                team: bravo_team.clone(),
+                members: vec![boundary::RosterMemberRecord {
+                    team_name: bravo_team.clone(),
+                    agent_name: "zulu".parse().expect("agent name"),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: "ops".to_string(),
+                    model: "claude".to_string(),
+                    recipient_pane_id: None,
+                    metadata_json: serde_json::Map::new(),
+                }],
+                source: Some(boundary::ReplaySource::new("config.json").expect("replay source")),
+            })
+            .expect("replace bravo roster");
+        store
+            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
+                team: alpha_team.clone(),
+                members: vec![boundary::RosterMemberRecord {
+                    team_name: alpha_team.clone(),
+                    agent_name: "alpha-agent".parse().expect("agent name"),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::CodexCli,
+                    agent_type: "dev".to_string(),
+                    model: "gpt-5".to_string(),
+                    recipient_pane_id: None,
+                    metadata_json: serde_json::Map::new(),
+                }],
+                source: Some(boundary::ReplaySource::new("config.json").expect("replay source")),
+            })
+            .expect("replace alpha roster");
+
+        let teams = store
+            .list_teams(boundary::RosterStoreListTeamsRequest)
+            .expect("list teams");
+
+        assert_eq!(teams.teams, vec![alpha_team, bravo_team]);
+    }
+
+    #[test]
     fn remote_replay_state_round_trips_and_purges_expired_rows() {
         let assembly = in_memory_assembly();
         let now = IsoTimestamp::now();

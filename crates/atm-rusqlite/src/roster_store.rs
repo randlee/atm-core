@@ -2,7 +2,7 @@ use super::SqliteRosterStore;
 use crate::{deserialize_json, serialize_json};
 use atm_core::boundary;
 use atm_core::error::AtmError;
-use atm_core::types::IsoTimestamp;
+use atm_core::types::{IsoTimestamp, TeamName};
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Map, Value};
 
@@ -225,6 +225,48 @@ impl boundary::RosterStore for SqliteRosterStore {
             member,
             is_member,
         })
+    }
+
+    fn list_teams(
+        &self,
+        _request: boundary::RosterStoreListTeamsRequest,
+    ) -> Result<boundary::RosterStoreListTeamsResponse, AtmError> {
+        let teams = self.db.with_connection(|connection| {
+            let mut statement = connection
+                .prepare(
+                    "SELECT DISTINCT team_name
+                     FROM team_roster
+                     ORDER BY team_name ASC;",
+                )
+                .map_err(|error| {
+                    self.db
+                        .error("failed to prepare canonical roster team enumeration", error)
+                })?;
+            let rows = statement
+                .query_map([], |row| row.get::<_, String>(0))
+                .map_err(|error| {
+                    self.db
+                        .error("failed to enumerate canonical roster teams", error)
+                })?;
+            let mut teams = Vec::new();
+            for row in rows {
+                let team_name = row.map_err(|error| {
+                    self.db.error("failed to decode canonical roster team row", error)
+                })?;
+                teams.push(team_name.parse::<TeamName>().map_err(|error| {
+                    AtmError::validation(format!(
+                        "roster-store list_teams rejected persisted team {}: {error}",
+                        team_name
+                    ))
+                    .with_recovery(
+                        "Repair the canonical team_roster rows or rewrite the roster through the owning boundary before retrying team enumeration.",
+                    )
+                    .with_source(error)
+                })?);
+            }
+            Ok(teams)
+        })?;
+        Ok(boundary::RosterStoreListTeamsResponse { teams })
     }
 
     fn health_snapshot(
