@@ -128,7 +128,7 @@ pub fn reexport_messages(
     request: InboxExportReexportMessageRequest,
 ) -> Result<InboxExportReexportMessageResponse, AtmError> {
     let wrote_messages = request.messages.len();
-    mailbox::store::write_compat_mailbox_projection(&request.path, &request.messages)?;
+    mailbox::store::commit_mailbox_state(&request.path, &request.messages)?;
     Ok(InboxExportReexportMessageResponse { wrote_messages })
 }
 

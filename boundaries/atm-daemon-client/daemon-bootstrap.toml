@@ -23,6 +23,9 @@ io_owns = [
   "same_host_daemon_bootstrap_types",
   "daemon_launch_gate",
   "daemon_auto_start_spawn",
+  "try_connect",
+  "exchange",
+  "unexpected_response",
 ]
 io_forbidden = [
   "sqlite",
