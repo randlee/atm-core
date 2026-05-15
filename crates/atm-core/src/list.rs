@@ -147,7 +147,8 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         None
     };
 
-    let metadata_rows = load_checked_list_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
+    let metadata_rows =
+        load_checked_list_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
     let classified_all = classify_mailbox_metadata_rows(&metadata_rows);
     let logical_current = logical_current_messages(classified_all);
     let bucket_counts = bucket_counts_for(&logical_current);

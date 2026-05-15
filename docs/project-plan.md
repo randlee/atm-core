@@ -3173,6 +3173,11 @@ Status note:
 - `X.1` complete on `feature/pX-s1-mailbox-runtime-cutover`
   - target: `integrate/phase-X`
   - scope: retained mailbox runtime cutover to a fail-closed SQLite/store-backed path
+- `X.2` complete on `feature/pX-s2-command-path-simplification`
+  - target: `integrate/phase-X`
+  - scope: removed the remaining production legacy-key branches, moved send
+    threading/export to a store-backed projection load, and confined
+    compatibility inbox file helpers to the hidden daemon ingress/export seam
 
 Pre-phase prerequisite:
 - before `integrate/phase-X` starts, a standalone develop-targeting PR
@@ -3227,3 +3232,17 @@ Acceptance:
   and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`
 - the Phase `W` closeout gate in `docs/plan-phase-W.md` remains authoritative
   for final merged-state certification
+  verification
+
+Execution rules:
+- no Phase `X` sprint may preserve or add a mailbox durability fallback path
+- the silent-emit and RULE-002 gates are treated as already-live pre-phase
+  develop prerequisites, not delayed `integrate/phase-X` sprint work
+- file watchers may remain only as ingress/reconcile edges, not as a parallel
+  mailbox backend
+- no Phase `X` scope item relies on an implicit discovery sprint
+- Phase `X` closes only when the legacy mailbox/runtime deletion gates,
+  same-host helper deduplication, and daemon SQLite-runtime truth rules are
+  revalidated on `integrate/phase-X`
+- `docs/phase-X/plan-phase-X.md` remains the authoritative execution plan for
+  the Phase `X` sprint line

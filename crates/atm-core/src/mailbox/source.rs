@@ -193,7 +193,7 @@ pub(crate) fn load_source_files(paths: &[PathBuf]) -> Result<Vec<SourceFile>, At
             ));
         }
 
-        let messages = super::read_messages(path)?;
+        let messages = super::load_compat_mailbox_messages(path)?;
         sources.push(SourceFile {
             path: path.clone(),
             messages,

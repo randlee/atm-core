@@ -11,7 +11,6 @@ use crate::boundary;
 use crate::config;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::identity;
-use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
@@ -499,14 +498,12 @@ pub(crate) fn append_mailbox_message_and_seed_workflow(
             if require_existing_inbox && !inbox_path.exists() {
                 return Ok(((), false));
             }
-            // Accepted risk: mailbox lock acquisition is time-bounded, but the
-            // subsequent file read is synchronous and may still stall on a bad
-            // filesystem while the lock is held.
-            let mut inbox_messages = mailbox::read_messages(inbox_path)?;
+            let mut inbox_messages =
+                load_store_backed_mailbox_projection(runtime, home_dir, team, agent)?;
             let mut prepared = envelope.clone();
             prepare_threaded_message(&mut prepared, &inbox_messages)?;
             inbox_messages.push(prepared.clone());
-            mailbox::store::commit_mailbox_state(inbox_path, &inbox_messages)?;
+            crate::mailbox::store::write_compat_mailbox_projection(inbox_path, &inbox_messages)?;
             mirror_message_to_store(runtime, team, agent, &prepared)?;
             Ok((
                 (),
@@ -514,6 +511,38 @@ pub(crate) fn append_mailbox_message_and_seed_workflow(
             ))
         },
     )
+}
+
+fn load_store_backed_mailbox_projection(
+    runtime: &(impl RetainedMailboxRuntime + ?Sized),
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<MessageEnvelope>, AtmError> {
+    let mut metadata_rows = runtime.query_mailbox_metadata_rows(home_dir, team, agent, None)?;
+    metadata_rows.sort_by(|left, right| {
+        left.message_at
+            .cmp(&right.message_at)
+            .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
+    });
+
+    metadata_rows
+        .into_iter()
+        .map(|row| {
+            runtime
+                .load_message_record(home_dir, team, agent, &row.message_key)?
+                .map(|record| record.envelope)
+                .ok_or_else(|| {
+                    AtmError::validation(format!(
+                        "sqlite mailbox metadata row {} could not be reloaded for compatibility inbox export",
+                        row.message_key
+                    ))
+                    .with_recovery(
+                        "Repair or remove the malformed sqlite mailbox row before retrying the ATM command.",
+                    )
+                })
+        })
+        .collect()
 }
 
 fn mirror_message_to_store(

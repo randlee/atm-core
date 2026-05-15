@@ -422,11 +422,11 @@ mod tests {
     }
 
     #[test]
-    fn workflow_message_key_accepts_legacy_prefix_for_read_compatibility() {
-        let key = "legacy:01KRFK5QTF2R6NRS3Q0F8Z9K0S"
+    fn workflow_message_key_rejects_non_atm_prefix() {
+        let error = "legacy:01KRFK5QTF2R6NRS3Q0F8Z9K0S"
             .parse::<WorkflowMessageKey>()
-            .expect("workflow key");
+            .expect_err("workflow key should reject legacy prefix");
 
-        assert_eq!(key.to_string(), "atm:01KRFK5QTF2R6NRS3Q0F8Z9K0S");
+        assert!(error.contains("workflow key must start with 'atm:'"));
     }
 }
