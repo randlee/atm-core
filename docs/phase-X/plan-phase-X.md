@@ -273,8 +273,9 @@ Required deliverables:
 - delete store-facing helpers from the retained runtime surface when they only
   exist to support legacy file-backed mailbox mutation
 - remove the retained boundary-adapter stubs in
-  `service_runtime_store.rs:305-315`; they are deletion targets, not
-  documentation anchors to preserve after the store-only cutover
+  `service_runtime_store.rs` by locating them through a pattern search for
+  `LegacyMailboxRuntime` or other dual-mode adapter remnants; they are deletion
+  targets, not documentation anchors to preserve after the store-only cutover
 - document any remaining source-file helper ownership as daemon-private
   ingress/migration-only scope rather than retained runtime scope
 
