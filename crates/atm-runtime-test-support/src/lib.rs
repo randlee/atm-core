@@ -13,7 +13,7 @@ static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =
     OnceLock::new();
 const MAX_SQLITE_RUNTIME_CACHE_ENTRIES: usize = 16;
-const SQLITE_RUNTIME_PATH_ENV: &str = "ATM_TEST_SQLITE_RUNTIME_PATH";
+pub const SQLITE_RUNTIME_PATH_ENV: &str = "ATM_TEST_SQLITE_RUNTIME_PATH";
 
 pub fn install_sqlite_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {

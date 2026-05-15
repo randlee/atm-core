@@ -2,6 +2,8 @@ use std::fs;
 #[cfg(unix)]
 use std::fs::OpenOptions;
 use std::sync::{Arc, Barrier, mpsc};
+#[cfg(unix)]
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -604,6 +606,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
+    let _env_lock = env_lock().lock().expect("env lock");
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -628,6 +631,7 @@ fn send_times_out_under_bounded_lock_contention() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
+    let _env_lock = env_lock().lock().expect("env lock");
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(
@@ -665,6 +669,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
+    let _env_lock = env_lock().lock().expect("env lock");
     let observability = NullObservability;
 
     let mutation_fixture = Fixture::new();
@@ -687,9 +692,8 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     mutation_lock_file
         .lock_exclusive()
         .expect("hold mutation lock");
-    let mutation_query = mutation_fixture
-        .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
+    let mut mutation_query = mutation_fixture.read_query(PRIMARY_AGENT);
+    mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
     let mutation_outcome = read_mail(mutation_query, &observability).expect("read with mutation");
     assert_eq!(mutation_outcome.count, 1);
     assert!(mutation_outcome.mutation_applied);
@@ -715,10 +719,9 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     no_mutation_lock_file
         .lock_exclusive()
         .expect("hold no-mutation lock");
-    let no_mutation_query = no_mutation_fixture
-        .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread)
-        .with_selection_mode(ReadSelection::All);
+    let mut no_mutation_query = no_mutation_fixture.read_query(PRIMARY_AGENT);
+    no_mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    no_mutation_query.selection_mode = ReadSelection::All;
     let started = Instant::now();
     let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
     assert_eq!(outcome.count, 1);
@@ -756,9 +759,8 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         .expect("logical message id");
     assert_eq!(physical_before["read"], false);
 
-    let read_query = fixture
-        .read_query(PRIMARY_AGENT)
-        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
+    let mut read_query = fixture.read_query(PRIMARY_AGENT);
+    read_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
         outcome
@@ -799,6 +801,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
+    let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -834,6 +837,7 @@ fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_reports_non_contention_lock_failures_without_timeout() {
+    let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -855,6 +859,20 @@ fn send_reports_non_contention_lock_failures_without_timeout() {
 enum CommandOp {
     Read(ReadQuery, Arc<NullObservability>),
     Clear(ClearQuery, Arc<NullObservability>),
+}
+
+// Serializes process-environment mutation inside this test module. This is
+// process-local only; it does not coordinate with other test processes.
+#[cfg(unix)]
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    // These tests mutate the process-global `ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS`,
+    // `ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT`, and
+    // `ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR` knobs while exercising
+    // mailbox lock behavior. Keep a single process-wide mutex in addition to
+    // `#[serial]` so a poisoned lock fails the suite closed instead of silently
+    // continuing with inconsistent shared state.
+    LOCK.get_or_init(|| Mutex::new(()))
 }
 
 struct Fixture {
@@ -987,7 +1005,7 @@ impl Fixture {
                 let notices = self.inbox_contents_for_team(team, TEAM_LEAD);
                 panic!("missing-config notice not observed before timeout: {notices:?}");
             }
-            thread::yield_now();
+            thread::sleep(Duration::from_millis(2));
         }
     }
 
@@ -1017,7 +1035,7 @@ impl Fixture {
                     "workflow state for missing-config notice not observed before timeout: {workflow:?}"
                 );
             }
-            thread::yield_now();
+            thread::sleep(Duration::from_millis(2));
         }
     }
 
@@ -1094,7 +1112,8 @@ impl Fixture {
 
         for (index, message) in messages.iter().enumerate() {
             let message_key = if let Some(message_id) = message.message_id {
-                atm_core::boundary::MessageKey::for_atm_message(message_id).expect("message key")
+                atm_core::boundary::MessageKey::new(format!("atm:{message_id}"))
+                    .expect("message key")
             } else {
                 atm_core::boundary::MessageKey::new(format!("ext:{agent}:{index}"))
                     .expect("message key")
@@ -1150,9 +1169,10 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
 }
 
 fn message_workflow_key(message: &MessageEnvelope) -> String {
-    atm_core::boundary::MessageKey::for_atm_message(message.message_id.expect("message id"))
-        .expect("message key")
-        .to_string()
+    message
+        .message_id
+        .map(|message_id| format!("atm:{message_id}"))
+        .expect("message id")
 }
 
 fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {

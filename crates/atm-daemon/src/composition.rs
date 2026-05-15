@@ -236,7 +236,7 @@ impl RuntimeComposition {
             peer_transport_runtime: PeerTransportRuntime::new_with_observability(
                 Some(replay_store),
                 SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
-            )?,
+            ),
         })
     }
 
@@ -760,7 +760,7 @@ pub(crate) fn compose_runtime(
     )
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use atm_core::boundary::ServerTransport;
     use serial_test::serial;
