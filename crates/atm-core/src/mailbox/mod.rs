@@ -20,7 +20,7 @@ const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// Append one message to a shared inbox file under the mailbox lock.
 ///
 /// Production send flows use the same lock discipline through
-/// `mailbox::store::write_compat_mailbox_projection()`. This helper is
+/// `mailbox::store::commit_mailbox_state()`. This helper is
 /// test-only because production callers must also coordinate workflow seeding.
 ///
 /// # Errors
@@ -69,7 +69,7 @@ where
     let _guard = lock::acquire_many_sorted([path.to_path_buf()], timeout)?;
     let mut messages = load_compat_mailbox_messages(path)?;
     mutate(&mut messages)?;
-    store::write_compat_mailbox_projection(path, &messages)
+    store::commit_mailbox_state(path, &messages)
 }
 
 /// Read all valid mailbox records from one shared inbox file.

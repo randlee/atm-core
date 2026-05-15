@@ -503,7 +503,7 @@ pub(crate) fn append_mailbox_message_and_seed_workflow(
             let mut prepared = envelope.clone();
             prepare_threaded_message(&mut prepared, &inbox_messages)?;
             inbox_messages.push(prepared.clone());
-            crate::mailbox::store::write_compat_mailbox_projection(inbox_path, &inbox_messages)?;
+            crate::mailbox::store::commit_mailbox_state(inbox_path, &inbox_messages)?;
             mirror_message_to_store(runtime, team, agent, &prepared)?;
             Ok((
                 (),
