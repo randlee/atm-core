@@ -1,0 +1,132 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# FTQ-002-X5: SQLITE_RUNTIME_CACHE path collision risk downstream of FTQ-001
+#
+# Sweep notes:
+#   - Pattern SQLITE_RUNTIME_CACHE|HashMap.*PathBuf in atm-runtime-test-support/src/lib.rs.
+#   - pX-s1: open — SQLITE_RUNTIME_CACHE present at lines 13 and 65;
+#     cache uses PathBuf keys derived from OnceLock<Mutex<Option<PathBuf>>> (no env,
+#     but same cache-key collision risk when env is added in later branches).
+#   - pX-s2, pX-s3, pX-s4: CRATE_ABSENT — absent.
+#   - pX-s5: open — SQLITE_RUNTIME_CACHE present at lines 13 and 63;
+#     here env var controls the path and env mutation lacks env_lock (per FTQ-001),
+#     so the cache key can diverge across test processes.
+#   - integrate/phase-X: CRATE_ABSENT — absent.
+#   - Downstream relationship to FTQ-001: fixing env_lock in pX-s5 reduces the window
+#     but does not eliminate the HashMap<PathBuf, ...> key-sharing risk entirely.
+#     Separate fix required to scope the cache or use a per-test isolation strategy.
+
+<urn:atm:triage:finding/FTQ-002-X5>
+  a triage:Finding ;
+  triage:findingId "FTQ-002-X5" ;
+  triage:title "SQLITE_RUNTIME_CACHE path collision risk downstream of FTQ-001" ;
+  triage:description "crates/atm-runtime-test-support/src/lib.rs — SQLITE_RUNTIME_CACHE uses HashMap<PathBuf, LocalServiceRuntime> keys derived from the env-var-controlled path. When multiple tests share the env var set without env_lock (FTQ-001), the cache can return a runtime from a different test's environment. Present on pX-s1 (lines 13, 65) and pX-s5 (lines 13, 63). Downstream of FTQ-001 env mutation issue; requires its own isolation fix." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002-X5/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002-X5/pX-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002-X5/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002-X5/pX-s5/2> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/0d337c7> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/78d1e2c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+# --- Occurrences on pX-s1 ---
+
+<urn:atm:triage:occurrence/FTQ-002-X5/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 13 ;
+  triage:snippet "static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/FTQ-002-X5/pX-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 65 ;
+  triage:snippet "let runtime_cache = SQLITE_RUNTIME_CACHE.get_or_init(|| Mutex::new(HashMap::new()));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+# --- Occurrences on pX-s5 ---
+
+<urn:atm:triage:occurrence/FTQ-002-X5/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 13 ;
+  triage:snippet "static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+<urn:atm:triage:occurrence/FTQ-002-X5/pX-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 63 ;
+  triage:snippet "let runtime_cache = SQLITE_RUNTIME_CACHE.get_or_init(|| Mutex::new(HashMap::new()));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/78d1e2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/34c3e0a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "34c3e0a" ;
+  triage:orderIndex 6 .

@@ -1,0 +1,114 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# FTQ-001-X5: SqliteRuntimeGuard::install mutates env without env_lock()
+#
+# Sweep notes:
+#   - atm-runtime-test-support crate is present only on pX-s1 and pX-s5.
+#   - pX-s2, pX-s3, pX-s4, and integrate/phase-X: CRATE_ABSENT.
+#   - pX-s1: crate uses OnceLock<Mutex<Option<PathBuf>>> path (no env mutation at all) — absent.
+#   - pX-s5: crate migrated to env-var approach; SqliteRuntimeGuard::install calls
+#     set_env_var(SQLITE_RUNTIME_PATH_ENV, ...) at line 31 WITHOUT first acquiring
+#     env_lock(). The set_env_var wrapper itself is safe but requires callers to hold
+#     the lock — this call site is the violation.
+#   - Repeatable sweep (scope=crate) on pX-s5 found two additional set_env_var calls
+#     in Drop (lines 39-40) also missing the env_lock() guard.
+
+<urn:atm:triage:finding/FTQ-001-X5>
+  a triage:Finding ;
+  triage:findingId "FTQ-001-X5" ;
+  triage:title "SqliteRuntimeGuard::install mutates env without env_lock()" ;
+  triage:description "crates/atm-runtime-test-support/src/lib.rs:31 — SqliteRuntimeGuard::install sets environment variables via set_env_var without holding env_lock(). Drop impl (lines 39-40) has the same omission. Concurrent test processes can observe torn env state. Must acquire env_lock() before any set_env_var/remove_env_var call in this crate." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001-X5/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001-X5/pX-s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001-X5/pX-s5/3> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/78d1e2c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+# --- Occurrences on pX-s5 (only open branch) ---
+
+<urn:atm:triage:occurrence/FTQ-001-X5/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 31 ;
+  triage:snippet "set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+<urn:atm:triage:occurrence/FTQ-001-X5/pX-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 39 ;
+  triage:snippet "Some(previous) => set_env_var(SQLITE_RUNTIME_PATH_ENV, previous.into_os_string())," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+<urn:atm:triage:occurrence/FTQ-001-X5/pX-s5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 40 ;
+  triage:snippet "None => remove_env_var(SQLITE_RUNTIME_PATH_ENV)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/78d1e2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/34c3e0a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "34c3e0a" ;
+  triage:orderIndex 6 .
