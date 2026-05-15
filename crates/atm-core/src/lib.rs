@@ -6,7 +6,7 @@ pub mod address;
 pub mod boundary;
 /// Hidden support helpers used by concrete boundary adapter crates.
 #[doc(hidden)]
-pub mod boundary_support;
+pub(crate) mod boundary_support;
 /// Mailbox cleanup workflows for read and acknowledged messages.
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.
@@ -107,6 +107,12 @@ pub use boundary::{
     TaskStoreResponse, TaskStoreTaskMetadata, TaskStoreTaskRecord, TaskStoreUpdateTaskRequest,
     TaskStoreUpdateTaskResponse, UpsertMailMessageStateRequest, UpsertMailMessageStateResponse,
     WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+};
+#[doc(hidden)]
+pub use boundary_support::{
+    compute_identity_fingerprint, deliver_notification, export_source_files, import_inbox_source,
+    load_team_config, load_workspace_config, poll_watch, reexport_messages, reconcile,
+    report_inbox_diagnostics,
 };
 pub use config::AtmConfig;
 pub use config::load_config as load_atm_config;

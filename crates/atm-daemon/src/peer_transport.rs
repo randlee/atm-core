@@ -145,9 +145,9 @@ impl PeerClientTransport {
         let endpoint = daemon_peer_endpoint_from_env();
         let config = std::env::current_dir()
             .ok()
-            .and_then(|current_dir| match atm_core::boundary_support::load_workspace_config(
-                ConfigLoadRequest { current_dir },
-            ) {
+            .and_then(|current_dir| match atm_core::load_workspace_config(ConfigLoadRequest {
+                current_dir,
+            }) {
                 Ok(response) => response.config,
                 Err(error) => {
                     tracing::warn!(
