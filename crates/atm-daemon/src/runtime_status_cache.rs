@@ -1,5 +1,4 @@
 use std::collections::HashMap;
-use std::path::Path;
 use std::sync::{Arc, Mutex};
 
 use atm_core::boundary;
@@ -392,10 +391,30 @@ fn finish_runtime_snapshot(
 
 pub(crate) fn build_runtime_status_cache_state(
     current_state: Option<&RuntimeStatusCacheState>,
-    home_dir: &Path,
     roster_store: &dyn boundary::RosterStore,
 ) -> Result<RuntimeStatusCacheState, AtmError> {
-    let mut next_state = RuntimeStatusCacheState {
+    let mut next_state = build_empty_runtime_status_cache_state(current_state);
+    let teams = roster_store
+        .list_teams(atm_core::boundary::RosterStoreListTeamsRequest)?
+        .teams;
+    if teams.len() > MAX_RELOAD_TEAMS {
+        return Err(AtmError::config(format!(
+            "daemon runtime reload rejected because sqlite-backed roster truth contains more than {MAX_RELOAD_TEAMS} teams"
+        ))
+        .with_recovery(
+            "Reduce the number of persisted ATM teams or raise the documented reload cap before retrying SIGHUP.",
+        ));
+    }
+    for team in teams {
+        hydrate_runtime_status_cache_team(&mut next_state, current_state, roster_store, team)?;
+    }
+    Ok(next_state)
+}
+
+fn build_empty_runtime_status_cache_state(
+    current_state: Option<&RuntimeStatusCacheState>,
+) -> RuntimeStatusCacheState {
+    RuntimeStatusCacheState {
         members: HashMap::new(),
         // This constructor always resets SQLite readiness to the optimistic
         // baseline; callers that detect assembly/open failure afterward own
@@ -403,94 +422,45 @@ pub(crate) fn build_runtime_status_cache_state(
         sqlite_ready: true,
         sqlite_detail: None,
         degraded_ingest: current_state.is_some_and(|state| state.degraded_ingest),
-    };
-    let teams_root = home_dir.join(".claude").join("teams");
-    if !teams_root.is_dir() {
-        return Ok(next_state);
     }
-    let entries = std::fs::read_dir(&teams_root).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to enumerate daemon team configs under {}",
-            teams_root.display()
-        ))
-        .with_recovery(
-            "Restore read access to the daemon team configuration tree under ATM_HOME before retrying atm-daemon startup.",
-        )
-        .with_source(error)
-    })?;
-    for (index, entry) in entries.enumerate() {
-        if index >= MAX_RELOAD_TEAMS {
+}
+
+fn hydrate_runtime_status_cache_team(
+    next_state: &mut RuntimeStatusCacheState,
+    current_state: Option<&RuntimeStatusCacheState>,
+    roster_store: &dyn boundary::RosterStore,
+    team: TeamName,
+) -> Result<(), AtmError> {
+    let roster = roster_store
+        .load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?;
+    for member in roster.members {
+        if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
             return Err(AtmError::config(format!(
-                "daemon runtime reload rejected because {} contains more than {MAX_RELOAD_TEAMS} team configs",
-                teams_root.display()
+                "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while loading roster for team {}",
+                team
             ))
             .with_recovery(
-                "Reduce the number of configured ATM teams or raise the documented reload cap before retrying SIGHUP.",
+                "Reduce configured roster size or increase the documented status-cache budget before retrying SIGHUP.",
             ));
         }
-        let entry = entry.map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to read daemon team-config entry under {}",
-                teams_root.display()
-            ))
-            .with_recovery(
-                "Repair the daemon team configuration directory entries under ATM_HOME before retrying atm-daemon startup.",
-            )
-            .with_source(error)
-        })?;
-        if !entry.path().is_dir() {
-            continue;
-        }
-        let Some(team_name) = entry.file_name().to_str().map(str::to_owned) else {
-            tracing::warn!(
-                path = %entry.path().display(),
-                "runtime status reload skipped non-UTF-8 team directory entry"
-            );
-            continue;
+        let member_name = member.agent_name;
+        let key = RuntimeMemberKey {
+            team: team.clone(),
+            member: member_name,
         };
-        let team: TeamName = match team_name.parse() {
-            Ok(team) => team,
-            Err(error) => {
-                tracing::warn!(
-                    team_name = %team_name,
-                    path = %entry.path().display(),
-                    error = %error,
-                    "runtime status reload skipped invalid team directory name"
-                );
-                continue;
-            }
-        };
-        let roster = roster_store
-            .load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?;
-        for member in roster.members {
-            if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
-                return Err(AtmError::config(format!(
-                    "daemon runtime reload rejected because status-cache capacity {MAX_STATUS_CACHE_ENTRIES} would be exceeded while loading roster for team {}",
-                    team
-                ))
-                .with_recovery(
-                    "Reduce configured roster size or increase the documented status-cache budget before retrying SIGHUP.",
-                ));
-            }
-            let member_name = member.agent_name;
-            let key = RuntimeMemberKey {
-                team: team.clone(),
-                member: member_name,
-            };
-            let existing = current_state.and_then(|state| state.members.get(&key));
-            next_state.members.insert(
-                key,
-                RuntimeMemberRecord {
-                    pid: existing.and_then(|record| record.pid),
-                    state: existing
-                        .map(|record| record.state)
-                        .unwrap_or(RuntimeMemberState::Unknown),
-                    last_active_at: existing.and_then(|record| record.last_active_at),
-                },
-            );
-        }
+        let existing = current_state.and_then(|state| state.members.get(&key));
+        next_state.members.insert(
+            key,
+            RuntimeMemberRecord {
+                pid: existing.and_then(|record| record.pid),
+                state: existing
+                    .map(|record| record.state)
+                    .unwrap_or(RuntimeMemberState::Unknown),
+                last_active_at: existing.and_then(|record| record.last_active_at),
+            },
+        );
     }
-    Ok(next_state)
+    Ok(())
 }
 
 pub(crate) fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> DoctorFinding {

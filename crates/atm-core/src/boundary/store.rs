@@ -292,6 +292,16 @@ pub struct RosterStoreHealthSnapshotResponse {
     pub snapshot: RosterStoreHealthSnapshot,
 }
 
+/// Canonical roster-store list-teams request payload.
+#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreListTeamsRequest;
+
+/// Canonical roster-store list-teams response payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreListTeamsResponse {
+    pub teams: Vec<TeamName>,
+}
+
 /// Canonical Phase R roster-store request entrypoint payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RosterStoreRequest {
@@ -502,6 +512,14 @@ pub trait RosterStore: sealed::Sealed {
         &self,
         request: RosterStoreQueryMembershipRequest,
     ) -> Result<RosterStoreQueryMembershipResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the canonical roster team set cannot be
+    /// enumerated safely.
+    fn list_teams(
+        &self,
+        request: RosterStoreListTeamsRequest,
+    ) -> Result<RosterStoreListTeamsResponse, AtmError>;
     /// # Errors
     ///
     /// Returns `AtmError` when roster health cannot be collected.

@@ -223,9 +223,8 @@ impl DaemonRequestDispatcher {
             sqlite_observability,
         ) {
             Ok(boundary) => {
-                if let Err(error) =
-                    build_runtime_status_cache_state(None, &home_dir, boundary.roster_store())
-                        .and_then(|state| status_cache.replace_state(state))
+                if let Err(error) = build_runtime_status_cache_state(None, boundary.roster_store())
+                    .and_then(|state| status_cache.replace_state(state))
                 {
                     tracing::warn!(%error, "failed to hydrate runtime status cache from sqlite roster state");
                     runtime_health_observability.emit_or_warn(
@@ -370,8 +369,7 @@ impl DaemonRequestDispatcher {
                 )
             })?;
         let current_state = self.status_cache.clone_state()?;
-        let next_state =
-            build_runtime_status_cache_state(Some(&current_state), &self.home_dir, roster_store)?;
+        let next_state = build_runtime_status_cache_state(Some(&current_state), roster_store)?;
         let reloaded_members = next_state.member_count();
         self.status_cache.replace_state(next_state)?;
         tracing::info!(
