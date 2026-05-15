@@ -1,0 +1,71 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# RSH-X3-NEW-002 — initial_pass triage result
+# Finding: spin-wait polling loop without sleep in run_bounded_shutdown_step
+# Sweep result: std::thread::sleep(Duration::from_millis(10)) is present on all
+# six worktrees at runtime_health.rs:204. The described defect is absent on
+# every branch. No occurrences recorded. Finding status: fixed.
+
+<urn:atm:triage:finding/RSH-X3-NEW-002>
+  a triage:Finding ;
+  triage:findingId "RSH-X3-NEW-002" ;
+  triage:title "spin-wait polling in run_bounded_shutdown_step" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs:191 — run_bounded_shutdown_step uses spin-wait polling loop without sleep. Fix: add thread::sleep interval. Introduced on X.3." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:worktree/pX-s1/010bfbe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:orderIndex 1 ;
+  triage:branchStatus "absent" .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c-s2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 ;
+  triage:branchStatus "absent" .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c-s3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 ;
+  triage:branchStatus "absent" .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c-s4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 ;
+  triage:branchStatus "absent" .
+
+<urn:atm:triage:worktree/pX-s5/d17602e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:orderIndex 5 ;
+  triage:branchStatus "absent" .
+
+<urn:atm:triage:worktree/integrate-phase-X/4e08185>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:orderIndex 6 ;
+  triage:branchStatus "absent" .
