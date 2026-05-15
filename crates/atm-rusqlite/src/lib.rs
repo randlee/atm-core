@@ -2151,7 +2151,7 @@ mod tests {
             .expect("replace alpha roster");
 
         let teams = store
-            .list_teams(boundary::RosterStoreListTeamsRequest)
+            .list_teams(boundary::RosterStoreListTeamsRequest { max_teams: 16 })
             .expect("list teams");
 
         assert_eq!(teams.teams, vec![alpha_team, bravo_team]);

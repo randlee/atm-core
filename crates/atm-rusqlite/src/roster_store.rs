@@ -229,21 +229,28 @@ impl boundary::RosterStore for SqliteRosterStore {
 
     fn list_teams(
         &self,
-        _request: boundary::RosterStoreListTeamsRequest,
+        request: boundary::RosterStoreListTeamsRequest,
     ) -> Result<boundary::RosterStoreListTeamsResponse, AtmError> {
+        let sqlite_limit = i64::try_from(request.max_teams.saturating_add(1)).map_err(|_| {
+            AtmError::validation("roster-store list_teams request exceeded sqlite limit range")
+                .with_recovery(
+                    "Lower the daemon runtime team-enumeration cap before retrying roster hydration.",
+                )
+        })?;
         let teams = self.db.with_connection(|connection| {
             let mut statement = connection
                 .prepare(
                     "SELECT DISTINCT team_name
                      FROM team_roster
-                     ORDER BY team_name ASC;",
+                     ORDER BY team_name ASC
+                     LIMIT ?1;",
                 )
                 .map_err(|error| {
                     self.db
                         .error("failed to prepare canonical roster team enumeration", error)
                 })?;
             let rows = statement
-                .query_map([], |row| row.get::<_, String>(0))
+                .query_map([sqlite_limit], |row| row.get::<_, String>(0))
                 .map_err(|error| {
                     self.db
                         .error("failed to enumerate canonical roster teams", error)

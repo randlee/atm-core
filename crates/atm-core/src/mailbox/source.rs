@@ -126,6 +126,9 @@ pub(crate) fn discover_source_paths(
     team: &TeamName,
     agent: &AgentName,
 ) -> Result<Vec<PathBuf>, AtmError> {
+    // WatchSubscriptionRequest and the retained inbox-export flow both rely on
+    // this one discovery routine so file watching and compatibility projection
+    // stay aligned on the exact same mailbox source path set.
     let inbox_path = home::inbox_path_from_home(home_dir, team, agent)?;
     let inboxes_dir = inbox_path
         .parent()

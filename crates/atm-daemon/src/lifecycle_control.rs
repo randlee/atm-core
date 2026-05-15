@@ -693,7 +693,7 @@ mod windows_tests {
     }
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod unix_tests {
     use super::{LifecycleControlSourceAdapter, run_unix_lifecycle_wake_worker};
     use std::os::unix::net::UnixStream;
@@ -712,6 +712,7 @@ mod unix_tests {
             .expect("worker thread id")
     }
 
+    #[cfg(unix)]
     #[test]
     fn unix_eof_wake_notifies_waiters() {
         let adapter = LifecycleControlSourceAdapter::new_for_test();
@@ -750,6 +751,7 @@ mod unix_tests {
         wait_join.join().expect("join waiter");
     }
 
+    #[cfg(unix)]
     #[test]
     #[serial_test::serial]
     fn unix_install_reuses_one_lifecycle_worker_until_shutdown() {

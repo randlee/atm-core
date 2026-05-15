@@ -10,9 +10,9 @@ use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::sqlite_observability::DaemonSqliteObservability;
 use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    sqlite_remote_replay_store_from_path_with_observability,
+    peer_transport::PeerTransportConfig, sqlite_remote_replay_store_from_path_with_observability,
 };
-use atm_core::boundary::RequestDispatcher;
+use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RequestDispatcher};
 use atm_core::error::AtmError;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
@@ -165,6 +165,7 @@ impl RuntimeComposition {
         replay_store_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
+        let (config_ingress, peer_transport_config) = build_peer_transport_config()?;
         let status_cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
@@ -183,11 +184,18 @@ impl RuntimeComposition {
         let inbox_ingress = DaemonInboxIngress::new();
         let composition_observability =
             SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
-        let replay_store = sqlite_remote_replay_store_from_path_with_observability(
+        let replay_store = build_replay_store(
             replay_store_path,
-            Arc::clone(&sqlite_observability),
-        )
-        .map_err(|error| replay_store_assembly_failed(error, &composition_observability))?;
+            &sqlite_observability,
+            &composition_observability,
+        )?;
+        let server_transport = build_server_transport(&observability);
+        let request_dispatcher = build_request_dispatcher(
+            home_dir,
+            &status_cache,
+            &observability,
+            sqlite_observability,
+        );
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             host_ownership_adapter: HostOwnershipAdapter::new_with_observability(
@@ -197,26 +205,8 @@ impl RuntimeComposition {
                 ),
             ),
             endpoint_guard: Mutex::new(None),
-            server_transport: LocalIpcServerTransportAdapter::new_with_observability(
-                SubsystemObservability::new(
-                    DaemonSubsystem::LocalIpcTransport,
-                    Arc::clone(&observability),
-                ),
-                SubsystemObservability::new(
-                    DaemonSubsystem::HostOwnership,
-                    Arc::clone(&observability),
-                ),
-                SubsystemObservability::new(
-                    DaemonSubsystem::LifecycleControl,
-                    Arc::clone(&observability),
-                ),
-            ),
-            request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
-                home_dir,
-                status_cache.clone(),
-                Arc::clone(&observability),
-                sqlite_observability,
-            )),
+            server_transport,
+            request_dispatcher,
             composition_observability,
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
@@ -230,13 +220,14 @@ impl RuntimeComposition {
                     Arc::clone(&observability),
                 ),
             ),
-            _config_ingress: DaemonConfigIngress::new(),
+            _config_ingress: config_ingress,
             _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
             peer_transport_runtime: PeerTransportRuntime::new_with_observability(
                 Some(replay_store),
+                peer_transport_config,
                 SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
-            ),
+            )?,
         })
     }
 
@@ -748,6 +739,65 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
     Ok(())
 }
 
+fn load_peer_transport_config(
+    config_ingress: &DaemonConfigIngress,
+) -> Result<PeerTransportConfig, AtmError> {
+    let current_dir = std::env::current_dir().map_err(|source| {
+        AtmError::config("failed to resolve current directory for daemon startup config validation")
+            .with_recovery(
+                "Start atm-daemon from a readable workspace directory so daemon peer transport configuration can be validated eagerly.",
+            )
+            .with_source(source)
+    })?;
+    let response = config_ingress.load_config(ConfigLoadRequest { current_dir })?;
+    PeerTransportConfig::from_config(response.config.as_ref())
+}
+
+fn build_peer_transport_config() -> Result<(DaemonConfigIngress, PeerTransportConfig), AtmError> {
+    let config_ingress = DaemonConfigIngress::new();
+    let peer_transport_config = load_peer_transport_config(&config_ingress)?;
+    Ok((config_ingress, peer_transport_config))
+}
+
+fn build_replay_store(
+    replay_store_path: PathBuf,
+    sqlite_observability: &Arc<dyn atm_rusqlite::SqliteObservability>,
+    composition_observability: &SubsystemObservability,
+) -> Result<Arc<dyn crate::RemoteReplayStore>, AtmError> {
+    sqlite_remote_replay_store_from_path_with_observability(
+        replay_store_path,
+        Arc::clone(sqlite_observability),
+    )
+    .map_err(|error| replay_store_assembly_failed(error, composition_observability))
+}
+
+fn build_request_dispatcher(
+    home_dir: AtmHomeDir,
+    status_cache: &RuntimeStatusCache,
+    observability: &Arc<dyn DaemonRuntimeObservability>,
+    sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability>,
+) -> Arc<DaemonRequestDispatcher> {
+    Arc::new(DaemonRequestDispatcher::new(
+        home_dir,
+        status_cache.clone(),
+        Arc::clone(observability),
+        sqlite_observability,
+    ))
+}
+
+fn build_server_transport(
+    observability: &Arc<dyn DaemonRuntimeObservability>,
+) -> LocalIpcServerTransportAdapter {
+    LocalIpcServerTransportAdapter::new_with_observability(
+        SubsystemObservability::new(
+            DaemonSubsystem::LocalIpcTransport,
+            Arc::clone(observability),
+        ),
+        SubsystemObservability::new(DaemonSubsystem::HostOwnership, Arc::clone(observability)),
+        SubsystemObservability::new(DaemonSubsystem::LifecycleControl, Arc::clone(observability)),
+    )
+}
+
 pub(crate) fn compose_runtime(
     observability: Arc<dyn DaemonRuntimeObservability>,
 ) -> Result<RuntimeComposition, AtmError> {
@@ -760,7 +810,7 @@ pub(crate) fn compose_runtime(
     )
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use atm_core::boundary::ServerTransport;
     use serial_test::serial;
@@ -771,6 +821,7 @@ mod tests {
     use super::RuntimeComposition;
     use super::{RuntimeLifecycle, RuntimeLifecycleState, shutdown_lane_with_deadline};
 
+    #[cfg(unix)]
     #[test]
     fn runtime_lifecycle_allows_only_documented_transitions() {
         let lifecycle = RuntimeLifecycle::new();
@@ -789,6 +840,7 @@ mod tests {
             .expect("stopped");
     }
 
+    #[cfg(unix)]
     #[test]
     fn runtime_lifecycle_happy_path_matches_documented_owner_sequence() {
         let lifecycle = RuntimeLifecycle::new();
@@ -819,6 +871,7 @@ mod tests {
         );
     }
 
+    #[cfg(unix)]
     #[test]
     fn runtime_lifecycle_rejects_illegal_transitions() {
         let lifecycle = RuntimeLifecycle::new();

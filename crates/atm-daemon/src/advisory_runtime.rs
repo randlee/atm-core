@@ -414,7 +414,7 @@ mod tests {
             team: "test-team".parse().expect("team"),
             agent: "test-agent".parse().expect("agent"),
             sender: "sender".parse().expect("sender"),
-            outcome: "sent".to_string(),
+            outcome: atm_core::send::SendDeliveryOutcome::Sent,
             message_id: atm_core::schema::AtmMessageId::new(),
             requires_ack: false,
             task_id: None,

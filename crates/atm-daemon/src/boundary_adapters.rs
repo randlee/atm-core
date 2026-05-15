@@ -186,7 +186,7 @@ impl InboxIngress for DaemonInboxIngress {
     fn compute_identity_fingerprint(
         &self,
         request: InboxIngressIdentityFingerprintRequest,
-    ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
+    ) -> InboxIngressIdentityFingerprintResponse {
         direct_boundaries::compute_identity_fingerprint(request)
     }
 
@@ -291,7 +291,6 @@ mod tests {
             .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
                 message: message.clone(),
             })
-            .expect("original fingerprint")
             .fingerprint;
 
         export
@@ -330,7 +329,6 @@ mod tests {
             .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
                 message: imported,
             })
-            .expect("imported fingerprint")
             .fingerprint;
         assert_eq!(imported_fingerprint, original_fingerprint);
     }
@@ -358,7 +356,6 @@ mod tests {
             .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
                 message: message.clone(),
             })
-            .expect("original fingerprint")
             .fingerprint;
 
         export
@@ -391,7 +388,6 @@ mod tests {
             .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
                 message: imported,
             })
-            .expect("imported fingerprint")
             .fingerprint;
         assert_eq!(imported_fingerprint, original_fingerprint);
     }

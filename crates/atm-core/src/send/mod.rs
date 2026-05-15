@@ -92,7 +92,7 @@ pub struct SendOutcome {
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
-    pub outcome: String,
+    pub outcome: SendDeliveryOutcome,
     pub message_id: AtmMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -105,6 +105,22 @@ pub struct SendOutcome {
     pub warnings: Vec<WarningEntry>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SendDeliveryOutcome {
+    Sent,
+    DryRun,
+}
+
+impl SendDeliveryOutcome {
+    pub const fn as_str(&self) -> &'static str {
+        match self {
+            Self::Sent => "sent",
+            Self::DryRun => "dry_run",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -288,13 +304,17 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         )?;
     }
 
-    let command_outcome = if request.dry_run { "dry_run" } else { "sent" };
+    let command_outcome = if request.dry_run {
+        SendDeliveryOutcome::DryRun
+    } else {
+        SendDeliveryOutcome::Sent
+    };
     let mut outcome = SendOutcome {
         action: CommandAction::Send,
         team: recipient.team.clone(),
         agent: recipient.agent.clone(),
         sender: canonical_sender.clone(),
-        outcome: command_outcome.to_string(),
+        outcome: command_outcome.clone(),
         message_id,
         requires_ack,
         task_id: task_id.clone(),
@@ -324,7 +344,7 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     if let Err(error) = observability.emit(CommandEvent {
         command: "send",
         action: "send",
-        outcome: command_outcome,
+        outcome: command_outcome.as_str(),
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender: canonical_sender,

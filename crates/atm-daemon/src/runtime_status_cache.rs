@@ -395,7 +395,14 @@ pub(crate) fn build_runtime_status_cache_state(
 ) -> Result<RuntimeStatusCacheState, AtmError> {
     let mut next_state = build_empty_runtime_status_cache_state(current_state);
     let teams = roster_store
-        .list_teams(atm_core::boundary::RosterStoreListTeamsRequest)?
+        .list_teams(atm_core::boundary::RosterStoreListTeamsRequest {
+            max_teams: MAX_RELOAD_TEAMS,
+        })
+        .map_err(|error| {
+            error.with_recovery(
+                "Restore the daemon roster store and retry the runtime-status reload after canonical team enumeration succeeds.",
+            )
+        })?
         .teams;
     if teams.len() > MAX_RELOAD_TEAMS {
         return Err(AtmError::config(format!(
@@ -432,7 +439,12 @@ fn hydrate_runtime_status_cache_team(
     team: TeamName,
 ) -> Result<(), AtmError> {
     let roster = roster_store
-        .load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?;
+        .load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })
+        .map_err(|error| {
+            error.with_recovery(
+                "Repair the canonical roster entry for the affected team before retrying daemon runtime hydration.",
+            )
+        })?;
     for member in roster.members {
         if next_state.members.len() >= MAX_STATUS_CACHE_ENTRIES {
             return Err(AtmError::config(format!(

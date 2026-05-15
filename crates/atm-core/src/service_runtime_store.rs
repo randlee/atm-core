@@ -11,7 +11,12 @@ type DefaultRuntimeFactory = fn() -> Result<LocalServiceRuntime, AtmError>;
 static DEFAULT_RUNTIME_FACTORY: OnceLock<DefaultRuntimeFactory> = OnceLock::new();
 
 pub fn install_default_runtime_factory(factory: DefaultRuntimeFactory) {
-    let _ = DEFAULT_RUNTIME_FACTORY.set(factory);
+    if DEFAULT_RUNTIME_FACTORY.set(factory).is_err() {
+        tracing::warn!(
+            action = "install_default_runtime_factory",
+            "default retained-runtime factory was already installed; keeping the original factory"
+        );
+    }
 }
 
 pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {

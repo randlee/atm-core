@@ -219,34 +219,46 @@ impl DaemonRequestDispatcher {
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
-        let sqlite_boundary = match assemble_default_boundary_with_observability(
-            sqlite_observability,
-        ) {
-            Ok(boundary) => {
-                if let Err(error) = build_runtime_status_cache_state(None, boundary.roster_store())
-                    .and_then(|state| status_cache.replace_state(state))
-                {
-                    tracing::warn!(%error, "failed to hydrate runtime status cache from sqlite roster state");
+        let sqlite_boundary =
+            match assemble_default_boundary_with_observability(sqlite_observability) {
+                Ok(boundary) => {
+                    if let Err(error) =
+                        build_runtime_status_cache_state(None, boundary.roster_store())
+                            .and_then(|state| status_cache.replace_state(state))
+                    {
+                        tracing::warn!(
+                            %error,
+                            subsystem = "runtime_health",
+                            action = "sqlite_cache_hydration",
+                            outcome = "degraded",
+                            "failed to hydrate runtime status cache from sqlite roster state"
+                        );
+                        runtime_health_observability.emit_or_warn(
+                            "sqlite_cache_hydration",
+                            "degraded",
+                            "failed to hydrate runtime status cache from sqlite roster state",
+                        );
+                        status_cache.mark_sqlite_unavailable();
+                    }
+                    Some(boundary)
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        subsystem = "runtime_health",
+                        action = "sqlite_boundary_assembly",
+                        outcome = "failed",
+                        "failed to assemble default sqlite boundary for daemon runtime health"
+                    );
                     runtime_health_observability.emit_or_warn(
-                        "sqlite_cache_hydration",
-                        "degraded",
-                        "failed to hydrate runtime status cache from sqlite roster state",
+                        "sqlite_boundary_assembly",
+                        "failed",
+                        "failed to assemble sqlite boundary for daemon runtime health",
                     );
                     status_cache.mark_sqlite_unavailable();
+                    None
                 }
-                Some(boundary)
-            }
-            Err(error) => {
-                tracing::warn!(%error, "failed to assemble default sqlite boundary for daemon runtime health");
-                runtime_health_observability.emit_or_warn(
-                    "sqlite_boundary_assembly",
-                    "failed",
-                    "failed to assemble sqlite boundary for daemon runtime health",
-                );
-                status_cache.mark_sqlite_unavailable();
-                None
-            }
-        };
+            };
         Self {
             home_dir: home_dir.clone(),
             observability: Arc::clone(&observability),

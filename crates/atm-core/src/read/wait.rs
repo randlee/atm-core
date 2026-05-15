@@ -1,4 +1,3 @@
-use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::error::AtmError;
@@ -9,6 +8,7 @@ pub fn wait_for_eligible_message<T, FLoad, FEligible>(
     timeout_secs: u64,
     mut load_messages: FLoad,
     is_eligible: FEligible,
+    should_cancel: impl Fn() -> bool,
 ) -> Result<bool, AtmError>
 where
     FLoad: FnMut() -> Result<Vec<T>, AtmError>,
@@ -18,7 +18,7 @@ where
     let start = Instant::now();
 
     loop {
-        if start.elapsed() >= timeout {
+        if should_cancel() || start.elapsed() >= timeout {
             return Ok(false);
         }
 
@@ -27,6 +27,9 @@ where
             return Ok(true);
         }
 
-        thread::sleep(DEFAULT_WAIT_POLL_INTERVAL);
+        if should_cancel() {
+            return Ok(false);
+        }
+        std::thread::park_timeout(DEFAULT_WAIT_POLL_INTERVAL);
     }
 }

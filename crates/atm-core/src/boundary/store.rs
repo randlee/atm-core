@@ -293,8 +293,10 @@ pub struct RosterStoreHealthSnapshotResponse {
 }
 
 /// Canonical roster-store list-teams request payload.
-#[derive(Debug, Clone, Default, Serialize, Deserialize, PartialEq, Eq)]
-pub struct RosterStoreListTeamsRequest;
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct RosterStoreListTeamsRequest {
+    pub max_teams: usize,
+}
 
 /// Canonical roster-store list-teams response payload.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -555,13 +557,10 @@ pub trait InboxIngress: sealed::Sealed {
         &self,
         request: InboxIngressImportRequest,
     ) -> Result<InboxIngressImportResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when identity fingerprinting cannot be computed.
     fn compute_identity_fingerprint(
         &self,
         request: InboxIngressIdentityFingerprintRequest,
-    ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError>;
+    ) -> InboxIngressIdentityFingerprintResponse;
     /// # Errors
     ///
     /// Returns `AtmError` when inbox diagnostics cannot be generated.

@@ -71,7 +71,7 @@ pub fn import_inbox_source(
 
 pub fn compute_identity_fingerprint(
     request: InboxIngressIdentityFingerprintRequest,
-) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
+) -> InboxIngressIdentityFingerprintResponse {
     let fingerprint = request
         .message
         .message_id
@@ -83,7 +83,7 @@ pub fn compute_identity_fingerprint(
                 request.message.timestamp.into_inner().to_rfc3339()
             ))
         });
-    Ok(InboxIngressIdentityFingerprintResponse { fingerprint })
+    InboxIngressIdentityFingerprintResponse { fingerprint }
 }
 
 pub fn report_inbox_diagnostics(
@@ -132,11 +132,10 @@ pub fn reexport_messages(
     Ok(InboxExportReexportMessageResponse { wrote_messages })
 }
 
-pub fn deliver_notification(event: NotificationEvent) -> Result<(), AtmError> {
+pub fn deliver_notification(event: NotificationEvent) {
     // The current daemon notification adapter is intentionally a retained-log
     // no-op until the R.17 notifier runtime replaces it with a real sink.
     info!(kind = %event.kind, detail = %event.detail, "daemon notification delivered");
-    Ok(())
 }
 
 pub fn poll_watch(request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {

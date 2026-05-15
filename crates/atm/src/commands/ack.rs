@@ -46,14 +46,14 @@ impl AckCommand {
             .parse::<AtmMessageId>()
             .with_context(|| format!("invalid message id: {}", self.message_id))?;
 
-        Ok(AckRequest {
+        Ok(AckRequest::new(
             home_dir,
             current_dir,
-            actor_override: self.actor.map(|value| value.parse()).transpose()?,
-            team_override: self.team.map(|value| value.parse()).transpose()?,
+            self.actor.as_deref(),
+            self.team.as_deref(),
             message_id,
-            reply_body: self.reply,
-        })
+            self.reply,
+        )?)
     }
 }
 
@@ -131,6 +131,6 @@ mod tests {
             request.actor_override.as_ref().map(|value| value.as_str()),
             Some("sender-a")
         );
-        assert_eq!(request.reply_body, "received");
+        assert_eq!(request.reply_body(), "received");
     }
 }

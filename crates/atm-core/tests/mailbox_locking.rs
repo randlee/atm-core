@@ -15,11 +15,10 @@ use atm_core::read::{ReadQuery, read_mail};
 use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AgentMember, AtmMessageId, MessageEnvelope, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
-#[cfg(unix)]
 use atm_core::test_support::EnvGuard;
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use atm_runtime_test_support::{
-    SqliteRuntimeGuard, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+    SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
 };
 use chrono::Utc;
 #[cfg(unix)]
@@ -133,64 +132,66 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
 fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() {
     let observability = Arc::new(NullObservability);
 
-    let clear_fixture = Fixture::new();
-    clear_fixture.write_primary_inbox(
-        PRIMARY_AGENT,
-        &[read_message(
-            SECONDARY_AGENT,
-            "clearable history entry",
-            AtmMessageId::from(Uuid::new_v4()),
-        )],
-    );
-    let barrier = Arc::new(Barrier::new(3));
-    let (tx, rx) = mpsc::channel();
-    let send_request =
-        clear_fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "new message");
-    let clear_request = clear_fixture.clear_query(PRIMARY_AGENT);
     {
-        let barrier = Arc::clone(&barrier);
-        let tx = tx.clone();
-        let observability = Arc::clone(&observability);
-        thread::spawn(move || {
-            barrier.wait();
-            tx.send((
-                "send-clear/send",
-                send_mail(send_request, observability.as_ref()).map(|_| ()),
-            ))
-            .expect("send result");
-        });
+        let clear_fixture = Fixture::new();
+        clear_fixture.write_primary_inbox(
+            PRIMARY_AGENT,
+            &[read_message(
+                SECONDARY_AGENT,
+                "clearable history entry",
+                AtmMessageId::from(Uuid::new_v4()),
+            )],
+        );
+        let barrier = Arc::new(Barrier::new(3));
+        let (tx, rx) = mpsc::channel();
+        let send_request =
+            clear_fixture.send_request(TEAM_LEAD, &qualified(PRIMARY_AGENT), "new message");
+        let clear_request = clear_fixture.clear_query(PRIMARY_AGENT);
+        {
+            let barrier = Arc::clone(&barrier);
+            let tx = tx.clone();
+            let observability = Arc::clone(&observability);
+            thread::spawn(move || {
+                barrier.wait();
+                tx.send((
+                    "send-clear/send",
+                    send_mail(send_request, observability.as_ref()).map(|_| ()),
+                ))
+                .expect("send result");
+            });
+        }
+        {
+            let barrier = Arc::clone(&barrier);
+            let tx = tx.clone();
+            let observability = Arc::clone(&observability);
+            thread::spawn(move || {
+                barrier.wait();
+                tx.send((
+                    "send-clear/clear",
+                    clear_mail(clear_request, observability.as_ref()).map(|_| ()),
+                ))
+                .expect("clear result");
+            });
+        }
+        drop(tx);
+        barrier.wait();
+        let first = rx
+            .recv_timeout(TEST_RESULT_TIMEOUT)
+            .expect("first send/clear result");
+        let second = rx
+            .recv_timeout(TEST_RESULT_TIMEOUT)
+            .expect("second send/clear result");
+        assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
+        assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
+        let arch_inbox = clear_fixture.inbox_contents(PRIMARY_AGENT);
+        assert!(
+            arch_inbox
+                .iter()
+                .any(|message| message.text == "new message"),
+            "new send was lost during concurrent clear: {:?}",
+            arch_inbox
+        );
     }
-    {
-        let barrier = Arc::clone(&barrier);
-        let tx = tx.clone();
-        let observability = Arc::clone(&observability);
-        thread::spawn(move || {
-            barrier.wait();
-            tx.send((
-                "send-clear/clear",
-                clear_mail(clear_request, observability.as_ref()).map(|_| ()),
-            ))
-            .expect("clear result");
-        });
-    }
-    drop(tx);
-    barrier.wait();
-    let first = rx
-        .recv_timeout(TEST_RESULT_TIMEOUT)
-        .expect("first send/clear result");
-    let second = rx
-        .recv_timeout(TEST_RESULT_TIMEOUT)
-        .expect("second send/clear result");
-    assert!(first.1.is_ok(), "{} failed: {:?}", first.0, first.1);
-    assert!(second.1.is_ok(), "{} failed: {:?}", second.0, second.1);
-    let arch_inbox = clear_fixture.inbox_contents(PRIMARY_AGENT);
-    assert!(
-        arch_inbox
-            .iter()
-            .any(|message| message.text == "new message"),
-        "new send was lost during concurrent clear: {:?}",
-        arch_inbox
-    );
 
     let ack_fixture = Fixture::new();
     let pending_message_id = AtmMessageId::from(Uuid::new_v4());
@@ -603,8 +604,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
-    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
-    let fixture = Fixture::new();
+    let fixture = Fixture::new_with_env(&[("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100")]);
     let observability = NullObservability;
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
     let lock_path = fixture.sqlite_db_path();
@@ -674,31 +674,34 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     let observability = NullObservability;
 
-    let mutation_fixture = Fixture::new();
-    mutation_fixture.write_primary_inbox(
-        PRIMARY_AGENT,
-        &[unread_message(
-            TEAM_LEAD,
-            "needs mark-read",
-            AtmMessageId::from(Uuid::new_v4()),
-        )],
-    );
-    let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path(PRIMARY_AGENT));
-    let mutation_lock_file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&mutation_lock_path)
-        .expect("open mutation lock file");
-    mutation_lock_file
-        .lock_exclusive()
-        .expect("hold mutation lock");
-    let mut mutation_query = mutation_fixture.read_query(PRIMARY_AGENT);
-    mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
-    let mutation_outcome = read_mail(mutation_query, &observability).expect("read with mutation");
-    assert_eq!(mutation_outcome.count, 1);
-    assert!(mutation_outcome.mutation_applied);
+    {
+        let mutation_fixture = Fixture::new();
+        mutation_fixture.write_primary_inbox(
+            PRIMARY_AGENT,
+            &[unread_message(
+                TEAM_LEAD,
+                "needs mark-read",
+                AtmMessageId::from(Uuid::new_v4()),
+            )],
+        );
+        let mutation_lock_path = sentinel_path(&mutation_fixture.primary_inbox_path(PRIMARY_AGENT));
+        let mutation_lock_file = OpenOptions::new()
+            .create(true)
+            .truncate(false)
+            .read(true)
+            .write(true)
+            .open(&mutation_lock_path)
+            .expect("open mutation lock file");
+        mutation_lock_file
+            .lock_exclusive()
+            .expect("hold mutation lock");
+        let mut mutation_query = mutation_fixture.read_query(PRIMARY_AGENT);
+        mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+        let mutation_outcome =
+            read_mail(mutation_query, &observability).expect("read with mutation");
+        assert_eq!(mutation_outcome.count, 1);
+        assert!(mutation_outcome.mutation_applied);
+    }
 
     let no_mutation_fixture = Fixture::new();
     no_mutation_fixture.write_primary_inbox(
@@ -803,8 +806,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
-    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
-    let fixture = Fixture::new();
+    let fixture = Fixture::new_with_env(&[("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1")]);
     let observability = NullObservability;
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
     fixture.write_origin_inbox(
@@ -838,8 +840,7 @@ fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_reports_non_contention_lock_failures_without_timeout() {
-    let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
-    let fixture = Fixture::new();
+    let fixture = Fixture::new_with_env(&[("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1")]);
     let observability = NullObservability;
     let started = Instant::now();
 
@@ -863,17 +864,36 @@ enum CommandOp {
 
 struct Fixture {
     tempdir: TempDir,
-    _sqlite_runtime_guard: SqliteRuntimeGuard,
+    _env_guard: EnvGuard,
     arch_message_id: AtmMessageId,
     qa_message_id: AtmMessageId,
 }
 
 impl Fixture {
     fn new() -> Self {
+        Self::new_with_env(&[])
+    }
+
+    fn new_with_env(extra_env: &[(&'static str, &'static str)]) -> Self {
         install_sqlite_retained_runtime_factory();
         let tempdir = tempfile::tempdir().expect("tempdir");
         let sqlite_db_path = tempdir.path().join("runtime").join("mail.sqlite3");
-        let sqlite_runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path);
+        let sqlite_db_path_str = sqlite_db_path.to_str().expect("utf8 sqlite db path");
+        let mut env_changes = vec![(SQLITE_RUNTIME_PATH_ENV, Some(sqlite_db_path_str))];
+        env_changes.extend(extra_env.iter().map(|(key, value)| (*key, Some(*value))));
+        let env_guard = match env_changes.len() {
+            1 => EnvGuard::set_many([(env_changes[0].0, env_changes[0].1)]),
+            2 => EnvGuard::set_many([
+                (env_changes[0].0, env_changes[0].1),
+                (env_changes[1].0, env_changes[1].1),
+            ]),
+            3 => EnvGuard::set_many([
+                (env_changes[0].0, env_changes[0].1),
+                (env_changes[1].0, env_changes[1].1),
+                (env_changes[2].0, env_changes[2].1),
+            ]),
+            _ => panic!("unexpected mailbox-locking env change count"),
+        };
         create_team_with_config(
             tempdir.path(),
             PRIMARY_TEAM,
@@ -885,21 +905,22 @@ impl Fixture {
 
         Self {
             tempdir,
-            _sqlite_runtime_guard: sqlite_runtime_guard,
+            _env_guard: env_guard,
             arch_message_id,
             qa_message_id,
         }
     }
 
     fn ack_request(&self, actor: &str, message_id: AtmMessageId, reply_body: &str) -> AckRequest {
-        AckRequest {
-            home_dir: self.tempdir.path().to_path_buf(),
-            current_dir: self.tempdir.path().to_path_buf(),
-            actor_override: Some(actor.parse().expect("actor")),
-            team_override: Some(PRIMARY_TEAM.parse().expect("team")),
+        AckRequest::new(
+            self.tempdir.path().to_path_buf(),
+            self.tempdir.path().to_path_buf(),
+            Some(actor),
+            Some(PRIMARY_TEAM),
             message_id,
-            reply_body: reply_body.to_string(),
-        }
+            reply_body,
+        )
+        .expect("ack request")
     }
 
     fn clear_query(&self, actor: &str) -> ClearQuery {
@@ -991,7 +1012,7 @@ impl Fixture {
                 let notices = self.inbox_contents_for_team(team, TEAM_LEAD);
                 panic!("missing-config notice not observed before timeout: {notices:?}");
             }
-            thread::yield_now();
+            thread::park_timeout(Duration::from_millis(2));
         }
     }
 
@@ -1021,7 +1042,7 @@ impl Fixture {
                     "workflow state for missing-config notice not observed before timeout: {workflow:?}"
                 );
             }
-            thread::yield_now();
+            thread::park_timeout(Duration::from_millis(2));
         }
     }
 

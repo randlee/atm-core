@@ -36,15 +36,45 @@ FORBIDDEN_PATTERNS = (
 
 ALLOWED_LEGACY_LITERALS = (
     AllowedLiteral(
+        "crates/atm-core/src/boundary_support.rs",
+        # Boundary-owned reexport of store-backed state to the Claude inbox
+        # surface still delegates through the compatibility projection writer.
+        re.compile(r"mailbox::store::commit_mailbox_state\(&request\.path, &request\.messages\)\?;"),
+    ),
+    AllowedLiteral(
         "crates/atm-core/src/list.rs",
+        # Production list/read code still rejects compatibility-only message
+        # keys by checking for the historical `legacy:` prefix explicitly.
         re.compile(r'message_key\.as_ref\(\)\.starts_with\("legacy:"\)'),
+    ),
+    AllowedLiteral(
+        "crates/atm-core/src/mailbox/mod.rs",
+        # Test-only mailbox helpers document and exercise the compatibility
+        # projection writer without exposing a second production runtime path.
+        re.compile(r"mailbox::store::commit_mailbox_state\(\)|store::commit_mailbox_state\(path, &messages\)"),
+    ),
+    AllowedLiteral(
+        "crates/atm-core/src/mailbox/store.rs",
+        # The mailbox store module owns the compatibility projection writer
+        # definition and its unit tests for the Claude-owned inbox surface.
+        re.compile(r"\bcommit_mailbox_state\b"),
     ),
     AllowedLiteral(
         "crates/atm-core/src/read/mod.rs",
+        # Read-path compatibility filtering uses the same explicit legacy-key
+        # prefix check while the old mailbox runtime is being deleted.
         re.compile(r'message_key\.as_ref\(\)\.starts_with\("legacy:"\)'),
     ),
     AllowedLiteral(
+        "crates/atm-core/src/send/mod.rs",
+        # Send persists store-backed state first, then rewrites the shared
+        # inbox compatibility projection for Claude-owned consumers.
+        re.compile(r"crate::mailbox::store::commit_mailbox_state\(inbox_path, &inbox_messages\)\?;"),
+    ),
+    AllowedLiteral(
         "crates/atm-core/src/workflow.rs",
+        # Workflow import/export still documents and parses historical
+        # compatibility ids during migration-state validation and tests.
         re.compile(r"`legacy:` remains|must start with 'atm:' or 'legacy:'|strip_prefix\(\"legacy:\"\)|legacy:01"),
     ),
 )
@@ -55,11 +85,15 @@ def iter_rust_sources(repo_root: Path) -> tuple[Path, ...]:
     return tuple(sorted(crates_dir.rglob("*.rs")))
 
 
-def is_allowed_legacy_literal(relative_path: str, line: str) -> bool:
+def is_allowed_line(relative_path: str, line: str) -> bool:
     return any(
         relative_path.endswith(allowed.path_suffix) and allowed.line_pattern.search(line)
         for allowed in ALLOWED_LEGACY_LITERALS
     )
+
+
+def is_allowed_legacy_literal(relative_path: str, line: str) -> bool:
+    return is_allowed_line(relative_path, line)
 
 
 def find_violations(repo_root: Path) -> tuple[Violation, ...]:
@@ -68,9 +102,9 @@ def find_violations(repo_root: Path) -> tuple[Violation, ...]:
         relative_path = path.relative_to(repo_root).as_posix()
         for line_number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), start=1):
             for label, pattern in FORBIDDEN_PATTERNS:
-                if pattern.search(line):
+                if pattern.search(line) and not is_allowed_line(relative_path, line):
                     violations.append(Violation(Path(relative_path), line_number, label, line.strip()))
-            if "legacy:" in line and not is_allowed_legacy_literal(relative_path, line):
+            if "legacy:" in line and not is_allowed_line(relative_path, line):
                 violations.append(
                     Violation(
                         Path(relative_path),

@@ -26,7 +26,10 @@ pub fn resolve_daemon_local_ipc_endpoint() -> Result<DaemonLocalIpcEndpoint, Atm
 /// resolved into the sibling `atm-daemon` binary path.
 ///
 /// `ATM_DAEMON_BIN` is fully trusted process-owner input and intentionally
-/// bypasses additional path validation.
+/// bypasses additional path validation. Resolution stays lazy here so CLI and
+/// graft callers fail only when they actually need to bootstrap the daemon,
+/// while the resulting error still points back to the exact missing or invalid
+/// binary path at bootstrap time.
 pub fn resolve_daemon_bin(current_host_label: &str) -> Result<DaemonBinaryPath, AtmError> {
     if let Some(path) = std::env::var_os("ATM_DAEMON_BIN").filter(|value| !value.is_empty()) {
         return DaemonBinaryPath::new(PathBuf::from(path));

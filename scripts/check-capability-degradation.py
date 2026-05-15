@@ -20,9 +20,12 @@ FORBIDDEN_PATTERNS = (
     ("replay capability degradation field", re.compile(r"\breplay_store\s*:\s*None\b")),
 )
 
-ALLOWED_TEST_MATCHES = (
+KNOWN_SAFE_CARVEOUTS = (
     (
         "crates/atm-daemon/src/peer_transport.rs",
+        # `replay_store: None` is allowed in peer_transport test fixtures that
+        # explicitly exercise the no-store branch; the production startup path
+        # still fails closed on missing replay-store assembly.
         re.compile(r"\breplay_store\s*:\s*None,\s*$"),
     ),
 )
@@ -35,7 +38,7 @@ def iter_rust_sources(repo_root: Path) -> tuple[Path, ...]:
 def is_allowed_test_match(relative_path: str, line: str) -> bool:
     return any(
         relative_path.endswith(path_suffix) and pattern.search(line)
-        for path_suffix, pattern in ALLOWED_TEST_MATCHES
+        for path_suffix, pattern in KNOWN_SAFE_CARVEOUTS
     )
 
 

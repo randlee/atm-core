@@ -1,0 +1,263 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Finding: RSH-001-X2
+# wait_for_eligible_message has no cancellation path — spins up to 3600s
+# Phase: phase-X  |  Mode: initial_pass  |  Triaged: 2026-05-14
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/RSH-001-X2>
+  a triage:Finding ;
+  triage:findingId "RSH-001-X2" ;
+  triage:title "wait_for_eligible_message has no cancellation path — spins up to 3600s" ;
+  triage:description "crates/atm-core/src/read/wait.rs:8 wait_for_eligible_message has no shutdown-flag parameter and spins up to 3600s with no cancellation path. Add a shutdown-flag parameter so the caller can interrupt the wait loop." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+
+  # occurrences — function definition (one per branch)
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s1/def> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s1/call1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s2/def> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s2/call1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s3/def> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s3/call1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s4/def> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s4/call1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s5/def> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s5/call1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/pX-s5/call2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/int/def> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/int/call1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-001-X2/int/call2> ;
+
+  # branch-level open edges
+  triage:openOn <urn:atm:triage:worktree/pX-s1/70460f9b> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e5> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e8> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/df124a86> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/0f5e11c8> ;
+  triage:openOn <urn:atm:triage:worktree/int/0f5e11c8> ;
+
+  # promote to highest open branch (s5 is highest feature branch)
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/0f5e11c8> ;
+
+  triage:reference "PR #282" ;
+  triage:reference "https://github.com/randlee/atm-core/pull/282#issuecomment-4456182190" .
+
+# ─── Worktree Snapshots ───────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/70460f9b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "70460f9b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e5" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e8" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a86" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/0f5e11c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "0f5e11c8" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/int/0f5e11c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "0f5e11c8" ;
+  triage:orderIndex 6 .
+
+# ─── Occurrences: pX-s1 ──────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s1/def>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/wait.rs" ;
+  triage:line 8 ;
+  triage:snippet "pub fn wait_for_eligible_message<T, FLoad, FEligible>(timeout_secs: u64, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "70460f9b" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/70460f9b> .
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s1/call1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 308 ;
+  triage:snippet "let wait_satisfied = wait::wait_for_eligible_message(timeout_secs, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "70460f9b" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/70460f9b> .
+
+# ─── Occurrences: pX-s2 ──────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s2/def>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/wait.rs" ;
+  triage:line 8 ;
+  triage:snippet "pub fn wait_for_eligible_message<T, FLoad, FEligible>(timeout_secs: u64, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e5" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e5> .
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s2/call1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 225 ;
+  triage:snippet "let wait_satisfied = wait::wait_for_eligible_message(timeout_secs, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e5" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e5> .
+
+# ─── Occurrences: pX-s3 ──────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s3/def>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/wait.rs" ;
+  triage:line 8 ;
+  triage:snippet "pub fn wait_for_eligible_message<T, FLoad, FEligible>(timeout_secs: u64, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e8> .
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s3/call1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 225 ;
+  triage:snippet "let wait_satisfied = wait::wait_for_eligible_message(timeout_secs, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e8> .
+
+# ─── Occurrences: pX-s4 ──────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s4/def>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/wait.rs" ;
+  triage:line 8 ;
+  triage:snippet "pub fn wait_for_eligible_message<T, FLoad, FEligible>(timeout_secs: u64, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a86" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a86> .
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s4/call1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 225 ;
+  triage:snippet "let wait_satisfied = wait::wait_for_eligible_message(timeout_secs, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a86" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a86> .
+
+# ─── Occurrences: pX-s5 ──────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s5/def>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/wait.rs" ;
+  triage:line 8 ;
+  triage:snippet "pub fn wait_for_eligible_message<T, FLoad, FEligible>(timeout_secs: u64, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "0f5e11c8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s5/call1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 252 ;
+  triage:snippet "let wait_satisfied = wait::wait_for_eligible_message(timeout_secs, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "0f5e11c8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+<urn:atm:triage:occurrence/RSH-001-X2/pX-s5/call2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/legacy_path.rs" ;
+  triage:line 48 ;
+  triage:snippet "let wait_satisfied = wait::wait_for_eligible_message(timeout_secs, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "0f5e11c8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+# ─── Occurrences: integrate/phase-X ─────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RSH-001-X2/int/def>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/wait.rs" ;
+  triage:line 8 ;
+  triage:snippet "pub fn wait_for_eligible_message<T, FLoad, FEligible>(timeout_secs: u64, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "0f5e11c8" ;
+  triage:occursIn <urn:atm:triage:worktree/int/0f5e11c8> .
+
+<urn:atm:triage:occurrence/RSH-001-X2/int/call1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 252 ;
+  triage:snippet "let wait_satisfied = wait::wait_for_eligible_message(timeout_secs, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "0f5e11c8" ;
+  triage:occursIn <urn:atm:triage:worktree/int/0f5e11c8> .
+
+<urn:atm:triage:occurrence/RSH-001-X2/int/call2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/legacy_path.rs" ;
+  triage:line 48 ;
+  triage:snippet "let wait_satisfied = wait::wait_for_eligible_message(timeout_secs, ...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "0f5e11c8" ;
+  triage:occursIn <urn:atm:triage:worktree/int/0f5e11c8> .

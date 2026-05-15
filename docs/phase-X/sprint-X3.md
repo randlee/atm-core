@@ -24,7 +24,6 @@ target: integrate/phase-X
 
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
-- `crates/atm-core/src/boundary/store.rs`
 - `crates/atm-core/src/doctor/mod.rs`
 - `crates/atm-rusqlite/src/lib.rs`
 - any roster-store implementation files touched by the new enumeration boundary

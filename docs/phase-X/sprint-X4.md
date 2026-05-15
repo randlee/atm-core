@@ -91,13 +91,16 @@ target: integrate/phase-X
   definitions live in `crates/atm-daemon-client/src/lib.rs`
 - updated CLI and graft same-host client wrappers to call the shared
   daemon-client helper line without keeping duplicate helper definitions
+- the merged Phase `X` line now carries matching prose and machine-readable
+  daemon-client boundary contracts for those shared same-host helpers
 
 Implementation result:
 - the X.4 acceptance criteria are satisfied on
   `feature/pX-s4-replay-and-ipc-consolidation`
-- the machine-readable and prose daemon-client boundary contracts already
-  matched the intended helper ownership on this branch baseline, so no extra
-  boundary-doc delta was required in this sprint
+- the merged Phase `X` line reflects the intended daemon-client helper
+  ownership in both:
+  - `docs/atm-daemon-client/boundaries.md`
+  - `boundaries/atm-daemon-client/daemon-bootstrap.toml`
 
 ## Required Validation
 

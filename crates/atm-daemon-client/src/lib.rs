@@ -78,6 +78,24 @@ fn validate_daemon_path(label: &str, path: &Path) -> Result<(), AtmError> {
     Ok(())
 }
 
+pub fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
+    std::env::var("ATM_IDENTITY")
+        .unwrap_or_else(|_| "unknown".to_string())
+        .parse()
+        .map_err(|error: AtmError| {
+            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
+        })
+}
+
+pub fn parse_bootstrap_team() -> Result<TeamName, AtmError> {
+    std::env::var("ATM_TEAM")
+        .unwrap_or_else(|_| "unknown".to_string())
+        .parse()
+        .map_err(|error: AtmError| {
+            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
+        })
+}
+
 #[derive(Debug)]
 pub struct DaemonSupervisor {
     endpoint: DaemonLocalIpcEndpoint,

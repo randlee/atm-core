@@ -28,7 +28,9 @@ use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
-use atm_daemon_client::{BootstrapTraceability, DaemonSupervisor};
+use atm_daemon_client::{
+    BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent, parse_bootstrap_team,
+};
 
 mod runtime;
 mod transport;
@@ -342,24 +344,6 @@ impl GraftSessionClient for GraftClient {
     }
 }
 
-fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
-    std::env::var("ATM_IDENTITY")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-        .map_err(|error: AtmError| {
-            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
-        })
-}
-
-fn parse_bootstrap_team() -> Result<TeamName, AtmError> {
-    std::env::var("ATM_TEAM")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-        .map_err(|error: AtmError| {
-            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
-        })
-}
-
 /// Concrete embedded graft session runtime.
 pub struct GraftSession {
     client: Arc<dyn GraftSessionClient>,
@@ -600,7 +584,18 @@ impl Drop for GraftSession {
         // Drop-triggered teardown emits AdvisorySessionState::Closed, identical to explicit close().
         // Merged observable state is accepted by design: callers that need to distinguish
         // drop-driven shutdown from user-directed shutdown should call close() explicitly.
-        let _ = self.close_internal();
+        if let Err(error) = self.close_internal() {
+            let session_id = self
+                .snapshot()
+                .map(|snapshot| snapshot.session_id.to_string())
+                .unwrap_or_else(|snapshot_error| format!("unavailable:{snapshot_error}"));
+            tracing::warn!(
+                session_id,
+                error_code = %error.code,
+                error_message = %error.message,
+                "graft session drop cleanup failed"
+            );
+        }
     }
 }
 
@@ -1013,7 +1008,7 @@ mod tests {
                     team: TEST_TEAM.parse().expect("team"),
                     agent: "agent-b".parse().expect("agent"),
                     sender: request.sender_override.expect("sender"),
-                    outcome: "sent".to_string(),
+                    outcome: atm_core::send::SendDeliveryOutcome::Sent,
                     message_id: AtmMessageId::new(),
                     requires_ack: false,
                     task_id: None,
@@ -1025,7 +1020,7 @@ mod tests {
             ),
             RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(ReadOutcome {
                 action: CommandAction::Read,
-                team: query.team_override.expect("team"),
+                team: query.team_override().cloned().expect("team"),
                 agent: "agent-b".parse().expect("agent"),
                 selection_mode: query.selection_mode,
                 mutation_applied: false,
@@ -1050,7 +1045,7 @@ mod tests {
                     reply_target: serde_json::from_str("\"agent-b@test-team\"")
                         .expect("reply target"),
                     reply_message_id: AtmMessageId::new(),
-                    reply_text: request.reply_body,
+                    reply_text: request.reply_body().to_string(),
                     warnings: Vec::new(),
                 })),
             ),
@@ -1061,20 +1056,23 @@ mod tests {
         let send_outcome = client
             .send_message(send_request(root.path()))
             .expect("send");
-        assert_eq!(send_outcome.outcome, "sent");
+        assert_eq!(send_outcome.outcome.as_str(), "sent");
 
         let read_outcome = client.read_message(read_query(root.path())).expect("read");
         assert_eq!(read_outcome.count, 1);
 
         let ack_outcome = client
-            .acknowledge_message(AckRequest {
-                home_dir: root.path().to_path_buf(),
-                current_dir: root.path().to_path_buf(),
-                actor_override: Some(TEST_LEAD.parse().expect("actor")),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
-                message_id: read_message_id,
-                reply_body: "received".to_string(),
-            })
+            .acknowledge_message(
+                AckRequest::new(
+                    root.path().to_path_buf(),
+                    root.path().to_path_buf(),
+                    Some(TEST_LEAD),
+                    Some(TEST_TEAM),
+                    read_message_id,
+                    "received",
+                )
+                .expect("ack request"),
+            )
             .expect("ack");
         assert_eq!(ack_outcome.reply_text, "received");
     }

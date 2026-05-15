@@ -101,6 +101,7 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
     let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
     let mut attempts = 0usize;
     let mut last_error = None;
+    let mut backoff = std::time::Duration::from_millis(1);
     while std::time::Instant::now() < deadline {
         match LocalSocketStream::connect(ipc_name.clone()) {
             Ok(stream) => return stream,
@@ -109,7 +110,8 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
                 last_error = Some(error);
                 // The ready signal is the structural synchronization point; this retry only
                 // covers the residual OS socket publication race after readiness.
-                std::thread::sleep(std::time::Duration::from_millis(1));
+                std::thread::sleep(backoff);
+                backoff = (backoff * 2).min(std::time::Duration::from_millis(50));
             }
         }
     }

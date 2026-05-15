@@ -19,7 +19,6 @@ use atm_core::protocol::{
 };
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
-use atm_core::types::{AgentName, TeamName};
 #[cfg(not(test))]
 use atm_daemon_bootstrap::{
     install_sqlite_retained_runtime_factory, resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
@@ -28,14 +27,14 @@ use atm_daemon_bootstrap::{
 use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
 use atm_daemon_client::{
     BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor, exchange as daemon_exchange,
-    try_connect as daemon_try_connect, unexpected_response,
+    parse_bootstrap_agent, parse_bootstrap_team, try_connect as daemon_try_connect,
+    unexpected_response,
 };
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
 #[cfg(test)]
 use atm_runtime_test_support::{
-    SqliteRuntimeGuard, install_sqlite_retained_runtime_factory as install_test_runtime_factory,
-    open_sqlite_boundary,
+    install_sqlite_retained_runtime_factory as install_test_runtime_factory, open_sqlite_boundary,
 };
 
 use crate::observability::CliObservability;
@@ -377,24 +376,6 @@ impl<'a> CliComposition<'a> {
     }
 }
 
-fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
-    std::env::var("ATM_IDENTITY")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-        .map_err(|error: AtmError| {
-            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
-        })
-}
-
-fn parse_bootstrap_team() -> Result<TeamName, AtmError> {
-    std::env::var("ATM_TEAM")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-        .map_err(|error: AtmError| {
-            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
-        })
-}
-
 impl AtmGraftClient for CliComposition<'_> {
     fn send_message(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {
         CliComposition::send(self, request)
@@ -471,6 +452,7 @@ mod tests {
     use atm_core::types::{AckActivationMode, ReadSelection};
     use atm_core::types::{AgentName, TeamName};
     use atm_daemon_client::DaemonBinaryPath;
+    use atm_runtime_test_support::SQLITE_RUNTIME_PATH_ENV;
     use chrono::Utc;
     use serde_json::Value;
     use serial_test::serial;
@@ -478,35 +460,39 @@ mod tests {
 
     use super::{
         CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
-        LaunchGateGuard, LocalIpcClientTransportAdapter, SqliteRuntimeGuard, open_sqlite_boundary,
+        LaunchGateGuard, LocalIpcClientTransportAdapter, install_test_runtime_factory,
+        open_sqlite_boundary,
     };
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
         _tempdir: TempDir,
         _env_guard: EnvGuard,
-        _runtime_guard: SqliteRuntimeGuard,
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     }
 
     impl LoopbackFixture {
         fn new(recipient: &str) -> Self {
-            super::install_retained_runtime_factory();
+            install_test_runtime_factory();
             let tempdir = tempfile::tempdir().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
             let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
-            let runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path);
-            let env_guard = EnvGuard::set_many([(
-                "ATM_HOME",
-                Some(home_dir.to_str().expect("utf-8 tempdir path")),
-            )]);
+            let env_guard = EnvGuard::set_many([
+                (
+                    "ATM_HOME",
+                    Some(home_dir.to_str().expect("utf-8 tempdir path")),
+                ),
+                (
+                    SQLITE_RUNTIME_PATH_ENV,
+                    Some(sqlite_db_path.to_str().expect("utf-8 sqlite db path")),
+                ),
+            ]);
             let current_dir = tempdir.path().join("cwd");
             fs::create_dir_all(&current_dir).expect("cwd");
             let fixture = Self {
                 _tempdir: tempdir,
                 _env_guard: env_guard,
-                _runtime_guard: runtime_guard,
                 home_dir,
                 current_dir,
             };
@@ -667,14 +653,15 @@ mod tests {
         }
 
         fn ack_request(&self, message_id: AtmMessageId, reply_body: &str) -> AckRequest {
-            AckRequest {
-                home_dir: self.home_dir.clone(),
-                current_dir: self.current_dir.clone(),
-                actor_override: Some(TEST_SENDER.parse().expect("actor")),
-                team_override: Some(TEST_TEAM.parse().expect("team")),
+            AckRequest::new(
+                self.home_dir.clone(),
+                self.current_dir.clone(),
+                Some(TEST_SENDER),
+                Some(TEST_TEAM),
                 message_id,
-                reply_body: reply_body.to_string(),
-            }
+                reply_body,
+            )
+            .expect("ack request")
         }
 
         fn read_query(&self) -> ReadQuery {

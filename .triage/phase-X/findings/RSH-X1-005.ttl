@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# The atm-runtime-test-support crate exists on s1 and s5 only.
+# s2, s3, s4 do not contain this crate — classified absent (no prior record).
+# integrate/phase-X does not contain this crate — classified absent.
+# s1 (introducing branch) and s5 (latest sprint) both have the open unbounded cache.
+# promote_to_branch = s5 (highest open branch with crate present).
+
+<urn:atm:triage:finding/RSH-X1-005>
+  a triage:Finding ;
+  triage:findingId "RSH-X1-005" ;
+  triage:title "atm-runtime-test-support cache is unbounded" ;
+  triage:description "crates/atm-runtime-test-support/src/lib.rs — static SQLITE_RUNTIME_CACHE is a HashMap with no size cap. The crate was introduced on pX-s1. Add a size cap or document the intended bound." ;
+  triage:phaseId "phase-X" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X1-005/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X1-005/pX-s5/1> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/0d337c7> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/8a4fa81> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+<urn:atm:triage:occurrence/RSH-X1-005/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 13 ;
+  triage:snippet "static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/RSH-X1-005/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 13 ;
+  triage:snippet "static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/8a4fa81>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/ec3d563>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "ec3d563" ;
+  triage:orderIndex 6 .
