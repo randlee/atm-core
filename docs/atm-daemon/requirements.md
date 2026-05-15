@@ -104,6 +104,8 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-RUNTIME-005` `atm-daemon` owns crash-recovery and replay policy
   around daemon-managed delivery/export work. Satisfies:
   `REQ-CORE-TRANSPORT-004`, `REQ-CORE-LOCK-RETIRE-001`.
+  The replay store is a fail-closed startup dependency because the bounded
+  replay-resume sweep must run before the daemon can enter serving state.
 - `REQ-DAEMON-RUNTIME-006` `atm-daemon` daemon-private control-plane code must
   be partitioned into explicit ownership modules rather than one mixed
   crate-root implementation surface. Satisfies:
