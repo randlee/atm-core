@@ -593,7 +593,7 @@ mod tests {
 
             for (index, message) in messages.iter().enumerate() {
                 let message_key = if let Some(message_id) = message.message_id {
-                    boundary::MessageKey::for_atm_message(message_id).expect("message key")
+                    boundary::MessageKey::new(format!("atm:{message_id}")).expect("message key")
                 } else {
                     boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
                 };
@@ -727,7 +727,7 @@ mod tests {
                 read,
                 source_team: Some(TEST_TEAM.parse().expect("team")),
                 summary: None,
-                message_id: None,
+                message_id: Some(AtmMessageId::new()),
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,

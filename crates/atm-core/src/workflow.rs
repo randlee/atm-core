@@ -279,9 +279,9 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{
-        WorkflowMessageKey, WorkflowMessageKeyParseError, WorkflowMessageState,
-        apply_projected_state, load_workflow_state, project_envelope, remember_initial_state,
-        remove_message_state, save_workflow_state, workflow_key,
+        WorkflowMessageKey, WorkflowMessageState, apply_projected_state, load_workflow_state,
+        project_envelope, remember_initial_state, remove_message_state, save_workflow_state,
+        workflow_key,
     };
     use crate::schema::{AtmMessageId, MessageEnvelope};
     use crate::test_support::{TEST_LEAD, TEST_SENDER, TEST_TEAM};
@@ -402,6 +402,6 @@ mod tests {
             .parse::<WorkflowMessageKey>()
             .expect_err("workflow key should reject non-workflow prefixes");
 
-        assert_eq!(error, WorkflowMessageKeyParseError::InvalidPrefix);
+        assert_eq!(error, "workflow key must start with 'atm:'");
     }
 }
