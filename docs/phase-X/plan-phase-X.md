@@ -204,8 +204,22 @@ Primary file scope:
 - `crates/atm-core/src/read/mod.rs`
 - `crates/atm-core/src/clear/mod.rs`
 - `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/doctor/mod.rs`
+- `crates/atm-core/src/mailbox/mod.rs`
+- `crates/atm-core/src/mailbox/source.rs`
+- `crates/atm-core/src/mailbox/store.rs`
+- `crates/atm-core/src/mailbox/surface.rs`
+- `crates/atm-core/src/read/state.rs`
+- `crates/atm-core/src/workflow.rs`
+- `crates/atm-core/src/lib.rs`
+- `crates/atm-core/Cargo.toml`
+- `crates/atm-core/tests/mailbox_locking.rs`
+- `crates/atm/src/composition.rs`
+- `crates/atm-rusqlite/src/writer/ops.rs`
+- `crates/atm-daemon/src/tests.rs`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-core/architecture.md`
+- `docs/project-plan.md`
 
 Required deliverables:
 - delete `LegacyMailboxRuntime`

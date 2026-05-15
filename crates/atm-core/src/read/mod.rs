@@ -213,134 +213,20 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         seen_watermark,
     } = resolve_read_context(&query, runtime)?;
     let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
-    let mut metadata_rows =
-        runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
-    let has_legacy_keys = metadata_rows
-        .iter()
-        .any(|row| row.message_key.as_ref().starts_with("legacy:"));
-    if has_legacy_keys {
-        return Err(AtmError::validation(
-            "sqlite mailbox metadata returned legacy-prefixed message keys",
-        )
-        .with_recovery(
-            "Repair or remove the malformed mailbox rows before retrying `atm read`; production runtimes expose only the sqlite-backed mailbox path.",
-        ));
-    }
-    let (mut bucket_counts, mut selected) =
-        selection_state_for_mailbox_metadata_rows(&metadata_rows, &query, seen_watermark);
-    let mut timed_out = false;
-
-    if selected.is_empty()
-        && let Some(timeout_secs) = query.timeout_secs
-    {
-        let wait_satisfied = wait::wait_for_eligible_message(
-            timeout_secs,
-            || {
-                runtime.query_mailbox_metadata_rows(
-                    &query.home_dir,
-                    &target.team,
-                    &target.agent,
-                    None,
-                )
-            },
-            |rows| {
-                !selection_state_for_mailbox_metadata_rows(rows, &query, seen_watermark)
-                    .1
-                    .is_empty()
-            },
-        )?;
-
-        if wait_satisfied {
-            metadata_rows = runtime.query_mailbox_metadata_rows(
-                &query.home_dir,
-                &target.team,
-                &target.agent,
-                None,
-            )?;
-            (bucket_counts, selected) =
-                selection_state_for_mailbox_metadata_rows(&metadata_rows, &query, seen_watermark);
-        } else {
-            timed_out = true;
-        }
-    }
-
-    let match_count = selected.len();
-    sort_and_limit_selected(&mut selected, Some(1));
-    let mutation_needed = displayed_messages_require_mutation(&selected);
-
-    let (mutation_applied, output_message, bucket_counts, selected_message_id, match_count) =
-        if timed_out || selected.is_empty() || !mutation_needed {
-            (
-                false,
-                output_messages_from_metadata_selection(
-                    runtime,
-                    &query.home_dir,
-                    &target.team,
-                    &target.agent,
-                    &metadata_rows,
-                    &selected,
-                    query.message_id_filter,
-                )?
-                .into_iter()
-                .next(),
-                bucket_counts,
-                selected
-                    .first()
-                    .and_then(|message| message.envelope.message_id),
-                match_count,
-            )
-        } else {
-            let mut metadata_rows = runtime.query_mailbox_metadata_rows(
-                &query.home_dir,
-                &target.team,
-                &target.agent,
-                None,
-            )?;
-            let (bucket_counts, mut selected) =
-                selection_state_for_mailbox_metadata_rows(&metadata_rows, &query, seen_watermark);
-            let match_count = selected.len();
-            sort_and_limit_selected(&mut selected, Some(1));
-            let mutation_applied = apply_display_mutations_to_store(
-                runtime,
-                &target.team,
-                &target.agent,
-                &selected,
-                query.ack_activation_mode,
-                own_inbox,
-            )?;
-            metadata_rows = runtime.query_mailbox_metadata_rows(
-                &query.home_dir,
-                &target.team,
-                &target.agent,
-                None,
-            )?;
-            let (_updated_counts, updated_selected) =
-                selection_state_for_mailbox_metadata_rows(&metadata_rows, &query, seen_watermark);
-            let output_message = output_messages_from_metadata_selection(
-                runtime,
-                &query.home_dir,
-                &target.team,
-                &target.agent,
-                &metadata_rows,
-                &updated_selected.into_iter().take(1).collect::<Vec<_>>(),
-                query.message_id_filter,
-            )?
-            .into_iter()
-            .next();
-            (
-                mutation_applied,
-                output_message,
-                bucket_counts,
-                selected
-                    .first()
-                    .and_then(|message| message.envelope.message_id),
-                match_count,
-            )
-        };
+    let selection = load_read_selection(runtime, &query, &target, seen_watermark)?;
+    let display = resolve_read_display(
+        runtime,
+        &query,
+        &target,
+        seen_watermark,
+        own_inbox,
+        selection,
+    )?;
 
     if query.seen_state_update
-        && !selected.is_empty()
-        && let Some(latest_timestamp) = selected
+        && !display.selected.is_empty()
+        && let Some(latest_timestamp) = display
+            .selected
             .iter()
             .map(|message| message.envelope.timestamp)
             .max()
@@ -358,19 +244,19 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         team: target.team.clone(),
         agent: target.agent.clone(),
         selection_mode: query.selection_mode,
-        mutation_applied,
-        count: usize::from(output_message.is_some()),
-        message: output_message,
-        selected_message_id,
-        match_count,
-        additional_match_count: match_count.saturating_sub(1),
-        bucket_counts,
+        mutation_applied: display.mutation_applied,
+        count: usize::from(display.output_message.is_some()),
+        message: display.output_message,
+        selected_message_id: display.selected_message_id,
+        match_count: display.match_count,
+        additional_match_count: display.match_count.saturating_sub(1),
+        bucket_counts: display.bucket_counts,
     };
 
     if let Err(error) = observability.emit(CommandEvent {
         command: "read",
         action: "read",
-        outcome: if timed_out { "timeout" } else { "ok" },
+        outcome: if display.timed_out { "timeout" } else { "ok" },
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender: actor,
@@ -385,6 +271,140 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     }
 
     Ok(outcome)
+}
+
+struct ReadSelectionState {
+    metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+    bucket_counts: BucketCounts,
+    selected: Vec<ClassifiedMessage>,
+    timed_out: bool,
+}
+
+struct ReadDisplayState {
+    mutation_applied: bool,
+    output_message: Option<ClassifiedMessage>,
+    bucket_counts: BucketCounts,
+    selected_message_id: Option<AtmMessageId>,
+    match_count: usize,
+    timed_out: bool,
+    selected: Vec<ClassifiedMessage>,
+}
+
+fn load_read_selection<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    query: &ReadQuery,
+    target: &crate::mailbox::source::ResolvedTarget,
+    seen_watermark: Option<IsoTimestamp>,
+) -> Result<ReadSelectionState, AtmError> {
+    let mut metadata_rows =
+        load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
+    let (mut bucket_counts, mut selected) =
+        selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
+    let mut timed_out = false;
+
+    if selected.is_empty()
+        && let Some(timeout_secs) = query.timeout_secs
+    {
+        let wait_satisfied = wait::wait_for_eligible_message(
+            timeout_secs,
+            || load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent),
+            |rows| {
+                !selection_state_for_mailbox_metadata_rows(rows, query, seen_watermark)
+                    .1
+                    .is_empty()
+            },
+        )?;
+
+        if wait_satisfied {
+            metadata_rows =
+                load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
+            (bucket_counts, selected) =
+                selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
+        } else {
+            timed_out = true;
+        }
+    }
+
+    Ok(ReadSelectionState {
+        metadata_rows,
+        bucket_counts,
+        selected,
+        timed_out,
+    })
+}
+
+fn resolve_read_display<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    query: &ReadQuery,
+    target: &crate::mailbox::source::ResolvedTarget,
+    seen_watermark: Option<IsoTimestamp>,
+    own_inbox: bool,
+    mut selection: ReadSelectionState,
+) -> Result<ReadDisplayState, AtmError> {
+    let match_count = selection.selected.len();
+    sort_and_limit_selected(&mut selection.selected, Some(1));
+    let selected_message_id = selection
+        .selected
+        .first()
+        .and_then(|message| message.envelope.message_id);
+    let mutation_needed = displayed_messages_require_mutation(&selection.selected);
+
+    if selection.timed_out || selection.selected.is_empty() || !mutation_needed {
+        let output_message = output_messages_from_metadata_selection(
+            runtime,
+            &query.home_dir,
+            &target.team,
+            &target.agent,
+            &selection.metadata_rows,
+            &selection.selected,
+            query.message_id_filter,
+        )?
+        .into_iter()
+        .next();
+        return Ok(ReadDisplayState {
+            mutation_applied: false,
+            output_message,
+            bucket_counts: selection.bucket_counts,
+            selected_message_id,
+            match_count,
+            timed_out: selection.timed_out,
+            selected: selection.selected,
+        });
+    }
+
+    let mutation_applied = apply_display_mutations_to_store(
+        runtime,
+        &target.team,
+        &target.agent,
+        &selection.selected,
+        query.ack_activation_mode,
+        own_inbox,
+    )?;
+    let metadata_rows =
+        load_checked_read_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
+    let (_updated_counts, updated_selected) =
+        selection_state_for_mailbox_metadata_rows(&metadata_rows, query, seen_watermark);
+    let updated_selected = updated_selected.into_iter().take(1).collect::<Vec<_>>();
+    let output_message = output_messages_from_metadata_selection(
+        runtime,
+        &query.home_dir,
+        &target.team,
+        &target.agent,
+        &metadata_rows,
+        &updated_selected,
+        query.message_id_filter,
+    )?
+    .into_iter()
+    .next();
+    Ok(ReadDisplayState {
+        mutation_applied,
+        output_message,
+        bucket_counts: selection.bucket_counts,
+        selected_message_id,
+        match_count,
+        timed_out: selection.timed_out,
+        selected: selection.selected,
+    })
 }
 
 struct ReadRuntimeContext {
@@ -446,7 +466,28 @@ fn resolve_read_context<R: RetainedServiceRuntime>(
 fn message_key_for_classified(
     message: &ClassifiedMessage,
 ) -> Result<boundary::MessageKey, AtmError> {
-    boundary::MessageKey::new(message.source_path.to_string_lossy().into_owned())
+    boundary::MessageKey::for_inbox_path(&message.source_path)
+}
+
+fn load_checked_read_metadata(
+    runtime: &(impl RetainedMailboxRuntime + ?Sized),
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+    let metadata_rows = runtime.query_mailbox_metadata_rows(home_dir, team, agent, None)?;
+    if metadata_rows
+        .iter()
+        .any(|row| row.message_key.as_ref().starts_with("legacy:"))
+    {
+        return Err(AtmError::validation(
+            "sqlite mailbox metadata returned legacy-prefixed message keys",
+        )
+        .with_recovery(
+            "Test-fixture databases with legacy-keyed rows also surface this guard; repair or remove the malformed mailbox rows before retrying `atm read`.",
+        ));
+    }
+    Ok(metadata_rows)
 }
 
 fn output_messages_from_metadata_selection<R: RetainedMailboxRuntime>(

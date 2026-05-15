@@ -3149,6 +3149,9 @@ Acceptance:
 Planning branch:
 - `feature/pX-s0-planning`
 
+Pre-phase prerequisite branch:
+- `feature/pX-lint-gates`
+
 Base branch:
 - `integrate/phase-W`
 
@@ -3162,6 +3165,14 @@ Goal:
 - make replay persistence startup behavior explicit and enforceable
 - add the guardrails needed to catch legacy-path regressions and stale code
   earlier in development
+
+Status note:
+- `X.0` complete on `feature/pX-lint-gates`
+  - target: `develop`
+  - scope: silent-emit regression gate and RULE-002 function-length gate
+- `X.1` complete on `feature/pX-s1-mailbox-runtime-cutover`
+  - target: `integrate/phase-X`
+  - scope: retained mailbox runtime cutover to a fail-closed SQLite/store-backed path
 
 Pre-phase prerequisite:
 - before `integrate/phase-X` starts, a standalone develop-targeting PR
@@ -3216,56 +3227,3 @@ Acceptance:
   and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`
 - the Phase `W` closeout gate in `docs/plan-phase-W.md` remains authoritative
   for final merged-state certification
-
-## 28. Phase X Planning And Pre-Phase Lint Prerequisite
-
-Planning branch:
-- `feature/pX-s0-planning`
-
-Pre-phase prerequisite branch:
-- `feature/pX-lint-gates`
-
-Base branch:
-- `integrate/phase-W`
-
-Integration branch:
-- `integrate/phase-X`
-
-Goal:
-- remove the remaining legacy mailbox/runtime branches behind the retained
-  boundary
-- tighten daemon runtime truth around the SQLite SSOT claim
-- make replay persistence startup behavior explicit and enforceable
-- add guardrails that catch stale legacy paths and silent regressions earlier
-
-Status note:
-- `X.0` complete on `feature/pX-lint-gates`
-  - target: `develop`
-  - scope: silent-emit regression gate and RULE-002 function-length gate
-- `X.1` complete on `feature/pX-s1-mailbox-runtime-cutover`
-  - target: `integrate/phase-X`
-  - scope: retained mailbox runtime cutover to a fail-closed SQLite/store-backed path
-
-Execution shape:
-- pre-phase prerequisite:
-  - `X.0` shared lint gates on `develop` before `integrate/phase-X` starts
-- `X.1` mailbox runtime cutover and dual-mode surface deletion
-- `X.2` command-path simplification and legacy mailbox path deletion
-- `X.3` daemon runtime truth unification and runtime-status-cache refactor
-- `X.4` replay-persistence startup contract, peer-transport decomposition, and
-  same-host helper deduplication
-- `X.5` systemic guardrails, dependency-ownership validation, and closeout
-  verification
-
-Execution rules:
-- no Phase `X` sprint may preserve or add a mailbox durability fallback path
-- the silent-emit and RULE-002 gates are treated as already-live pre-phase
-  develop prerequisites, not delayed `integrate/phase-X` sprint work
-- file watchers may remain only as ingress/reconcile edges, not as a parallel
-  mailbox backend
-- no Phase `X` scope item relies on an implicit discovery sprint
-- Phase `X` closes only when the legacy mailbox/runtime deletion gates,
-  same-host helper deduplication, and daemon SQLite-runtime truth rules are
-  revalidated on `integrate/phase-X`
-- `docs/phase-X/plan-phase-X.md` remains the authoritative execution plan for
-  the Phase `X` sprint line

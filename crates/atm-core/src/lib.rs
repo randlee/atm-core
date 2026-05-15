@@ -51,7 +51,7 @@ pub mod send;
 /// Internal service-owned seams that isolate retained command orchestration
 /// from direct helper/path access.
 pub(crate) mod service_runtime;
-/// Transitional legacy store adapters used by the retained service runtime.
+/// Store-backed retained runtime adapters used by retained command workflows.
 pub(crate) mod service_runtime_store;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;

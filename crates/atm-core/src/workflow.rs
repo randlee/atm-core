@@ -19,6 +19,7 @@ use crate::persistence;
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use thiserror::Error;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub(crate) struct WorkflowStateFile {
@@ -30,9 +31,19 @@ pub(crate) struct WorkflowStateFile {
 ///
 /// Per ADR-012, all new writes use the `atm:` prefix. `legacy:` remains
 /// accepted here for read-compatibility only while older workflow state files
-/// are still present on disk.
+/// are still present on disk; Phase `X.2` owns deleting the last production
+/// command-path compatibility branches after this sidecar parser keeps old
+/// state files readable through the cutover.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct WorkflowMessageKey(AtmMessageId);
+
+#[derive(Debug, Error, Clone, PartialEq, Eq)]
+pub(crate) enum WorkflowMessageKeyParseError {
+    #[error("workflow key must start with 'atm:' or 'legacy:'")]
+    InvalidPrefix,
+    #[error("invalid workflow message id: {0}")]
+    InvalidMessageId(String),
+}
 
 impl WorkflowMessageKey {
     const PREFIX: &str = "atm:";
@@ -46,6 +57,14 @@ impl WorkflowMessageKey {
     }
 }
 
+impl From<WorkflowMessageKeyParseError> for AtmError {
+    fn from(error: WorkflowMessageKeyParseError) -> Self {
+        AtmError::validation(error.to_string()).with_recovery(
+            "Repair the malformed workflow-state message key so ATM can project read and ack state deterministically.",
+        )
+    }
+}
+
 impl fmt::Display for WorkflowMessageKey {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{}{}", Self::PREFIX, self.0)
@@ -53,21 +72,16 @@ impl fmt::Display for WorkflowMessageKey {
 }
 
 impl FromStr for WorkflowMessageKey {
-    type Err = String;
+    type Err = WorkflowMessageKeyParseError;
 
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let raw_id = value
             .strip_prefix(Self::PREFIX)
             .or_else(|| value.strip_prefix("legacy:"))
-            .ok_or_else(|| {
-                format!(
-                    "workflow key must start with '{}' or 'legacy:'",
-                    Self::PREFIX
-                )
-            })?;
+            .ok_or(WorkflowMessageKeyParseError::InvalidPrefix)?;
         let message_id = raw_id
             .parse::<AtmMessageId>()
-            .map_err(|error| format!("invalid workflow message id: {error}"))?;
+            .map_err(|error| WorkflowMessageKeyParseError::InvalidMessageId(error.to_string()))?;
         Ok(Self::new(message_id))
     }
 }
@@ -110,12 +124,10 @@ fn is_false(value: &bool) -> bool {
 
 pub(crate) fn load_workflow_state(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
 ) -> Result<WorkflowStateFile, AtmError> {
-    let team: TeamName = team.parse()?;
-    let agent: AgentName = agent.parse()?;
-    let path = home::workflow_state_path_from_home(home_dir, &team, &agent)?;
+    let path = home::workflow_state_path_from_home(home_dir, team, agent)?;
     if !path.exists() {
         return Ok(WorkflowStateFile::default());
     }
@@ -145,13 +157,11 @@ pub(crate) fn load_workflow_state(
 
 pub(crate) fn save_workflow_state(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     state: &WorkflowStateFile,
 ) -> Result<(), AtmError> {
-    let team: TeamName = team.parse()?;
-    let agent: AgentName = agent.parse()?;
-    let path = home::workflow_state_path_from_home(home_dir, &team, &agent)?;
+    let path = home::workflow_state_path_from_home(home_dir, team, agent)?;
     let encoded = serde_json::to_string_pretty(state).map_err(|error| {
         AtmError::new(
             AtmErrorKind::Serialization,
@@ -173,8 +183,8 @@ pub(crate) fn save_workflow_state(
 
 pub(crate) fn commit_workflow_state<T, I, F>(
     home_dir: &Path,
-    team: &str,
-    agent: &str,
+    team: &TeamName,
+    agent: &AgentName,
     extra_write_paths: I,
     timeout: Duration,
     body: F,
@@ -183,9 +193,7 @@ where
     I: IntoIterator<Item = PathBuf>,
     F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
 {
-    let team_name: TeamName = team.parse()?;
-    let agent_name: AgentName = agent.parse()?;
-    let workflow_path = home::workflow_state_path_from_home(home_dir, &team_name, &agent_name)?;
+    let workflow_path = home::workflow_state_path_from_home(home_dir, team, agent)?;
     let mut write_paths = vec![workflow_path];
     write_paths.extend(extra_write_paths);
     let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
@@ -314,11 +322,20 @@ mod tests {
         }
     }
 
+    fn test_team_name() -> TeamName {
+        TEST_TEAM.parse::<TeamName>().expect("team")
+    }
+
+    fn test_agent_name() -> AgentName {
+        TEST_SENDER.parse::<AgentName>().expect("agent")
+    }
+
     #[test]
     fn load_missing_workflow_state_returns_default() {
         let tempdir = TempDir::new().expect("tempdir");
-        let state =
-            load_workflow_state(tempdir.path(), TEST_TEAM, TEST_SENDER).expect("load state");
+        let team = test_team_name();
+        let agent = test_agent_name();
+        let state = load_workflow_state(tempdir.path(), &team, &agent).expect("load state");
 
         assert!(state.messages.is_empty());
     }
@@ -326,6 +343,8 @@ mod tests {
     #[test]
     fn save_and_load_workflow_state_round_trips() {
         let tempdir = TempDir::new().expect("tempdir");
+        let team = test_team_name();
+        let agent = test_agent_name();
         let mut state = super::WorkflowStateFile::default();
         state.messages.insert(
             "atm:01KRFK5QTF2R6NRS3Q0F8Z9K0S"
@@ -338,9 +357,8 @@ mod tests {
             },
         );
 
-        save_workflow_state(tempdir.path(), TEST_TEAM, TEST_SENDER, &state).expect("save state");
-        let loaded =
-            load_workflow_state(tempdir.path(), TEST_TEAM, TEST_SENDER).expect("load state");
+        save_workflow_state(tempdir.path(), &team, &agent, &state).expect("save state");
+        let loaded = load_workflow_state(tempdir.path(), &team, &agent).expect("load state");
 
         assert_eq!(loaded, state);
     }

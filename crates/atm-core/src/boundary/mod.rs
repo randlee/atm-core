@@ -3,12 +3,14 @@
 use crate::error::AtmError;
 use crate::graft::AdvisoryStreamRequest;
 use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
+use crate::schema::AtmMessageId;
 pub use crate::protocol::{
     NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
     WatchSubscriptionRequest,
 };
 use serde::{Deserialize, Serialize};
 use std::fmt;
+use std::path::Path;
 use std::str::FromStr;
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
@@ -44,6 +46,20 @@ impl MessageKey {
             );
         }
         Ok(Self(value))
+    }
+
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the derived key is blank or only whitespace.
+    pub fn for_atm_message(message_id: AtmMessageId) -> Result<Self, AtmError> {
+        Self::new(format!("atm:{message_id}"))
+    }
+
+    /// # Errors
+    ///
+    /// Returns [`AtmError`] when the derived key is blank or only whitespace.
+    pub fn for_inbox_path(path: &Path) -> Result<Self, AtmError> {
+        Self::new(path.to_string_lossy().into_owned())
     }
 }
 

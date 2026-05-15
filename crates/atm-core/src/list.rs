@@ -139,34 +139,7 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     _observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<ListOutcome, AtmError> {
-    let config = runtime.load_config(&query.current_dir)?;
-    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
-    let target = resolve_target(
-        query.target_address.as_ref(),
-        &actor,
-        query.team_override.as_ref(),
-        config.as_ref(),
-    )?;
-    let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&target.team).with_recovery(
-            "Create the team config for the requested team or target a different team before retrying `atm list`.",
-        ));
-    }
-
-    let team_config = runtime.load_team_config(&team_dir)?;
-    if target.explicit
-        && !team_config
-            .members
-            .iter()
-            .any(|member| member.name == target.agent.as_str())
-    {
-        return Err(
-            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-                "Update the team membership in config.json or list a different mailbox target.",
-            ),
-        );
-    }
+    let target = resolve_list_target(&query, runtime)?;
 
     let seen_watermark = if query.seen_state_filter && query.selection_mode != ReadSelection::All {
         runtime.load_seen_watermark(&query.home_dir, &target.team, &target.agent)?
@@ -174,19 +147,7 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         None
     };
 
-    let metadata_rows =
-        runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
-    if metadata_rows
-        .iter()
-        .any(|row| row.message_key.as_ref().starts_with("legacy:"))
-    {
-        return Err(AtmError::validation(
-            "sqlite mailbox metadata returned legacy-prefixed message keys",
-        )
-        .with_recovery(
-            "Repair or remove the malformed mailbox rows before retrying `atm list`; production runtimes expose only the sqlite-backed mailbox metadata path.",
-        ));
-    }
+    let metadata_rows = load_checked_list_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;
     let classified_all = classify_mailbox_metadata_rows(&metadata_rows);
     let logical_current = logical_current_messages(classified_all);
     let bucket_counts = bucket_counts_for(&logical_current);
@@ -216,6 +177,63 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         rows,
         bucket_counts,
     })
+}
+
+fn resolve_list_target<R: RetainedServiceRuntime>(
+    query: &ListQuery,
+    runtime: &R,
+) -> Result<crate::mailbox::source::ResolvedTarget, AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
+    let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
+    let target = resolve_target(
+        query.target_address.as_ref(),
+        &actor,
+        query.team_override.as_ref(),
+        config.as_ref(),
+    )?;
+    let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
+    if !team_dir.exists() {
+        return Err(AtmError::team_not_found(&target.team).with_recovery(
+            "Create the team config for the requested team or target a different team before retrying `atm list`.",
+        ));
+    }
+
+    let team_config = runtime.load_team_config(&team_dir)?;
+    if target.explicit
+        && !team_config
+            .members
+            .iter()
+            .any(|member| member.name == target.agent.as_str())
+    {
+        return Err(
+            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
+                "Update the team membership in config.json or list a different mailbox target.",
+            ),
+        );
+    }
+
+    Ok(target)
+}
+
+fn load_checked_list_metadata(
+    runtime: &(impl RetainedMailboxRuntime + ?Sized),
+    home_dir: &std::path::Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<crate::boundary::MailStoreMailboxMetadataRow>, AtmError> {
+    let metadata_rows = runtime.query_mailbox_metadata_rows(home_dir, team, agent, None)?;
+    if metadata_rows
+        .iter()
+        .any(|row| row.message_key.as_ref().starts_with("legacy:"))
+    {
+        return Err(AtmError::validation(
+            "sqlite mailbox metadata returned legacy-prefixed message keys",
+        )
+        .with_recovery(
+            "Repair or remove the malformed mailbox rows before retrying `atm list`; production runtimes expose only the sqlite-backed mailbox metadata path.",
+        ));
+    }
+    Ok(metadata_rows)
 }
 
 fn apply_list_filters(

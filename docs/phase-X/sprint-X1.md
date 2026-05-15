@@ -71,6 +71,8 @@ target: integrate/phase-X
   the retained mailbox trait surface to store-shaped operations only
 - deleted `crates/atm-core/src/read/legacy_path.rs` and
   `crates/atm-core/src/unsupported_adapters.rs`
+- recorded the `unsupported_adapters.rs` deletion as dead transitional code
+  exposed by the one-backend cutover, not as deferred Phase `X` scope
 - added test/runtime bootstrap support so same-host CLI, core mailbox-locking,
   and daemon doctor/runtime tests execute against the SQLite-backed retained
   runtime path

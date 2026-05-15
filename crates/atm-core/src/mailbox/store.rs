@@ -55,6 +55,10 @@ pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), Atm
 
 fn load_export_policy(path: &Path) -> Result<SharedInboxExportPolicy, AtmError> {
     let config_dir = path.parent().unwrap_or_else(|| Path::new("."));
+    // This stays lazy on each mailbox write because the Claude-owned inbox
+    // export policy is config-derived at the owner layer today. If composition
+    // starts validating and freezing this policy up front, this lookup can move
+    // there and the mailbox write path can become purely mechanical.
     let atm_authored_body_export_max_bytes = config::load_config(config_dir)?
         .map(|config| config.claude_jsonl_body_export_max_bytes)
         .unwrap_or_else(|| SharedInboxExportPolicy::default().atm_authored_body_export_max_bytes);
