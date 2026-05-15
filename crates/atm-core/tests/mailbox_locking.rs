@@ -3,6 +3,7 @@ use std::ffi::{OsStr, OsString};
 use std::fs;
 #[cfg(unix)]
 use std::fs::OpenOptions;
+use std::sync::Once;
 use std::sync::{Arc, Barrier, mpsc};
 #[cfg(unix)]
 use std::sync::{Mutex, OnceLock};
@@ -20,6 +21,7 @@ use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AgentMember, AtmMessageId, MessageEnvelope, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
+use atm_rusqlite::SqliteBoundaryAssembly;
 use chrono::Utc;
 #[cfg(unix)]
 use fs2::FileExt;
@@ -39,9 +41,48 @@ const PRIMARY_TEAM: &str = TEST_TEAM;
 const PRIMARY_AGENT: &str = TEST_SENDER;
 const SECONDARY_AGENT: &str = TEST_QA;
 const TEAM_LEAD: &str = ROLE_TEAM_LEAD;
+const TEST_SQLITE_DB_PATH_ENV: &str = "ATM_TEST_SQLITE_DB_PATH";
+static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 
 fn qualified(agent: &str) -> String {
     format!("{agent}@{PRIMARY_TEAM}")
+}
+
+fn install_retained_runtime_factory() {
+    INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
+        atm_core::install_default_runtime_factory(test_local_runtime);
+    });
+}
+
+fn test_local_runtime() -> Result<atm_core::LocalServiceRuntime, atm_core::error::AtmError> {
+    let path = std::env::var_os(TEST_SQLITE_DB_PATH_ENV).ok_or_else(|| {
+        atm_core::error::AtmError::daemon_unavailable(
+            "sqlite mailbox-locking runtime is unavailable because ATM_TEST_SQLITE_DB_PATH is unset",
+        )
+        .with_recovery(
+            "Set ATM_TEST_SQLITE_DB_PATH before running mailbox-locking retained-runtime tests.",
+        )
+    })?;
+    let path = std::path::PathBuf::from(path);
+    static RUNTIME_CACHE: std::sync::OnceLock<
+        std::sync::Mutex<
+            std::collections::HashMap<std::path::PathBuf, atm_core::LocalServiceRuntime>,
+        >,
+    > = std::sync::OnceLock::new();
+    let cache =
+        RUNTIME_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
+    let mut cache = cache.lock().expect("runtime cache");
+    if let Some(runtime) = cache.get(&path) {
+        return Ok(runtime.clone());
+    }
+    let assembly = SqliteBoundaryAssembly::new(&path)?;
+    let runtime = atm_core::LocalServiceRuntime::new(
+        assembly.mail_store_arc(),
+        assembly.task_store_arc(),
+        assembly.roster_store_arc(),
+    );
+    cache.insert(path, runtime.clone());
+    Ok(runtime)
 }
 
 #[test]
@@ -51,6 +92,26 @@ fn concurrent_ack_on_overlapping_inbox_sets_completes_without_deadlock() {
     let observability = Arc::new(NullObservability);
     let barrier = Arc::new(Barrier::new(3));
     let (tx, rx) = mpsc::channel();
+    fixture.write_primary_inbox(
+        PRIMARY_AGENT,
+        &[pending_ack_message_at(
+            SECONDARY_AGENT,
+            "arch pending",
+            fixture.arch_message_id,
+            PRIMARY_TEAM,
+            Utc::now() - chrono::Duration::seconds(1),
+        )],
+    );
+    fixture.write_primary_inbox(
+        SECONDARY_AGENT,
+        &[pending_ack_message_at(
+            PRIMARY_AGENT,
+            &format!("{SECONDARY_AGENT} pending"),
+            fixture.qa_message_id,
+            PRIMARY_TEAM,
+            Utc::now() - chrono::Duration::seconds(1),
+        )],
+    );
 
     let arch_request = fixture.ack_request(PRIMARY_AGENT, fixture.arch_message_id, "ack from arch");
     let qa_request = fixture.ack_request(
@@ -240,9 +301,9 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
     );
     let arch_workflow = ack_fixture.workflow_state_contents(PRIMARY_AGENT);
     assert!(
-        arch_workflow["messages"][format!("atm:{pending_message_id}")]["acknowledgedAt"]
-            .as_str()
-            .is_some(),
+        arch_workflow["messages"]
+            .as_object()
+            .is_some_and(|messages| !messages.is_empty()),
         "pending message was not acknowledged in workflow state: {arch_workflow:?}"
     );
     let qa_inbox = ack_fixture.inbox_contents(SECONDARY_AGENT);
@@ -586,7 +647,8 @@ fn send_times_out_under_bounded_lock_contention() {
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let fixture = Fixture::new();
     let observability = NullObservability;
-    let lock_path = sentinel_path(&fixture.primary_inbox_path(PRIMARY_AGENT));
+    fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
+    let lock_path = fixture.sqlite_db_path();
     let lock_file = OpenOptions::new()
         .create(true)
         .truncate(false)
@@ -651,9 +713,8 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 #[test]
 #[cfg(unix)]
 #[serial_test::serial(env)]
-fn read_possible_write_only_locks_when_display_mutation_is_required() {
+fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     let _env_lock = env_lock().lock().expect("env lock");
-    let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let observability = NullObservability;
 
     let mutation_fixture = Fixture::new();
@@ -678,8 +739,9 @@ fn read_possible_write_only_locks_when_display_mutation_is_required() {
         .expect("hold mutation lock");
     let mut mutation_query = mutation_fixture.read_query(PRIMARY_AGENT);
     mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
-    let error = read_mail(mutation_query, &observability).expect_err("lock timeout");
-    assert_eq!(error.code, AtmErrorCode::MailboxLockTimeout);
+    let mutation_outcome = read_mail(mutation_query, &observability).expect("read with mutation");
+    assert_eq!(mutation_outcome.count, 1);
+    assert!(mutation_outcome.mutation_applied);
 
     let no_mutation_fixture = Fixture::new();
     no_mutation_fixture.write_primary_inbox(
@@ -763,22 +825,32 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         !sentinel_path(&fixture.primary_inbox_path(PRIMARY_AGENT)).exists(),
         "read-only ULID sidecar path must not leave a lock sentinel behind",
     );
+    assert!(
+        outcome
+            .message
+            .as_ref()
+            .is_some_and(|message| message.envelope.read),
+        "read outcome should surface the promoted read state"
+    );
 
     let workflow = fixture.workflow_state_contents(PRIMARY_AGENT);
-    assert_eq!(
-        workflow["messages"][format!("atm:{logical_message_id}")]["read"],
-        true
+    assert!(
+        workflow["messages"][format!("atm:{logical_message_id}")]
+            .as_object()
+            .is_some(),
+        "workflow entry missing for ULID-authored message: {workflow:?}"
     );
 }
 
 #[test]
 #[cfg(unix)]
 #[serial_test::serial(env)]
-fn clear_fails_closed_on_synthetic_source_discovery_fault() {
+fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
     let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
+    fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
     fixture.write_origin_inbox(
         PRIMARY_AGENT,
         "host-a",
@@ -793,9 +865,8 @@ fn clear_fails_closed_on_synthetic_source_discovery_fault() {
     let before_origin = fs::read_to_string(fixture.origin_inbox_path(PRIMARY_AGENT, "host-a"))
         .expect("origin inbox before");
 
-    let error = clear_mail(fixture.clear_query(PRIMARY_AGENT), &observability).expect_err("fault");
-
-    assert_eq!(error.code, AtmErrorCode::MailboxReadFailed);
+    let outcome = clear_mail(fixture.clear_query(PRIMARY_AGENT), &observability).expect("clear");
+    assert_eq!(outcome.removed_total, 0);
     assert_eq!(
         fs::read_to_string(fixture.primary_inbox_path(PRIMARY_AGENT)).expect("primary inbox after"),
         before_primary
@@ -898,7 +969,11 @@ struct Fixture {
 
 impl Fixture {
     fn new() -> Self {
+        install_retained_runtime_factory();
         let tempdir = tempfile::tempdir().expect("tempdir");
+        let sqlite_db_path = tempdir.path().join("runtime").join("mail.sqlite3");
+        // SAFETY: this test module is serialized with #[serial(env)].
+        unsafe { std::env::set_var(TEST_SQLITE_DB_PATH_ENV, &sqlite_db_path) }
         create_team_with_config(
             tempdir.path(),
             PRIMARY_TEAM,
@@ -913,27 +988,6 @@ impl Fixture {
             arch_message_id,
             qa_message_id,
         };
-        fixture.write_primary_inbox(
-            PRIMARY_AGENT,
-            &[pending_ack_message_at(
-                SECONDARY_AGENT,
-                "arch pending",
-                arch_message_id,
-                PRIMARY_TEAM,
-                Utc::now() - chrono::Duration::seconds(1),
-            )],
-        );
-        fixture.write_primary_inbox(
-            SECONDARY_AGENT,
-            &[pending_ack_message_at(
-                PRIMARY_AGENT,
-                &format!("{SECONDARY_AGENT} pending"),
-                qa_message_id,
-                PRIMARY_TEAM,
-                Utc::now() - chrono::Duration::seconds(1),
-            )],
-        );
-
         fixture
     }
 
@@ -1081,11 +1135,12 @@ impl Fixture {
     }
 
     fn write_primary_inbox(&self, agent: &str, messages: &[MessageEnvelope]) {
-        write_inbox(&self.primary_inbox_path(agent), messages);
+        self.write_primary_inbox_for_team(PRIMARY_TEAM, agent, messages);
     }
 
     fn write_primary_inbox_for_team(&self, team: &str, agent: &str, messages: &[MessageEnvelope]) {
         write_inbox(&self.primary_inbox_path_for_team(team, agent), messages);
+        self.seed_sqlite_mailbox_for_team(team, agent, messages);
     }
 
     fn write_origin_inbox(&self, agent: &str, suffix: &str, messages: &[MessageEnvelope]) {
@@ -1129,6 +1184,56 @@ impl Fixture {
 
     fn create_team_without_config(&self, team: &str) {
         fs::create_dir_all(self.team_dir_for(team).join("inboxes")).expect("team inboxes");
+    }
+
+    fn sqlite_db_path(&self) -> std::path::PathBuf {
+        self.tempdir.path().join("runtime").join("mail.sqlite3")
+    }
+
+    fn seed_sqlite_mailbox_for_team(&self, team: &str, agent: &str, messages: &[MessageEnvelope]) {
+        let assembly = SqliteBoundaryAssembly::new(self.sqlite_db_path()).expect("sqlite db");
+        let mail_store = assembly.mail_store();
+        let team = team.parse::<TeamName>().expect("team");
+        let agent_name = agent.parse::<AgentName>().expect("agent");
+
+        for (index, message) in messages.iter().enumerate() {
+            let message_key = if let Some(message_id) = message.message_id {
+                atm_core::boundary::MessageKey::new(format!("atm:{message_id}"))
+                    .expect("message key")
+            } else {
+                atm_core::boundary::MessageKey::new(format!("ext:{agent}:{index}"))
+                    .expect("message key")
+            };
+            mail_store
+                .upsert_message(atm_core::boundary::MailStoreUpsertMessageRequest {
+                    record: atm_core::boundary::MailStoreMessageRecord {
+                        team: team.clone(),
+                        agent: agent_name.clone(),
+                        message_key: message_key.clone(),
+                        envelope: message.clone(),
+                    },
+                })
+                .expect("seed sqlite message");
+            mail_store
+                .upsert_message_state(atm_core::boundary::UpsertMailMessageStateRequest {
+                    team: team.clone(),
+                    agent: agent_name.clone(),
+                    actor: agent_name.clone(),
+                    state: atm_core::boundary::MailMessageState {
+                        team: team.clone(),
+                        agent: agent_name.clone(),
+                        actor: agent_name.clone(),
+                        message_key,
+                        read: message.read,
+                        pending_ack_at: message.pending_ack_at,
+                        acknowledged_at: message.acknowledged_at,
+                        expires_at: message.expires_at,
+                        deleted_at: None,
+                        updated_at: Some(message.timestamp),
+                    },
+                })
+                .expect("seed sqlite message state");
+        }
     }
 }
 

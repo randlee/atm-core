@@ -120,6 +120,12 @@ Purpose:
 
 Notes:
 - This stays the canonical durable truth behind send and receive workflows.
+- Retained command/runtime code now resolves mailbox durability only through the
+  installed store-backed runtime factory.
+- If that runtime factory is unavailable, ATM must fail closed with shared ATM
+  errors instead of selecting a second mailbox backend.
+- Compatibility inbox files remain ingress/export surfaces, not a parallel
+  durable mailbox implementation behind retained command logic.
 
 ## TaskStore
 
