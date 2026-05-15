@@ -10,6 +10,7 @@ dependencies = [
  "anyhow",
  "atm-daemon-bootstrap",
  "atm-daemon-client",
+ "atm-rusqlite",
  "chrono",
  "clap",
  "interprocess",
@@ -27,6 +28,7 @@ dependencies = [
 name = "agent-team-mail-core"
 version = "1.2.0"
 dependencies = [
+ "atm-rusqlite",
  "chrono",
  "fs2",
  "interprocess",

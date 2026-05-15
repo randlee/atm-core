@@ -1,5 +1,4 @@
 pub(crate) mod filters;
-pub(crate) mod legacy_path;
 pub(crate) mod metadata_selection;
 pub(crate) mod seen_state;
 pub(crate) mod state;
@@ -15,7 +14,7 @@ use crate::boundary;
 use crate::config;
 use crate::error::AtmError;
 use crate::identity;
-use crate::mailbox::source::{SourceFile, resolve_target};
+use crate::mailbox::source::resolve_target;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -25,11 +24,7 @@ use crate::types::{
     AckActivationMode, AgentName, CommandAction, DisplayBucket, IsoTimestamp, MessageClass,
     ReadSelection, SourceIndex, TaskId, TeamName,
 };
-use crate::workflow;
-use legacy_path::read_mail_legacy_path;
-use metadata_selection::{
-    effective_display_envelope, selection_state_for_mailbox_metadata_rows, sort_and_limit_selected,
-};
+use metadata_selection::{selection_state_for_mailbox_metadata_rows, sort_and_limit_selected};
 
 pub const MAX_CONTAINS_FILTER_LEN: usize = 1024;
 pub const MAX_TIMEOUT_SECS: u64 = 3600;
@@ -223,23 +218,12 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     let has_legacy_keys = metadata_rows
         .iter()
         .any(|row| row.message_key.as_ref().starts_with("legacy:"));
-    if has_legacy_keys && runtime.allows_legacy_mailbox_files() {
-        return read_mail_legacy_path(
-            query,
-            observability,
-            runtime,
-            actor,
-            actor_team,
-            target,
-            seen_watermark,
-        );
-    }
     if has_legacy_keys {
         return Err(AtmError::validation(
-            "sqlite mailbox metadata returned legacy-prefixed message keys in non-legacy runtime mode",
+            "sqlite mailbox metadata returned legacy-prefixed message keys",
         )
         .with_recovery(
-            "Repair or remove the malformed mailbox rows before retrying `atm read`; production runtimes must not downgrade back to file-backed mailbox reads.",
+            "Repair or remove the malformed mailbox rows before retrying `atm read`; production runtimes expose only the sqlite-backed mailbox path.",
         ));
     }
     let (mut bucket_counts, mut selected) =
@@ -618,89 +602,10 @@ fn apply_display_mutations_to_store<R: RetainedMailboxRuntime>(
     Ok(changed)
 }
 
-fn output_messages_from_selection(
-    selected: &[ClassifiedMessage],
-    source_files: &[SourceFile],
-    workflow_state: &workflow::WorkflowStateFile,
-) -> Vec<ClassifiedMessage> {
-    let projected = source_files
-        .iter()
-        .flat_map(|source| {
-            source
-                .messages
-                .iter()
-                .map(|message| workflow::project_envelope(message, workflow_state))
-        })
-        .collect::<Vec<_>>();
-    let thread_index = ThreadIndex::new(&projected);
-
-    selected
-        .iter()
-        .cloned()
-        .map(|selected_message| ClassifiedMessage {
-            source_index: selected_message.source_index,
-            source_path: selected_message.source_path.clone(),
-            bucket: selected_message.bucket,
-            class: selected_message.class,
-            envelope: source_files
-                .iter()
-                .find(|source| source.path == selected_message.source_path)
-                .and_then(|source| source.messages.get(selected_message.source_index.get()))
-                .map(|message| workflow::project_envelope(message, workflow_state))
-                .map(|message| effective_display_envelope(&message, &thread_index))
-                .unwrap_or(selected_message.envelope),
-        })
-        .collect()
-}
-
-#[derive(Debug, Default, Clone, Copy)]
-struct DisplayMutationResult {
-    any_changed: bool,
-    mailbox_changed: bool,
-    workflow_changed: bool,
-}
-
 fn displayed_messages_require_mutation(displayed_messages: &[ClassifiedMessage]) -> bool {
     displayed_messages
         .iter()
         .any(|message| !message.envelope.read)
-}
-
-fn apply_display_mutations(
-    source_files: &mut [SourceFile],
-    workflow_state: &mut workflow::WorkflowStateFile,
-    displayed_messages: &[ClassifiedMessage],
-    ack_activation_mode: AckActivationMode,
-    own_inbox: bool,
-) -> DisplayMutationResult {
-    let mut mutation = DisplayMutationResult::default();
-    let promote_unread =
-        own_inbox && ack_activation_mode == AckActivationMode::PromoteDisplayedUnread;
-    let now = IsoTimestamp::now();
-
-    for message in displayed_messages {
-        let transitioned = transition_displayed_message(message, promote_unread, now);
-        let updated = transitioned.into_envelope();
-        if updated == message.envelope {
-            continue;
-        }
-        if workflow::apply_projected_state(workflow_state, &message.envelope, &updated) {
-            mutation.any_changed = true;
-            mutation.workflow_changed = true;
-            continue;
-        }
-        if let Some(source_file) = source_files
-            .iter_mut()
-            .find(|source| source.path == message.source_path)
-            && let Some(stored) = source_file.messages.get_mut(message.source_index.get())
-        {
-            *stored = updated;
-            mutation.any_changed = true;
-            mutation.mailbox_changed = true;
-        }
-    }
-
-    mutation
 }
 
 fn transition_displayed_message(
@@ -752,25 +657,249 @@ fn transition_displayed_message(
 
 #[cfg(test)]
 mod tests {
+    use std::collections::HashMap;
     use std::path::PathBuf;
 
     use serde_json::Map;
+    use serde_json::Value;
     use tempfile::tempdir;
 
-    use super::ReadQuery;
-    use super::legacy_path::{
-        idle_notification_sender, selected_after_filters, selection_state_for_source_files,
-    };
+    use super::{BucketCounts, ClassifiedMessage, ReadQuery, metadata_selection, state};
     use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
+    use crate::mailbox::surface::dedupe_message_id_surface;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::threading::ThreadIndex;
     use crate::types::{
         AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
         TaskId, TeamName,
     };
     use crate::workflow;
+
+    fn selection_state_for_source_files(
+        source_files: &[SourceFile],
+        workflow_state: &workflow::WorkflowStateFile,
+        query: &ReadQuery,
+        seen_watermark: Option<IsoTimestamp>,
+    ) -> (BucketCounts, Vec<ClassifiedMessage>) {
+        let classified_all = classify_all(
+            apply_idle_notification_dedup(
+                dedupe_message_id_surface(
+                    merged_surface(source_files),
+                    |message: &SourcedMessage| message.envelope.message_id,
+                    |message: &SourcedMessage| message.envelope.timestamp,
+                ),
+                workflow_state,
+            ),
+            workflow_state,
+        );
+        if let Some(message_id) = query.message_id_filter {
+            let selected = classified_all
+                .iter()
+                .filter(|message| message.envelope.message_id == Some(message_id))
+                .cloned()
+                .collect();
+            let logical_current = metadata_selection::logical_current_messages(classified_all);
+            let bucket_counts = metadata_selection::bucket_counts_for(&logical_current);
+            return (bucket_counts, selected);
+        }
+        let logical_current = metadata_selection::logical_current_messages(classified_all);
+        let bucket_counts = metadata_selection::bucket_counts_for(&logical_current);
+        let filtered = metadata_selection::apply_filters(
+            logical_current,
+            query.sender_filter.as_ref(),
+            query.timestamp_filter,
+            query.task_filter.as_ref(),
+            query.contains_filter.as_deref(),
+        );
+        let selected =
+            metadata_selection::select_messages(&filtered, query.selection_mode, seen_watermark);
+        (bucket_counts, selected)
+    }
+
+    fn selected_after_filters(
+        messages: &[SourcedMessage],
+        workflow_state: &workflow::WorkflowStateFile,
+        query: &ReadQuery,
+        seen_watermark: Option<IsoTimestamp>,
+    ) -> Vec<ClassifiedMessage> {
+        let classified = classify_all(messages.to_vec(), workflow_state);
+        if let Some(message_id) = query.message_id_filter {
+            return classified
+                .into_iter()
+                .filter(|message| message.envelope.message_id == Some(message_id))
+                .collect();
+        }
+        let filtered = metadata_selection::apply_filters(
+            metadata_selection::logical_current_messages(classified),
+            query.sender_filter.as_ref(),
+            query.timestamp_filter,
+            query.task_filter.as_ref(),
+            query.contains_filter.as_deref(),
+        );
+        metadata_selection::select_messages(&filtered, query.selection_mode, seen_watermark)
+    }
+
+    fn merged_surface(source_files: &[SourceFile]) -> Vec<SourcedMessage> {
+        source_files
+            .iter()
+            .flat_map(|source| {
+                source
+                    .messages
+                    .iter()
+                    .cloned()
+                    .enumerate()
+                    .map(|(source_index, envelope)| SourcedMessage {
+                        envelope,
+                        source_path: source.path.clone(),
+                        source_index: source_index.into(),
+                    })
+            })
+            .collect()
+    }
+
+    fn apply_idle_notification_dedup(
+        deduped: Vec<SourcedMessage>,
+        workflow_state: &workflow::WorkflowStateFile,
+    ) -> Vec<SourcedMessage> {
+        let projected = deduped
+            .into_iter()
+            .map(|message| SourcedMessage {
+                envelope: workflow::project_envelope(&message.envelope, workflow_state),
+                source_path: message.source_path,
+                source_index: message.source_index,
+            })
+            .collect::<Vec<_>>();
+        let latest_idle_for_sender = messages_from_idle_sender(&projected);
+
+        projected
+            .into_iter()
+            .enumerate()
+            .filter_map(|(index, message)| {
+                dedupe_idle_notifications(index, &message, &latest_idle_for_sender)
+                    .then_some(message)
+            })
+            .collect()
+    }
+
+    fn dedupe_idle_notifications(
+        index: usize,
+        message: &SourcedMessage,
+        latest_idle_for_sender: &HashMap<AgentName, usize>,
+    ) -> bool {
+        if !is_unread_idle_notification(&message.envelope) {
+            return true;
+        }
+
+        idle_sender(&message.envelope)
+            .and_then(|sender| latest_idle_for_sender.get(&sender))
+            .map(|keep_index| *keep_index == index)
+            .unwrap_or(true)
+    }
+
+    fn messages_from_idle_sender(messages: &[SourcedMessage]) -> HashMap<AgentName, usize> {
+        let mut latest_idle_for_sender = HashMap::new();
+
+        for (index, message) in messages.iter().enumerate() {
+            if !is_unread_idle_notification(&message.envelope) {
+                continue;
+            }
+
+            if let Some(sender) = idle_sender(&message.envelope) {
+                latest_idle_for_sender
+                    .entry(sender)
+                    .and_modify(|keep_index| *keep_index = index)
+                    .or_insert(index);
+            }
+        }
+
+        latest_idle_for_sender
+    }
+
+    fn is_unread_idle_notification(message: &MessageEnvelope) -> bool {
+        !message.read && idle_notification_sender(message).is_some()
+    }
+
+    fn idle_sender(message: &MessageEnvelope) -> Option<AgentName> {
+        idle_notification_sender(message)
+    }
+
+    fn idle_notification_sender(message: &MessageEnvelope) -> Option<AgentName> {
+        let value = match serde_json::from_str::<Value>(&message.text) {
+            Ok(value) => value,
+            Err(error) => {
+                if message.text.contains("idle_notification") {
+                    tracing::debug!(
+                        %error,
+                        recovery = "Repair or remove the malformed Claude idle-notification JSON. ATM will continue treating the record as a normal mailbox message.",
+                        message_text = %message.text,
+                        "ignoring malformed idle-notification JSON while classifying read surface"
+                    );
+                }
+                return None;
+            }
+        };
+
+        if value.get("type").and_then(Value::as_str) != Some("idle_notification") {
+            return None;
+        }
+
+        match value.get("from").and_then(Value::as_str) {
+            Some(sender) => match sender.parse() {
+                Ok(sender) => Some(sender),
+                Err(error) => {
+                    tracing::debug!(
+                        %error,
+                        recovery = "Ensure Claude idle-notification payloads include a valid ATM agent name in `from`. ATM will continue treating the record as a normal mailbox message.",
+                        sender,
+                        message_text = %message.text,
+                        "ignoring malformed idle-notification payload with invalid `from`"
+                    );
+                    None
+                }
+            },
+            None => {
+                tracing::debug!(
+                    recovery = "Ensure Claude idle-notification payloads include a string `from` field. ATM will continue treating the record as a normal mailbox message.",
+                    message_text = %message.text,
+                    "ignoring malformed idle-notification payload missing string `from`"
+                );
+                None
+            }
+        }
+    }
+
+    fn classify_all(
+        messages: Vec<SourcedMessage>,
+        workflow_state: &workflow::WorkflowStateFile,
+    ) -> Vec<ClassifiedMessage> {
+        let projected = messages
+            .iter()
+            .map(|message| workflow::project_envelope(&message.envelope, workflow_state))
+            .collect::<Vec<_>>();
+        let thread_index = ThreadIndex::new(&projected);
+
+        messages
+            .into_iter()
+            .zip(projected.iter().cloned())
+            .map(|(message, projected)| {
+                let effective =
+                    metadata_selection::effective_display_envelope(&projected, &thread_index);
+                let class = state::classify_message(&effective);
+                let bucket = state::display_bucket_for_class(class);
+
+                ClassifiedMessage {
+                    source_index: message.source_index,
+                    source_path: message.source_path,
+                    bucket,
+                    class,
+                    envelope: effective,
+                }
+            })
+            .collect()
+    }
 
     fn sourced_message(index: usize, text: &str) -> SourcedMessage {
         SourcedMessage {

@@ -333,14 +333,20 @@ impl<'a> StorageEnvelope<'a> {
             read: false,
             source_team: &envelope.source_team,
             summary: &envelope.summary,
-            message_id: envelope.message_id.as_ref().map(ToString::to_string),
+            message_id: envelope
+                .message_id
+                .as_ref()
+                .map(|value| value.into_uuid_wire().to_string()),
             pending_ack_at: None,
             acknowledged_at: None,
             acknowledges_message_id: envelope
                 .acknowledges_message_id
                 .as_ref()
-                .map(ToString::to_string),
-            parent_message_id: envelope.parent_message_id.as_ref().map(ToString::to_string),
+                .map(|value| value.into_uuid_wire().to_string()),
+            parent_message_id: envelope
+                .parent_message_id
+                .as_ref()
+                .map(|value| value.into_uuid_wire().to_string()),
             thread_mode: &envelope.thread_mode,
             task_id: &envelope.task_id,
             extra: &envelope.extra,

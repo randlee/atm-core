@@ -3239,9 +3239,12 @@ Goal:
 - add guardrails that catch stale legacy paths and silent regressions earlier
 
 Status note:
-- `X.0` in progress on `feature/pX-lint-gates`
+- `X.0` complete on `feature/pX-lint-gates`
   - target: `develop`
   - scope: silent-emit regression gate and RULE-002 function-length gate
+- `X.1` complete on `feature/pX-s1-mailbox-runtime-cutover`
+  - target: `integrate/phase-X`
+  - scope: retained mailbox runtime cutover to a fail-closed SQLite/store-backed path
 
 Execution shape:
 - pre-phase prerequisite:

@@ -197,6 +197,7 @@ where
     Ok(result)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn project_envelope(
     envelope: &MessageEnvelope,
     workflow_state: &WorkflowStateFile,
@@ -218,6 +219,7 @@ pub(crate) fn project_envelope(
     projected_envelope
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn apply_projected_state(
     workflow_state: &mut WorkflowStateFile,
     original: &MessageEnvelope,
@@ -242,6 +244,7 @@ pub(crate) fn apply_projected_state(
     true
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn remove_message_state(
     workflow_state: &mut WorkflowStateFile,
     envelope: &MessageEnvelope,

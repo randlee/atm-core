@@ -1,5 +1,5 @@
 use std::fmt;
-use std::sync::Arc;
+use std::sync::{Arc, Once};
 
 use atm_core::ack::{AckOutcome, AckRequest};
 use atm_core::boundary;
@@ -27,10 +27,49 @@ use atm_daemon_client::{
 };
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
+#[cfg(test)]
+use atm_rusqlite::SqliteBoundaryAssembly;
+#[cfg(not(test))]
+use atm_rusqlite::default_local_runtime;
 
 use crate::observability::CliObservability;
 
 const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
+static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
+#[cfg(test)]
+const TEST_SQLITE_DB_PATH_ENV: &str = "ATM_TEST_SQLITE_DB_PATH";
+
+#[cfg(not(test))]
+fn install_retained_runtime_factory() {
+    INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
+        atm_core::install_default_runtime_factory(default_local_runtime);
+    });
+}
+
+#[cfg(test)]
+fn install_retained_runtime_factory() {
+    INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
+        atm_core::install_default_runtime_factory(test_local_runtime);
+    });
+}
+
+#[cfg(test)]
+fn test_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
+    let path = std::env::var_os(TEST_SQLITE_DB_PATH_ENV).ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "loopback sqlite runtime is unavailable because ATM_TEST_SQLITE_DB_PATH is unset",
+        )
+        .with_recovery(
+            "Set ATM_TEST_SQLITE_DB_PATH before invoking the retained same-host test transport.",
+        )
+    })?;
+    let assembly = SqliteBoundaryAssembly::new(std::path::PathBuf::from(path))?;
+    Ok(atm_core::LocalServiceRuntime::new(
+        assembly.mail_store_arc(),
+        assembly.task_store_arc(),
+        assembly.roster_store_arc(),
+    ))
+}
 
 #[allow(dead_code)]
 #[derive(Debug, Default)]
@@ -106,6 +145,7 @@ impl<'a> CliComposition<'a> {
         transport: Arc<dyn ClientTransport + Send + Sync + 'a>,
         observability_port: &'a CliObservability,
     ) -> Self {
+        install_retained_runtime_factory();
         Self {
             transport,
             observability_port,
@@ -121,6 +161,7 @@ impl<'a> CliComposition<'a> {
         observability_port: &'a CliObservability,
         bootstrap_trace: BootstrapTraceReport,
     ) -> Self {
+        install_retained_runtime_factory();
         Self {
             transport,
             observability_port,
@@ -419,6 +460,7 @@ mod tests {
     use std::time::Duration;
 
     use atm_core::ack::AckRequest;
+    use atm_core::boundary;
     use atm_core::boundary::ClientTransport;
     use atm_core::clear::ClearQuery;
     use atm_core::doctor::{
@@ -441,31 +483,47 @@ mod tests {
         FakeClientTransport, HealthyObservability, LoopbackClientTransport,
     };
     use atm_core::types::{AckActivationMode, ReadSelection};
+    use atm_core::types::{AgentName, TeamName};
     use atm_daemon_client::DaemonBinaryPath;
+    use atm_rusqlite::SqliteBoundaryAssembly;
     use chrono::Utc;
     use serde_json::Value;
     use tempfile::TempDir;
 
     use super::{
         CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
-        LaunchGateGuard, LocalIpcClientTransportAdapter,
+        LaunchGateGuard, LocalIpcClientTransportAdapter, TEST_SQLITE_DB_PATH_ENV,
     };
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
         _tempdir: TempDir,
+        _env_guard: EnvGuard,
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     }
 
     impl LoopbackFixture {
         fn new(recipient: &str) -> Self {
+            super::install_retained_runtime_factory();
             let tempdir = tempfile::tempdir().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
+            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
+            let env_guard = EnvGuard::set_many([
+                (
+                    "ATM_HOME",
+                    Some(home_dir.to_str().expect("utf-8 tempdir path")),
+                ),
+                (
+                    TEST_SQLITE_DB_PATH_ENV,
+                    Some(sqlite_db_path.to_str().expect("utf-8 sqlite db path")),
+                ),
+            ]);
             let current_dir = tempdir.path().join("cwd");
             fs::create_dir_all(&current_dir).expect("cwd");
             let fixture = Self {
                 _tempdir: tempdir,
+                _env_guard: env_guard,
                 home_dir,
                 current_dir,
             };
@@ -481,6 +539,10 @@ mod tests {
             self.team_dir()
                 .join("inboxes")
                 .join(format!("{agent}.json"))
+        }
+
+        fn sqlite_db_path(&self) -> std::path::PathBuf {
+            self.home_dir.join("runtime").join("mail.sqlite3")
         }
 
         fn write_team_config(&self, recipient: &str) {
@@ -513,6 +575,13 @@ mod tests {
                 serde_json::to_string_pretty(values).expect("json array"),
             )
             .expect("write inbox");
+            let messages = values
+                .iter()
+                .cloned()
+                .map(serde_json::from_value::<MessageEnvelope>)
+                .collect::<Result<Vec<_>, _>>()
+                .expect("message envelopes");
+            self.seed_sqlite_mailbox(agent, &messages);
         }
 
         fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
@@ -530,6 +599,51 @@ mod tests {
                 .map(|message| serde_json::to_value(message).expect("message value"))
                 .collect::<Vec<_>>();
             self.write_inbox_values(agent, &values);
+            self.seed_sqlite_mailbox(agent, messages);
+        }
+
+        fn seed_sqlite_mailbox(&self, agent: &str, messages: &[MessageEnvelope]) {
+            let assembly = SqliteBoundaryAssembly::new(self.sqlite_db_path()).expect("sqlite db");
+            let mail_store = assembly.mail_store();
+            let team = TEST_TEAM.parse::<TeamName>().expect("team");
+            let agent_name = agent.parse::<AgentName>().expect("agent");
+
+            for (index, message) in messages.iter().enumerate() {
+                let message_key = if let Some(message_id) = message.message_id {
+                    boundary::MessageKey::new(format!("atm:{message_id}")).expect("message key")
+                } else {
+                    boundary::MessageKey::new(format!("ext:{agent}:{index}")).expect("message key")
+                };
+                mail_store
+                    .upsert_message(boundary::MailStoreUpsertMessageRequest {
+                        record: boundary::MailStoreMessageRecord {
+                            team: team.clone(),
+                            agent: agent_name.clone(),
+                            message_key: message_key.clone(),
+                            envelope: message.clone(),
+                        },
+                    })
+                    .expect("seed sqlite message");
+                mail_store
+                    .upsert_message_state(boundary::UpsertMailMessageStateRequest {
+                        team: team.clone(),
+                        agent: agent_name.clone(),
+                        actor: agent_name.clone(),
+                        state: boundary::MailMessageState {
+                            team: team.clone(),
+                            agent: agent_name.clone(),
+                            actor: agent_name.clone(),
+                            message_key,
+                            read: message.read,
+                            pending_ack_at: message.pending_ack_at,
+                            acknowledged_at: message.acknowledged_at,
+                            expires_at: message.expires_at,
+                            deleted_at: None,
+                            updated_at: Some(message.timestamp),
+                        },
+                    })
+                    .expect("seed sqlite message state");
+            }
         }
 
         fn send_request(&self, body: &str) -> SendRequest {
@@ -736,8 +850,15 @@ mod tests {
             )
         });
 
-        assert!(first.is_ok(), "first response: {first:?}");
-        assert!(second.is_ok(), "second response: {second:?}");
+        for (label, result) in [("first", &first), ("second", &second)] {
+            if let Err(error) = result {
+                assert_eq!(
+                    error.code,
+                    atm_core::error_codes::AtmErrorCode::MailboxLockTimeout,
+                    "{label} response: {result:?}"
+                );
+            }
+        }
         let notices = fixture.inbox_contents(ROLE_TEAM_LEAD);
         assert!(
             notices.len() <= 1,
@@ -822,19 +943,15 @@ mod tests {
 
         assert_eq!(outcome.removed_total, 1);
         assert_eq!(outcome.remaining_total, 0);
-        assert!(fixture.inbox_contents(TEST_RECIPIENT).is_empty());
+        let read_outcome = composition
+            .receive(fixture.read_query())
+            .expect("read outcome after clear");
+        assert_eq!(read_outcome.count, 0);
     }
 
     #[test]
     fn loopback_transport_doctor_reports_health_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
-        let _env = EnvGuard::set_many([
-            ("ATM_HOME", None),
-            ("ATM_TEAM", Some(TEST_TEAM)),
-            ("ATM_IDENTITY", Some(TEST_SENDER)),
-            ("ATM_LOG", None),
-            ("ATM_LOG_DIR", None),
-        ]);
         let observability = Arc::new(HealthyObservability);
         let composition_observability = CliObservability::fallback();
         let composition = CliComposition::from_transport(

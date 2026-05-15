@@ -42,10 +42,10 @@ pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Atm
 /// Lock, load, mutate, and atomically rewrite one mailbox file.
 ///
 /// Production mutation paths use equivalent lock coverage through
-/// `mailbox::store::with_locked_source_files()` plus
-/// `mailbox::store::commit_source_files()`. This helper stays test-only so unit
-/// tests can exercise the shared mailbox lock contract directly without the
-/// workflow/state sidecars required in production commands.
+/// `workflow::commit_workflow_state()` plus `mailbox::store::commit_source_files()`.
+/// This helper stays test-only so unit tests can exercise the shared mailbox
+/// lock contract directly without the workflow/state sidecars required in
+/// production commands.
 ///
 /// # Errors
 ///

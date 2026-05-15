@@ -2,15 +2,11 @@
 
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::time::Duration;
 
 use crate::config;
 use crate::error::AtmError;
 use crate::mailbox::atomic;
-use crate::mailbox::lock;
-use crate::mailbox::source::{
-    SourceFile, discover_source_paths, load_source_files, rediscover_and_validate_source_paths,
-};
+use crate::mailbox::source::{SourceFile, discover_source_paths, load_source_files};
 use crate::schema::MessageEnvelope;
 use crate::schema::inbox_message::SharedInboxExportPolicy;
 use crate::types::{AgentName, TeamName};
@@ -77,60 +73,11 @@ pub(crate) fn observe_source_files(
     load_source_files(&source_paths)
 }
 
-/// Reload one mailbox source set under the deterministic mailbox lock plan
-/// without forcing the caller into an inbox rewrite.
-pub(crate) fn with_locked_source_files<T, I, F>(
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-    extra_write_paths: I,
-    timeout: Duration,
-    body: F,
-) -> Result<T, AtmError>
-where
-    I: IntoIterator<Item = PathBuf>,
-    F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
-{
-    with_locked_source_files_hook(
-        home_dir,
-        team,
-        agent,
-        extra_write_paths,
-        timeout,
-        |_| Ok(()),
-        body,
-    )
-}
-
-fn with_locked_source_files_hook<T, I, H, F>(
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-    extra_write_paths: I,
-    timeout: Duration,
-    before_load: H,
-    body: F,
-) -> Result<T, AtmError>
-where
-    I: IntoIterator<Item = PathBuf>,
-    H: FnOnce(&[PathBuf]) -> Result<(), AtmError>,
-    F: FnOnce(&[PathBuf], &mut Vec<SourceFile>) -> Result<T, AtmError>,
-{
-    let source_paths = discover_source_paths(home_dir, team, agent)?;
-    let mut write_paths = source_paths.clone();
-    write_paths.extend(extra_write_paths);
-    let _locks = lock::acquire_many_sorted(write_paths, timeout)?;
-    let source_paths = rediscover_and_validate_source_paths(&source_paths, home_dir, team, agent)?;
-    before_load(&source_paths)?;
-    let mut source_files = load_source_files(&source_paths)?;
-    body(&source_paths, &mut source_files)
-}
-
 #[cfg(test)]
 mod tests {
     use tempfile::tempdir;
 
-    use super::{commit_mailbox_state, commit_source_files, with_locked_source_files_hook};
+    use super::{commit_mailbox_state, commit_source_files};
     use crate::mailbox::read_messages;
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -244,48 +191,6 @@ mod tests {
         assert!(error.is_mailbox_write());
         assert_eq!(read_messages(&first_path).expect("first inbox").len(), 1);
         assert!(!later_path.exists());
-    }
-
-    #[test]
-    fn injected_before_load_hook_can_fail_closed_without_production_env_seam() {
-        let tempdir = tempdir().expect("tempdir");
-        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
-        let inbox_dir = team_dir.join("inboxes");
-        std::fs::create_dir_all(&inbox_dir).expect("inbox dir");
-        std::fs::write(
-            team_dir.join("config.json"),
-            serde_json::json!({
-                "members": [{"name": TEST_SENDER}, {"name": ROLE_TEAM_LEAD}]
-            })
-            .to_string(),
-        )
-        .expect("config");
-        let inbox_path = inbox_dir.join(format!("{TEST_SENDER}.json"));
-        commit_mailbox_state(&inbox_path, &[sample_message(ROLE_TEAM_LEAD, "hello")])
-            .expect("seed");
-
-        let error = with_locked_source_files_hook(
-            tempdir.path(),
-            &TEST_TEAM.parse().expect("team"),
-            &TEST_SENDER.parse().expect("sender"),
-            std::iter::empty::<std::path::PathBuf>(),
-            std::time::Duration::from_secs(1),
-            |paths| {
-                let path = paths.first().expect("first path");
-                std::fs::remove_file(path).map_err(|source| {
-                    crate::error::AtmError::mailbox_write(format!(
-                        "failed to remove locked inbox {} during test injection: {source}",
-                        path.display()
-                    ))
-                    .with_source(source)
-                })
-            },
-            |_paths, _source_files| Ok(()),
-        )
-        .expect_err("hook failure");
-
-        assert!(error.is_mailbox_read());
-        assert!(!inbox_path.exists());
     }
 
     fn sample_message(from: &str, text: &str) -> MessageEnvelope {

@@ -17,6 +17,7 @@ pub(crate) struct SourceFile {
     pub messages: Vec<MessageEnvelope>,
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 #[derive(Debug, Clone)]
 pub(crate) struct SourcedMessage {
     pub envelope: MessageEnvelope,
@@ -141,6 +142,7 @@ pub(crate) fn discover_source_paths(
     Ok(paths)
 }
 
+#[cfg(test)]
 pub(crate) fn rediscover_and_validate_source_paths(
     locked_paths: &[PathBuf],
     home_dir: &Path,

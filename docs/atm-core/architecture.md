@@ -141,6 +141,11 @@ Follow-up work:
   façade interfaces with hidden implementations.
 - `atm-core` must keep production failure handling structured with typed
   `Result`/error-enum boundaries rather than routine panic/unwrap paths.
+- retained mailbox runtime selection must be fail-closed and store-backed only;
+  `atm-core` must not preserve a file-backed mailbox fallback once the Phase X
+  cutover line lands
+- compatibility inbox files may survive only as ingress/export edges; retained
+  command/runtime logic must not treat them as a second durable mailbox backend
 
 Observability release boundary rules:
 - raw `serde_json::Value` / `serde_json::Map` remain internal translation types

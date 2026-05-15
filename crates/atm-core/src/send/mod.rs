@@ -11,11 +11,12 @@ use crate::boundary;
 use crate::config;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::identity;
+use crate::mailbox;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
-use crate::service_runtime_store::{RetainedMailboxRuntime, legacy_runtime};
+use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 use crate::workflow;
@@ -150,7 +151,7 @@ pub fn send_mail(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
 ) -> Result<SendOutcome, AtmError> {
-    let runtime = legacy_runtime();
+    let runtime = default_runtime()?;
     send_mail_with_runtime(request, observability, &runtime)
 }
 
@@ -501,11 +502,11 @@ pub(crate) fn append_mailbox_message_and_seed_workflow(
             // Accepted risk: mailbox lock acquisition is time-bounded, but the
             // subsequent file read is synchronous and may still stall on a bad
             // filesystem while the lock is held.
-            let mut inbox_messages = runtime.read_messages(inbox_path)?;
+            let mut inbox_messages = mailbox::read_messages(inbox_path)?;
             let mut prepared = envelope.clone();
             prepare_threaded_message(&mut prepared, &inbox_messages)?;
             inbox_messages.push(prepared.clone());
-            runtime.commit_mailbox_state(inbox_path, &inbox_messages)?;
+            mailbox::store::commit_mailbox_state(inbox_path, &inbox_messages)?;
             mirror_message_to_store(runtime, team, agent, &prepared)?;
             Ok((
                 (),

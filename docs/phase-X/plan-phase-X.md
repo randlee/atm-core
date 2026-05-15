@@ -56,7 +56,7 @@ Predecessor gate:
 Pre-phase prerequisite:
 - before `integrate/phase-X` is created, the following guardrails must land on
   `develop` through a standalone branch such as `feature/pX-lint-gates`:
-  - `scripts/check-silent-emit.sh`
+  - `scripts/check-silent-emit.py`
   - `scripts/check-function-length.py`
 - reason:
   - these gates must already be live on every Phase `X` sprint branch from its

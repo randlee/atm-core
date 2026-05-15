@@ -68,8 +68,6 @@ pub(crate) mod threading;
 pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
-/// Transitional legacy placeholder adapters extracted from retained runtime glue.
-pub(crate) mod unsupported_adapters;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
