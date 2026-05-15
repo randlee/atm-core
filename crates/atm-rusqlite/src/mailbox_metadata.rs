@@ -164,15 +164,10 @@ pub fn query_mailbox_metadata_rows(
     limit: Option<usize>,
 ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
     db.with_connection(|connection| {
-        let limit_i64 = limit
-            .map(i64::try_from)
-            .transpose()
-            .map_err(|_| {
-                AtmError::validation("mailbox metadata limit exceeds sqlite i64 range".to_string())
-                    .with_recovery(
-                        "Use a smaller mailbox metadata limit before retrying the query.",
-                    )
-            })?;
+        let limit_i64 = limit.map(i64::try_from).transpose().map_err(|_| {
+            AtmError::validation("mailbox metadata limit exceeds sqlite i64 range".to_string())
+                .with_recovery("Use a smaller mailbox metadata limit before retrying the query.")
+        })?;
         let sql = if limit_i64.is_some() {
             "SELECT
                  mail_messages.message_key,

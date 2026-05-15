@@ -28,6 +28,7 @@ dependencies = [
 name = "agent-team-mail-core"
 version = "1.2.0"
 dependencies = [
+ "atm-runtime-test-support",
  "atm-rusqlite",
  "chrono",
  "fs2",
@@ -116,6 +117,7 @@ name = "atm-daemon"
 version = "1.2.0"
 dependencies = [
  "agent-team-mail-core",
+ "atm-runtime-test-support",
  "atm-rusqlite",
  "chrono",
  "fs2",
@@ -160,6 +162,14 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tracing",
+]
+
+[[package]]
+name = "atm-runtime-test-support"
+version = "1.2.0"
+dependencies = [
+ "agent-team-mail-core",
+ "atm-rusqlite",
 ]
 
 [[package]]
