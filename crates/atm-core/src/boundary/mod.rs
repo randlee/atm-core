@@ -3,11 +3,11 @@
 use crate::error::AtmError;
 use crate::graft::AdvisoryStreamRequest;
 use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
-use crate::schema::AtmMessageId;
 pub use crate::protocol::{
     NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
     WatchSubscriptionRequest,
 };
+use crate::schema::AtmMessageId;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::path::Path;

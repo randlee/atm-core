@@ -126,8 +126,11 @@ def find_function_spans(path: Path) -> list[FunctionSpan]:
         name = match.group(1)
         signature_end = index
         while signature_end < len(lines) and "{" not in lines[signature_end]:
+            if ";" in lines[signature_end]:
+                signature_end = -1
+                break
             signature_end += 1
-        if signature_end >= len(lines):
+        if signature_end < 0 or signature_end >= len(lines):
             index += 1
             continue
 

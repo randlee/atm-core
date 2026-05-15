@@ -1,7 +1,7 @@
 ---
 id: X.5
 title: Guardrails And Closeout Verification
-status: planned
+status: complete
 branch: feature/pX-s5-guardrails-and-closeout
 worktree: ../atm-core-worktrees/feature/pX-s5-guardrails-and-closeout
 target: integrate/phase-X
@@ -24,8 +24,8 @@ target: integrate/phase-X
 
 ## Exact Targets
 
-- `scripts/check-legacy-mailbox-paths.sh`
-- `scripts/check-capability-degradation.sh`
+- `scripts/check-legacy-mailbox-paths.py`
+- `scripts/check-capability-degradation.py`
 - CI workflow files that own repository gate execution
 - `.claude/assets/sc-rust/quality-mgr/templates/`
 - `.claude/skills/rust-development/guidelines.txt`
@@ -65,6 +65,29 @@ target: integrate/phase-X
   - Rust development guidelines daemon structured-logging advisory
 - deletion-sprint QA instructions explicitly require whole-workspace pattern
   searches for removed legacy constructs
+
+## Delivered
+
+- added Phase `X` closeout guardrail scripts:
+  - `scripts/check-legacy-mailbox-paths.py`
+  - `scripts/check-capability-degradation.py`
+- wired those gates into the active local lint surface:
+  - `Justfile`
+  - `.just/run_lint.py`
+  - `.just/print_help.py`
+  - `.just` unit coverage for the new entries
+- fixed the RULE-002 helper to ignore trait method declarations so the
+  function-length gate only evaluates real function bodies
+- updated QA/checklist language so deletion sprints must search the full
+  workspace for each removed legacy construct family, not only touched files
+- verified the carried baseline from `TASK-1515` remains present while adding
+  the new deletion and dependency-ownership closeout checks
+- moved the production retained-runtime factory install edge into
+  `atm-daemon-bootstrap` and removed the stale direct production
+  `atm -> atm-rusqlite` dependency
+- added `atm-runtime-test-support` for SQLite retained-runtime test assembly,
+  including a process-visible runtime-path guard that works for spawned threads
+  without deadlocking multi-fixture tests
 
 ## Required Validation
 

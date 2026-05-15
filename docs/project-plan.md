@@ -3183,6 +3183,17 @@ Status note:
   - scope: removed filesystem team discovery from daemon runtime hydration,
     added explicit `RosterStore` team enumeration, and aligned core/daemon
     boundary docs with store-owned team/member runtime truth
+- `X.4` complete on `feature/pX-s4-replay-and-ipc-consolidation`
+  - target: `integrate/phase-X`
+  - scope: made replay persistence fail closed at daemon startup, decomposed
+    the oversized peer-transport paths, and collapsed same-host helper
+    ownership onto `atm-daemon-client`
+- `X.5` complete on `feature/pX-s5-guardrails-and-closeout`
+  - target: `integrate/phase-X`
+  - scope: added legacy-mailbox and replay-capability regression gates,
+    verified dependency ownership on the active lint surface, tightened
+    deletion-sprint QA instructions, and moved the retained-runtime bootstrap
+    edge out of the CLI production dependency line
 
 Pre-phase prerequisite:
 - before `integrate/phase-X` starts, a standalone develop-targeting PR
@@ -3232,18 +3243,6 @@ Acceptance:
   reuse and the current `main` CLI baseline it must preserve
 - duplicate interface-specific error/reporting implementations for the same
   touched failure class are marked for consolidation rather than preservation
-- no Phase W scope item relies on an implicit discovery sprint
-- Phase `W` closes only when shared CLI / graft / peer ATM error-code parity
-  and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`
-- the Phase `W` closeout gate in `docs/plan-phase-W.md` remains authoritative
-  for final merged-state certification
-
-Execution rules:
-- no Phase `X` sprint may preserve or add a mailbox durability fallback path
-- the silent-emit and RULE-002 gates are treated as already-live pre-phase
-  develop prerequisites, not delayed `integrate/phase-X` sprint work
-- file watchers may remain only as ingress/reconcile edges, not as a parallel
-  mailbox backend
 - no Phase `X` scope item relies on an implicit discovery sprint
 - Phase `X` closes only when the legacy mailbox/runtime deletion gates,
   same-host helper deduplication, and daemon SQLite-runtime truth rules are
