@@ -7,6 +7,7 @@ pub use crate::protocol::{
     NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
     WatchSubscriptionRequest,
 };
+use crate::schema::AtmMessageId;
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::str::FromStr;

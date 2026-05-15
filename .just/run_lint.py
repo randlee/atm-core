@@ -28,6 +28,8 @@ PYTHON_LINT_ORDER = (
     "manifests",
     "silent-emit",
     "function-length",
+    "legacy-mailbox-paths",
+    "capability-degradation",
     "identities",
     "fixed-sleep",
     "ttl-triage",
@@ -38,7 +40,19 @@ PYTHON_LINT_ORDER = (
 )
 EXTRA_LINTS = ("sc-boundary", "sc-portability")
 CARGO_LINT_ORDER = ("fmt", "clippy", "deny", "shear")
-FAST_LINT_ORDER = ("fmt", "version", "boundaries", "manifests", "silent-emit", "function-length", "spell", "pytests")
+FAST_LINT_ORDER = (
+    "fmt",
+    "version",
+    "boundaries",
+    "manifests",
+    "shear",
+    "silent-emit",
+    "function-length",
+    "legacy-mailbox-paths",
+    "capability-degradation",
+    "spell",
+    "pytests",
+)
 HIGH_VOLUME_LINTS = {"identities", "lines"}
 CRATE_INVENTORY_LINTS = {"fmt", "clippy", "modules", "boundaries", "sc-boundary", "sc-portability", "manifests"}
 COUNT_PATTERNS = (
@@ -102,6 +116,14 @@ def build_tasks(repo_root: Path) -> dict[str, LintTask]:
         ),
         "function-length": LintTask(
             "function-length", [python_executable, str(repo_root / "scripts/check-function-length.py")]
+        ),
+        "legacy-mailbox-paths": LintTask(
+            "legacy-mailbox-paths",
+            [python_executable, str(repo_root / "scripts/check-legacy-mailbox-paths.py")],
+        ),
+        "capability-degradation": LintTask(
+            "capability-degradation",
+            [python_executable, str(repo_root / "scripts/check-capability-degradation.py")],
         ),
         "spell": LintTask("spell", [python_executable, str(repo_root / ".just/lint_codespell.py")]),
         "fixed-sleep": LintTask(
