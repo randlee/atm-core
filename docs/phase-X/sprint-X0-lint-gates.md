@@ -27,6 +27,9 @@ target: develop
 - none
 - treat `X.0` as a satisfied prerequisite on the restart line
 - later sprint QA should only verify the inherited lint gates remain active
+- include an explicit gate-liveness check during later QA:
+  - `scripts/check-silent-emit.py`
+  - `scripts/check-function-length.py`
 
 ## Goal
 

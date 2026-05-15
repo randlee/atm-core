@@ -32,6 +32,9 @@ target: integrate/phase-Xb
   `cdb1edd...` closeout work onto `feature/pXb-s5-guardrails-and-closeout`
 - exclude old merge-repair and branch-topology noise that is specific to the
   abandoned `phase-X` line
+- preserve the corrected restart-line script inventory while replaying `X.5`:
+  - use `scripts/check-legacy-mailbox-paths.py`, not the old `.sh` name
+  - use `scripts/check-capability-degradation.py`, not the old `.sh` name
 - confirm the restarted branch satisfies every `X.5` guardrail, dependency, and
   closeout acceptance criterion on the new line
 - run full `X.5` QA on `pXb-s5`
