@@ -101,13 +101,13 @@ impl LocalIpcClientTransportAdapter {
         Self { endpoint }
     }
 
-    fn try_connect(&self) -> Result<interprocess::local_socket::Stream, AtmError> {
+    fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {
         daemon_try_connect(&self.endpoint)
     }
 
     /// This function performs blocking IPC I/O. Callers in async contexts must
     /// wrap this in `tokio::task::spawn_blocking`.
-    fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    fn round_trip(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         daemon_exchange(&self.endpoint, request, SAME_HOST_REQUEST_DEADLINE)
     }
 }
@@ -116,7 +116,7 @@ impl boundary::sealed::Sealed for LocalIpcClientTransportAdapter {}
 
 impl ClientTransport for LocalIpcClientTransportAdapter {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        self.exchange(request)
+        self.round_trip(request)
     }
 }
 
@@ -383,7 +383,7 @@ impl<'a> CliComposition<'a> {
             parse_bootstrap_agent()?,
         );
         supervisor.ensure_daemon_available_with_traceability(&traceability, || {
-            transport.try_connect().map(|_| ())
+            transport.probe_connection().map(|_| ())
         })?;
         let mut composition = Self::from_transport(transport, observability);
         composition.bootstrap_trace = Some(traceability.snapshot());
@@ -1214,7 +1214,7 @@ mod tests {
 
         let error = supervisor
             .ensure_daemon_available_with_lock_path(
-                || transport.try_connect().map(|_| ()),
+                || transport.probe_connection().map(|_| ()),
                 Duration::from_millis(0),
                 Duration::from_millis(0),
                 launch_lock_path,
@@ -1260,7 +1260,7 @@ mod tests {
 
         let error = supervisor
             .ensure_daemon_available_with_lock_path(
-                || transport.try_connect().map(|_| ()),
+                || transport.probe_connection().map(|_| ()),
                 Duration::from_millis(10),
                 Duration::from_millis(0),
                 launch_lock_path,
