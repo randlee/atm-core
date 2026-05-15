@@ -51,8 +51,8 @@ target: integrate/phase-Xb
 
 ## Exact Targets
 
-- `scripts/check-legacy-mailbox-paths.sh`
-- `scripts/check-capability-degradation.sh`
+- `scripts/check-legacy-mailbox-paths.py`
+- `scripts/check-capability-degradation.py`
 - CI workflow files that own repository gate execution
 - `.claude/assets/sc-rust/quality-mgr/templates/`
 - `.claude/skills/rust-development/guidelines.txt`

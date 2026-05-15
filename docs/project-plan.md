@@ -3228,7 +3228,7 @@ Acceptance:
 - duplicate interface-specific error/reporting implementations for the same
   touched failure class are marked for consolidation rather than preservation
 
-## 28. Phase Xb Planning And Pre-Phase Lint Prerequisite
+## 29. Phase Xb Planning And Pre-Phase Lint Prerequisite
 
 Planning input:
 - legacy planning branch: `feature/pX-s0-planning`
