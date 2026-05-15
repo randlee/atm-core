@@ -1,0 +1,253 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Finding: RBP-F002-X3
+# Title:   Raw ? propagation in boundary operation without context wrapping
+# Triaged: 2026-05-14T00:00:00Z
+# Mode:    initial_pass
+# ─────────────────────────────────────────────────────────────────────────────
+# Sweep result: Open on all branches.
+#
+# s1/s2/integrate: 1 bare ? at load_roster boundary call (line 464/464/464).
+#   All map_err-wrapped ?; calls are already context-wrapped.
+#
+# s3/s4/s5: 3 bare ? calls —
+#   1) .list_teams(RosterStoreListTeamsRequest)? at line 398
+#      (refactored to list_teams API introduced in s3)
+#   2) hydrate_runtime_status_cache_team(...)? at line 409
+#      (internal call, propagates boundary errors without wrapping)
+#   3) .load_roster(RosterStoreLoadRosterRequest { team: team.clone() })? at line 435
+#      (boundary call in hydrate helper, no context)
+#
+# promote_to_branch: feature/pX-s5-guardrails-and-closeout (highest open)
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/RBP-F002-X3>
+    a triage:Finding ;
+    triage:findingId "RBP-F002-X3" ;
+    triage:title "Raw ? propagation in boundary operation without context wrapping" ;
+    triage:description "crates/atm-daemon/src/runtime_status_cache.rs — raw ? operator propagates errors from boundary operations without adding context. Error context wrapping (e.g., .map_err or .context()) should be used at boundary crossings." ;
+    triage:phaseId "phase-X" ;
+    triage:triageMode "initial_pass" ;
+    triage:category "RBP" ;
+    triage:severity "minor" ;
+    triage:repeatable true ;
+    triage:sweepScope "file_only" ;
+    triage:status "open" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+
+    # Occurrences recorded on the highest open branch (pX-s5)
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s5/list-teams-398> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s5/hydrate-team-409> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s5/load-roster-435> ;
+
+    # Also open on s1/s2/integrate (1 occurrence each: load_roster bare ?)
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s1/load-roster-464> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s2/load-roster-464> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s4/list-teams-398> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s4/hydrate-team-409> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s4/load-roster-435> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s3/list-teams-398> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s3/hydrate-team-409> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/pX-s3/load-roster-435> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002-X3/integrate/load-roster-464> ;
+
+    # All branches are open
+    triage:openOn <urn:atm:triage:worktree/pX-s1/0d337c7> ;
+    triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e> ;
+    triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e> ;
+    triage:openOn <urn:atm:triage:worktree/pX-s4/df124a8> ;
+    triage:openOn <urn:atm:triage:worktree/pX-s5/8a4fa81> ;
+    triage:openOn <urn:atm:triage:worktree/integrate-phase-X/ec149fa> ;
+
+    # Promote to highest open branch
+    triage:promoteTo <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Occurrences on highest open branch (feature/pX-s5-guardrails-and-closeout)
+# Repeatable file_only sweep on runtime_status_cache.rs
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s5/list-teams-398>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 398 ;
+    triage:snippet ".list_teams(atm_core::boundary::RosterStoreListTeamsRequest)?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "8a4fa81" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s5/hydrate-team-409>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 409 ;
+    triage:snippet "hydrate_runtime_status_cache_team(&mut next_state, current_state, roster_store, team)?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "8a4fa81" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s5/load-roster-435>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 435 ;
+    triage:snippet ".load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "8a4fa81" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Occurrences on lower branches (s1/s2 code path — 1 bare ? per branch)
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s1/load-roster-464>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 464 ;
+    triage:snippet ".load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+    triage:headSha "0d337c7" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s2/load-roster-464>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 464 ;
+    triage:snippet ".load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s2-command-path-simplification" ;
+    triage:headSha "0580c0e" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s3/list-teams-398>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 398 ;
+    triage:snippet ".list_teams(atm_core::boundary::RosterStoreListTeamsRequest)?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s3-runtime-truth-unification" ;
+    triage:headSha "9264c3e" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s3/hydrate-team-409>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 409 ;
+    triage:snippet "hydrate_runtime_status_cache_team(&mut next_state, current_state, roster_store, team)?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s3-runtime-truth-unification" ;
+    triage:headSha "9264c3e" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s3/load-roster-435>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 435 ;
+    triage:snippet ".load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s3-runtime-truth-unification" ;
+    triage:headSha "9264c3e" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s4/list-teams-398>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 398 ;
+    triage:snippet ".list_teams(atm_core::boundary::RosterStoreListTeamsRequest)?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:headSha "df124a8" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s4/hydrate-team-409>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 409 ;
+    triage:snippet "hydrate_runtime_status_cache_team(&mut next_state, current_state, roster_store, team)?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:headSha "df124a8" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/RBP-F002-X3/pX-s4/load-roster-435>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 435 ;
+    triage:snippet ".load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:headSha "df124a8" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/RBP-F002-X3/integrate/load-roster-464>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    triage:line 464 ;
+    triage:snippet ".load_roster(atm_core::boundary::RosterStoreLoadRosterRequest { team: team.clone() })?" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "integrate/phase-X" ;
+    triage:headSha "ec149fa" ;
+    triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/ec149fa> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WorktreeSnapshots
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+    triage:headSha "0d337c7" ;
+    triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s2-command-path-simplification" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+    triage:headSha "0580c0e" ;
+    triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s3-runtime-truth-unification" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+    triage:headSha "9264c3e" ;
+    triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:headSha "df124a8" ;
+    triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/8a4fa81>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "8a4fa81" ;
+    triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/ec149fa>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-X" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+    triage:headSha "ec149fa" ;
+    triage:orderIndex 6 .

@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Finding: RBP-F001-X3
+# Title:   SHUTDOWN_FINALIZER_THREADS static Mutex lacks rationale comment
+# Triaged: 2026-05-14T00:00:00Z
+# Mode:    initial_pass
+# ─────────────────────────────────────────────────────────────────────────────
+# Sweep result: The rationale comment already exists on ALL branches.
+# Lines 48-51 of runtime_health.rs contain: "Timed-out shutdown workers are
+# retained in one process-wide registry instead of being dropped orphaned;
+# this must be static because the bounded finalizer helper can outlive any one
+# dispatcher instance after timeout, while orderly shutdown and serial tests
+# still need one place to recover and join those retained workers later."
+# The comment also addresses Send+Sync safety (Mutex<Vec<JoinHandle<()>>> is
+# Send+Sync by Rust stdlib guarantees; no unsafe involved).
+# Finding is ABSENT on all branches — the QA finding was stale at triage time.
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/RBP-F001-X3>
+    a triage:Finding ;
+    triage:findingId "RBP-F001-X3" ;
+    triage:title "SHUTDOWN_FINALIZER_THREADS static Mutex lacks rationale comment" ;
+    triage:description "crates/atm-daemon/src/runtime_health.rs:52 — SHUTDOWN_FINALIZER_THREADS is a static Mutex but lacks a comment explaining why it is used here and whether it is Send+Sync safe." ;
+    triage:phaseId "phase-X" ;
+    triage:triageMode "initial_pass" ;
+    triage:category "RBP" ;
+    triage:severity "minor" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "fixed" ;
+    triage:dispatchReady false ;
+    triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+
+    # All branches are absent (comment already present on every branch)
+    triage:fixedOn <urn:atm:triage:worktree/pX-s1/0d337c7> ;
+    triage:fixedOn <urn:atm:triage:worktree/pX-s2/0580c0e> ;
+    triage:fixedOn <urn:atm:triage:worktree/pX-s3/9264c3e> ;
+    triage:fixedOn <urn:atm:triage:worktree/pX-s4/df124a8> ;
+    triage:fixedOn <urn:atm:triage:worktree/pX-s5/8a4fa81> ;
+    triage:fixedOn <urn:atm:triage:worktree/integrate-phase-X/ec149fa> .
+
+# No open occurrences — rationale comment exists at lines 48-51 of
+# runtime_health.rs across all branches. No dispatch needed.
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WorktreeSnapshots
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+    triage:headSha "0d337c7" ;
+    triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s2-command-path-simplification" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+    triage:headSha "0580c0e" ;
+    triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s3-runtime-truth-unification" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+    triage:headSha "9264c3e" ;
+    triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:headSha "df124a8" ;
+    triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/8a4fa81>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "8a4fa81" ;
+    triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/ec149fa>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-X" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+    triage:headSha "ec149fa" ;
+    triage:orderIndex 6 .

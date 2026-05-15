@@ -1,0 +1,145 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-X2-003>
+  a triage:Finding ;
+  triage:findingId "RSH-X2-003" ;
+  triage:title "--timeout flag has no upper-bound validation" ;
+  triage:description "crates/atm/src/commands/read.rs:68 — --timeout CLI flag accepts any u64 value with no upper-bound check against MAX_TIMEOUT_SECS. Fix: add validation. Introduced on X.2." ;
+  triage:phaseId "phase-X" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X2-003/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X2-003/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X2-003/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X2-003/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X2-003/s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X2-003/integrate/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/pX-s1/010bfbe> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-integrate/4e08185> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/pX-integrate/4e08185> .
+
+# --- Occurrences ---
+
+<urn:atm:triage:occurrence/RSH-X2-003/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 69 ;
+  triage:snippet "    timeout: Option<u64>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/010bfbe> .
+
+<urn:atm:triage:occurrence/RSH-X2-003/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 69 ;
+  triage:snippet "    timeout: Option<u64>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RSH-X2-003/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 69 ;
+  triage:snippet "    timeout: Option<u64>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RSH-X2-003/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 69 ;
+  triage:snippet "    timeout: Option<u64>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RSH-X2-003/s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 69 ;
+  triage:snippet "    timeout: Option<u64>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/d17602e> .
+
+<urn:atm:triage:occurrence/RSH-X2-003/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 69 ;
+  triage:snippet "    timeout: Option<u64>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-integrate/4e08185> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/pX-s1/010bfbe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/d17602e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pX-integrate/4e08185>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:orderIndex 6 .

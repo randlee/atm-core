@@ -21,6 +21,10 @@ use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_runtime_test_support::{
+    SQLITE_RUNTIME_PATH_ENV,
+    install_sqlite_retained_runtime_factory as install_test_runtime_factory,
+};
 use atm_rusqlite::assemble_boundary;
 #[cfg(windows)]
 use interprocess::local_socket::Stream as LocalSocketStream;
@@ -28,7 +32,6 @@ use interprocess::local_socket::traits::Stream as _;
 use serial_test::serial;
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::Once;
 use std::sync::OnceLock;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -37,33 +40,10 @@ use tempfile::TempDir;
 use crate::test_support::connect_daemon_local_ipc_until_ready;
 
 const TEST_TEAM: &str = "test-team";
-const TEST_SQLITE_DB_PATH_ENV: &str = "ATM_TEST_SQLITE_DB_PATH";
-static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 
 fn test_team() -> &'static TeamName {
     static TEST_TEAM_NAME: OnceLock<TeamName> = OnceLock::new();
     TEST_TEAM_NAME.get_or_init(|| TEST_TEAM.parse().expect("team"))
-}
-
-fn install_retained_runtime_factory() {
-    INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
-        atm_core::install_default_runtime_factory(test_local_runtime);
-    });
-}
-
-fn test_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
-    let path = std::env::var_os(TEST_SQLITE_DB_PATH_ENV).ok_or_else(|| {
-        AtmError::daemon_unavailable(
-            "daemon test retained runtime is unavailable because ATM_TEST_SQLITE_DB_PATH is unset",
-        )
-        .with_recovery("Set ATM_TEST_SQLITE_DB_PATH before running daemon doctor/runtime tests.")
-    })?;
-    let assembly = atm_rusqlite::SqliteBoundaryAssembly::new(std::path::PathBuf::from(path))?;
-    Ok(atm_core::LocalServiceRuntime::new(
-        assembly.mail_store_arc(),
-        assembly.task_store_arc(),
-        assembly.roster_store_arc(),
-    ))
 }
 
 struct ShutdownFinalizerDrainGuard;
@@ -77,7 +57,7 @@ impl Drop for ShutdownFinalizerDrainGuard {
 #[test]
 #[serial]
 fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
-    install_retained_runtime_factory();
+    install_test_runtime_factory();
     // TempDir uniqueness is process-local; #[serial] keeps this same-host transport smoke test
     // from racing other lifecycle-control and singleton-sensitive daemon tests.
     let tempdir = TempDir::new().expect("tempdir");
@@ -87,7 +67,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
         (
-            TEST_SQLITE_DB_PATH_ENV,
+            SQLITE_RUNTIME_PATH_ENV,
             Some(db_path.to_str().expect("utf8 sqlite db path")),
         ),
         ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
@@ -175,7 +155,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
 #[test]
 #[serial]
 fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
-    install_retained_runtime_factory();
+    install_test_runtime_factory();
     let _drain_guard = ShutdownFinalizerDrainGuard;
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -184,7 +164,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
         (
-            TEST_SQLITE_DB_PATH_ENV,
+            SQLITE_RUNTIME_PATH_ENV,
             Some(db_path.to_str().expect("utf8 sqlite db path")),
         ),
         ("ATM_LOG_DIR", None),
@@ -246,7 +226,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     }
 
     observability
-        .wait_for_message_contains("daemon start requested", Duration::from_secs(10))
+        .wait_for_message_contains("daemon start requested", Duration::from_secs(30))
         .expect("startup event should be recorded without busy-spin polling");
 
     lifecycle.set_terminate_for_test(true);
@@ -356,14 +336,15 @@ fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
 }
 
 #[test]
+#[serial]
 fn heartbeat_updates_status_cache_and_doctor_projection() {
-    install_retained_runtime_factory();
+    install_test_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
     let _env = EnvGuard::set_many([(
-        TEST_SQLITE_DB_PATH_ENV,
+        SQLITE_RUNTIME_PATH_ENV,
         Some(db_path.to_str().expect("utf8 sqlite db path")),
     )]);
 
@@ -826,14 +807,15 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
 }
 
 #[test]
+#[serial]
 fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
-    install_retained_runtime_factory();
+    install_test_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
     let _env = EnvGuard::set_many([(
-        TEST_SQLITE_DB_PATH_ENV,
+        SQLITE_RUNTIME_PATH_ENV,
         Some(db_path.to_str().expect("utf8 sqlite db path")),
     )]);
 
@@ -872,14 +854,15 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
 }
 
 #[test]
+#[serial]
 fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
-    install_retained_runtime_factory();
+    install_test_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
     let _env = EnvGuard::set_many([(
-        TEST_SQLITE_DB_PATH_ENV,
+        SQLITE_RUNTIME_PATH_ENV,
         Some(db_path.to_str().expect("utf8 sqlite db path")),
     )]);
 

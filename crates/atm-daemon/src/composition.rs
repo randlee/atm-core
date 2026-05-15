@@ -760,7 +760,7 @@ pub(crate) fn compose_runtime(
     )
 }
 
-#[cfg(all(test, unix))]
+#[cfg(test)]
 mod tests {
     use atm_core::boundary::ServerTransport;
     use serial_test::serial;

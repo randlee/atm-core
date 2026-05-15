@@ -5,10 +5,13 @@ line.
 
 Current design assumption:
 - concrete sqlite adapters stay private to this crate
-- no external crate should depend on `atm-rusqlite` directly
+- no external production client crate should depend on `atm-rusqlite` directly
 - runtime composition must go through `atm-core` boundary traits/facades
 - client crates such as `atm`, `atm-graft`, and future harness-specific clients
   must not depend on this crate directly
+- the only approved direct dependents outside `atm-daemon` are:
+  - `atm-daemon-bootstrap` for installing the default retained-runtime factory
+  - `atm-runtime-test-support` for cross-crate SQLite runtime test helpers
 
 Canonical machine-readable boundary sources:
 - [`boundaries/atm-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-sqlite.toml)
@@ -44,6 +47,11 @@ Notes:
 - The production assembly path must resolve the host-scoped durable root via
   one crate-owned default entry point rather than by leaking path ownership to
   callers.
+- `atm-daemon-bootstrap` may use the default runtime assembly entrypoint to
+  install the production retained-runtime factory without taking ownership of
+  SQLite policy.
+- `atm-runtime-test-support` may use the assembly seam only for test-only
+  cross-crate runtime harnessing and lock-contention helpers.
 
 ## SharedDbStateRoot
 
@@ -62,6 +70,9 @@ Notes:
 - Schema changes are lock-step architectural changes and require explicit user
   approval plus matching updates to requirements, architecture, and boundary
   docs before implementation is accepted.
+- Test-only support may hold writer locks through this crate so cross-crate
+  integration tests can exercise SQLite contention without reimplementing the
+  underlying transaction policy.
 
 ## SqliteMailStoreAdapter
 

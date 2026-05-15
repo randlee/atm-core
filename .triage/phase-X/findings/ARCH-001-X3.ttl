@@ -1,0 +1,142 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-001-X3>
+  a triage:Finding ;
+  triage:findingId "ARCH-001-X3" ;
+  triage:title "sc-observability in atm-daemon [dependencies] — should be dev-only" ;
+  triage:description "crates/atm-daemon/Cargo.toml:18 — sc-observability under [dependencies] (production). atm-daemon is a library crate (lib.rs only, no main.rs). Only binary entry points may declare sc-observability as a production dependency. Fix: remove from [dependencies]; keep only in [dev-dependencies] with fault-injection feature for tests. Production code must use sc-observability-types or DaemonRuntimeObservability trait. Still open after fix-R1 (4cfeb8c)." ;
+  triage:phaseId "phase-X" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/pX-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/pX-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/pX-s3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/pX-s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/pX-s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/integrate-phase-X/2> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/010bfbe> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c-s3> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c-s4> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/4e08185> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s1/010bfbe> .
+
+# --- Occurrences (followup_pass round 2) ---
+
+<urn:atm:triage:occurrence/ARCH-001-X3/pX-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/010bfbe> .
+
+<urn:atm:triage:occurrence/ARCH-001-X3/pX-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/ARCH-001-X3/pX-s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c-s3> .
+
+<urn:atm:triage:occurrence/ARCH-001-X3/pX-s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c-s4> .
+
+<urn:atm:triage:occurrence/ARCH-001-X3/pX-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/d17602e> .
+
+<urn:atm:triage:occurrence/ARCH-001-X3/integrate-phase-X/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/4e08185> .
+
+# --- WorktreeSnapshots (followup_pass round 2) ---
+
+<urn:atm:triage:worktree/pX-s1/010bfbe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c-s3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c-s4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/d17602e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/4e08185>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:orderIndex 6 .

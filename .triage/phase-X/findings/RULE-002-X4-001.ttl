@@ -1,0 +1,103 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ──────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/RULE-002-X4-001>
+    a triage:Finding ;
+    triage:findingId "RULE-002-X4-001" ;
+    triage:title "create_task 87L exceeds 80L gate" ;
+    triage:description "crates/atm-core/src/boundary/store.rs — fn create_task (trait declaration, no body) is measured as 87 lines by the unfixed check-function-length.py scanner on branches sharing SHA 4cfeb8c. The scanner's forward-brace search crosses into the subsequent RosterStore trait body. Branch pX-s5-guardrails-and-closeout (c8bd38a) ships a corrected scanner that skips trait method declarations ending in ';', eliminating the false-positive. Introduced in fix-R1 diff on X.4; present identically on X.2/X.3/X.4 (SHA 4cfeb8c). Fix: propagate the scanner correction (the ';'-guard added in s5) to the unfixed branches via merge-forward." ;
+    triage:category "RULE-002" ;
+    triage:phaseId "phase-X" ;
+    triage:severity "blocking" ;
+    triage:triageMode "initial_pass" ;
+    triage:repeatable true ;
+    triage:sweepScope "crates/atm-core/src/boundary/store.rs" ;
+    triage:status "open" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+
+    # Occurrences on open branches
+    triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X4-001/pX-s2/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X4-001/pX-s3/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X4-001/pX-s4/1> ;
+
+    # Branch correlation
+    triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+    triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+    triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
+
+    triage:promoteTo <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/b6b0f6e>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+    triage:headSha "b6b0f6e" ;
+    triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s2-command-path-simplification" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+    triage:headSha "4cfeb8c" ;
+    triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s3-runtime-truth-unification" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+    triage:headSha "4cfeb8c" ;
+    triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:headSha "4cfeb8c" ;
+    triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/c8bd38a>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "c8bd38a" ;
+    triage:orderIndex 5 .
+
+# ── Occurrences ───────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RULE-002-X4-001/pX-s2/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-core/src/boundary/store.rs" ;
+    triage:line 444 ;
+    triage:snippet "fn create_task (trait decl: scanner spans 444-530, 87L, due to unfixed ';'-guard bug in check-function-length.py)" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s2-command-path-simplification" ;
+    triage:headSha "4cfeb8c" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RULE-002-X4-001/pX-s3/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-core/src/boundary/store.rs" ;
+    triage:line 444 ;
+    triage:snippet "fn create_task (trait decl: scanner spans 444-530, 87L, due to unfixed ';'-guard bug in check-function-length.py)" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s3-runtime-truth-unification" ;
+    triage:headSha "4cfeb8c" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RULE-002-X4-001/pX-s4/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-core/src/boundary/store.rs" ;
+    triage:line 444 ;
+    triage:snippet "fn create_task (trait decl: scanner spans 444-530, 87L, due to unfixed ';'-guard bug in check-function-length.py)" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:headSha "4cfeb8c" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .

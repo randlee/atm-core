@@ -1,0 +1,165 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: ATM-QA-X1-001
+# RULE-002 violation: ack_mail_with_runtime_sqlite is 191 lines (gate: 80)
+# Triage mode: initial_pass
+# Phase: phase-X
+# Triaged: 2026-05-14T00:00:00Z
+
+<urn:atm:triage:finding/ATM-QA-X1-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-X1-001" ;
+  triage:title "RULE-002 violation: ack_mail_with_runtime_sqlite is 191 lines" ;
+  triage:description "crates/atm-core/src/ack/mod.rs — fn ack_mail_with_runtime_sqlite spans 191 lines (RULE-002 hard gate is 80 lines). Function is pre-existing: it was introduced before phase-X, present at the merge-base (sha 0f5e11c) at line 388 with the same body. Sprint pX-s1 refactored the surrounding file (large deletion of legacy path), leaving the function unchanged and repositioned to line 157. The 191-line count is identical across all feature branches (s1–s5) and the integrate/phase-X branch." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-X1-001/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-X1-001/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-X1-001/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-X1-001/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-X1-001/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-X1-001/integrate-phase-X/1> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/0d337c7> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/df124a8> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/8a4fa81> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/ec3d563> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/8a4fa81> ;
+  triage:note "Function is pre-existing (introduced before phase-X, present at merge-base 0f5e11c at line 388 with identical body). The pX-s1 sprint refactored surrounding code but did not modify the function. Fix must land on the highest feature branch (pX-s5) and merge forward to integrate/phase-X." .
+
+# Occurrences on feature/pX-s1-mailbox-runtime-cutover
+
+<urn:atm:triage:occurrence/ATM-QA-X1-001/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 157 ;
+  triage:snippet "fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRuntime>(" ;
+  triage:lineCount 191 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+# Occurrences on feature/pX-s2-command-path-simplification
+
+<urn:atm:triage:occurrence/ATM-QA-X1-001/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 157 ;
+  triage:snippet "fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRuntime>(" ;
+  triage:lineCount 191 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+# Occurrences on feature/pX-s3-runtime-truth-unification
+
+<urn:atm:triage:occurrence/ATM-QA-X1-001/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 157 ;
+  triage:snippet "fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRuntime>(" ;
+  triage:lineCount 191 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+# Occurrences on feature/pX-s4-replay-and-ipc-consolidation
+
+<urn:atm:triage:occurrence/ATM-QA-X1-001/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 157 ;
+  triage:snippet "fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRuntime>(" ;
+  triage:lineCount 191 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+# Occurrences on feature/pX-s5-guardrails-and-closeout
+
+<urn:atm:triage:occurrence/ATM-QA-X1-001/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 157 ;
+  triage:snippet "fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRuntime>(" ;
+  triage:lineCount 191 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+# Occurrences on integrate/phase-X
+
+<urn:atm:triage:occurrence/ATM-QA-X1-001/integrate-phase-X/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 388 ;
+  triage:snippet "fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRuntime>(" ;
+  triage:lineCount 191 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "ec3d563" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/ec3d563> .
+
+# WorktreeSnapshots
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/8a4fa81>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/ec3d563>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "ec3d563" ;
+  triage:orderIndex 6 .

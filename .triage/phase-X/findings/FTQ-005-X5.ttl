@@ -1,0 +1,246 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-005-X5>
+  a triage:Finding ;
+  triage:findingId "FTQ-005-X5" ;
+  triage:title "Non-#[serial] tests call install_retained_runtime_factory" ;
+  triage:description "crates/atm-daemon/src/tests.rs contains test functions that call install_retained_runtime_factory() without the #[serial] attribute. Since this function mutates global singleton state, all callers must be serialized. Missing #[serial] allows concurrent test execution to trigger the factory race from FTQ-004." ;
+  triage:phaseId "phase-X" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs1/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs2/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs3/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs4/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-005-X5/pXs5/3> ;
+  triage:openOn <urn:atm:triage:worktree/pXs1/0d337c7> ;
+  triage:openOn <urn:atm:triage:worktree/pXs2/0580c0e> ;
+  triage:openOn <urn:atm:triage:worktree/pXs3/9264c3e> ;
+  triage:openOn <urn:atm:triage:worktree/pXs4/df124a8> ;
+  triage:openOn <urn:atm:triage:worktree/pXs5/78d1e2c> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate/34c3e0a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pXs5/78d1e2c> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 360 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn heartbeat_updates_status_cache_and_doctor_projection has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs1/0d337c7> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 830 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs1/0d337c7> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 876 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn doctor_projects_unavailable_runtime_when_all_members_are_offline has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs1/0d337c7> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 360 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn heartbeat_updates_status_cache_and_doctor_projection has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs2/0580c0e> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 830 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs2/0580c0e> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 876 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn doctor_projects_unavailable_runtime_when_all_members_are_offline has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs2/0580c0e> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 360 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn heartbeat_updates_status_cache_and_doctor_projection has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs3/9264c3e> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 830 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs3/9264c3e> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 876 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn doctor_projects_unavailable_runtime_when_all_members_are_offline has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs3/9264c3e> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 360 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn heartbeat_updates_status_cache_and_doctor_projection has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs4/df124a8> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 830 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs4/df124a8> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 876 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn doctor_projects_unavailable_runtime_when_all_members_are_offline has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs4/df124a8> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 360 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn heartbeat_updates_status_cache_and_doctor_projection has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs5/78d1e2c> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 830 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs5/78d1e2c> .
+
+<urn:atm:triage:occurrence/FTQ-005-X5/pXs5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 876 ;
+  triage:snippet "install_retained_runtime_factory(); // test fn doctor_projects_unavailable_runtime_when_all_members_are_offline has no #[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs5/78d1e2c> .
+
+<urn:atm:triage:worktree/pXs1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pXs2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pXs3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pXs4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pXs5/78d1e2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate/34c3e0a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "34c3e0a" ;
+  triage:orderIndex 6 .

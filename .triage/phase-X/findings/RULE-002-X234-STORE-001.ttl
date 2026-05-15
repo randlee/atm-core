@@ -1,0 +1,75 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RULE-002-X234-STORE-001>
+  a triage:Finding ;
+  triage:findingId "RULE-002-X234-STORE-001" ;
+  triage:title "create_task function is 87L — exceeds 80L gate" ;
+  triage:description "crates/atm-core/src/boundary/store.rs:444-530 — create_task is 87 lines, exceeds 80L gate. Introduced by 4cfeb8c. Fix: extract task-record validation or task-link initialization into private helper." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RULE-002" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "absent" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-15T04:36:57Z"^^xsd:dateTime ;
+  triage:notes "FINDING INVALID: fn create_task in crates/atm-core/src/boundary/store.rs is a trait method declaration (4 lines, no body, ends with ;). The cited range 444-530 spans multiple trait methods across TaskStore and RosterStore boundaries. Actual function length is 4 lines on all 6 branches. The 87L claim does not match any branch. Gate violation absent on all branches. No fix required." ;
+
+  triage:absentOn <urn:atm:triage:worktree/pX-s1/010bfbe> ;
+  triage:absentOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+  triage:absentOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+  triage:absentOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
+  triage:absentOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
+  triage:absentOn <urn:atm:triage:worktree/integrate-phase-X/4e08185> .
+
+# --- Worktree Snapshots ---
+
+<urn:atm:triage:worktree/pX-s1/010bfbe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pX-s5/d17602e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:orderIndex 5 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/integrate-phase-X/4e08185>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:orderIndex 6 ;
+  triage:branchState "absent" .

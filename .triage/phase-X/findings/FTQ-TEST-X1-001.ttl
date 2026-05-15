@@ -1,0 +1,149 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ─────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/FTQ-TEST-X1-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-TEST-X1-001" ;
+  triage:title "send_times_out_under_bounded_lock_contention uses flock — fails on Linux" ;
+  triage:description "crates/atm-core/tests/mailbox_locking.rs test send_times_out_under_bounded_lock_contention uses flock (lock_exclusive) to simulate lock contention. On Linux, SQLite WAL uses fcntl byte-range locks (orthogonal to flock), so flock does not block SQLite writes — test panics because send_mail returns Ok instead of Err. Introduced or exposed by X.1 fix-R2 commit e36e8cf. Fix: replace flock with a rusqlite writer-connection held open in a second thread to trigger SQLite single-writer busy-timeout." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #281" ;
+  triage:references "X.1 QA-2 verdict TASK-1549" ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-TEST-X1-001/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-TEST-X1-001/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-TEST-X1-001/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-TEST-X1-001/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-TEST-X1-001/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-TEST-X1-001/integrate-phase-X/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/pX-s1/e36e8cf> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/99b98cb> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/d17602e> .
+
+# ── Occurrences ─────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/FTQ-TEST-X1-001/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 605 ;
+  triage:snippet "lock_file.lock_exclusive().expect(\"hold mailbox lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "e36e8cf" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/e36e8cf> .
+
+<urn:atm:triage:occurrence/FTQ-TEST-X1-001/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 645 ;
+  triage:snippet "lock_file.lock_exclusive().expect(\"hold mailbox lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/FTQ-TEST-X1-001/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 645 ;
+  triage:snippet "lock_file.lock_exclusive().expect(\"hold mailbox lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+<urn:atm:triage:occurrence/FTQ-TEST-X1-001/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 645 ;
+  triage:snippet "lock_file.lock_exclusive().expect(\"hold mailbox lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:occurrence/FTQ-TEST-X1-001/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 606 ;
+  triage:snippet "lock_file.lock_exclusive().expect(\"hold mailbox lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/d17602e> .
+
+<urn:atm:triage:occurrence/FTQ-TEST-X1-001/integrate-phase-X/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 584 ;
+  triage:snippet "lock_file.lock_exclusive().expect(\"hold mailbox lock\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "99b98cb" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/99b98cb> .
+
+# ── WorktreeSnapshots ────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/e36e8cf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "e36e8cf" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/d17602e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/99b98cb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "99b98cb" ;
+  triage:orderIndex 6 .

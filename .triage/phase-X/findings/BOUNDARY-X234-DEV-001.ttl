@@ -1,0 +1,99 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/BOUNDARY-X234-DEV-001>
+  a triage:Finding ;
+  triage:findingId "BOUNDARY-X234-DEV-001" ;
+  triage:title "atm-core depends on atm-rusqlite in [dev-dependencies]" ;
+  triage:description "crates/atm-core/Cargo.toml:37 — atm-rusqlite added to [dev-dependencies]. Fires 14 BOUNDARY-* rules (all atm-core boundary rules). Tests needing SQLite must use atm-runtime-test-support crate above the boundary. Introduced by commit 4cfeb8c (fix: close phase X4 follow-ups). Open on X.2/X.3/X.4 (same commit). Check X.5 (includes X.4 code)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "BOUNDARY" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-X234-DEV-001/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-X234-DEV-001/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/BOUNDARY-X234-DEV-001/pX-s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:occurrence/BOUNDARY-X234-DEV-001/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/Cargo.toml" ;
+  triage:line 37 ;
+  triage:snippet "atm-rusqlite = { path = \"../atm-rusqlite\", version = \"1.2.0\" }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/BOUNDARY-X234-DEV-001/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/Cargo.toml" ;
+  triage:line 37 ;
+  triage:snippet "atm-rusqlite = { path = \"../atm-rusqlite\", version = \"1.2.0\" }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+<urn:atm:triage:occurrence/BOUNDARY-X234-DEV-001/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/Cargo.toml" ;
+  triage:line 37 ;
+  triage:snippet "atm-rusqlite = { path = \"../atm-rusqlite\", version = \"1.2.0\" }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:worktree/pX-s1/010bfbe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/d17602e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-pX/4e08185>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:orderIndex 6 .

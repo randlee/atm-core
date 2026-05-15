@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# NOTE: The supplied file_filter "mailbox_locking\.rs" combined with the
+# pattern "SELECT.*metadata|query.*metadata|fn.*metadata" yields zero matches
+# on all branches. The actual unbounded metadata query code lives in
+# crates/atm-rusqlite/src/mailbox_metadata.rs (the None-limit branch at line
+# 103-133 of s1). The file_filter as stated is a mismatch; all branches are
+# classified absent under the literal stated scope.
+
+<urn:atm:triage:finding/RSH-X1-004>
+  a triage:Finding ;
+  triage:findingId "RSH-X1-004" ;
+  triage:title "Unbounded metadata queries at 3 sites in mailbox_locking.rs" ;
+  triage:description "crates/atm-core/src/mailbox/locking/mailbox_locking.rs — 3 metadata query sites return unbounded result sets with no LIMIT clause. NOTE: file_filter mailbox_locking.rs + pattern SELECT.*metadata|query.*metadata|fn.*metadata matches zero lines in that test file on all branches. Actual unbounded path exists in crates/atm-rusqlite/src/mailbox_metadata.rs (None-limit SELECT branch, line 103). Finding requires file_filter correction before dispatch." ;
+  triage:phaseId "phase-X" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X1-004/pX-s1/1> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/0d337c7> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/df124a8> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/8a4fa81> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+# Actual occurrence found in mailbox_metadata.rs (file_filter mismatch noted above).
+# Recorded under s1 as the introducing branch; repeatable sweep on promote_to_branch
+# confirms same unbounded-None path present on s1 through s5.
+<urn:atm:triage:occurrence/RSH-X1-004/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 103 ;
+  triage:snippet "\"SELECT ... ORDER BY mail_messages.message_at DESC, mail_messages.message_key DESC;\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/8a4fa81>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/ec3d563>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "ec3d563" ;
+  triage:orderIndex 6 .

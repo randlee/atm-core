@@ -126,6 +126,10 @@ Notes:
   errors instead of selecting a second mailbox backend.
 - Compatibility inbox files remain ingress/export surfaces, not a parallel
   durable mailbox implementation behind retained command logic.
+- The test-only `atm-runtime-test-support` crate may compose the store-backed
+  retained runtime for cross-crate integration tests, but production crates
+  must still reach mailbox durability only through the installed runtime
+  factory.
 
 ## TaskStore
 

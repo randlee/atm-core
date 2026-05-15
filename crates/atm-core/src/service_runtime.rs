@@ -10,6 +10,9 @@ use crate::send::{PostSendHookContext, maybe_run_post_send_hook};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
 
+// Five seconds is the longest lock wait we tolerate on the local workflow
+// state file in same-host CLI/daemon deployments before surfacing a bounded
+// operator-facing timeout instead of hanging indefinitely behind a stale lock.
 const WORKFLOW_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

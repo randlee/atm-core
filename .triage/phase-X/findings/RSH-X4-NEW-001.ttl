@@ -1,0 +1,106 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-X4-NEW-001>
+  a triage:Finding ;
+  triage:findingId "RSH-X4-NEW-001" ;
+  triage:title "conflated retry budget used as startup sweep deadline in peer_transport.rs" ;
+  triage:description "crates/atm-daemon/src/peer_transport.rs -- live-delivery retry budget (remote_retry_budget) reused as the startup sweep timeout. Fix: introduce distinct STARTUP_REPLAY_PER_RECORD_DEADLINE constant for the startup sweep path. s5 introduced MAX_REPLAY_RESUME_SWEEP_BUDGET + sweep_deadline; s1-s4 remain unfixed." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/b6b0f6e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
+  triage:fixedOn <urn:atm:triage:worktree/pX-s5/c8bd38a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 304 ;
+  triage:snippet "let deadline = started + self.config.remote_retry_budget;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "b6b0f6e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/b6b0f6e> .
+
+<urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 311 ;
+  triage:snippet "let deadline = Instant::now() + self.config.remote_retry_budget;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 311 ;
+  triage:snippet "let deadline = Instant::now() + self.config.remote_retry_budget;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 311 ;
+  triage:snippet "let deadline = Instant::now() + self.config.remote_retry_budget;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:worktree/pX-s1/b6b0f6e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "b6b0f6e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/c8bd38a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "c8bd38a" ;
+  triage:orderIndex 5 .

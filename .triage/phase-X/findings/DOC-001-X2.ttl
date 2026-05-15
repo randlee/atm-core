@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DOC-001-X2>
+  a triage:Finding ;
+  triage:findingId "DOC-001-X2" ;
+  triage:title "sprint-X2.md status: planned in main repo vs complete in worktree" ;
+  triage:description "docs/phase-X/sprint-X2.md — status field says 'planned' in the main repo / develop baseline but 'complete' in the worktree. Fix: update main repo sprint doc to match worktree (status: complete, add branch/worktree fields)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "DOC" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T04:35:44Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001-X2/pXs1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DOC-001-X2/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pXs1/010bfbe> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-pX/4e08185> ;
+  triage:fixedOn <urn:atm:triage:worktree/pXs2/4cfeb8c> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-pX/4e08185> .
+
+<urn:atm:triage:occurrence/DOC-001-X2/pXs1/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X2.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:occursIn <urn:atm:triage:worktree/pXs1/010bfbe> .
+
+<urn:atm:triage:occurrence/DOC-001-X2/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X2.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-pX/4e08185> .
+
+<urn:atm:triage:worktree/pXs1/010bfbe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pXs2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pXs3/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pXs4/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pXs5/d17602e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-pX/4e08185>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:orderIndex 6 .

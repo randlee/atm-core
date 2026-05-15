@@ -1,0 +1,162 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/PORT-003-X4>
+  a triage:Finding ;
+  triage:findingId "PORT-003-X4" ;
+  triage:title "unsafe std::env::set_var in test at mailbox_locking.rs:976" ;
+  triage:description "crates/atm-core/tests/mailbox_locking.rs — std::env::set_var() mutates global process state. #[serial(env)] guard present but raw set_var not via helper; helper at line 948 is #[cfg(unix)] only. Fix: use temp_env::with_var or pass SQLite path as constructor arg to Fixture. Introduced on X.4." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "PORT" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-003-X4/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-003-X4/pX-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-003-X4/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-003-X4/pX-s3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-003-X4/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-003-X4/pX-s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PORT-003-X4/integrate-phase-X/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/4e08185> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-X/4e08185> .
+
+# ── WorktreeSnapshots ──────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/010bfbe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/d17602e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/4e08185>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:orderIndex 6 .
+
+# ── Occurrences on feature/pX-s2 ──────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/PORT-003-X4/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 953 ;
+  triage:snippet "unsafe { std::env::set_var(key, value) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/PORT-003-X4/pX-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 976 ;
+  triage:snippet "unsafe { std::env::set_var(TEST_SQLITE_DB_PATH_ENV, &sqlite_db_path) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+# ── Occurrences on feature/pX-s3 ──────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/PORT-003-X4/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 953 ;
+  triage:snippet "unsafe { std::env::set_var(key, value) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+<urn:atm:triage:occurrence/PORT-003-X4/pX-s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 976 ;
+  triage:snippet "unsafe { std::env::set_var(TEST_SQLITE_DB_PATH_ENV, &sqlite_db_path) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+# ── Occurrences on feature/pX-s4 ──────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/PORT-003-X4/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 953 ;
+  triage:snippet "unsafe { std::env::set_var(key, value) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:occurrence/PORT-003-X4/pX-s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 976 ;
+  triage:snippet "unsafe { std::env::set_var(TEST_SQLITE_DB_PATH_ENV, &sqlite_db_path) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+# ── Occurrence on integrate/phase-X ───────────────────────────────────────────
+
+<urn:atm:triage:occurrence/PORT-003-X4/integrate-phase-X/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 882 ;
+  triage:snippet "unsafe { std::env::set_var(key, value) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/4e08185> .

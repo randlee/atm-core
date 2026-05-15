@@ -1,0 +1,150 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/RBP-F004-X2>
+  a triage:Finding ;
+  triage:findingId "RBP-F004-X2" ;
+  triage:title "AckOutcome.warnings is Vec<String> — should be Vec<WarningEntry>" ;
+  triage:description "AckOutcome.warnings field uses Vec<String> for warning messages. Replace with Vec<WarningEntry> (a typed struct with code + message fields). Workspace-wide sweep for other Vec<String> warning/error collections that should use typed entries." ;
+  triage:phaseId "phase-X" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #282" ;
+  triage:references "https://github.com/randlee/atm-core/pull/282#issuecomment-4456182190" ;
+  # occurrences — primary struct definition (per branch)
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-X2/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-X2/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-X2/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-X2/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-X2/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F004-X2/integrate-phase-X/1> ;
+  # sweep — additional in-scope occurrences on promote_to_branch (s5, workspace scope)
+  # deprecation_warnings in read.rs returns Vec<String> of display strings — out of scope (not a structured warning collection)
+  # test_observability.rs Mutex<Vec<String>> is test-only message storage — out of scope
+  triage:openOn <urn:atm:triage:worktree/pX-s1/70460f9b> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e5> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e8> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/df124a86> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/0f5e11c8> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/0f5e11c8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+# ── Occurrences ────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RBP-F004-X2/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 44 ;
+  triage:snippet "pub warnings: Vec<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "70460f9b" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/70460f9b> .
+
+<urn:atm:triage:occurrence/RBP-F004-X2/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 44 ;
+  triage:snippet "pub warnings: Vec<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e5" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e5> .
+
+<urn:atm:triage:occurrence/RBP-F004-X2/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 44 ;
+  triage:snippet "pub warnings: Vec<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e8> .
+
+<urn:atm:triage:occurrence/RBP-F004-X2/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 44 ;
+  triage:snippet "pub warnings: Vec<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a86" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a86> .
+
+<urn:atm:triage:occurrence/RBP-F004-X2/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 50 ;
+  triage:snippet "pub warnings: Vec<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "0f5e11c8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+<urn:atm:triage:occurrence/RBP-F004-X2/integrate-phase-X/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/ack/mod.rs" ;
+  triage:line 50 ;
+  triage:snippet "pub warnings: Vec<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "0f5e11c8" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/0f5e11c8> .
+
+# ── WorktreeSnapshots ──────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/70460f9b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "70460f9b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e5" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e8" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a86" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/0f5e11c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "0f5e11c8" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/0f5e11c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "0f5e11c8" ;
+  triage:orderIndex 6 .

@@ -1,0 +1,147 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RULE-002-X1-R2>
+  a triage:Finding ;
+  triage:findingId "RULE-002-X1-R2" ;
+  triage:title "query_mailbox_metadata_rows function exceeds 80L gate" ;
+  triage:description "crates/atm-rusqlite/src/mailbox_metadata.rs function query_mailbox_metadata_rows is over 80 lines (163L on s1/s5, 203L on s2/s3/s4/integrate), exceeding the 80L hard function-length gate. Introduced in X.1 fix-R2 commit e36e8cf." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RULE" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:pattern "fn query_mailbox_metadata_rows" ;
+  triage:fileFilter "mailbox_metadata" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #281" , "X.1 QA-2 verdict TASK-1549" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X1-R2/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X1-R2/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X1-R2/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X1-R2/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X1-R2/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X1-R2/integrate-phase-X/1> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/e36e8cf> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/99b98cb> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-X/99b98cb> .
+
+<urn:atm:triage:occurrence/RULE-002-X1-R2/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 59 ;
+  triage:snippet "pub fn query_mailbox_metadata_rows(\\n    db: &SharedDb,\\n    team: &TeamName," ;
+  triage:functionLength 163 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "e36e8cf" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/e36e8cf> .
+
+<urn:atm:triage:occurrence/RULE-002-X1-R2/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 57 ;
+  triage:snippet "pub fn query_mailbox_metadata_rows(\\n    db: &SharedDb,\\n    team: &TeamName," ;
+  triage:functionLength 203 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RULE-002-X1-R2/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 57 ;
+  triage:snippet "pub fn query_mailbox_metadata_rows(\\n    db: &SharedDb,\\n    team: &TeamName," ;
+  triage:functionLength 203 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RULE-002-X1-R2/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 57 ;
+  triage:snippet "pub fn query_mailbox_metadata_rows(\\n    db: &SharedDb,\\n    team: &TeamName," ;
+  triage:functionLength 203 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RULE-002-X1-R2/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 59 ;
+  triage:snippet "pub fn query_mailbox_metadata_rows(\\n    db: &SharedDb,\\n    team: &TeamName," ;
+  triage:functionLength 163 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/d17602e> .
+
+<urn:atm:triage:occurrence/RULE-002-X1-R2/integrate-phase-X/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 57 ;
+  triage:snippet "pub fn query_mailbox_metadata_rows(\\n    db: &SharedDb,\\n    team: &TeamName," ;
+  triage:functionLength 203 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "99b98cb" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/99b98cb> .
+
+<urn:atm:triage:worktree/pX-s1/e36e8cf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "e36e8cf" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/d17602e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/99b98cb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "99b98cb" ;
+  triage:orderIndex 6 .
