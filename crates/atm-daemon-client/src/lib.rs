@@ -2,6 +2,7 @@ use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use std::{fmt, thread};
 
@@ -20,6 +21,7 @@ use std::sync::Mutex;
 
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
+const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 
 #[derive(Debug, Clone)]
 pub struct DaemonLocalIpcEndpoint(PathBuf);
@@ -251,16 +253,46 @@ fn format_bootstrap_error_detail(error: &AtmError) -> String {
 }
 
 pub fn try_connect(endpoint: &DaemonLocalIpcEndpoint) -> Result<LocalSocketStream, AtmError> {
-    LocalSocketStream::connect(atm_core::protocol::daemon_local_ipc_name_from_path(
-        endpoint.as_ref(),
-    )?)
-    .map_err(|source| {
-        AtmError::daemon_unavailable(format!(
+    let ipc_name = atm_core::protocol::daemon_local_ipc_name_from_path(endpoint.as_ref())?;
+    let (result_tx, result_rx) = mpsc::sync_channel(1);
+    thread::Builder::new()
+        .name("daemon-local-ipc-connect".to_string())
+        .spawn(move || {
+            if result_tx.send(LocalSocketStream::connect(ipc_name)).is_err() {
+                tracing::debug!(
+                    "daemon local IPC connect worker dropped its result because the caller timed out first"
+                );
+            }
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn bounded daemon local IPC connect worker")
+                .with_recovery(
+                    "Retry the request after the local runtime can create the same-host daemon connect helper thread again.",
+                )
+                .with_source(source)
+        })?;
+    match result_rx.recv_timeout(LOCAL_IPC_CONNECT_DEADLINE) {
+        Ok(Ok(stream)) => Ok(stream),
+        Ok(Err(source)) => Err(AtmError::daemon_unavailable(format!(
             "failed to connect to daemon local IPC endpoint at {}",
             endpoint.display()
         ))
-        .with_source(source)
-    })
+        .with_source(source)),
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(AtmError::daemon_unavailable(format!(
+            "timed out connecting to daemon local IPC endpoint at {}",
+            endpoint.display()
+        ))
+        .with_recovery(
+            "Retry the request after atm-daemon reaches serving state. If the same-host connect path remains stuck, inspect daemon startup and local IPC health before retrying again.",
+        )),
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err(AtmError::daemon_unavailable(format!(
+            "daemon local IPC connect worker disconnected unexpectedly for {}",
+            endpoint.display()
+        ))
+        .with_recovery(
+            "Retry the request after the same-host daemon connect helper can be created again.",
+        )),
+    }
 }
 
 /// This function performs blocking IPC I/O. Callers in async contexts must
@@ -377,6 +409,24 @@ impl DaemonSupervisor {
         )
     }
 
+    pub fn ensure_daemon_available_with_timeout_and_traceability<F>(
+        &self,
+        try_connect: F,
+        publish_timeout: Duration,
+        poll_interval: Duration,
+        traceability: &BootstrapTraceability<'_>,
+    ) -> Result<(), AtmError>
+    where
+        F: FnMut() -> Result<(), AtmError>,
+    {
+        self.ensure_daemon_available_with_timeout_impl(
+            try_connect,
+            publish_timeout,
+            poll_interval,
+            Some(traceability),
+        )
+    }
+
     fn ensure_daemon_available_with_timeout_impl<F>(
         &self,
         try_connect: F,
@@ -489,12 +539,22 @@ impl DaemonSupervisor {
                 if let Some(traceability) = traceability {
                     traceability.emit("daemon_auto_start", "publish_wait_started", None);
                 }
+                let halfway_deadline = Instant::now() + (publish_timeout / 2);
+                let mut halfway_reported = false;
                 while Instant::now() < deadline {
                     if try_connect().is_ok() {
                         if let Some(traceability) = traceability {
                             traceability.emit("daemon_connect", "connected", None);
                         }
                         return Ok(());
+                    }
+                    if !halfway_reported && Instant::now() >= halfway_deadline {
+                        tracing::warn!(
+                            endpoint = %self.endpoint.display(),
+                            publish_timeout_ms = publish_timeout.as_millis(),
+                            "daemon auto-start is still waiting for the same-host IPC endpoint halfway through the publish budget"
+                        );
+                        halfway_reported = true;
                     }
                     if let Some(traceability) = traceability {
                         traceability.emit("daemon_auto_start", "publish_wait_continuing", None);

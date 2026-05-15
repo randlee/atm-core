@@ -1,6 +1,6 @@
 use anyhow::Result;
 use atm_core::home;
-use atm_core::read::ReadQuery;
+use atm_core::read::{MAX_TIMEOUT_SECS, ReadQuery};
 use atm_core::types::{AckActivationMode, ReadSelection};
 use clap::Args;
 
@@ -93,6 +93,16 @@ impl ReadCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<ReadQuery> {
+        if let Some(timeout_secs) = self.timeout
+            && timeout_secs > MAX_TIMEOUT_SECS
+        {
+            return Err(atm_core::error::AtmError::validation(format!(
+                "timeout exceeds the {} second maximum",
+                MAX_TIMEOUT_SECS
+            ))
+            .with_recovery("Use a timeout no greater than one hour before retrying `atm read`.")
+            .into());
+        }
         let _ = self.since_last_seen;
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
@@ -198,12 +208,12 @@ mod tests {
 
         let query = command.build_query(".".into(), ".".into()).expect("query");
 
-        assert_eq!(query.selection_mode, ReadSelection::Actionable);
-        assert_eq!(query.ack_activation_mode, AckActivationMode::ReadOnly);
-        assert!(!query.seen_state_filter);
-        assert!(!query.seen_state_update);
-        assert_eq!(query.timeout_secs, Some(9));
-        assert!(query.message_id_filter.is_some());
+        assert_eq!(query.selection_mode(), ReadSelection::Actionable);
+        assert_eq!(query.ack_activation_mode(), AckActivationMode::ReadOnly);
+        assert!(!query.seen_state_filter());
+        assert!(!query.seen_state_update());
+        assert_eq!(query.timeout_secs(), Some(9));
+        assert!(query.message_id_filter().is_some());
     }
 
     #[test]

@@ -37,16 +37,16 @@ pub struct ReadQuery {
     pub(crate) actor_override: Option<AgentName>,
     pub(crate) target_address: Option<AgentAddress>,
     pub(crate) team_override: Option<TeamName>,
-    pub selection_mode: ReadSelection,
-    pub seen_state_filter: bool,
-    pub seen_state_update: bool,
-    pub ack_activation_mode: AckActivationMode,
-    pub message_id_filter: Option<AtmMessageId>,
+    pub(crate) selection_mode: ReadSelection,
+    pub(crate) seen_state_filter: bool,
+    pub(crate) seen_state_update: bool,
+    pub(crate) ack_activation_mode: AckActivationMode,
+    pub(crate) message_id_filter: Option<AtmMessageId>,
     pub(crate) sender_filter: Option<AgentName>,
     pub(crate) timestamp_filter: Option<IsoTimestamp>,
     pub(crate) task_filter: Option<TaskId>,
     pub(crate) contains_filter: Option<String>,
-    pub timeout_secs: Option<u64>,
+    pub(crate) timeout_secs: Option<u64>,
 }
 
 impl ReadQuery {
@@ -101,6 +101,40 @@ impl ReadQuery {
 
     pub fn team_override(&self) -> Option<&TeamName> {
         self.team_override.as_ref()
+    }
+
+    pub fn selection_mode(&self) -> ReadSelection {
+        self.selection_mode
+    }
+
+    pub fn seen_state_filter(&self) -> bool {
+        self.seen_state_filter
+    }
+
+    pub fn seen_state_update(&self) -> bool {
+        self.seen_state_update
+    }
+
+    pub fn ack_activation_mode(&self) -> AckActivationMode {
+        self.ack_activation_mode
+    }
+
+    pub fn message_id_filter(&self) -> Option<&AtmMessageId> {
+        self.message_id_filter.as_ref()
+    }
+
+    pub fn timeout_secs(&self) -> Option<u64> {
+        self.timeout_secs
+    }
+
+    pub fn with_selection_mode(mut self, selection_mode: ReadSelection) -> Self {
+        self.selection_mode = selection_mode;
+        self
+    }
+
+    pub fn with_ack_activation_mode(mut self, ack_activation_mode: AckActivationMode) -> Self {
+        self.ack_activation_mode = ack_activation_mode;
+        self
     }
 }
 

@@ -19,7 +19,8 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::test_support::EnvGuard;
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use atm_runtime_test_support::{
-    SqliteRuntimeGuard, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+    SqliteRuntimeGuard, hold_sqlite_writer_lock, install_sqlite_retained_runtime_factory,
+    open_sqlite_boundary,
 };
 use chrono::Utc;
 #[cfg(unix)]
@@ -607,15 +608,7 @@ fn send_times_out_under_bounded_lock_contention() {
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
-    let lock_path = fixture.sqlite_db_path();
-    let lock_file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&lock_path)
-        .expect("open lock file");
-    lock_file.lock_exclusive().expect("hold mailbox lock");
+    let _writer_lock = hold_sqlite_writer_lock(fixture.sqlite_db_path()).expect("hold sqlite lock");
 
     let started = Instant::now();
     let error = send_mail(
@@ -694,8 +687,9 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     mutation_lock_file
         .lock_exclusive()
         .expect("hold mutation lock");
-    let mut mutation_query = mutation_fixture.read_query(PRIMARY_AGENT);
-    mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let mutation_query = mutation_fixture
+        .read_query(PRIMARY_AGENT)
+        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
     let mutation_outcome = read_mail(mutation_query, &observability).expect("read with mutation");
     assert_eq!(mutation_outcome.count, 1);
     assert!(mutation_outcome.mutation_applied);
@@ -721,9 +715,10 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     no_mutation_lock_file
         .lock_exclusive()
         .expect("hold no-mutation lock");
-    let mut no_mutation_query = no_mutation_fixture.read_query(PRIMARY_AGENT);
-    no_mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
-    no_mutation_query.selection_mode = ReadSelection::All;
+    let no_mutation_query = no_mutation_fixture
+        .read_query(PRIMARY_AGENT)
+        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread)
+        .with_selection_mode(ReadSelection::All);
     let started = Instant::now();
     let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
     assert_eq!(outcome.count, 1);
@@ -761,8 +756,9 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         .expect("logical message id");
     assert_eq!(physical_before["read"], false);
 
-    let mut read_query = fixture.read_query(PRIMARY_AGENT);
-    read_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let read_query = fixture
+        .read_query(PRIMARY_AGENT)
+        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
         outcome
@@ -1154,15 +1150,8 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
 }
 
 fn message_workflow_key(message: &MessageEnvelope) -> String {
-    message
-        .message_id
-        .map(|message_id| {
-            atm_core::boundary::MessageKey::for_atm_message(message_id)
-                .expect("message key")
-                .to_string()
-        })
-        .as_deref()
-        .expect("message id")
+    atm_core::boundary::MessageKey::for_atm_message(message.message_id.expect("message id"))
+        .expect("message key")
         .to_string()
 }
 
