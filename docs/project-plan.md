@@ -3237,10 +3237,6 @@ Acceptance:
   and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`
 - the Phase `W` closeout gate in `docs/plan-phase-W.md` remains authoritative
   for final merged-state certification
-  same-host helper deduplication
-- `X.5` systemic guardrails, dependency-ownership validation, and closeout
->>>>>>> feature/pX-s3-runtime-truth-unification
-  verification
 
 Execution rules:
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
