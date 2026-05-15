@@ -113,8 +113,11 @@ Current code still exposes both SQLite and legacy file-backed mailbox behavior:
   - `DefaultMailboxRuntime::{Sqlite, Legacy}` at lines `19-22`
   - `default_runtime()` fallback to `Legacy(...)` at lines `51-55`
   - retained runtime still fronts file-backed mailbox operations at lines
-    `299-345`
-  - `LegacyMailboxRuntime` remains live at lines `606-689`
+    `299-345` as of the original Phase `X` baseline; confirm current positions
+    by inspection on the restart branch
+  - `LegacyMailboxRuntime` remains live at lines `606-689` as of the original
+    Phase `X` baseline; confirm current positions by inspection on the restart
+    branch
 - `crates/atm-core/src/ack/mod.rs`
   - command logic still branches into the legacy file path at lines `154-328`
 

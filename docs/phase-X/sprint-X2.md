@@ -66,7 +66,8 @@ target: integrate/phase-Xb
 - narrow or delete `boundary_support.rs` helpers that still keep file-backed
   mailbox behavior on the production path
 - remove the retained boundary-adapter stubs in
-  `service_runtime_store.rs:305-315`
+  `service_runtime_store.rs` by locating them through a pattern search for
+  `LegacyMailboxRuntime` or other dual-mode adapter remnants
 - document any remaining source-file helper ownership as daemon-private
   ingress/migration-only scope
 
