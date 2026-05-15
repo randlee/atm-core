@@ -301,7 +301,7 @@ pub fn query_mailbox_metadata_counts(
                 |row| {
                     Ok(MailStoreMailboxMetadataCounts {
                         total_messages: row.get::<_, i64>(0)? as u64,
-                        unread_messages: row.get::<_, Option<i64>>(1)?.unwrap_or(0) as u64,
+                        unread_message_count: row.get::<_, Option<i64>>(1)?.unwrap_or(0) as u64,
                         pending_ack_messages: row.get::<_, Option<i64>>(2)?.unwrap_or(0) as u64,
                     })
                 },

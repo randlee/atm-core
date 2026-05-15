@@ -96,7 +96,7 @@ pub struct MailStoreHealthSnapshot {
     pub agent: AgentName,
     pub total_messages: u64,
     pub pending_ack_messages: u64,
-    pub read_messages: u64,
+    pub read_message_count: u64,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub latest_message_timestamp: Option<IsoTimestamp>,
 }
@@ -140,7 +140,7 @@ pub struct MailStoreQueryMailboxMetadataResponse {
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MailStoreMailboxMetadataCounts {
     pub total_messages: u64,
-    pub unread_messages: u64,
+    pub unread_message_count: u64,
     pub pending_ack_messages: u64,
 }
 

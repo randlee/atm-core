@@ -146,6 +146,9 @@ Follow-up work:
   cutover line lands
 - compatibility inbox files may survive only as ingress/export edges; retained
   command/runtime logic must not treat them as a second durable mailbox backend
+- if compatibility inbox import/export helpers remain, they must stay behind
+  the hidden daemon-side ingress/export seam rather than leaking back into the
+  retained command runtime surface
 
 Observability release boundary rules:
 - raw `serde_json::Value` / `serde_json::Map` remain internal translation types
