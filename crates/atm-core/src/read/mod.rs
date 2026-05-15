@@ -215,17 +215,6 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     let own_inbox = actor == target.agent && actor_team.as_deref() == Some(target.team.as_str());
     let mut metadata_rows =
         runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
-    let has_legacy_keys = metadata_rows
-        .iter()
-        .any(|row| row.message_key.as_ref().starts_with("legacy:"));
-    if has_legacy_keys {
-        return Err(AtmError::validation(
-            "sqlite mailbox metadata returned legacy-prefixed message keys",
-        )
-        .with_recovery(
-            "Repair or remove the malformed mailbox rows before retrying `atm read`; production runtimes expose only the sqlite-backed mailbox path.",
-        ));
-    }
     let (mut bucket_counts, mut selected) =
         selection_state_for_mailbox_metadata_rows(&metadata_rows, &query, seen_watermark);
     let mut timed_out = false;

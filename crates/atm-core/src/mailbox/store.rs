@@ -11,20 +11,20 @@ use crate::schema::MessageEnvelope;
 use crate::schema::inbox_message::SharedInboxExportPolicy;
 use crate::types::{AgentName, TeamName};
 
-/// Commit one mailbox file through the mailbox-layer write boundary.
+/// Write one compatibility mailbox file projection through the mailbox layer.
 ///
 /// The mailbox layer owns writes to the Claude-owned inbox compatibility
 /// surface. Callers should express mailbox intent here instead of reaching
 /// down to low-level atomic replacement directly.
-pub(crate) fn commit_mailbox_state(
+pub(crate) fn write_compat_mailbox_projection(
     path: &Path,
     messages: &[MessageEnvelope],
 ) -> Result<(), AtmError> {
     let export_policy = load_export_policy(path)?;
-    commit_mailbox_state_with_policy(path, messages, export_policy)
+    write_compat_mailbox_projection_with_policy(path, messages, export_policy)
 }
 
-fn commit_mailbox_state_with_policy(
+fn write_compat_mailbox_projection_with_policy(
     path: &Path,
     messages: &[MessageEnvelope],
     export_policy: SharedInboxExportPolicy,
@@ -32,8 +32,8 @@ fn commit_mailbox_state_with_policy(
     atomic::write_messages(path, messages, export_policy)
 }
 
-/// Commit one already-loaded multi-source mailbox set through the mailbox layer.
-pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), AtmError> {
+/// Write one already-loaded multi-source compatibility inbox projection set.
+pub(crate) fn write_compat_source_projections(source_files: &[SourceFile]) -> Result<(), AtmError> {
     let mut export_policy_by_dir = BTreeMap::<PathBuf, SharedInboxExportPolicy>::new();
     for source in source_files {
         let config_dir = source
@@ -48,7 +48,7 @@ pub(crate) fn commit_source_files(source_files: &[SourceFile]) -> Result<(), Atm
             export_policy_by_dir.insert(config_dir, policy);
             policy
         };
-        commit_mailbox_state_with_policy(&source.path, &source.messages, export_policy)?;
+        write_compat_mailbox_projection_with_policy(&source.path, &source.messages, export_policy)?;
     }
     Ok(())
 }
@@ -63,8 +63,8 @@ fn load_export_policy(path: &Path) -> Result<SharedInboxExportPolicy, AtmError> 
     })
 }
 
-/// Load the current mailbox source set without taking any mailbox locks.
-pub(crate) fn observe_source_files(
+/// Load the current compatibility inbox projection set without mailbox locks.
+pub(crate) fn load_compat_source_projections(
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
@@ -77,8 +77,8 @@ pub(crate) fn observe_source_files(
 mod tests {
     use tempfile::tempdir;
 
-    use super::{commit_mailbox_state, commit_source_files};
-    use crate::mailbox::read_messages;
+    use super::{write_compat_mailbox_projection, write_compat_source_projections};
+    use crate::mailbox::load_compat_mailbox_messages;
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AtmMessageId, MessageEnvelope};
@@ -86,7 +86,7 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     #[test]
-    fn commit_mailbox_state_rewrites_mailbox_array_with_only_new_messages() {
+    fn write_compat_mailbox_projection_rewrites_mailbox_array_with_only_new_messages() {
         let tempdir = tempdir().expect("tempdir");
         let path = tempdir.path().join(format!("{TEST_SENDER}.json"));
         std::fs::write(&path, "{\"stale\":true}\n").expect("seed mailbox");
@@ -95,18 +95,21 @@ mod tests {
             sample_message(TEST_QA, "second replacement"),
         ];
 
-        commit_mailbox_state(&path, &messages).expect("commit mailbox");
+        write_compat_mailbox_projection(&path, &messages).expect("commit mailbox");
 
         let raw = std::fs::read_to_string(&path).expect("mailbox contents");
         assert!(!raw.contains("stale"));
         let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
         assert_eq!(encoded.len(), 2);
         assert!(raw.ends_with('\n'));
-        assert_eq!(read_messages(&path).expect("read mailbox"), messages);
+        assert_eq!(
+            load_compat_mailbox_messages(&path).expect("read mailbox"),
+            messages
+        );
     }
 
     #[test]
-    fn commit_mailbox_state_exports_retrieval_stub_when_config_cap_is_zero() {
+    fn write_compat_mailbox_projection_exports_retrieval_stub_when_config_cap_is_zero() {
         let tempdir = tempdir().expect("tempdir");
         std::fs::write(
             tempdir.path().join(".atm.toml"),
@@ -118,7 +121,8 @@ mod tests {
         let message_id = message.message_id.expect("message id");
         message.summary = Some("stub summary".to_string());
 
-        commit_mailbox_state(&path, std::slice::from_ref(&message)).expect("commit mailbox");
+        write_compat_mailbox_projection(&path, std::slice::from_ref(&message))
+            .expect("commit mailbox");
 
         let raw = std::fs::read_to_string(&path).expect("mailbox contents");
         let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
@@ -133,7 +137,7 @@ mod tests {
     }
 
     #[test]
-    fn commit_source_files_commits_each_source_path() {
+    fn write_compat_source_projections_commits_each_source_path() {
         let tempdir = tempdir().expect("tempdir");
         let left_path = tempdir.path().join(format!("{TEST_SENDER}.json"));
         let right_path = tempdir.path().join(format!("{TEST_QA}.json"));
@@ -143,7 +147,7 @@ mod tests {
             sample_message(ROLE_TEAM_LEAD, "right second"),
         ];
 
-        commit_source_files(&[
+        write_compat_source_projections(&[
             SourceFile {
                 path: left_path.clone(),
                 messages: left_messages.clone(),
@@ -156,23 +160,23 @@ mod tests {
         .expect("commit source files");
 
         assert_eq!(
-            read_messages(&left_path).expect("left inbox"),
+            load_compat_mailbox_messages(&left_path).expect("left inbox"),
             left_messages
         );
         assert_eq!(
-            read_messages(&right_path).expect("right inbox"),
+            load_compat_mailbox_messages(&right_path).expect("right inbox"),
             right_messages
         );
     }
 
     #[test]
-    fn commit_source_files_stops_after_first_write_error() {
+    fn write_compat_source_projections_stops_after_first_write_error() {
         let tempdir = tempdir().expect("tempdir");
         let first_path = tempdir.path().join("first.json");
         let invalid_path = tempdir.path().to_path_buf();
         let later_path = tempdir.path().join("later.json");
 
-        let error = commit_source_files(&[
+        let error = write_compat_source_projections(&[
             SourceFile {
                 path: first_path.clone(),
                 messages: vec![sample_message(ROLE_TEAM_LEAD, "first")],
@@ -189,7 +193,12 @@ mod tests {
         .expect_err("write failure");
 
         assert!(error.is_mailbox_write());
-        assert_eq!(read_messages(&first_path).expect("first inbox").len(), 1);
+        assert_eq!(
+            load_compat_mailbox_messages(&first_path)
+                .expect("first inbox")
+                .len(),
+            1
+        );
         assert!(!later_path.exists());
     }
 
