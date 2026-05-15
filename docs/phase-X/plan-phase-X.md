@@ -65,6 +65,12 @@ Restart execution note:
   - `X.4`: `df124a8`, `3f8338b`
   - `X.5`: `78d1e2c`, `c8bd38a`, `cdb1edd`
 
+Restart completion rule:
+- prior Phase `X` completion is evidence of salvageable work, not proof that a
+  restarted sprint is done
+- a restarted sprint is complete only when its remaining replay/reconcile work
+  is finished on the `pXb` branch and the full sprint QA scope passes there
+
 Predecessor gate:
 - Phase `W` must remain merged and validated on `integrate/phase-W`
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path

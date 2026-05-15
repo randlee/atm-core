@@ -22,6 +22,16 @@ target: integrate/phase-Xb
 - QA must validate the entire `X.3` sprint on `pXb-s3`, not only the replayed
   delta from that commit.
 
+## Remaining Restart Work
+
+- replay or selectively re-implement the audited `9264c3e...` delta onto
+  `feature/pXb-s3-runtime-truth-unification`
+- verify the restarted branch still moves daemon team/member discovery fully to
+  the explicit roster/store boundary on the new line
+- confirm the restarted branch satisfies every `X.3` runtime-truth and
+  refactor acceptance criterion on the new line
+- run full `X.3` QA on `pXb-s3`
+
 ## Goal
 
 - make daemon runtime team/member truth come from one explicit ownership model

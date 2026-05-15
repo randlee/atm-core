@@ -23,6 +23,16 @@ target: integrate/phase-Xb
 - QA must validate the entire `X.4` sprint on `pXb-s4`, including replay
   contract behavior and same-host parity, not only the replayed delta.
 
+## Remaining Restart Work
+
+- replay or selectively re-implement the audited `df124a8...` and
+  `3f8338b...` changes onto `feature/pXb-s4-replay-and-ipc-consolidation`
+- reconcile any restart-line drift in replay-contract enforcement, peer
+  transport decomposition, and same-host helper ownership
+- confirm the restarted branch satisfies every `X.4` transport, replay, and
+  parity acceptance criterion on the new line
+- run full `X.4` QA on `pXb-s4`
+
 ## Goal
 
 - make replay persistence startup behavior explicit and enforceable

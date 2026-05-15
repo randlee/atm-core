@@ -26,6 +26,16 @@ target: integrate/phase-Xb
 - QA must validate the entire `X.5` sprint on `pXb-s5`, not only the replayed
   delta from those prior commits.
 
+## Remaining Restart Work
+
+- selectively replay only the audited `78d1e2c...`, `c8bd38a...`, and
+  `cdb1edd...` closeout work onto `feature/pXb-s5-guardrails-and-closeout`
+- exclude old merge-repair and branch-topology noise that is specific to the
+  abandoned `phase-X` line
+- confirm the restarted branch satisfies every `X.5` guardrail, dependency, and
+  closeout acceptance criterion on the new line
+- run full `X.5` QA on `pXb-s5`
+
 ## Goal
 
 - finish the remaining mechanical guardrails after the structural deletion

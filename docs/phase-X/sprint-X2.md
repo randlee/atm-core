@@ -22,6 +22,16 @@ target: integrate/phase-Xb
 - QA must validate the entire `X.2` sprint on `pXb-s2`, not only the replayed
   delta from that commit.
 
+## Remaining Restart Work
+
+- replay or selectively re-implement the audited `0580c0e...` delta onto
+  `feature/pXb-s2-command-path-simplification`
+- verify that any legacy command-path behavior still present after `X.1`
+  replay is fully removed on the restart line
+- confirm the restarted branch satisfies every `X.2` deletion and boundary
+  acceptance criterion on the new line
+- run full `X.2` QA on `pXb-s2`
+
 ## Goal
 
 - delete the remaining file-backed mailbox command branches

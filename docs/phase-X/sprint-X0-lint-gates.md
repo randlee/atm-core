@@ -22,6 +22,12 @@ target: develop
 - QA on `phase-Xb` treats this sprint as already live baseline and does not
   reopen it as partial scope.
 
+## Remaining Restart Work
+
+- none
+- treat `X.0` as a satisfied prerequisite on the restart line
+- later sprint QA should only verify the inherited lint gates remain active
+
 ## Goal
 
 - land the shared lint gates that must already be active before any

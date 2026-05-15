@@ -24,6 +24,16 @@ target: integrate/phase-Xb
 - QA must validate the entire `X.1` sprint on `pXb-s1`, not only the replayed
   delta from those commits.
 
+## Remaining Restart Work
+
+- replay or selectively re-implement the audited `70460f9...` and `6143bda...`
+  changes onto `feature/pXb-s1-mailbox-runtime-cutover`
+- reconcile any drift between the old `phase-X` implementation base and the new
+  `develop`-based restart line
+- confirm the restarted branch actually satisfies every `X.1` deletion and
+  boundary acceptance criterion on the new line
+- run full `X.1` QA on `pXb-s1`; do not treat prior completion as sufficient
+
 ## Goal
 
 - remove dual mailbox runtime selection from the retained runtime surface
