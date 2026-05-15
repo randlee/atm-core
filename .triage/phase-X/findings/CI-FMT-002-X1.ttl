@@ -1,0 +1,73 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CI-FMT-002-X1>
+  a triage:Finding ;
+  triage:findingId "CI-FMT-002-X1" ;
+  triage:title "cargo fmt regression: line wrap in list.rs" ;
+  triage:description "crates/atm-core/src/list.rs:150 — cargo fmt --check fails on pX-s1 due to an unwrapped long call on line 150: let metadata_rows = load_checked_list_metadata(runtime, &query.home_dir, &target.team, &target.agent)?; exceeds rustfmt line width. Other sprint branches use a different implementation that does not have this call." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-FMT-002-X1/pX-s1/1> ;
+  triage:openOn <urn:atm:triage:worktree/CI-FMT-002/pX-s1/0d337c7> ;
+  triage:promoteTo <urn:atm:triage:worktree/CI-FMT-002/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/CI-FMT-002-X1/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 150 ;
+  triage:snippet "let metadata_rows = load_checked_list_metadata(runtime, &query.home_dir, &target.team, &target.agent)?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/CI-FMT-002/pX-s1/0d337c7> .
+
+<urn:atm:triage:worktree/CI-FMT-002/pX-s1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/CI-FMT-002/pX-s2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/CI-FMT-002/pX-s3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/CI-FMT-002/pX-s4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/CI-FMT-002/pX-s5/8a4fa81>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/CI-FMT-002/integrate-phase-X/ec3d563>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "ec3d563" ;
+  triage:orderIndex 6 .

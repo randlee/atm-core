@@ -1,0 +1,160 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Finding: RBP-F001-X2
+# Title:   Structurally infallible Result return types in boundary_support.rs
+# Triaged: 2026-05-14T00:00:00Z
+# Mode:    initial_pass
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/RBP-F001-X2>
+    a triage:Finding ;
+    triage:findingId "RBP-F001-X2" ;
+    triage:title "Structurally infallible Result return types in boundary_support.rs" ;
+    triage:description "crates/atm-core/src/boundary_support.rs: deliver_notification returns Result<(), AtmError> but is structurally infallible (only returns Ok(())). compute_identity_fingerprint returns Result<InboxIngressIdentityFingerprintResponse, AtmError> but is also structurally infallible. Both should return Result<..., Infallible> or unwrap to the Ok type. Delegation wrappers in direct_boundaries.rs and boundary_adapters.rs propagate the same nominal error type. Trait definition in boundary/store.rs dictates the signature. Workspace-wide sweep found 6 occurrences across 5 files on all branches." ;
+    triage:phaseId "phase-X" ;
+    triage:triageMode "initial_pass" ;
+    triage:category "RBP" ;
+    triage:severity "important" ;
+    triage:repeatable true ;
+    triage:sweepScope "workspace" ;
+    triage:status "open" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+
+    # Primary occurrences (core infallible implementations)
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/deliver-notification> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/compute-identity-fingerprint-boundary-support> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/compute-identity-fingerprint-reconcile-runtime> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/compute-identity-fingerprint-direct-boundaries> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/compute-identity-fingerprint-boundary-adapters> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/compute-identity-fingerprint-store-trait> ;
+
+    # All branches are open
+    triage:openOn <urn:atm:triage:worktree/pX-s1/70460f9b> ;
+    triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e5> ;
+    triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e8> ;
+    triage:openOn <urn:atm:triage:worktree/pX-s4/df124a86> ;
+    triage:openOn <urn:atm:triage:worktree/pX-s5/0f5e11c8> ;
+    triage:openOn <urn:atm:triage:worktree/integrate-phase-X/0f5e11c8> ;
+
+    # Promote to highest open branch
+    triage:promoteTo <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Occurrences on highest open branch (feature/pX-s5-guardrails-and-closeout)
+# Repeatable workspace sweep results
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/deliver-notification>
+    a triage:Occurrence ;
+    triage:file "crates/atm-core/src/boundary_support.rs" ;
+    triage:line 131 ;
+    triage:snippet "pub fn deliver_notification(event: NotificationEvent) -> Result<(), AtmError> { ... Ok(()) }" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "0f5e11c8" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+<urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/compute-identity-fingerprint-boundary-support>
+    a triage:Occurrence ;
+    triage:file "crates/atm-core/src/boundary_support.rs" ;
+    triage:line 68 ;
+    triage:snippet "pub fn compute_identity_fingerprint(request: ...) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> { ... Ok(...) }" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "0f5e11c8" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+<urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/compute-identity-fingerprint-reconcile-runtime>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+    triage:line 1004 ;
+    triage:snippet "fn compute_identity_fingerprint(&self, request: ...) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> { Ok(...) }" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "0f5e11c8" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+<urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/compute-identity-fingerprint-direct-boundaries>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/direct_boundaries.rs" ;
+    triage:line 31 ;
+    triage:snippet "pub(crate) fn compute_identity_fingerprint(request: ...) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> { atm_core::boundary_support::compute_identity_fingerprint(request) }" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "0f5e11c8" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+<urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/compute-identity-fingerprint-boundary-adapters>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/boundary_adapters.rs" ;
+    triage:line 186 ;
+    triage:snippet "fn compute_identity_fingerprint(&self, request: ...) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> { direct_boundaries::compute_identity_fingerprint(request) }" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "0f5e11c8" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+<urn:atm:triage:occurrence/RBP-F001-X2/pX-s5/compute-identity-fingerprint-store-trait>
+    a triage:Occurrence ;
+    triage:file "crates/atm-core/src/boundary/store.rs" ;
+    triage:line 543 ;
+    triage:snippet "fn compute_identity_fingerprint(&self, request: ...) -> Result<InboxIngressIdentityFingerprintResponse, AtmError>; // trait definition" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "0f5e11c8" ;
+    triage:occursIn <urn:atm:triage:worktree/pX-s5/0f5e11c8> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WorktreeSnapshots
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/70460f9b>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+    triage:headSha "70460f9b" ;
+    triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e5>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s2-command-path-simplification" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+    triage:headSha "0580c0e5" ;
+    triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e8>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s3-runtime-truth-unification" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+    triage:headSha "9264c3e8" ;
+    triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a86>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+    triage:headSha "df124a86" ;
+    triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/0f5e11c8>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+    triage:headSha "0f5e11c8" ;
+    triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/0f5e11c8>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-X" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+    triage:headSha "0f5e11c8" ;
+    triage:orderIndex 6 .

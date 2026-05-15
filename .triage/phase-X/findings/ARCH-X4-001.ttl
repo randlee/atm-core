@@ -1,0 +1,368 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-X4-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-X4-001" ;
+  triage:title "parse_bootstrap_agent / parse_bootstrap_team duplicated across crates" ;
+  triage:description "crates/atm-graft/src/lib.rs and crates/atm/src/composition.rs contain identical parsing logic for bootstrap agent and team fields. Should be consolidated to one shared definition." ;
+  triage:phaseId "phase-X" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s1/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s1/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s2/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s2/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s3/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s3/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s4/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s4/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s5/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/pX-s5/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/integrate/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/integrate/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/integrate/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-X4-001/integrate/4> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/0d337c7> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/df124a8> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/8a4fa81> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/ec149fa> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+# --- Worktree Snapshots ---
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/8a4fa81>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/ec149fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "ec149fa" ;
+  triage:orderIndex 6 .
+
+# --- Occurrences: s1 ---
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 345 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 354 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 394 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s1/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 403 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+# --- Occurrences: s2 ---
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 345 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 354 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 394 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s2/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 403 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+# --- Occurrences: s3 ---
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 345 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 354 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 394 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s3/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 403 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+# --- Occurrences: s4 ---
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 345 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 354 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 394 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s4/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 403 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+# --- Occurrences: s5 (promote_to_branch) ---
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 345 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 354 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 394 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/pX-s5/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 403 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+# --- Occurrences: integrate/phase-X ---
+
+<urn:atm:triage:occurrence/ARCH-X4-001/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 345 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "ec149fa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/ec149fa> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/integrate/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 354 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "ec149fa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/ec149fa> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/integrate/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 353 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "ec149fa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/ec149fa> .
+
+<urn:atm:triage:occurrence/ARCH-X4-001/integrate/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 362 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "ec149fa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/ec149fa> .

@@ -1,0 +1,197 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: ARCH-002-X2
+# write_compat_mailbox_projection retained on production command path
+# Triaged: 2026-05-14T00:00:00Z
+# Mode: initial_pass | Phase: phase-X
+
+<urn:atm:triage:finding/ARCH-002-X2>
+  a triage:Finding ;
+  triage:findingId "ARCH-002-X2" ;
+  triage:title "write_compat_mailbox_projection retained on production command path" ;
+  triage:description "crates/atm-core/src/send/mod.rs:506 calls write_compat_mailbox_projection inside the production shared append path — a retained file-surface write on the command path. Must be moved to daemon-side export cycle or documented as scheduled structural debt in boundaries.md with explicit scope." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #282" ;
+  triage:references "https://github.com/randlee/atm-core/pull/282#issuecomment-4456182190" ;
+
+  # Open occurrences
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-X2/pX-s2/send-506> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-X2/pX-s2/mailbox-mod-72> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-X2/pX-s2/boundary-131> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-X2/pX-s3/send-506> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-X2/pX-s3/mailbox-mod-72> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-X2/pX-s3/boundary-131> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-X2/pX-s4/send-506> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-X2/pX-s4/mailbox-mod-72> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-002-X2/pX-s4/boundary-131> ;
+
+  # Branch state summary
+  triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e5> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e8> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/df124a86> ;
+  triage:fixedOn <urn:atm:triage:worktree/pX-s5/0f5e11c8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s4/df124a86> .
+
+# ─── Worktree Snapshots ───────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/70460f9b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "70460f9b" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e5" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e8" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pX-s4/df124a86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a86" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pX-s5/0f5e11c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "0f5e11c8" ;
+  triage:orderIndex 5 ;
+  triage:branchState "fixed" .
+
+<urn:atm:triage:worktree/integrate-phase-X/0f5e11c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "0f5e11c8" ;
+  triage:orderIndex 6 ;
+  triage:branchState "absent" .
+
+# ─── Occurrences on pX-s2 ─────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-002-X2/pX-s2/send-506>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 506 ;
+  triage:snippet "crate::mailbox::store::write_compat_mailbox_projection(inbox_path, &inbox_messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e5" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e5> .
+
+<urn:atm:triage:occurrence/ARCH-002-X2/pX-s2/mailbox-mod-72>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 72 ;
+  triage:snippet "store::write_compat_mailbox_projection(path, &messages)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e5" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e5> .
+
+<urn:atm:triage:occurrence/ARCH-002-X2/pX-s2/boundary-131>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 131 ;
+  triage:snippet "mailbox::store::write_compat_mailbox_projection(&request.path, &request.messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e5" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e5> .
+
+# ─── Occurrences on pX-s3 ─────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-002-X2/pX-s3/send-506>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 506 ;
+  triage:snippet "crate::mailbox::store::write_compat_mailbox_projection(inbox_path, &inbox_messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e8> .
+
+<urn:atm:triage:occurrence/ARCH-002-X2/pX-s3/mailbox-mod-72>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 72 ;
+  triage:snippet "store::write_compat_mailbox_projection(path, &messages)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e8> .
+
+<urn:atm:triage:occurrence/ARCH-002-X2/pX-s3/boundary-131>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 131 ;
+  triage:snippet "mailbox::store::write_compat_mailbox_projection(&request.path, &request.messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e8> .
+
+# ─── Occurrences on pX-s4 ─────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-002-X2/pX-s4/send-506>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 506 ;
+  triage:snippet "crate::mailbox::store::write_compat_mailbox_projection(inbox_path, &inbox_messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a86" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a86> .
+
+<urn:atm:triage:occurrence/ARCH-002-X2/pX-s4/mailbox-mod-72>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 72 ;
+  triage:snippet "store::write_compat_mailbox_projection(path, &messages)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a86" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a86> .
+
+<urn:atm:triage:occurrence/ARCH-002-X2/pX-s4/boundary-131>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 131 ;
+  triage:snippet "mailbox::store::write_compat_mailbox_projection(&request.path, &request.messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a86" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a86> .
