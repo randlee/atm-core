@@ -1,6 +1,6 @@
 use anyhow::Result;
 use atm_core::home;
-use atm_core::read::ReadQuery;
+use atm_core::read::{MAX_TIMEOUT_SECS, ReadQuery};
 use atm_core::types::{AckActivationMode, ReadSelection};
 use clap::Args;
 
@@ -94,6 +94,15 @@ impl ReadCommand {
         current_dir: std::path::PathBuf,
     ) -> Result<ReadQuery> {
         let _ = self.since_last_seen;
+        if self
+            .timeout
+            .is_some_and(|timeout| timeout > MAX_TIMEOUT_SECS)
+        {
+            anyhow::bail!(
+                "timeout must be <= {} seconds for `atm read`",
+                MAX_TIMEOUT_SECS
+            );
+        }
         let selection_mode = self.selection_mode();
         let timestamp_filter = self.since.as_deref().map(parse_timestamp).transpose()?;
         ReadQuery::new(

@@ -211,12 +211,84 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
     ensure_ack_source_state(request.message_id, &source_record.envelope)?;
     let reply_target =
         resolve_validated_reply_target(runtime, &request.home_dir, &source_record.envelope, &team)?;
+    let prepared_reply = prepare_ack_reply_message(&request, &actor, &team, &source_record)?;
+    persist_acknowledged_source_state(
+        runtime,
+        &team,
+        &actor,
+        &source_row.message_key,
+        &source_record.envelope,
+        prepared_reply.ack_timestamp,
+    )?;
+    append_reply_to_target(
+        runtime,
+        &request.home_dir,
+        &reply_target,
+        &prepared_reply.message,
+    )?;
 
+    let mut outcome = prepared_reply.outcome(&team, &actor, request.message_id, &reply_target);
+    populate_ack_warnings(
+        runtime,
+        &mut outcome,
+        config,
+        &actor,
+        &team,
+        prepared_reply.reply_message_id,
+        &reply_target,
+    );
+    emit_ack_command_event(
+        observability,
+        request.message_id,
+        &team,
+        actor,
+        outcome.task_id.clone(),
+    );
+
+    Ok(outcome)
+}
+
+struct PreparedAckReply {
+    ack_timestamp: IsoTimestamp,
+    reply_message_id: AtmMessageId,
+    reply_text: String,
+    source_task_id: Option<TaskId>,
+    message: MessageEnvelope,
+}
+
+impl PreparedAckReply {
+    fn outcome(
+        &self,
+        team: &TeamName,
+        actor: &AgentName,
+        message_id: AtmMessageId,
+        reply_target: &ReplyTarget,
+    ) -> AckOutcome {
+        AckOutcome {
+            action: CommandAction::Ack,
+            team: team.clone(),
+            agent: actor.clone(),
+            message_id,
+            task_id: self.source_task_id.clone(),
+            reply_target: reply_target.clone(),
+            reply_message_id: self.reply_message_id,
+            reply_text: self.reply_text.clone(),
+            warnings: Vec::new(),
+        }
+    }
+}
+
+fn prepare_ack_reply_message(
+    request: &AckRequest,
+    actor: &AgentName,
+    team: &TeamName,
+    source_record: &boundary::MailStoreMessageRecord,
+) -> Result<PreparedAckReply, AtmError> {
     let ack_timestamp = IsoTimestamp::now();
-    let reply_text = request.reply_body;
+    let reply_text = input::validate_message_text(request.reply_body.clone())?;
     let reply_message_id = AtmMessageId::new();
     let source_task_id = source_record.envelope.task_id.clone();
-    let reply_message = MessageEnvelope {
+    let message = MessageEnvelope {
         from: actor.clone(),
         text: reply_text.clone(),
         timestamp: ack_timestamp,
@@ -233,54 +305,38 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         task_id: None,
         extra: Map::new(),
     };
-    persist_acknowledged_source_state(
-        runtime,
-        &team,
-        &actor,
-        &source_row.message_key,
-        &source_record.envelope,
+    Ok(PreparedAckReply {
         ack_timestamp,
-    )?;
-    append_reply_to_target(runtime, &request.home_dir, &reply_target, &reply_message)?;
+        reply_message_id,
+        reply_text,
+        source_task_id,
+        message,
+    })
+}
 
-    let mut outcome = AckOutcome {
-        action: CommandAction::Ack,
-        team: team.clone(),
-        agent: actor.clone(),
-        message_id: request.message_id,
-        task_id: source_task_id.clone(),
-        reply_target: reply_target.clone(),
-        reply_message_id,
-        reply_text: reply_text.clone(),
-        warnings: Vec::new(),
-    };
-    populate_ack_warnings(
-        runtime,
-        &mut outcome,
-        config,
-        &actor,
-        &team,
-        reply_message_id,
-        &reply_target,
-    );
+fn emit_ack_command_event(
+    observability: &dyn ObservabilityPort,
+    message_id: AtmMessageId,
+    team: &TeamName,
+    actor: AgentName,
+    task_id: Option<TaskId>,
+) {
     if let Err(error) = observability.emit(CommandEvent {
         command: "ack",
         action: "ack",
         outcome: "ok",
-        team,
+        team: team.clone(),
         agent: actor.clone(),
         sender: actor,
-        message_id: Some(request.message_id),
+        message_id: Some(message_id),
         requires_ack: false,
         dry_run: false,
-        task_id: source_task_id,
+        task_id,
         error_code: None,
         error_message: None,
     }) {
         tracing::warn!(%error, command = "ack", action = "ack", "failed to emit ack command event");
     }
-
-    Ok(outcome)
 }
 
 fn load_ack_source_row<R: RetainedMailboxRuntime>(

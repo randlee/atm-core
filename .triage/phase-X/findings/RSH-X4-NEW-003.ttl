@@ -1,75 +1,99 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<urn:atm:triage:finding/ARCH-001-X2>
+<urn:atm:triage:finding/RSH-X4-NEW-003>
   a triage:Finding ;
-  triage:findingId "ARCH-001-X2" ;
-  triage:title "atm-core boundary_support module is fully public" ;
-  triage:description "crates/atm-core/src/lib.rs — `pub mod boundary_support` still fully public after fix-R1. #[doc(hidden)] suppresses docs but NOT visibility — external crates can still import atm_core::boundary_support directly, defeating the daemon-private seam. Fix: change to `pub(crate) mod boundary_support;`" ;
+  triage:findingId "RSH-X4-NEW-003" ;
+  triage:title "unbounded concurrent reconcile waiters in reconcile_runtime.rs" ;
+  triage:description "crates/atm-daemon/src/reconcile_runtime.rs:63 — no upper bound on concurrent reconcile waiters. Fix: add capacity limit or document intended bound. Introduced on X.4." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
   triage:phaseId "phase-X" ;
-  triage:triageMode "followup_pass" ;
-  triage:category "ARCH" ;
-  triage:severity "blocking" ;
+  triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X2/pX-s1/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X2/pX-s2/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X2/pX-s3/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X2/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-003/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-003/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-003/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-003/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-003/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-003/integrate-pX/1> ;
   triage:openOn <urn:atm:triage:worktree/pX-s1/010bfbe> ;
   triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
   triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
   triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
-  triage:fixedOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
-  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-X/4e08185> ;
-  triage:promoteTo <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+  triage:openOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-pX/4e08185> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-pX/4e08185> .
 
-<urn:atm:triage:occurrence/ARCH-001-X2/pX-s1/1>
+<urn:atm:triage:occurrence/RSH-X4-NEW-003/pX-s1/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/lib.rs" ;
-  triage:line 9 ;
-  triage:snippet "pub mod boundary_support;" ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 63 ;
+  triage:snippet "completed: HashMap<u64, ReconcileOutcome>," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
   triage:headSha "010bfbe" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s1/010bfbe> .
 
-<urn:atm:triage:occurrence/ARCH-001-X2/pX-s2/1>
+<urn:atm:triage:occurrence/RSH-X4-NEW-003/pX-s2/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/lib.rs" ;
-  triage:line 10 ;
-  triage:snippet "pub mod boundary_support;" ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 63 ;
+  triage:snippet "completed: HashMap<u64, ReconcileOutcome>," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s2-command-path-simplification" ;
   triage:headSha "4cfeb8c" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
 
-<urn:atm:triage:occurrence/ARCH-001-X2/pX-s3/1>
+<urn:atm:triage:occurrence/RSH-X4-NEW-003/pX-s3/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/lib.rs" ;
-  triage:line 10 ;
-  triage:snippet "pub mod boundary_support;" ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 63 ;
+  triage:snippet "completed: HashMap<u64, ReconcileOutcome>," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s3-runtime-truth-unification" ;
   triage:headSha "4cfeb8c" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
 
-<urn:atm:triage:occurrence/ARCH-001-X2/pX-s4/1>
+<urn:atm:triage:occurrence/RSH-X4-NEW-003/pX-s4/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/lib.rs" ;
-  triage:line 10 ;
-  triage:snippet "pub mod boundary_support;" ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 63 ;
+  triage:snippet "completed: HashMap<u64, ReconcileOutcome>," ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
   triage:headSha "4cfeb8c" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RSH-X4-NEW-003/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 63 ;
+  triage:snippet "completed: HashMap<u64, ReconcileOutcome>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/d17602e> .
+
+<urn:atm:triage:occurrence/RSH-X4-NEW-003/integrate-pX/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 63 ;
+  triage:snippet "completed: HashMap<u64, ReconcileOutcome>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-pX/4e08185> .
 
 <urn:atm:triage:worktree/pX-s1/010bfbe>
   a triage:WorktreeSnapshot ;
@@ -106,7 +130,7 @@
   triage:headSha "d17602e" ;
   triage:orderIndex 5 .
 
-<urn:atm:triage:worktree/integrate-phase-X/4e08185>
+<urn:atm:triage:worktree/integrate-pX/4e08185>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-X" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;

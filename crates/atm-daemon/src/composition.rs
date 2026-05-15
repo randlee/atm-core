@@ -165,7 +165,7 @@ impl RuntimeComposition {
         replay_store_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
-        let (config_ingress, peer_transport_config) = build_peer_transport_config()?;
+        let (config_ingress, _peer_transport_config) = build_peer_transport_config()?;
         let status_cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
@@ -225,9 +225,8 @@ impl RuntimeComposition {
             _inbox_export: DaemonInboxExport::new(),
             peer_transport_runtime: PeerTransportRuntime::new_with_observability(
                 Some(replay_store),
-                peer_transport_config,
                 SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
-            )?,
+            ),
         })
     }
 
@@ -750,7 +749,7 @@ fn load_peer_transport_config(
             .with_source(source)
     })?;
     let response = config_ingress.load_config(ConfigLoadRequest { current_dir })?;
-    PeerTransportConfig::from_config(response.config.as_ref())
+    Ok(PeerTransportConfig::from_config(response.config.as_ref()))
 }
 
 fn build_peer_transport_config() -> Result<(DaemonConfigIngress, PeerTransportConfig), AtmError> {

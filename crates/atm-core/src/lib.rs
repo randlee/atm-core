@@ -4,8 +4,8 @@ pub mod ack;
 pub mod address;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
-/// Hidden daemon-private ingress/export helpers used by concrete boundary
-/// adapter crates.
+/// Hidden support helpers used by concrete boundary adapter crates.
+#[doc(hidden)]
 pub(crate) mod boundary_support;
 /// Mailbox cleanup workflows for read and acknowledged messages.
 pub mod clear;
@@ -51,7 +51,7 @@ pub mod send;
 /// Internal service-owned seams that isolate retained command orchestration
 /// from direct helper/path access.
 pub(crate) mod service_runtime;
-/// Store-backed retained runtime adapters used by retained command workflows.
+/// Transitional legacy store adapters used by the retained service runtime.
 pub(crate) mod service_runtime_store;
 /// Retained local team discovery, roster repair, and backup/restore workflows.
 pub mod team_admin;
@@ -68,6 +68,8 @@ pub(crate) mod threading;
 pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
+/// Transitional legacy placeholder adapters extracted from retained runtime glue.
+pub(crate) mod unsupported_adapters;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 

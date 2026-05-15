@@ -1,0 +1,231 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ──────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/QA2-X3-005>
+  a triage:Finding ;
+  triage:findingId "QA2-X3-005" ;
+  triage:title "sc-observability in both [dependencies] and [dev-dependencies] — Cargo may unify fault-injection feature" ;
+  triage:description "crates/atm-daemon/Cargo.toml:18+31 — sc-observability appears in both [dependencies] and [dev-dependencies] with fault-injection feature in dev-dep. Cargo feature unification may activate fault-injection in production build graph. Fix: remove production [dependencies] entry (keep only dev) or restructure. Introduced by X.3." ;
+  triage:category "QA2" ;
+  triage:phaseId "phase-X" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T21:23:00Z"^^xsd:dateTime ;
+
+  # occurrences — 2 per branch × 6 branches = 12 occurrence nodes
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/pX-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/pX-s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/pX-s3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/pX-s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/pX-s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/integrate/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X3-005/integrate/2> ;
+
+  # branch-level state edges
+  triage:openOn <urn:atm:triage:worktree/pX-s1/010bfbe> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/4e08185> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-X/4e08185> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/010bfbe>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/d17602e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/4e08185>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:orderIndex 6 .
+
+# ── Occurrences — pX-s1 (010bfbe) ────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/QA2-X3-005/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/010bfbe> .
+
+<urn:atm:triage:occurrence/QA2-X3-005/pX-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 31 ;
+  triage:snippet "sc-observability = { workspace = true, features = [\"fault-injection\"] }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "010bfbe" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/010bfbe> .
+
+# ── Occurrences — pX-s2 (4cfeb8c) ────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/QA2-X3-005/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/QA2-X3-005/pX-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 31 ;
+  triage:snippet "sc-observability = { workspace = true, features = [\"fault-injection\"] }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+# ── Occurrences — pX-s3 (4cfeb8c) ────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/QA2-X3-005/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+<urn:atm:triage:occurrence/QA2-X3-005/pX-s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 31 ;
+  triage:snippet "sc-observability = { workspace = true, features = [\"fault-injection\"] }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+# ── Occurrences — pX-s4 (4cfeb8c) ────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/QA2-X3-005/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:occurrence/QA2-X3-005/pX-s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 31 ;
+  triage:snippet "sc-observability = { workspace = true, features = [\"fault-injection\"] }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+# ── Occurrences — pX-s5 (d17602e) ────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/QA2-X3-005/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/d17602e> .
+
+<urn:atm:triage:occurrence/QA2-X3-005/pX-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 32 ;
+  triage:snippet "sc-observability = { workspace = true, features = [\"fault-injection\"] }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "d17602e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/d17602e> .
+
+# ── Occurrences — integrate/phase-X (4e08185) ────────────────────────────────
+
+<urn:atm:triage:occurrence/QA2-X3-005/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 18 ;
+  triage:snippet "sc-observability.workspace = true" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/4e08185> .
+
+<urn:atm:triage:occurrence/QA2-X3-005/integrate/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/Cargo.toml" ;
+  triage:line 31 ;
+  triage:snippet "sc-observability = { workspace = true, features = [\"fault-injection\"] }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/4e08185> .

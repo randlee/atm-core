@@ -184,170 +184,288 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     runtime: &R,
 ) -> Result<SendOutcome, AtmError> {
     let config = runtime.load_config(&request.current_dir)?;
+    let identity = resolve_send_identity_context(&request, config.as_ref())?;
+    let target = validate_send_target(runtime, &request, &identity.recipient)?;
+    let prepared = prepare_send_message(&request, &identity)?;
+    persist_send_message_if_needed(runtime, &request, &identity, &target, &prepared)?;
+
+    let mut outcome = prepared.outcome(&request, &identity, target.warnings);
+    maybe_run_send_post_hook(runtime, &mut outcome, config.as_ref(), &identity, &prepared);
+    emit_send_command_event(observability, &identity, &outcome, prepared.task_id.clone());
+    Ok(outcome)
+}
+
+struct SendIdentityContext {
+    canonical_sender: AgentName,
+    recipient: ResolvedRecipient,
+    sender_team: Option<TeamName>,
+    display_sender: AgentName,
+}
+
+fn resolve_send_identity_context(
+    request: &SendRequest,
+    config: Option<&config::AtmConfig>,
+) -> Result<SendIdentityContext, AtmError> {
     let canonical_sender =
-        identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
-    let recipient = resolve_recipient(
-        &request.to,
-        request.team_override.as_deref(),
-        config.as_ref(),
-    )?;
-    let sender_team = config::resolve_team(None, config.as_ref());
+        identity::resolve_sender_identity(request.sender_override.as_deref(), config)?;
+    let recipient = resolve_recipient(&request.to, request.team_override.as_deref(), config)?;
+    let sender_team = config::resolve_team(None, config);
     let display_sender = display_sender_identity(
         &canonical_sender,
         request.sender_override.as_ref(),
         sender_team.as_ref(),
         &recipient.team,
-        config.as_ref(),
+        config,
     );
+    Ok(SendIdentityContext {
+        canonical_sender,
+        recipient,
+        sender_team,
+        display_sender,
+    })
+}
 
+struct ValidatedSendTarget {
+    inbox_path: PathBuf,
+    warnings: Vec<WarningEntry>,
+}
+
+fn validate_send_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    request: &SendRequest,
+    recipient: &ResolvedRecipient,
+) -> Result<ValidatedSendTarget, AtmError> {
     let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
     }
-
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
-    let mut warnings = Vec::new();
+    let warnings = load_target_team_config(runtime, request, recipient, &team_dir, &inbox_path)?;
+    Ok(ValidatedSendTarget {
+        inbox_path,
+        warnings,
+    })
+}
 
-    match runtime.load_team_config(&team_dir) {
+fn load_target_team_config<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    request: &SendRequest,
+    recipient: &ResolvedRecipient,
+    team_dir: &Path,
+    inbox_path: &Path,
+) -> Result<Vec<WarningEntry>, AtmError> {
+    match runtime.load_team_config(team_dir) {
         Ok(team_config) => {
             alert_state::clear_missing_team_config_alert(
                 &request.home_dir,
-                &alert_state::missing_team_config_alert_key(&team_dir),
+                &alert_state::missing_team_config_alert_key(team_dir),
             );
-            if !team_config
+            if team_config
                 .members
                 .iter()
                 .any(|member| member.name == recipient.agent.as_str())
             {
-                return Err(AtmError::agent_not_found(&recipient.agent, &recipient.team));
+                Ok(Vec::new())
+            } else {
+                Err(AtmError::agent_not_found(&recipient.agent, &recipient.team))
             }
         }
         Err(error) if error.is_missing_document() => {
-            if !inbox_path.exists() {
-                return Err(AtmError::missing_document(format!(
-                    "team config is missing at {} and inbox {} does not exist, so send cannot safely proceed",
-                    team_dir.join("config.json").display(),
-                    inbox_path.display()
-                ))
-                .with_recovery(
-                    "Restore config.json for the team or create the intended inbox by an approved workflow before retrying.",
-                ));
-            }
-
-            warnings.push(WarningEntry::new(
-                format!(
-                    "warning: team config is missing at {}; send used existing inbox fallback for {}@{}.",
-                    team_dir.join("config.json").display(),
-                    recipient.agent,
-                    recipient.team
-                ),
-                Some("Restore the team config."),
-            ));
-            warn!(code = %AtmErrorCode::WarningMissingTeamConfigFallback,
-                config_path = %team_dir.join("config.json").display(),
-                recipient = %recipient.agent,
-                team = %recipient.team,
-                "send used existing inbox fallback; team config is missing"
-            );
-
-            if !request.dry_run {
-                notify_team_lead_missing_config(
-                    runtime,
-                    &request.home_dir,
-                    &team_dir,
-                    &recipient.team,
-                    &recipient.agent,
-                );
-            }
+            missing_team_config_fallback(runtime, request, recipient, team_dir, inbox_path)
         }
-        Err(error) => return Err(error),
+        Err(error) => Err(error),
+    }
+}
+
+fn missing_team_config_fallback<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    request: &SendRequest,
+    recipient: &ResolvedRecipient,
+    team_dir: &Path,
+    inbox_path: &Path,
+) -> Result<Vec<WarningEntry>, AtmError> {
+    if !inbox_path.exists() {
+        return Err(AtmError::missing_document(format!(
+            "team config is missing at {} and inbox {} does not exist, so send cannot safely proceed",
+            team_dir.join("config.json").display(),
+            inbox_path.display()
+        ))
+        .with_recovery(
+            "Restore config.json for the team or create the intended inbox by an approved workflow before retrying.",
+        ));
     }
 
-    let task_id = request.task_id;
-    let requires_ack = request.requires_ack || task_id.is_some();
-    let body = resolve_message_body(
-        &request.message_source,
-        &request.current_dir,
-        &request.home_dir,
-        &recipient.team,
-    )?;
-    let summary = summary::build_summary(&body, request.summary_override);
-    let message_id = AtmMessageId::new();
-    let timestamp = IsoTimestamp::now();
-
+    warn!(
+        code = %AtmErrorCode::WarningMissingTeamConfigFallback,
+        config_path = %team_dir.join("config.json").display(),
+        recipient = %recipient.agent,
+        team = %recipient.team,
+        "send used existing inbox fallback; team config is missing"
+    );
     if !request.dry_run {
-        let envelope = MessageEnvelope {
-            from: display_sender.clone(),
-            text: body.clone(),
-            timestamp,
+        notify_team_lead_missing_config(
+            runtime,
+            &request.home_dir,
+            team_dir,
+            &recipient.team,
+            &recipient.agent,
+        );
+    }
+    Ok(vec![WarningEntry::new(
+        format!(
+            "warning: team config is missing at {}; send used existing inbox fallback for {}@{}.",
+            team_dir.join("config.json").display(),
+            recipient.agent,
+            recipient.team
+        ),
+        Some("Restore the team config."),
+    )])
+}
+
+struct PreparedSendMessage {
+    body: String,
+    summary: String,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+    task_id: Option<TaskId>,
+    requires_ack: bool,
+    command_outcome: SendDeliveryOutcome,
+}
+
+impl PreparedSendMessage {
+    fn envelope(&self, request: &SendRequest, identity: &SendIdentityContext) -> MessageEnvelope {
+        MessageEnvelope {
+            from: identity.display_sender.clone(),
+            text: self.body.clone(),
+            timestamp: self.timestamp,
             read: false,
-            source_team: sender_team.clone().or_else(|| Some(recipient.team.clone())),
-            summary: Some(summary.clone()),
-            message_id: Some(message_id),
-            pending_ack_at: requires_ack.then_some(timestamp),
+            source_team: identity
+                .sender_team
+                .clone()
+                .or_else(|| Some(identity.recipient.team.clone())),
+            summary: Some(self.summary.clone()),
+            message_id: Some(self.message_id),
+            pending_ack_at: self.requires_ack.then_some(self.timestamp),
             acknowledged_at: None,
             acknowledges_message_id: None,
             parent_message_id: request.parent_message_id,
             thread_mode: request.thread_mode,
             expires_at: request.expires_at,
-            task_id: task_id.clone(),
+            task_id: self.task_id.clone(),
             extra: Map::new(),
-        };
-        append_mailbox_message_and_seed_workflow(
-            runtime,
-            &request.home_dir,
-            &recipient.team,
-            &recipient.agent,
-            &inbox_path,
-            &envelope,
-            false,
-        )?;
+        }
     }
 
-    let command_outcome = if request.dry_run {
-        SendDeliveryOutcome::DryRun
-    } else {
-        SendDeliveryOutcome::Sent
-    };
-    let mut outcome = SendOutcome {
-        action: CommandAction::Send,
-        team: recipient.team.clone(),
-        agent: recipient.agent.clone(),
-        sender: canonical_sender.clone(),
-        outcome: command_outcome.clone(),
-        message_id,
+    fn outcome(
+        &self,
+        request: &SendRequest,
+        identity: &SendIdentityContext,
+        warnings: Vec<WarningEntry>,
+    ) -> SendOutcome {
+        SendOutcome {
+            action: CommandAction::Send,
+            team: identity.recipient.team.clone(),
+            agent: identity.recipient.agent.clone(),
+            sender: identity.canonical_sender.clone(),
+            outcome: self.command_outcome.clone(),
+            message_id: self.message_id,
+            requires_ack: self.requires_ack,
+            task_id: self.task_id.clone(),
+            summary: Some(self.summary.clone()),
+            message: request.dry_run.then_some(self.body.clone()),
+            warnings,
+            dry_run: request.dry_run,
+        }
+    }
+}
+
+fn prepare_send_message(
+    request: &SendRequest,
+    identity: &SendIdentityContext,
+) -> Result<PreparedSendMessage, AtmError> {
+    let task_id = request.task_id.clone();
+    let requires_ack = request.requires_ack || task_id.is_some();
+    let body = resolve_message_body(
+        &request.message_source,
+        &request.current_dir,
+        &request.home_dir,
+        &identity.recipient.team,
+    )?;
+    Ok(PreparedSendMessage {
+        summary: summary::build_summary(&body, request.summary_override.clone()),
+        body,
+        message_id: AtmMessageId::new(),
+        timestamp: IsoTimestamp::now(),
+        task_id,
         requires_ack,
-        task_id: task_id.clone(),
-        summary: Some(summary),
-        message: request.dry_run.then_some(body.clone()),
-        warnings,
-        dry_run: request.dry_run,
-    };
+        command_outcome: if request.dry_run {
+            SendDeliveryOutcome::DryRun
+        } else {
+            SendDeliveryOutcome::Sent
+        },
+    })
+}
 
-    if !request.dry_run {
-        runtime.maybe_run_post_send_hook(
-            &mut outcome.warnings,
-            config.as_ref(),
-            PostSendHookContext {
-                sender: &canonical_sender,
-                sender_team: sender_team.as_ref(),
-                recipient: &recipient,
-                recipient_pane_id: None,
-                message_id,
-                requires_ack,
-                is_ack: false,
-                task_id: task_id.as_ref(),
-            },
-        );
+fn persist_send_message_if_needed<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    request: &SendRequest,
+    identity: &SendIdentityContext,
+    target: &ValidatedSendTarget,
+    prepared: &PreparedSendMessage,
+) -> Result<(), AtmError> {
+    if request.dry_run {
+        return Ok(());
     }
+    append_mailbox_message_and_seed_workflow(
+        runtime,
+        &request.home_dir,
+        &identity.recipient.team,
+        &identity.recipient.agent,
+        &target.inbox_path,
+        &prepared.envelope(request, identity),
+        false,
+    )
+}
 
+fn maybe_run_send_post_hook<R: RetainedServiceRuntime>(
+    runtime: &R,
+    outcome: &mut SendOutcome,
+    config: Option<&config::AtmConfig>,
+    identity: &SendIdentityContext,
+    prepared: &PreparedSendMessage,
+) {
+    if outcome.dry_run {
+        return;
+    }
+    runtime.maybe_run_post_send_hook(
+        &mut outcome.warnings,
+        config,
+        PostSendHookContext {
+            sender: &identity.canonical_sender,
+            sender_team: identity.sender_team.as_ref(),
+            recipient: &identity.recipient,
+            recipient_pane_id: None,
+            message_id: prepared.message_id,
+            requires_ack: prepared.requires_ack,
+            is_ack: false,
+            task_id: prepared.task_id.as_ref(),
+        },
+    );
+}
+
+fn emit_send_command_event(
+    observability: &dyn ObservabilityPort,
+    identity: &SendIdentityContext,
+    outcome: &SendOutcome,
+    task_id: Option<TaskId>,
+) {
     if let Err(error) = observability.emit(CommandEvent {
         command: "send",
         action: "send",
-        outcome: command_outcome.as_str(),
+        outcome: outcome.outcome.as_str(),
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: canonical_sender,
+        sender: identity.canonical_sender.clone(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
@@ -357,8 +475,6 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     }) {
         warn!(%error, command = "send", action = "send", "failed to emit send command event");
     }
-
-    Ok(outcome)
 }
 
 #[derive(Debug)]

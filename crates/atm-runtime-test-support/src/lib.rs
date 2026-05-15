@@ -7,7 +7,7 @@ use std::sync::{Mutex, MutexGuard, Once, OnceLock};
 use atm_core::LocalServiceRuntime;
 use atm_core::error::AtmError;
 use atm_core::test_support::{env_lock, remove_env_var, set_env_var};
-use atm_rusqlite::SqliteBoundaryAssembly;
+use atm_rusqlite::{SqliteBoundaryAssembly, SqliteWriterLockGuard};
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =
@@ -53,6 +53,10 @@ impl Drop for SqliteRuntimeGuard {
 
 pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<SqliteBoundaryAssembly, AtmError> {
     SqliteBoundaryAssembly::new(path.as_ref())
+}
+
+pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLockGuard, AtmError> {
+    atm_rusqlite::hold_sqlite_writer_lock(path)
 }
 
 fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {

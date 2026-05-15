@@ -3,6 +3,7 @@ members = [
     "crates/atm-core",
     "crates/atm-runtime-test-support",
     "crates/atm",
+    "crates/atm-daemon-bin",
     "crates/atm-daemon-bootstrap",
     "crates/atm-daemon-client",
     "crates/atm-graft",

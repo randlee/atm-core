@@ -32,7 +32,7 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = []
+allowed_dependents = ["atm-daemon-bin"]
 allowed_dependencies = ["atm-core", "atm-rusqlite"]
 forbidden_edges = [
   "atm -> atm-daemon",

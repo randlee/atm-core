@@ -18,6 +18,7 @@ const DEFAULT_RECONCILE_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
 const MAX_RECONCILE_FINGERPRINT_KEYS: usize = 1024;
 const MAX_RECONCILE_FINGERPRINTS_PER_KEY: usize = 256;
+const MAX_RECONCILE_WAITERS: usize = 1024;
 #[cfg(not(test))]
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
 #[cfg(test)]
@@ -430,6 +431,15 @@ impl ReconcileRuntime {
                 ));
             }
             let waiter_id = state.next_waiter_id;
+            if state.active_waiters.len() >= MAX_RECONCILE_WAITERS {
+                return Err(AtmError::daemon_unavailable(format!(
+                    "reconcile runtime rejected a waiter because the {}-waiter capacity was exhausted",
+                    MAX_RECONCILE_WAITERS
+                ))
+                .with_recovery(
+                    "Wait for existing reconcile requests to complete before retrying, or restart atm-daemon if waiter pressure does not drain.",
+                ));
+            }
             state.next_waiter_id += 1;
             state.active_waiters.insert(waiter_id);
             state.pending_epoch = state.pending_epoch.saturating_add(1);

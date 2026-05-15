@@ -18,7 +18,8 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::test_support::EnvGuard;
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use atm_runtime_test_support::{
-    SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+    SQLITE_RUNTIME_PATH_ENV, hold_sqlite_writer_lock, install_sqlite_retained_runtime_factory,
+    open_sqlite_boundary,
 };
 use chrono::Utc;
 #[cfg(unix)]
@@ -607,15 +608,7 @@ fn send_times_out_under_bounded_lock_contention() {
     let fixture = Fixture::new_with_env(&[("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100")]);
     let observability = NullObservability;
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
-    let lock_path = fixture.sqlite_db_path();
-    let lock_file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&lock_path)
-        .expect("open lock file");
-    lock_file.lock_exclusive().expect("hold mailbox lock");
+    let _writer_lock = hold_sqlite_writer_lock(fixture.sqlite_db_path()).expect("writer lock");
 
     let started = Instant::now();
     let error = send_mail(
@@ -1182,9 +1175,7 @@ fn message_workflow_key(message: &MessageEnvelope) -> String {
                 .expect("message key")
                 .to_string()
         })
-        .as_deref()
         .expect("message id")
-        .to_string()
 }
 
 fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {

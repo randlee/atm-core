@@ -25,7 +25,6 @@ pub use observability::{
 use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error};
-#[cfg(test)]
 use std::path::Path;
 #[cfg(test)]
 use std::path::PathBuf;
@@ -34,6 +33,34 @@ use std::sync::Arc;
 #[derive(Debug)]
 struct SqliteMailStore {
     db: Arc<SharedDb>,
+}
+
+pub struct SqliteWriterLockGuard {
+    connection: Connection,
+}
+
+impl Drop for SqliteWriterLockGuard {
+    fn drop(&mut self) {
+        let _ = self.connection.execute_batch("ROLLBACK;");
+    }
+}
+
+pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLockGuard, AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::daemon_unavailable("failed to open sqlite writer lock connection")
+            .with_recovery(
+                "Repair the sqlite test runtime path before retrying the bounded mailbox lock test.",
+            )
+            .with_source(error)
+    })?;
+    connection.execute_batch("BEGIN IMMEDIATE;").map_err(|error| {
+        AtmError::daemon_unavailable("failed to begin sqlite writer lock transaction")
+            .with_recovery(
+                "Repair the sqlite test runtime path before retrying the bounded mailbox lock test.",
+            )
+            .with_source(error)
+    })?;
+    Ok(SqliteWriterLockGuard { connection })
 }
 
 #[derive(Debug, Clone)]

@@ -14,6 +14,9 @@ use atm_core::graft::{
 use atm_core::protocol::{self, ResponseEnvelope};
 
 use crate::transport::ActiveAdvisoryStream;
+// Structural note: these crate-root imports are stable data/trait surfaces
+// re-exported for the graft runtime and do not create a recursive module
+// dependency; the runtime module remains a leaf over the session/client types.
 use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};
 
 const MAX_LIVE_RECONNECT_BACKOFF: std::time::Duration = std::time::Duration::from_secs(30);

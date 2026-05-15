@@ -1,0 +1,224 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Finding: RULE-002-X3-002
+# RULE-002 80L hard gate violations in composition.rs start() and
+# start_with_socket_path_for_test() introduced in X.3 diff.
+# Present across all 5 Phase-X worktrees (initial_pass).
+# Triaged: 2026-05-14
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/RULE-002-X3-002>
+  a triage:Finding ;
+  triage:findingId "RULE-002-X3-002" ;
+  triage:title "composition.rs start() 82L and start_with_socket_path_for_test() 99L exceed 80L gate" ;
+  triage:description "crates/atm-daemon/src/composition.rs: start() (82 lines) and start_with_socket_path_for_test() (99 lines) both exceed RULE-002 80L hard gate. Introduced in X.3 diff. Present on all five Phase-X worktrees. Fix: extract resume_startup_replay() helper and prepare_transport_runtime()." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RULE-002" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-daemon/src/composition.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+
+  # Occurrences — start() on each worktree
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X3-002/s1/start> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X3-002/s2/start> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X3-002/s3/start> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X3-002/s4/start> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X3-002/s5/start> ;
+
+  # Occurrences — start_with_socket_path_for_test() on each worktree
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X3-002/s1/start_with_socket_path_for_test> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X3-002/s2/start_with_socket_path_for_test> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X3-002/s3/start_with_socket_path_for_test> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X3-002/s4/start_with_socket_path_for_test> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X3-002/s5/start_with_socket_path_for_test> ;
+
+  # Branch-level open/promote edges
+  triage:openOn <urn:atm:triage:worktree/s1/b6b0f6e> ;
+  triage:openOn <urn:atm:triage:worktree/s2/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/s3/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/s4/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/s5/c8bd38a> ;
+  triage:promoteTo <urn:atm:triage:worktree/s5/c8bd38a> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WorktreeSnapshots
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/s1/b6b0f6e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "b6b0f6e" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s3/4cfeb8c-s3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s4/4cfeb8c-s4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s5/c8bd38a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "c8bd38a" ;
+  triage:orderIndex 5 .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Occurrences — start()
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RULE-002-X3-002/s1/start>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 302 ;
+  triage:snippet "pub(crate) fn start(&self) -> Result<(), AtmError> { /* 82 lines */ }" ;
+  triage:functionLength 82 ;
+  triage:gateLimit 80 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "b6b0f6e" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/b6b0f6e> .
+
+<urn:atm:triage:occurrence/RULE-002-X3-002/s2/start>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 289 ;
+  triage:snippet "pub(crate) fn start(&self) -> Result<(), AtmError> { /* 82 lines */ }" ;
+  triage:functionLength 82 ;
+  triage:gateLimit 80 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RULE-002-X3-002/s3/start>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 289 ;
+  triage:snippet "pub(crate) fn start(&self) -> Result<(), AtmError> { /* 82 lines */ }" ;
+  triage:functionLength 82 ;
+  triage:gateLimit 80 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/4cfeb8c-s3> .
+
+<urn:atm:triage:occurrence/RULE-002-X3-002/s4/start>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 289 ;
+  triage:snippet "pub(crate) fn start(&self) -> Result<(), AtmError> { /* 82 lines */ }" ;
+  triage:functionLength 82 ;
+  triage:gateLimit 80 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/4cfeb8c-s4> .
+
+<urn:atm:triage:occurrence/RULE-002-X3-002/s5/start>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 280 ;
+  triage:snippet "pub(crate) fn start(&self) -> Result<(), AtmError> { /* 82 lines */ }" ;
+  triage:functionLength 82 ;
+  triage:gateLimit 80 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "c8bd38a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/c8bd38a> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Occurrences — start_with_socket_path_for_test()
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RULE-002-X3-002/s1/start_with_socket_path_for_test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 387 ;
+  triage:snippet "pub(crate) fn start_with_socket_path_for_test(&self, socket_path: PathBuf, ...) -> Result<(), AtmError> { /* 99 lines */ }" ;
+  triage:functionLength 99 ;
+  triage:gateLimit 80 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "b6b0f6e" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/b6b0f6e> .
+
+<urn:atm:triage:occurrence/RULE-002-X3-002/s2/start_with_socket_path_for_test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 374 ;
+  triage:snippet "pub(crate) fn start_with_socket_path_for_test(&self, socket_path: PathBuf, ...) -> Result<(), AtmError> { /* 99 lines */ }" ;
+  triage:functionLength 99 ;
+  triage:gateLimit 80 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RULE-002-X3-002/s3/start_with_socket_path_for_test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 374 ;
+  triage:snippet "pub(crate) fn start_with_socket_path_for_test(&self, socket_path: PathBuf, ...) -> Result<(), AtmError> { /* 99 lines */ }" ;
+  triage:functionLength 99 ;
+  triage:gateLimit 80 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/4cfeb8c-s3> .
+
+<urn:atm:triage:occurrence/RULE-002-X3-002/s4/start_with_socket_path_for_test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 374 ;
+  triage:snippet "pub(crate) fn start_with_socket_path_for_test(&self, socket_path: PathBuf, ...) -> Result<(), AtmError> { /* 99 lines */ }" ;
+  triage:functionLength 99 ;
+  triage:gateLimit 80 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/4cfeb8c-s4> .
+
+<urn:atm:triage:occurrence/RULE-002-X3-002/s5/start_with_socket_path_for_test>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 365 ;
+  triage:snippet "pub(crate) fn start_with_socket_path_for_test(&self, socket_path: PathBuf, ...) -> Result<(), AtmError> { /* 99 lines */ }" ;
+  triage:functionLength 99 ;
+  triage:gateLimit 80 ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "c8bd38a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/c8bd38a> .

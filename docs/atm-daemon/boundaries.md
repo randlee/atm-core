@@ -7,6 +7,9 @@ Current design assumption:
 - `atm-daemon` is the production runtime composition root
 - `allowed_dependents: []` means no external crate should depend on these
   daemon-private concrete adapters
+- the only intentional exception is `atm-daemon-bin`, which is the package
+  wrapper that owns the production `atm-daemon` executable while delegating
+  runtime composition to the `atm-daemon` library crate
 - Runtime test doubles now exist for the watch/reconcile/notifier lanes so
   boundary tests can exercise the daemon-owned runtimes without bypassing the
   declared contracts.
