@@ -2,12 +2,25 @@
 id: X.2
 title: Command Path Simplification
 status: planned
-branch: feature/pX-s2-command-path-simplification
-worktree: ../atm-core-worktrees/feature/pX-s2-command-path-simplification
-target: integrate/phase-X
+branch: feature/pXb-s2-command-path-simplification
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification
+target: integrate/phase-Xb
 ---
 
 # Sprint X.2 — Command Path Simplification And Legacy Path Deletion
+
+## Modification
+
+- This sprint is a restart replay on `feature/pXb-s2-command-path-simplification`.
+- Prior Phase `X` already has one clean implementation candidate for the core
+  `X.2` work:
+  - `0580c0e540e28403715e939a0da8cf3cfaf67f2a`
+    - `feat: simplify mailbox command paths for phase X`
+- The old `feature/pX-s2-command-path-simplification` branch head is
+  contaminated by later sprint merges and must not be treated as the replay
+  source; salvage only the audited `0580c0e...` delta.
+- QA must validate the entire `X.2` sprint on `pXb-s2`, not only the replayed
+  delta from that commit.
 
 ## Goal
 

@@ -1,4 +1,4 @@
-# Phase X — SQLite SSOT And Daemon Boundary Simplification
+# Phase Xb — Restarted SQLite SSOT And Daemon Boundary Simplification
 
 Goal:
 - close the pre-existing SSOT gaps that remained after Phase `W`
@@ -17,10 +17,12 @@ Phase scope note:
   planning sprint.
 
 Planning branch:
-- `feature/pX-s0-planning`
+- legacy planning input: `feature/pX-s0-planning`
+- restart execution line: `integrate/phase-Xb`
 
 Baseline:
-- `integrate/phase-W` at `9016eed`
+- `develop` at `0f5e11c`
+- inherited pre-phase prerequisite already merged from `feature/pX-lint-gates`
 - authoritative inputs:
   - `docs/phase-W/post-mortem.md`
   - `crates/atm-core/src/service_runtime_store.rs`
@@ -47,21 +49,32 @@ Baseline:
   - `.claude/skills/codex-orchestration/qa-template.xml.j2`
 
 Target integration branch:
-- `integrate/phase-X`
+- `integrate/phase-Xb`
+
+Restart execution note:
+- the original `integrate/phase-X` line is not the authoritative merge base for
+  this restart
+- prior Phase `X` branches are salvage sources only
+- each `Xb` sprint may cherry-pick or re-implement audited prior work, but must
+  validate the full sprint scope on the new `pXb` branch before QA can pass
+- completed prior-work candidates currently identified for salvage are:
+  - `X.0`: inherited from `develop` via `feature/pX-lint-gates`
+  - `X.1`: `70460f9`, `6143bda`
+  - `X.2`: `0580c0e`
+  - `X.3`: `9264c3e`
+  - `X.4`: `df124a8`, `3f8338b`
+  - `X.5`: `78d1e2c`, `c8bd38a`, `cdb1edd`
 
 Predecessor gate:
 - Phase `W` must remain merged and validated on `integrate/phase-W`
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
 
 Pre-phase prerequisite:
-- before `integrate/phase-X` is created, the following guardrails must land on
-  `develop` through a standalone branch such as `feature/pX-lint-gates`:
-  - `scripts/check-silent-emit.sh`
+- satisfied already on `develop` before `integrate/phase-Xb` creation:
+  - `scripts/check-silent-emit.py`
   - `scripts/check-function-length.py`
-- reason:
-  - these gates must already be live on every Phase `X` sprint branch from its
-    first push
-  - they are not acceptable as a late sprint inside `integrate/phase-X`
+- inherited source:
+  - `feature/pX-lint-gates` / develop head `0f5e11c`
 
 Boundary rules for Phase `X`:
 - SQLite/store is the only durable ATM mailbox implementation
@@ -175,12 +188,12 @@ Phase `W` post-mortem assigned these follow-ups to `arch-ctm`:
 The silent-emit and RULE-002 lint gates are pre-phase develop-targeting
 prerequisites. The remaining items are already-landed baseline verification
 inputs or active `X.5` closeout work; they are not separate new typed-doc
-deliverables on `integrate/phase-X`.
+deliverables on `integrate/phase-Xb`.
 
 ## Execution Shape
 
 - pre-phase prerequisite:
-  - standalone develop-targeting lint-gate PR before `integrate/phase-X`
+  - standalone develop-targeting lint-gate PR before `integrate/phase-Xb`
 - `X.1` mailbox runtime cutover and dual-mode surface deletion
 - `X.2` command-path simplification and legacy mailbox path deletion
 - `X.3` daemon runtime truth unification and runtime-status-cache refactor
@@ -188,6 +201,8 @@ deliverables on `integrate/phase-X`.
   same-host IPC helper consolidation
 - `X.5` systemic guardrails, dependency-ownership validation, and closeout
   verification
+- every `Xb` sprint branch must treat prior Phase `X` work as candidate salvage
+  only and still run full-sprint QA after replay
 
 ## Sprint Ownership
 

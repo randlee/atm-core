@@ -2,12 +2,25 @@
 id: X.3
 title: Daemon Runtime Truth Unification
 status: planned
-branch: feature/pX-s3-runtime-truth-unification
-worktree: ../atm-core-worktrees/feature/pX-s3-runtime-truth-unification
-target: integrate/phase-X
+branch: feature/pXb-s3-runtime-truth-unification
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification
+target: integrate/phase-Xb
 ---
 
 # Sprint X.3 — Daemon Runtime Truth Unification
+
+## Modification
+
+- This sprint is a restart replay on `feature/pXb-s3-runtime-truth-unification`.
+- Prior Phase `X` already has one clean implementation candidate for the core
+  `X.3` work:
+  - `9264c3e8c480a4262a23ee0fd1ffaa144cd5f38f`
+    - `feat: unify daemon runtime truth on roster store`
+- The old `feature/pX-s3-runtime-truth-unification` branch ref is contaminated
+  by later sprint merges and must not be treated as the replay source; salvage
+  only the audited `9264c3e...` delta.
+- QA must validate the entire `X.3` sprint on `pXb-s3`, not only the replayed
+  delta from that commit.
 
 ## Goal
 

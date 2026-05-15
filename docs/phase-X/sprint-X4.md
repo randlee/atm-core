@@ -2,12 +2,26 @@
 id: X.4
 title: Replay Contract And IPC Helper Consolidation
 status: planned
-branch: feature/pX-s4-replay-and-ipc-consolidation
-worktree: ../atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation
-target: integrate/phase-X
+branch: feature/pXb-s4-replay-and-ipc-consolidation
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation
+target: integrate/phase-Xb
 ---
 
 # Sprint X.4 — Replay Persistence Contract, Peer Transport, And Same-Host IPC Helpers
+
+## Modification
+
+- This sprint is a restart replay on `feature/pXb-s4-replay-and-ipc-consolidation`.
+- Prior Phase `X` already completed the main `X.4` implementation and one
+  follow-up fix round:
+  - `df124a8605596337b0395e0db2b9cbfb7a404226`
+    - `feat: complete phase X replay and ipc consolidation`
+  - `3f8338b04181ce0591f2ec98e4c75981cb700bf1`
+    - `fix: close phase X4 follow-up findings`
+- Replay this sprint by cherry-picking or selectively reapplying those audited
+  commits; do not treat `integrate/phase-X` as the authoritative merge base.
+- QA must validate the entire `X.4` sprint on `pXb-s4`, including replay
+  contract behavior and same-host parity, not only the replayed delta.
 
 ## Goal
 
