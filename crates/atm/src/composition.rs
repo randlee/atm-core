@@ -20,6 +20,11 @@ use atm_core::protocol::{
 use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, TeamName};
+#[cfg(not(test))]
+use atm_daemon_bootstrap::{
+    install_sqlite_retained_runtime_factory, resolve_daemon_bin, resolve_daemon_local_ipc_endpoint,
+};
+#[cfg(test)]
 use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
 use atm_daemon_client::{
     BootstrapTraceability, DaemonLocalIpcEndpoint, DaemonSupervisor, exchange as daemon_exchange,
@@ -28,47 +33,25 @@ use atm_daemon_client::{
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
 #[cfg(test)]
-use atm_rusqlite::SqliteBoundaryAssembly;
-#[cfg(not(test))]
-use atm_rusqlite::default_local_runtime;
+use atm_runtime_test_support::install_sqlite_retained_runtime_factory as install_test_runtime_factory;
 
 use crate::observability::CliObservability;
 
 const SAME_HOST_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(3);
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
-#[cfg(test)]
-const TEST_SQLITE_DB_PATH_ENV: &str = "ATM_TEST_SQLITE_DB_PATH";
 
 #[cfg(not(test))]
 fn install_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
-        atm_core::install_default_runtime_factory(default_local_runtime);
+        install_sqlite_retained_runtime_factory();
     });
 }
 
 #[cfg(test)]
 fn install_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
-        atm_core::install_default_runtime_factory(test_local_runtime);
+        install_test_runtime_factory();
     });
-}
-
-#[cfg(test)]
-fn test_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
-    let path = std::env::var_os(TEST_SQLITE_DB_PATH_ENV).ok_or_else(|| {
-        AtmError::daemon_unavailable(
-            "loopback sqlite runtime is unavailable because ATM_TEST_SQLITE_DB_PATH is unset",
-        )
-        .with_recovery(
-            "Set ATM_TEST_SQLITE_DB_PATH before invoking the retained same-host test transport.",
-        )
-    })?;
-    let assembly = SqliteBoundaryAssembly::new(std::path::PathBuf::from(path))?;
-    Ok(atm_core::LocalServiceRuntime::new(
-        assembly.mail_store_arc(),
-        assembly.task_store_arc(),
-        assembly.roster_store_arc(),
-    ))
 }
 
 #[allow(dead_code)]
@@ -485,45 +468,46 @@ mod tests {
     use atm_core::types::{AckActivationMode, ReadSelection};
     use atm_core::types::{AgentName, TeamName};
     use atm_daemon_client::DaemonBinaryPath;
-    use atm_rusqlite::SqliteBoundaryAssembly;
+    use atm_runtime_test_support::{
+        SqliteRuntimeGuard,
+        install_sqlite_retained_runtime_factory as install_test_runtime_factory,
+        open_sqlite_boundary,
+    };
     use chrono::Utc;
     use serde_json::Value;
     use tempfile::TempDir;
 
     use super::{
         CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
-        LaunchGateGuard, LocalIpcClientTransportAdapter, TEST_SQLITE_DB_PATH_ENV,
+        LaunchGateGuard, LocalIpcClientTransportAdapter,
     };
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
         _tempdir: TempDir,
         _env_guard: EnvGuard,
+        _sqlite_guard: SqliteRuntimeGuard,
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     }
 
     impl LoopbackFixture {
         fn new(recipient: &str) -> Self {
-            super::install_retained_runtime_factory();
+            install_test_runtime_factory();
             let tempdir = tempfile::tempdir().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
-            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
-            let env_guard = EnvGuard::set_many([
-                (
-                    "ATM_HOME",
-                    Some(home_dir.to_str().expect("utf-8 tempdir path")),
-                ),
-                (
-                    TEST_SQLITE_DB_PATH_ENV,
-                    Some(sqlite_db_path.to_str().expect("utf-8 sqlite db path")),
-                ),
-            ]);
+            let env_guard = EnvGuard::set_many([(
+                "ATM_HOME",
+                Some(home_dir.to_str().expect("utf-8 tempdir path")),
+            )]);
             let current_dir = tempdir.path().join("cwd");
             fs::create_dir_all(&current_dir).expect("cwd");
+            let sqlite_guard =
+                SqliteRuntimeGuard::install(home_dir.join("runtime").join("mail.sqlite3"));
             let fixture = Self {
                 _tempdir: tempdir,
                 _env_guard: env_guard,
+                _sqlite_guard: sqlite_guard,
                 home_dir,
                 current_dir,
             };
@@ -603,7 +587,7 @@ mod tests {
         }
 
         fn seed_sqlite_mailbox(&self, agent: &str, messages: &[MessageEnvelope]) {
-            let assembly = SqliteBoundaryAssembly::new(self.sqlite_db_path()).expect("sqlite db");
+            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
             let mail_store = assembly.mail_store();
             let team = TEST_TEAM.parse::<TeamName>().expect("team");
             let agent_name = agent.parse::<AgentName>().expect("agent");

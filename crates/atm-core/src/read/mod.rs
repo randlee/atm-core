@@ -32,20 +32,20 @@ pub const MAX_TIMEOUT_SECS: u64 = 3600;
 /// Parameters for querying and optionally mutating one mailbox display surface.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ReadQuery {
-    pub home_dir: PathBuf,
-    pub current_dir: PathBuf,
-    pub actor_override: Option<AgentName>,
-    pub target_address: Option<AgentAddress>,
-    pub team_override: Option<TeamName>,
+    pub(crate) home_dir: PathBuf,
+    pub(crate) current_dir: PathBuf,
+    pub(crate) actor_override: Option<AgentName>,
+    pub(crate) target_address: Option<AgentAddress>,
+    pub(crate) team_override: Option<TeamName>,
     pub selection_mode: ReadSelection,
     pub seen_state_filter: bool,
     pub seen_state_update: bool,
     pub ack_activation_mode: AckActivationMode,
     pub message_id_filter: Option<AtmMessageId>,
-    pub sender_filter: Option<AgentName>,
-    pub timestamp_filter: Option<IsoTimestamp>,
-    pub task_filter: Option<TaskId>,
-    pub contains_filter: Option<String>,
+    pub(crate) sender_filter: Option<AgentName>,
+    pub(crate) timestamp_filter: Option<IsoTimestamp>,
+    pub(crate) task_filter: Option<TaskId>,
+    pub(crate) contains_filter: Option<String>,
     pub timeout_secs: Option<u64>,
 }
 
@@ -97,6 +97,10 @@ impl ReadQuery {
             contains_filter,
             timeout_secs,
         })
+    }
+
+    pub fn team_override(&self) -> Option<&TeamName> {
+        self.team_override.as_ref()
     }
 }
 

@@ -1,4 +1,3 @@
-use std::thread;
 use std::time::{Duration, Instant};
 
 use crate::error::AtmError;
@@ -27,6 +26,6 @@ where
             return Ok(true);
         }
 
-        thread::sleep(DEFAULT_WAIT_POLL_INTERVAL);
+        std::thread::park_timeout(DEFAULT_WAIT_POLL_INTERVAL);
     }
 }

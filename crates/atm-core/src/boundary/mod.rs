@@ -1,17 +1,18 @@
 //! Phase R boundary skeleton contracts.
 
+use std::fmt;
+use std::path::Path;
+use std::str::FromStr;
+
 use crate::error::AtmError;
 use crate::graft::AdvisoryStreamRequest;
 use crate::protocol::{FramePayload, RequestEnvelope, RequestId, ResponseEnvelope};
-use crate::schema::AtmMessageId;
 pub use crate::protocol::{
     NotificationEvent, ReconcileRequest, ReconcileResult, RuntimeStatusSnapshot, WatchEventBatch,
     WatchSubscriptionRequest,
 };
+use crate::schema::AtmMessageId;
 use serde::{Deserialize, Serialize};
-use std::fmt;
-use std::path::Path;
-use std::str::FromStr;
 
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
 ///

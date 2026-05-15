@@ -6,12 +6,14 @@ use std::sync::{Mutex, Once, OnceLock};
 
 use atm_core::LocalServiceRuntime;
 use atm_core::error::AtmError;
+use atm_core::test_support::{remove_env_var, set_env_var};
 use atm_rusqlite::SqliteBoundaryAssembly;
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
-static SQLITE_RUNTIME_PATH: OnceLock<Mutex<Option<PathBuf>>> = OnceLock::new();
 static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =
     OnceLock::new();
+const MAX_SQLITE_RUNTIME_CACHE_ENTRIES: usize = 16;
+const SQLITE_RUNTIME_PATH_ENV: &str = "ATM_TEST_SQLITE_RUNTIME_PATH";
 
 pub fn install_sqlite_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
@@ -26,18 +28,18 @@ pub struct SqliteRuntimeGuard {
 impl SqliteRuntimeGuard {
     pub fn install(path: impl Into<PathBuf>) -> Self {
         install_sqlite_retained_runtime_factory();
-        let runtime_path = SQLITE_RUNTIME_PATH.get_or_init(|| Mutex::new(None));
-        let mut runtime_path = runtime_path.lock().expect("sqlite runtime path");
-        let previous = runtime_path.replace(path.into());
+        let previous = std::env::var_os(SQLITE_RUNTIME_PATH_ENV).map(PathBuf::from);
+        set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());
         Self { previous }
     }
 }
 
 impl Drop for SqliteRuntimeGuard {
     fn drop(&mut self) {
-        let runtime_path = SQLITE_RUNTIME_PATH.get_or_init(|| Mutex::new(None));
-        let mut runtime_path = runtime_path.lock().expect("sqlite runtime path");
-        *runtime_path = self.previous.take();
+        match self.previous.take() {
+            Some(previous) => set_env_var(SQLITE_RUNTIME_PATH_ENV, previous.into_os_string()),
+            None => remove_env_var(SQLITE_RUNTIME_PATH_ENV),
+        }
     }
 }
 
@@ -46,21 +48,16 @@ pub fn open_sqlite_boundary(path: impl AsRef<Path>) -> Result<SqliteBoundaryAsse
 }
 
 fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
-    let path = {
-        let runtime_path = SQLITE_RUNTIME_PATH.get_or_init(|| Mutex::new(None));
-        runtime_path
-            .lock()
-            .expect("sqlite runtime path")
-            .clone()
-            .ok_or_else(|| {
-                AtmError::daemon_unavailable(
-                    "sqlite retained runtime is unavailable because no sqlite test runtime path is installed",
-                )
-                .with_recovery(
-                    "Install a sqlite retained-runtime guard before running retained-runtime integration tests.",
-                )
-            })?
-    };
+    let path = std::env::var_os(SQLITE_RUNTIME_PATH_ENV)
+        .map(PathBuf::from)
+        .ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "sqlite retained runtime is unavailable because no sqlite test runtime path is installed",
+            )
+            .with_recovery(
+                "Install a sqlite retained-runtime guard before running retained-runtime integration tests.",
+            )
+        })?;
 
     let runtime_cache = SQLITE_RUNTIME_CACHE.get_or_init(|| Mutex::new(HashMap::new()));
     let mut runtime_cache = runtime_cache.lock().expect("sqlite runtime cache");
@@ -74,6 +71,9 @@ fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
         assembly.task_store_arc(),
         assembly.roster_store_arc(),
     );
+    if runtime_cache.len() >= MAX_SQLITE_RUNTIME_CACHE_ENTRIES {
+        runtime_cache.clear();
+    }
     runtime_cache.insert(path, runtime.clone());
     Ok(runtime)
 }
