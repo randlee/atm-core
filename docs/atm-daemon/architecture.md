@@ -196,6 +196,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - startup must run one bounded replay-resume sweep from the host-scoped SQLite
   state root before serving requests so pending remote handoff rows keyed by
   durable `message_key` are retried or retained with typed degraded status
+- replay-store assembly is therefore fail-closed at startup; atm-daemon must
+  not enter serving state without the SQLite-backed replay store required for
+  that bounded replay-resume sweep
 - daemon runtime failures must remain typed and must not depend on
   panic/unwrap for routine transport, socket, or store-boundary failure.
 - daemon observability remains structured through `sc-observability`; no ad hoc

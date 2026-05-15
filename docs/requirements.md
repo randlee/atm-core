@@ -2817,6 +2817,9 @@ mail correctness.
   - re-export/replay must be keyed by durable `message_key`
   - if daemon-managed retry/re-export state survives crash, it must be stored
     durably with a bounded expiry/deadline
+  - daemon startup must fail closed if the persisted replay store cannot be
+    opened, because the bounded replay-resume sweep is part of the serving
+    startup contract
   - persisted retry state must not become a long-lived remote outbox
 
 - `REQ-CORE-RUNTIME-002` Live agent status must not use SQLite as its

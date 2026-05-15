@@ -183,24 +183,11 @@ impl RuntimeComposition {
         let inbox_ingress = DaemonInboxIngress::new();
         let composition_observability =
             SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
-        let replay_store = match sqlite_remote_replay_store_from_path_with_observability(
+        let replay_store = sqlite_remote_replay_store_from_path_with_observability(
             replay_store_path,
             Arc::clone(&sqlite_observability),
-        ) {
-            Ok(store) => Some(store),
-            Err(error) => {
-                tracing::warn!(
-                    %error,
-                    "remote replay store unavailable; outcome-unknown delivery cannot be persisted"
-                );
-                composition_observability.emit_or_warn(
-                    "sqlite_replay_store_assembly",
-                    "degraded",
-                    "remote replay store unavailable; outcome-unknown delivery cannot be persisted",
-                );
-                None
-            }
-        };
+        )
+        .map_err(|error| replay_store_assembly_failed(error, &composition_observability))?;
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             host_ownership_adapter: HostOwnershipAdapter::new_with_observability(
@@ -247,7 +234,7 @@ impl RuntimeComposition {
             _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
             peer_transport_runtime: PeerTransportRuntime::new_with_observability(
-                replay_store,
+                Some(replay_store),
                 SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
             ),
         })
@@ -623,6 +610,28 @@ impl RuntimeComposition {
     }
 }
 
+fn replay_store_assembly_failed(
+    error: AtmError,
+    observability: &SubsystemObservability,
+) -> AtmError {
+    tracing::error!(
+        %error,
+        "remote replay store assembly failed; daemon startup is fail-closed"
+    );
+    observability.emit_or_warn(
+        "sqlite_replay_store_assembly",
+        "failed",
+        "remote replay store assembly failed; daemon startup is fail-closed",
+    );
+    AtmError::daemon_unavailable(
+        "remote replay store is unavailable; atm-daemon startup is blocked",
+    )
+    .with_recovery(
+        "Restore the host-scoped ATM SQLite replay store before starting atm-daemon so the required bounded replay-resume sweep can run.",
+    )
+    .with_source(error)
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct StartedLanes {
     watch_started: bool,
@@ -882,6 +891,39 @@ mod tests {
                 .contains("cannot bootstrap the daemon directly")
         );
         assert_eq!(runtime.lifecycle_state(), RuntimeLifecycleState::Stopped);
+    }
+
+    #[test]
+    fn runtime_composition_fails_closed_when_replay_store_cannot_open() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let home_dir = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&home_dir).expect("atm home");
+        let replay_parent_file = tempdir.path().join("not-a-dir");
+        std::fs::write(&replay_parent_file, "x").expect("parent file");
+        let observability = std::sync::Arc::new(
+            crate::test_observability::TestDaemonObservability::new(
+                atm_core::home::host_log_dir_from_home(&home_dir),
+            )
+            .expect("test observability"),
+        );
+
+        let error = RuntimeComposition::new_with_replay_store_path(
+            crate::AtmHomeDir::from_path_for_test(home_dir),
+            replay_parent_file.join("mail.db"),
+            observability,
+        )
+        .expect_err("replay-store assembly should fail closed");
+
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::DaemonUnavailable
+        );
+        assert!(
+            error
+                .to_string()
+                .contains("remote replay store is unavailable"),
+            "{error}"
+        );
     }
 
     #[test]

@@ -209,7 +209,7 @@ impl GraftClient {
             parse_bootstrap_agent()?,
         );
         supervisor.ensure_daemon_available_with_traceability(&traceability, || {
-            advisory_transport.try_connect().map(|_| ())
+            advisory_transport.probe_connection().map(|_| ())
         })?;
         Ok(Self {
             transport,

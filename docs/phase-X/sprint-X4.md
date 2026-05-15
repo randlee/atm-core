@@ -1,7 +1,7 @@
 ---
 id: X.4
 title: Replay Contract And IPC Helper Consolidation
-status: planned
+status: complete
 branch: feature/pX-s4-replay-and-ipc-consolidation
 worktree: ../atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation
 target: integrate/phase-X
@@ -71,6 +71,33 @@ target: integrate/phase-X
   unexpected-response behavior
 - peer transport preserves the shared ATM error/recovery contract after
   `send_to_endpoint(...)` and `send_once(...)` refactor
+
+## Delivered
+
+- documented replay persistence startup as a fail-closed daemon dependency in:
+  - `docs/requirements.md`
+  - `docs/architecture.md`
+  - `docs/atm-daemon/requirements.md`
+  - `docs/atm-daemon/architecture.md`
+- changed daemon composition to fail startup when the replay store cannot be
+  assembled, instead of degrading to `replay_store = None`
+- added direct coverage for the fail-closed replay-store startup contract in
+  `crates/atm-daemon/src/composition.rs` tests
+- refactored `send_to_endpoint(...)` to `43` lines and `send_once(...)` to
+  `19` lines while preserving the shared peer-transport ATM error and recovery
+  contract
+- collapsed same-host helper ownership so the only remaining
+  `try_connect(...)`, `exchange(...)`, and `unexpected_response(...)`
+  definitions live in `crates/atm-daemon-client/src/lib.rs`
+- updated CLI and graft same-host client wrappers to call the shared
+  daemon-client helper line without keeping duplicate helper definitions
+
+Implementation result:
+- the X.4 acceptance criteria are satisfied on
+  `feature/pX-s4-replay-and-ipc-consolidation`
+- the machine-readable and prose daemon-client boundary contracts already
+  matched the intended helper ownership on this branch baseline, so no extra
+  boundary-doc delta was required in this sprint
 
 ## Required Validation
 
