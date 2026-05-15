@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-X4-007>
+  a triage:Finding ;
+  triage:findingId "RSH-X4-007" ;
+  triage:title "Retry budget not validated at configuration load" ;
+  triage:description "crates/atm-daemon/src/peer_transport.rs:46 — remote_retry_budget value accepted from config with no lower-bound check. Zero or negative Duration values produce undefined retry behavior. The config load site at PeerTransportConfig::from_config does not validate the supplied Duration against a minimum acceptable value before use." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-007/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-007/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-007/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-007/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-007/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-007/integrate-phase-X/1> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/0d337c7> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/df124a8> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/8a4fa81> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/ec149fa> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+<urn:atm:triage:occurrence/RSH-X4-007/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 46 ;
+  triage:snippet "remote_retry_budget: config.daemon.remote_retry_budget," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/RSH-X4-007/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 46 ;
+  triage:snippet "remote_retry_budget: config.daemon.remote_retry_budget," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+<urn:atm:triage:occurrence/RSH-X4-007/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 46 ;
+  triage:snippet "remote_retry_budget: config.daemon.remote_retry_budget," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/RSH-X4-007/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 46 ;
+  triage:snippet "remote_retry_budget: config.daemon.remote_retry_budget," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/RSH-X4-007/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 46 ;
+  triage:snippet "remote_retry_budget: config.daemon.remote_retry_budget," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/8a4fa81> .
+
+<urn:atm:triage:occurrence/RSH-X4-007/integrate-phase-X/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 46 ;
+  triage:snippet "remote_retry_budget: config.daemon.remote_retry_budget," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "ec149fa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/ec149fa> .
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/8a4fa81>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "8a4fa81" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/ec149fa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "ec149fa" ;
+  triage:orderIndex 6 .
