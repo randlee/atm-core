@@ -4,8 +4,8 @@
 <urn:atm:triage:finding/RSH-X4-NEW-001>
   a triage:Finding ;
   triage:findingId "RSH-X4-NEW-001" ;
-  triage:title "live-delivery retry budget used for startup sweep timeout" ;
-  triage:description "crates/atm-daemon/src/peer_transport.rs -- live-delivery retry budget used for startup sweep timeout. Fix: introduce distinct STARTUP_REPLAY_PER_RECORD_DEADLINE constant. Introduced on X.4." ;
+  triage:title "conflated retry budget used as startup sweep deadline in peer_transport.rs" ;
+  triage:description "crates/atm-daemon/src/peer_transport.rs -- live-delivery retry budget (remote_retry_budget) reused as the startup sweep timeout. Fix: introduce distinct STARTUP_REPLAY_PER_RECORD_DEADLINE constant for the startup sweep path. s5 introduced MAX_REPLAY_RESUME_SWEEP_BUDGET + sweep_deadline; s1-s4 remain unfixed." ;
   triage:triageMode "initial_pass" ;
   triage:category "RSH" ;
   triage:phaseId "phase-X" ;
@@ -14,19 +14,17 @@
   triage:sweepScope "file_only" ;
   triage:status "fixed_partial" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-15T04:36:15Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s1/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s2/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s3/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s4/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-X4-NEW-001/integrate-pX/1> ;
-  triage:openOn <urn:atm:triage:worktree/pX-s1/010bfbe> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/b6b0f6e> ;
   triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
   triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
   triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
-  triage:openOn <urn:atm:triage:worktree/integrate-pX/4e08185> ;
-  triage:fixedOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
-  triage:promoteTo <urn:atm:triage:worktree/integrate-pX/4e08185> .
+  triage:fixedOn <urn:atm:triage:worktree/pX-s5/c8bd38a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
 
 <urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s1/1>
   a triage:Occurrence ;
@@ -36,8 +34,8 @@
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
-  triage:headSha "010bfbe" ;
-  triage:occursIn <urn:atm:triage:worktree/pX-s1/010bfbe> .
+  triage:headSha "b6b0f6e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/b6b0f6e> .
 
 <urn:atm:triage:occurrence/RSH-X4-NEW-001/pX-s2/1>
   a triage:Occurrence ;
@@ -72,22 +70,11 @@
   triage:headSha "4cfeb8c" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
 
-<urn:atm:triage:occurrence/RSH-X4-NEW-001/integrate-pX/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
-  triage:line 304 ;
-  triage:snippet "let deadline = started + self.config.remote_retry_budget;" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "integrate/phase-X" ;
-  triage:headSha "4e08185" ;
-  triage:occursIn <urn:atm:triage:worktree/integrate-pX/4e08185> .
-
-<urn:atm:triage:worktree/pX-s1/010bfbe>
+<urn:atm:triage:worktree/pX-s1/b6b0f6e>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
-  triage:headSha "010bfbe" ;
+  triage:headSha "b6b0f6e" ;
   triage:orderIndex 1 .
 
 <urn:atm:triage:worktree/pX-s2/4cfeb8c>
@@ -111,16 +98,9 @@
   triage:headSha "4cfeb8c" ;
   triage:orderIndex 4 .
 
-<urn:atm:triage:worktree/pX-s5/d17602e>
+<urn:atm:triage:worktree/pX-s5/c8bd38a>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pX-s5-guardrails-and-closeout" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
-  triage:headSha "d17602e" ;
+  triage:headSha "c8bd38a" ;
   triage:orderIndex 5 .
-
-<urn:atm:triage:worktree/integrate-pX/4e08185>
-  a triage:WorktreeSnapshot ;
-  triage:branch "integrate/phase-X" ;
-  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
-  triage:headSha "4e08185" ;
-  triage:orderIndex 6 .

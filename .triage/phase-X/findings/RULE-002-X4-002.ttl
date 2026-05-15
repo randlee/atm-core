@@ -1,0 +1,106 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ─── Finding ──────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/RULE-002-X4-002>
+  a triage:Finding ;
+  triage:findingId "RULE-002-X4-002" ;
+  triage:title "clear_mail_with_runtime_impl 99L exceeds 80L gate" ;
+  triage:description "crates/atm-core/src/clear/mod.rs:86-184 — clear_mail_with_runtime_impl is 99 lines, exceeds RULE-002 80L hard gate. Introduced in fix-R1 diff on X.4. Present on X.2/X.3/X.4 (all at SHA 4cfeb8c). Fix: extract per-message state persistence loop or RemovedByClass counting block." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RULE-002" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/clear/mod.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X4-002/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X4-002/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RULE-002-X4-002/s4/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+# ─── Occurrences ──────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RULE-002-X4-002/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 86 ;
+  triage:snippet "fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>( ... ) — 100L (L86-L185), exceeds 80L gate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RULE-002-X4-002/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 86 ;
+  triage:snippet "fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>( ... ) — 100L (L86-L185), exceeds 80L gate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
+
+<urn:atm:triage:occurrence/RULE-002-X4-002/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/clear/mod.rs" ;
+  triage:line 86 ;
+  triage:snippet "fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>( ... ) — 100L (L86-L185), exceeds 80L gate" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+# ─── WorktreeSnapshots ────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/b6b0f6e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "b6b0f6e" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pX-s2/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "4cfeb8c" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pX-s5/c8bd38a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "c8bd38a" ;
+  triage:orderIndex 5 ;
+  triage:branchState "absent" .
