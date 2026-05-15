@@ -249,7 +249,7 @@ impl RuntimeComposition {
             peer_transport_runtime: PeerTransportRuntime::new_with_observability(
                 replay_store,
                 SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
-            ),
+            )?,
         })
     }
 

@@ -1,12 +1,7 @@
-#[cfg(unix)]
-use std::ffi::{OsStr, OsString};
 use std::fs;
 #[cfg(unix)]
 use std::fs::OpenOptions;
-use std::sync::Once;
 use std::sync::{Arc, Barrier, mpsc};
-#[cfg(unix)]
-use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -20,8 +15,13 @@ use atm_core::read::{ReadQuery, read_mail};
 use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AgentMember, AtmMessageId, MessageEnvelope, TeamConfig};
 use atm_core::send::{SendMessageSource, SendRequest, send_mail};
+#[cfg(unix)]
+use atm_core::test_support::EnvGuard;
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
-use atm_rusqlite::SqliteBoundaryAssembly;
+use atm_runtime_test_support::{
+    SqliteRuntimeGuard, hold_sqlite_writer_lock, install_sqlite_retained_runtime_factory,
+    open_sqlite_boundary,
+};
 use chrono::Utc;
 #[cfg(unix)]
 use fs2::FileExt;
@@ -41,48 +41,9 @@ const PRIMARY_TEAM: &str = TEST_TEAM;
 const PRIMARY_AGENT: &str = TEST_SENDER;
 const SECONDARY_AGENT: &str = TEST_QA;
 const TEAM_LEAD: &str = ROLE_TEAM_LEAD;
-const TEST_SQLITE_DB_PATH_ENV: &str = "ATM_TEST_SQLITE_DB_PATH";
-static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 
 fn qualified(agent: &str) -> String {
     format!("{agent}@{PRIMARY_TEAM}")
-}
-
-fn install_retained_runtime_factory() {
-    INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
-        atm_core::install_default_runtime_factory(test_local_runtime);
-    });
-}
-
-fn test_local_runtime() -> Result<atm_core::LocalServiceRuntime, atm_core::error::AtmError> {
-    let path = std::env::var_os(TEST_SQLITE_DB_PATH_ENV).ok_or_else(|| {
-        atm_core::error::AtmError::daemon_unavailable(
-            "sqlite mailbox-locking runtime is unavailable because ATM_TEST_SQLITE_DB_PATH is unset",
-        )
-        .with_recovery(
-            "Set ATM_TEST_SQLITE_DB_PATH before running mailbox-locking retained-runtime tests.",
-        )
-    })?;
-    let path = std::path::PathBuf::from(path);
-    static RUNTIME_CACHE: std::sync::OnceLock<
-        std::sync::Mutex<
-            std::collections::HashMap<std::path::PathBuf, atm_core::LocalServiceRuntime>,
-        >,
-    > = std::sync::OnceLock::new();
-    let cache =
-        RUNTIME_CACHE.get_or_init(|| std::sync::Mutex::new(std::collections::HashMap::new()));
-    let mut cache = cache.lock().expect("runtime cache");
-    if let Some(runtime) = cache.get(&path) {
-        return Ok(runtime.clone());
-    }
-    let assembly = SqliteBoundaryAssembly::new(&path)?;
-    let runtime = atm_core::LocalServiceRuntime::new(
-        assembly.mail_store_arc(),
-        assembly.task_store_arc(),
-        assembly.roster_store_arc(),
-    );
-    cache.insert(path, runtime.clone());
-    Ok(runtime)
 }
 
 #[test]
@@ -643,20 +604,11 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
-    let _env_lock = env_lock().lock().expect("env lock");
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(PRIMARY_AGENT, &[]);
-    let lock_path = fixture.sqlite_db_path();
-    let lock_file = OpenOptions::new()
-        .create(true)
-        .truncate(false)
-        .read(true)
-        .write(true)
-        .open(&lock_path)
-        .expect("open lock file");
-    lock_file.lock_exclusive().expect("hold mailbox lock");
+    let _writer_lock = hold_sqlite_writer_lock(fixture.sqlite_db_path()).expect("hold sqlite lock");
 
     let started = Instant::now();
     let error = send_mail(
@@ -676,7 +628,6 @@ fn send_times_out_under_bounded_lock_contention() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
-    let _env_lock = env_lock().lock().expect("env lock");
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(
@@ -714,7 +665,6 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
-    let _env_lock = env_lock().lock().expect("env lock");
     let observability = NullObservability;
 
     let mutation_fixture = Fixture::new();
@@ -737,8 +687,9 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     mutation_lock_file
         .lock_exclusive()
         .expect("hold mutation lock");
-    let mut mutation_query = mutation_fixture.read_query(PRIMARY_AGENT);
-    mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let mutation_query = mutation_fixture
+        .read_query(PRIMARY_AGENT)
+        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
     let mutation_outcome = read_mail(mutation_query, &observability).expect("read with mutation");
     assert_eq!(mutation_outcome.count, 1);
     assert!(mutation_outcome.mutation_applied);
@@ -764,9 +715,10 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     no_mutation_lock_file
         .lock_exclusive()
         .expect("hold no-mutation lock");
-    let mut no_mutation_query = no_mutation_fixture.read_query(PRIMARY_AGENT);
-    no_mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
-    no_mutation_query.selection_mode = ReadSelection::All;
+    let no_mutation_query = no_mutation_fixture
+        .read_query(PRIMARY_AGENT)
+        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread)
+        .with_selection_mode(ReadSelection::All);
     let started = Instant::now();
     let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
     assert_eq!(outcome.count, 1);
@@ -804,8 +756,9 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         .expect("logical message id");
     assert_eq!(physical_before["read"], false);
 
-    let mut read_query = fixture.read_query(PRIMARY_AGENT);
-    read_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let read_query = fixture
+        .read_query(PRIMARY_AGENT)
+        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
         outcome
@@ -846,7 +799,6 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
-    let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -882,7 +834,6 @@ fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_reports_non_contention_lock_failures_without_timeout() {
-    let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -906,74 +857,19 @@ enum CommandOp {
     Clear(ClearQuery, Arc<NullObservability>),
 }
 
-// Serializes process-environment mutation inside this test module. This is
-// process-local only; it does not coordinate with other test processes.
-#[cfg(unix)]
-fn env_lock() -> &'static Mutex<()> {
-    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-    // These tests mutate the process-global `ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS`,
-    // `ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT`, and
-    // `ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR` knobs while exercising
-    // mailbox lock behavior. Keep a single process-wide mutex in addition to
-    // `#[serial]` so a poisoned lock fails the suite closed instead of silently
-    // continuing with inconsistent shared state.
-    LOCK.get_or_init(|| Mutex::new(()))
-}
-
-#[cfg(unix)]
-struct EnvGuard {
-    key: &'static str,
-    original: Option<OsString>,
-}
-
-#[cfg(unix)]
-impl EnvGuard {
-    fn set_raw(key: &'static str, value: &str) -> Self {
-        let original = std::env::var_os(key);
-        set_env_var(key, value);
-        Self { key, original }
-    }
-}
-
-#[cfg(unix)]
-impl Drop for EnvGuard {
-    fn drop(&mut self) {
-        match self.original.take() {
-            Some(value) => set_env_var(self.key, value),
-            None => remove_env_var(self.key),
-        }
-    }
-}
-
-#[cfg(unix)]
-fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
-    // SAFETY: these tests take a process-wide mutex and use #[serial] before
-    // mutating the environment, so the mutation is serialized within this
-    // process.
-    unsafe { std::env::set_var(key, value) }
-}
-
-#[cfg(unix)]
-fn remove_env_var<K: AsRef<OsStr>>(key: K) {
-    // SAFETY: these tests take a process-wide mutex and use #[serial] before
-    // mutating the environment, so the mutation is serialized within this
-    // process.
-    unsafe { std::env::remove_var(key) }
-}
-
 struct Fixture {
     tempdir: TempDir,
+    _sqlite_runtime_guard: SqliteRuntimeGuard,
     arch_message_id: AtmMessageId,
     qa_message_id: AtmMessageId,
 }
 
 impl Fixture {
     fn new() -> Self {
-        install_retained_runtime_factory();
+        install_sqlite_retained_runtime_factory();
         let tempdir = tempfile::tempdir().expect("tempdir");
         let sqlite_db_path = tempdir.path().join("runtime").join("mail.sqlite3");
-        // SAFETY: this test module is serialized with #[serial(env)].
-        unsafe { std::env::set_var(TEST_SQLITE_DB_PATH_ENV, &sqlite_db_path) }
+        let sqlite_runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path);
         create_team_with_config(
             tempdir.path(),
             PRIMARY_TEAM,
@@ -983,12 +879,12 @@ impl Fixture {
         let arch_message_id = AtmMessageId::new();
         let qa_message_id = AtmMessageId::new();
 
-        let fixture = Self {
+        Self {
             tempdir,
+            _sqlite_runtime_guard: sqlite_runtime_guard,
             arch_message_id,
             qa_message_id,
-        };
-        fixture
+        }
     }
 
     fn ack_request(&self, actor: &str, message_id: AtmMessageId, reply_body: &str) -> AckRequest {
@@ -1191,15 +1087,14 @@ impl Fixture {
     }
 
     fn seed_sqlite_mailbox_for_team(&self, team: &str, agent: &str, messages: &[MessageEnvelope]) {
-        let assembly = SqliteBoundaryAssembly::new(self.sqlite_db_path()).expect("sqlite db");
+        let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
         let mail_store = assembly.mail_store();
         let team = team.parse::<TeamName>().expect("team");
         let agent_name = agent.parse::<AgentName>().expect("agent");
 
         for (index, message) in messages.iter().enumerate() {
             let message_key = if let Some(message_id) = message.message_id {
-                atm_core::boundary::MessageKey::new(format!("atm:{message_id}"))
-                    .expect("message key")
+                atm_core::boundary::MessageKey::for_atm_message(message_id).expect("message key")
             } else {
                 atm_core::boundary::MessageKey::new(format!("ext:{agent}:{index}"))
                     .expect("message key")
@@ -1255,11 +1150,8 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
 }
 
 fn message_workflow_key(message: &MessageEnvelope) -> String {
-    message
-        .message_id
-        .map(|message_id| format!("atm:{message_id}"))
-        .as_deref()
-        .expect("message id")
+    atm_core::boundary::MessageKey::for_atm_message(message.message_id.expect("message id"))
+        .expect("message key")
         .to_string()
 }
 

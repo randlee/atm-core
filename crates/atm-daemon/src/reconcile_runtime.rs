@@ -18,6 +18,7 @@ const DEFAULT_RECONCILE_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
 const MAX_RECONCILE_FINGERPRINT_KEYS: usize = 1024;
 const MAX_RECONCILE_FINGERPRINTS_PER_KEY: usize = 256;
+const MAX_RECONCILE_WAITERS: usize = 1024;
 #[cfg(not(test))]
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
 #[cfg(test)]
@@ -428,6 +429,27 @@ impl ReconcileRuntime {
                 return Err(AtmError::daemon_unavailable(
                     "reconcile runtime is unavailable during daemon shutdown",
                 ));
+            }
+            if state.active_waiters.len() >= MAX_RECONCILE_WAITERS {
+                let event = self
+                    .inner
+                    .observability
+                    .event(
+                        "reconcile",
+                        "rejected",
+                        "reconcile runtime hit its concurrent waiter capacity",
+                    )
+                    .with_team(request_team.clone())
+                    .with_agent(request_agent.clone());
+                self.inner.observability.emit_event_or_warn(event);
+                return Err(
+                    AtmError::daemon_unavailable(
+                        "reconcile runtime hit its concurrent waiter capacity",
+                    )
+                    .with_recovery(
+                        "Reduce concurrent reconcile waiters or retry after earlier reconcile requests complete.",
+                    ),
+                );
             }
             let waiter_id = state.next_waiter_id;
             state.next_waiter_id += 1;
