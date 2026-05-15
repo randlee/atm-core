@@ -1,0 +1,392 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ────────────────────────────────────────────────────────────────────────────
+# Finding: ARCH-001-X5
+# Title:   #[cfg(all(test, unix))] module-level gate violates boundary policy
+# Phase:   phase-X
+# Triage:  initial_pass  2026-05-14T00:00:00Z
+# Status:  open  (all 6 branches carry live occurrences)
+# ────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/ARCH-001-X5>
+  a triage:Finding ;
+  triage:findingId "ARCH-001-X5" ;
+  triage:title "#[cfg(all(test, unix))] module-level gate violates boundary policy" ;
+  triage:description "crates/atm-daemon uses #[cfg(all(test, unix))] as a module-level gate in composition.rs, lifecycle_control.rs, and local_ipc_transport.rs. Phase S boundary policy requires #[cfg(test)] at module level and per-function #[cfg(unix)] on individual unix-only test functions. The combined module-level gate hides entire test modules from non-unix CI runs and violates the cross-platform guidelines." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-X" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+
+  # open-on: all six branches carry live occurrences
+  triage:openOn <urn:atm:triage:worktree/pX-s1/0d337c7> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/df124a8> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/78d1e2c> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/34c3e0a> ;
+
+  # promote_to: highest sprint branch (s5)
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/78d1e2c> ;
+
+  # ── occurrences: feature/pX-s1 ───────────────────────────────────────────
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s1/composition/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s1/lifecycle_control/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s1/local_ipc_transport/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s1/local_ipc_transport/2> ;
+
+  # ── occurrences: feature/pX-s2 ───────────────────────────────────────────
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s2/composition/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s2/lifecycle_control/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s2/local_ipc_transport/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s2/local_ipc_transport/2> ;
+
+  # ── occurrences: feature/pX-s3 ───────────────────────────────────────────
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s3/composition/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s3/lifecycle_control/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s3/local_ipc_transport/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s3/local_ipc_transport/2> ;
+
+  # ── occurrences: feature/pX-s4 ───────────────────────────────────────────
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s4/composition/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s4/lifecycle_control/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s4/local_ipc_transport/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s4/local_ipc_transport/2> ;
+
+  # ── occurrences: feature/pX-s5 ───────────────────────────────────────────
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s5/composition/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s5/lifecycle_control/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s5/local_ipc_transport/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/pX-s5/local_ipc_transport/2> ;
+
+  # ── occurrences: integrate/phase-X ───────────────────────────────────────
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/integrate-phase-X/composition/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/integrate-phase-X/lifecycle_control/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/integrate-phase-X/local_ipc_transport/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X5/integrate-phase-X/local_ipc_transport/2> .
+
+# ── WorktreeSnapshot nodes ───────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/78d1e2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/34c3e0a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "34c3e0a" ;
+  triage:orderIndex 6 .
+
+# ── Occurrence nodes: feature/pX-s1 ─────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s1/composition/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 754 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s1/lifecycle_control/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 696 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s1/local_ipc_transport/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 34 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s1/local_ipc_transport/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 200 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+# ── Occurrence nodes: feature/pX-s2 ─────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s2/composition/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 754 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s2/lifecycle_control/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 696 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s2/local_ipc_transport/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 34 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s2/local_ipc_transport/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 200 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+# ── Occurrence nodes: feature/pX-s3 ─────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s3/composition/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 754 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s3/lifecycle_control/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 696 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s3/local_ipc_transport/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 34 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s3/local_ipc_transport/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 200 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+# ── Occurrence nodes: feature/pX-s4 ─────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s4/composition/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 763 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s4/lifecycle_control/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 696 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s4/local_ipc_transport/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 34 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s4/local_ipc_transport/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 200 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+# ── Occurrence nodes: feature/pX-s5 ─────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s5/composition/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 763 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s5/lifecycle_control/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 696 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s5/local_ipc_transport/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 34 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/pX-s5/local_ipc_transport/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 200 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+# ── Occurrence nodes: integrate/phase-X ─────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-001-X5/integrate-phase-X/composition/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 754 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "34c3e0a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/34c3e0a> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/integrate-phase-X/lifecycle_control/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 696 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "34c3e0a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/34c3e0a> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/integrate-phase-X/local_ipc_transport/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 34 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "34c3e0a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/34c3e0a> .
+
+<urn:atm:triage:occurrence/ARCH-001-X5/integrate-phase-X/local_ipc_transport/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 200 ;
+  triage:snippet "#[cfg(all(test, unix))]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "34c3e0a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/34c3e0a> .

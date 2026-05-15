@@ -1,75 +1,73 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<urn:atm:triage:finding/ARCH-001-X2>
+<urn:atm:triage:finding/QA2-X4-007>
   a triage:Finding ;
-  triage:findingId "ARCH-001-X2" ;
-  triage:title "atm-core boundary_support module is fully public" ;
-  triage:description "crates/atm-core/src/lib.rs — `pub mod boundary_support` still fully public after fix-R1. #[doc(hidden)] suppresses docs but NOT visibility — external crates can still import atm_core::boundary_support directly, defeating the daemon-private seam. Fix: change to `pub(crate) mod boundary_support;`" ;
+  triage:findingId "QA2-X4-007" ;
+  triage:title "cfg(unix) gap in set_env_var usage at mailbox_locking.rs:948" ;
+  triage:description "crates/atm-core/tests/mailbox_locking.rs — set_env_var helper is #[cfg(unix)] only; local definition still present on feature/pX-s2, pX-s3, pX-s4, and integrate/phase-X. pX-s1 and pX-s5 have already migrated to atm_core::test_support::EnvGuard (cross-platform). Fix: migrate remaining branches to test_support or add cross-platform equivalent." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA2" ;
   triage:phaseId "phase-X" ;
-  triage:triageMode "followup_pass" ;
-  triage:category "ARCH" ;
-  triage:severity "blocking" ;
+  triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
-  triage:status "fixed_partial" ;
+  triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X2/pX-s1/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X2/pX-s2/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X2/pX-s3/1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X2/pX-s4/1> ;
-  triage:openOn <urn:atm:triage:worktree/pX-s1/010bfbe> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X4-007/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X4-007/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X4-007/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X4-007/integrate-phase-X/1> ;
   triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
   triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
   triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
-  triage:fixedOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
-  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-X/4e08185> ;
-  triage:promoteTo <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/4e08185> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-X/4e08185> .
 
-<urn:atm:triage:occurrence/ARCH-001-X2/pX-s1/1>
+<urn:atm:triage:occurrence/QA2-X4-007/pX-s2/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/lib.rs" ;
-  triage:line 9 ;
-  triage:snippet "pub mod boundary_support;" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
-  triage:headSha "010bfbe" ;
-  triage:occursIn <urn:atm:triage:worktree/pX-s1/010bfbe> .
-
-<urn:atm:triage:occurrence/ARCH-001-X2/pX-s2/1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/src/lib.rs" ;
-  triage:line 10 ;
-  triage:snippet "pub mod boundary_support;" ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 948 ;
+  triage:snippet "#[cfg(unix)]" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s2-command-path-simplification" ;
   triage:headSha "4cfeb8c" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
 
-<urn:atm:triage:occurrence/ARCH-001-X2/pX-s3/1>
+<urn:atm:triage:occurrence/QA2-X4-007/pX-s3/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/lib.rs" ;
-  triage:line 10 ;
-  triage:snippet "pub mod boundary_support;" ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 948 ;
+  triage:snippet "#[cfg(unix)]" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s3-runtime-truth-unification" ;
   triage:headSha "4cfeb8c" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
 
-<urn:atm:triage:occurrence/ARCH-001-X2/pX-s4/1>
+<urn:atm:triage:occurrence/QA2-X4-007/pX-s4/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-core/src/lib.rs" ;
-  triage:line 10 ;
-  triage:snippet "pub mod boundary_support;" ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 948 ;
+  triage:snippet "#[cfg(unix)]" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
   triage:headSha "4cfeb8c" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
+
+<urn:atm:triage:occurrence/QA2-X4-007/integrate-phase-X/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 877 ;
+  triage:snippet "#[cfg(unix)]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "4e08185" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/4e08185> .
 
 <urn:atm:triage:worktree/pX-s1/010bfbe>
   a triage:WorktreeSnapshot ;

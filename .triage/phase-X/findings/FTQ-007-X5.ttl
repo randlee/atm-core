@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-007-X5>
+  a triage:Finding ;
+  triage:findingId "FTQ-007-X5" ;
+  triage:title "10s wall-clock deadline for wait_for_message_contains observability assert" ;
+  triage:description "crates/atm-daemon/src/tests.rs:248 — Hard wall-clock 10s deadline in wait_for_message_contains can flake under CI parallelism. Should switch to condvar-based wait or increase deadline." ;
+  triage:phaseId "phase-X" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-007-X5/pX-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-007-X5/pX-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-007-X5/pX-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-007-X5/pX-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-007-X5/pX-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-007-X5/integrate-phase-X/1> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s1/0d337c7> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s2/0580c0e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/9264c3e> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/df124a8> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s5/78d1e2c> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-X/34c3e0a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+<urn:atm:triage:occurrence/FTQ-007-X5/pX-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 249 ;
+  triage:snippet ".wait_for_message_contains(\"daemon start requested\", Duration::from_secs(10))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s1/0d337c7> .
+
+<urn:atm:triage:occurrence/FTQ-007-X5/pX-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 249 ;
+  triage:snippet ".wait_for_message_contains(\"daemon start requested\", Duration::from_secs(10))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s2/0580c0e> .
+
+<urn:atm:triage:occurrence/FTQ-007-X5/pX-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 249 ;
+  triage:snippet ".wait_for_message_contains(\"daemon start requested\", Duration::from_secs(10))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/9264c3e> .
+
+<urn:atm:triage:occurrence/FTQ-007-X5/pX-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 249 ;
+  triage:snippet ".wait_for_message_contains(\"daemon start requested\", Duration::from_secs(10))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/df124a8> .
+
+<urn:atm:triage:occurrence/FTQ-007-X5/pX-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 249 ;
+  triage:snippet ".wait_for_message_contains(\"daemon start requested\", Duration::from_secs(10))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pX-s5/78d1e2c> .
+
+<urn:atm:triage:occurrence/FTQ-007-X5/integrate-phase-X/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 213 ;
+  triage:snippet ".wait_for_message_contains(\"daemon start requested\", Duration::from_secs(10))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-X" ;
+  triage:headSha "34c3e0a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/34c3e0a> .
+
+<urn:atm:triage:worktree/pX-s1/0d337c7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:headSha "0d337c7" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pX-s2/0580c0e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:headSha "0580c0e" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pX-s3/9264c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:headSha "9264c3e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pX-s4/df124a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df124a8" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pX-s5/78d1e2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pX-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:headSha "78d1e2c" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-X/34c3e0a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-X" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-X" ;
+  triage:headSha "34c3e0a" ;
+  triage:orderIndex 6 .

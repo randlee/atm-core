@@ -1,103 +1,100 @@
 @prefix triage: <urn:atm:triage:> .
 @prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
 
-<urn:atm:triage:finding/ARCH-001-X3>
+<urn:atm:triage:finding/QA2-X4-006>
   a triage:Finding ;
-  triage:findingId "ARCH-001-X3" ;
-  triage:title "sc-observability in atm-daemon [dependencies] — should be dev-only" ;
-  triage:description "crates/atm-daemon/Cargo.toml:18 — sc-observability under [dependencies] (production). atm-daemon is a library crate (lib.rs only, no main.rs). Only binary entry points may declare sc-observability as a production dependency. Fix: remove from [dependencies]; keep only in [dev-dependencies] with fault-injection feature for tests. Production code must use sc-observability-types or DaemonRuntimeObservability trait. Still open after fix-R1 (4cfeb8c)." ;
+  triage:findingId "QA2-X4-006" ;
+  triage:title "SCB-CYCLE-001 potential cycle in atm-graft/src/lib.rs — may be pre-existing" ;
+  triage:description "crates/atm-graft/src/lib.rs — SCB-CYCLE-001 detected; may be pre-existing against develop baseline. Triage to determine if new or pre-existing, and identify canonical fix location. Introduced or exposed on X.4." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA2" ;
   triage:phaseId "phase-X" ;
-  triage:triageMode "followup_pass" ;
-  triage:category "ARCH" ;
-  triage:severity "blocking" ;
+  triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/pX-s1/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/pX-s2/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/pX-s3/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/pX-s4/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/pX-s5/2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-X3/integrate-phase-X/2> ;
+  triage:triageNote "Pattern exists identically on develop baseline (runtime.rs line 17: use crate::{GraftObservability, GraftSessionClient, ...}). Finding is pre-existing, not introduced by phase-X. Present on all 6 worktrees unchanged from develop." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X4-006/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X4-006/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X4-006/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X4-006/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X4-006/s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA2-X4-006/integrate/1> ;
   triage:openOn <urn:atm:triage:worktree/pX-s1/010bfbe> ;
   triage:openOn <urn:atm:triage:worktree/pX-s2/4cfeb8c> ;
-  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c-s3> ;
-  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c-s4> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s3/4cfeb8c> ;
+  triage:openOn <urn:atm:triage:worktree/pX-s4/4cfeb8c> ;
   triage:openOn <urn:atm:triage:worktree/pX-s5/d17602e> ;
   triage:openOn <urn:atm:triage:worktree/integrate-phase-X/4e08185> ;
-  triage:promoteTo <urn:atm:triage:worktree/pX-s1/010bfbe> .
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-X/4e08185> .
 
-# --- Occurrences (followup_pass round 2) ---
-
-<urn:atm:triage:occurrence/ARCH-001-X3/pX-s1/2>
+<urn:atm:triage:occurrence/QA2-X4-006/s1/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 18 ;
-  triage:snippet "sc-observability.workspace = true" ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 17 ;
+  triage:snippet "use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s1-mailbox-runtime-cutover" ;
   triage:headSha "010bfbe" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s1/010bfbe> .
 
-<urn:atm:triage:occurrence/ARCH-001-X3/pX-s2/2>
+<urn:atm:triage:occurrence/QA2-X4-006/s2/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 18 ;
-  triage:snippet "sc-observability.workspace = true" ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 17 ;
+  triage:snippet "use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s2-command-path-simplification" ;
   triage:headSha "4cfeb8c" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s2/4cfeb8c> .
 
-<urn:atm:triage:occurrence/ARCH-001-X3/pX-s3/2>
+<urn:atm:triage:occurrence/QA2-X4-006/s3/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 18 ;
-  triage:snippet "sc-observability.workspace = true" ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 17 ;
+  triage:snippet "use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s3-runtime-truth-unification" ;
   triage:headSha "4cfeb8c" ;
-  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c-s3> .
+  triage:occursIn <urn:atm:triage:worktree/pX-s3/4cfeb8c> .
 
-<urn:atm:triage:occurrence/ARCH-001-X3/pX-s4/2>
+<urn:atm:triage:occurrence/QA2-X4-006/s4/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 18 ;
-  triage:snippet "sc-observability.workspace = true" ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 17 ;
+  triage:snippet "use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
   triage:headSha "4cfeb8c" ;
-  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c-s4> .
+  triage:occursIn <urn:atm:triage:worktree/pX-s4/4cfeb8c> .
 
-<urn:atm:triage:occurrence/ARCH-001-X3/pX-s5/2>
+<urn:atm:triage:occurrence/QA2-X4-006/s5/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 18 ;
-  triage:snippet "sc-observability.workspace = true" ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 17 ;
+  triage:snippet "use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pX-s5-guardrails-and-closeout" ;
   triage:headSha "d17602e" ;
   triage:occursIn <urn:atm:triage:worktree/pX-s5/d17602e> .
 
-<urn:atm:triage:occurrence/ARCH-001-X3/integrate-phase-X/2>
+<urn:atm:triage:occurrence/QA2-X4-006/integrate/1>
   a triage:Occurrence ;
-  triage:file "crates/atm-daemon/Cargo.toml" ;
-  triage:line 18 ;
-  triage:snippet "sc-observability.workspace = true" ;
+  triage:file "crates/atm-graft/src/runtime.rs" ;
+  triage:line 17 ;
+  triage:snippet "use crate::{GraftObservability, GraftSessionClient, RECEIVE_LOOP_JOIN_DEADLINE, SessionSnapshot};" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "integrate/phase-X" ;
   triage:headSha "4e08185" ;
   triage:occursIn <urn:atm:triage:worktree/integrate-phase-X/4e08185> .
-
-# --- WorktreeSnapshots (followup_pass round 2) ---
 
 <urn:atm:triage:worktree/pX-s1/010bfbe>
   a triage:WorktreeSnapshot ;
@@ -113,14 +110,14 @@
   triage:headSha "4cfeb8c" ;
   triage:orderIndex 2 .
 
-<urn:atm:triage:worktree/pX-s3/4cfeb8c-s3>
+<urn:atm:triage:worktree/pX-s3/4cfeb8c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pX-s3-runtime-truth-unification" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
   triage:headSha "4cfeb8c" ;
   triage:orderIndex 3 .
 
-<urn:atm:triage:worktree/pX-s4/4cfeb8c-s4>
+<urn:atm:triage:worktree/pX-s4/4cfeb8c>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pX-s4-replay-and-ipc-consolidation" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
