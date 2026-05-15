@@ -47,21 +47,21 @@ Baseline:
   - `.claude/skills/codex-orchestration/qa-template.xml.j2`
 
 Target integration branch:
-- `integrate/phase-X`
+- `integrate/phase-Xb`
 
 Predecessor gate:
 - Phase `W` must remain merged and validated on `integrate/phase-W`
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
 
 Pre-phase prerequisite:
-- before `integrate/phase-X` is created, the following guardrails must land on
+- before `integrate/phase-Xb` is created, the following guardrails must land on
   `develop` through a standalone branch such as `feature/pX-lint-gates`:
-  - `scripts/check-silent-emit.sh`
+  - `scripts/check-silent-emit.py`
   - `scripts/check-function-length.py`
 - reason:
   - these gates must already be live on every Phase `X` sprint branch from its
     first push
-  - they are not acceptable as a late sprint inside `integrate/phase-X`
+  - they are not acceptable as a late sprint inside `integrate/phase-Xb`
 
 Boundary rules for Phase `X`:
 - SQLite/store is the only durable ATM mailbox implementation
@@ -175,12 +175,12 @@ Phase `W` post-mortem assigned these follow-ups to `arch-ctm`:
 The silent-emit and RULE-002 lint gates are pre-phase develop-targeting
 prerequisites. The remaining items are already-landed baseline verification
 inputs or active `X.5` closeout work; they are not separate new typed-doc
-deliverables on `integrate/phase-X`.
+deliverables on `integrate/phase-Xb`.
 
 ## Execution Shape
 
 - pre-phase prerequisite:
-  - standalone develop-targeting lint-gate PR before `integrate/phase-X`
+  - standalone develop-targeting lint-gate PR before `integrate/phase-Xb`
 - `X.1` mailbox runtime cutover and dual-mode surface deletion
 - `X.2` command-path simplification and legacy mailbox path deletion
 - `X.3` daemon runtime truth unification and runtime-status-cache refactor

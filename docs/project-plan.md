@@ -3255,6 +3255,12 @@ Status note:
   - scope: silent-emit regression gate and RULE-002 function-length gate
 - `X.1` through `X.5` restart on `pXb` sprint branches with audited salvage
   from prior Phase `X` implementation commits
+  - salvage cherry-picks:
+    - `X.1`: `70460f9` / `6143bda`
+    - `X.2`: `0580c0e`
+    - `X.3`: `9264c3e`
+    - `X.4`: `df124a8` / `3f8338b`
+    - `X.5`: `78d1e2c` / `c8bd38a` / `cdb1edd`
 
 Execution shape:
 - pre-phase prerequisite:
