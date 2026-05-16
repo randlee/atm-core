@@ -3,8 +3,6 @@
 
 use std::collections::HashSet;
 
-use tracing::info;
-
 use crate::boundary::{
     ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse,
     InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
@@ -18,10 +16,6 @@ use crate::error::AtmError;
 use crate::home;
 use crate::mailbox;
 use crate::mailbox::source::SourceFile;
-use crate::protocol::{
-    NotificationEvent, ReconcileRequest, ReconcileResult, WatchEventBatch, WatchSubscriptionRequest,
-};
-
 fn to_boundary_source_file(source: SourceFile) -> InboxSourceFileRecord {
     InboxSourceFileRecord {
         path: source.path,
@@ -36,13 +30,15 @@ fn from_boundary_source_file(source: InboxSourceFileRecord) -> SourceFile {
     }
 }
 
-pub fn load_workspace_config(request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
+pub(crate) fn load_workspace_config(
+    request: ConfigLoadRequest,
+) -> Result<ConfigLoadResponse, AtmError> {
     Ok(ConfigLoadResponse {
         config: config::load_config(&request.current_dir)?,
     })
 }
 
-pub fn load_team_config(
+pub(crate) fn load_team_config(
     request: ConfigTeamLoadRequest,
 ) -> Result<ConfigTeamLoadResponse, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
@@ -53,10 +49,10 @@ pub fn load_team_config(
     })
 }
 
-pub fn import_inbox_source(
+pub(crate) fn import_inbox_source(
     request: InboxIngressImportRequest,
 ) -> Result<InboxIngressImportResponse, AtmError> {
-    let source_files = mailbox::store::load_compat_source_projections(
+    let source_files = mailbox::import_compat_source_projections(
         &request.home_dir,
         &request.team,
         &request.agent,
@@ -69,7 +65,7 @@ pub fn import_inbox_source(
     })
 }
 
-pub fn compute_identity_fingerprint(
+pub(crate) fn compute_identity_fingerprint(
     request: InboxIngressIdentityFingerprintRequest,
 ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
     let fingerprint = request
@@ -86,7 +82,7 @@ pub fn compute_identity_fingerprint(
     Ok(InboxIngressIdentityFingerprintResponse { fingerprint })
 }
 
-pub fn report_inbox_diagnostics(
+pub(crate) fn report_inbox_diagnostics(
     request: InboxIngressDiagnosticsRequest,
 ) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
     let mut seen = HashSet::new();
@@ -111,7 +107,7 @@ pub fn report_inbox_diagnostics(
     })
 }
 
-pub fn export_source_files(
+pub(crate) fn export_source_files(
     request: InboxExportRecordRequest,
 ) -> Result<InboxExportRecordResponse, AtmError> {
     let committed_paths = request.source_files.len();
@@ -120,47 +116,14 @@ pub fn export_source_files(
         .into_iter()
         .map(from_boundary_source_file)
         .collect::<Vec<_>>();
-    mailbox::store::write_compat_source_projections(&source_files)?;
+    mailbox::export_compat_source_projections(&source_files)?;
     Ok(InboxExportRecordResponse { committed_paths })
 }
 
-pub fn reexport_messages(
+pub(crate) fn reexport_messages(
     request: InboxExportReexportMessageRequest,
 ) -> Result<InboxExportReexportMessageResponse, AtmError> {
     let wrote_messages = request.messages.len();
-    mailbox::store::write_compat_mailbox_projection(&request.path, &request.messages)?;
+    mailbox::export_compat_mailbox_projection(&request.path, &request.messages)?;
     Ok(InboxExportReexportMessageResponse { wrote_messages })
-}
-
-pub fn deliver_notification(event: NotificationEvent) -> Result<(), AtmError> {
-    // The current daemon notification adapter is intentionally a retained-log
-    // no-op until the R.17 notifier runtime replaces it with a real sink.
-    info!(kind = %event.kind, detail = %event.detail, "daemon notification delivered");
-    Ok(())
-}
-
-pub fn poll_watch(request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
-    let paths = crate::mailbox::source::discover_source_paths(
-        &request.home_dir,
-        &request.team,
-        &request.agent,
-    )?;
-    Ok(WatchEventBatch { paths })
-}
-
-pub fn reconcile(request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
-    let batch = poll_watch(WatchSubscriptionRequest {
-        home_dir: request.home_dir.clone(),
-        team: request.team.clone(),
-        agent: request.agent.clone(),
-    })?;
-    let import = import_inbox_source(InboxIngressImportRequest {
-        home_dir: request.home_dir,
-        team: request.team,
-        agent: request.agent,
-    })?;
-    Ok(ReconcileResult {
-        observed_paths: batch.paths.len(),
-        imported_sources: import.source_files.len(),
-    })
 }

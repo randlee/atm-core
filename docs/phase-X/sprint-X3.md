@@ -16,9 +16,9 @@ target: integrate/phase-Xb
   `X.3` work:
   - `9264c3e8c480a4262a23ee0fd1ffaa144cd5f38f`
     - `feat: unify daemon runtime truth on roster store`
-- The old `feature/pX-s3-runtime-truth-unification` branch ref is contaminated
-  by later sprint merges and must not be treated as the replay source; salvage
-  only the audited `9264c3e...` delta.
+- The old Phase `X` `X.3` sprint branch ref is contaminated by later sprint
+  merges and must not be treated as the replay source; salvage only the
+  audited `9264c3e...` delta.
 - QA must validate the entire `X.3` sprint on `pXb-s3`, not only the replayed
   delta from that commit.
 
