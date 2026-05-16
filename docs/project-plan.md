@@ -3181,6 +3181,17 @@ Status note:
   - target: `integrate/phase-Xb`
   - scope: mailbox runtime cutover and dual-mode retained-runtime surface
     deletion
+- `X.2` complete on `feature/pXb-s2-command-path-simplification`
+  - target: `integrate/phase-Xb`
+  - scope: command-path simplification and legacy mailbox path deletion
+- `X.3` complete on `feature/pXb-s3-runtime-truth-unification`
+  - target: `integrate/phase-Xb`
+  - scope: daemon runtime truth unification and runtime-status-cache refactor
+- `X.4` complete on `feature/pXb-s4-replay-and-ipc-consolidation`
+  - target: `integrate/phase-Xb`
+  - scope: replay-persistence startup contract, peer-transport decomposition,
+    same-host helper deduplication, and follow-up boundary/error-visibility
+    cleanup
 
 Pre-phase prerequisite:
 - already satisfied on `develop` before `integrate/phase-Xb` starts via
@@ -3275,7 +3286,12 @@ Status note:
   - scope: removed filesystem team discovery from daemon runtime hydration,
     added explicit `RosterStore` team enumeration, and aligned core/daemon
     boundary docs with store-owned team/member runtime truth
-- `X.4` and `X.5` remain replayed on their `pXb` sprint branches pending
+- `X.4` complete on `feature/pXb-s4-replay-and-ipc-consolidation`
+  - target: `integrate/phase-Xb`
+  - scope: fail-closed replay startup, peer transport decomposition,
+    same-host helper deduplication, and follow-up boundary/error-visibility
+    cleanup
+- `X.5` remains replayed on `feature/pXb-s5-guardrails-and-closeout` pending
   final closeout and integration
 
 Execution shape:

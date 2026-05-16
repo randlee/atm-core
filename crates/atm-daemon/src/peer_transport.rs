@@ -3,6 +3,7 @@ use std::net::{SocketAddr, TcpStream};
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -660,7 +661,21 @@ fn wait_for_retry_backoff(terminate: &Arc<AtomicBool>, sleep_for: Duration) -> b
 }
 
 fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
-    Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag())
+    static DAEMON_TERMINATE_FLAG: Mutex<Option<Arc<AtomicBool>>> = Mutex::new(None);
+
+    let mut cached_flag = DAEMON_TERMINATE_FLAG.lock().map_err(|_| {
+        AtmError::daemon_unavailable("peer transport terminate flag cache lock poisoned")
+            .with_recovery(
+                "Restart the daemon; peer transport can no longer safely reuse the shared lifecycle terminate flag.",
+            )
+    })?;
+    if let Some(flag) = cached_flag.as_ref() {
+        return Ok(Arc::clone(flag));
+    }
+
+    let flag = crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag();
+    *cached_flag = Some(Arc::clone(&flag));
+    Ok(flag)
 }
 
 impl boundary::sealed::Sealed for PeerClientTransport {}

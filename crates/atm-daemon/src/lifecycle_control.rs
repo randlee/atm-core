@@ -750,7 +750,7 @@ mod unix_tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn unix_install_reuses_one_lifecycle_worker_until_shutdown() {
         let first = LifecycleControlSourceAdapter::install().expect("install first");
         let first_worker = worker_thread_id();
