@@ -9,6 +9,28 @@ target: develop
 
 # Sprint X.0 — Pre-Phase Lint Gates
 
+## Modification
+
+- `X.0` is inherited complete on the restart line.
+- No new `pXb` worktree is required because the prerequisite is already merged
+  into `develop`, which is the base of `integrate/phase-Xb`.
+- Authoritative inherited branch/worktree:
+  - `feature/pX-lint-gates`
+  - `/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-lint-gates`
+- Inherited completion source:
+  - `8499fcd4eb513e4da6a7cb6b032e04513a7095c4`
+- QA on `phase-Xb` treats this sprint as already live baseline and does not
+  reopen it as partial scope.
+
+## Remaining Restart Work
+
+- none
+- treat `X.0` as a satisfied prerequisite on the restart line
+- later sprint QA should only verify the inherited lint gates remain active
+- include an explicit gate-liveness check during later QA:
+  - `scripts/check-silent-emit.py`
+  - `scripts/check-function-length.py`
+
 ## Goal
 
 - land the shared lint gates that must already be active before any

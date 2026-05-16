@@ -605,7 +605,6 @@ fn install_platform_hooks(
 #[cfg(all(test, windows))]
 mod windows_tests {
     use super::LifecycleControlSourceAdapter;
-    use serial_test::serial;
     use std::sync::mpsc;
     use std::thread::ThreadId;
     use std::time::Duration;
@@ -620,7 +619,7 @@ mod windows_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn windows_reload_flag_is_shared_across_install_calls() {
         let first = LifecycleControlSourceAdapter::install().expect("install first");
         first.set_terminate_for_test(false);
@@ -634,7 +633,7 @@ mod windows_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn windows_terminate_flag_is_shared_across_install_calls() {
         let first = LifecycleControlSourceAdapter::install().expect("install first");
         first.set_terminate_for_test(false);
@@ -647,7 +646,7 @@ mod windows_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn windows_terminate_request_wakes_waiters() {
         let first = LifecycleControlSourceAdapter::install().expect("install first");
         first.set_terminate_for_test(false);
@@ -675,7 +674,7 @@ mod windows_tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn windows_install_reuses_one_lifecycle_worker_until_shutdown() {
         let first = LifecycleControlSourceAdapter::install().expect("install first");
         let first_worker = worker_thread_id();
@@ -751,7 +750,7 @@ mod unix_tests {
     }
 
     #[test]
-    #[serial_test::serial]
+    #[serial_test::serial(env)]
     fn unix_install_reuses_one_lifecycle_worker_until_shutdown() {
         let first = LifecycleControlSourceAdapter::install().expect("install first");
         let first_worker = worker_thread_id();

@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003" ;
+  triage:title "Boundary doc coverage gap — daemon-client ownership not explicitly documented in sprint-X4 review scope" ;
+  triage:description "docs/atm-daemon-client/boundaries.md and boundaries/atm-daemon-client/daemon-bootstrap.toml were listed in docs/phase-X/sprint-X4.md Exact Targets (:61-66) but absent from review_targets and changed_files in XB-S4-QA-1. These docs must explicitly allow daemon-client ownership of try_connect, exchange, and unexpected_response. Sprint doc must include evidence (Delivered section entry) that boundary ownership is verified. Prior triage wrote wrong content (rustdoc on pub(crate) functions) — corrected here per quality-mgr ruling 2026-05-15." ;
+  triage:category "ATM-QA" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-15T16:00:00Z"^^xsd:dateTime ;
+  triage:resolvedAt "2026-05-16T00:00:00Z"^^xsd:dateTime ;
+  triage:resolutionNote "arch-ctm code audit (2026-05-16) confirmed docs/atm-daemon-client/boundaries.md and boundaries/atm-daemon-client/daemon-bootstrap.toml already explicitly document daemon-client ownership of try_connect, exchange, unexpected_response. Finding satisfied without code change." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/s4/boundaries-md> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/s4/daemon-bootstrap-toml> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/s4/sprint-x4-targets> ;
+  triage:openOn <urn:atm:triage:worktree/s4/e195d86> ;
+  triage:openOn <urn:atm:triage:worktree/s5/45b1397> ;
+  triage:promoteTo <urn:atm:triage:worktree/s4/e195d86> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/s4/boundaries-md>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon-client/boundaries.md" ;
+  triage:line 1 ;
+  triage:snippet "Must explicitly allow daemon-client ownership of try_connect, exchange, unexpected_response" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "e195d86" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/e195d86> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/s4/daemon-bootstrap-toml>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon-client/daemon-bootstrap.toml" ;
+  triage:line 1 ;
+  triage:snippet "Must match boundaries.md daemon-client ownership grant for try_connect, exchange, unexpected_response" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "e195d86" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/e195d86> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/s4/sprint-x4-targets>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X4.md" ;
+  triage:line 61 ;
+  triage:snippet "Exact Targets section lists boundary docs but they are absent from changed_files; add Delivered section evidence" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "e195d86" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/e195d86> .
+
+<urn:atm:triage:worktree/s4/e195d86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "e195d86" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s5/45b1397>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate/cdeb063>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Xb" ;
+  triage:headSha "cdeb063" ;
+  triage:orderIndex 6 .

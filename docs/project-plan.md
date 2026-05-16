@@ -3148,7 +3148,7 @@ Acceptance:
 
 Planning input:
 - legacy planning branch: `feature/pX-s0-planning`
-- restart planning branch: `feature/pXb-s0-planning`
+- restart execution branch: `integrate/phase-Xb`
 
 Base branch:
 - `develop`
@@ -3172,10 +3172,30 @@ Restart note:
 - prior implementation completion exists for much of `X.1` through `X.5`, but
   QA must still validate each restarted sprint end to end after any cherry-pick
   or selective reapplication
-- the planning docs for `phase-Xb` must state both:
-  - what is already replayed on the `pXb` sprint branch
-  - what still remains to be corrected or validated before the sprint is
-    actually complete
+
+Status note:
+- `X.0` complete on `feature/pX-lint-gates`
+  - target: `develop`
+  - scope: silent-emit regression gate and RULE-002 function-length gate
+- `X.1` complete on `feature/pXb-s1-mailbox-runtime-cutover`
+  - target: `integrate/phase-Xb`
+  - scope: mailbox runtime cutover and dual-mode retained-runtime surface
+    deletion
+- `X.2` complete on `feature/pXb-s2-command-path-simplification`
+  - target: `integrate/phase-Xb`
+  - scope: command-path simplification and legacy mailbox path deletion
+- `X.3` complete on `feature/pXb-s3-runtime-truth-unification`
+  - target: `integrate/phase-Xb`
+  - scope: daemon runtime truth unification and runtime-status-cache refactor
+- `X.4` complete on `feature/pXb-s4-replay-and-ipc-consolidation`
+  - target: `integrate/phase-Xb`
+  - scope: replay-persistence startup contract, peer-transport decomposition,
+    same-host helper deduplication, and follow-up boundary/error-visibility
+    cleanup
+- `X.5` complete on `feature/pXb-s5-guardrails-and-closeout`
+  - target: `integrate/phase-Xb`
+  - scope: closeout guardrails, dependency-ownership validation, and replayed
+    sprint acceptance verification
 
 Pre-phase prerequisite:
 - already satisfied on `develop` before `integrate/phase-Xb` starts via
@@ -3199,6 +3219,73 @@ Execution shape:
   `feature/pXb-s4-replay-and-ipc-consolidation`
 - `X.5` systemic guardrails, dependency-ownership validation, and closeout
   verification on `feature/pXb-s5-guardrails-and-closeout`
+
+#### Sprint X.4 — Replay Persistence Contract, Peer Transport, And Same-Host IPC Helpers
+
+Branch:
+- `feature/pXb-s4-replay-and-ipc-consolidation`
+
+PR:
+- `#290`
+
+Status:
+- X.4 complete (PR #290 merged to integrate/phase-Xb)
+
+Deliverables:
+- fail-closed replay-store startup contract documented and enforced in daemon
+  composition
+- peer-transport helper decomposition with the shared ATM error and recovery
+  contract preserved
+- same-host helper ownership consolidated into `atm-daemon-client`
+- CLI and graft same-host wrappers aligned to the shared daemon-client helper
+  line
+- daemon ingress/export error visibility tightened around config load, source
+  import, and source/mailbox projection rewrites
+- machine-readable and prose daemon-client boundary records aligned with the
+  replayed helper ownership
+
+Acceptance criteria:
+- one replay-persistence startup contract is documented in product and
+  daemon-local docs
+- daemon startup behavior in `composition.rs` matches the documented contract
+- `send_to_endpoint(...)` is under `80` lines
+- `send_once(...)` is under `80` lines
+- `rg -n "fn try_connect\\(|fn exchange\\(|fn unexpected_response\\(" crates/atm crates/atm-graft crates/atm-daemon-client`
+  finds one shared helper definition per helper name
+- CLI and graft same-host paths share the same daemon-unavailable and
+  unexpected-response behavior
+- peer transport preserves the shared ATM error and recovery contract after the
+  `send_to_endpoint(...)` and `send_once(...)` refactor
+
+#### Sprint X.5 — Guardrails, Dependency Ownership, And Closeout Verification
+
+Branch:
+- `feature/pXb-s5-guardrails-and-closeout`
+
+PR:
+- `#291`
+
+Status:
+- X.5 complete (PR #291 merged to integrate/phase-Xb)
+
+Deliverables:
+- `ATM-QA-S4-001` closure by warning before peer-transport retry-budget fallback
+- `FTQ-006` closure by replacing composition test cwd restore pairs with
+  `CwdGuard`
+- `RBP-F005` closure by keeping the replayed local IPC and reconcile paths
+  inside the `RULE-002` function-length guardrail
+- `sprint-X5.md` aligned to the completed `pXb` branch state
+- closeout guardrails and dependency-ownership checks validated on the replayed
+  `X.5` line
+
+Acceptance criteria:
+- the legacy-mailbox-regression gate is runnable in CI
+- the replay-capability-degradation regression gate is runnable in CI
+- the local lint entrypoints include dependency-ownership validation
+- the `TASK-1515` baseline artifacts remain present and consistent at Phase `X`
+  closeout
+- the replayed `X.5` branch passes full sprint QA after any promoted finding
+  fix
 
 Execution rules:
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
@@ -3257,46 +3344,33 @@ Status note:
 - `X.0` complete on `feature/pX-lint-gates`
   - target: `develop`
   - scope: silent-emit regression gate and RULE-002 function-length gate
-- `X.1` through `X.5` restart on `pXb` sprint branches with audited salvage
-  from prior Phase `X` implementation commits
-  - salvage cherry-picks:
-    - `X.1`: `70460f9` / `6143bda`
-    - `X.2`: `0580c0e`
-    - `X.3`: `9264c3e`
-    - `X.4`: `df124a8` / `3f8338b`
-    - `X.5`: `78d1e2c` / `c8bd38a` / `cdb1edd`
-- replayed restart heads as of `2026-05-15`:
-  - `X.1`: `feature/pXb-s1-mailbox-runtime-cutover @ 2d6596e`
-  - `X.2`: `feature/pXb-s2-command-path-simplification @ e508ecb`
-  - `X.3`: `feature/pXb-s3-runtime-truth-unification @ adc7c4b`
-  - `X.4`: `feature/pXb-s4-replay-and-ipc-consolidation @ f10c9ec`
-  - `X.5`: `feature/pXb-s5-guardrails-and-closeout @ 5d4c92a`
-- `quality-mgr` alignment review already passed for the replayed `pXb`
-  branches
-  - that pass confirms code-to-plan alignment only
-  - it does not replace full sprint QA
-- known remaining restart corrections:
-  - `X.2`
-    - split `clear_mail_with_runtime_impl` below `80` lines
-    - replace the two fixed sleeps in `crates/atm-core/tests/mailbox_locking.rs`
-  - `X.4`
-    - split `ensure_daemon_available_with_lock_path_impl` below `80` lines
-    - move peer-transport retry-budget loading behind the daemon-owned
-      `ConfigIngress` path or explicit composition-time injection
-    - stop silently defaulting the remote retry budget when config load fails
-  - `X.5`
-    - remove unused dev-dependencies causing `cargo-shear` failure
-    - remove the forbidden `atm-core -> atm-rusqlite` dev edge causing the
-      boundary-lint failure
-    - split `reconcile_runtime::reconcile` below `80` lines
-    - split `query_mailbox_metadata_rows` below `80` lines
-    - keep hidden compatibility seams from widening while closing the remaining
-      manifest and lint debt
+- `X.1` complete on `feature/pXb-s1-mailbox-runtime-cutover`
+  - target: `integrate/phase-Xb`
+  - scope: retained mailbox runtime cutover to a fail-closed SQLite/store-backed path
+- `X.2` complete on `feature/pXb-s2-command-path-simplification`
+  - target: `integrate/phase-Xb`
+  - scope: removed the remaining production legacy-key branches, moved send
+    threading/export to a store-backed projection load, and confined
+    compatibility inbox file helpers to the hidden daemon ingress/export seam
+- `X.3` complete on `feature/pXb-s3-runtime-truth-unification`
+  - target: `integrate/phase-Xb`
+  - scope: removed filesystem team discovery from daemon runtime hydration,
+    added explicit `RosterStore` team enumeration, and aligned core/daemon
+    boundary docs with store-owned team/member runtime truth
+- `X.4` complete on `feature/pXb-s4-replay-and-ipc-consolidation`
+  - target: `integrate/phase-Xb`
+  - scope: fail-closed replay startup, peer transport decomposition,
+    same-host helper deduplication, and follow-up boundary/error-visibility
+    cleanup
+- `X.5` complete on `feature/pXb-s5-guardrails-and-closeout` (`#291`)
+  - target: `integrate/phase-Xb`
+  - scope: closeout guardrails, dependency-ownership validation, and replayed
+    sprint acceptance verification
 
 Execution shape:
 - pre-phase prerequisite:
   - `X.0` shared lint gates already live on `develop` before
-    `integrate/phase-Xb` starts
+  `integrate/phase-Xb` starts
 - `X.1` mailbox runtime cutover and dual-mode surface deletion on
   `feature/pXb-s1-mailbox-runtime-cutover`
 - `X.2` command-path simplification and legacy mailbox path deletion on

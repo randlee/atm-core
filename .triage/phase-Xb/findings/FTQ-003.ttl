@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-003>
+  a triage:Finding ;
+  triage:findingId "FTQ-003" ;
+  triage:title "Cross-group serial token interference — partial fix residual" ;
+  triage:description "FIX-R1 at e195d86 (s4) converted 20 bare #[serial] → #[serial_test::serial(env)] in crates/atm-daemon/src/. However, lifecycle_control.rs:753 contains #[serial_test::serial] without the (env) token. This qualified-but-tokenless form was missed because the acceptance check was 'rg ^#\\[serial\\] = 0', which does not match the qualified namespace form. The token group must be (env) to ensure cross-suite serialization with mailbox_locking tests." ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "followup_pass" ;
+  triage:severity "Blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-daemon/src/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/followup/s4-qualified-tokenless-1> ;
+  triage:openOn <urn:atm:triage:worktree/s4/e195d86> ;
+  triage:openOn <urn:atm:triage:worktree/s3/ceba612> ;
+  triage:openOn <urn:atm:triage:worktree/s2/2bd828d> ;
+  triage:openOn <urn:atm:triage:worktree/s1/2a0b3ec> ;
+  triage:promoteTo <urn:atm:triage:worktree/s4/e195d86> .
+
+<urn:atm:triage:occurrence/FTQ-003/followup/s4-qualified-tokenless-1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 753 ;
+  triage:snippet "#[serial_test::serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "e195d86" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/e195d86> .
+
+<urn:atm:triage:worktree/s4/e195d86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "e195d86" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s3/ceba612>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "ceba612" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s2/2bd828d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "2bd828d" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s1/2a0b3ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:orderIndex 1 .

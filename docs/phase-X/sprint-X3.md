@@ -1,13 +1,36 @@
 ---
 id: X.3
-title: Daemon Runtime Truth Unification
-status: replayed
+title: Sprint X.3 — Daemon Runtime Truth Unification
+status: complete
 branch: feature/pXb-s3-runtime-truth-unification
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification
+worktree: ../atm-core-worktrees/feature/pXb-s3-runtime-truth-unification
 target: integrate/phase-Xb
 ---
 
 # Sprint X.3 — Daemon Runtime Truth Unification
+
+## Modification
+
+- This sprint is a restart replay on `feature/pXb-s3-runtime-truth-unification`.
+- Prior Phase `X` already has one clean implementation candidate for the core
+  `X.3` work:
+  - `9264c3e8c480a4262a23ee0fd1ffaa144cd5f38f`
+    - `feat: unify daemon runtime truth on roster store`
+- The old Phase `X` `X.3` sprint branch ref is contaminated by later sprint
+  merges and must not be treated as the replay source; salvage only the
+  audited `9264c3e...` delta.
+- QA must validate the entire `X.3` sprint on `pXb-s3`, not only the replayed
+  delta from that commit.
+
+## Remaining Restart Work
+
+- replay or selectively re-implement the audited `9264c3e...` delta onto
+  `feature/pXb-s3-runtime-truth-unification`
+- verify the restarted branch still moves daemon team/member discovery fully to
+  the explicit roster/store boundary on the new line
+- confirm the restarted branch satisfies every `X.3` runtime-truth and
+  refactor acceptance criterion on the new line
+- run full `X.3` QA on `pXb-s3`
 
 ## Goal
 
@@ -20,38 +43,18 @@ target: integrate/phase-Xb
 - `X.1` and `X.2` complete because daemon/runtime truth should be unified after
   mailbox SSOT cutover and command-path simplification are in place
 
-## Replay Status
-
-- replayed on `feature/pXb-s3-runtime-truth-unification` at `adc7c4b`
-- replayed from prior Phase `X` salvage commit:
-  - `9264c3e`
-- `quality-mgr` alignment review already confirmed the replayed branch matches
-  the intended sprint deliverables at a non-critical level
-
-## Already Complete On Restart Branch
-
-- roster-store-backed team enumeration is replayed onto the restart branch
-- the filesystem-plus-SQLite hybrid team discovery path is replaced on the
-  replayed branch by the store-owned runtime truth implementation
-- the sprint already contains the intended runtime-status-cache refactor
-
-## Remaining Restart Work
-
-- run full sprint QA and validation on
-  `feature/pXb-s3-runtime-truth-unification`
-- no branch-local corrective backlog is known as of `2026-05-15`
-- if later full-stack work still needs a RULE-002 cleanup in
-  `crates/atm-daemon/src/reconcile_runtime.rs`, keep that correction on `X.5`
-  unless a direct `X.3` regression is proven
-
 ## Exact Targets
 
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-core/src/boundary/store.rs`
+- `crates/atm-core/src/doctor/mod.rs`
 - `crates/atm-rusqlite/src/lib.rs`
 - any roster-store implementation files touched by the new enumeration boundary
 - `crates/atm-daemon/src/composition.rs`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-core/architecture.md`
+- `docs/atm-core/requirements.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-daemon/architecture.md`
 
@@ -81,6 +84,32 @@ target: integrate/phase-Xb
 - `build_runtime_status_cache_state(...)` is under `80` lines
 - doctor/runtime-health still surface SQLite unavailability and degraded state
   with the existing shared ATM error contract
+
+## Delivered
+
+- added `RosterStore::list_teams(...)` as the explicit boundary operation for
+  daemon runtime team discovery
+- updated the SQLite roster-store adapter to enumerate canonical persisted team
+  names in sorted order and added direct coverage for that boundary behavior
+- removed `ATM_HOME/.claude/teams` enumeration from
+  `build_runtime_status_cache_state(...)`
+- refactored runtime-status hydration so the daemon now builds team/member truth
+  only from the installed roster-store boundary plus preserved in-memory live
+  state
+- kept the shutdown-finalizer registry unchanged while rewiring only the
+  runtime-truth assembly path
+- updated both `atm-core` and `atm-daemon` boundary/architecture docs so
+  roster truth now explicitly includes daemon runtime team discovery
+- updated the `atm-core` doctor-only roster-store test double to match the
+  expanded sealed boundary contract
+
+Implementation result:
+- the X.3 acceptance criteria are satisfied on
+  `feature/pXb-s3-runtime-truth-unification`
+- `build_runtime_status_cache_state(...)` no longer uses `read_dir(...)` or
+  `home_dir`
+- daemon runtime-status hydration now has one explicit durable team/member
+  source: `RosterStore`
 
 ## Required Validation
 

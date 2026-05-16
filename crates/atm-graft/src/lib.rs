@@ -28,7 +28,9 @@ use atm_core::read::{ReadOutcome, ReadQuery};
 use atm_core::send::{SendOutcome, SendRequest};
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_daemon_bootstrap::{resolve_daemon_bin, resolve_daemon_local_ipc_endpoint};
-use atm_daemon_client::{BootstrapTraceability, DaemonSupervisor};
+use atm_daemon_client::{
+    BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent, parse_bootstrap_team,
+};
 
 mod runtime;
 mod transport;
@@ -209,7 +211,7 @@ impl GraftClient {
             parse_bootstrap_agent()?,
         );
         supervisor.ensure_daemon_available_with_traceability(&traceability, || {
-            advisory_transport.try_connect().map(|_| ())
+            advisory_transport.probe_connection().map(|_| ())
         })?;
         Ok(Self {
             transport,
@@ -340,24 +342,6 @@ impl GraftSessionClient for GraftClient {
         })?;
         transport.open_advisory_stream(request)
     }
-}
-
-fn parse_bootstrap_agent() -> Result<AgentName, AtmError> {
-    std::env::var("ATM_IDENTITY")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-        .map_err(|error: AtmError| {
-            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
-        })
-}
-
-fn parse_bootstrap_team() -> Result<TeamName, AtmError> {
-    std::env::var("ATM_TEAM")
-        .unwrap_or_else(|_| "unknown".to_string())
-        .parse()
-        .map_err(|error: AtmError| {
-            error.with_recovery("Check ATM_IDENTITY and ATM_TEAM env vars are set")
-        })
 }
 
 /// Concrete embedded graft session runtime.
@@ -600,7 +584,18 @@ impl Drop for GraftSession {
         // Drop-triggered teardown emits AdvisorySessionState::Closed, identical to explicit close().
         // Merged observable state is accepted by design: callers that need to distinguish
         // drop-driven shutdown from user-directed shutdown should call close() explicitly.
-        let _ = self.close_internal();
+        if let Err(error) = self.close_internal() {
+            let session_id = self
+                .snapshot()
+                .map(|snapshot| snapshot.session_id.to_string())
+                .unwrap_or_else(|snapshot_error| format!("unavailable:{snapshot_error}"));
+            tracing::warn!(
+                session_id,
+                error_code = %error.code,
+                error_message = %error.message,
+                "graft session drop cleanup failed"
+            );
+        }
     }
 }
 
@@ -1025,9 +1020,9 @@ mod tests {
             ),
             RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(ReadOutcome {
                 action: CommandAction::Read,
-                team: query.team_override.expect("team"),
+                team: query.team_override().cloned().expect("team"),
                 agent: "agent-b".parse().expect("agent"),
-                selection_mode: query.selection_mode,
+                selection_mode: query.selection_mode(),
                 mutation_applied: false,
                 count: 1,
                 message: None,

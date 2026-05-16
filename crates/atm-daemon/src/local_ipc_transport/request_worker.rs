@@ -15,6 +15,11 @@ use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatc
 use super::PreparedRuntimeServer;
 use super::{MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE, write_shutdown_response};
 
+type DispatchResultRx = std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>;
+type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
+type DispatchWorkerHandle = std::thread::JoinHandle<()>;
+type DispatchWorker = (DispatchResultRx, DispatchCompletionRx, DispatchWorkerHandle);
+
 pub(super) fn handle_connection(
     mut stream: LocalSocketStream,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
@@ -25,6 +30,34 @@ pub(super) fn handle_connection(
     if force_shutdown.load(Ordering::SeqCst) {
         return write_shutdown_response(&mut stream, &codec).map(|_| ());
     }
+    configure_request_deadlines(&stream)?;
+
+    let Some(frame) = read_request_frame(&mut stream)? else {
+        return Ok(());
+    };
+    tracing::debug!(
+        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
+        "daemon request frame accepted under configured size cap"
+    );
+    let (request_id, request) = codec.request_from_frame(frame)?;
+    if let RequestEnvelope::AdvisoryStream(request) = request {
+        return dispatch_advisory_stream(
+            &mut stream,
+            dispatcher.as_ref(),
+            force_shutdown,
+            &codec,
+            request_id,
+            request,
+        );
+    }
+
+    let response = dispatch_request(request, dispatcher, &registry)?;
+    write_response(&mut stream, &codec, request_id, response)?;
+    registry.reap_finished_dispatches()?;
+    Ok(())
+}
+
+fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<(), AtmError> {
     stream
         .set_recv_timeout(Some(REQUEST_DEADLINE))
         .map_err(|source| {
@@ -42,43 +75,67 @@ pub(super) fn handle_connection(
                     "Restart the daemon; the same-host request socket could not apply its bounded write deadline.",
                 )
                 .with_source(source)
-        })?;
+        })
+}
 
-    let Some(frame) = atm_core::protocol::read_frame(
-        &mut stream,
+fn read_request_frame(
+    stream: &mut LocalSocketStream,
+) -> Result<Option<atm_core::protocol::FramePayload>, AtmError> {
+    atm_core::protocol::read_frame(
+        stream,
         "failed to read daemon request frame",
         "daemon request frame exceeded the maximum supported size",
-    )?
-    else {
-        return Ok(());
-    };
-    tracing::debug!(
-        max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
-        "daemon request frame accepted under configured size cap"
-    );
-    let (request_id, request) = codec.request_from_frame(frame)?;
-    if let RequestEnvelope::AdvisoryStream(request) = request {
-        stream.set_send_timeout(None).map_err(|source| {
-            AtmError::daemon_unavailable(
-                "failed to clear daemon advisory-stream write deadline",
-            )
+    )
+}
+
+fn dispatch_advisory_stream(
+    stream: &mut LocalSocketStream,
+    dispatcher: &dyn RequestDispatcher,
+    force_shutdown: &AtomicBool,
+    codec: &JsonAtmProtocolCodec,
+    request_id: RequestId,
+    request: atm_core::AdvisoryStreamRequest,
+) -> Result<(), AtmError> {
+    stream.set_send_timeout(None).map_err(|source| {
+        AtmError::daemon_unavailable("failed to clear daemon advisory-stream write deadline")
             .with_recovery(
                 "Restart the daemon; the same-host advisory stream socket could not switch into long-lived streaming mode.",
             )
             .with_source(source)
-        })?;
-        let mut sink = LocalIpcAdvisoryStreamSink {
-            stream: &mut stream,
-            codec: &codec,
-            request_id,
-            force_shutdown,
-        };
-        return dispatcher.dispatch_advisory_stream(request, &mut sink);
-    }
+    })?;
+    let mut sink = LocalIpcAdvisoryStreamSink {
+        stream,
+        codec,
+        request_id,
+        force_shutdown,
+    };
+    dispatcher.dispatch_advisory_stream(request, &mut sink)
+}
 
+fn dispatch_request(
+    request: RequestEnvelope,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    registry: &Arc<ActiveConnectionRegistry>,
+) -> Result<ResponseEnvelope, AtmError> {
+    let (result_rx, completion_rx, dispatch_handle) =
+        spawn_dispatch_worker(request, dispatcher, Arc::clone(registry))?;
+    registry.push_dispatch_handle(
+        TrackedDispatchHandle {
+            completion_rx,
+            join_handle: dispatch_handle,
+        },
+        MAX_CONCURRENT_CONNECTIONS,
+    )?;
+    Ok(await_dispatch_response(result_rx))
+}
+
+fn spawn_dispatch_worker(
+    request: RequestEnvelope,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    dispatch_registry: Arc<ActiveConnectionRegistry>,
+) -> Result<DispatchWorker, AtmError> {
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
     let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
-    let dispatch_registry = Arc::clone(&registry);
     let dispatch_handle = std::thread::Builder::new()
         .name("local-ipc-dispatch".to_string())
         .spawn(move || {
@@ -93,14 +150,13 @@ pub(super) fn handle_connection(
                 )
                 .with_source(source)
         })?;
-    registry.push_dispatch_handle(
-        TrackedDispatchHandle {
-            completion_rx,
-            join_handle: dispatch_handle,
-        },
-        MAX_CONCURRENT_CONNECTIONS,
-    )?;
-    let response = match result_rx.recv_timeout(REQUEST_DEADLINE) {
+    Ok((result_rx, completion_rx, dispatch_handle))
+}
+
+fn await_dispatch_response(
+    result_rx: std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>,
+) -> ResponseEnvelope {
+    match result_rx.recv_timeout(REQUEST_DEADLINE) {
         Ok(Ok(response)) => response,
         Ok(Err(error)) => ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error)),
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
@@ -129,18 +185,24 @@ pub(super) fn handle_connection(
                 ),
             ))
         }
-    };
+    }
+}
+
+fn write_response(
+    stream: &mut LocalSocketStream,
+    codec: &JsonAtmProtocolCodec,
+    request_id: RequestId,
+    response: ResponseEnvelope,
+) -> Result<(), AtmError> {
     let frame = codec.response_to_frame(request_id, response)?;
-    atm_core::protocol::write_frame(&mut stream, &frame, "failed to write daemon response frame")?;
-    std::io::Write::flush(&mut stream).map_err(|source| {
+    atm_core::protocol::write_frame(stream, &frame, "failed to write daemon response frame")?;
+    std::io::Write::flush(stream).map_err(|source| {
         AtmError::daemon_unavailable("failed to flush daemon response frame")
             .with_recovery(
                 "Retry the ATM command after the daemon finishes recovering the same-host request runtime.",
             )
             .with_source(source)
-    })?;
-    registry.reap_finished_dispatches()?;
-    Ok(())
+    })
 }
 
 #[cfg(test)]

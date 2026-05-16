@@ -1,13 +1,38 @@
 ---
 id: X.5
-title: Guardrails And Closeout Verification
-status: replayed
+title: Sprint X.5 — Guardrails, Dependency Ownership, And Closeout Verification
+status: complete
 branch: feature/pXb-s5-guardrails-and-closeout
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout
+worktree: ../atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout
 target: integrate/phase-Xb
 ---
 
 # Sprint X.5 — Guardrails, Dependency Ownership, And Closeout Verification
+
+## Modification
+
+- This sprint is a restart replay on `feature/pXb-s5-guardrails-and-closeout`.
+- Prior Phase `X` already completed the main `X.5` implementation and two
+  follow-up fix rounds:
+  - `78d1e2ceb3ae8862b5179408090e0b65ac2fb07c`
+    - `feat: complete phase X guardrails and closeout`
+  - `c8bd38a6561623276b3b7bc0874417757b64dab6`
+    - `fix: close phase X5 follow-up findings`
+  - `cdb1edd2b215afb3a489ae335fce7d9279bfa53f`
+    - `fix: close phase X follow-up queue`
+- Replay this sprint selectively after audit. Do not blindly replay the old
+  branch head because it also contains merge-repair and cross-sprint carry
+  forward noise.
+- QA must validate the entire `X.5` sprint on `pXb-s5`, not only the replayed
+  delta from those prior commits.
+
+## Remaining Restart Work
+
+- none for core sprint scope; `feature/pXb-s5-guardrails-and-closeout`
+  is the replayed and validated `X.5` baseline
+- only between-sprint finding fixes remain when new `X.5` findings are
+  promoted to this branch
+- run full `X.5` QA on `pXb-s5` after each promoted finding fix
 
 ## Goal
 
@@ -22,57 +47,10 @@ target: integrate/phase-Xb
 - `X.1` through `X.4` complete because this sprint validates the post-cutover
   guardrails against the final Phase `X` implementation shape
 
-## Replay Status
-
-- replayed on `feature/pXb-s5-guardrails-and-closeout` at `5d4c92a`
-- replayed from prior Phase `X` salvage commits:
-  - `78d1e2c`
-  - `c8bd38a`
-  - `cdb1edd`
-- `quality-mgr` alignment review already confirmed the replayed branch matches
-  the intended sprint deliverables at a non-critical level
-
-## Already Complete On Restart Branch
-
-- the closeout guardrail scripts are already present on the replayed branch
-- the replayed branch already builds and passes `cargo test --workspace`
-- the typed-observability/process baseline from `TASK-1515` remains present on
-  the restart line
-
-## Remaining Restart Work
-
-- remove the unused dev-dependencies causing `cargo-shear` failure:
-  - `crates/atm-core/Cargo.toml` dev-dependency on `atm-rusqlite`
-  - `crates/atm-daemon/Cargo.toml` dev-dependency on
-    `atm-runtime-test-support`
-- remove the forbidden `atm-core -> atm-rusqlite` dev edge so the boundary
-  lint passes without exceptions
-- split `crates/atm-daemon/src/reconcile_runtime.rs:reconcile` below the
-  RULE-002 `80`-line limit
-- split
-  `crates/atm-rusqlite/src/mailbox_metadata.rs:query_mailbox_metadata_rows`
-  below the RULE-002 `80`-line limit
-- keep `atm_core::boundary_support` as a contained hidden daemon-support seam
-  only while resolving the remaining closeout debt; do not add new consumers
-  outside the daemon-owned direct-boundary path
-- rerun the full restart closeout validation on
-  `feature/pXb-s5-guardrails-and-closeout`:
-  - `python3 .just/run_lint.py all`
-  - `cargo build --workspace`
-  - `cargo test --workspace`
-  - `cargo clippy --workspace -- -D warnings`
-- this sprint owns the remaining replayed full-stack lint closure unless a
-  lower sprint must be reopened to preserve independent validation
-
 ## Exact Targets
 
 - `scripts/check-legacy-mailbox-paths.py`
 - `scripts/check-capability-degradation.py`
-- `crates/atm-core/Cargo.toml`
-- `crates/atm-daemon/Cargo.toml`
-- `crates/atm-daemon/src/reconcile_runtime.rs`
-- `crates/atm-rusqlite/src/mailbox_metadata.rs`
-- `crates/atm-core/src/lib.rs`
 - CI workflow files that own repository gate execution
 - `.claude/assets/sc-rust/quality-mgr/templates/`
 - `.claude/skills/rust-development/guidelines.txt`
@@ -91,8 +69,6 @@ target: integrate/phase-Xb
   active lint/CI path
 - update QA/checklist language so deletion sprints require whole-workspace
   pattern searches for removed legacy constructs
-- verify the replayed branch does not broaden hidden compatibility seams while
-  fixing manifest and lint debt
 - verify the already-landed `TASK-1515` baseline remains present and aligned:
   - typed observability requirement in `docs/requirements.md`
   - phased typed observability note in `docs/architecture.md`
@@ -106,8 +82,6 @@ target: integrate/phase-Xb
 - the pre-phase silent-emit and RULE-002 gates are treated as already-live
   prerequisites, not delayed `integrate/phase-Xb` sprint work
 - the local lint entrypoints include dependency-ownership validation
-- the closeout branch does not add new non-daemon consumers of
-  `atm_core::boundary_support`
 - the `TASK-1515` baseline artifacts remain present and consistent at Phase `X`
   closeout
   - `docs/requirements.md` typed observability migration requirement
@@ -117,11 +91,60 @@ target: integrate/phase-Xb
 - deletion-sprint QA instructions explicitly require whole-workspace pattern
   searches for removed legacy constructs
 
+## Delivered
+
+- added Phase `X` closeout guardrail scripts:
+  - `scripts/check-legacy-mailbox-paths.py`
+  - `scripts/check-capability-degradation.py`
+- wired those gates into the active local lint surface:
+  - `Justfile`
+  - `.just/run_lint.py`
+  - `.just/print_help.py`
+  - `.just` unit coverage for the new entries
+- fixed the RULE-002 helper to ignore trait method declarations so the
+  function-length gate only evaluates real function bodies
+- updated QA/checklist language so deletion sprints must search the full
+  workspace for each removed legacy construct family, not only touched files
+- verified the carried baseline from `TASK-1515` remains present while adding
+  the new deletion and dependency-ownership closeout checks
+- moved the production retained-runtime factory install edge into
+  `atm-daemon-bootstrap` and removed the stale direct production
+  `atm -> atm-rusqlite` dependency
+- added `atm-runtime-test-support` for SQLite retained-runtime test assembly,
+  including a process-visible runtime-path guard that works for spawned threads
+  without deadlocking multi-fixture tests
+
+### Closed Findings
+
+- `PLAN-GAP-001`
+  - `crates/atm-core/Cargo.toml`
+  - closed by `069be8c`
+  - removed the unused `atm-rusqlite` dev-dependency so the replayed
+    `X.5` branch no longer carries stale dependency-ownership debt
+- `PLAN-GAP-002`
+  - `crates/atm-core/Cargo.toml`
+  - closed by `069be8c`
+  - removing the same unused dev-dependency also eliminated the forbidden
+    `atm-core -> atm-rusqlite` boundary edge that was still failing
+    closeout validation
+- `ATM-QA-S4-001`
+  - `crates/atm-daemon/src/peer_transport.rs`
+  - `PeerTransportConfig::from_config(...)` now emits `tracing::warn!` before
+    falling back to `DEFAULT_REMOTE_RETRY_BUDGET` when no config is provided
+- `FTQ-006`
+  - `crates/atm-daemon/src/composition.rs`
+  - `CwdGuard` with a `Drop` restore path now replaces every manual
+    `set_current_dir(...)` / restore pair in the touched tests
+- `RBP-F005`
+  - `crates/atm-daemon/src/local_ipc_transport.rs`
+  - `serve_with_deadlines_and_accept_probe(...)`, the extracted request worker,
+    and the touched reconcile runtime paths are all kept at or below the
+    `RULE-002` threshold on the replayed `X.5` branch
+
 ## Required Validation
 
 - execute each new script locally in its intended mode
 - run the affected CI/lint entrypoints locally, or record any unavailable
   entrypoint in the sprint validation report
-- `python3 .just/run_lint.py all`
 - run `cargo-shear`
 - `git diff --check`

@@ -176,18 +176,6 @@ fn list_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
 
     let metadata_rows =
         runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
-    if !runtime.allows_legacy_mailbox_files()
-        && metadata_rows
-            .iter()
-            .any(|row| row.message_key.as_ref().starts_with("legacy:"))
-    {
-        return Err(AtmError::validation(
-            "sqlite mailbox metadata returned legacy-prefixed message keys in non-legacy runtime mode",
-        )
-        .with_recovery(
-            "Repair or remove the malformed mailbox rows before retrying `atm list`; production runtimes must not downgrade back to file-backed mailbox metadata reads.",
-        ));
-    }
     let classified_all = classify_mailbox_metadata_rows(&metadata_rows);
     let logical_current = logical_current_messages(classified_all);
     let bucket_counts = bucket_counts_for(&logical_current);

@@ -1,0 +1,106 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/X2-ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "X2-ATM-QA-004" ;
+  triage:title "load_compat_source_projections internal call site and definition remaining after external caller removal" ;
+  triage:description "XB-S4-FIX-R1 at e195d86 removed external callers of load_compat_source_projections from boundary_support.rs (occurrences at :59, :114, :123). However, the function definition remains at crates/atm-core/src/mailbox/mod.rs (approx line 131) and is still called internally from crates/atm-core/src/mailbox/store.rs (approx line 67). Team-lead ruling: I2 OPEN — the compat shim must be fully removed including the definition and internal call site." ;
+  triage:category "X2-ATM-QA" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "followup_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T15:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-004/boundary-59-fixed> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-004/boundary-123-fixed> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-004/store-67-open> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-004/mod-131-open> ;
+  triage:fixedOn <urn:atm:triage:worktree/pXb-s4/64ade30> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s1/2a0b3ec> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s2/7c377d1> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s3/029992e> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s4/64ade30> ;
+  triage:promoteTo <urn:atm:triage:worktree/pXb-s4/64ade30> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-004/boundary-59-fixed>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 59 ;
+  triage:snippet "let source_files = mailbox::store::load_compat_source_projections(" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/64ade30> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-004/boundary-123-fixed>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 123 ;
+  triage:snippet "mailbox::store::write_compat_source_projections(&source_files)?;" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/64ade30> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-004/store-67-open>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 67 ;
+  triage:snippet "pub(crate) fn load_compat_source_projections(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/64ade30> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-004/mod-131-open>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 131 ;
+  triage:snippet "store::load_compat_source_projections(home_dir, team, agent)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/64ade30> .
+
+<urn:atm:triage:worktree/pXb-s1/2a0b3ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pXb-s2/7c377d1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pXb-s3/029992e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pXb-s4/64ade30>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate/cdeb063>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Xb" ;
+  triage:headSha "cdeb063" ;
+  triage:orderIndex 6 .
