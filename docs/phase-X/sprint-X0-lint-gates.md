@@ -44,6 +44,15 @@ target: develop
 - this sprint lands on `develop`, not `integrate/phase-Xb`
 - `X.1` through `X.5` must not start until this sprint is merged
 
+## Current Reality
+
+- this sprint is already complete on `feature/pX-lint-gates`
+- the delivered guardrails are inherited by the `pXb` restart line from
+  `develop`
+- there is no remaining implementation work in `X.0`
+- later sprint QA must still verify the inherited gate wiring remains live
+  after replay on the restart branches
+
 ## Exact Targets
 
 - `scripts/check-silent-emit.py`
