@@ -1,38 +1,13 @@
 ---
 id: X.1
 title: Mailbox Runtime Cutover
-status: planned
+status: complete
 branch: feature/pXb-s1-mailbox-runtime-cutover
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover
+worktree: ../atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover
 target: integrate/phase-Xb
 ---
 
 # Sprint X.1 — Mailbox Runtime Cutover
-
-## Modification
-
-- This sprint is a restart replay on `feature/pXb-s1-mailbox-runtime-cutover`.
-- Prior Phase `X` work already completed most of the intended `X.1` scope:
-  - `70460f9b4fca061dd069b7b4245215c635ceb693`
-    - `feat: complete phase X mailbox runtime cutover`
-  - `6143bdab6cd2279558c62da836b5cb9aab054262`
-    - `fix: close phase X1 follow-up findings`
-- Execute this sprint by cherry-picking or selectively reapplying that prior
-  work onto `pXb-s1` after audit; do not re-derive the design from scratch.
-- The old `feature/pX-s1-mailbox-runtime-cutover` branch is a salvage source,
-  not the new execution branch.
-- QA must validate the entire `X.1` sprint on `pXb-s1`, not only the replayed
-  delta from those commits.
-
-## Remaining Restart Work
-
-- replay or selectively re-implement the audited `70460f9...` and `6143bda...`
-  changes onto `feature/pXb-s1-mailbox-runtime-cutover`
-- reconcile any drift between the old `phase-X` implementation base and the new
-  `develop`-based restart line
-- confirm the restarted branch actually satisfies every `X.1` deletion and
-  boundary acceptance criterion on the new line
-- run full `X.1` QA on `pXb-s1`; do not treat prior completion as sufficient
 
 ## Goal
 
@@ -42,7 +17,7 @@ target: integrate/phase-Xb
 ## Hard Dependencies
 
 - `X.0` merged on `develop`
-- `integrate/phase-Xb` created from `develop` after `X.0` was already live
+- `integrate/phase-Xb` created from a validated `develop` restart baseline
 - no fallback path may be preserved for later cleanup once this sprint starts
 
 ## Exact Targets
@@ -53,8 +28,22 @@ target: integrate/phase-Xb
 - `crates/atm-core/src/read/mod.rs`
 - `crates/atm-core/src/clear/mod.rs`
 - `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/doctor/mod.rs`
+- `crates/atm-core/src/mailbox/mod.rs`
+- `crates/atm-core/src/mailbox/source.rs`
+- `crates/atm-core/src/mailbox/store.rs`
+- `crates/atm-core/src/mailbox/surface.rs`
+- `crates/atm-core/src/read/state.rs`
+- `crates/atm-core/src/workflow.rs`
+- `crates/atm-core/src/lib.rs`
+- `crates/atm-core/Cargo.toml`
+- `crates/atm-core/tests/mailbox_locking.rs`
+- `crates/atm/src/composition.rs`
+- `crates/atm-rusqlite/src/writer/ops.rs`
+- `crates/atm-daemon/src/tests.rs`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-core/architecture.md`
+- `docs/project-plan.md`
 
 ## Required Work
 
@@ -72,6 +61,24 @@ target: integrate/phase-Xb
 - update the atm-core boundary/architecture docs to state there is one durable
   mailbox backend
 
+## Delivered
+
+- removed dual runtime selection and all named legacy mailbox selectors from
+  `atm-core`
+- converted `default_runtime()` to fail closed when no SQLite/store-backed
+  runtime factory is installed
+- removed production `read/ack/clear/send/doctor` backend branching and updated
+  the retained mailbox trait surface to store-shaped operations only
+- deleted `crates/atm-core/src/read/legacy_path.rs` and
+  `crates/atm-core/src/unsupported_adapters.rs`
+- added test/runtime bootstrap support so same-host CLI, core mailbox-locking,
+  and daemon doctor/runtime tests execute against the SQLite-backed retained
+  runtime path
+- fixed the SQLite envelope serialization mismatch uncovered by the cutover in
+  `crates/atm-rusqlite/src/writer/ops.rs`
+- updated project-plan / boundary / architecture docs to reflect the one-backend
+  retained runtime rule
+
 ## Acceptance Criteria
 
 - `rg -n "LegacyMailboxRuntime|DefaultMailboxRuntime::Legacy|legacy_runtime\\(|allows_legacy_mailbox_files" crates/atm-core/src`
@@ -82,6 +89,9 @@ target: integrate/phase-Xb
 - retained mailbox interfaces no longer expose backend-choice branching
 - daemon/store unavailability returns shared ATM errors instead of selecting a
   second mailbox implementation
+
+Implementation result:
+- all listed acceptance criteria are satisfied on this branch
 
 ## Required Validation
 

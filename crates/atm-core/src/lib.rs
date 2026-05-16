@@ -4,7 +4,8 @@ pub mod ack;
 pub mod address;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
-/// Hidden support helpers used by concrete boundary adapter crates.
+/// Hidden daemon-private ingress/export helpers used by concrete boundary
+/// adapter crates.
 #[doc(hidden)]
 pub mod boundary_support;
 /// Mailbox cleanup workflows for read and acknowledged messages.
@@ -68,8 +69,6 @@ pub(crate) mod threading;
 pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
-/// Transitional legacy placeholder adapters extracted from retained runtime glue.
-pub(crate) mod unsupported_adapters;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 

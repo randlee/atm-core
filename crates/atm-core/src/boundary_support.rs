@@ -1,4 +1,5 @@
-//! Hidden helper layer used by concrete boundary adapters.
+//! Hidden daemon-side ingress/export helper layer used by concrete boundary
+//! adapters.
 
 use std::collections::HashSet;
 
@@ -55,8 +56,11 @@ pub fn load_team_config(
 pub fn import_inbox_source(
     request: InboxIngressImportRequest,
 ) -> Result<InboxIngressImportResponse, AtmError> {
-    let source_files =
-        mailbox::store::observe_source_files(&request.home_dir, &request.team, &request.agent)?;
+    let source_files = mailbox::store::load_compat_source_projections(
+        &request.home_dir,
+        &request.team,
+        &request.agent,
+    )?;
     Ok(InboxIngressImportResponse {
         source_files: source_files
             .into_iter()
@@ -116,7 +120,7 @@ pub fn export_source_files(
         .into_iter()
         .map(from_boundary_source_file)
         .collect::<Vec<_>>();
-    mailbox::store::commit_source_files(&source_files)?;
+    mailbox::store::write_compat_source_projections(&source_files)?;
     Ok(InboxExportRecordResponse { committed_paths })
 }
 
@@ -124,7 +128,7 @@ pub fn reexport_messages(
     request: InboxExportReexportMessageRequest,
 ) -> Result<InboxExportReexportMessageResponse, AtmError> {
     let wrote_messages = request.messages.len();
-    mailbox::store::commit_mailbox_state(&request.path, &request.messages)?;
+    mailbox::store::write_compat_mailbox_projection(&request.path, &request.messages)?;
     Ok(InboxExportReexportMessageResponse { wrote_messages })
 }
 

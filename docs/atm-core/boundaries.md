@@ -120,6 +120,12 @@ Purpose:
 
 Notes:
 - This stays the canonical durable truth behind send and receive workflows.
+- Retained command/runtime code now resolves mailbox durability only through the
+  installed store-backed runtime factory.
+- If that runtime factory is unavailable, ATM must fail closed with shared ATM
+  errors instead of selecting a second mailbox backend.
+- Compatibility inbox files remain ingress/export surfaces, not a parallel
+  durable mailbox implementation behind retained command logic.
 
 ## TaskStore
 
@@ -171,6 +177,9 @@ Purpose:
 
 Notes:
 - The import path stays separate from durable store ownership.
+- The hidden `atm_core::boundary_support` helper module is the only retained
+  implementation seam that may still touch compatibility inbox source files for
+  this boundary family.
 
 ## InboxExport
 
@@ -183,6 +192,9 @@ Purpose:
 
 Notes:
 - This is the write-facing sibling of InboxIngress, not a general store boundary.
+- Retained command/runtime code must reach compatibility inbox export only
+  through the daemon-owned ingress/export seam; it must not treat export-file
+  reads as a second source of mailbox truth.
 
 ## NotificationSink
 

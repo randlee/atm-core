@@ -27,25 +27,6 @@ pub(crate) trait RetainedServiceRuntime {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<PathBuf, AtmError>;
-    fn workflow_state_path(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<PathBuf, AtmError>;
-    fn load_workflow_state(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<WorkflowStateFile, AtmError>;
-    fn save_workflow_state(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-        state: &WorkflowStateFile,
-    ) -> Result<(), AtmError>;
     fn load_seen_watermark(
         &self,
         home_dir: &Path,
@@ -86,7 +67,6 @@ pub struct LocalServiceRuntime {
     pub(crate) mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
     pub(crate) task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
     pub(crate) roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
-    pub(crate) allow_legacy_mailbox_files: bool,
 }
 
 impl LocalServiceRuntime {
@@ -99,17 +79,7 @@ impl LocalServiceRuntime {
             mail_store,
             task_store,
             roster_store,
-            allow_legacy_mailbox_files: false,
         }
-    }
-
-    pub(crate) fn with_legacy_mailbox_files(mut self) -> Self {
-        self.allow_legacy_mailbox_files = true;
-        self
-    }
-
-    pub(crate) const fn allows_legacy_mailbox_files(&self) -> bool {
-        self.allow_legacy_mailbox_files
     }
 }
 
@@ -119,10 +89,6 @@ impl fmt::Debug for LocalServiceRuntime {
             .field("mail_store", &std::sync::Arc::as_ptr(&self.mail_store))
             .field("task_store", &std::sync::Arc::as_ptr(&self.task_store))
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
-            .field(
-                "allow_legacy_mailbox_files",
-                &self.allow_legacy_mailbox_files,
-            )
             .finish()
     }
 }
@@ -147,34 +113,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         agent: &AgentName,
     ) -> Result<PathBuf, AtmError> {
         crate::home::inbox_path_from_home(home_dir, team, agent)
-    }
-
-    fn workflow_state_path(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<PathBuf, AtmError> {
-        crate::home::workflow_state_path_from_home(home_dir, team, agent)
-    }
-
-    fn load_workflow_state(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-    ) -> Result<WorkflowStateFile, AtmError> {
-        workflow::load_workflow_state(home_dir, team, agent)
-    }
-
-    fn save_workflow_state(
-        &self,
-        home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
-        state: &WorkflowStateFile,
-    ) -> Result<(), AtmError> {
-        workflow::save_workflow_state(home_dir, team, agent, state)
     }
 
     fn load_seen_watermark(

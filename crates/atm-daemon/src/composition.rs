@@ -165,6 +165,7 @@ impl RuntimeComposition {
         replay_store_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
+        let config_ingress = DaemonConfigIngress::new();
         let status_cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
@@ -183,24 +184,18 @@ impl RuntimeComposition {
         let inbox_ingress = DaemonInboxIngress::new();
         let composition_observability =
             SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
-        let replay_store = match sqlite_remote_replay_store_from_path_with_observability(
+        let replay_store = build_replay_store(
             replay_store_path,
-            Arc::clone(&sqlite_observability),
-        ) {
-            Ok(store) => Some(store),
-            Err(error) => {
-                tracing::warn!(
-                    %error,
-                    "remote replay store unavailable; outcome-unknown delivery cannot be persisted"
-                );
-                composition_observability.emit_or_warn(
-                    "sqlite_replay_store_assembly",
-                    "degraded",
-                    "remote replay store unavailable; outcome-unknown delivery cannot be persisted",
-                );
-                None
-            }
-        };
+            &sqlite_observability,
+            &composition_observability,
+        );
+        let server_transport = build_server_transport(&observability);
+        let request_dispatcher = build_request_dispatcher(
+            home_dir,
+            &status_cache,
+            &observability,
+            sqlite_observability,
+        );
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             host_ownership_adapter: HostOwnershipAdapter::new_with_observability(
@@ -210,26 +205,8 @@ impl RuntimeComposition {
                 ),
             ),
             endpoint_guard: Mutex::new(None),
-            server_transport: LocalIpcServerTransportAdapter::new_with_observability(
-                SubsystemObservability::new(
-                    DaemonSubsystem::LocalIpcTransport,
-                    Arc::clone(&observability),
-                ),
-                SubsystemObservability::new(
-                    DaemonSubsystem::HostOwnership,
-                    Arc::clone(&observability),
-                ),
-                SubsystemObservability::new(
-                    DaemonSubsystem::LifecycleControl,
-                    Arc::clone(&observability),
-                ),
-            ),
-            request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
-                home_dir,
-                status_cache.clone(),
-                Arc::clone(&observability),
-                sqlite_observability,
-            )),
+            server_transport,
+            request_dispatcher,
             composition_observability,
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
@@ -243,13 +220,13 @@ impl RuntimeComposition {
                     Arc::clone(&observability),
                 ),
             ),
-            _config_ingress: DaemonConfigIngress::new(),
+            _config_ingress: config_ingress,
             _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
             peer_transport_runtime: PeerTransportRuntime::new_with_observability(
                 replay_store,
                 SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
-            ),
+            )?,
         })
     }
 
@@ -621,6 +598,58 @@ impl RuntimeComposition {
             None => Ok(()),
         }
     }
+}
+
+fn build_replay_store(
+    replay_store_path: PathBuf,
+    sqlite_observability: &Arc<dyn atm_rusqlite::SqliteObservability>,
+    composition_observability: &SubsystemObservability,
+) -> Option<Arc<dyn crate::RemoteReplayStore>> {
+    match sqlite_remote_replay_store_from_path_with_observability(
+        replay_store_path,
+        Arc::clone(sqlite_observability),
+    ) {
+        Ok(store) => Some(store),
+        Err(error) => {
+            tracing::warn!(
+                %error,
+                "remote replay store unavailable; outcome-unknown delivery cannot be persisted"
+            );
+            composition_observability.emit_or_warn(
+                "sqlite_replay_store_assembly",
+                "degraded",
+                "remote replay store unavailable; outcome-unknown delivery cannot be persisted",
+            );
+            None
+        }
+    }
+}
+
+fn build_request_dispatcher(
+    home_dir: AtmHomeDir,
+    status_cache: &RuntimeStatusCache,
+    observability: &Arc<dyn DaemonRuntimeObservability>,
+    sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability>,
+) -> Arc<DaemonRequestDispatcher> {
+    Arc::new(DaemonRequestDispatcher::new(
+        home_dir,
+        status_cache.clone(),
+        Arc::clone(observability),
+        sqlite_observability,
+    ))
+}
+
+fn build_server_transport(
+    observability: &Arc<dyn DaemonRuntimeObservability>,
+) -> LocalIpcServerTransportAdapter {
+    LocalIpcServerTransportAdapter::new_with_observability(
+        SubsystemObservability::new(
+            DaemonSubsystem::LocalIpcTransport,
+            Arc::clone(observability),
+        ),
+        SubsystemObservability::new(DaemonSubsystem::HostOwnership, Arc::clone(observability)),
+        SubsystemObservability::new(DaemonSubsystem::LifecycleControl, Arc::clone(observability)),
+    )
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]

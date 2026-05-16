@@ -20,7 +20,7 @@ const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// Append one message to a shared inbox file under the mailbox lock.
 ///
 /// Production send flows use the same lock discipline through
-/// `mailbox::store::append_mailbox_message_and_seed_workflow()`. This helper is
+/// `mailbox::store::write_compat_mailbox_projection()`. This helper is
 /// test-only because production callers must also coordinate workflow seeding.
 ///
 /// # Errors
@@ -42,10 +42,11 @@ pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), Atm
 /// Lock, load, mutate, and atomically rewrite one mailbox file.
 ///
 /// Production mutation paths use equivalent lock coverage through
-/// `mailbox::store::with_locked_source_files()` plus
-/// `mailbox::store::commit_source_files()`. This helper stays test-only so unit
-/// tests can exercise the shared mailbox lock contract directly without the
-/// workflow/state sidecars required in production commands.
+/// `workflow::commit_workflow_state()` plus
+/// `mailbox::store::write_compat_source_projections()`.
+/// This helper stays test-only so unit tests can exercise the shared mailbox
+/// lock contract directly without the workflow/state sidecars required in
+/// production commands.
 ///
 /// # Errors
 ///
@@ -66,9 +67,9 @@ where
     F: FnOnce(&mut Vec<MessageEnvelope>) -> Result<(), AtmError>,
 {
     let _guard = lock::acquire_many_sorted([path.to_path_buf()], timeout)?;
-    let mut messages = read_messages(path)?;
+    let mut messages = load_compat_mailbox_messages(path)?;
     mutate(&mut messages)?;
-    store::commit_mailbox_state(path, &messages)
+    store::write_compat_mailbox_projection(path, &messages)
 }
 
 /// Read all valid mailbox records from one shared inbox file.
@@ -78,7 +79,7 @@ where
 /// Returns [`AtmError`] with
 /// [`crate::error_codes::AtmErrorCode::MailboxReadFailed`] when the mailbox
 /// file cannot be opened or read.
-pub fn read_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
+pub(crate) fn load_compat_mailbox_messages(path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
     if !path.exists() {
         return Ok(Vec::new());
     }
@@ -275,7 +276,10 @@ mod tests {
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
-    use super::{MAX_MAILBOX_READ_BYTES, append_message, locked_read_modify_write, read_messages};
+    use super::{
+        MAX_MAILBOX_READ_BYTES, append_message, load_compat_mailbox_messages,
+        locked_read_modify_write,
+    };
     use crate::mailbox::lock;
 
     #[test]
@@ -290,7 +294,7 @@ mod tests {
         let values: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
         assert_eq!(values.len(), 1);
         assert_eq!(values[0]["text"], "first");
-        let read_back = read_messages(&path).expect("read back");
+        let read_back = load_compat_mailbox_messages(&path).expect("read back");
         assert_eq!(read_back, vec![envelope]);
     }
 
@@ -325,7 +329,7 @@ mod tests {
         })
         .expect("locked read modify write");
 
-        let messages = read_messages(&path).expect("read");
+        let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages.len(), 2);
         assert!(messages[0].read);
         assert_eq!(messages[1].text, "second");
@@ -353,27 +357,27 @@ mod tests {
     }
 
     #[test]
-    fn read_messages_skips_malformed_lines() {
+    fn load_compat_mailbox_messages_skips_malformed_lines() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("skip-malformed.jsonl");
         let valid =
             serde_json::to_string(&sample_message(Uuid::new_v4(), "valid")).expect("valid json");
         fs::write(&path, format!("{valid}\n{{not-json}}\n")).expect("write");
 
-        let messages = read_messages(&path).expect("read");
+        let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].text, "valid");
     }
 
     #[test]
-    fn read_messages_rejects_oversized_mailbox_before_loading_contents() {
+    fn load_compat_mailbox_messages_rejects_oversized_mailbox_before_loading_contents() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("oversized-mailbox.jsonl");
         File::create(&path)
             .and_then(|file| file.set_len(MAX_MAILBOX_READ_BYTES + 1))
             .expect("oversized mailbox");
 
-        let error = read_messages(&path).expect_err("oversized mailbox should fail");
+        let error = load_compat_mailbox_messages(&path).expect_err("oversized mailbox should fail");
 
         assert!(error.is_mailbox_read());
         assert!(error.message.contains("exceeds"));
@@ -386,7 +390,7 @@ mod tests {
     }
 
     #[test]
-    fn read_messages_preserves_duplicate_message_ids_for_surface_canonicalization() {
+    fn load_compat_mailbox_messages_preserves_duplicate_message_ids_for_surface_canonicalization() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("dedupe.jsonl");
         let message_id = Uuid::new_v4();
@@ -405,14 +409,14 @@ mod tests {
         );
         fs::write(&path, contents).expect("write");
 
-        let messages = read_messages(&path).expect("read");
+        let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0].text, "first");
         assert_eq!(messages[1].text, "second");
     }
 
     #[test]
-    fn read_messages_treats_malformed_message_id_as_absent() {
+    fn load_compat_mailbox_messages_treats_malformed_message_id_as_absent() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("malformed-message-id.jsonl");
         let contents = serde_json::json!({
@@ -428,14 +432,14 @@ mod tests {
         )
         .expect("write");
 
-        let messages = read_messages(&path).expect("read");
+        let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].text, "valid body");
         assert!(messages[0].message_id.is_none());
     }
 
     #[test]
-    fn read_messages_supports_json_array_mailboxes_without_message_id() {
+    fn load_compat_mailbox_messages_supports_json_array_mailboxes_without_message_id() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("array-no-message-id.json");
         let contents = serde_json::json!([
@@ -448,14 +452,14 @@ mod tests {
         ]);
         fs::write(&path, serde_json::to_vec(&contents).expect("json")).expect("write");
 
-        let messages = read_messages(&path).expect("read");
+        let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].text, "from claude array");
         assert!(messages[0].message_id.is_none());
     }
 
     #[test]
-    fn read_messages_supports_json_array_mailboxes_with_atm_fields() {
+    fn load_compat_mailbox_messages_supports_json_array_mailboxes_with_atm_fields() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("array-with-atm-fields.json");
         let message = sample_message(Uuid::new_v4(), "array with id");
@@ -465,12 +469,12 @@ mod tests {
         )
         .expect("write");
 
-        let messages = read_messages(&path).expect("read");
+        let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages, vec![message]);
     }
 
     #[test]
-    fn read_messages_use_top_level_compatibility_fields() {
+    fn load_compat_mailbox_messages_use_top_level_compatibility_fields() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("top-level-compatibility.json");
         let contents = serde_json::json!({
@@ -486,7 +490,7 @@ mod tests {
         });
         fs::write(&path, serde_json::to_vec(&contents).expect("json")).expect("write");
 
-        let messages = read_messages(&path).expect("read");
+        let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
         assert!(messages[0].message_id.is_some());
         assert_eq!(messages[0].source_team.as_deref(), Some(TEST_TEAM));
@@ -498,7 +502,7 @@ mod tests {
     }
 
     #[test]
-    fn read_messages_preserves_metadata_atm_as_opaque_extra() {
+    fn load_compat_mailbox_messages_preserves_metadata_atm_as_opaque_extra() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("metadata-atm-pass-through.jsonl");
         let contents = serde_json::json!({
@@ -518,7 +522,7 @@ mod tests {
         });
         fs::write(&path, serde_json::to_vec(&contents).expect("json")).expect("write");
 
-        let messages = read_messages(&path).expect("read");
+        let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
         assert!(messages[0].message_id.is_none());
         assert!(messages[0].source_team.is_none());
@@ -558,7 +562,7 @@ mod tests {
             handle.join().expect("thread");
         }
 
-        let messages = read_messages(&path).expect("read");
+        let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages.len(), 2);
         assert!(messages.iter().any(|message| message.text == "first"));
         assert!(messages.iter().any(|message| message.text == "second"));

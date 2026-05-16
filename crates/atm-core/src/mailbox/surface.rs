@@ -6,6 +6,7 @@ use crate::types::IsoTimestamp;
 /// Canonicalize a merged mailbox surface by top-level `message_id`.
 /// For read/ack/clear, the newest message for a given AtmMessageId wins;
 /// equal timestamps fall back to the later merged-surface position.
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn dedupe_message_id_surface<T, FId, FTs>(
     messages: Vec<T>,
     mut message_id: FId,

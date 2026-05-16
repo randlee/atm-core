@@ -18,6 +18,7 @@ const DEFAULT_RECONCILE_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
 const MAX_RECONCILE_FINGERPRINT_KEYS: usize = 1024;
 const MAX_RECONCILE_FINGERPRINTS_PER_KEY: usize = 256;
+const MAX_RECONCILE_WAITERS: usize = 1024;
 #[cfg(not(test))]
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
 #[cfg(test)]
@@ -391,68 +392,89 @@ impl ReconcileRuntime {
     pub(crate) fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
         let request_team = request.team.clone();
         let request_agent = request.agent.clone();
-        let waiter_id = {
-            let mut state = self.inner.state.lock().map_err(|_| {
-                AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
-                    "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
-                )
-            })?;
-            if !state.started {
-                let event = self
-                    .inner
-                    .observability
-                    .event(
-                        "reconcile",
-                        "rejected",
-                        "reconcile runtime is unavailable before daemon startup",
-                    )
-                    .with_team(request_team.clone())
-                    .with_agent(request_agent.clone());
-                self.inner.observability.emit_event_or_warn(event);
-                return Err(AtmError::daemon_unavailable(
-                    "reconcile runtime is unavailable before daemon startup",
-                ));
-            }
-            if state.shutdown {
-                let event = self
-                    .inner
-                    .observability
-                    .event(
-                        "reconcile",
-                        "rejected",
-                        "reconcile runtime is unavailable during daemon shutdown",
-                    )
-                    .with_team(request_team.clone())
-                    .with_agent(request_agent.clone());
-                self.inner.observability.emit_event_or_warn(event);
-                return Err(AtmError::daemon_unavailable(
-                    "reconcile runtime is unavailable during daemon shutdown",
-                ));
-            }
-            let waiter_id = state.next_waiter_id;
-            state.next_waiter_id += 1;
-            state.active_waiters.insert(waiter_id);
-            state.pending_epoch = state.pending_epoch.saturating_add(1);
-            let key = ReconcileKey::from_request(&request);
-            if let Some(pending) = state.pending.get_mut(&key) {
-                pending.request = request.clone();
-                pending.waiters.push(waiter_id);
-            } else {
-                state.pending_order.push_back(key.clone());
-                state.pending.insert(
-                    key,
-                    PendingReconcile {
-                        request,
-                        waiters: vec![waiter_id],
-                    },
-                );
-            }
-            self.inner.wake.notify_one();
-            #[cfg(test)]
-            self.inner.pending_changed.notify_all();
-            waiter_id
-        };
+        let waiter_id = self.enqueue_reconcile_request(&request, &request_team, &request_agent)?;
+        self.wait_for_reconcile_result(waiter_id, &request_team, &request_agent)
+    }
 
+    fn enqueue_reconcile_request(
+        &self,
+        request: &ReconcileRequest,
+        request_team: &atm_core::types::TeamName,
+        request_agent: &atm_core::types::AgentName,
+    ) -> Result<u64, AtmError> {
+        let mut state = self.inner.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
+                "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
+            )
+        })?;
+        self.validate_reconcile_runtime_state(&state, request_team, request_agent)?;
+        let waiter_id = state.next_waiter_id;
+        state.next_waiter_id += 1;
+        state.active_waiters.insert(waiter_id);
+        state.pending_epoch = state.pending_epoch.saturating_add(1);
+        let key = ReconcileKey::from_request(request);
+        if let Some(pending) = state.pending.get_mut(&key) {
+            pending.request = request.clone();
+            pending.waiters.push(waiter_id);
+        } else {
+            state.pending_order.push_back(key.clone());
+            state.pending.insert(
+                key,
+                PendingReconcile {
+                    request: request.clone(),
+                    waiters: vec![waiter_id],
+                },
+            );
+        }
+        self.inner.wake.notify_one();
+        #[cfg(test)]
+        self.inner.pending_changed.notify_all();
+        Ok(waiter_id)
+    }
+
+    fn validate_reconcile_runtime_state(
+        &self,
+        state: &ReconcileState,
+        request_team: &atm_core::types::TeamName,
+        request_agent: &atm_core::types::AgentName,
+    ) -> Result<(), AtmError> {
+        if !state.started {
+            return Err(self.reconcile_unavailable_error(
+                "rejected",
+                "reconcile runtime is unavailable before daemon startup",
+                request_team,
+                request_agent,
+            ));
+        }
+        if state.shutdown {
+            return Err(self.reconcile_unavailable_error(
+                "rejected",
+                "reconcile runtime is unavailable during daemon shutdown",
+                request_team,
+                request_agent,
+            ));
+        }
+        if state.active_waiters.len() >= MAX_RECONCILE_WAITERS {
+            return Err(self
+                .reconcile_unavailable_error(
+                    "rejected",
+                    "reconcile runtime hit its concurrent waiter capacity",
+                    request_team,
+                    request_agent,
+                )
+                .with_recovery(
+                    "Reduce concurrent reconcile waiters or retry after earlier reconcile requests complete.",
+                ));
+        }
+        Ok(())
+    }
+
+    fn wait_for_reconcile_result(
+        &self,
+        waiter_id: u64,
+        request_team: &atm_core::types::TeamName,
+        request_agent: &atm_core::types::AgentName,
+    ) -> Result<ReconcileResult, AtmError> {
         let mut state = self.inner.state.lock().map_err(|_| {
             AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
                 "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
@@ -461,19 +483,11 @@ impl ReconcileRuntime {
         loop {
             if state.shutdown {
                 state.release_waiter(waiter_id);
-                let event = self
-                    .inner
-                    .observability
-                    .event(
-                        "reconcile",
-                        "degraded",
-                        "reconcile runtime shut down before completion",
-                    )
-                    .with_team(request_team.clone())
-                    .with_agent(request_agent.clone());
-                self.inner.observability.emit_event_or_warn(event);
-                return Err(AtmError::daemon_unavailable(
+                return Err(self.reconcile_unavailable_error(
+                    "degraded",
                     "reconcile runtime shut down before completion",
+                    request_team,
+                    request_agent,
                 ));
             }
             if let Some(outcome) = state.completed.remove(&waiter_id) {
@@ -493,22 +507,31 @@ impl ReconcileRuntime {
             state = wait.0;
             if wait.1.timed_out() {
                 state.release_waiter(waiter_id);
-                let event = self
-                    .inner
-                    .observability
-                    .event(
-                        "reconcile",
-                        "degraded",
-                        "reconcile runtime timed out waiting for background completion",
-                    )
-                    .with_team(request_team.clone())
-                    .with_agent(request_agent.clone());
-                self.inner.observability.emit_event_or_warn(event);
-                return Err(AtmError::daemon_unavailable(
+                return Err(self.reconcile_unavailable_error(
+                    "degraded",
                     "reconcile runtime timed out waiting for background completion",
+                    request_team,
+                    request_agent,
                 ));
             }
         }
+    }
+
+    fn reconcile_unavailable_error(
+        &self,
+        outcome: &'static str,
+        message: &'static str,
+        request_team: &atm_core::types::TeamName,
+        request_agent: &atm_core::types::AgentName,
+    ) -> AtmError {
+        let event = self
+            .inner
+            .observability
+            .event("reconcile", outcome, message)
+            .with_team(request_team.clone())
+            .with_agent(request_agent.clone());
+        self.inner.observability.emit_event_or_warn(event);
+        AtmError::daemon_unavailable(message)
     }
 
     #[cfg(test)]
