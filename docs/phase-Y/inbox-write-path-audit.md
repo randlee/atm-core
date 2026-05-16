@@ -266,6 +266,28 @@ write classes:
      - `write_messages(...)`
      - status: retained only until append-only cutover lands
 
+### Retain As Notification / Fallback Side-Effect Stack
+
+1. Notification sink stack
+   - runtime trait entrypoint: `crates/atm-core/src/service_runtime.rs:44`
+     - `maybe_run_post_send_hook(...)`
+     - status: retain as side-effect interface only; do not let it own event
+       legality
+   - runtime implementation: `crates/atm-core/src/service_runtime.rs:143`
+     - `maybe_run_post_send_hook(...)`
+     - status: retain as runtime bridge only
+   - send façade: `crates/atm-core/src/send/mod.rs:705`
+     - `maybe_run_post_send_hook(...)`
+     - status: retain only as thin façade or inline into the eventual
+       notification sink boundary
+   - hook executor: `crates/atm-core/src/send/hook.rs:57`
+     - `hook::maybe_run_post_send_hook(...)`
+     - status: retain as notification fallback executor only; do not let it
+       decide harness routing or SQLite failure policy
+   - hook child-process supervisor: `crates/atm-core/src/send/hook.rs:90`
+     - `execute_post_send_hook(...)`
+     - status: retain under NotificationSink side-effect ownership only
+
 2. Explicit re-export / repair path
    - public bridge: `crates/atm-core/src/direct_boundaries.rs:44`
      - `reexport_messages(...)`

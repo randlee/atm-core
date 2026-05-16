@@ -24,6 +24,21 @@ target: integrate/phase-Y
 - `docs/phase-Y/state-machine-coverage-audit.md`
 - `GH #83`
 
+## GH #83 Design Ruling (approved by team-lead)
+
+- add explicit `Help(HelpCommand)` variant; keep `disable_help_subcommand = true`
+- `atm --help` remains clap-generated command syntax help (unchanged)
+- `atm help` is conceptual/product help — a separate product feature
+- `atm help <subcommand>` delegates to clap `--help` output first, then may
+  append optional prose; clap output is the single source of truth for flag
+  docs — no parallel text maintained
+- concept topics (no clap equivalent) are authored in the topic registry:
+  - tier 1 (must ship): `config`, `errors`
+  - tier 2 (may ship incomplete in v1.1): `hooks`, `identity`, `skills`
+- v1.1 scope: `atm help --list`, `atm help <topic>`, `atm help <topic> --json`
+- location: `crates/atm/src/commands/help.rs` with typed topic registry
+- no asset-install/init entanglement in this delivery
+
 ## Exact Targets
 
 - `crates/atm/src/main.rs`
@@ -36,8 +51,7 @@ target: integrate/phase-Y
 
 ## Required Work
 
-- implement the agreed `atm help` improvements and any directly adjacent
-  subcommand-help cleanup
+- implement `atm help` per the GH #83 design ruling above
 - make daemon + SQLite ownership expectations explicit in user-facing help
   where it prevents operator confusion
 - remove or rewrite stale help/output text that suggests:
@@ -49,7 +63,10 @@ target: integrate/phase-Y
 
 ## Acceptance Criteria
 
-- `atm help` exists in the form approved for the release line
+- `atm help`, `atm help --list`, `atm help <topic>`, `atm help <topic> --json` all work
+- `atm help <subcommand>` output starts with clap `--help` content
+- tier-1 concept topics (`config`, `errors`) have authored content
+- tier-2 topics (`hooks`, `identity`, `skills`) either have content or are explicitly listed as deferred to `Y.2`
 - command help/output no longer makes stale file-SSOT claims
 - any intentionally deferred UX/help items are explicitly listed for `Y.2`
 

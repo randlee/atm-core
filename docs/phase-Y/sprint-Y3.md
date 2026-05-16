@@ -233,6 +233,22 @@ function, and line number.
 - `crates/atm-core/src/team_admin.rs:492`
   - `atomic_write(...)`
   - decision: retain only behind `write_team_config(...)`
+- `crates/atm-core/src/service_runtime.rs:44`
+  - `maybe_run_post_send_hook(...)`
+  - decision: retain as side-effect trait only; no event legality here
+- `crates/atm-core/src/service_runtime.rs:143`
+  - `maybe_run_post_send_hook(...)`
+  - decision: retain as runtime bridge only
+- `crates/atm-core/src/send/mod.rs:705`
+  - `maybe_run_post_send_hook(...)`
+  - decision: retain only as thin façade or remove if NotificationSink absorbs
+    it directly
+- `crates/atm-core/src/send/hook.rs:57`
+  - `hook::maybe_run_post_send_hook(...)`
+  - decision: retain only as fallback side-effect executor
+- `crates/atm-core/src/send/hook.rs:90`
+  - `execute_post_send_hook(...)`
+  - decision: retain under NotificationSink side-effect ownership only
 
 ## Split Recommendation
 
