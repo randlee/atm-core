@@ -35,6 +35,8 @@ before append-only work or smoke testing begins.
 - land separate event-family state machines instead of generic send branches
 - encode the harness gate and the SQL-failure/original+error companion-message
   rule before implementation begins
+- land explicit enums and transition tables for every required write-affecting
+  event family before any implementation-specific simplification is considered
 
 ## Governing Requirements
 
@@ -139,6 +141,9 @@ Development work:
 - land:
   - `NewMessageStateMachine`
   - `ThreadUpdateStateMachine`
+  - `AckReplyStateMachine`
+  - `InboxRepairStateMachine`
+  - `RestoreInboxRebuildStateMachine`
 - ensure the Claude/non-Claude split for new-message handling is encoded in the
   machine definitions, not in scattered call-site conditionals
 
@@ -146,6 +151,9 @@ Required tests:
 - one transition test matrix for `ClaudeHarnessNewMessage`
 - one transition test matrix for `NonClaudeHarnessNewMessage`
 - one transition test matrix for `ThreadUpdateStateMachine`
+- one transition test matrix for `AckReplyStateMachine`
+- one transition test matrix for `InboxRepairStateMachine`
+- one transition test matrix for `RestoreInboxRebuildStateMachine`
 - observability confirms each state transition explicitly
 
 Required doc or boundary updates:
@@ -263,6 +271,10 @@ second, but do not leave the repo in a mixed command-owned state between them.
 - exactly one runtime writer owner remains for Claude-Code harness export
 - non-Claude harnesses still have no JSONL append path
 - only the documented admin/repair exceptions remain outside the runtime owner
+- every required write-affecting event family has:
+  - an explicit enum
+  - an explicit transition table
+  - a QA transition matrix
 
 ## Required Validation
 

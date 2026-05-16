@@ -5,6 +5,7 @@ description: Render a fenced-JSON assignment for req-qa.
 format: json
 required_variables:
   - reference_docs
+  - sprint_doc
 optional_variables:
   - phase
   - sprint
@@ -43,6 +44,10 @@ defaults:
   },
   "phase_or_sprint_docs": [{% for doc in reference_docs %}"{{ doc }}"{% if not loop.last %}, {% endif %}{% endfor %}],
   "phase_sprint_documents": [{% for doc in reference_docs %}"{{ doc }}"{% if not loop.last %}, {% endif %}{% endfor %}],
+  "authoritative_sprint_doc": "{{ sprint_doc }}",
+  "deliverable_enumeration_source": "authoritative_sprint_doc",
+  "deliverable_coverage_required": true,
+  "coverage_rule": "Before reviewing, enumerate every deliverable, acceptance criterion, deletion target, required validation item, and expected artifact from authoritative_sprint_doc. Do not assume the provided deliverables list is exhaustive. If any sprint-doc item is missing from the hand-authored list, treat that as assignment incompleteness and still review it.",
   "worktree_path": {% if worktree_path %}"{{ worktree_path }}"{% else %}null{% endif %},
   "branch": {% if branch %}"{{ branch }}"{% else %}null{% endif %},
   "commit": {% if commit %}"{{ commit }}"{% else %}null{% endif %},

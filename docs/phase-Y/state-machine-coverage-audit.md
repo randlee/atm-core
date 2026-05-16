@@ -33,8 +33,12 @@ Current gap notes:
   - `ClaudeHarnessNewMessage`
   - `NonClaudeHarnessNewMessage`
   - `ThreadUpdateStateMachine`
-- `AckReplyStateMachine` is not yet documented either and must be explicitly
-  accepted as either in-scope for `Y.3` or deferred by name
+  - `AckReplyStateMachine`
+  - `InboxRepairStateMachine`
+  - `RestoreInboxRebuildStateMachine`
+- the normative enum + transition definitions now live in
+  `docs/phase-Y/delivery-state-machines.md`; the remaining gap is the diagram
+  artifact set QA will compare against implementation
 
 ## 2. Client-Socket / Daemon Request Coverage
 
@@ -96,6 +100,9 @@ Current gap notes:
   - Claude-harness new-message flow
   - non-Claude-harness new-message flow
   - thread-update legality and delivery flow
+  - ack-reply legality and delegated reply-delivery flow
+  - inbox-repair staged rebuild flow
+  - restore-inbox-rebuild staged publish flow
 
 ## 3. SQLite Query Diagrams Already Documented
 
@@ -144,6 +151,13 @@ Planning must produce:
   event-family state machines
 - one normative design note for those machines:
   - `docs/phase-Y/delivery-state-machines.md`
+- one explicit QA-owned diagram artifact for each required machine:
+  - `ClaudeHarnessNewMessage`
+  - `NonClaudeHarnessNewMessage`
+  - `ThreadUpdateStateMachine`
+  - `AckReplyStateMachine`
+  - `InboxRepairStateMachine`
+  - `RestoreInboxRebuildStateMachine`
 
 ## 5. QA Enforcement Intent
 

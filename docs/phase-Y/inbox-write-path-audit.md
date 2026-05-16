@@ -338,6 +338,45 @@ write classes:
 - `crates/atm-core/src/team_admin/restore.rs:426`
   - `prepare_restore_workspace(...)`
   - status: retain under restore boundary
+
+## 6. Mechanical Completeness Checks
+
+The line-numbered ledger above is only acceptable if these source queries stay
+consistent with the sampled implementation branch.
+
+Production caller census used for this audit:
+
+```bash
+rg -n "append_mailbox_message_and_seed_workflow|write_compat_mailbox_projection\\(|write_compat_mailbox_projection_with_policy\\(|write_compat_source_projections\\(|export_source_files\\(|reexport_messages\\(|ensure_inbox_exists\\(|write_team_config\\(|maybe_run_post_send_hook\\(|execute_post_send_hook\\(" \
+  crates/atm-core/src
+```
+
+Required review rule:
+
+- if this query returns a new production call site not already classified in
+  Sections 5.1 through 5.4, that is a planning miss and must be treated as a
+  blocking finding before the corresponding sprint starts
+
+Known non-production exclusions:
+
+- `crates/atm-core/src/mailbox/mod.rs:76`
+  - `store::write_compat_mailbox_projection(...)`
+  - classification: `#[cfg(test)]` helper only; not part of the production
+    write/removal ledger
+- `crates/atm-core/src/team_admin.rs:639`
+  - local `write_team_config(...)` test helper
+  - classification: unit-test helper only
+- `crates/atm-core/src/team_admin/restore.rs:577`
+  - local `write_team_config(...)` test helper
+  - classification: unit-test helper only
+
+Normal runtime completion rule for `Y.3`:
+
+- after command-owned rewrite removal, the same caller census must show no
+  `send` or `ack` production path reaching:
+  - `append_mailbox_message_and_seed_workflow(...)`
+  - `write_compat_mailbox_projection(...)`
+  - `write_compat_mailbox_projection_with_policy(...)`
 - `crates/atm-core/src/team_admin/restore.rs:450`
   - `apply_restored_inboxes(...)`
   - status: retain as bulk inbox rebuild/install owner
@@ -368,7 +407,5 @@ write classes:
 - whether the watcher/import/export subsystem itself should own both approved
   inbox-write classes, or whether the bulk-mailbox-creation path should remain
   a separately owned admin/repair boundary
-- whether `AckReplyStateMachine` should land in `Y.3` with `NewMessage`, or
-  remain a follow-on machine after the core delivery-policy extraction
 - whether any shared-inbox mutable ATM field still has a legitimate
   compatibility role

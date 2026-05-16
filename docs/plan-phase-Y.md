@@ -96,9 +96,12 @@ Normal runtime behavior must therefore converge on:
   `RosterHarness`
 - separate event-family state machines rather than one combined “mail send”
   state machine
-- at minimum:
+- required families:
   - `NewMessageStateMachine`
   - `ThreadUpdateStateMachine`
+  - `AckReplyStateMachine`
+  - `InboxRepairStateMachine`
+  - `RestoreInboxRebuildStateMachine`
 - one explicit companion error contract when SQLite delivery fails:
   - original outward delivery still proceeds
   - an additional `atm-system@<team>` error message is emitted
@@ -119,6 +122,8 @@ The following must be completed on the planning branch before numbered Phase
 - `docs/phase-Y/delivery-state-machines.md`
 - backlog list for any missing command/request/query diagrams
 - line-numbered write/removal ledger for every inbox/config write stack
+- explicit enum + transition definitions for every required write-affecting
+  event-family state machine
 - approved implementation scopes for the first two small pre-smoke sprints
 
 These are planning deliverables, not execution sprints.
@@ -219,6 +224,11 @@ Purpose:
 - every write-stack removal or retention decision must be documented by file,
   line, and function name before the corresponding sprint starts
 - every write-affecting event family must have its own documented state machine
+  with:
+  - explicit enum values
+  - explicit transition table
+  - explicit side effects
+  - explicit observable transition names
 - harness-specific branching must live in the delivery-policy coordinator plus
   the relevant state machine, not in command code
 - do not treat command-path direct inbox rewrites as an acceptable long-term

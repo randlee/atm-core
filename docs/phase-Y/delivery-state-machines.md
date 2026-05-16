@@ -248,22 +248,174 @@ Why it is separate from `NewMessageStateMachine`:
 | `PersistSqlite` | `sqlite_err` | durable write failed | `Failed` | record persistence failure | `thread_update.sqlite_failed` |
 | `DispatchByHarness` | `claude_or_non_claude_terminal` | harness resolved and side effects complete | `Delivered` | dispatch through harness-specific delivery effects | `thread_update.delivered` |
 
-### 3. Follow-On Families
+### 3. Ack Reply
 
-These may land after the first two, but they must not be smuggled back into
-generic command logic:
+Required top-level machine:
 
 - `AckReplyStateMachine`
+
+Required machine enums:
+
+```rust
+enum AckReplyCoordinatorState {
+    Received,
+    ValidateAckTarget,
+    ResolveHarness,
+    DispatchAckReply,
+    Completed,
+    Rejected,
+}
+
+enum AckReplyState {
+    Received,
+    ValidateAckTargetExists,
+    ValidateReplyTargetAllowed,
+    PersistAckTransition,
+    BuildReplyDeliveryRequest,
+    DispatchReplyByHarness,
+    Delivered,
+    Rejected,
+    Failed,
+}
+```
+
+Why it is separate:
+
+- ack legality is not the same as either standalone send or thread update
+- reply delivery must inherit the approved `NewMessage` harness contract without
+  re-embedding that logic in `ack`
+- the machine must make the ack transition observable before the reply leaves
+  the coordinator
+
+#### Ack Reply Transition Table
+
+| From | Trigger | Preconditions | To | Side effects | Observable transition |
+|---|---|---|---|---|---|
+| `Received` | `begin` | reply mode is `ack` | `ValidateAckTargetExists` | none | `ack_reply.received` |
+| `ValidateAckTargetExists` | `target_found` | referenced message exists | `ValidateReplyTargetAllowed` | none | `ack_reply.target_ok` |
+| `ValidateAckTargetExists` | `target_missing` | none | `Rejected` | emit validation error | `ack_reply.target_missing` |
+| `ValidateReplyTargetAllowed` | `reply_allowed` | reply target and sender policy pass | `PersistAckTransition` | none | `ack_reply.reply_allowed` |
+| `ValidateReplyTargetAllowed` | `reply_rejected` | none | `Rejected` | emit validation error | `ack_reply.reply_rejected` |
+| `PersistAckTransition` | `sqlite_ok` | ack-state write succeeded | `BuildReplyDeliveryRequest` | persist ack transition | `ack_reply.ack_state_committed` |
+| `PersistAckTransition` | `sqlite_err` | none | `Failed` | record blocking persistence failure | `ack_reply.ack_state_failed` |
+| `BuildReplyDeliveryRequest` | `reply_ready` | reply payload and recipient resolved | `DispatchReplyByHarness` | construct reply delivery request | `ack_reply.reply_ready` |
+| `DispatchReplyByHarness` | `delegate_to_new_message_machine` | harness resolved | `Delivered` | invoke the approved `NewMessage` harness path verbatim for the reply payload | `ack_reply.delivered` |
+
+### 4. Inbox Repair
+
+Required top-level machine:
+
 - `InboxRepairStateMachine`
+
+Required machine enums:
+
+```rust
+enum InboxRepairCoordinatorState {
+    Received,
+    ResolveHarness,
+    ValidateRepairRequest,
+    DispatchRepair,
+    Completed,
+    Rejected,
+}
+
+enum InboxRepairState {
+    Received,
+    ValidateClaudeHarness,
+    LoadRepairProjection,
+    FilterDeletedMessages,
+    StageInboxRebuild,
+    PublishInboxRebuild,
+    Delivered,
+    Rejected,
+    Failed,
+}
+```
+
+Why it is separate:
+
+- this is the explicit bulk mailbox creation / rebuild path
+- it is allowed to stage and publish a bounded historical projection
+- it must stay distinct from normal runtime message delivery and from restore
+
+#### Inbox Repair Transition Table
+
+| From | Trigger | Preconditions | To | Side effects | Observable transition |
+|---|---|---|---|---|---|
+| `Received` | `begin` | explicit repair/rebuild request accepted | `ValidateClaudeHarness` | none | `inbox_repair.received` |
+| `ValidateClaudeHarness` | `harness=ClaudeCode` | canonical roster member exists | `LoadRepairProjection` | none | `inbox_repair.harness_ok` |
+| `ValidateClaudeHarness` | `harness!=ClaudeCode` | none | `Rejected` | emit validation error | `inbox_repair.harness_rejected` |
+| `LoadRepairProjection` | `projection_loaded` | bounded source projection available | `FilterDeletedMessages` | load rebuild candidate set | `inbox_repair.projection_loaded` |
+| `LoadRepairProjection` | `projection_err` | none | `Failed` | record projection failure | `inbox_repair.projection_failed` |
+| `FilterDeletedMessages` | `filter_complete` | deleted messages excluded | `StageInboxRebuild` | produce non-deleted rebuild set | `inbox_repair.filter_complete` |
+| `StageInboxRebuild` | `stage_ok` | staged inbox image prepared | `PublishInboxRebuild` | create temp/staged inbox output | `inbox_repair.staged` |
+| `StageInboxRebuild` | `stage_err` | none | `Failed` | record staging failure | `inbox_repair.stage_failed` |
+| `PublishInboxRebuild` | `publish_ok` | staged output atomically published | `Delivered` | create or replace the repaired Claude inbox | `inbox_repair.published` |
+| `PublishInboxRebuild` | `publish_err` | none | `Failed` | record publish failure | `inbox_repair.publish_failed` |
+
+### 5. Restore Inbox Rebuild
+
+Required top-level machine:
+
 - `RestoreInboxRebuildStateMachine`
 
-Deferral rule:
+Required machine enums:
 
-- if any follow-on family is not landed in the same sprint as the central
-  coordinator, the plan must say:
-  - why it is deferred
-  - which existing path still owns it temporarily
-  - which sprint will absorb it
+```rust
+enum RestoreInboxRebuildCoordinatorState {
+    Received,
+    ValidateRestoreScope,
+    ResolveHarness,
+    DispatchRestoreRebuild,
+    Completed,
+    Rejected,
+}
+
+enum RestoreInboxRebuildState {
+    Received,
+    ValidateRestoreMarker,
+    ValidateClaudeHarness,
+    LoadRestoreProjection,
+    StageRestoreOutput,
+    PublishRestoreOutput,
+    Delivered,
+    Rejected,
+    Failed,
+}
+```
+
+Why it is separate:
+
+- restore is a privileged recovery path with its own staging, rollback, and
+  restore-marker semantics
+- it must not be conflated with either normal runtime delivery or ad hoc inbox
+  repair
+- QA must be able to audit restore-specific publish and cleanup transitions
+
+#### Restore Inbox Rebuild Transition Table
+
+| From | Trigger | Preconditions | To | Side effects | Observable transition |
+|---|---|---|---|---|---|
+| `Received` | `begin` | explicit restore/rebuild request accepted | `ValidateRestoreMarker` | none | `restore_inbox.rebuild_received` |
+| `ValidateRestoreMarker` | `marker_ok` | restore marker / staging contract is valid | `ValidateClaudeHarness` | none | `restore_inbox.marker_ok` |
+| `ValidateRestoreMarker` | `marker_missing_or_invalid` | none | `Rejected` | emit validation error | `restore_inbox.marker_rejected` |
+| `ValidateClaudeHarness` | `harness=ClaudeCode` | canonical roster member exists | `LoadRestoreProjection` | none | `restore_inbox.harness_ok` |
+| `ValidateClaudeHarness` | `harness!=ClaudeCode` | none | `Rejected` | emit validation error | `restore_inbox.harness_rejected` |
+| `LoadRestoreProjection` | `projection_loaded` | restore source set available | `StageRestoreOutput` | load restore projection | `restore_inbox.projection_loaded` |
+| `LoadRestoreProjection` | `projection_err` | none | `Failed` | record projection failure | `restore_inbox.projection_failed` |
+| `StageRestoreOutput` | `stage_ok` | restore output staged successfully | `PublishRestoreOutput` | write staged rebuild output | `restore_inbox.staged` |
+| `StageRestoreOutput` | `stage_err` | none | `Failed` | record staging failure | `restore_inbox.stage_failed` |
+| `PublishRestoreOutput` | `publish_ok` | staged restore output atomically published | `Delivered` | publish rebuilt inbox and clear restore staging as documented | `restore_inbox.published` |
+| `PublishRestoreOutput` | `publish_err` | none | `Failed` | record publish failure | `restore_inbox.publish_failed` |
+
+### 6. Deferral Rule
+
+If any required family above is not landed in the same sprint as the central
+coordinator, the plan must say:
+
+- why it is deferred
+- which existing path still owns it temporarily
+- which sprint will absorb it
 
 ## Shared Side-Effect Helpers
 
@@ -402,6 +554,9 @@ QA must have one transition table per required machine:
 - `ClaudeHarnessNewMessage`
 - `NonClaudeHarnessNewMessage`
 - `ThreadUpdateStateMachine`
+- `AckReplyStateMachine`
+- `InboxRepairStateMachine`
+- `RestoreInboxRebuildStateMachine`
 
 Each table must list:
 
