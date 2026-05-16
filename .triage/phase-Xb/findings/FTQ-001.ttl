@@ -1,0 +1,239 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-001" ;
+  triage:title "SqliteRuntimeGuard env race — missing env_lock() in install()" ;
+  triage:description "atm-runtime-test-support/src/lib.rs — SqliteRuntimeGuard::install() and Drop impl call set_env_var() and remove_env_var() without acquiring env_lock() first, creating a race when parallel tests share the process environment. Safety invariant violated: set_env_var/remove_env_var assume caller has acquired env_lock()." ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-Xb" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-runtime-test-support/src/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s1/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s2/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s3/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s4/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-001/s5/3> ;
+  triage:openOn <urn:atm:triage:worktree/s1/ae0e20b> ;
+  triage:openOn <urn:atm:triage:worktree/s2/5dd2380> ;
+  triage:openOn <urn:atm:triage:worktree/s3/adc7c4b> ;
+  triage:openOn <urn:atm:triage:worktree/s4/f10c9ec> ;
+  triage:openOn <urn:atm:triage:worktree/s5/5d4c92a> ;
+  triage:promoteTo <urn:atm:triage:worktree/s5/5d4c92a> ;
+  triage:recommendedFix "Acquire env_lock() before calling set_env_var()/remove_env_var() in SqliteRuntimeGuard::install() and Drop impl. Wrap env mutations in a guard structure similar to EnvGuard pattern in atm_core::test_support." .
+
+<urn:atm:triage:occurrence/FTQ-001/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 32 ;
+  triage:snippet "set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/ae0e20b> .
+
+<urn:atm:triage:occurrence/FTQ-001/s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 40 ;
+  triage:snippet "Some(previous) => set_env_var(SQLITE_RUNTIME_PATH_ENV, previous.into_os_string())," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/ae0e20b> .
+
+<urn:atm:triage:occurrence/FTQ-001/s1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 41 ;
+  triage:snippet "None => remove_env_var(SQLITE_RUNTIME_PATH_ENV)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/ae0e20b> .
+
+<urn:atm:triage:occurrence/FTQ-001/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 32 ;
+  triage:snippet "set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:occursIn <urn:atm:triage:worktree/s2/5dd2380> .
+
+<urn:atm:triage:occurrence/FTQ-001/s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 40 ;
+  triage:snippet "Some(previous) => set_env_var(SQLITE_RUNTIME_PATH_ENV, previous.into_os_string())," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:occursIn <urn:atm:triage:worktree/s2/5dd2380> .
+
+<urn:atm:triage:occurrence/FTQ-001/s2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 41 ;
+  triage:snippet "None => remove_env_var(SQLITE_RUNTIME_PATH_ENV)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:occursIn <urn:atm:triage:worktree/s2/5dd2380> .
+
+<urn:atm:triage:occurrence/FTQ-001/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 32 ;
+  triage:snippet "set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/adc7c4b> .
+
+<urn:atm:triage:occurrence/FTQ-001/s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 40 ;
+  triage:snippet "Some(previous) => set_env_var(SQLITE_RUNTIME_PATH_ENV, previous.into_os_string())," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/adc7c4b> .
+
+<urn:atm:triage:occurrence/FTQ-001/s3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 41 ;
+  triage:snippet "None => remove_env_var(SQLITE_RUNTIME_PATH_ENV)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/adc7c4b> .
+
+<urn:atm:triage:occurrence/FTQ-001/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 32 ;
+  triage:snippet "set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/FTQ-001/s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 40 ;
+  triage:snippet "Some(previous) => set_env_var(SQLITE_RUNTIME_PATH_ENV, previous.into_os_string())," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/FTQ-001/s4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 41 ;
+  triage:snippet "None => remove_env_var(SQLITE_RUNTIME_PATH_ENV)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/FTQ-001/s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 32 ;
+  triage:snippet "set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-001/s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 40 ;
+  triage:snippet "Some(previous) => set_env_var(SQLITE_RUNTIME_PATH_ENV, previous.into_os_string())," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-001/s5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-runtime-test-support/src/lib.rs" ;
+  triage:line 41 ;
+  triage:snippet "None => remove_env_var(SQLITE_RUNTIME_PATH_ENV)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:worktree/s1/ae0e20b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s2/5dd2380>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s3/adc7c4b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s4/f10c9ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s5/5d4c92a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:orderIndex 5 .

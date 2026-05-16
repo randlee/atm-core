@@ -1,0 +1,90 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/X2-ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "X2-ATM-QA-004" ;
+  triage:title "reconcile() in boundary_support.rs retains file-backed mailbox remnants via source_files calls" ;
+  triage:description "crates/atm-core/src/boundary_support.rs reconcile() function calls source_files operations (file-backed mailbox remnants). Sprint X.2 targeted command-path simplification to remove file-backed paths, but reconcile() still reaches back into filesystem-backed source_files logic. This is a design regression — the unification work should have removed or replaced these calls with store-backed alternatives." ;
+  triage:category "X2-ATM-QA" ;
+  triage:severity "Important" ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-004/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-004/s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-004/s4/3> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s4/f10c9ec> ;
+  triage:promoteTo <urn:atm:triage:worktree/pXb-s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-004/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 59 ;
+  triage:snippet "let source_files = mailbox::store::load_compat_source_projections(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-004/s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 114 ;
+  triage:snippet "pub fn export_source_files(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-004/s4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 123 ;
+  triage:snippet "mailbox::store::write_compat_source_projections(&source_files)?;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/f10c9ec> .
+
+<urn:atm:triage:worktree/pXb-s1/71511a4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pXb-s2/f3bd5f5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "f3bd5f5" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pXb-s3/d287149>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "d287149" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pXb-s4/f10c9ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate/1acc5f0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Xb" ;
+  triage:headSha "1acc5f0" ;
+  triage:orderIndex 6 .

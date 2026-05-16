@@ -9,17 +9,39 @@ target: develop
 
 # Sprint X.0 — Pre-Phase Lint Gates
 
+## Modification
+
+- `X.0` is inherited complete on the restart line.
+- No new `pXb` worktree is required because the prerequisite is already merged
+  into `develop`, which is the base of `integrate/phase-Xb`.
+- Authoritative inherited branch/worktree:
+  - `feature/pX-lint-gates`
+  - `/Users/randlee/Documents/github/atm-core-worktrees/feature/pX-lint-gates`
+- Inherited completion source:
+  - `8499fcd4eb513e4da6a7cb6b032e04513a7095c4`
+- QA on `phase-Xb` treats this sprint as already live baseline and does not
+  reopen it as partial scope.
+
+## Remaining Restart Work
+
+- none
+- treat `X.0` as a satisfied prerequisite on the restart line
+- later sprint QA should only verify the inherited lint gates remain active
+- include an explicit gate-liveness check during later QA:
+  - `scripts/check-silent-emit.py`
+  - `scripts/check-function-length.py`
+
 ## Goal
 
 - land the shared lint gates that must already be active before any
-  `integrate/phase-X` sprint branch is created
+  `integrate/phase-Xb` sprint branch is created
 - make silent-emit and RULE-002 regressions fail from the first push on every
   Phase `X` implementation branch
 
 ## Hard Dependencies
 
 - `integrate/phase-W` remains the code baseline for the new guard behavior
-- this sprint lands on `develop`, not `integrate/phase-X`
+- this sprint lands on `develop`, not `integrate/phase-Xb`
 - `X.1` through `X.5` must not start until this sprint is merged
 
 ## Exact Targets
@@ -56,12 +78,12 @@ target: develop
 
 - the silent-emit gate is runnable through the normal lint entrypoint
 - the RULE-002 gate is runnable through the normal lint entrypoint
-- both gates run on `develop` before `integrate/phase-X` is created
+- both gates run on `develop` before `integrate/phase-Xb` is created
 - silent `let _ = ...emit(...)` discards fail immediately in non-test Rust
 - unchanged pre-existing `80+` RULE-002 violations do not block the pre-phase
   gate, but any new diff-overlapping `80+` violation fails
 - Phase `X` planning docs treat these gates as pre-phase prerequisites, not
-  internal `integrate/phase-X` sprint work
+  internal `integrate/phase-Xb` sprint work
 
 ## Required Validation
 

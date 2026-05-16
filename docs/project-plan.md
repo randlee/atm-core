@@ -3144,13 +3144,19 @@ Acceptance:
 - each sprint has explicit hard dependencies, required work, acceptance
   criteria, and required validation
 
-## 28. Phase X SQLite SSOT And Daemon Boundary Simplification
+## 28. Phase Xb SQLite SSOT And Daemon Boundary Simplification Restart
 
+<<<<<<< HEAD
 Planning branch:
 - `feature/pXb-s0-planning`
+=======
+Planning input:
+- legacy planning branch: `feature/pX-s0-planning`
+- restart execution branch: `integrate/phase-Xb`
+>>>>>>> feature/pXb-s3-runtime-truth-unification
 
 Base branch:
-- `integrate/phase-W`
+- `develop`
 
 Integration branch:
 - `integrate/phase-Xb`
@@ -3163,9 +3169,18 @@ Goal:
 - add the guardrails needed to catch legacy-path regressions and stale code
   earlier in development
 
+Restart note:
+- the original `integrate/phase-X` line is abandoned as the authoritative phase
+  branch
+- `Xb` sprint branches replay audited prior Phase `X` work onto a clean
+  `develop`-based integration line
+- prior implementation completion exists for much of `X.1` through `X.5`, but
+  QA must still validate each restarted sprint end to end after any cherry-pick
+  or selective reapplication
+
 Pre-phase prerequisite:
-- before `integrate/phase-Xb` starts, a standalone develop-targeting PR
-  (for example `feature/pX-lint-gates`) must land the shared:
+- already satisfied on `develop` before `integrate/phase-Xb` starts via
+  `feature/pX-lint-gates`:
   - silent-emit regression gate
   - RULE-002 function-length gate
 - those guards must already be live on every Phase `X` sprint branch from the
@@ -3173,14 +3188,18 @@ Pre-phase prerequisite:
 
 Execution shape:
 - pre-phase prerequisite:
-  - standalone develop-targeting lint-gate PR before `integrate/phase-Xb`
-- `X.1` mailbox runtime cutover and dual-mode surface deletion
-- `X.2` command-path simplification and legacy mailbox path deletion
-- `X.3` daemon runtime truth unification and runtime-status-cache refactor
+  - inherited `X.0` lint-gate baseline already live before `integrate/phase-Xb`
+- `X.1` mailbox runtime cutover and dual-mode surface deletion on
+  `feature/pXb-s1-mailbox-runtime-cutover`
+- `X.2` command-path simplification and legacy mailbox path deletion on
+  `feature/pXb-s2-command-path-simplification`
+- `X.3` daemon runtime truth unification and runtime-status-cache refactor on
+  `feature/pXb-s3-runtime-truth-unification`
 - `X.4` replay-persistence startup contract, peer-transport decomposition, and
-  same-host helper deduplication
+  same-host helper deduplication on
+  `feature/pXb-s4-replay-and-ipc-consolidation`
 - `X.5` systemic guardrails, dependency-ownership validation, and closeout
-  verification
+  verification on `feature/pXb-s5-guardrails-and-closeout`
 
 Execution rules:
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
@@ -3195,6 +3214,8 @@ Execution rules:
   contradict each other
 - deletion sprints must include explicit whole-workspace searches for removed
   legacy constructs, not only touched-file verification
+- sprint replay from prior Phase `X` commits is allowed only after audit and
+  does not reduce QA scope; QA runs on the full restarted sprint branch
 
 Acceptance:
 - every live legacy mailbox/runtime path named in `docs/phase-X/plan-phase-X.md`
@@ -3211,22 +3232,17 @@ Acceptance:
   reuse and the current `main` CLI baseline it must preserve
 - duplicate interface-specific error/reporting implementations for the same
   touched failure class are marked for consolidation rather than preservation
-- no Phase W scope item relies on an implicit discovery sprint
-- Phase `W` closes only when shared CLI / graft / peer ATM error-code parity
-  and shared `atm doctor` diagnostics are revalidated on `integrate/phase-W`
-- the Phase `W` closeout gate in `docs/plan-phase-W.md` remains authoritative
-  for final merged-state certification
 
-## 28. Phase X Planning And Pre-Phase Lint Prerequisite
+## 29. Phase Xb Planning And Pre-Phase Lint Prerequisite
 
-Planning branch:
-- `feature/pXb-s0-planning`
+Planning input:
+- legacy planning branch: `feature/pX-s0-planning`
 
 Pre-phase prerequisite branch:
 - `feature/pX-lint-gates`
 
 Base branch:
-- `integrate/phase-W`
+- `develop`
 
 Integration branch:
 - `integrate/phase-Xb`
@@ -3255,17 +3271,24 @@ Status note:
   - scope: removed filesystem team discovery from daemon runtime hydration,
     added explicit `RosterStore` team enumeration, and aligned core/daemon
     boundary docs with store-owned team/member runtime truth
+- `X.4` and `X.5` remain replayed on their `pXb` sprint branches pending
+  final closeout and integration
 
 Execution shape:
 - pre-phase prerequisite:
-  - `X.0` shared lint gates on `develop` before `integrate/phase-Xb` starts
-- `X.1` mailbox runtime cutover and dual-mode surface deletion
-- `X.2` command-path simplification and legacy mailbox path deletion
-- `X.3` daemon runtime truth unification and runtime-status-cache refactor
+  - `X.0` shared lint gates already live on `develop` before
+  `integrate/phase-Xb` starts
+- `X.1` mailbox runtime cutover and dual-mode surface deletion on
+  `feature/pXb-s1-mailbox-runtime-cutover`
+- `X.2` command-path simplification and legacy mailbox path deletion on
+  `feature/pXb-s2-command-path-simplification`
+- `X.3` daemon runtime truth unification and runtime-status-cache refactor on
+  `feature/pXb-s3-runtime-truth-unification`
 - `X.4` replay-persistence startup contract, peer-transport decomposition, and
-  same-host helper deduplication
+  same-host helper deduplication on
+  `feature/pXb-s4-replay-and-ipc-consolidation`
 - `X.5` systemic guardrails, dependency-ownership validation, and closeout
-  verification
+  verification on `feature/pXb-s5-guardrails-and-closeout`
 
 Execution rules:
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
@@ -3277,5 +3300,7 @@ Execution rules:
 - Phase `X` closes only when the legacy mailbox/runtime deletion gates,
   same-host helper deduplication, and daemon SQLite-runtime truth rules are
   revalidated on `integrate/phase-Xb`
+- cherry-picked or selectively replayed prior Phase `X` work does not narrow
+  QA scope; each restarted sprint must pass QA as a full sprint
 - `docs/phase-X/plan-phase-X.md` remains the authoritative execution plan for
   the Phase `X` sprint line
