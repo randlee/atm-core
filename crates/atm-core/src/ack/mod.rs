@@ -202,12 +202,9 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
             )
         })?;
 
-    match (
-        state::derive_read_state(&source_record.envelope),
-        state::derive_ack_state(&source_record.envelope),
-    ) {
-        (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
-        (_, crate::types::AckState::Acknowledged) => {
+    match state::derive_ack_state(&source_record.envelope) {
+        crate::types::AckState::PendingAck => {}
+        crate::types::AckState::Acknowledged => {
             return Err(AtmError::validation(format!(
                 "message {} is already acknowledged",
                 request.message_id
@@ -216,9 +213,9 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
                 "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
             ));
         }
-        _ => {
+        crate::types::AckState::NoAckRequired => {
             return Err(AtmError::validation(format!(
-                "message {} is not in the (read, pending_ack) state",
+                "message {} is not pending acknowledgement",
                 request.message_id
             ))
             .with_recovery(

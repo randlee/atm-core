@@ -4,6 +4,8 @@ use atm_core::observability::{
     ObservabilityPort,
 };
 use atm_core::types::{AgentName, TeamName};
+
+use crate::constants::ATM_SERVICE_NAME;
 /// Structured CLI-owned observability construction options.
 ///
 /// L.5 intentionally keeps the release surface narrow: one explicit
@@ -67,7 +69,7 @@ impl CliObservability {
         };
         let agent = identity.parse().unwrap_or(fallback_agent);
         if let Err(emit_error) = self.emit(CommandEvent {
-            command: "atm",
+            command: ATM_SERVICE_NAME,
             action: stage,
             outcome: "error",
             team: team.parse().unwrap_or(fallback_team),
