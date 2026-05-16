@@ -1,0 +1,152 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-002>
+  a triage:Finding ;
+  triage:findingId "FTQ-002" ;
+  triage:title "Busy-spin yield_now in mailbox locking + partial-write panic instead of retry" ;
+  triage:description "crates/atm-core/tests/mailbox_locking.rs — uses yield_now() in tight loops with no backoff. Partial-write scenario causes panic instead of retry. Fix: replace yield_now loop with thread::sleep(Duration::from_millis(5)) + bounded retry count; convert partial-write panic to recoverable error." ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/tests/" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:highestFixedBranch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:promoteTo <urn:atm:triage:worktree/s3/adc7c4b> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/s3/2> ;
+  triage:openOn <urn:atm:triage:worktree/s1/ae0e20b> ;
+  triage:openOn <urn:atm:triage:worktree/s2/5dd2380> ;
+  triage:openOn <urn:atm:triage:worktree/s3/adc7c4b> ;
+  triage:fixedOn <urn:atm:triage:worktree/s4/f10c9ec> ;
+  triage:fixedOn <urn:atm:triage:worktree/s5/5d4c92a> ;
+  triage:absenceOn <urn:atm:triage:worktree/integrate/b1e70b6> .
+
+<urn:atm:triage:occurrence/FTQ-002/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 990 ;
+  triage:snippet "thread::yield_now();" ;
+  triage:context "wait_for_missing_config_notice loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/ae0e20b> .
+
+<urn:atm:triage:occurrence/FTQ-002/s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1020 ;
+  triage:snippet "thread::yield_now();" ;
+  triage:context "wait_for_workflow_state_for_message loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/ae0e20b> .
+
+<urn:atm:triage:occurrence/FTQ-002/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 990 ;
+  triage:snippet "thread::yield_now();" ;
+  triage:context "wait_for_missing_config_notice loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:occursIn <urn:atm:triage:worktree/s2/5dd2380> .
+
+<urn:atm:triage:occurrence/FTQ-002/s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1020 ;
+  triage:snippet "thread::yield_now();" ;
+  triage:context "wait_for_workflow_state_for_message loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:occursIn <urn:atm:triage:worktree/s2/5dd2380> .
+
+<urn:atm:triage:occurrence/FTQ-002/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 990 ;
+  triage:snippet "thread::yield_now();" ;
+  triage:context "wait_for_missing_config_notice loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/adc7c4b> .
+
+<urn:atm:triage:occurrence/FTQ-002/s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1020 ;
+  triage:snippet "thread::yield_now();" ;
+  triage:context "wait_for_workflow_state_for_message loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/adc7c4b> .
+
+<urn:atm:triage:worktree/s1/ae0e20b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/s2/5dd2380>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:orderIndex 2 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/s3/adc7c4b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:orderIndex 3 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/s4/f10c9ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:orderIndex 4 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/s5/5d4c92a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:orderIndex 5 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/integrate/b1e70b6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Xb" ;
+  triage:headSha "b1e70b6" ;
+  triage:orderIndex 6 ;
+  triage:status "absent" .

@@ -4,7 +4,7 @@ title: Mailbox Runtime Cutover
 status: complete
 branch: feature/pXb-s1-mailbox-runtime-cutover
 worktree: ../atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover
-target: integrate/phase-X
+target: integrate/phase-Xb
 ---
 
 # Sprint X.1 — Mailbox Runtime Cutover
@@ -17,7 +17,7 @@ target: integrate/phase-X
 ## Hard Dependencies
 
 - `X.0` merged on `develop`
-- `integrate/phase-X` created from a validated `integrate/phase-W`
+- `integrate/phase-Xb` created from a validated `develop` restart baseline
 - no fallback path may be preserved for later cleanup once this sprint starts
 
 ## Exact Targets
