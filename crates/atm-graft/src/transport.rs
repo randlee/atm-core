@@ -28,13 +28,16 @@ impl GraftLocalIpcClientTransport {
         Self { endpoint }
     }
 
-    pub(crate) fn try_connect(&self) -> Result<LocalSocketStream, AtmError> {
+    pub(crate) fn probe_connection(&self) -> Result<LocalSocketStream, AtmError> {
         daemon_try_connect(&self.endpoint)
     }
 
     /// This function performs blocking IPC I/O. Callers in async contexts must
     /// wrap this in `tokio::task::spawn_blocking`.
-    pub(crate) fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    pub(crate) fn round_trip(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, AtmError> {
         daemon_exchange(&self.endpoint, request, SAME_HOST_REQUEST_DEADLINE)
     }
 
@@ -42,7 +45,7 @@ impl GraftLocalIpcClientTransport {
         &self,
         request: atm_core::graft::AdvisoryStreamRequest,
     ) -> Result<ActiveAdvisoryStream, AtmError> {
-        let mut stream = self.try_connect()?;
+        let mut stream = self.probe_connection()?;
         stream
             .set_send_timeout(Some(SAME_HOST_REQUEST_DEADLINE))
             .map_err(|source| {
@@ -89,6 +92,6 @@ impl boundary::sealed::Sealed for GraftLocalIpcClientTransport {}
 
 impl ClientTransport for GraftLocalIpcClientTransport {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        self.exchange(request)
+        self.round_trip(request)
     }
 }

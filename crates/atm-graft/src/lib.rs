@@ -188,28 +188,11 @@ impl fmt::Debug for GraftClient {
 }
 
 impl GraftClient {
-    const DEFAULT_CONNECT_POLL_INTERVAL: Duration = Duration::from_millis(25);
-
     /// # Errors
     ///
     /// Returns [`AtmError`] when the daemon endpoint or daemon binary cannot
     /// be resolved or the same-host daemon cannot be reached or started.
     pub fn connect() -> Result<Self, AtmError> {
-        Self::connect_with_timeout(
-            atm_daemon_client::AUTO_START_PUBLISH_TIMEOUT,
-            Self::DEFAULT_CONNECT_POLL_INTERVAL,
-        )
-    }
-
-    /// # Errors
-    ///
-    /// Returns [`AtmError`] when the daemon endpoint or daemon binary cannot
-    /// be resolved or the same-host daemon cannot be reached or started within
-    /// the supplied publish budget.
-    pub fn connect_with_timeout(
-        publish_timeout: Duration,
-        poll_interval: Duration,
-    ) -> Result<Self, AtmError> {
         let endpoint = resolve_daemon_local_ipc_endpoint()?;
         let daemon_bin = resolve_daemon_bin("graft host")?;
         let advisory_transport = Arc::new(GraftLocalIpcClientTransport::new(endpoint.clone()));
@@ -225,12 +208,9 @@ impl GraftClient {
             parse_bootstrap_team()?,
             parse_bootstrap_agent()?,
         );
-        supervisor.ensure_daemon_available_with_timeout_and_traceability(
-            || advisory_transport.try_connect().map(|_| ()),
-            publish_timeout,
-            poll_interval,
-            &traceability,
-        )?;
+        supervisor.ensure_daemon_available_with_traceability(&traceability, || {
+            advisory_transport.probe_connection().map(|_| ())
+        })?;
         Ok(Self {
             transport,
             advisory_transport: Some(advisory_transport),
@@ -620,18 +600,7 @@ impl Drop for GraftSession {
         // Drop-triggered teardown emits AdvisorySessionState::Closed, identical to explicit close().
         // Merged observable state is accepted by design: callers that need to distinguish
         // drop-driven shutdown from user-directed shutdown should call close() explicitly.
-        if let Err(error) = self.close_internal() {
-            let session_id = self
-                .snapshot()
-                .map(|snapshot| snapshot.session_id.to_string())
-                .unwrap_or_else(|snapshot_error| format!("unavailable:{snapshot_error}"));
-            tracing::warn!(
-                session_id,
-                error_code = %error.code,
-                error_message = %error.message,
-                "graft session drop cleanup failed"
-            );
-        }
+        let _ = self.close_internal();
     }
 }
 

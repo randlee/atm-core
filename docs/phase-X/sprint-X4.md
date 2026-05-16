@@ -1,9 +1,9 @@
 ---
 id: X.4
-title: Replay Contract And IPC Helper Consolidation
-status: planned
+title: Sprint X.4 — Replay Persistence Contract, Peer Transport, And Same-Host IPC Helpers
+status: complete
 branch: feature/pXb-s4-replay-and-ipc-consolidation
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation
+worktree: ../atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation
 target: integrate/phase-Xb
 ---
 
@@ -25,13 +25,13 @@ target: integrate/phase-Xb
 
 ## Remaining Restart Work
 
-- replay or selectively re-implement the audited `df124a8...` and
-  `3f8338b...` changes onto `feature/pXb-s4-replay-and-ipc-consolidation`
-- reconcile any restart-line drift in replay-contract enforcement, peer
-  transport decomposition, and same-host helper ownership
-- confirm the restarted branch satisfies every `X.4` transport, replay, and
-  parity acceptance criterion on the new line
-- run full `X.4` QA on `pXb-s4`
+- none for core sprint scope; `feature/pXb-s4-replay-and-ipc-consolidation`
+  is the replayed `X.4` baseline
+- only between-sprint finding fixes remain when new `X.4` findings are
+  promoted to this branch
+- defer later-phase closeout items such as `FTQ-006`, `RBP-F005`, and
+  `ATM-QA-S4-001` only when they are explicitly promoted to `X.5`
+- run full `X.4` QA on `pXb-s4` after each promoted finding fix
 
 ## Goal
 
@@ -65,6 +65,13 @@ target: integrate/phase-Xb
 - `docs/atm-daemon-client/boundaries.md`
 - `boundaries/atm-daemon-client/daemon-bootstrap.toml`
 
+Exact-target disposition:
+- `crates/atm/src/composition.rs`, `crates/atm-graft/src/lib.rs`,
+  `crates/atm-graft/src/runtime.rs`, and `crates/atm-graft/src/transport.rs`
+  remain unchanged on `pXb-s4` because the replayed branch already collapsed
+  same-host helper ownership into `atm-daemon-client`; this sprint now treats
+  them as QA parity witnesses rather than fresh edit targets
+
 ## Required Work
 
 - document the replay-store startup contract as either fail-closed or explicitly
@@ -95,6 +102,49 @@ target: integrate/phase-Xb
   unexpected-response behavior
 - peer transport preserves the shared ATM error/recovery contract after
   `send_to_endpoint(...)` and `send_once(...)` refactor
+
+## Delivered
+
+- documented replay persistence startup as a fail-closed daemon dependency in:
+  - `docs/requirements.md`
+  - `docs/architecture.md`
+  - `docs/atm-daemon/requirements.md`
+  - `docs/atm-daemon/architecture.md`
+- changed daemon composition to fail startup when the replay store cannot be
+  assembled, instead of degrading to `replay_store = None`
+- added direct coverage for the fail-closed replay-store startup contract in
+  `crates/atm-daemon/src/composition.rs` tests
+- refactored `send_to_endpoint(...)` to `43` lines and `send_once(...)` to
+  `19` lines while preserving the shared peer-transport ATM error and recovery
+  contract
+- collapsed same-host helper ownership so the only remaining
+  `try_connect(...)`, `exchange(...)`, and `unexpected_response(...)`
+  definitions live in `crates/atm-daemon-client/src/lib.rs`
+- updated CLI and graft same-host client wrappers to call the shared
+  daemon-client helper line without keeping duplicate helper definitions
+- `crates/atm/src/composition.rs`, `crates/atm-graft/src/lib.rs`,
+  `crates/atm-graft/src/runtime.rs`, and `crates/atm-graft/src/transport.rs`
+  remain unchanged on `pXb-s4` because the replayed branch already collapsed
+  same-host helper ownership into `atm-daemon-client`; this sprint treats them
+  as QA parity witnesses rather than fresh edit targets
+- moved peer transport retry-budget resolution up into daemon composition via
+  `ConfigIngress` so the runtime no longer self-loads workspace config or
+  silently defaults the retry budget after a config-load failure
+- cached the shared lifecycle terminate flag behind one install path so remote
+  delivery retries no longer reinstall lifecycle-control hooks on each request
+- tightened daemon ingress/export error visibility with boundary-local context
+  on workspace config load, team config load, inbox source import, source
+  projection export, and mailbox projection rewrite failures
+- renamed the hidden mailbox projection loader to `load_source_projections(...)`
+  so the replayed daemon ingress seam no longer advertises the pre-cutover
+  compatibility load verb
+
+Implementation result:
+- the X.4 acceptance criteria are satisfied on
+  `feature/pXb-s4-replay-and-ipc-consolidation`
+- the machine-readable and prose daemon-client boundary contracts already
+  matched the intended helper ownership on this branch baseline, so no extra
+  boundary-doc delta was required in this sprint
 
 ## Required Validation
 

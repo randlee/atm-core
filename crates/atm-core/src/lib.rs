@@ -12,6 +12,9 @@ pub mod boundary_support;
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.
 pub(crate) mod config;
+/// Hidden daemon-facing wrapper surface over crate-private boundary helpers.
+#[doc(hidden)]
+pub mod direct_boundaries;
 /// Doctor-report types and health checks for the CLI surface.
 pub mod doctor;
 /// Shared ATM error types and recovery-oriented error helpers.

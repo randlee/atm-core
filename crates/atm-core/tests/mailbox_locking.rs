@@ -2,6 +2,8 @@ use std::fs;
 #[cfg(unix)]
 use std::fs::OpenOptions;
 use std::sync::{Arc, Barrier, mpsc};
+#[cfg(unix)]
+use std::sync::{Mutex, OnceLock};
 use std::thread;
 use std::time::Duration;
 use std::time::Instant;
@@ -18,11 +20,11 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 #[cfg(unix)]
 use atm_core::test_support::EnvGuard;
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
+#[cfg(unix)]
+use atm_runtime_test_support::hold_sqlite_writer_lock;
 use atm_runtime_test_support::{
     SqliteRuntimeGuard, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
 };
-#[cfg(unix)]
-use atm_runtime_test_support::hold_sqlite_writer_lock;
 use chrono::Utc;
 #[cfg(unix)]
 use fs2::FileExt;
@@ -605,6 +607,7 @@ fn multi_source_read_and_clear_complete_without_deadlock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_times_out_under_bounded_lock_contention() {
+    let _env_lock = env_lock().lock().expect("env lock");
     let _timeout = EnvGuard::set_raw("ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS", "100");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -629,6 +632,7 @@ fn send_times_out_under_bounded_lock_contention() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_dry_run_does_not_wait_on_mailbox_lock() {
+    let _env_lock = env_lock().lock().expect("env lock");
     let fixture = Fixture::new();
     let observability = NullObservability;
     fixture.write_primary_inbox(
@@ -666,6 +670,7 @@ fn clear_dry_run_does_not_wait_on_mailbox_lock() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
+    let _env_lock = env_lock().lock().expect("env lock");
     let observability = NullObservability;
 
     let mutation_fixture = Fixture::new();
@@ -800,6 +805,7 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
+    let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -835,6 +841,7 @@ fn clear_ignores_synthetic_source_discovery_fault_in_store_only_mode() {
 #[cfg(unix)]
 #[serial_test::serial(env)]
 fn send_reports_non_contention_lock_failures_without_timeout() {
+    let _env_lock = env_lock().lock().expect("env lock");
     let _fault = EnvGuard::set_raw("ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR", "1");
     let fixture = Fixture::new();
     let observability = NullObservability;
@@ -856,6 +863,20 @@ fn send_reports_non_contention_lock_failures_without_timeout() {
 enum CommandOp {
     Read(ReadQuery, Arc<NullObservability>),
     Clear(ClearQuery, Arc<NullObservability>),
+}
+
+// Serializes process-environment mutation inside this test module. This is
+// process-local only; it does not coordinate with other test processes.
+#[cfg(unix)]
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    // These tests mutate the process-global `ATM_TEST_MAILBOX_LOCK_TIMEOUT_MS`,
+    // `ATM_TEST_FORCE_SOURCE_DISCOVERY_FAULT`, and
+    // `ATM_TEST_FORCE_LOCK_NON_CONTENTION_ERROR` knobs while exercising
+    // mailbox lock behavior. Keep a single process-wide mutex in addition to
+    // `#[serial]` so a poisoned lock fails the suite closed instead of silently
+    // continuing with inconsistent shared state.
+    LOCK.get_or_init(|| Mutex::new(()))
 }
 
 struct Fixture {
@@ -1180,9 +1201,10 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
 }
 
 fn message_workflow_key(message: &MessageEnvelope) -> String {
-    atm_core::boundary::MessageKey::new(format!("atm:{}", message.message_id.expect("message id")))
-        .expect("message key")
-        .to_string()
+    message
+        .message_id
+        .map(|message_id| format!("atm:{message_id}"))
+        .expect("message id")
 }
 
 fn read_jsonl(path: std::path::PathBuf) -> Vec<MessageEnvelope> {

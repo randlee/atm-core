@@ -1,5 +1,4 @@
 use atm_core::error::AtmError;
-use serial_test::serial;
 
 use crate::{
     DaemonExitCode, daemon_exit_code_for_error, lifecycle_control::LifecycleControlSourceAdapter,
@@ -18,7 +17,7 @@ fn daemon_shutdown_signals_for_test_are_isolated() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn daemon_shutdown_signal_install_reuses_shared_flags() {
     let first = LifecycleControlSourceAdapter::install().expect("install first");
     let _reset = LifecycleFlagResetGuard::install(first.clone());

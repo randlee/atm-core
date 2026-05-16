@@ -4,7 +4,6 @@ use std::sync::mpsc;
 use std::time::Duration;
 
 use atm_core::error_codes::AtmErrorCode;
-use serial_test::serial;
 use tempfile::TempDir;
 
 use crate::host_ownership::{
@@ -68,7 +67,7 @@ fn singleton_guard_is_host_wide_across_different_socket_paths() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn singleton_guard_reports_stale_owner_record_failure() {
     let tempdir = TempDir::new().expect("tempdir");
     let lock_path = atm_core::home::host_runtime_lock_path_from_home(
@@ -94,7 +93,7 @@ fn singleton_guard_reports_stale_owner_record_failure() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
     let tempdir = TempDir::new().expect("tempdir");
     let lock_path = atm_core::home::host_runtime_lock_path_from_home(
@@ -122,7 +121,7 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
     let tempdir = TempDir::new().expect("tempdir");
     let lock_path = atm_core::home::host_runtime_lock_path_from_home(

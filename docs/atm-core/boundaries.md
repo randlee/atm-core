@@ -39,6 +39,9 @@ Notes:
     canonical daemon-owned member-liveness DTO family added in `R.15`
   - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
     `atm doctor`
+- `atm-runtime-test-support` is an allowed workspace-local dependent for the
+  retained-runtime test harness seam; it is not a production consumer
+  boundary.
 
 ## ClientTransport
 

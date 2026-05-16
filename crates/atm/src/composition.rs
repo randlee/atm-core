@@ -33,10 +33,7 @@ use atm_daemon_client::{
 #[cfg(test)]
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
 #[cfg(test)]
-use atm_runtime_test_support::{
-    SqliteRuntimeGuard, install_sqlite_retained_runtime_factory as install_test_runtime_factory,
-    open_sqlite_boundary,
-};
+use atm_runtime_test_support::install_sqlite_retained_runtime_factory as install_test_runtime_factory;
 
 use crate::observability::CliObservability;
 
@@ -87,13 +84,13 @@ impl LocalIpcClientTransportAdapter {
         Self { endpoint }
     }
 
-    fn try_connect(&self) -> Result<interprocess::local_socket::Stream, AtmError> {
+    fn probe_connection(&self) -> Result<interprocess::local_socket::Stream, AtmError> {
         daemon_try_connect(&self.endpoint)
     }
 
     /// This function performs blocking IPC I/O. Callers in async contexts must
     /// wrap this in `tokio::task::spawn_blocking`.
-    fn exchange(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
+    fn round_trip(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
         daemon_exchange(&self.endpoint, request, SAME_HOST_REQUEST_DEADLINE)
     }
 }
@@ -102,7 +99,7 @@ impl boundary::sealed::Sealed for LocalIpcClientTransportAdapter {}
 
 impl ClientTransport for LocalIpcClientTransportAdapter {
     fn send(&self, request: RequestEnvelope) -> Result<ResponseEnvelope, AtmError> {
-        self.exchange(request)
+        self.round_trip(request)
     }
 }
 
@@ -369,7 +366,7 @@ impl<'a> CliComposition<'a> {
             parse_bootstrap_agent()?,
         );
         supervisor.ensure_daemon_available_with_traceability(&traceability, || {
-            transport.try_connect().map(|_| ())
+            transport.probe_connection().map(|_| ())
         })?;
         let mut composition = Self::from_transport(transport, observability);
         composition.bootstrap_trace = Some(traceability.snapshot());
@@ -471,42 +468,46 @@ mod tests {
     use atm_core::types::{AckActivationMode, ReadSelection};
     use atm_core::types::{AgentName, TeamName};
     use atm_daemon_client::DaemonBinaryPath;
+    use atm_runtime_test_support::{
+        SqliteRuntimeGuard,
+        install_sqlite_retained_runtime_factory as install_test_runtime_factory,
+        open_sqlite_boundary,
+    };
     use chrono::Utc;
     use serde_json::Value;
-    use serial_test::serial;
     use tempfile::TempDir;
 
     use super::{
         CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
-        LaunchGateGuard, LocalIpcClientTransportAdapter, SqliteRuntimeGuard, open_sqlite_boundary,
+        LaunchGateGuard, LocalIpcClientTransportAdapter,
     };
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
         _tempdir: TempDir,
         _env_guard: EnvGuard,
-        _runtime_guard: SqliteRuntimeGuard,
+        _sqlite_guard: SqliteRuntimeGuard,
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     }
 
     impl LoopbackFixture {
         fn new(recipient: &str) -> Self {
-            super::install_retained_runtime_factory();
+            install_test_runtime_factory();
             let tempdir = tempfile::tempdir().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
-            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
-            let runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path);
             let env_guard = EnvGuard::set_many([(
                 "ATM_HOME",
                 Some(home_dir.to_str().expect("utf-8 tempdir path")),
             )]);
             let current_dir = tempdir.path().join("cwd");
             fs::create_dir_all(&current_dir).expect("cwd");
+            let sqlite_guard =
+                SqliteRuntimeGuard::install(home_dir.join("runtime").join("mail.sqlite3"));
             let fixture = Self {
                 _tempdir: tempdir,
                 _env_guard: env_guard,
-                _runtime_guard: runtime_guard,
+                _sqlite_guard: sqlite_guard,
                 home_dir,
                 current_dir,
             };
@@ -780,7 +781,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
     fn loopback_transport_send_persists_inbox_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let transport_observability = Arc::new(atm_core::observability::NullObservability);
@@ -803,7 +803,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
     fn loopback_transport_missing_config_notice_retains_at_most_one_team_lead_message_under_concurrency()
      {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
@@ -853,7 +852,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
     fn loopback_transport_send_preserves_ack_and_task_metadata_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let composition_observability = CliObservability::fallback();
@@ -888,7 +886,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
     fn loopback_transport_read_surfaces_messages_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("read me", false)]);
@@ -913,7 +910,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
     fn loopback_transport_clear_removes_read_messages_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         fixture.write_inbox_messages(TEST_RECIPIENT, &[fixture.message("done", true)]);
@@ -938,7 +934,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
     fn loopback_transport_doctor_reports_health_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let observability = Arc::new(HealthyObservability);
@@ -957,7 +952,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
     fn doctor_projects_bootstrap_trace_into_report() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let observability = Arc::new(HealthyObservability);
@@ -1019,7 +1013,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
     fn loopback_transport_ack_appends_reply_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let (message_id, pending_ack) = fixture.pending_ack_message("please ack");
@@ -1056,7 +1049,6 @@ mod tests {
     }
 
     #[test]
-    #[serial(env)]
     fn cli_composition_supports_graft_client_surface_without_daemon() {
         let fixture = LoopbackFixture::new(TEST_RECIPIENT);
         let composition_observability = CliObservability::fallback();
@@ -1206,7 +1198,7 @@ mod tests {
 
         let error = supervisor
             .ensure_daemon_available_with_lock_path(
-                || transport.try_connect().map(|_| ()),
+                || transport.probe_connection().map(|_| ()),
                 Duration::from_millis(0),
                 Duration::from_millis(0),
                 launch_lock_path,
@@ -1252,7 +1244,7 @@ mod tests {
 
         let error = supervisor
             .ensure_daemon_available_with_lock_path(
-                || transport.try_connect().map(|_| ()),
+                || transport.probe_connection().map(|_| ()),
                 Duration::from_millis(10),
                 Duration::from_millis(0),
                 launch_lock_path,

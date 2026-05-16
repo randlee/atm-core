@@ -3181,6 +3181,17 @@ Status note:
   - target: `integrate/phase-Xb`
   - scope: mailbox runtime cutover and dual-mode retained-runtime surface
     deletion
+- `X.2` complete on `feature/pXb-s2-command-path-simplification`
+  - target: `integrate/phase-Xb`
+  - scope: command-path simplification and legacy mailbox path deletion
+- `X.3` complete on `feature/pXb-s3-runtime-truth-unification`
+  - target: `integrate/phase-Xb`
+  - scope: daemon runtime truth unification and runtime-status-cache refactor
+- `X.4` complete on `feature/pXb-s4-replay-and-ipc-consolidation`
+  - target: `integrate/phase-Xb`
+  - scope: replay-persistence startup contract, peer-transport decomposition,
+    same-host helper deduplication, and follow-up boundary/error-visibility
+    cleanup
 
 Pre-phase prerequisite:
 - already satisfied on `develop` before `integrate/phase-Xb` starts via
@@ -3204,6 +3215,43 @@ Execution shape:
   `feature/pXb-s4-replay-and-ipc-consolidation`
 - `X.5` systemic guardrails, dependency-ownership validation, and closeout
   verification on `feature/pXb-s5-guardrails-and-closeout`
+
+#### Sprint X.4 — Replay Persistence Contract, Peer Transport, And Same-Host IPC Helpers
+
+Branch:
+- `feature/pXb-s4-replay-and-ipc-consolidation`
+
+PR:
+- `#290`
+
+Status:
+- complete
+
+Deliverables:
+- fail-closed replay-store startup contract documented and enforced in daemon
+  composition
+- peer-transport helper decomposition with the shared ATM error and recovery
+  contract preserved
+- same-host helper ownership consolidated into `atm-daemon-client`
+- CLI and graft same-host wrappers aligned to the shared daemon-client helper
+  line
+- daemon ingress/export error visibility tightened around config load, source
+  import, and source/mailbox projection rewrites
+- machine-readable and prose daemon-client boundary records aligned with the
+  replayed helper ownership
+
+Acceptance criteria:
+- one replay-persistence startup contract is documented in product and
+  daemon-local docs
+- daemon startup behavior in `composition.rs` matches the documented contract
+- `send_to_endpoint(...)` is under `80` lines
+- `send_once(...)` is under `80` lines
+- `rg -n "fn try_connect\\(|fn exchange\\(|fn unexpected_response\\(" crates/atm crates/atm-graft crates/atm-daemon-client`
+  finds one shared helper definition per helper name
+- CLI and graft same-host paths share the same daemon-unavailable and
+  unexpected-response behavior
+- peer transport preserves the shared ATM error and recovery contract after the
+  `send_to_endpoint(...)` and `send_once(...)` refactor
 
 Execution rules:
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
@@ -3275,7 +3323,12 @@ Status note:
   - scope: removed filesystem team discovery from daemon runtime hydration,
     added explicit `RosterStore` team enumeration, and aligned core/daemon
     boundary docs with store-owned team/member runtime truth
-- `X.4` and `X.5` remain replayed on their `pXb` sprint branches pending
+- `X.4` complete on `feature/pXb-s4-replay-and-ipc-consolidation`
+  - target: `integrate/phase-Xb`
+  - scope: fail-closed replay startup, peer transport decomposition,
+    same-host helper deduplication, and follow-up boundary/error-visibility
+    cleanup
+- `X.5` remains replayed on `feature/pXb-s5-guardrails-and-closeout` pending
   final closeout and integration
 
 Execution shape:
