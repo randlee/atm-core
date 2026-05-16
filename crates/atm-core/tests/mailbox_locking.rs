@@ -1151,10 +1151,7 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
 }
 
 fn message_workflow_key(message: &MessageEnvelope) -> String {
-    atm_core::boundary::MessageKey::new(format!(
-        "atm:{}",
-        message.message_id.expect("message id")
-    ))
+    atm_core::boundary::MessageKey::new(format!("atm:{}", message.message_id.expect("message id")))
         .expect("message key")
         .to_string()
 }
