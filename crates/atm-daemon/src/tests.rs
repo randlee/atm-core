@@ -25,7 +25,6 @@ use atm_rusqlite::assemble_boundary;
 #[cfg(windows)]
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
-use serial_test::serial;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::Once;
@@ -75,7 +74,7 @@ impl Drop for ShutdownFinalizerDrainGuard {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     install_retained_runtime_factory();
     // TempDir uniqueness is process-local; #[serial] keeps this same-host transport smoke test
@@ -173,7 +172,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {
     install_retained_runtime_factory();
     let _drain_guard = ShutdownFinalizerDrainGuard;
@@ -260,7 +259,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
 
 #[cfg(windows)]
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     let tempdir = TempDir::new().expect("tempdir");
     let socket_path = tempdir.path().join("daemon.sock");
@@ -356,6 +355,7 @@ fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn heartbeat_updates_status_cache_and_doctor_projection() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
@@ -537,7 +537,7 @@ fn reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_stat
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
     let _drain_guard = ShutdownFinalizerDrainGuard;
     let tempdir = TempDir::new().expect("tempdir");
@@ -826,6 +826,7 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
@@ -872,6 +873,7 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
