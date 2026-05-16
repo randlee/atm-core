@@ -519,17 +519,6 @@ fn load_checked_read_metadata(
     agent: &AgentName,
 ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
     let metadata_rows = runtime.query_mailbox_metadata_rows(home_dir, team, agent, None)?;
-    if metadata_rows
-        .iter()
-        .any(|row| row.message_key.as_ref().starts_with("legacy:"))
-    {
-        return Err(AtmError::validation(
-            "sqlite mailbox metadata returned legacy-prefixed message keys",
-        )
-        .with_recovery(
-            "Test-fixture databases with legacy-keyed rows also surface this guard; repair or remove the malformed mailbox rows before retrying `atm read`.",
-        ));
-    }
     Ok(metadata_rows)
 }
 
