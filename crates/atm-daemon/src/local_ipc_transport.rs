@@ -188,6 +188,36 @@ enum ShutdownResponseOutcome {
     RejectedRequest,
 }
 
+enum AcceptLoopOutcome {
+    Continue,
+    Break(Option<AtmError>),
+    Dispatch(LocalSocketStream),
+}
+
+struct AcceptLoopContext<'a> {
+    listener: &'a LocalSocketListener,
+    lifecycle_control: &'a LifecycleControlSourceAdapter,
+    registry: &'a Arc<ActiveConnectionRegistry>,
+    force_shutdown: &'a Arc<AtomicBool>,
+    codec: &'a JsonAtmProtocolCodec,
+    observability: &'a SubsystemObservability,
+    dispatcher: &'a Arc<dyn RequestDispatcher + Send + Sync>,
+    signals: &'a ServeLoopSignals,
+    shutdown_beacon: &'a ShutdownBeacon,
+    endpoint_path: &'a Path,
+    #[cfg(test)]
+    accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
+}
+
+struct ServeShutdownContext<'a> {
+    endpoint_guard: SocketEndpointGuard,
+    graceful_drain_deadline: Duration,
+    force_cancel_deadline: Duration,
+    registry: &'a Arc<ActiveConnectionRegistry>,
+    force_shutdown: &'a AtomicBool,
+    lifecycle_control: &'a LifecycleControlSourceAdapter,
+}
+
 impl std::fmt::Debug for PreparedRuntimeServer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PreparedRuntimeServer")
@@ -326,371 +356,45 @@ impl PreparedRuntimeServer {
             observability,
         } = self;
         thread::scope(|scope| -> Result<(), AtmError> {
-            // Each serving invocation owns its own shutdown beacon. The beacon must not survive a
-            // later bind/restart cycle because a tripped beacon from an older listener would
-            // incorrectly poison the next same-host endpoint publication.
             let shutdown_beacon = Arc::new(ShutdownBeacon::default());
             let signals = Arc::new(ServeLoopSignals::default());
-            let mut serve_error = None;
-            let mut terminate_probe_pending = false;
-            let lifecycle_waiter = {
-                let signals = Arc::clone(&signals);
-                let shutdown_beacon = Arc::clone(&shutdown_beacon);
-                let lifecycle_control = lifecycle_control.clone();
-                let endpoint_path = endpoint_path.clone();
-                thread::Builder::new()
-                    .name("local-ipc-lifecycle-waiter".to_string())
-                    .spawn_scoped(scope, move || {
-                    let mut observed_generation = match lifecycle_control.event_generation() {
-                        Ok(generation) => generation,
-                        Err(error) => {
-                            shutdown_beacon.trip();
-                            let _ = lifecycle_control.notify_state_change();
-                            let _ = signals.record_accept_error(error);
-                            let _ = wake_listener(&endpoint_path);
-                            return;
-                        }
-                    };
-                    loop {
-                        if shutdown_beacon.is_tripped() {
-                            return;
-                        }
-                        if let Err(error) =
-                            lifecycle_control.wait_for_state_change(&mut observed_generation)
-                        {
-                            shutdown_beacon.trip();
-                            let _ = lifecycle_control.notify_state_change();
-                            let _ = signals.record_accept_error(error);
-                            let _ = wake_listener(&endpoint_path);
-                            return;
-                        }
-                        if shutdown_beacon.is_tripped() {
-                            return;
-                        }
-                        if lifecycle_control.terminate_requested() {
-                            shutdown_beacon.trip();
-                            let _ = lifecycle_control.notify_state_change();
-                            let _ = wake_listener(&endpoint_path);
-                            return;
-                        }
-                        if lifecycle_control.take_reload_requested() {
-                            signals.request_reload();
-                            if let Err(error) = wake_listener(&endpoint_path) {
-                                shutdown_beacon.trip();
-                                let _ = lifecycle_control.notify_state_change();
-                                let _ = signals.record_accept_error(
-                                    AtmError::daemon_lifecycle_wedge(
-                                        "daemon lifecycle waiter could not wake the direct local IPC accept loop for reload handling",
-                                    )
-                                    .with_recovery(
-                                        "Restart the daemon; lifecycle-control reload state could not interrupt the same-host listener cleanly.",
-                                    )
-                                    .with_source(error),
-                                );
-                                return;
-                            }
-                        }
-                    }
-                })
-                .map_err(|source| {
-                    AtmError::daemon_unavailable("failed to spawn local IPC lifecycle waiter")
-                        .with_recovery(
-                            "Restart the daemon after confirming the host can spawn the same-host lifecycle waiter thread.",
-                        )
-                        .with_source(source)
-                })?
-            };
+            let lifecycle_waiter = spawn_lifecycle_waiter(
+                scope,
+                Arc::clone(&signals),
+                Arc::clone(&shutdown_beacon),
+                lifecycle_control.clone(),
+                endpoint_path.clone(),
+            )?;
             publish_ready()?;
-            loop {
-                // Direct accept-loop target: lifecycle wakeups interrupt accept(), then this loop
-                // drains reload/error state inline so same-host serving stays in one place.
-                // Completed request workers are reaped before every accept iteration so join
-                // ownership stays with the direct serve loop instead of a side-channel worker.
-                if let Err(error) = registry.reap_finished_dispatches() {
-                    shutdown_beacon.trip();
-                    let _ = lifecycle_control.notify_state_change();
-                    serve_error = Some(error);
-                    break;
-                }
-                match signals.take_accept_error() {
-                    Ok(Some(error)) => {
-                        shutdown_beacon.trip();
-                        let _ = lifecycle_control.notify_state_change();
-                        serve_error = Some(error);
-                        break;
-                    }
-                    Ok(None) => {}
-                    Err(error) => {
-                        shutdown_beacon.trip();
-                        let _ = lifecycle_control.notify_state_change();
-                        serve_error = Some(error);
-                        break;
-                    }
-                }
-                // Reload work stays serialized inside the direct accept loop so the listener never
-                // races a partially-applied runtime view update.
-                if signals.take_reload() {
-                    match reload_runtime_view() {
-                        Ok(()) => {
-                            observability.emit_or_warn(
-                                "reload_runtime_view",
-                                "ok",
-                                "bounded lifecycle-control-triggered config or roster reload applied",
-                            );
-                            tracing::info!(
-                                "bounded lifecycle-control-triggered config/roster reload applied"
-                            )
-                        }
-                        Err(error) => tracing::warn!(
-                            error_code = %error.code,
-                            error_message = %error.message,
-                            "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
-                        ),
-                    }
-                    continue;
-                }
+            let mut accept_context = AcceptLoopContext {
+                listener: &listener,
+                lifecycle_control: &lifecycle_control,
+                registry: &registry,
+                force_shutdown: &force_shutdown,
+                codec: &codec,
+                observability: &observability,
+                dispatcher: &dispatcher,
+                signals: signals.as_ref(),
+                shutdown_beacon: shutdown_beacon.as_ref(),
+                endpoint_path: &endpoint_path,
                 #[cfg(test)]
-                if let Some(sender) = accept_error_inject.take() {
-                    let _ = sender.send(());
-                    shutdown_beacon.trip();
-                    let _ = lifecycle_control.notify_state_change();
-                    serve_error = Some(
-                        AtmError::daemon_unavailable(
-                            "injected daemon local IPC accept error for test",
-                        )
-                        .with_recovery("Test-only injected accept failure."),
-                    );
-                    break;
-                }
-
-                let mut stream = match listener.accept() {
-                    Ok(stream) => stream,
-                    Err(source) => {
-                        shutdown_beacon.trip();
-                        let _ = lifecycle_control.notify_state_change();
-                        serve_error = Some(
-                            AtmError::daemon_unavailable(
-                                "failed while accepting daemon local IPC connection",
-                            )
-                            .with_recovery(
-                                "Restart the daemon; the local IPC listener stopped accepting connections unexpectedly.",
-                            )
-                            .with_source(source),
-                        );
-                        break;
-                    }
-                };
-
-                match signals.take_accept_error() {
-                    Ok(Some(error)) => {
-                        shutdown_beacon.trip();
-                        let _ = lifecycle_control.notify_state_change();
-                        serve_error = Some(error);
-                        break;
-                    }
-                    Ok(None) => {}
-                    Err(error) => {
-                        shutdown_beacon.trip();
-                        let _ = lifecycle_control.notify_state_change();
-                        serve_error = Some(error);
-                        break;
-                    }
-                }
-                if signals.take_reload() {
-                    drop(stream);
-                    match reload_runtime_view() {
-                        Ok(()) => {
-                            observability.emit_or_warn(
-                                "reload_runtime_view",
-                                "ok",
-                                "bounded lifecycle-control-triggered config or roster reload applied",
-                            );
-                            tracing::info!(
-                                "bounded lifecycle-control-triggered config/roster reload applied"
-                            )
-                        }
-                        Err(error) => tracing::warn!(
-                            error_code = %error.code,
-                            error_message = %error.message,
-                            "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
-                        ),
-                    }
-                    continue;
-                }
-                if lifecycle_control.terminate_requested() || shutdown_beacon.is_tripped() {
-                    shutdown_beacon.trip();
-                    let _ = lifecycle_control.notify_state_change();
-                    match write_shutdown_response(&mut stream, &codec)? {
-                        ShutdownResponseOutcome::RejectedRequest => break,
-                        ShutdownResponseOutcome::NoFrame if terminate_probe_pending => break,
-                        ShutdownResponseOutcome::NoFrame => {
-                            terminate_probe_pending = true;
-                            if let Err(error) = schedule_delayed_listener_wake(
-                                endpoint_path.clone(),
-                                TERMINATE_REJECTION_GRACE_DEADLINE,
-                            ) {
-                                tracing::warn!(
-                                    %error,
-                                    subsystem = "local_ipc_transport",
-                                    action = "shutdown_probe_wake",
-                                    deadline_ms = TERMINATE_REJECTION_GRACE_DEADLINE.as_millis(),
-                                    path = %endpoint_path.display(),
-                                    "failed to schedule delayed listener wake during shutdown probe"
-                                );
-                                let _ = wake_listener(&endpoint_path);
-                                break;
-                            }
-                            continue;
-                        }
-                    }
-                }
-                terminate_probe_pending = false;
-                if registry.active_connections() >= MAX_CONCURRENT_CONNECTIONS {
-                    let response = ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-                        &AtmError::daemon_unavailable(
-                            "daemon connection cap exceeded (max 64 concurrent accepts)",
-                        )
-                        .with_recovery(
-                            "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
-                        ),
-                    ));
-                    let frame = codec.response_to_frame(
-                        atm_core::protocol::RequestId::new(TERMINATE_REJECTION_REQUEST_ID)?,
-                        response,
-                    )?;
-                    let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
-                    let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-                    let _ = atm_core::protocol::write_frame(
-                        &mut stream,
-                        &frame,
-                        "failed to write daemon rejection response frame",
-                    );
-                    let _ = stream.flush();
-                    continue;
-                }
-
-                let active = registry.register();
-                let dispatcher = Arc::clone(&dispatcher);
-                let force_shutdown = Arc::clone(&force_shutdown);
-                let registry = Arc::clone(&registry);
-                let codec = codec.clone();
-                thread::Builder::new()
-                    .name("local-ipc-connection-worker".to_string())
-                    .spawn_scoped(scope, move || {
-                    let _active = active;
-                    let result = catch_unwind(AssertUnwindSafe(|| {
-                        handle_connection(
-                            stream,
-                            dispatcher,
-                            force_shutdown.as_ref(),
-                            registry,
-                            codec,
-                        )
-                    }));
-                    match result {
-                        Ok(Ok(())) => {}
-                        Ok(Err(error)) => {
-                            tracing::warn!(%error, "daemon local IPC connection handling failed");
-                        }
-                        Err(_) => {
-                            tracing::warn!(
-                                "daemon local IPC connection worker panicked; the transport thread recovered and continued shutdown accounting"
-                            );
-                        }
-                    }
-                })
-                .map_err(|source| {
-                    AtmError::daemon_unavailable("failed to spawn local IPC connection worker")
-                        .with_recovery(
-                            "Restart the daemon after confirming the host can spawn same-host connection workers.",
-                        )
-                        .with_source(source)
-                })?;
-            }
-
-            // Every serve-loop exit path, including AcceptError and internal tracked-work failures,
-            // must transition through begin_shutdown() before finalization so RuntimeComposition
-            // observes Running -> Draining -> Stopped instead of a silent hard stop.
-            let mut shutdown_error = begin_shutdown().err();
-            let shutdown_started = Instant::now();
-            if let Err(error) = drain_active_connections_for_shutdown(
-                registry.as_ref(),
-                force_shutdown.as_ref(),
-                graceful_drain_deadline,
-                force_cancel_deadline,
-                shutdown_started,
-                TRACKED_DISPATCH_JOIN_DEADLINE,
-            ) {
-                if let Some(existing) = shutdown_error.as_ref() {
-                    tracing::warn!(
-                        begin_shutdown_error = %existing,
-                        drain_error = %error,
-                        "daemon shutdown drain failed after an earlier shutdown-start error"
-                    );
-                } else {
-                    shutdown_error = Some(error);
-                }
-            }
-            let _ = lifecycle_control.notify_state_change();
-            if let Err(error) = wake_listener(endpoint_guard.endpoint_path()) {
-                tracing::debug!(%error, "daemon local IPC listener wake was unnecessary during shutdown");
-            }
-            if lifecycle_waiter.join().is_err() {
-                let error = AtmError::daemon_lifecycle_wedge(
-                    "daemon lifecycle waiter panicked during transport shutdown",
-                )
-                .with_recovery(
-                    "Restart the daemon; the same-host lifecycle waiter crashed while the runtime was transitioning out of serving state.",
-                );
-                if let Some(existing) = shutdown_error.as_ref() {
-                    tracing::warn!(
-                        begin_shutdown_error = %existing,
-                        lifecycle_waiter_error = %error,
-                        "daemon lifecycle waiter failed after an earlier shutdown error"
-                    );
-                } else {
-                    shutdown_error = Some(error);
-                }
-            }
-            if let Err(error) = lifecycle_control.shutdown_worker_with_timeout() {
-                if let Some(existing) = shutdown_error.as_ref() {
-                    tracing::warn!(
-                        begin_shutdown_error = %existing,
-                        lifecycle_worker_error = %error,
-                        "daemon lifecycle worker shutdown failed after an earlier shutdown-start error"
-                    );
-                } else {
-                    shutdown_error = Some(error);
-                }
-            }
-            if let Err(error) = endpoint_guard.unpublish() {
-                if let Some(existing) = shutdown_error.as_ref() {
-                    tracing::warn!(
-                        begin_shutdown_error = %existing,
-                        endpoint_cleanup_error = %error,
-                        "daemon endpoint cleanup failed after an earlier shutdown-start error"
-                    );
-                } else {
-                    shutdown_error = Some(error);
-                }
-            }
-            finalize_shutdown();
-            if let Some(serve_error) = serve_error {
-                if let Some(shutdown_error) = shutdown_error {
-                    tracing::warn!(
-                        %shutdown_error,
-                        %serve_error,
-                        "daemon shutdown encountered an additional error after a serve error"
-                    );
-                } else {
-                    tracing::warn!(
-                        %serve_error,
-                        "daemon serve loop exited with an error after shutdown finalization"
-                    );
-                }
-                return Err(serve_error);
-            }
-            shutdown_error.map_or(Ok(()), Err)
+                accept_error_inject: &mut accept_error_inject,
+            };
+            let serve_error = run_accept_loop(scope, &mut accept_context, &reload_runtime_view)?;
+            let shutdown_error = finalize_serve_loop(
+                &begin_shutdown,
+                &finalize_shutdown,
+                ServeShutdownContext {
+                    endpoint_guard,
+                    graceful_drain_deadline,
+                    force_cancel_deadline,
+                    registry: &registry,
+                    force_shutdown: force_shutdown.as_ref(),
+                    lifecycle_control: &lifecycle_control,
+                },
+                lifecycle_waiter,
+            );
+            finish_serve_shutdown(serve_error, shutdown_error)
         })
     }
 
@@ -702,6 +406,454 @@ impl PreparedRuntimeServer {
                 )
         })
     }
+}
+
+fn spawn_lifecycle_waiter<'scope, 'env>(
+    scope: &'scope thread::Scope<'scope, 'env>,
+    signals: Arc<ServeLoopSignals>,
+    shutdown_beacon: Arc<ShutdownBeacon>,
+    lifecycle_control: LifecycleControlSourceAdapter,
+    endpoint_path: PathBuf,
+) -> Result<std::thread::ScopedJoinHandle<'scope, ()>, AtmError> {
+    thread::Builder::new()
+        .name("local-ipc-lifecycle-waiter".to_string())
+        .spawn_scoped(scope, move || {
+            let mut observed_generation = match lifecycle_control.event_generation() {
+                Ok(generation) => generation,
+                Err(error) => {
+                    record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
+                    let _ = signals.record_accept_error(error);
+                    let _ = wake_listener(&endpoint_path);
+                    return;
+                }
+            };
+            loop {
+                if shutdown_beacon.is_tripped() {
+                    return;
+                }
+                if let Err(error) = lifecycle_control.wait_for_state_change(&mut observed_generation) {
+                    record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
+                    let _ = signals.record_accept_error(error);
+                    let _ = wake_listener(&endpoint_path);
+                    return;
+                }
+                if shutdown_beacon.is_tripped() {
+                    return;
+                }
+                if lifecycle_control.terminate_requested() {
+                    record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
+                    let _ = wake_listener(&endpoint_path);
+                    return;
+                }
+                if lifecycle_control.take_reload_requested() {
+                    signals.request_reload();
+                    if let Err(error) = wake_listener(&endpoint_path) {
+                        record_shutdown_signal(&lifecycle_control, shutdown_beacon.as_ref());
+                        let _ = signals.record_accept_error(
+                            AtmError::daemon_lifecycle_wedge(
+                                "daemon lifecycle waiter could not wake the direct local IPC accept loop for reload handling",
+                            )
+                            .with_recovery(
+                                "Restart the daemon; lifecycle-control reload state could not interrupt the same-host listener cleanly.",
+                            )
+                            .with_source(error),
+                        );
+                        return;
+                    }
+                }
+            }
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn local IPC lifecycle waiter")
+                .with_recovery(
+                    "Restart the daemon after confirming the host can spawn the same-host lifecycle waiter thread.",
+                )
+                .with_source(source)
+        })
+}
+
+fn run_accept_loop<'scope, ReloadRuntimeView>(
+    scope: &'scope thread::Scope<'scope, '_>,
+    context: &mut AcceptLoopContext<'_>,
+    reload_runtime_view: &ReloadRuntimeView,
+) -> Result<Option<AtmError>, AtmError>
+where
+    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+{
+    let mut terminate_probe_pending = false;
+    loop {
+        match prepare_accept_iteration(context, reload_runtime_view)? {
+            AcceptLoopOutcome::Continue => continue,
+            AcceptLoopOutcome::Break(error) => return Ok(error),
+            AcceptLoopOutcome::Dispatch(stream) => match handle_accepted_stream(
+                scope,
+                stream,
+                context,
+                reload_runtime_view,
+                &mut terminate_probe_pending,
+            )? {
+                AcceptLoopOutcome::Continue => continue,
+                AcceptLoopOutcome::Break(error) => return Ok(error),
+                AcceptLoopOutcome::Dispatch(_) => unreachable!("dispatch stream consumed"),
+            },
+        }
+    }
+}
+
+fn prepare_accept_iteration<ReloadRuntimeView>(
+    context: &mut AcceptLoopContext<'_>,
+    reload_runtime_view: &ReloadRuntimeView,
+) -> Result<AcceptLoopOutcome, AtmError>
+where
+    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+{
+    if let Err(error) = context.registry.reap_finished_dispatches() {
+        return Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
+            context.lifecycle_control,
+            context.shutdown_beacon,
+            error,
+        ))));
+    }
+    if let Some(error) = take_accept_error(
+        context.signals,
+        context.lifecycle_control,
+        context.shutdown_beacon,
+    )? {
+        return Ok(AcceptLoopOutcome::Break(Some(error)));
+    }
+    if maybe_reload_runtime_view(
+        context.signals,
+        reload_runtime_view,
+        context.observability,
+    ) {
+        return Ok(AcceptLoopOutcome::Continue);
+    }
+    #[cfg(test)]
+    if let Some(sender) = context.accept_error_inject.take() {
+        let _ = sender.send(());
+        return Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
+            context.lifecycle_control,
+            context.shutdown_beacon,
+            AtmError::daemon_unavailable("injected daemon local IPC accept error for test")
+                .with_recovery("Test-only injected accept failure."),
+        ))));
+    }
+    match context.listener.accept() {
+        Ok(stream) => Ok(AcceptLoopOutcome::Dispatch(stream)),
+        Err(source) => Ok(AcceptLoopOutcome::Break(Some(record_serve_error(
+            context.lifecycle_control,
+            context.shutdown_beacon,
+            AtmError::daemon_unavailable("failed while accepting daemon local IPC connection")
+                .with_recovery(
+                    "Restart the daemon; the local IPC listener stopped accepting connections unexpectedly.",
+                )
+                .with_source(source),
+        )))),
+    }
+}
+
+fn handle_accepted_stream<'scope, ReloadRuntimeView>(
+    scope: &'scope thread::Scope<'scope, '_>,
+    mut stream: LocalSocketStream,
+    context: &AcceptLoopContext<'_>,
+    reload_runtime_view: &ReloadRuntimeView,
+    terminate_probe_pending: &mut bool,
+) -> Result<AcceptLoopOutcome, AtmError>
+where
+    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+{
+    if let Some(error) = take_accept_error(
+        context.signals,
+        context.lifecycle_control,
+        context.shutdown_beacon,
+    )? {
+        return Ok(AcceptLoopOutcome::Break(Some(error)));
+    }
+    if maybe_reload_runtime_view(
+        context.signals,
+        reload_runtime_view,
+        context.observability,
+    ) {
+        drop(stream);
+        return Ok(AcceptLoopOutcome::Continue);
+    }
+    if context.lifecycle_control.terminate_requested() || context.shutdown_beacon.is_tripped() {
+        return handle_shutdown_probe(
+            &mut stream,
+            context.lifecycle_control,
+            context.shutdown_beacon,
+            context.codec,
+            context.endpoint_path,
+            terminate_probe_pending,
+        );
+    }
+    *terminate_probe_pending = false;
+    if reject_connection_when_capped(
+        &mut stream,
+        context.codec,
+        context.registry.active_connections(),
+    )? {
+        return Ok(AcceptLoopOutcome::Continue);
+    }
+    spawn_connection_worker(
+        scope,
+        stream,
+        context.dispatcher,
+        context.force_shutdown,
+        context.registry,
+        context.codec.clone(),
+    )?;
+    Ok(AcceptLoopOutcome::Continue)
+}
+
+fn take_accept_error(
+    signals: &ServeLoopSignals,
+    lifecycle_control: &LifecycleControlSourceAdapter,
+    shutdown_beacon: &ShutdownBeacon,
+) -> Result<Option<AtmError>, AtmError> {
+    match signals.take_accept_error()? {
+        Some(error) => Ok(Some(record_serve_error(
+            lifecycle_control,
+            shutdown_beacon,
+            error,
+        ))),
+        None => Ok(None),
+    }
+}
+
+fn maybe_reload_runtime_view<ReloadRuntimeView>(
+    signals: &ServeLoopSignals,
+    reload_runtime_view: &ReloadRuntimeView,
+    observability: &SubsystemObservability,
+) -> bool
+where
+    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+{
+    if !signals.take_reload() {
+        return false;
+    }
+    match reload_runtime_view() {
+        Ok(()) => {
+            observability.emit_or_warn(
+                "reload_runtime_view",
+                "ok",
+                "bounded lifecycle-control-triggered config or roster reload applied",
+            );
+            tracing::info!("bounded lifecycle-control-triggered config/roster reload applied");
+        }
+        Err(error) => tracing::warn!(
+            error_code = %error.code,
+            error_message = %error.message,
+            "bounded lifecycle-control-triggered config/roster reload rejected; last-known-good serving config retained"
+        ),
+    }
+    true
+}
+
+fn handle_shutdown_probe(
+    stream: &mut LocalSocketStream,
+    lifecycle_control: &LifecycleControlSourceAdapter,
+    shutdown_beacon: &ShutdownBeacon,
+    codec: &JsonAtmProtocolCodec,
+    endpoint_path: &Path,
+    terminate_probe_pending: &mut bool,
+) -> Result<AcceptLoopOutcome, AtmError> {
+    record_shutdown_signal(lifecycle_control, shutdown_beacon);
+    match write_shutdown_response(stream, codec)? {
+        ShutdownResponseOutcome::RejectedRequest => Ok(AcceptLoopOutcome::Break(None)),
+        ShutdownResponseOutcome::NoFrame if *terminate_probe_pending => {
+            Ok(AcceptLoopOutcome::Break(None))
+        }
+        ShutdownResponseOutcome::NoFrame => {
+            *terminate_probe_pending = true;
+            if let Err(error) = schedule_delayed_listener_wake(
+                endpoint_path.to_path_buf(),
+                TERMINATE_REJECTION_GRACE_DEADLINE,
+            ) {
+                tracing::warn!(
+                    %error,
+                    subsystem = "local_ipc_transport",
+                    action = "shutdown_probe_wake",
+                    deadline_ms = TERMINATE_REJECTION_GRACE_DEADLINE.as_millis(),
+                    path = %endpoint_path.display(),
+                    "failed to schedule delayed listener wake during shutdown probe"
+                );
+                let _ = wake_listener(endpoint_path);
+                return Ok(AcceptLoopOutcome::Break(None));
+            }
+            Ok(AcceptLoopOutcome::Continue)
+        }
+    }
+}
+
+fn reject_connection_when_capped(
+    stream: &mut LocalSocketStream,
+    codec: &JsonAtmProtocolCodec,
+    active_connections: usize,
+) -> Result<bool, AtmError> {
+    if active_connections < MAX_CONCURRENT_CONNECTIONS {
+        return Ok(false);
+    }
+    let response = ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
+        &AtmError::daemon_unavailable("daemon connection cap exceeded (max 64 concurrent accepts)")
+            .with_recovery(
+                "Wait for in-flight ATM commands to complete before retrying, or reduce concurrent atm invocations.",
+            ),
+    ));
+    let frame = codec.response_to_frame(
+        atm_core::protocol::RequestId::new(TERMINATE_REJECTION_REQUEST_ID)?,
+        response,
+    )?;
+    let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
+    let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
+    let _ = atm_core::protocol::write_frame(
+        stream,
+        &frame,
+        "failed to write daemon rejection response frame",
+    );
+    let _ = stream.flush();
+    Ok(true)
+}
+
+fn spawn_connection_worker<'scope>(
+    scope: &'scope thread::Scope<'scope, '_>,
+    stream: LocalSocketStream,
+    dispatcher: &Arc<dyn RequestDispatcher + Send + Sync>,
+    force_shutdown: &Arc<AtomicBool>,
+    registry: &Arc<ActiveConnectionRegistry>,
+    codec: JsonAtmProtocolCodec,
+) -> Result<(), AtmError> {
+    let active = registry.register();
+    let dispatcher = Arc::clone(dispatcher);
+    let force_shutdown = Arc::clone(force_shutdown);
+    let registry = Arc::clone(registry);
+    thread::Builder::new()
+        .name("local-ipc-connection-worker".to_string())
+        .spawn_scoped(scope, move || {
+            let _active = active;
+            let result = catch_unwind(AssertUnwindSafe(|| {
+                handle_connection(stream, dispatcher, force_shutdown.as_ref(), registry, codec)
+            }));
+            match result {
+                Ok(Ok(())) => {}
+                Ok(Err(error)) => {
+                    tracing::warn!(%error, "daemon local IPC connection handling failed");
+                }
+                Err(_) => {
+                    tracing::warn!(
+                        "daemon local IPC connection worker panicked; the transport thread recovered and continued shutdown accounting"
+                    );
+                }
+            }
+        })
+        .map(|_| ())
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn local IPC connection worker")
+                .with_recovery(
+                    "Restart the daemon after confirming the host can spawn same-host connection workers.",
+                )
+                .with_source(source)
+        })
+}
+
+fn finalize_serve_loop<BeginShutdown, FinalizeShutdown>(
+    begin_shutdown: &BeginShutdown,
+    finalize_shutdown: &FinalizeShutdown,
+    context: ServeShutdownContext<'_>,
+    lifecycle_waiter: std::thread::ScopedJoinHandle<'_, ()>,
+) -> Option<AtmError>
+where
+    BeginShutdown: Fn() -> Result<(), AtmError>,
+    FinalizeShutdown: Fn(),
+{
+    let mut shutdown_error = begin_shutdown().err();
+    let shutdown_started = Instant::now();
+    if let Err(error) = drain_active_connections_for_shutdown(
+        context.registry.as_ref(),
+        context.force_shutdown,
+        context.graceful_drain_deadline,
+        context.force_cancel_deadline,
+        shutdown_started,
+        TRACKED_DISPATCH_JOIN_DEADLINE,
+    ) {
+        append_shutdown_error(&mut shutdown_error, "drain_error", error);
+    }
+    let _ = context.lifecycle_control.notify_state_change();
+    if let Err(error) = wake_listener(context.endpoint_guard.endpoint_path()) {
+        tracing::debug!(%error, "daemon local IPC listener wake was unnecessary during shutdown");
+    }
+    if lifecycle_waiter.join().is_err() {
+        append_shutdown_error(
+            &mut shutdown_error,
+            "lifecycle_waiter_error",
+            AtmError::daemon_lifecycle_wedge(
+                "daemon lifecycle waiter panicked during transport shutdown",
+            )
+            .with_recovery(
+                "Restart the daemon; the same-host lifecycle waiter crashed while the runtime was transitioning out of serving state.",
+            ),
+        );
+    }
+    if let Err(error) = context.lifecycle_control.shutdown_worker_with_timeout() {
+        append_shutdown_error(&mut shutdown_error, "lifecycle_worker_error", error);
+    }
+    if let Err(error) = context.endpoint_guard.unpublish() {
+        append_shutdown_error(&mut shutdown_error, "endpoint_cleanup_error", error);
+    }
+    finalize_shutdown();
+    shutdown_error
+}
+
+fn finish_serve_shutdown(
+    serve_error: Option<AtmError>,
+    shutdown_error: Option<AtmError>,
+) -> Result<(), AtmError> {
+    if let Some(serve_error) = serve_error {
+        if let Some(shutdown_error) = shutdown_error {
+            tracing::warn!(
+                %shutdown_error,
+                %serve_error,
+                "daemon shutdown encountered an additional error after a serve error"
+            );
+        } else {
+            tracing::warn!(
+                %serve_error,
+                "daemon serve loop exited with an error after shutdown finalization"
+            );
+        }
+        return Err(serve_error);
+    }
+    shutdown_error.map_or(Ok(()), Err)
+}
+
+fn append_shutdown_error(shutdown_error: &mut Option<AtmError>, field_name: &str, error: AtmError) {
+    if let Some(existing) = shutdown_error.as_ref() {
+        tracing::warn!(
+            begin_shutdown_error = %existing,
+            error_field = field_name,
+            additional_error = %error,
+            "daemon shutdown encountered an additional error after an earlier shutdown-start error"
+        );
+    } else {
+        *shutdown_error = Some(error);
+    }
+}
+
+fn record_serve_error(
+    lifecycle_control: &LifecycleControlSourceAdapter,
+    shutdown_beacon: &ShutdownBeacon,
+    error: AtmError,
+) -> AtmError {
+    record_shutdown_signal(lifecycle_control, shutdown_beacon);
+    error
+}
+
+fn record_shutdown_signal(
+    lifecycle_control: &LifecycleControlSourceAdapter,
+    shutdown_beacon: &ShutdownBeacon,
+) {
+    shutdown_beacon.trip();
+    let _ = lifecycle_control.notify_state_change();
 }
 
 #[derive(Debug, Clone)]

@@ -770,12 +770,27 @@ pub(crate) fn compose_runtime(
 #[cfg(test)]
 mod tests {
     use atm_core::boundary::ServerTransport;
+    use std::path::PathBuf;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
     use super::RuntimeComposition;
     use super::{RuntimeLifecycle, RuntimeLifecycleState, shutdown_lane_with_deadline};
+
+    struct CwdGuard(PathBuf);
+
+    impl CwdGuard {
+        fn install() -> Self {
+            Self(std::env::current_dir().expect("cwd"))
+        }
+    }
+
+    impl Drop for CwdGuard {
+        fn drop(&mut self) {
+            std::env::set_current_dir(&self.0).expect("restore cwd");
+        }
+    }
 
     #[test]
     fn runtime_lifecycle_allows_only_documented_transitions() {
@@ -886,7 +901,7 @@ mod tests {
     #[serial_test::serial(env)]
     fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
         let tempdir = TempDir::new().expect("tempdir");
-        let original_dir = std::env::current_dir().expect("cwd");
+        let _cwd_guard = CwdGuard::install();
         std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
 
         let runtime = RuntimeComposition::new(tempdir.path().to_path_buf()).expect("runtime");
@@ -894,7 +909,6 @@ mod tests {
         let error = ServerTransport::serve(&runtime.server_transport, runtime.request_dispatcher())
             .expect_err("direct transport bootstrap should be rejected");
 
-        std::env::set_current_dir(original_dir).expect("restore cwd");
         assert!(error.is_daemon_unavailable());
         assert!(
             error
@@ -912,7 +926,7 @@ mod tests {
         std::fs::create_dir_all(&home_dir).expect("atm home");
         let replay_parent_file = tempdir.path().join("not-a-dir");
         std::fs::write(&replay_parent_file, "x").expect("parent file");
-        let original_dir = std::env::current_dir().expect("cwd");
+        let _cwd_guard = CwdGuard::install();
         std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
         let observability = std::sync::Arc::new(
             crate::test_observability::TestDaemonObservability::new(
@@ -928,7 +942,6 @@ mod tests {
         )
         .expect_err("replay-store assembly should fail closed");
 
-        std::env::set_current_dir(original_dir).expect("restore cwd");
         assert_eq!(
             error.code,
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
@@ -954,12 +967,11 @@ mod tests {
             "[daemon]\nremote_retry_budget = \"100ms\"\n",
         )
         .expect("invalid config");
-        let original_dir = std::env::current_dir().expect("cwd");
+        let _cwd_guard = CwdGuard::install();
         std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
 
         let result = RuntimeComposition::new(home_dir.clone());
 
-        std::env::set_current_dir(original_dir).expect("restore cwd");
         let error = result.expect_err("invalid peer transport config should fail closed");
         assert_eq!(
             error.code,

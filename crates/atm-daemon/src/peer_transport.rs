@@ -43,6 +43,13 @@ impl Default for PeerTransportConfig {
 
 impl PeerTransportConfig {
     pub(crate) fn from_config(config: Option<&AtmConfig>) -> Result<Self, AtmError> {
+        if config.is_none() {
+            tracing::warn!(
+                subsystem = "peer_transport",
+                action = "config_default",
+                "no AtmConfig provided to PeerTransportConfig::from_config; using default remote_retry_budget"
+            );
+        }
         let remote_retry_budget = config
             .map(|config| config.daemon.remote_retry_budget)
             .unwrap_or(DEFAULT_REMOTE_RETRY_BUDGET);

@@ -307,22 +307,8 @@ impl ReconcileRuntime {
         };
         if let Some(handle) = handle {
             let worker_thread_id = handle.thread().id();
-            let (result_tx, result_rx) = mpsc::sync_channel(1);
-            let join_helper = thread::Builder::new()
-                .name("atm-daemon-reconcile-join".to_string())
-                .spawn(move || {
-                    let _ = result_tx.send(handle.join());
-                })
-                .map_err(|source| {
-                    AtmError::daemon_unavailable(
-                        "failed to spawn reconcile runtime join helper during shutdown",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon; reconcile shutdown could not create its bounded join helper.",
-                    )
-                    .with_source(source)
-                })?;
-            match result_rx.recv_timeout(RECONCILE_SHUTDOWN_DEADLINE) {
+            let (result_rx, join_helper) = spawn_reconcile_join_helper(handle)?;
+            match wait_for_reconcile_join(result_rx) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
                     self.inner.observability.emit_or_warn(
@@ -345,7 +331,7 @@ impl ReconcileRuntime {
                         "Restart atm-daemon; the reconcile background lane crashed while shutting down.",
                     ));
                 }
-                Err(mpsc::RecvTimeoutError::Timeout) => {
+                Err(ReconcileJoinStatus::Timeout) => {
                     // Intentional detach: once the bounded deadline expires, shutdown returns the
                     // typed timeout failure immediately instead of waiting forever on the helper.
                     drop(join_helper);
@@ -366,7 +352,7 @@ impl ReconcileRuntime {
                         "Restart atm-daemon after the reconcile background lane becomes responsive again.",
                     ));
                 }
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
+                Err(ReconcileJoinStatus::Disconnected) => {
                     let _ = join_helper.join();
                     self.inner.observability.emit_or_warn(
                         "shutdown",
@@ -702,57 +688,9 @@ fn should_emit_reconcile_notification(
 
 fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
     loop {
-        let pending = {
-            let mut state = match inner.state.lock() {
-                Ok(state) => state,
-                Err(_) => return,
-            };
-            while state.pending.is_empty() && !state.shutdown {
-                let wait = match inner
-                    .wake
-                    .wait_timeout(state, DEFAULT_RECONCILE_IDLE_INTERVAL)
-                {
-                    Ok(wait) => wait,
-                    Err(_) => return,
-                };
-                state = wait.0;
-            }
-            if state.shutdown {
-                return;
-            }
-            let mut debounce_epoch = state.pending_epoch;
-            let mut debounce_extensions = 0u32;
-            loop {
-                let wait = match inner.wake.wait_timeout(state, inner.debounce) {
-                    Ok(wait) => wait,
-                    Err(_) => return,
-                };
-                state = wait.0;
-                if state.shutdown {
-                    return;
-                }
-                if state.pending_epoch != debounce_epoch {
-                    debounce_epoch = state.pending_epoch;
-                    debounce_extensions = debounce_extensions.saturating_add(1);
-                    if debounce_extensions >= MAX_RECONCILE_DEBOUNCE_EXTENSIONS {
-                        break;
-                    }
-                    continue;
-                }
-                if wait.1.timed_out() {
-                    break;
-                }
-            }
-            let pending_order = std::mem::take(&mut state.pending_order);
-            let mut drained = Vec::with_capacity(pending_order.len());
-            for key in pending_order {
-                if let Some(pending) = state.pending.remove(&key) {
-                    drained.push(pending);
-                }
-            }
-            #[cfg(test)]
-            inner.pending_changed.notify_all();
-            drained
+        let pending = match take_pending_reconcile_batch(inner.as_ref()) {
+            Some(pending) => pending,
+            None => return,
         };
 
         for pending_request in pending {
@@ -768,18 +706,119 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
                     ReconcileOutcome::Failure(error.into())
                 }
             };
-            if let Ok(mut state) = inner.state.lock() {
-                for waiter in pending_request.waiters {
-                    if state.active_waiters.contains(&waiter) {
-                        state.completed.insert(waiter, outcome.clone());
-                    }
-                }
-                inner.wake.notify_all();
-            } else {
+            if record_reconcile_outcome(inner.as_ref(), pending_request, outcome).is_none() {
                 return;
             }
         }
     }
+}
+
+enum ReconcileJoinStatus {
+    Timeout,
+    Disconnected,
+}
+
+fn spawn_reconcile_join_helper(
+    handle: JoinHandle<()>,
+) -> Result<(mpsc::Receiver<std::thread::Result<()>>, JoinHandle<()>), AtmError> {
+    let (result_tx, result_rx) = mpsc::sync_channel(1);
+    let join_helper = thread::Builder::new()
+        .name("atm-daemon-reconcile-join".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(handle.join());
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable(
+                "failed to spawn reconcile runtime join helper during shutdown",
+            )
+            .with_recovery(
+                "Restart atm-daemon; reconcile shutdown could not create its bounded join helper.",
+            )
+            .with_source(source)
+        })?;
+    Ok((result_rx, join_helper))
+}
+
+fn wait_for_reconcile_join(
+    result_rx: mpsc::Receiver<std::thread::Result<()>>,
+) -> Result<std::thread::Result<()>, ReconcileJoinStatus> {
+    result_rx
+        .recv_timeout(RECONCILE_SHUTDOWN_DEADLINE)
+        .map_err(|error| match error {
+            mpsc::RecvTimeoutError::Timeout => ReconcileJoinStatus::Timeout,
+            mpsc::RecvTimeoutError::Disconnected => ReconcileJoinStatus::Disconnected,
+        })
+}
+
+fn take_pending_reconcile_batch(inner: &ReconcileRuntimeInner) -> Option<Vec<PendingReconcile>> {
+    let mut state = inner.state.lock().ok()?;
+    while state.pending.is_empty() && !state.shutdown {
+        let wait = inner
+            .wake
+            .wait_timeout(state, DEFAULT_RECONCILE_IDLE_INTERVAL)
+            .ok()?;
+        state = wait.0;
+    }
+    if state.shutdown {
+        return None;
+    }
+    debounce_pending_reconcile_batch(inner, state)
+}
+
+fn debounce_pending_reconcile_batch(
+    inner: &ReconcileRuntimeInner,
+    mut state: std::sync::MutexGuard<'_, ReconcileState>,
+) -> Option<Vec<PendingReconcile>> {
+    let mut debounce_epoch = state.pending_epoch;
+    let mut debounce_extensions = 0u32;
+    loop {
+        let wait = inner.wake.wait_timeout(state, inner.debounce).ok()?;
+        state = wait.0;
+        if state.shutdown {
+            return None;
+        }
+        if state.pending_epoch != debounce_epoch {
+            debounce_epoch = state.pending_epoch;
+            debounce_extensions = debounce_extensions.saturating_add(1);
+            if debounce_extensions >= MAX_RECONCILE_DEBOUNCE_EXTENSIONS {
+                break;
+            }
+            continue;
+        }
+        if wait.1.timed_out() {
+            break;
+        }
+    }
+    let drained = drain_pending_reconcile_batch(&mut state);
+    #[cfg(test)]
+    inner.pending_changed.notify_all();
+    Some(drained)
+}
+
+fn drain_pending_reconcile_batch(state: &mut ReconcileState) -> Vec<PendingReconcile> {
+    let pending_order = std::mem::take(&mut state.pending_order);
+    let mut drained = Vec::with_capacity(pending_order.len());
+    for key in pending_order {
+        if let Some(pending) = state.pending.remove(&key) {
+            drained.push(pending);
+        }
+    }
+    drained
+}
+
+fn record_reconcile_outcome(
+    inner: &ReconcileRuntimeInner,
+    pending_request: PendingReconcile,
+    outcome: ReconcileOutcome,
+) -> Option<()> {
+    let mut state = inner.state.lock().ok()?;
+    for waiter in pending_request.waiters {
+        if state.active_waiters.contains(&waiter) {
+            state.completed.insert(waiter, outcome.clone());
+        }
+    }
+    inner.wake.notify_all();
+    Some(())
 }
 
 #[cfg(test)]

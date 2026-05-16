@@ -117,7 +117,6 @@ name = "atm-daemon"
 version = "1.2.0"
 dependencies = [
  "agent-team-mail-core",
- "atm-runtime-test-support",
  "atm-rusqlite",
  "chrono",
  "fs2",

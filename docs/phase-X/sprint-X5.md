@@ -1,7 +1,7 @@
 ---
 id: X.5
 title: Guardrails And Closeout Verification
-status: planned
+status: complete
 branch: feature/pXb-s5-guardrails-and-closeout
 worktree: ../atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout
 target: integrate/phase-Xb
