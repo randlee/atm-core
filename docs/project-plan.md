@@ -3146,14 +3146,9 @@ Acceptance:
 
 ## 28. Phase Xb SQLite SSOT And Daemon Boundary Simplification Restart
 
-<<<<<<< HEAD
-Planning branch:
-- `feature/pXb-s0-planning`
-=======
 Planning input:
 - legacy planning branch: `feature/pX-s0-planning`
 - restart execution branch: `integrate/phase-Xb`
->>>>>>> feature/pXb-s3-runtime-truth-unification
 
 Base branch:
 - `develop`
