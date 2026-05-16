@@ -1094,7 +1094,8 @@ impl Fixture {
 
         for (index, message) in messages.iter().enumerate() {
             let message_key = if let Some(message_id) = message.message_id {
-                atm_core::boundary::MessageKey::for_atm_message(message_id).expect("message key")
+                atm_core::boundary::MessageKey::new(format!("atm:{message_id}"))
+                    .expect("message key")
             } else {
                 atm_core::boundary::MessageKey::new(format!("ext:{agent}:{index}"))
                     .expect("message key")
@@ -1150,7 +1151,7 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
 }
 
 fn message_workflow_key(message: &MessageEnvelope) -> String {
-    atm_core::boundary::MessageKey::for_atm_message(message.message_id.expect("message id"))
+    atm_core::boundary::MessageKey::new(format!("atm:{}", message.message_id.expect("message id")))
         .expect("message key")
         .to_string()
 }
