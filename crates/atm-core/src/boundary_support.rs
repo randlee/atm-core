@@ -104,7 +104,7 @@ pub(crate) fn import_inbox_source(
 
 pub(crate) fn compute_identity_fingerprint(
     request: InboxIngressIdentityFingerprintRequest,
-) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
+) -> InboxIngressIdentityFingerprintResponse {
     let fingerprint = request
         .message
         .message_id
@@ -116,12 +116,12 @@ pub(crate) fn compute_identity_fingerprint(
                 request.message.timestamp.into_inner().to_rfc3339()
             ))
         });
-    Ok(InboxIngressIdentityFingerprintResponse { fingerprint })
+    InboxIngressIdentityFingerprintResponse { fingerprint }
 }
 
 pub(crate) fn report_inbox_diagnostics(
     request: InboxIngressDiagnosticsRequest,
-) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
+) -> InboxIngressDiagnosticsResponse {
     let mut seen = HashSet::new();
     let mut duplicate_message_ids = 0usize;
     let mut messages_without_ids = 0usize;
@@ -138,10 +138,10 @@ pub(crate) fn report_inbox_diagnostics(
         }
     }
 
-    Ok(InboxIngressDiagnosticsResponse {
+    InboxIngressDiagnosticsResponse {
         duplicate_message_ids,
         messages_without_ids,
-    })
+    }
 }
 
 pub(crate) fn export_source_files(

@@ -1,6 +1,6 @@
 ---
 id: X.5
-title: Guardrails And Closeout Verification
+title: Sprint X.5 — Guardrails, Dependency Ownership, And Closeout Verification
 status: complete
 branch: feature/pXb-s5-guardrails-and-closeout
 worktree: ../atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout
@@ -116,6 +116,17 @@ target: integrate/phase-Xb
 
 ### Closed Findings
 
+- `PLAN-GAP-001`
+  - `crates/atm-core/Cargo.toml`
+  - closed by `069be8c`
+  - removed the unused `atm-rusqlite` dev-dependency so the replayed
+    `X.5` branch no longer carries stale dependency-ownership debt
+- `PLAN-GAP-002`
+  - `crates/atm-core/Cargo.toml`
+  - closed by `069be8c`
+  - removing the same unused dev-dependency also eliminated the forbidden
+    `atm-core -> atm-rusqlite` boundary edge that was still failing
+    closeout validation
 - `ATM-QA-S4-001`
   - `crates/atm-daemon/src/peer_transport.rs`
   - `PeerTransportConfig::from_config(...)` now emits `tracing::warn!` before

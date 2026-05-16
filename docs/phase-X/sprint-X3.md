@@ -1,6 +1,6 @@
 ---
 id: X.3
-title: Daemon Runtime Truth Unification
+title: Sprint X.3 — Daemon Runtime Truth Unification
 status: complete
 branch: feature/pXb-s3-runtime-truth-unification
 worktree: ../atm-core-worktrees/feature/pXb-s3-runtime-truth-unification

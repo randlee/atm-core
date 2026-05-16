@@ -1,6 +1,6 @@
 ---
 id: X.2
-title: Command Path Simplification
+title: Sprint X.2 — Command Path Simplification And Legacy Path Deletion
 status: complete
 branch: feature/pXb-s2-command-path-simplification
 worktree: ../atm-core-worktrees/feature/pXb-s2-command-path-simplification
@@ -82,7 +82,6 @@ target: integrate/phase-Xb
 - command logic no longer branches on mailbox backend selection
 - mailbox command behavior remains routed through one store-backed path
 
-<<<<<<< HEAD
 ## Delivered
 
 - removed the remaining production `legacy:` mailbox-key branches from
@@ -107,9 +106,6 @@ Implementation result:
 - `rg -n "observe_source_files|commit_source_files|with_locked_source_files|commit_mailbox_state|read_messages" crates/atm-core/src`
   returns only test names in `mailbox/mod.rs`, not production helper or
   command-path matches
-
-=======
->>>>>>> feature/pXb-s1-mailbox-runtime-cutover
 ## Required Validation
 
 - `cargo build --workspace`

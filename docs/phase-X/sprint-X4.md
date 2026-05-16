@@ -146,6 +146,14 @@ Implementation result:
   matched the intended helper ownership on this branch baseline, so no extra
   boundary-doc delta was required in this sprint
 
+### Resolved Findings
+
+- `ATM-QA-F03`
+  - `docs/phase-X/sprint-X4.md`
+  - closed by `cb18a9c`
+  - aligned the frontmatter title with the sprint H1 so the completion record
+    uses the canonical sprint title everywhere
+
 ## Required Validation
 
 - `cargo build --workspace`

@@ -25,13 +25,13 @@ pub fn import_inbox_source(
 
 pub fn compute_identity_fingerprint(
     request: InboxIngressIdentityFingerprintRequest,
-) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
+) -> InboxIngressIdentityFingerprintResponse {
     crate::boundary_support::compute_identity_fingerprint(request)
 }
 
 pub fn report_inbox_diagnostics(
     request: InboxIngressDiagnosticsRequest,
-) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
+) -> InboxIngressDiagnosticsResponse {
     crate::boundary_support::report_inbox_diagnostics(request)
 }
 

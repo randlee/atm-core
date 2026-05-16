@@ -29,7 +29,6 @@ name = "agent-team-mail-core"
 version = "1.2.0"
 dependencies = [
  "atm-runtime-test-support",
- "atm-rusqlite",
  "chrono",
  "fs2",
  "interprocess",

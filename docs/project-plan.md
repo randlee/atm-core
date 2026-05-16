@@ -3229,7 +3229,7 @@ PR:
 - `#290`
 
 Status:
-- complete
+- X.4 complete (PR #290 merged to integrate/phase-Xb)
 
 Deliverables:
 - fail-closed replay-store startup contract documented and enforced in daemon
@@ -3266,7 +3266,7 @@ PR:
 - `#291`
 
 Status:
-- complete
+- X.5 complete (PR #291 merged to integrate/phase-Xb)
 
 Deliverables:
 - `ATM-QA-S4-001` closure by warning before peer-transport retry-budget fallback
