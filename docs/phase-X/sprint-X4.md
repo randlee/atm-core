@@ -1,6 +1,6 @@
 ---
 id: X.4
-title: Replay Persistence Contract, Peer Transport, And Same-Host IPC Helpers
+title: Sprint X.4 — Replay Persistence Contract, Peer Transport, And Same-Host IPC Helpers
 status: complete
 branch: feature/pXb-s4-replay-and-ipc-consolidation
 worktree: ../atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation
