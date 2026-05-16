@@ -13,6 +13,8 @@ Ownership rules:
 - ATM must not treat Claude JSON as the durable truth for ATM-owned machine
   state.
 - Unknown additive fields must be tolerated and preserved.
+- Phase `Y` requires one field-justification ledger for every ATM additive
+  field that survives on the shared inbox surface.
 
 Enforcement model in this repo:
 
@@ -34,6 +36,14 @@ needs compatibility with existing Claude-side consumers:
 
 These fields are compatibility fields only. They are not the durable ATM-owned
 source of truth for mailbox state.
+
+Phase `Y` rule:
+
+- field survival decisions must be owned by the relevant event-family state
+  machine plus the central delivery-policy coordinator
+- fields must not persist merely because scattered command code still reads
+  them
+- `Y.4` is the sprint that decides which of these fields actually survive
 
 ## 3. One Message Identity
 

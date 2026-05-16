@@ -3149,6 +3149,56 @@ mail correctness.
   - the later agent plugin crate must align to this daemon API rather than
     introducing a parallel message transport
 
+- `REQ-CORE-COMPAT-003` Compatibility export and nudge policy must be owned by
+  explicit event-family state machines.
+
+  Required behavior:
+  - one central delivery-policy coordinator dispatches by event family and
+    canonical roster `harness`
+  - harness routing is based on `RosterHarness`, not model strings
+  - the coordinator must not collapse all delivery behavior into one universal
+    send state enum
+  - at minimum the implementation must expose:
+    - `NewMessageStateMachine`
+    - `ThreadUpdateStateMachine`
+  - `NewMessageStateMachine` must have distinct audited Claude-harness and
+    non-Claude-harness paths
+  - `ThreadUpdateStateMachine` must remain distinct because parent/root
+    legality, sender-match checks, and one-successor rules are not new-message
+    semantics
+  - observable transition emission is required for every write-affecting state
+    transition
+
+- `REQ-CORE-COMPAT-004` Non-Claude harnesses must never receive ATM-authored
+  JSONL append output.
+
+  Required behavior:
+  - only `RosterHarness::ClaudeCode` may take the compatibility JSONL append
+    branch
+  - `codex-cli`, `gemini-cli`, `opencode`, and later non-Claude harnesses must
+    use non-JSONL delivery/notification paths
+  - this branch must not depend on model strings
+
+- `REQ-CORE-COMPAT-005` New-message SQLite failure must emit a companion system
+  error message instead of silently degrading.
+
+  Required behavior:
+  - if the durable SQLite write succeeds:
+    - the original message proceeds normally
+  - if the durable SQLite write fails:
+    - the original outward message still proceeds
+    - for `RosterHarness::ClaudeCode`, ATM appends:
+      - the original message
+      - a second error message from `atm-system@<team>`
+    - for non-Claude harnesses, ATM emits:
+      - the original message through the non-Claude delivery path
+      - a second error message from `atm-system@<team>` through the same
+        non-Claude delivery path
+    - the notification/nudge behavior mirrors both messages
+  - if the Claude-harness append fails after a successful SQLite write:
+    - the fallback notification path is post-send-hook execution
+  - no alternate fallback path may replace the companion error-message rule
+
 ### 21.6 Lock Elimination Target
 
 - `REQ-CORE-LOCK-RETIRE-001` ATM mail correctness must stop depending on

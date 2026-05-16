@@ -125,6 +125,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   boundary.
 - `atm-daemon` must not parse or write inbox JSONL except through the
   `atm-core` ingress/export boundaries.
+- write-affecting daemon mail events must route through one central
+  delivery-policy coordinator plus explicit event-family state machines rather
+  than through transport- or command-specific conditional branches
 - daemon runtime-health/status assembly must discover teams and members only
   through the installed `RosterStore`; `ATM_HOME/.claude/teams` is a config
   ingress surface, not a runtime-truth discovery path

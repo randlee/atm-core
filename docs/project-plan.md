@@ -3453,6 +3453,8 @@ Goal:
 - minimize ATM-authored metadata on the shared inbox surface
 - move all ATM-authored compatibility inbox/config writes behind one hard
   owner boundary
+- centralize delivery routing into one coordinator plus explicit event-family
+  state machines
 - remove mutable workflow-state projection from compatibility output
 - document every CLI/client-socket write path and every SQLite query state
   machine so QA can verify simplification directly
@@ -3478,6 +3480,7 @@ Immediate planning outputs:
 - `docs/plan-phase-Y.md`
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/phase-Y/delivery-state-machines.md`
 - `docs/phase-Y/sprint-Y3.md`
 - `docs/phase-Y/sprint-Y4.md`
 - `docs/phase-Y/sprint-Y5.md`

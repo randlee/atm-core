@@ -31,6 +31,8 @@ before append-only work or smoke testing begins.
 - retain exactly one normal runtime Claude-Code-only compatibility write owner
 - retain explicit admin/repair exceptions only where they are justified and
   documented
+- introduce one central delivery-policy coordinator
+- land separate event-family state machines instead of generic send branches
 - encode the harness gate and the SQL-failure/original+error companion-message
   rule before implementation begins
 
@@ -43,6 +45,10 @@ before append-only work or smoke testing begins.
 - harness selection is based on harness type, not model
 - non-Claude harnesses must never receive ATM-authored JSONL append output
 - the final runtime append path must be a single owned path
+- event-family routing must occur through one central coordinator rather than
+  through scattered `if` branches in command code
+- `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate machines
+  with separate QA transition tables
 - SQLite failure must still emit:
   - the original outward message
   - an additional `atm-system@<team>` error message
@@ -69,6 +75,7 @@ before append-only work or smoke testing begins.
 
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/phase-Y/delivery-state-machines.md`
 - the current `feature/pY-trivial-fixes` call stacks sampled in that audit
 
 ## Non-Goals
@@ -122,7 +129,30 @@ Required doc or boundary updates:
 - update `docs/atm-core/boundaries.md`
 - update `docs/atm-daemon/boundaries.md`
 
-### 3. Preserve only approved exceptional write paths
+### 3. Land the central delivery-policy coordinator and state machines
+
+Development work:
+- introduce one central delivery-policy coordinator that:
+  - dispatches by event family
+  - branches by `RosterHarness`
+  - emits observable transition events
+- land:
+  - `NewMessageStateMachine`
+  - `ThreadUpdateStateMachine`
+- ensure the Claude/non-Claude split for new-message handling is encoded in the
+  machine definitions, not in scattered call-site conditionals
+
+Required tests:
+- one transition test matrix for `ClaudeHarnessNewMessage`
+- one transition test matrix for `NonClaudeHarnessNewMessage`
+- one transition test matrix for `ThreadUpdateStateMachine`
+- observability confirms each state transition explicitly
+
+Required doc or boundary updates:
+- update `docs/phase-Y/delivery-state-machines.md`
+- update `docs/phase-Y/state-machine-coverage-audit.md`
+
+### 4. Preserve only approved exceptional write paths
 
 Development work:
 - retain admin/repair inbox creation only at:
@@ -230,11 +260,14 @@ second, but do not leave the repo in a mixed command-owned state between them.
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/plan-phase-Y.md`
 - `docs/project-plan.md`
+- `docs/phase-Y/delivery-state-machines.md`
 - any boundary docs touched by the retained owner shape
 
 ## Risks And Watchouts
 
 - this sprint must not invent a second runtime writer under a different name
+- do not let the central coordinator become a “god object”; event-family
+  legality stays in dedicated state machines
 - keep harness gating explicit; model-based branching is incorrect
 - if an old dependency appears, remove or document it now rather than preserving
   it silently for later

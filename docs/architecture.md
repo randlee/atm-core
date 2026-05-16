@@ -2284,6 +2284,29 @@ Architectural rule:
 `config.json` remains a team-ingress surface, but roster truth moves to
 SQLite.
 
+### 21.2.1 Delivery Policy Placement
+
+Compatibility export and notification policy must not remain scattered through
+command code.
+
+Architectural rules:
+
+- one central delivery-policy coordinator dispatches write-affecting events by:
+  - event family
+  - canonical roster `harness`
+- the coordinator is not a universal mail state machine; it is a dispatcher
+  and policy gate
+- event legality remains in dedicated event-family state machines
+- at minimum the runtime must model:
+  - `NewMessageStateMachine`
+  - `ThreadUpdateStateMachine`
+- `NewMessageStateMachine` must expose two auditable harness paths:
+  - Claude harness
+  - non-Claude harness
+- `ThreadUpdateStateMachine` remains separate because supersede/update legality
+  differs materially from standalone send
+- write-affecting transitions must emit observable transition records
+
 ### 21.3 Information Flow
 
 There are three distinct paths:
@@ -2313,6 +2336,30 @@ Projection-awareness rule:
   mail
 - re-observing the same ATM retrieval stub for the same `message_id` must not
   trigger a new logical message import or notification loop
+
+### 21.3.1 New-Message Failure Contract
+
+The first daemon + SQLite release keeps one exact outward-delivery rule for new
+messages.
+
+Architectural rules:
+
+- for `RosterHarness::ClaudeCode`
+  - SQLite success:
+    - original message flow completes
+    - compatibility append runs
+    - normal nudge runs
+  - SQLite failure:
+    - the original message is still appended to the Claude inbox
+    - ATM appends a second `atm-system@<team>` error message to the Claude
+      inbox
+    - the notification path mirrors both messages
+  - compatibility append failure after SQLite success:
+    - post-send-hook execution is the fallback notification path
+- for non-Claude harnesses
+  - no compatibility JSONL append occurs
+  - on SQLite failure, the same original-plus-error-message rule applies
+    through the non-Claude delivery path rather than JSONL append
 
 ### 21.4 One Interface, Two Transport Implementations
 

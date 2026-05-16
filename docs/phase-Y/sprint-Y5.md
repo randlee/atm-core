@@ -30,6 +30,8 @@ runtime lock dependence on inbox-file rewrites.
 - replace full-file runtime rewrites with append-only output where permitted
 - keep repair/rebuild flows separate
 - preserve the exact success/failure contract agreed during planning
+- keep append/no-append behavior inside harness-specific state-machine
+  transitions
 
 ## Governing Requirements
 
@@ -58,11 +60,13 @@ runtime lock dependence on inbox-file rewrites.
 
 - final accepted wire-format decision
 - final accepted SQLite-failure/original+error emission contract
+- `docs/phase-Y/delivery-state-machines.md`
 
 ## Non-Goals
 
 - do not relax the exact failure contract during implementation
 - do not broaden JSONL append to non-Claude harnesses
+- do not push append/no-append decisions back into generic writer helpers
 
 ## Sub-Tasks
 
@@ -72,6 +76,7 @@ Development work:
 - replace runtime array rewrite usage with append-only output
 - keep explicit rebuild/repair flows staged and separate
 - delete leftover lock-coupled runtime rewrite code
+- keep the append choice owned by the harness-specific `NewMessage` machines
 
 Required tests:
 - append-only success on Claude Code harness
@@ -81,13 +86,18 @@ Required tests:
 Required doc or boundary updates:
 - update `docs/phase-Y/inbox-write-path-audit.md`
 - update `docs/atm-message-schema.md` if wire-format wording changes
+- update `docs/phase-Y/delivery-state-machines.md` if the append contract
+  changes any machine transitions
 
 ### 2. Encode the exact failure truth table
 
 Development work:
 - implement only the approved cases:
   - SQLite success -> original message output
-  - SQLite failure -> original message + `atm-system@<team>` error message
+  - SQLite failure on `Claude Code` harness -> original message append +
+    `atm-system@<team>` error-message append
+  - SQLite failure on non-Claude harness -> original message delivery +
+    `atm-system@<team>` error-message delivery through the non-Claude path
   - append failure -> post-send-hook fallback for notification degradation
 - do not add alternate fallback branches
 

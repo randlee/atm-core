@@ -130,6 +130,8 @@ Current assessment:
 
 - JSONL append is a `Claude Code` harness output only; harness type, not model,
   decides whether a compatibility append is allowed
+- harness routing must be resolved from canonical roster `harness` truth, not
+  from ad hoc command inputs or model strings
 - non-`Claude Code` harnesses must never receive ATM-authored JSONL appends
 - multiple command/daemon flows may persist messages into SQLite, but only one
   Claude-compatible append path is allowed after that write flow completes
@@ -137,14 +139,22 @@ Current assessment:
   not become the mutable source of truth
 - the final normal runtime write owner must sit behind one hard boundary and
   must not be directly callable from arbitrary command code
+- the branch between Claude and non-Claude behavior must live in one central
+  delivery-policy coordinator plus explicit event-family state machines
+- `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate by
+  design; they must not be collapsed into one generic send machine
 - normal runtime append behavior is:
   - SQLite inbox write completes
   - one owned Claude-Code-only append path runs
   - one nudge path runs
 - SQLite failure behavior is intentionally stricter than a normal degradation:
-  - original outward delivery still proceeds
-  - ATM must also emit a second error message from `atm-system@<team>`
-  - the nudge path mirrors that two-message behavior
+  - for `Claude Code` harnesses:
+    - the original message is still appended to the Claude inbox
+    - ATM also appends a second error message from `atm-system@<team>`
+  - for non-Claude harnesses:
+    - the original message still proceeds through the non-Claude delivery path
+    - ATM also emits a second error message through that same path
+  - the nudge/notification path mirrors that two-message behavior
   - no alternate fallback path is allowed in place of that companion error
     message
 - if the Claude Code append itself fails, the fallback notification path is the
@@ -336,5 +346,7 @@ write classes:
 - whether the watcher/import/export subsystem itself should own both approved
   inbox-write classes, or whether the bulk-mailbox-creation path should remain
   a separately owned admin/repair boundary
+- whether `AckReplyStateMachine` should land in `Y.3` with `NewMessage`, or
+  remain a follow-on machine after the core delivery-policy extraction
 - whether any shared-inbox mutable ATM field still has a legitimate
   compatibility role

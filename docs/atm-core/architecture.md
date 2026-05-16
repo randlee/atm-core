@@ -474,6 +474,12 @@ Architectural rules:
 - Claude inbox JSONL is ingress/egress compatibility only
 - ATM-authored JSONL export is a bounded compatibility projection over the full
   durable message body
+- canonical roster `harness` is the behavior gate for compatibility export
+  versus native delivery; model strings are not
+- write-affecting mail events must route through one central delivery-policy
+  coordinator plus dedicated event-family state machines
+- `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate machines
+  by design; shared helpers may share side effects but not event legality
 
 Migration implication:
 - current mailbox/workflow-sidecar logic is transitional and must converge onto

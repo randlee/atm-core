@@ -27,6 +27,14 @@ Current gap notes:
   export/write path itself
 - there is no dedicated state-machine diagram for watcher/import/export write
   ownership
+- there is no dedicated state-machine diagram for the central delivery-policy
+  coordinator
+- there is no dedicated state-machine diagram for:
+  - `ClaudeHarnessNewMessage`
+  - `NonClaudeHarnessNewMessage`
+  - `ThreadUpdateStateMachine`
+- `AckReplyStateMachine` is not yet documented either and must be explicitly
+  accepted as either in-scope for `Y.3` or deferred by name
 
 ## 2. Client-Socket / Daemon Request Coverage
 
@@ -83,6 +91,11 @@ Current gap notes:
 - missing write-ownership diagrams:
   - compatibility inbox export / rewrite owner
   - `config.json` write owner and allowed admin/recovery flows
+- missing delivery-policy diagrams:
+  - central event-family dispatcher keyed by `RosterHarness`
+  - Claude-harness new-message flow
+  - non-Claude-harness new-message flow
+  - thread-update legality and delivery flow
 
 ## 3. SQLite Query Diagrams Already Documented
 
@@ -127,6 +140,10 @@ Planning must produce:
 - a checked inventory of every client-socket request family
 - a checked inventory of every SQLite query diagram used by the daemon/runtime
 - an explicit backlog list for any missing diagrams required by QA
+- one diagram set for the central delivery-policy coordinator and the required
+  event-family state machines
+- one normative design note for those machines:
+  - `docs/phase-Y/delivery-state-machines.md`
 
 ## 5. QA Enforcement Intent
 

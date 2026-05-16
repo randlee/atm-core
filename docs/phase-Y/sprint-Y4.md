@@ -30,6 +30,7 @@ before release smoke work begins.
 - justify every surviving ATM-authored shared-inbox field
 - remove mutable workflow-state fields from compatibility output
 - expose and delete hidden consumers that still depend on those fields
+- keep field-removal behavior explicit inside the event-family state machines
 
 ## Governing Requirements
 
@@ -57,6 +58,7 @@ before release smoke work begins.
 ## Hard Dependencies
 
 - `docs/atm-message-schema.md`
+- `docs/phase-Y/delivery-state-machines.md`
 - any field-by-field justification table produced during planning review
 
 ## Non-Goals
@@ -81,6 +83,8 @@ Required tests:
 Required doc or boundary updates:
 - update `docs/atm-message-schema.md`
 - update `docs/phase-Y/sprint-Y4.md`
+- update `docs/phase-Y/delivery-state-machines.md` if field removal changes any
+  transition contracts
 
 ### 2. Remove mutable workflow-state fields
 

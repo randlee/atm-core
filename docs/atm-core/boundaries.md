@@ -198,6 +198,9 @@ Notes:
 - Retained command/runtime code must reach compatibility inbox export only
   through the daemon-owned ingress/export seam; it must not treat export-file
   reads as a second source of mailbox truth.
+- Harness-specific export policy belongs in one central delivery-policy
+  coordinator and event-family state machines above this boundary, not in
+  scattered command callers.
 
 ## NotificationSink
 
@@ -210,6 +213,9 @@ Purpose:
 
 Notes:
 - This replaces direct `Command::new` use in business-flow code.
+- Notification fallback policy for delivery state machines belongs here as a
+  sink-side effect, but event legality still belongs to the event-family state
+  machine rather than to the sink adapter.
 
 ## StatusSource
 

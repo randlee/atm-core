@@ -12,6 +12,9 @@ dogfood work:
 - minimize ATM-authored metadata on the Claude compatibility inbox surface
 - move all ATM-authored inbox/config write behavior behind one hard-owned
   boundary
+- centralize delivery/write-routing policy into one explicit coordinator
+- replace scattered command-local conditionals with auditable event-family
+  state machines
 - remove mutable workflow-state projection from compatibility inbox output
 - eliminate normal-runtime mailbox-lock dependence where the compatibility
   contract allows it
@@ -89,6 +92,13 @@ Normal runtime behavior must therefore converge on:
 - one Claude-Code-only compatibility append branch after that delivery/state
   flow
 - no JSONL append for non-Claude harnesses
+- one central delivery-policy coordinator that dispatches by event family and
+  `RosterHarness`
+- separate event-family state machines rather than one combined “mail send”
+  state machine
+- at minimum:
+  - `NewMessageStateMachine`
+  - `ThreadUpdateStateMachine`
 - one explicit companion error contract when SQLite delivery fails:
   - original outward delivery still proceeds
   - an additional `atm-system@<team>` error message is emitted
@@ -106,6 +116,7 @@ The following must be completed on the planning branch before numbered Phase
 - minimum-field decision for ATM-authored shared-inbox metadata
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/phase-Y/delivery-state-machines.md`
 - backlog list for any missing command/request/query diagrams
 - line-numbered write/removal ledger for every inbox/config write stack
 - approved implementation scopes for the first two small pre-smoke sprints
@@ -146,6 +157,8 @@ Purpose:
 - add machine-checkable enforcement so command code cannot bypass that owner
 - execute the line-numbered removal ledger from
   `docs/phase-Y/inbox-write-path-audit.md`
+- land the central delivery-policy coordinator and the first required
+  event-family state machines
 
 ### Y.4 Mutable Compatibility-Field Removal And Dependency Exposure
 
@@ -155,6 +168,8 @@ Purpose:
 - let breakage expose hidden logic dependencies
 - delete or refactor those obsolete dependencies instead of preserving them
 - justify every remaining compatibility field explicitly
+- keep field-removal logic inside the event-family state machines rather than
+  in generic export conditionals
 
 ### Y.5 Append-Only Compatibility Export Cutover
 
@@ -164,6 +179,8 @@ Purpose:
   compatibility rewrites with append-only writes
 - eliminate normal-runtime inbox locks from the hot write path
 - keep restore/repair flows separate if they still require staged rewrites
+- keep the append/no-append decision inside the harness-specific new-message
+  state machines rather than in scattered writer call sites
 
 ### Y.6 Smoke Bring-Up
 
@@ -201,6 +218,9 @@ Purpose:
 - use data removal to expose hidden dependencies early
 - every write-stack removal or retention decision must be documented by file,
   line, and function name before the corresponding sprint starts
+- every write-affecting event family must have its own documented state machine
+- harness-specific branching must live in the delivery-policy coordinator plus
+  the relevant state machine, not in command code
 - do not treat command-path direct inbox rewrites as an acceptable long-term
   boundary outcome
 - every CLI command, every client-socket command family, and every SQLite
