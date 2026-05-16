@@ -38,6 +38,28 @@ fn production() {
 
         self.assertEqual([span.name for span in spans], ["production"])
 
+    def test_find_function_spans_ignores_trait_method_signatures_without_bodies(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            path = Path(tempdir) / "sample.rs"
+            path.write_text(
+                """\
+trait Example {
+    fn create_task(
+        &self,
+        request: String,
+    ) -> Result<(), String>;
+}
+
+fn production() {
+    let value = 1;
+}
+""",
+                encoding="utf-8",
+            )
+            spans = MODULE.find_function_spans(path)
+
+        self.assertEqual([span.name for span in spans], ["production"])
+
     def test_overlaps_changed_lines_detects_diff_overlap(self) -> None:
         function = MODULE.FunctionSpan(path=Path("crates/atm-core/src/example.rs"), name="demo", start_line=10, end_line=20)
 

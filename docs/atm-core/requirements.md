@@ -307,7 +307,7 @@ Required `atm-core` crate rules:
 - `atm-core` owns the canonical durable-store contract including:
   - `messages`
   - one unified mutable message-state surface
-  - one canonical roster/member surface
+  - one canonical roster/team/member surface
   - `inbox_ingest`
 - `atm-core` must keep daemon-owned live `pid` state out of the canonical
   roster/member surface

@@ -25,7 +25,6 @@ pub use observability::{
 use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, OptionalExtension, params};
 use shared_db::{SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error};
-#[cfg(test)]
 use std::path::Path;
 #[cfg(test)]
 use std::path::PathBuf;
@@ -34,6 +33,34 @@ use std::sync::Arc;
 #[derive(Debug)]
 struct SqliteMailStore {
     db: Arc<SharedDb>,
+}
+
+pub struct SqliteWriterLockGuard {
+    connection: Connection,
+}
+
+impl Drop for SqliteWriterLockGuard {
+    fn drop(&mut self) {
+        let _ = self.connection.execute_batch("ROLLBACK;");
+    }
+}
+
+pub fn hold_sqlite_writer_lock(path: impl AsRef<Path>) -> Result<SqliteWriterLockGuard, AtmError> {
+    let connection = Connection::open(path.as_ref()).map_err(|error| {
+        AtmError::daemon_unavailable("failed to open sqlite writer lock connection")
+            .with_recovery(
+                "Repair the sqlite test runtime path before retrying the bounded mailbox lock test.",
+            )
+            .with_source(error)
+    })?;
+    connection.execute_batch("BEGIN IMMEDIATE;").map_err(|error| {
+        AtmError::daemon_unavailable("failed to begin sqlite writer lock transaction")
+            .with_recovery(
+                "Repair the sqlite test runtime path before retrying the bounded mailbox lock test.",
+            )
+            .with_source(error)
+    })?;
+    Ok(SqliteWriterLockGuard { connection })
 }
 
 #[derive(Debug, Clone)]
@@ -345,7 +372,7 @@ impl boundary::MailStore for SqliteMailStore {
         &self,
         request: boundary::MailStoreHealthSnapshotRequest,
     ) -> Result<boundary::MailStoreHealthSnapshotResponse, AtmError> {
-        let (total_messages, pending_ack_messages, read_messages, latest_message_timestamp) =
+        let (total_messages, pending_ack_messages, read_message_count, latest_message_timestamp) =
             self.db.with_connection(|connection| {
                 connection
                     .query_row(
@@ -394,7 +421,7 @@ impl boundary::MailStore for SqliteMailStore {
                 agent: request.agent,
                 total_messages,
                 pending_ack_messages,
-                read_messages,
+                read_message_count,
                 latest_message_timestamp,
             },
         })
@@ -823,7 +850,7 @@ mod tests {
             read: false,
             source_team: Some(team()),
             summary: Some("summary".to_string()),
-            message_id: None,
+            message_id: Some(atm_core::schema::AtmMessageId::new()),
             pending_ack_at: Some(IsoTimestamp::now()),
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -950,10 +977,11 @@ mod tests {
         let mut readable_envelope = envelope();
         readable_envelope.text = "sqlite body".to_string();
         readable_envelope.summary = Some("summary: sqlite body".to_string());
+        let readable_message_id = readable_envelope.message_id.expect("message id");
         let record = boundary::MailStoreMessageRecord {
             team: team(),
             agent: agent(),
-            message_key: message_key("atm:readable"),
+            message_key: message_key(&format!("atm:{readable_message_id}")),
             envelope: readable_envelope,
         };
         assembly
@@ -1085,10 +1113,11 @@ mod tests {
             })
             .expect("bootstrap");
 
+        let entrypoint_message_id = atm_core::schema::AtmMessageId::new();
         let record = boundary::MailStoreMessageRecord {
             team: team_name.clone(),
             agent: agent_name.clone(),
-            message_key: message_key("atm:entrypoint-read"),
+            message_key: message_key(&format!("atm:{entrypoint_message_id}")),
             envelope: MessageEnvelope {
                 from: actor(),
                 text: "entrypoint read body".to_string(),
@@ -1096,7 +1125,7 @@ mod tests {
                 read: false,
                 source_team: Some(team_name.clone()),
                 summary: Some("entrypoint read summary".to_string()),
-                message_id: None,
+                message_id: Some(entrypoint_message_id),
                 pending_ack_at: Some(IsoTimestamp::now()),
                 acknowledged_at: None,
                 acknowledges_message_id: None,
@@ -1413,7 +1442,7 @@ mod tests {
             .expect("health");
         assert_eq!(health.snapshot.total_messages, 1);
         assert_eq!(health.snapshot.pending_ack_messages, 1);
-        assert_eq!(health.snapshot.read_messages, 1);
+        assert_eq!(health.snapshot.read_message_count, 1);
 
         assembly
             .mail_store
@@ -1497,7 +1526,7 @@ mod tests {
             counts,
             boundary::MailStoreMailboxMetadataCounts {
                 total_messages: 3,
-                unread_messages: 2,
+                unread_message_count: 2,
                 pending_ack_messages: 2,
             }
         );
@@ -1592,7 +1621,7 @@ mod tests {
             counts,
             boundary::MailStoreMailboxMetadataCounts {
                 total_messages: 1,
-                unread_messages: 1,
+                unread_message_count: 1,
                 pending_ack_messages: 0,
             }
         );
@@ -2108,6 +2137,53 @@ mod tests {
             .expect("load empty roster");
 
         assert!(loaded.members.is_empty());
+    }
+
+    #[test]
+    fn roster_store_list_teams_returns_sorted_distinct_team_names() {
+        let assembly = in_memory_assembly();
+        let store = assembly.roster_store();
+        let alpha_team: TeamName = "alpha".parse().expect("team name");
+        let bravo_team: TeamName = "bravo".parse().expect("team name");
+
+        store
+            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
+                team: bravo_team.clone(),
+                members: vec![boundary::RosterMemberRecord {
+                    team_name: bravo_team.clone(),
+                    agent_name: "zulu".parse().expect("agent name"),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: "ops".to_string(),
+                    model: "claude".to_string(),
+                    recipient_pane_id: None,
+                    metadata_json: serde_json::Map::new(),
+                }],
+                source: Some(boundary::ReplaySource::new("config.json").expect("replay source")),
+            })
+            .expect("replace bravo roster");
+        store
+            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
+                team: alpha_team.clone(),
+                members: vec![boundary::RosterMemberRecord {
+                    team_name: alpha_team.clone(),
+                    agent_name: "alpha-agent".parse().expect("agent name"),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::CodexCli,
+                    agent_type: "dev".to_string(),
+                    model: "gpt-5".to_string(),
+                    recipient_pane_id: None,
+                    metadata_json: serde_json::Map::new(),
+                }],
+                source: Some(boundary::ReplaySource::new("config.json").expect("replay source")),
+            })
+            .expect("replace alpha roster");
+
+        let teams = store
+            .list_teams(boundary::RosterStoreListTeamsRequest)
+            .expect("list teams");
+
+        assert_eq!(teams.teams, vec![alpha_team, bravo_team]);
     }
 
     #[test]

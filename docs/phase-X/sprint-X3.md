@@ -1,9 +1,9 @@
 ---
 id: X.3
 title: Daemon Runtime Truth Unification
-status: planned
+status: complete
 branch: feature/pXb-s3-runtime-truth-unification
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification
+worktree: ../atm-core-worktrees/feature/pXb-s3-runtime-truth-unification
 target: integrate/phase-Xb
 ---
 
@@ -16,9 +16,9 @@ target: integrate/phase-Xb
   `X.3` work:
   - `9264c3e8c480a4262a23ee0fd1ffaa144cd5f38f`
     - `feat: unify daemon runtime truth on roster store`
-- The old `feature/pX-s3-runtime-truth-unification` branch ref is contaminated
-  by later sprint merges and must not be treated as the replay source; salvage
-  only the audited `9264c3e...` delta.
+- The old Phase `X` `X.3` sprint branch ref is contaminated by later sprint
+  merges and must not be treated as the replay source; salvage only the
+  audited `9264c3e...` delta.
 - QA must validate the entire `X.3` sprint on `pXb-s3`, not only the replayed
   delta from that commit.
 
@@ -48,9 +48,13 @@ target: integrate/phase-Xb
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-core/src/boundary/store.rs`
+- `crates/atm-core/src/doctor/mod.rs`
 - `crates/atm-rusqlite/src/lib.rs`
 - any roster-store implementation files touched by the new enumeration boundary
 - `crates/atm-daemon/src/composition.rs`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-core/architecture.md`
+- `docs/atm-core/requirements.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-daemon/architecture.md`
 
@@ -80,6 +84,32 @@ target: integrate/phase-Xb
 - `build_runtime_status_cache_state(...)` is under `80` lines
 - doctor/runtime-health still surface SQLite unavailability and degraded state
   with the existing shared ATM error contract
+
+## Delivered
+
+- added `RosterStore::list_teams(...)` as the explicit boundary operation for
+  daemon runtime team discovery
+- updated the SQLite roster-store adapter to enumerate canonical persisted team
+  names in sorted order and added direct coverage for that boundary behavior
+- removed `ATM_HOME/.claude/teams` enumeration from
+  `build_runtime_status_cache_state(...)`
+- refactored runtime-status hydration so the daemon now builds team/member truth
+  only from the installed roster-store boundary plus preserved in-memory live
+  state
+- kept the shutdown-finalizer registry unchanged while rewiring only the
+  runtime-truth assembly path
+- updated both `atm-core` and `atm-daemon` boundary/architecture docs so
+  roster truth now explicitly includes daemon runtime team discovery
+- updated the `atm-core` doctor-only roster-store test double to match the
+  expanded sealed boundary contract
+
+Implementation result:
+- the X.3 acceptance criteria are satisfied on
+  `feature/pXb-s3-runtime-truth-unification`
+- `build_runtime_status_cache_state(...)` no longer uses `read_dir(...)` or
+  `home_dir`
+- daemon runtime-status hydration now has one explicit durable team/member
+  source: `RosterStore`
 
 ## Required Validation
 

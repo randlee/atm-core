@@ -1,9 +1,9 @@
 ---
 id: X.2
 title: Command Path Simplification
-status: planned
+status: complete
 branch: feature/pXb-s2-command-path-simplification
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification
+worktree: ../atm-core-worktrees/feature/pXb-s2-command-path-simplification
 target: integrate/phase-Xb
 ---
 
@@ -16,9 +16,9 @@ target: integrate/phase-Xb
   `X.2` work:
   - `0580c0e540e28403715e939a0da8cf3cfaf67f2a`
     - `feat: simplify mailbox command paths for phase X`
-- The old `feature/pX-s2-command-path-simplification` branch head is
-  contaminated by later sprint merges and must not be treated as the replay
-  source; salvage only the audited `0580c0e...` delta.
+- The original Phase `X` `X.2` branch head is contaminated by later sprint
+  merges and must not be treated as the replay source; salvage only the
+  audited `0580c0e...` delta.
 - QA must validate the entire `X.2` sprint on `pXb-s2`, not only the replayed
   delta from that commit.
 
@@ -82,6 +82,34 @@ target: integrate/phase-Xb
 - command logic no longer branches on mailbox backend selection
 - mailbox command behavior remains routed through one store-backed path
 
+<<<<<<< HEAD
+## Delivered
+
+- removed the remaining production `legacy:` mailbox-key branches from
+  retained command/runtime code
+- changed the shared send/ack append path to load mailbox thread context from
+  SQLite metadata/records instead of compatibility inbox files
+- renamed the old file-surface helper APIs so retained command logic no longer
+  depends on the legacy `observe_source_files` / `commit_source_files` /
+  `commit_mailbox_state` / `read_messages` surface
+- kept the remaining compatibility inbox import/export helpers behind the
+  hidden daemon-side ingress/export seam in `boundary_support.rs`
+- tightened boundary docs so compatibility inbox files are explicitly
+  daemon-owned ingress/export edges rather than a retained runtime backend
+- updated mailbox health/count DTO names so the X.2 grep gate is clean in
+  production code
+
+Implementation result:
+- the X.2 acceptance criteria are satisfied on
+  `feature/pXb-s2-command-path-simplification`
+- `rg -n "legacy:" crates/atm-core/src` returns only the explicit rejection
+  test fixture in `workflow.rs`
+- `rg -n "observe_source_files|commit_source_files|with_locked_source_files|commit_mailbox_state|read_messages" crates/atm-core/src`
+  returns only test names in `mailbox/mod.rs`, not production helper or
+  command-path matches
+
+=======
+>>>>>>> feature/pXb-s1-mailbox-runtime-cutover
 ## Required Validation
 
 - `cargo build --workspace`

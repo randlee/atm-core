@@ -29,9 +29,8 @@ impl DaemonRequestDispatcher {
             Arc::clone(&sqlite_observability),
         ) {
             Ok(boundary) => {
-                if let Err(error) =
-                    build_runtime_status_cache_state(None, &home_dir, boundary.roster_store())
-                        .and_then(|state| status_cache.replace_state(state))
+                if let Err(error) = build_runtime_status_cache_state(None, boundary.roster_store())
+                    .and_then(|state| status_cache.replace_state(state))
                 {
                     tracing::warn!(
                         %error,

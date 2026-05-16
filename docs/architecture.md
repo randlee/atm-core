@@ -2258,6 +2258,9 @@ Required architectural rules:
 - remote replay rows live in the host-scoped SQLite root and are keyed by
   mailbox identity plus durable `message_key` so startup resume can replay
   pending remote handoff without duplicating committed local state
+- daemon startup is fail-closed when the persisted replay store cannot be
+  opened, because the bounded replay-resume sweep is part of the serving
+  startup contract rather than an optional degraded-mode feature
 - WAL checkpoint is part of graceful shutdown, but recovery correctness must
   not depend on graceful shutdown having succeeded
 - persisted retry state must not become a long-lived remote outbox; expired

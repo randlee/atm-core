@@ -9,7 +9,6 @@ use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::IsoTimestamp;
 use atm_rusqlite::assemble_boundary;
-use serial_test::serial;
 use tempfile::TempDir;
 
 use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
@@ -80,7 +79,7 @@ fn advisory_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn dispatcher_routes_advisory_register_requests() {
     let (_tempdir, dispatcher) = advisory_test_dispatcher();
     let request = advisory_registration_request("session-register");
@@ -101,7 +100,7 @@ fn dispatcher_routes_advisory_register_requests() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn dispatcher_routes_advisory_unregister_requests() {
     let (_tempdir, dispatcher) = advisory_test_dispatcher();
     let request = advisory_registration_request("session-unregister");
@@ -127,7 +126,7 @@ fn dispatcher_routes_advisory_unregister_requests() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn dispatcher_routes_advisory_fetch_requests() {
     let (_tempdir, dispatcher) = advisory_test_dispatcher();
     let request = advisory_registration_request("session-fetch");
@@ -154,7 +153,7 @@ fn dispatcher_routes_advisory_fetch_requests() {
 }
 
 #[test]
-#[serial]
+#[serial_test::serial(env)]
 fn dispatcher_routes_advisory_drain_requests() {
     let (_tempdir, dispatcher) = advisory_test_dispatcher();
     let request = advisory_registration_request("session-drain");

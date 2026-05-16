@@ -36,6 +36,8 @@ resolver = "2"
         self.assertIn("manifests", names)
         self.assertIn("silent-emit", names)
         self.assertIn("function-length", names)
+        self.assertIn("legacy-mailbox-paths", names)
+        self.assertIn("capability-degradation", names)
         self.assertIn("deny", names)
         self.assertIn("shear", names)
         self.assertIn("fixed-sleep", names)
@@ -109,6 +111,14 @@ resolver = "2"
                 tasks["function-length"].command[-1],
                 str(repo_root / "scripts/check-function-length.py"),
             )
+            self.assertEqual(
+                tasks["legacy-mailbox-paths"].command[-1],
+                str(repo_root / "scripts/check-legacy-mailbox-paths.py"),
+            )
+            self.assertEqual(
+                tasks["capability-degradation"].command[-1],
+                str(repo_root / "scripts/check-capability-degradation.py"),
+            )
             self.assertEqual(tasks["deny"].command[-1], str(repo_root / ".just/lint_cargo_deny.py"))
             self.assertEqual(tasks["shear"].command[-1], str(repo_root / ".just/lint_cargo_shear.py"))
             self.assertEqual(
@@ -129,7 +139,19 @@ resolver = "2"
     def test_resolve_task_names_fast_is_low_latency_subset(self) -> None:
         self.assertEqual(
             resolve_task_names("fast"),
-            ["fmt", "version", "boundaries", "manifests", "silent-emit", "function-length", "spell", "pytests"],
+            [
+                "fmt",
+                "version",
+                "boundaries",
+                "manifests",
+                "shear",
+                "silent-emit",
+                "function-length",
+                "legacy-mailbox-paths",
+                "capability-degradation",
+                "spell",
+                "pytests",
+            ],
         )
 
     def test_build_transcript_adds_crate_inventory_for_crate_scoped_lints(self) -> None:

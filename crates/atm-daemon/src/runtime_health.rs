@@ -223,9 +223,8 @@ impl DaemonRequestDispatcher {
             sqlite_observability,
         ) {
             Ok(boundary) => {
-                if let Err(error) =
-                    build_runtime_status_cache_state(None, &home_dir, boundary.roster_store())
-                        .and_then(|state| status_cache.replace_state(state))
+                if let Err(error) = build_runtime_status_cache_state(None, boundary.roster_store())
+                    .and_then(|state| status_cache.replace_state(state))
                 {
                     tracing::warn!(%error, "failed to hydrate runtime status cache from sqlite roster state");
                     runtime_health_observability.emit_or_warn(
@@ -370,8 +369,7 @@ impl DaemonRequestDispatcher {
                 )
             })?;
         let current_state = self.status_cache.clone_state()?;
-        let next_state =
-            build_runtime_status_cache_state(Some(&current_state), &self.home_dir, roster_store)?;
+        let next_state = build_runtime_status_cache_state(Some(&current_state), roster_store)?;
         let reloaded_members = next_state.member_count();
         self.status_cache.replace_state(next_state)?;
         tracing::info!(
@@ -601,7 +599,6 @@ mod tests {
     use super::{
         DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
     };
-    use serial_test::serial;
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
 
@@ -614,7 +611,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn bounded_shutdown_step_returns_after_deadline() {
         let _drain_guard = ShutdownFinalizerDrainGuard;
         let release = Arc::new((Mutex::new(false), Condvar::new()));
@@ -647,7 +644,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn bounded_shutdown_step_does_not_exceed_retained_finalizer_cap() {
         let _drain_guard = ShutdownFinalizerDrainGuard;
         DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();

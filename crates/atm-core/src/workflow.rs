@@ -28,9 +28,7 @@ pub(crate) struct WorkflowStateFile {
 
 /// Workflow sidecar key for one ATM-owned message identity.
 ///
-/// Per ADR-012, all new writes use the `atm:` prefix. `legacy:` remains
-/// accepted here for read-compatibility only while older workflow state files
-/// are still present on disk.
+/// Per ADR-012, all workflow sidecar keys use the `atm:` prefix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct WorkflowMessageKey(AtmMessageId);
 
@@ -58,13 +56,7 @@ impl FromStr for WorkflowMessageKey {
     fn from_str(value: &str) -> Result<Self, Self::Err> {
         let raw_id = value
             .strip_prefix(Self::PREFIX)
-            .or_else(|| value.strip_prefix("legacy:"))
-            .ok_or_else(|| {
-                format!(
-                    "workflow key must start with '{}' or 'legacy:'",
-                    Self::PREFIX
-                )
-            })?;
+            .ok_or_else(|| format!("workflow key must start with '{}'", Self::PREFIX))?;
         let message_id = raw_id
             .parse::<AtmMessageId>()
             .map_err(|error| format!("invalid workflow message id: {error}"))?;
@@ -197,6 +189,7 @@ where
     Ok(result)
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn project_envelope(
     envelope: &MessageEnvelope,
     workflow_state: &WorkflowStateFile,
@@ -218,6 +211,7 @@ pub(crate) fn project_envelope(
     projected_envelope
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn apply_projected_state(
     workflow_state: &mut WorkflowStateFile,
     original: &MessageEnvelope,
@@ -242,6 +236,7 @@ pub(crate) fn apply_projected_state(
     true
 }
 
+#[cfg_attr(not(test), allow(dead_code))]
 pub(crate) fn remove_message_state(
     workflow_state: &mut WorkflowStateFile,
     envelope: &MessageEnvelope,
@@ -401,11 +396,11 @@ mod tests {
     }
 
     #[test]
-    fn workflow_message_key_accepts_legacy_prefix_for_read_compatibility() {
-        let key = "legacy:01KRFK5QTF2R6NRS3Q0F8Z9K0S"
+    fn workflow_message_key_rejects_non_atm_prefix() {
+        let error = "legacy:01KRFK5QTF2R6NRS3Q0F8Z9K0S"
             .parse::<WorkflowMessageKey>()
-            .expect("workflow key");
+            .expect_err("workflow key should reject non-workflow prefixes");
 
-        assert_eq!(key.to_string(), "atm:01KRFK5QTF2R6NRS3Q0F8Z9K0S");
+        assert_eq!(error, "workflow key must start with 'atm:'");
     }
 }

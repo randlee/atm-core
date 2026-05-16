@@ -141,6 +141,14 @@ Follow-up work:
   façade interfaces with hidden implementations.
 - `atm-core` must keep production failure handling structured with typed
   `Result`/error-enum boundaries rather than routine panic/unwrap paths.
+- retained mailbox runtime selection must be fail-closed and store-backed only;
+  `atm-core` must not preserve a file-backed mailbox fallback once the Phase X
+  cutover line lands
+- compatibility inbox files may survive only as ingress/export edges; retained
+  command/runtime logic must not treat them as a second durable mailbox backend
+- if compatibility inbox import/export helpers remain, they must stay behind
+  the hidden daemon-side ingress/export seam rather than leaking back into the
+  retained command runtime surface
 
 Observability release boundary rules:
 - raw `serde_json::Value` / `serde_json::Map` remain internal translation types
@@ -276,11 +284,11 @@ Architectural rule:
 Store-family rule:
 - `MailStore` owns message lifecycle state
 - `TaskStore` owns task-domain state and task metadata
-- `RosterStore` owns durable roster membership state only
+- `RosterStore` owns durable team/member roster state only
 - daemon-owned live `pid` state and other session-transient runtime data stay
   outside `RosterStore`
 - `TeamConfig` / `config.json` stays a config-ingress document, not the durable
-  roster contract
+  roster contract or the daemon runtime team-discovery surface
 - `MailStore` must not become the catch-all owner for unrelated future domains
   such as orchestration or daemon-live-status state
 

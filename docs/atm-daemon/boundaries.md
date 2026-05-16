@@ -30,6 +30,8 @@ even though they are not public cross-crate traits:
   - must remain runtime-private and must not absorb dispatcher or store logic
 - `RuntimeStatusCache` in `atm_daemon::runtime_health`
   - owns live daemon-memory member state and cache-cap semantics
+  - hydrates durable team/member truth only through `RosterStore`; it must not
+    rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving and peer transport code
 
 ## Planned R.20 partition map
@@ -197,6 +199,10 @@ Notes:
   `atm_daemon::peer_transport`.
 - Runtime composition owns replay resume and exposes the transport only through
   the shared `ClientTransport` contract.
+- Runtime composition also owns peer-transport config resolution through the
+  daemon-side `ConfigIngress` adapter; `PeerClientTransport` must not call the
+  workspace config loader directly or silently fall back to defaults after a
+  config-load failure.
 - The peer transport must reuse the shared ATM frame header and packet DTOs
   used by the same-host local IPC boundary; host-host traffic is not a second
   daemon message system.
