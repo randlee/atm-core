@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use crate::RemoteReplayStateRecord;
 use atm_core::AtmConfig;
-use atm_core::boundary::{self, AtmProtocol, ClientTransport, ConfigLoadRequest, MessageKey};
+use atm_core::boundary::{self, AtmProtocol, ClientTransport, MessageKey};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
     JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
@@ -23,6 +23,7 @@ use crate::{DaemonSubsystem, SubsystemObservability};
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
+const MIN_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(1);
 const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
 
@@ -40,12 +41,22 @@ impl Default for PeerTransportConfig {
 }
 
 impl PeerTransportConfig {
-    pub(crate) fn from_config(config: Option<&AtmConfig>) -> Self {
-        config
-            .map(|config| Self {
-                remote_retry_budget: config.daemon.remote_retry_budget,
-            })
-            .unwrap_or_default()
+    pub(crate) fn from_config(config: Option<&AtmConfig>) -> Result<Self, AtmError> {
+        let remote_retry_budget = config
+            .map(|config| config.daemon.remote_retry_budget)
+            .unwrap_or(DEFAULT_REMOTE_RETRY_BUDGET);
+        if remote_retry_budget < MIN_REMOTE_RETRY_BUDGET {
+            return Err(AtmError::validation(format!(
+                "daemon.remote_retry_budget must be at least {} second(s)",
+                MIN_REMOTE_RETRY_BUDGET.as_secs()
+            ))
+            .with_recovery(
+                "Raise daemon.remote_retry_budget to at least one second before starting atm-daemon.",
+            ));
+        }
+        Ok(Self {
+            remote_retry_budget,
+        })
     }
 }
 
@@ -147,25 +158,10 @@ struct PeerClientTransport {
 impl PeerClientTransport {
     fn new_with_observability(
         replay_store: Option<Arc<dyn RemoteReplayStore>>,
+        config: PeerTransportConfig,
         observability: SubsystemObservability,
     ) -> Self {
         let endpoint = daemon_peer_endpoint_from_env();
-        let config = std::env::current_dir()
-            .ok()
-            .and_then(|current_dir| match crate::direct_boundaries::load_workspace_config(
-                ConfigLoadRequest { current_dir },
-            ) {
-                Ok(response) => response.config,
-                Err(error) => {
-                    tracing::warn!(
-                        %error,
-                        "failed to load workspace config while constructing peer transport; using default remote retry budget"
-                    );
-                    None
-                }
-            })
-            .map(|config| PeerTransportConfig::from_config(Some(&config)))
-            .unwrap_or_default();
         Self {
             endpoint,
             config,
@@ -701,16 +697,22 @@ impl PeerTransportRuntime {
     pub(crate) fn new(replay_store: Option<Arc<dyn RemoteReplayStore>>) -> Self {
         Self::new_with_observability(
             replay_store,
+            PeerTransportConfig::default(),
             SubsystemObservability::disabled(DaemonSubsystem::PeerTransport),
         )
     }
 
     pub(crate) fn new_with_observability(
         replay_store: Option<Arc<dyn RemoteReplayStore>>,
+        config: PeerTransportConfig,
         observability: SubsystemObservability,
     ) -> Self {
         Self {
-            client: PeerClientTransport::new_with_observability(replay_store, observability),
+            client: PeerClientTransport::new_with_observability(
+                replay_store,
+                config,
+                observability,
+            ),
         }
     }
 

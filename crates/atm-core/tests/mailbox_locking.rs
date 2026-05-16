@@ -692,8 +692,9 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     mutation_lock_file
         .lock_exclusive()
         .expect("hold mutation lock");
-    let mut mutation_query = mutation_fixture.read_query(PRIMARY_AGENT);
-    mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let mutation_query = mutation_fixture
+        .read_query(PRIMARY_AGENT)
+        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
     let mutation_outcome = read_mail(mutation_query, &observability).expect("read with mutation");
     assert_eq!(mutation_outcome.count, 1);
     assert!(mutation_outcome.mutation_applied);
@@ -719,9 +720,10 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     no_mutation_lock_file
         .lock_exclusive()
         .expect("hold no-mutation lock");
-    let mut no_mutation_query = no_mutation_fixture.read_query(PRIMARY_AGENT);
-    no_mutation_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
-    no_mutation_query.selection_mode = ReadSelection::All;
+    let no_mutation_query = no_mutation_fixture
+        .read_query(PRIMARY_AGENT)
+        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread)
+        .with_selection_mode(ReadSelection::All);
     let started = Instant::now();
     let outcome = read_mail(no_mutation_query, &observability).expect("read without mutation");
     assert_eq!(outcome.count, 1);
@@ -759,8 +761,9 @@ fn read_mail_updates_sidecar_for_ulid_authored_message_without_mutating_inbox() 
         .expect("logical message id");
     assert_eq!(physical_before["read"], false);
 
-    let mut read_query = fixture.read_query(PRIMARY_AGENT);
-    read_query.ack_activation_mode = AckActivationMode::PromoteDisplayedUnread;
+    let read_query = fixture
+        .read_query(PRIMARY_AGENT)
+        .with_ack_activation_mode(AckActivationMode::PromoteDisplayedUnread);
     let outcome = read_mail(read_query, &observability).expect("read mail");
     assert!(
         outcome
@@ -1005,6 +1008,7 @@ impl Fixture {
                 let notices = self.inbox_contents_for_team(team, TEAM_LEAD);
                 panic!("missing-config notice not observed before timeout: {notices:?}");
             }
+            // lint-fixed-sleep: allow-next-line
             thread::sleep(Duration::from_millis(2));
         }
     }
@@ -1035,6 +1039,7 @@ impl Fixture {
                     "workflow state for missing-config notice not observed before timeout: {workflow:?}"
                 );
             }
+            // lint-fixed-sleep: allow-next-line
             thread::sleep(Duration::from_millis(2));
         }
     }

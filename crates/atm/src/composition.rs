@@ -728,7 +728,7 @@ mod tests {
                 read,
                 source_team: Some(TEST_TEAM.parse().expect("team")),
                 summary: None,
-                message_id: None,
+                message_id: Some(AtmMessageId::new()),
                 pending_ack_at: None,
                 acknowledged_at: None,
                 acknowledges_message_id: None,

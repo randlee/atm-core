@@ -3147,7 +3147,7 @@ Acceptance:
 ## 28. Phase X SQLite SSOT And Daemon Boundary Simplification
 
 Planning branch:
-- `feature/pX-s0-planning`
+- `feature/pXb-s0-planning`
 
 Base branch:
 - `integrate/phase-W`
@@ -3220,7 +3220,7 @@ Acceptance:
 ## 28. Phase X Planning And Pre-Phase Lint Prerequisite
 
 Planning branch:
-- `feature/pX-s0-planning`
+- `feature/pXb-s0-planning`
 
 Pre-phase prerequisite branch:
 - `feature/pX-lint-gates`
