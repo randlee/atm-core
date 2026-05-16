@@ -169,7 +169,6 @@ pub fn query_mailbox_metadata_rows(
                 .with_recovery("Use a smaller mailbox metadata limit before retrying the query.")
         })?;
         let sql = "SELECT
-        let sql = "SELECT
                  mail_messages.message_key,
                  mail_messages.message_id,
                  mail_messages.parent_message_id,
