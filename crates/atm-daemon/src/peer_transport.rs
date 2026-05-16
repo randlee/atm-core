@@ -27,7 +27,6 @@ const MIN_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(1);
 const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
 const MAX_REPLAY_RESUME_SWEEP_BUDGET: Duration = Duration::from_secs(30);
-const PEER_BLOCKING_SLICE_DEADLINE: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PeerTransportConfig {
@@ -313,105 +312,39 @@ impl PeerClientTransport {
         endpoint: SocketAddr,
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, AtmError> {
-        let request_id = atm_core::protocol::next_request_id();
-        let frame = self.codec.request_to_frame(request_id, request)?;
+        let frame = self
+            .codec
+            .request_to_frame(atm_core::protocol::next_request_id(), request)?;
         let deadline = Instant::now() + self.config.remote_retry_budget;
         let terminate = daemon_terminate_flag()?;
         let mut backoff = INITIAL_RETRY_BACKOFF;
         let mut attempt = 0u32;
 
         loop {
-            if terminate.load(Ordering::SeqCst) {
-                return Err(
-                    AtmError::daemon_unavailable(
-                        "daemon shutdown interrupted remote peer delivery before the next network attempt",
-                    )
-                    .with_recovery(
-                        "Retry the daemon operation after atm-daemon restarts and resumes pending remote replay work.",
-                    ),
-                );
-            }
+            self.ensure_retry_not_terminated(
+                &terminate,
+                "daemon shutdown interrupted remote peer delivery before the next network attempt",
+            )?;
+            let current_attempt = attempt;
+            let mut retry_state = DeliveryRetryState {
+                deadline,
+                terminate: &terminate,
+                backoff: &mut backoff,
+                next_attempt: &mut attempt,
+            };
             match self.send_once(endpoint, &frame) {
                 Ok(response) => {
-                    tracing::info!(
-                        peer_addr = %endpoint,
-                        attempt,
-                        "daemon peer delivery succeeded"
-                    );
-                    self.observability.emit_or_warn(
-                        "send_to_endpoint",
-                        "ok",
-                        "daemon peer delivery succeeded",
-                    );
-                    return Ok(response);
+                    return Ok(self.record_send_success(endpoint, current_attempt, response));
                 }
-                Err(failure) if failure.kind == AttemptFailureKind::Retryable => {
-                    let now = Instant::now();
-                    if now >= deadline {
-                        tracing::error!(
-                            peer_addr = %endpoint,
-                            attempt,
-                            error_code = %failure.error.code,
-                            error_message = %failure.error.message,
-                            "daemon peer delivery exhausted retry budget"
-                        );
-                        self.observability.emit_or_warn(
-                            "send_to_endpoint",
-                            "failed",
-                            "daemon peer delivery exhausted its retry budget",
-                        );
-                        return Err(failure.error);
-                    }
-                    let remaining = deadline.saturating_duration_since(now);
-                    let sleep_for =
-                        jittered_backoff(backoff, jitter_seed(endpoint, attempt)).min(remaining);
-                    tracing::warn!(
-                        peer_addr = %endpoint,
-                        attempt,
-                        sleep_ms = sleep_for.as_millis(),
-                        error_code = %failure.error.code,
-                        error_message = %failure.error.message,
-                        "daemon peer delivery hit retryable failure"
-                    );
-                    self.observability.emit_or_warn(
-                        "send_to_endpoint",
-                        "degraded",
-                        "daemon peer delivery hit a retryable failure",
-                    );
-                    if wait_for_retry_backoff(&terminate, sleep_for) {
-                        return Err(
-                            AtmError::daemon_unavailable(
-                                "daemon shutdown interrupted remote peer retry backoff",
-                            )
-                            .with_recovery(
-                                "Retry the daemon operation after atm-daemon restarts and resumes pending remote replay work.",
-                            ),
-                        );
-                    }
-                    backoff = backoff.saturating_mul(2).min(MAX_RETRY_BACKOFF);
-                    attempt = attempt.saturating_add(1);
-                }
-                Err(failure) => {
-                    let level = if failure.kind == AttemptFailureKind::OutcomeUnknown {
-                        "outcome_unknown"
-                    } else {
-                        "non_retryable"
-                    };
-                    tracing::error!(
-                        peer_addr = %endpoint,
-                        attempt,
-                        failure_kind = level,
-                        error_code = %failure.error.code,
-                        error_message = %failure.error.message,
-                        "daemon peer delivery failed"
-                    );
-                    self.observability.emit_or_warn(
-                        "send_to_endpoint",
-                        "failed",
-                        "daemon peer delivery failed with a non-retryable or outcome-unknown error",
-                    );
-                    return Err(failure.error);
-                }
+                Err(failure) => match self.handle_send_failure(
+                    endpoint,
+                    current_attempt,
+                    &mut retry_state,
+                    *failure,
+                ) {
+                    DeliveryLoopDecision::Retry => {}
+                    DeliveryLoopDecision::Return(error) => return Err(error),
+                },
             }
         }
     }
@@ -421,52 +354,53 @@ impl PeerClientTransport {
         endpoint: SocketAddr,
         request_frame: &atm_core::protocol::FramePayload,
     ) -> Result<ResponseEnvelope, Box<AttemptFailure>> {
-        let mut stream = TcpStream::connect_timeout(
-            &endpoint,
-            PEER_CONNECT_DEADLINE.min(PEER_BLOCKING_SLICE_DEADLINE),
-        )
-        .map_err(|source| {
-                Box::new(AttemptFailure {
-                    kind: classify_io_error(&source),
-                    error: AtmError::daemon_unavailable(format!(
-                        "failed to connect to remote daemon peer at {endpoint}"
-                    ))
-                    .with_recovery(
-                        "Confirm the remote daemon is reachable at the configured peer endpoint, then retry. If the remote daemon is intentionally offline, let durable replay resume the handoff after it recovers.",
-                    )
-                    .with_source(source),
-                })
-            })?;
+        let mut stream = self.connect_peer_stream(endpoint)?;
+        self.apply_peer_io_deadlines(&stream)?;
+        self.publish_request_frame(&mut stream, request_frame)?;
+        match self.decode_response_frame(
+            request_frame.request_id,
+            self.read_response_frame(&mut stream)?,
+        )? {
+            ResponseEnvelope::Error(error) => Err(Box::new(AttemptFailure {
+                kind: AttemptFailureKind::NonRetryable,
+                error: error.into_atm_error(),
+            })),
+            response => Ok(response),
+        }
+    }
+
+    fn connect_peer_stream(&self, endpoint: SocketAddr) -> Result<TcpStream, Box<AttemptFailure>> {
+        TcpStream::connect_timeout(&endpoint, PEER_CONNECT_DEADLINE).map_err(|source| {
+            Box::new(AttemptFailure {
+                kind: classify_io_error(&source),
+                error: AtmError::daemon_unavailable(format!(
+                    "failed to connect to remote daemon peer at {endpoint}"
+                ))
+                .with_recovery(
+                    "Confirm the remote daemon is reachable at the configured peer endpoint, then retry. If the remote daemon is intentionally offline, let durable replay resume the handoff after it recovers.",
+                )
+                .with_source(source),
+            })
+        })
+    }
+
+    fn apply_peer_io_deadlines(&self, stream: &TcpStream) -> Result<(), Box<AttemptFailure>> {
         stream
-            .set_read_timeout(Some(PEER_IO_DEADLINE.min(PEER_BLOCKING_SLICE_DEADLINE)))
-            .map_err(|source| {
-                Box::new(AttemptFailure {
-                    kind: AttemptFailureKind::Retryable,
-                    error: AtmError::daemon_unavailable(
-                        "failed to apply remote peer read deadline",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon and retry after the peer socket can accept bounded read deadlines again.",
-                    )
-                    .with_source(source),
-                })
-            })?;
+            .set_read_timeout(Some(PEER_IO_DEADLINE))
+            .map_err(peer_read_deadline_error)?;
         stream
-            .set_write_timeout(Some(PEER_IO_DEADLINE.min(PEER_BLOCKING_SLICE_DEADLINE)))
-            .map_err(|source| {
-                Box::new(AttemptFailure {
-                    kind: AttemptFailureKind::Retryable,
-                    error: AtmError::daemon_unavailable(
-                        "failed to apply remote peer write deadline",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon and retry after the peer socket can accept bounded write deadlines again.",
-                    )
-                    .with_source(source),
-                })
-            })?;
+            .set_write_timeout(Some(PEER_IO_DEADLINE))
+            .map_err(peer_write_deadline_error)?;
+        Ok(())
+    }
+
+    fn publish_request_frame(
+        &self,
+        stream: &mut TcpStream,
+        request_frame: &atm_core::protocol::FramePayload,
+    ) -> Result<(), Box<AttemptFailure>> {
         atm_core::protocol::write_frame(
-            &mut stream,
+            stream,
             request_frame,
             "failed to write remote peer request frame",
         )
@@ -476,17 +410,16 @@ impl PeerClientTransport {
                 error,
             })
         })?;
-        stream.flush().map_err(|source| {
-            Box::new(AttemptFailure {
-                kind: AttemptFailureKind::OutcomeUnknown,
-                error: AtmError::remote_delivery_outcome_unknown(
-                    "failed to flush the remote peer request frame before waiting for a response",
-                )
-                .with_source(source),
-            })
-        })?;
-        let Some(response_frame) = atm_core::protocol::read_frame(
-            &mut stream,
+        stream.flush().map_err(peer_flush_error)?;
+        Ok(())
+    }
+
+    fn read_response_frame(
+        &self,
+        stream: &mut TcpStream,
+    ) -> Result<atm_core::protocol::FramePayload, Box<AttemptFailure>> {
+        atm_core::protocol::read_frame(
+            stream,
             "failed to read remote peer response frame",
             "remote peer response frame exceeded the maximum supported size",
         )
@@ -496,52 +429,233 @@ impl PeerClientTransport {
                 error,
             })
         })?
-        else {
-            return Err(Box::new(AttemptFailure {
-                kind: AttemptFailureKind::OutcomeUnknown,
-                error: AtmError::remote_delivery_outcome_unknown(
-                    "remote peer closed the connection before returning a response frame",
-                )
-                .with_recovery(
-                    "Check the destination daemon or mailbox before retrying. If local durable replay is enabled, let the daemon resume the pending handoff rather than guessing success.",
-                ),
-            }));
-        };
-        let (response_id, response) =
-            self.codec
-                .response_from_frame(response_frame)
-                .map_err(|error| {
-                    Box::new(AttemptFailure {
-                        kind: AttemptFailureKind::NonRetryable,
-                        error: AtmError::daemon_unavailable(
-                            "failed to decode remote peer response frame",
-                        )
-                        .with_recovery(
-                            "Align the peer daemon builds so both sides speak the same ATM daemon protocol before retrying the remote delivery.",
-                        )
-                        .with_source(error),
-                    })
-                })?;
-        if response_id != request_frame.request_id {
-            return Err(Box::new(AttemptFailure {
-                kind: AttemptFailureKind::NonRetryable,
-                error: AtmError::daemon_unavailable(format!(
-                    "remote peer response request_id {} did not match request_id {}",
-                    response_id, request_frame.request_id
-                ))
-                .with_recovery(
-                    "Align the peer daemon builds so both sides use the same ATM daemon protocol contract before retrying.",
-                ),
-            }));
+        .ok_or_else(peer_closed_before_response_error)
+    }
+
+    fn decode_response_frame(
+        &self,
+        request_id: atm_core::protocol::RequestId,
+        response_frame: atm_core::protocol::FramePayload,
+    ) -> Result<ResponseEnvelope, Box<AttemptFailure>> {
+        let (response_id, response) = self
+            .codec
+            .response_from_frame(response_frame)
+            .map_err(peer_response_decode_error)?;
+        if response_id != request_id {
+            return Err(peer_response_id_mismatch_error(response_id, request_id));
         }
-        match response {
-            ResponseEnvelope::Error(error) => Err(Box::new(AttemptFailure {
-                kind: AttemptFailureKind::NonRetryable,
-                error: error.into_atm_error(),
-            })),
-            response => Ok(response),
+        Ok(response)
+    }
+
+    fn ensure_retry_not_terminated(
+        &self,
+        terminate: &Arc<AtomicBool>,
+        message: &'static str,
+    ) -> Result<(), AtmError> {
+        if terminate.load(Ordering::SeqCst) {
+            return Err(AtmError::daemon_unavailable(message).with_recovery(
+                "Retry the daemon operation after atm-daemon restarts and resumes pending remote replay work.",
+            ));
+        }
+        Ok(())
+    }
+
+    fn record_send_success(
+        &self,
+        endpoint: SocketAddr,
+        attempt: u32,
+        response: ResponseEnvelope,
+    ) -> ResponseEnvelope {
+        tracing::info!(
+            peer_addr = %endpoint,
+            attempt,
+            "daemon peer delivery succeeded"
+        );
+        self.observability
+            .emit_or_warn("send_to_endpoint", "ok", "daemon peer delivery succeeded");
+        response
+    }
+
+    fn handle_send_failure(
+        &self,
+        endpoint: SocketAddr,
+        attempt: u32,
+        retry_state: &mut DeliveryRetryState<'_>,
+        failure: AttemptFailure,
+    ) -> DeliveryLoopDecision {
+        match failure.kind {
+            AttemptFailureKind::Retryable => {
+                self.handle_retryable_failure(endpoint, attempt, retry_state, failure.error)
+            }
+            AttemptFailureKind::NonRetryable | AttemptFailureKind::OutcomeUnknown => {
+                self.handle_terminal_failure(endpoint, attempt, failure)
+            }
         }
     }
+
+    fn handle_retryable_failure(
+        &self,
+        endpoint: SocketAddr,
+        attempt: u32,
+        retry_state: &mut DeliveryRetryState<'_>,
+        error: AtmError,
+    ) -> DeliveryLoopDecision {
+        let now = Instant::now();
+        if now >= retry_state.deadline {
+            tracing::error!(
+                peer_addr = %endpoint,
+                attempt,
+                error_code = %error.code,
+                error_message = %error.message,
+                "daemon peer delivery exhausted retry budget"
+            );
+            self.observability.emit_or_warn(
+                "send_to_endpoint",
+                "failed",
+                "daemon peer delivery exhausted its retry budget",
+            );
+            return DeliveryLoopDecision::Return(error);
+        }
+        let remaining = retry_state.deadline.saturating_duration_since(now);
+        let sleep_for =
+            jittered_backoff(*retry_state.backoff, jitter_seed(endpoint, attempt)).min(remaining);
+        tracing::warn!(
+            peer_addr = %endpoint,
+            attempt,
+            sleep_ms = sleep_for.as_millis(),
+            error_code = %error.code,
+            error_message = %error.message,
+            "daemon peer delivery hit retryable failure"
+        );
+        self.observability.emit_or_warn(
+            "send_to_endpoint",
+            "degraded",
+            "daemon peer delivery hit a retryable failure",
+        );
+        if wait_for_retry_backoff(retry_state.terminate, sleep_for) {
+            return DeliveryLoopDecision::Return(
+                AtmError::daemon_unavailable(
+                    "daemon shutdown interrupted remote peer retry backoff",
+                )
+                .with_recovery(
+                    "Retry the daemon operation after atm-daemon restarts and resumes pending remote replay work.",
+                ),
+            );
+        }
+        *retry_state.backoff = retry_state.backoff.saturating_mul(2).min(MAX_RETRY_BACKOFF);
+        *retry_state.next_attempt = retry_state.next_attempt.saturating_add(1);
+        DeliveryLoopDecision::Retry
+    }
+
+    fn handle_terminal_failure(
+        &self,
+        endpoint: SocketAddr,
+        attempt: u32,
+        failure: AttemptFailure,
+    ) -> DeliveryLoopDecision {
+        let failure_kind = match failure.kind {
+            AttemptFailureKind::OutcomeUnknown => "outcome_unknown",
+            AttemptFailureKind::NonRetryable => "non_retryable",
+            AttemptFailureKind::Retryable => "retryable",
+        };
+        tracing::error!(
+            peer_addr = %endpoint,
+            attempt,
+            failure_kind,
+            error_code = %failure.error.code,
+            error_message = %failure.error.message,
+            "daemon peer delivery failed"
+        );
+        self.observability.emit_or_warn(
+            "send_to_endpoint",
+            "failed",
+            "daemon peer delivery failed with a non-retryable or outcome-unknown error",
+        );
+        DeliveryLoopDecision::Return(failure.error)
+    }
+}
+
+struct DeliveryRetryState<'a> {
+    deadline: Instant,
+    terminate: &'a Arc<AtomicBool>,
+    backoff: &'a mut Duration,
+    next_attempt: &'a mut u32,
+}
+
+enum DeliveryLoopDecision {
+    Retry,
+    Return(AtmError),
+}
+
+fn peer_read_deadline_error(source: io::Error) -> Box<AttemptFailure> {
+    Box::new(AttemptFailure {
+        kind: AttemptFailureKind::Retryable,
+        error: AtmError::daemon_unavailable("failed to apply remote peer read deadline")
+            .with_recovery(
+                "Restart atm-daemon and retry after the peer socket can accept bounded read deadlines again.",
+            )
+            .with_source(source),
+    })
+}
+
+fn peer_write_deadline_error(source: io::Error) -> Box<AttemptFailure> {
+    Box::new(AttemptFailure {
+        kind: AttemptFailureKind::Retryable,
+        error: AtmError::daemon_unavailable("failed to apply remote peer write deadline")
+            .with_recovery(
+                "Restart atm-daemon and retry after the peer socket can accept bounded write deadlines again.",
+            )
+            .with_source(source),
+    })
+}
+
+fn peer_flush_error(source: io::Error) -> Box<AttemptFailure> {
+    Box::new(AttemptFailure {
+        kind: AttemptFailureKind::OutcomeUnknown,
+        error: AtmError::remote_delivery_outcome_unknown(
+            "failed to flush the remote peer request frame before waiting for a response",
+        )
+        .with_source(source),
+    })
+}
+
+fn peer_closed_before_response_error() -> Box<AttemptFailure> {
+    Box::new(AttemptFailure {
+        kind: AttemptFailureKind::OutcomeUnknown,
+        error: AtmError::remote_delivery_outcome_unknown(
+            "remote peer closed the connection before returning a response frame",
+        )
+        .with_recovery(
+            "Check the destination daemon or mailbox before retrying. If local durable replay is enabled, let the daemon resume the pending handoff rather than guessing success.",
+        ),
+    })
+}
+
+fn peer_response_decode_error(error: AtmError) -> Box<AttemptFailure> {
+    Box::new(AttemptFailure {
+        kind: AttemptFailureKind::NonRetryable,
+        error: AtmError::daemon_unavailable("failed to decode remote peer response frame")
+            .with_recovery(
+                "Align the peer daemon builds so both sides speak the same ATM daemon protocol before retrying the remote delivery.",
+            )
+            .with_source(error),
+    })
+}
+
+fn peer_response_id_mismatch_error(
+    response_id: atm_core::protocol::RequestId,
+    request_id: atm_core::protocol::RequestId,
+) -> Box<AttemptFailure> {
+    Box::new(AttemptFailure {
+        kind: AttemptFailureKind::NonRetryable,
+        error: AtmError::daemon_unavailable(format!(
+            "remote peer response request_id {} did not match request_id {}",
+            response_id, request_id
+        ))
+        .with_recovery(
+            "Align the peer daemon builds so both sides use the same ATM daemon protocol contract before retrying.",
+        ),
+    })
 }
 
 fn wait_for_retry_backoff(terminate: &Arc<AtomicBool>, sleep_for: Duration) -> bool {

@@ -3245,6 +3245,11 @@ Status note:
 - `X.1` complete on `feature/pX-s1-mailbox-runtime-cutover`
   - target: `integrate/phase-X`
   - scope: retained mailbox runtime cutover to a fail-closed SQLite/store-backed path
+- `X.2` complete on `feature/pX-s2-command-path-simplification`
+  - target: `integrate/phase-X`
+  - scope: removed the remaining production legacy-key branches, moved send
+    threading/export to a store-backed projection load, and confined
+    compatibility inbox file helpers to the hidden daemon ingress/export seam
 
 Execution shape:
 - pre-phase prerequisite:

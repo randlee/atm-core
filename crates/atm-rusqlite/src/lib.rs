@@ -372,7 +372,7 @@ impl boundary::MailStore for SqliteMailStore {
         &self,
         request: boundary::MailStoreHealthSnapshotRequest,
     ) -> Result<boundary::MailStoreHealthSnapshotResponse, AtmError> {
-        let (total_messages, pending_ack_messages, read_messages, latest_message_timestamp) =
+        let (total_messages, pending_ack_messages, read_message_count, latest_message_timestamp) =
             self.db.with_connection(|connection| {
                 connection
                     .query_row(
@@ -421,7 +421,7 @@ impl boundary::MailStore for SqliteMailStore {
                 agent: request.agent,
                 total_messages,
                 pending_ack_messages,
-                read_messages,
+                read_message_count,
                 latest_message_timestamp,
             },
         })
@@ -1442,7 +1442,7 @@ mod tests {
             .expect("health");
         assert_eq!(health.snapshot.total_messages, 1);
         assert_eq!(health.snapshot.pending_ack_messages, 1);
-        assert_eq!(health.snapshot.read_messages, 1);
+        assert_eq!(health.snapshot.read_message_count, 1);
 
         assembly
             .mail_store
@@ -1526,7 +1526,7 @@ mod tests {
             counts,
             boundary::MailStoreMailboxMetadataCounts {
                 total_messages: 3,
-                unread_messages: 2,
+                unread_message_count: 2,
                 pending_ack_messages: 2,
             }
         );
@@ -1621,7 +1621,7 @@ mod tests {
             counts,
             boundary::MailStoreMailboxMetadataCounts {
                 total_messages: 1,
-                unread_messages: 1,
+                unread_message_count: 1,
                 pending_ack_messages: 0,
             }
         );

@@ -1,7 +1,16 @@
 use std::path::PathBuf;
+use std::sync::Once;
 
 use atm_core::error::AtmError;
 use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint};
+
+static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
+
+pub fn install_sqlite_retained_runtime_factory() {
+    INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
+        atm_core::install_default_runtime_factory(atm_rusqlite::default_local_runtime);
+    });
+}
 
 /// # Errors
 ///

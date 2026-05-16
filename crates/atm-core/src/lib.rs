@@ -4,7 +4,8 @@ pub mod ack;
 pub mod address;
 /// Phase R boundary traits and placeholder contract types.
 pub mod boundary;
-/// Hidden support helpers used by concrete boundary adapter crates.
+/// Hidden daemon-private ingress/export helpers used by concrete boundary
+/// adapter crates.
 #[doc(hidden)]
 pub mod boundary_support;
 /// Mailbox cleanup workflows for read and acknowledged messages.
