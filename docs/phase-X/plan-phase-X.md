@@ -1,4 +1,4 @@
-# Phase X — SQLite SSOT And Daemon Boundary Simplification
+# Phase Xb — SQLite SSOT And Daemon Boundary Simplification Restart
 
 Goal:
 - close the pre-existing SSOT gaps that remained after Phase `W`
@@ -11,15 +11,22 @@ Goal:
   regressions from reappearing
 
 Phase scope note:
-- Phase `X` is implementation planning only.
+- Phase `Xb` is restart execution planning for the abandoned Phase `X` work.
 - It is not a discovery line.
 - Every sprint below is written to be directly executable without a separate
   planning sprint.
 
 Planning branch:
-- `feature/pX-s0-planning`
+- `feature/pXb-s0-planning`
 
-Baseline:
+Restart baseline:
+- `develop` at `0f5e11c`
+- prior implementation salvage source:
+  - abandoned `integrate/phase-X` line and its sprint branches
+- inherited prerequisite baseline:
+  - `feature/pX-lint-gates` already merged to `develop`
+
+Historical baseline reference:
 - `integrate/phase-W` at `9016eed`
 - authoritative inputs:
   - `docs/phase-W/post-mortem.md`
@@ -54,8 +61,9 @@ Predecessor gate:
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
 
 Pre-phase prerequisite:
-- before `integrate/phase-Xb` is created, the following guardrails must land on
-  `develop` through a standalone branch such as `feature/pX-lint-gates`:
+- already satisfied before `integrate/phase-Xb` creation:
+  - the following guardrails landed on `develop` through
+    `feature/pX-lint-gates`:
   - `scripts/check-silent-emit.py`
   - `scripts/check-function-length.py`
 - reason:
@@ -85,17 +93,19 @@ Boundary rules for Phase `X`:
   `#[path = ...]` indirection may not leave stale dependencies hidden until
   `cargo-shear` catches them at the end of a sprint
 
-## Current-State Analysis
+## Original Defect Drivers
 
 ### PX-001 [BLOCKING for SSOT] — Mailbox durability still has two implementations
 
-Current code still exposes both SQLite and legacy file-backed mailbox behavior:
+On the abandoned original Phase `X` baseline, code still exposed both SQLite
+and legacy file-backed mailbox behavior:
 - `crates/atm-core/src/service_runtime_store.rs`
   - `DefaultMailboxRuntime::{Sqlite, Legacy}` at lines `19-22`
   - `default_runtime()` fallback to `Legacy(...)` at lines `51-55`
   - retained runtime still fronts file-backed mailbox operations at lines
     `299-345`
-  - `LegacyMailboxRuntime` remains live at lines `606-689`
+  - `LegacyMailboxRuntime` remained live at lines `606-689` on the original
+    abandoned Phase `X` baseline
 - `crates/atm-core/src/ack/mod.rs`
   - command logic still branches into the legacy file path at lines `154-328`
 
@@ -106,7 +116,8 @@ Required outcome:
 
 ### PX-002 [HIGH] — Daemon runtime truth is still hybrid filesystem plus SQLite
 
-Current code still assembles daemon runtime state from two ownership domains:
+On the abandoned original Phase `X` baseline, code still assembled daemon
+runtime state from two ownership domains:
 - `crates/atm-daemon/src/runtime_status_cache.rs`
   - `build_runtime_status_cache_state(...)` at lines `393-494`
   - team discovery starts from `ATM_HOME/.claude/teams`
@@ -118,8 +129,8 @@ Required outcome:
 
 ### PX-003 [MEDIUM] — Replay persistence startup contract is implicit
 
-Current code allows reduced-capability startup without an explicit product
-decision:
+On the abandoned original Phase `X` baseline, code allowed reduced-capability
+startup without an explicit product decision:
 - `crates/atm-daemon/src/composition.rs`
   - replay-store assembly failure at lines `186-202`
   - daemon logs degradation and continues with `replay_store = None`
@@ -130,8 +141,8 @@ Required outcome:
 
 ### PX-004 [HIGH] — Same-host client helper duplication still exists
 
-Current code still keeps duplicated same-host daemon helper logic across the
-CLI and graft surfaces:
+On the abandoned original Phase `X` baseline, code still kept duplicated
+same-host daemon helper logic across the CLI and graft surfaces:
 - `crates/atm/src/composition.rs`
   - local `try_connect(...)`
   - local `exchange(...)`
@@ -188,6 +199,76 @@ deliverables on `integrate/phase-Xb`.
   same-host IPC helper consolidation
 - `X.5` systemic guardrails, dependency-ownership validation, and closeout
   verification
+
+## Current Restart Status (2026-05-15)
+
+Alignment status:
+- `quality-mgr` reported `XB-ALIGN-REVIEW PASS` for the replayed sprint
+  branches
+- that pass confirms branch-to-plan alignment only; it is not a critical QA
+  verdict and does not reduce sprint QA scope
+
+Replay status by sprint:
+- `X.0`
+  - complete on `feature/pX-lint-gates`
+  - inherited by every `phase-Xb` sprint branch from `develop`
+- `X.1`
+  - replayed on `feature/pXb-s1-mailbox-runtime-cutover` at `2d6596e`
+  - salvage source commits: `70460f9`, `6143bda`
+  - no sprint-local code correction is currently known
+- `X.2`
+  - replayed on `feature/pXb-s2-command-path-simplification` at `e508ecb`
+  - salvage source commit: `0580c0e`
+  - remaining corrective work:
+    - split `crates/atm-core/src/clear/mod.rs:clear_mail_with_runtime_impl`
+      below `80` lines
+    - replace fixed sleeps in
+      `crates/atm-core/tests/mailbox_locking.rs` lines `1011` and `1041`
+- `X.3`
+  - replayed on `feature/pXb-s3-runtime-truth-unification` at `adc7c4b`
+  - salvage source commit: `9264c3e`
+  - no sprint-local code correction is currently known
+- `X.4`
+  - replayed on `feature/pXb-s4-replay-and-ipc-consolidation` at `f10c9ec`
+  - salvage source commits: `df124a8`, `3f8338b`
+  - remaining corrective work:
+    - split
+      `crates/atm-daemon-client/src/lib.rs:ensure_daemon_available_with_lock_path_impl`
+      below `80` lines
+    - stop `PeerClientTransport::new_with_observability(...)` from loading
+      workspace config directly through `direct_boundaries`; peer-transport
+      retry-budget loading must come through the daemon-owned `ConfigIngress`
+      path or explicit composition-time injection
+    - stop silently defaulting the remote retry budget when peer-transport
+      config loading fails; the restart line must either fail explicitly during
+      composition or document and emit a typed degraded contract
+- `X.5`
+  - replayed on `feature/pXb-s5-guardrails-and-closeout` at `5d4c92a`
+  - salvage source commits: `78d1e2c`, `c8bd38a`, `cdb1edd`
+  - remaining corrective work from the full-stack restart lint run:
+    - remove unused dev-dependencies causing `cargo-shear` failure:
+      `atm-core -> atm-rusqlite`, `atm-daemon -> atm-runtime-test-support`
+    - remove the forbidden `atm-core -> atm-rusqlite` dev edge causing the
+      boundary-lint failure
+    - split `crates/atm-daemon/src/reconcile_runtime.rs:reconcile` below
+      `80` lines
+    - split
+      `crates/atm-rusqlite/src/mailbox_metadata.rs:query_mailbox_metadata_rows`
+      below `80` lines
+    - preserve the current hidden `atm_core::boundary_support` seam as the
+      only compatibility ingress/export implementation path; the closeout line
+      must not add new non-daemon consumers while resolving the remaining lint
+      debt
+
+Planning rule for replayed residuals:
+- a replayed sprint may already contain most of its original implementation
+- the sprint plan remains authoritative for the remaining branch-local work
+- if a stacked full-line lint failure surfaced only after replay and is not
+  needed to keep the earlier sprint coherent in isolation, prefer to absorb it
+  in the latest owning sprint instead of reopening lower branches without need
+- if a replayed branch still violates a documented boundary owner, assign that
+  corrective work back to the sprint that owns the boundary rather than hiding
+  it in closeout-only prose
 
 ## Sprint Ownership
 
@@ -418,8 +499,8 @@ Goal:
   not re-enter the codebase
 
 Primary file scope:
-- `scripts/check-legacy-mailbox-paths.sh`
-- `scripts/check-capability-degradation.sh`
+- `scripts/check-legacy-mailbox-paths.py`
+- `scripts/check-capability-degradation.py`
 - CI workflow files that own repository gate execution
 - `.claude/assets/sc-rust/quality-mgr/templates/`
 - `.claude/skills/rust-development/guidelines.txt`

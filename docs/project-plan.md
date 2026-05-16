@@ -3172,6 +3172,10 @@ Restart note:
 - prior implementation completion exists for much of `X.1` through `X.5`, but
   QA must still validate each restarted sprint end to end after any cherry-pick
   or selective reapplication
+- the planning docs for `phase-Xb` must state both:
+  - what is already replayed on the `pXb` sprint branch
+  - what still remains to be corrected or validated before the sprint is
+    actually complete
 
 Pre-phase prerequisite:
 - already satisfied on `develop` before `integrate/phase-Xb` starts via
@@ -3261,6 +3265,33 @@ Status note:
     - `X.3`: `9264c3e`
     - `X.4`: `df124a8` / `3f8338b`
     - `X.5`: `78d1e2c` / `c8bd38a` / `cdb1edd`
+- replayed restart heads as of `2026-05-15`:
+  - `X.1`: `feature/pXb-s1-mailbox-runtime-cutover @ 2d6596e`
+  - `X.2`: `feature/pXb-s2-command-path-simplification @ e508ecb`
+  - `X.3`: `feature/pXb-s3-runtime-truth-unification @ adc7c4b`
+  - `X.4`: `feature/pXb-s4-replay-and-ipc-consolidation @ f10c9ec`
+  - `X.5`: `feature/pXb-s5-guardrails-and-closeout @ 5d4c92a`
+- `quality-mgr` alignment review already passed for the replayed `pXb`
+  branches
+  - that pass confirms code-to-plan alignment only
+  - it does not replace full sprint QA
+- known remaining restart corrections:
+  - `X.2`
+    - split `clear_mail_with_runtime_impl` below `80` lines
+    - replace the two fixed sleeps in `crates/atm-core/tests/mailbox_locking.rs`
+  - `X.4`
+    - split `ensure_daemon_available_with_lock_path_impl` below `80` lines
+    - move peer-transport retry-budget loading behind the daemon-owned
+      `ConfigIngress` path or explicit composition-time injection
+    - stop silently defaulting the remote retry budget when config load fails
+  - `X.5`
+    - remove unused dev-dependencies causing `cargo-shear` failure
+    - remove the forbidden `atm-core -> atm-rusqlite` dev edge causing the
+      boundary-lint failure
+    - split `reconcile_runtime::reconcile` below `80` lines
+    - split `query_mailbox_metadata_rows` below `80` lines
+    - keep hidden compatibility seams from widening while closing the remaining
+      manifest and lint debt
 
 Execution shape:
 - pre-phase prerequisite:
