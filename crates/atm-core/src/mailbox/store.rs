@@ -63,8 +63,8 @@ fn load_export_policy(path: &Path) -> Result<SharedInboxExportPolicy, AtmError> 
     })
 }
 
-/// Load the current compatibility inbox projection set without mailbox locks.
-pub(crate) fn load_compat_source_projections(
+/// Load the current inbox projection set without mailbox locks.
+pub(crate) fn load_source_projections(
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,

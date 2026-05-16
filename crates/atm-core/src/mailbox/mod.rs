@@ -123,12 +123,12 @@ pub(crate) fn load_compat_mailbox_messages(path: &Path) -> Result<Vec<MessageEnv
     parse_mailbox_contents(&raw, path)
 }
 
-pub(crate) fn import_compat_source_projections(
+pub(crate) fn import_source_projections(
     home_dir: &Path,
     team: &TeamName,
     agent: &AgentName,
 ) -> Result<Vec<SourceFile>, AtmError> {
-    store::load_compat_source_projections(home_dir, team, agent)
+    store::load_source_projections(home_dir, team, agent)
 }
 
 pub(crate) fn export_compat_source_projections(
