@@ -3397,3 +3397,77 @@ Execution rules:
   QA scope; each restarted sprint must pass QA as a full sprint
 - `docs/phase-X/plan-phase-X.md` remains the authoritative execution plan for
   the Phase `X` sprint line
+
+## 30. Phase Y Pre-Smoke Trivial Fixes
+
+Branch:
+- `feature/pY-trivial-fixes`
+
+Target:
+- `develop`
+
+Status:
+- in progress
+
+Scope:
+- small pre-Phase-`Y` cleanup items that should land before the dedicated
+  Phase `Y` planning and smoke-testing line starts
+
+Delivered / active scope:
+- shared `ATM_SERVICE_NAME` constant reuse in CLI observability fatal-event
+  emission
+- `atm ack` validation cleanup to remove redundant dual state derivation
+- architecture wording cleanup for the current clear-eligibility model
+- safe `GH #78` follow-up to preserve the working compatibility inbox contract
+  while adding regression coverage
+- `GH #83` implementation intentionally deferred to Phase `Y` Sprint `Y.1`
+
+## 31. Phase Y Daemon Release Readiness, Compatibility Write Simplification, And Smoke Rollout
+
+Planning branch:
+- `feature/pY-s0-planning`
+
+Pre-phase implementation branch:
+- `feature/pY-trivial-fixes`
+
+Future integration branch:
+- `integrate/phase-Y`
+
+Target:
+- `develop` for planning / pre-phase setup
+- `integrate/phase-Y` for the execution line
+
+Status:
+- planning
+
+Goal:
+- make the first daemon + SQLite mail-SSOT release safe for real operator use
+- minimize ATM-authored metadata on the shared inbox surface
+- move all ATM-authored compatibility inbox/config writes behind one hard
+  owner boundary
+- remove mutable workflow-state projection from compatibility output
+- document every CLI/client-socket write path and every SQLite query state
+  machine so QA can verify simplification directly
+- run progressive smoke and dogfood validation only after the write-boundary
+  cleanup line is in place
+
+Execution shape:
+- `Y.0` pre-smoke trivial fixes on `feature/pY-trivial-fixes`
+- planning-branch audits and field-minimum decisions complete before numbered
+  sprint execution begins
+- `Y.1` `atm help` and UX improvements
+- `Y.2` pre-smoke easy fixes and validation
+- `Y.3` hard write-boundary consolidation
+- `Y.4` mutable compatibility-field removal and hidden-dependency exposure
+- `Y.5` append-only compatibility export cutover if the approved wire contract
+  allows it
+- `Y.6` executable smoke bring-up
+- `Y.7` fix and revalidate
+- `Y.8` `atm-dev` canary / dogfood
+- `Y.9` final fixes and release sign-off
+
+Immediate planning outputs:
+- `docs/plan-phase-Y.md`
+- `docs/phase-Y/inbox-write-path-audit.md`
+- `docs/phase-Y/state-machine-coverage-audit.md`
+- approved implementation scopes for `Y.1` and `Y.2`
