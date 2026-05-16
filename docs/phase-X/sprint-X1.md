@@ -2,8 +2,8 @@
 id: X.1
 title: Mailbox Runtime Cutover
 status: complete
-branch: feature/pX-s1-mailbox-runtime-cutover
-worktree: ../atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover
+branch: feature/pXb-s1-mailbox-runtime-cutover
+worktree: ../atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover
 target: integrate/phase-X
 ---
 
