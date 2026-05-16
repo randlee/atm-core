@@ -43,6 +43,14 @@ impl Default for PeerTransportConfig {
 
 impl PeerTransportConfig {
     pub(crate) fn from_config(config: Option<&AtmConfig>) -> Result<Self, AtmError> {
+        if config.is_none() {
+            tracing::warn!(
+                subsystem = "peer_transport",
+                action = "config_default",
+                outcome = "default",
+                "no AtmConfig provided to PeerTransportConfig::from_config; using default remote_retry_budget"
+            );
+        }
         let remote_retry_budget = config
             .map(|config| config.daemon.remote_retry_budget)
             .unwrap_or(DEFAULT_REMOTE_RETRY_BUDGET);
@@ -98,6 +106,7 @@ fn daemon_peer_endpoint_from_env() -> Option<SocketAddr> {
             tracing::warn!(
                 subsystem = "peer_transport",
                 action = "env_parse",
+                outcome = "ignored",
                 "ignoring non-unicode ATM_DAEMON_PEER_ADDR value"
             );
             None
@@ -225,6 +234,9 @@ impl PeerClientTransport {
                     record.last_attempt_at = Some(IsoTimestamp::now());
                     record.last_error = Some(error.code.to_string());
                     tracing::warn!(
+                        subsystem = "peer_transport",
+                        action = "resume_replay",
+                        outcome = "skipped",
                         message_key = %record.message_key,
                         peer_addr = %record.peer_addr,
                         replay_attempt_count = record.attempt_count,
@@ -286,6 +298,9 @@ impl PeerClientTransport {
     fn persist_outcome_unknown_request(&self, request: &RequestEnvelope) -> Result<(), AtmError> {
         let Some((team, agent, message_key)) = replay_metadata_for_request(request) else {
             tracing::warn!(
+                subsystem = "peer_transport",
+                action = "persist",
+                outcome = "unknown",
                 request = ?request,
                 "remote delivery outcome is unknown but this request family does not support durable replay persistence",
             );
@@ -512,6 +527,9 @@ impl PeerClientTransport {
         let sleep_for =
             jittered_backoff(*retry_state.backoff, jitter_seed(endpoint, attempt)).min(remaining);
         tracing::warn!(
+            subsystem = "peer_transport",
+            action = "retry",
+            outcome = "retrying",
             peer_addr = %endpoint,
             attempt,
             sleep_ms = sleep_for.as_millis(),
@@ -661,6 +679,10 @@ fn wait_for_retry_backoff(terminate: &Arc<AtomicBool>, sleep_for: Duration) -> b
 }
 
 fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
+    // Global terminate flag for signal handler: handler requires one shared terminate flag;
+    // Mutex<Option<...>> is required because LifecycleControlSourceAdapter::install() is
+    // fallible and OnceLock cannot propagate errors from its once-setter; channel unnecessary
+    // (read-cache, not a queue).
     static DAEMON_TERMINATE_FLAG: Mutex<Option<Arc<AtomicBool>>> = Mutex::new(None);
 
     let mut cached_flag = DAEMON_TERMINATE_FLAG.lock().map_err(|_| {
@@ -834,6 +856,9 @@ fn jitter_seed(endpoint: SocketAddr, attempt: u32) -> u64 {
         Ok(duration) => duration.as_nanos() as u64,
         Err(error) => {
             tracing::warn!(
+                subsystem = "peer_transport",
+                action = "jitter_seed",
+                outcome = "default",
                 %error,
                 "system clock is before the unix epoch; using deterministic jitter fallback"
             );
@@ -848,6 +873,9 @@ fn parse_peer_endpoint(raw: &str) -> Option<SocketAddr> {
         Ok(endpoint) => Some(endpoint),
         Err(error) => {
             tracing::warn!(
+                subsystem = "peer_transport",
+                action = "parse_endpoint",
+                outcome = "skipped",
                 %raw,
                 %error,
                 "parse_peer_endpoint: invalid address format"

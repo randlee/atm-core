@@ -38,13 +38,16 @@ fn production() {
 
         self.assertEqual([span.name for span in spans], ["production"])
 
-    def test_find_function_spans_ignores_semicolon_only_trait_methods(self) -> None:
+    def test_find_function_spans_ignores_trait_method_signatures_without_bodies(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:
             path = Path(tempdir) / "sample.rs"
             path.write_text(
                 """\
 trait Example {
-    fn required_method(&self);
+    fn create_task(
+        &self,
+        request: String,
+    ) -> Result<(), String>;
 }
 
 fn production() {

@@ -396,12 +396,11 @@ mod tests {
     }
 
     #[test]
-    fn workflow_message_key_rejects_legacy_prefix() {
-        let prefixed_key = format!("{}{}", "legacy", ":01KRFK5QTF2R6NRS3Q0F8Z9K0S");
-        let error = prefixed_key
+    fn workflow_message_key_rejects_non_atm_prefix() {
+        let error = "legacy:01KRFK5QTF2R6NRS3Q0F8Z9K0S"
             .parse::<WorkflowMessageKey>()
-            .expect_err("legacy workflow key should fail");
+            .expect_err("workflow key should reject non-workflow prefixes");
 
-        assert!(error.contains("workflow key must start with 'atm:'"));
+        assert_eq!(error, "workflow key must start with 'atm:'");
     }
 }

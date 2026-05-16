@@ -74,6 +74,14 @@ _lint-silent-emit:
 _lint-function-length:
     {{python_cmd}} scripts/check-function-length.py
 
+[private]
+_lint-legacy-mailbox-paths:
+    {{python_cmd}} scripts/check-legacy-mailbox-paths.py
+
+[private]
+_lint-capability-degradation:
+    {{python_cmd}} scripts/check-capability-degradation.py
+
 # Verify crate/release versions stay aligned.
 [private]
 _lint-version:

@@ -3192,6 +3192,10 @@ Status note:
   - scope: replay-persistence startup contract, peer-transport decomposition,
     same-host helper deduplication, and follow-up boundary/error-visibility
     cleanup
+- `X.5` complete on `feature/pXb-s5-guardrails-and-closeout`
+  - target: `integrate/phase-Xb`
+  - scope: closeout guardrails, dependency-ownership validation, and replayed
+    sprint acceptance verification
 
 Pre-phase prerequisite:
 - already satisfied on `develop` before `integrate/phase-Xb` starts via
@@ -3252,6 +3256,36 @@ Acceptance criteria:
   unexpected-response behavior
 - peer transport preserves the shared ATM error and recovery contract after the
   `send_to_endpoint(...)` and `send_once(...)` refactor
+
+#### Sprint X.5 — Guardrails, Dependency Ownership, And Closeout Verification
+
+Branch:
+- `feature/pXb-s5-guardrails-and-closeout`
+
+PR:
+- `#291`
+
+Status:
+- complete
+
+Deliverables:
+- `ATM-QA-S4-001` closure by warning before peer-transport retry-budget fallback
+- `FTQ-006` closure by replacing composition test cwd restore pairs with
+  `CwdGuard`
+- `RBP-F005` closure by keeping the replayed local IPC and reconcile paths
+  inside the `RULE-002` function-length guardrail
+- `sprint-X5.md` aligned to the completed `pXb` branch state
+- closeout guardrails and dependency-ownership checks validated on the replayed
+  `X.5` line
+
+Acceptance criteria:
+- the legacy-mailbox-regression gate is runnable in CI
+- the replay-capability-degradation regression gate is runnable in CI
+- the local lint entrypoints include dependency-ownership validation
+- the `TASK-1515` baseline artifacts remain present and consistent at Phase `X`
+  closeout
+- the replayed `X.5` branch passes full sprint QA after any promoted finding
+  fix
 
 Execution rules:
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
@@ -3328,8 +3362,10 @@ Status note:
   - scope: fail-closed replay startup, peer transport decomposition,
     same-host helper deduplication, and follow-up boundary/error-visibility
     cleanup
-- `X.5` remains replayed on `feature/pXb-s5-guardrails-and-closeout` pending
-  final closeout and integration
+- `X.5` complete on `feature/pXb-s5-guardrails-and-closeout` (`#291`)
+  - target: `integrate/phase-Xb`
+  - scope: closeout guardrails, dependency-ownership validation, and replayed
+    sprint acceptance verification
 
 Execution shape:
 - pre-phase prerequisite:
