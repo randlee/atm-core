@@ -19,9 +19,10 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail};
 use atm_core::test_support::EnvGuard;
 use atm_core::types::{AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TeamName};
 use atm_runtime_test_support::{
-    SqliteRuntimeGuard, hold_sqlite_writer_lock, install_sqlite_retained_runtime_factory,
-    open_sqlite_boundary,
+    SqliteRuntimeGuard, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
 };
+#[cfg(unix)]
+use atm_runtime_test_support::hold_sqlite_writer_lock;
 use chrono::Utc;
 #[cfg(unix)]
 use fs2::FileExt;
