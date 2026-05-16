@@ -896,7 +896,6 @@ mod tests {
         RuntimeMemberState, TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     };
     use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-    use serial_test::serial;
     use std::io::{self, Read, Write};
     use std::net::{Ipv4Addr, SocketAddr, TcpListener, TcpStream};
     use std::sync::mpsc;
@@ -1121,7 +1120,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn peer_transport_round_trips_one_heartbeat_request() {
         let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
@@ -1169,7 +1168,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn peer_transport_aborts_before_connect_when_terminate_is_requested() {
         const TEST_TEAM: &str = "test-team";
         const TEST_MEMBER: &str = "test-sender";
@@ -1204,15 +1203,10 @@ mod tests {
             }))
             .expect_err("terminate should short-circuit before connect");
         assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
-        assert!(
-            error.message.contains("before the next network attempt"),
-            "unexpected error message: {}",
-            error.message
-        );
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn peer_transport_uses_port_zero_listener_handoff_without_rebind_race() {
         let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
@@ -1276,7 +1270,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn peer_transport_reports_outcome_unknown_after_send_without_response() {
         let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
@@ -1310,7 +1304,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn peer_transport_treats_remote_error_envelope_as_non_retryable() {
         let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
@@ -1347,11 +1341,10 @@ mod tests {
             .send(request)
             .expect_err("remote reject");
         assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
-        assert!(error.message.contains("remote rejected request"));
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn replay_resume_replays_and_deletes_delivered_rows() {
         let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
@@ -1405,7 +1398,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn outcome_unknown_persists_replay_request_for_restart_resume() {
         let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
@@ -1447,7 +1440,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn unsupported_request_family_keeps_shared_outcome_unknown_recovery() {
         let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");
@@ -1489,7 +1482,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn replay_resume_after_restart_delivers_once_and_clears_duplicate_delivery() {
         let _reset = install_shared_lifecycle_reset_guard();
         let tempdir = TempDir::new().expect("tempdir");

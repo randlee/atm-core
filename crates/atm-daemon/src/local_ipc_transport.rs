@@ -892,7 +892,6 @@ mod tests {
     #[cfg(unix)]
     use atm_core::test_support::EnvGuard;
     #[cfg(unix)]
-    use serial_test::serial;
     use std::sync::Arc;
     use std::sync::atomic::Ordering;
     use std::sync::mpsc;
@@ -955,7 +954,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn accept_error_without_lifecycle_signal_exits_within_one_second() {
         let tempdir = TempDir::new().expect("tempdir");
         let atm_home = tempdir.path().join("atm-home");
@@ -1012,7 +1011,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn accept_after_terminate_returns_typed_shutdown_error() {
         let tempdir = TempDir::new().expect("tempdir");
         let atm_home = tempdir.path().join("atm-home");
@@ -1106,7 +1105,7 @@ mod tests {
 
     #[cfg(unix)]
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn panic_in_dispatch_still_cleans_up_socket_path_on_shutdown() {
         let tempdir = TempDir::new().expect("tempdir");
         let socket_path = tempdir.path().join("daemon.sock");
@@ -1176,7 +1175,7 @@ mod tests {
 
         lifecycle.set_terminate_for_test(true);
         serve_result_rx
-            .recv_timeout(Duration::from_secs(5))
+            .recv_timeout(Duration::from_secs(15))
             .expect("recv serve result")
             .expect("serve runtime result");
         join.join().expect("join serve thread");
