@@ -2,12 +2,35 @@
 id: X.2
 title: Command Path Simplification
 status: complete
-branch: feature/pX-s2-command-path-simplification
-worktree: ../atm-core-worktrees/feature/pX-s2-command-path-simplification
-target: integrate/phase-X
+branch: feature/pXb-s2-command-path-simplification
+worktree: ../atm-core-worktrees/feature/pXb-s2-command-path-simplification
+target: integrate/phase-Xb
 ---
 
 # Sprint X.2 — Command Path Simplification And Legacy Path Deletion
+
+## Modification
+
+- This sprint is a restart replay on `feature/pXb-s2-command-path-simplification`.
+- Prior Phase `X` already has one clean implementation candidate for the core
+  `X.2` work:
+  - `0580c0e540e28403715e939a0da8cf3cfaf67f2a`
+    - `feat: simplify mailbox command paths for phase X`
+- The original Phase `X` `X.2` branch head is contaminated by later sprint
+  merges and must not be treated as the replay source; salvage only the
+  audited `0580c0e...` delta.
+- QA must validate the entire `X.2` sprint on `pXb-s2`, not only the replayed
+  delta from that commit.
+
+## Remaining Restart Work
+
+- replay or selectively re-implement the audited `0580c0e...` delta onto
+  `feature/pXb-s2-command-path-simplification`
+- verify that any legacy command-path behavior still present after `X.1`
+  replay is fully removed on the restart line
+- confirm the restarted branch satisfies every `X.2` deletion and boundary
+  acceptance criterion on the new line
+- run full `X.2` QA on `pXb-s2`
 
 ## Goal
 
@@ -51,7 +74,8 @@ target: integrate/phase-X
 - narrow or delete `boundary_support.rs` helpers that still keep file-backed
   mailbox behavior on the production path
 - remove the retained boundary-adapter stubs in
-  `service_runtime_store.rs:305-315`
+  `service_runtime_store.rs` by locating them through a pattern search for
+  `LegacyMailboxRuntime` or other dual-mode adapter remnants
 - document any remaining source-file helper ownership as daemon-private
   ingress/migration-only scope
 
@@ -84,7 +108,7 @@ target: integrate/phase-X
 
 Implementation result:
 - the X.2 acceptance criteria are satisfied on
-  `feature/pX-s2-command-path-simplification`
+  `feature/pXb-s2-command-path-simplification`
 - `rg -n "legacy:" crates/atm-core/src` returns only the explicit rejection
   test fixture in `workflow.rs`
 - `rg -n "observe_source_files|commit_source_files|with_locked_source_files|commit_mailbox_state|read_messages" crates/atm-core/src`

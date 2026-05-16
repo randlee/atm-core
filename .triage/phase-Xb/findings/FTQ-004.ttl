@@ -1,0 +1,526 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-004>
+  a triage:Finding ;
+  triage:findingId "FTQ-004" ;
+  triage:title "INSTALL_RETAINED_RUNTIME_FACTORY Once race + mismatched serial tokens in daemon tests" ;
+  triage:description "FTQ-004: daemon composition uses a Once cell for INSTALL_RETAINED_RUNTIME_FACTORY without a test synchronization guard, allowing parallel tests to race on initialization. FTQ-005: #[serial] test tokens are mismatched across test modules, allowing tests that should be sequential to run in parallel. Fix: add a Mutex guard around INSTALL_RETAINED_RUNTIME_FACTORY in test harness; fix #[serial(token)] groupings so all daemon-factory tests use the same token." ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-daemon/" ;
+  triage:status "open_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/14> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/15> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/16> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/17> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/18> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/19> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/20> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/21> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/22> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/23> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/24> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/25> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/26> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/27> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/28> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/29> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/30> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/31> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/32> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/33> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/34> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/35> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/36> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-004/s5/37> ;
+  triage:openOn <urn:atm:triage:worktree/s1/ae0e20b> ;
+  triage:openOn <urn:atm:triage:worktree/s2/5dd2380> ;
+  triage:openOn <urn:atm:triage:worktree/s3/adc7c4b> ;
+  triage:openOn <urn:atm:triage:worktree/s4/f10c9ec> ;
+  triage:openOn <urn:atm:triage:worktree/s5/5d4c92a> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate/b1e70b6> ;
+  triage:promoteTo <urn:atm:triage:worktree/s5/5d4c92a> .
+
+# Occurrence 1: INSTALL_RETAINED_RUNTIME_FACTORY line 41
+<urn:atm:triage:occurrence/FTQ-004/s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 41 ;
+  triage:snippet "static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+# Occurrence 2: INSTALL_RETAINED_RUNTIME_FACTORY line 49
+<urn:atm:triage:occurrence/FTQ-004/s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 49 ;
+  triage:snippet "INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+# #[serial] mismatches - bare annotations
+<urn:atm:triage:occurrence/FTQ-004/s5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 78 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 176 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 263 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 540 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 623 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 637 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 650 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 678 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_lifecycle.rs" ;
+  triage:line 21 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 858 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 958 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1015 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/15>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1109 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/16>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_host_ownership.rs" ;
+  triage:line 71 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/17>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_host_ownership.rs" ;
+  triage:line 97 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/18>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_host_ownership.rs" ;
+  triage:line 125 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/19>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1086 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/20>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1134 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/21>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1177 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/22>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1241 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/23>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1275 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/24>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1316 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/25>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1370 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/26>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1412 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/27>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 1454 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/28>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_advisory.rs" ;
+  triage:line 83 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/29>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_advisory.rs" ;
+  triage:line 104 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/30>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_advisory.rs" ;
+  triage:line 130 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/31>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests_advisory.rs" ;
+  triage:line 157 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/32>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 615 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/33>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 648 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/34>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/bin_support/daemon_observability.rs" ;
+  triage:line 968 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/35>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/bin_support/daemon_observability.rs" ;
+  triage:line 1013 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/36>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/bin_support/daemon_observability.rs" ;
+  triage:line 1029 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/FTQ-004/s5/37>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/bin_support/daemon_observability.rs" ;
+  triage:line 1056 ;
+  triage:snippet "#[serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+# Mismatched token annotation
+<urn:atm:triage:occurrence/FTQ-004/s5/38>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 754 ;
+  triage:snippet "#[serial_test::serial]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/5d4c92a> .
+
+# Worktree snapshots
+<urn:atm:triage:worktree/s1/ae0e20b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s2/5dd2380>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s3/adc7c4b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s4/f10c9ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s5/5d4c92a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate/b1e70b6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Xb" ;
+  triage:headSha "b1e70b6" ;
+  triage:orderIndex 6 .
