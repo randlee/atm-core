@@ -12,9 +12,11 @@
   triage:triageMode "followup_pass" ;
   triage:repeatable false ;
   triage:sweepScope "docs/" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-05-15T16:00:00Z"^^xsd:dateTime ;
+  triage:resolvedAt "2026-05-16T00:00:00Z"^^xsd:dateTime ;
+  triage:resolutionNote "arch-ctm code audit (2026-05-16) confirmed docs/atm-daemon-client/boundaries.md and boundaries/atm-daemon-client/daemon-bootstrap.toml already explicitly document daemon-client ownership of try_connect, exchange, unexpected_response. Finding satisfied without code change." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/s4/boundaries-md> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/s4/daemon-bootstrap-toml> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/s4/sprint-x4-targets> ;

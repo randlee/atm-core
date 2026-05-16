@@ -4,8 +4,8 @@
 <urn:atm:triage:finding/RBP-F005>
   a triage:Finding ;
   triage:findingId "RBP-F005" ;
-  triage:title "serve_with_deadlines_and_accept_probe exceeds RULE-002 80-line limit (~479 lines)" ;
-  triage:description "local_ipc_transport.rs:290-768 — function serve_with_deadlines_and_accept_probe is approximately 479 lines, 6x the RULE-002 80-line limit. Contains separable concerns: accept loop, lifecycle-waiter thread, shutdown drain, finalization. Pre-existing finding first surfaced in S4 zero-tolerance review." ;
+  triage:title "local_ipc_transport.rs: 3 functions exceed RULE-002 80-line limit" ;
+  triage:description "arch-ctm code audit 2026-05-16 corrected stale title. Three RULE-002 violations on current s4/s5 head: (1) serve_with_deadlines_and_accept_probe ~406 lines (was 479 at initial triage — partially refactored but still over limit); (2) request_worker >80 lines; (3) reconcile_runtime >80 lines. All in crates/atm-daemon/src/local_ipc_transport.rs. Deferred to s5 per XB-S4-QA-1 task." ;
   triage:phaseId "phase-Xb" ;
   triage:triageMode "initial_pass" ;
   triage:category "RBP" ;
