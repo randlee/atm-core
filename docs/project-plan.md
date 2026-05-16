@@ -3262,8 +3262,17 @@ Status note:
 - `X.0` complete on `feature/pX-lint-gates`
   - target: `develop`
   - scope: silent-emit regression gate and RULE-002 function-length gate
-- `X.1` through `X.5` restart on `pXb` sprint branches with audited salvage
-  from prior Phase `X` implementation commits
+- `X.1` complete on `feature/pXb-s1-mailbox-runtime-cutover`
+  - target: `integrate/phase-Xb`
+  - scope: retained mailbox runtime cutover to a fail-closed SQLite/store-backed path
+- `X.2` complete on `feature/pXb-s2-command-path-simplification`
+  - target: `integrate/phase-Xb`
+  - scope: removed the remaining production legacy-key branches, moved send
+    threading/export to a store-backed projection load, and confined
+    compatibility inbox file helpers to the hidden daemon ingress/export seam
+- `X.3` through `X.5` replayed onto `pXb` sprint branches from audited prior
+  Phase `X` salvage commits; full closeout and final integration remain
+  pending after branch-local QA/fix rounds
 
 Execution shape:
 - pre-phase prerequisite:
