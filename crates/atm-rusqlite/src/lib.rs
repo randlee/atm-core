@@ -850,7 +850,7 @@ mod tests {
             read: false,
             source_team: Some(team()),
             summary: Some("summary".to_string()),
-            message_id: None,
+            message_id: Some(atm_core::schema::AtmMessageId::new()),
             pending_ack_at: Some(IsoTimestamp::now()),
             acknowledged_at: None,
             acknowledges_message_id: None,
@@ -977,10 +977,11 @@ mod tests {
         let mut readable_envelope = envelope();
         readable_envelope.text = "sqlite body".to_string();
         readable_envelope.summary = Some("summary: sqlite body".to_string());
+        let readable_message_id = readable_envelope.message_id.expect("message id");
         let record = boundary::MailStoreMessageRecord {
             team: team(),
             agent: agent(),
-            message_key: message_key("atm:readable"),
+            message_key: message_key(&format!("atm:{readable_message_id}")),
             envelope: readable_envelope,
         };
         assembly
@@ -1112,10 +1113,11 @@ mod tests {
             })
             .expect("bootstrap");
 
+        let entrypoint_message_id = atm_core::schema::AtmMessageId::new();
         let record = boundary::MailStoreMessageRecord {
             team: team_name.clone(),
             agent: agent_name.clone(),
-            message_key: message_key("atm:entrypoint-read"),
+            message_key: message_key(&format!("atm:{entrypoint_message_id}")),
             envelope: MessageEnvelope {
                 from: actor(),
                 text: "entrypoint read body".to_string(),
@@ -1123,7 +1125,7 @@ mod tests {
                 read: false,
                 source_team: Some(team_name.clone()),
                 summary: Some("entrypoint read summary".to_string()),
-                message_id: None,
+                message_id: Some(entrypoint_message_id),
                 pending_ack_at: Some(IsoTimestamp::now()),
                 acknowledged_at: None,
                 acknowledges_message_id: None,

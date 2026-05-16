@@ -614,9 +614,9 @@ impl PeerTransportRuntime {
     ) -> Result<Self, AtmError> {
         let config = std::env::current_dir()
             .ok()
-            .and_then(|current_dir| match atm_core::load_workspace_config(ConfigLoadRequest {
-                current_dir,
-            }) {
+            .and_then(|current_dir| match crate::direct_boundaries::load_workspace_config(
+                ConfigLoadRequest { current_dir },
+            ) {
                 Ok(response) => response.config,
                 Err(error) => {
                     tracing::warn!(
