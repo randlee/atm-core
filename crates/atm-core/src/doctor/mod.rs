@@ -609,6 +609,13 @@ mod tests {
             unreachable!("doctor tests do not touch the roster store boundary")
         }
 
+        fn list_teams(
+            &self,
+            _request: boundary::RosterStoreListTeamsRequest,
+        ) -> Result<boundary::RosterStoreListTeamsResponse, AtmError> {
+            unreachable!("doctor tests do not touch the roster store boundary")
+        }
+
         fn health_snapshot(
             &self,
             _request: boundary::RosterStoreHealthSnapshotRequest,

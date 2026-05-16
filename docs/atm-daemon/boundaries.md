@@ -30,6 +30,8 @@ even though they are not public cross-crate traits:
   - must remain runtime-private and must not absorb dispatcher or store logic
 - `RuntimeStatusCache` in `atm_daemon::runtime_health`
   - owns live daemon-memory member state and cache-cap semantics
+  - hydrates durable team/member truth only through `RosterStore`; it must not
+    rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving and peer transport code
 
 ## Planned R.20 partition map

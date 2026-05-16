@@ -3270,9 +3270,13 @@ Status note:
   - scope: removed the remaining production legacy-key branches, moved send
     threading/export to a store-backed projection load, and confined
     compatibility inbox file helpers to the hidden daemon ingress/export seam
-- `X.3` through `X.5` replayed onto `pXb` sprint branches from audited prior
-  Phase `X` salvage commits; full closeout and final integration remain
-  pending after branch-local QA/fix rounds
+- `X.3` complete on `feature/pXb-s3-runtime-truth-unification`
+  - target: `integrate/phase-Xb`
+  - scope: removed filesystem team discovery from daemon runtime hydration,
+    added explicit `RosterStore` team enumeration, and aligned core/daemon
+    boundary docs with store-owned team/member runtime truth
+- `X.4` and `X.5` remain replayed on their `pXb` sprint branches pending
+  final closeout and integration
 
 Execution shape:
 - pre-phase prerequisite:

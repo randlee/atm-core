@@ -971,8 +971,20 @@ impl Fixture {
         serde_json::from_str(&raw).expect("workflow json")
     }
 
+    fn try_workflow_state_contents_for_team(
+        &self,
+        team: &str,
+        agent: &str,
+    ) -> Result<serde_json::Value, String> {
+        let path = self.workflow_state_path_for_team(team, agent);
+        let raw = fs::read_to_string(&path)
+            .map_err(|error| format!("read {}: {error}", path.display()))?;
+        serde_json::from_str(&raw).map_err(|error| format!("parse {}: {error}", path.display()))
+    }
+
     fn wait_for_missing_config_notice(&self, team: &str) -> MessageEnvelope {
         let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
+        let mut attempts = 0usize;
         loop {
             if let Some(notice) = self
                 .inbox_contents_for_team(team, TEAM_LEAD)
@@ -986,9 +998,13 @@ impl Fixture {
             }
             if Instant::now() >= deadline {
                 let notices = self.inbox_contents_for_team(team, TEAM_LEAD);
-                panic!("missing-config notice not observed before timeout: {notices:?}");
+                panic!(
+                    "missing-config notice not observed before timeout after {attempts} attempts: {notices:?}"
+                );
             }
-            thread::yield_now();
+            attempts = attempts.saturating_add(1);
+            // lint-fixed-sleep: allow-next-line
+            thread::sleep(Duration::from_millis(5));
         }
     }
 
@@ -1001,24 +1017,36 @@ impl Fixture {
         let workflow_path = self.workflow_state_path_for_team(team, agent);
         let message_key = message_workflow_key(message);
         let deadline = Instant::now() + TEST_RESULT_TIMEOUT;
+        let mut attempts = 0usize;
+        let mut last_error = None;
         loop {
             if workflow_path.exists() {
-                let workflow = self.workflow_state_contents_for_team(team, agent);
-                if workflow["messages"][&message_key].as_object().is_some() {
-                    return workflow;
+                match self.try_workflow_state_contents_for_team(team, agent) {
+                    Ok(workflow) => {
+                        last_error = None;
+                        if workflow["messages"][&message_key].as_object().is_some() {
+                            return workflow;
+                        }
+                    }
+                    Err(error) => {
+                        last_error = Some(error);
+                    }
                 }
             }
             if Instant::now() >= deadline {
                 let workflow = if workflow_path.exists() {
-                    self.workflow_state_contents_for_team(team, agent)
+                    self.try_workflow_state_contents_for_team(team, agent)
+                        .unwrap_or_else(|error| serde_json::json!({ "workflow_error": error }))
                 } else {
                     serde_json::json!({})
                 };
                 panic!(
-                    "workflow state for missing-config notice not observed before timeout: {workflow:?}"
+                    "workflow state for missing-config notice not observed before timeout after {attempts} attempts: {workflow:?}; last_error={last_error:?}"
                 );
             }
-            thread::yield_now();
+            attempts = attempts.saturating_add(1);
+            // lint-fixed-sleep: allow-next-line
+            thread::sleep(Duration::from_millis(5));
         }
     }
 
