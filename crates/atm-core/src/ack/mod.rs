@@ -162,73 +162,172 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
     actor: AgentName,
     team: TeamName,
 ) -> Result<AckOutcome, AtmError> {
-    let metadata_rows =
-        runtime.query_mailbox_metadata_rows(&request.home_dir, &team, &actor, None)?;
-    let source_row = metadata_rows
+    let source = load_ack_source(
+        runtime,
+        &request.home_dir,
+        &team,
+        &actor,
+        request.message_id,
+    )?;
+    let reply_target = validate_reply_target(runtime, &request.home_dir, &source.record, &team)?;
+    let persisted = persist_ack_reply(runtime, &request, &actor, &team, &source, &reply_target)?;
+
+    let mut outcome = AckOutcome {
+        action: CommandAction::Ack,
+        team: team.clone(),
+        agent: actor.clone(),
+        message_id: request.message_id,
+        task_id: persisted.task_id.clone(),
+        reply_target: reply_target.clone(),
+        reply_message_id: persisted.reply_message_id,
+        reply_text: persisted.reply_text.clone(),
+        warnings: Vec::new(),
+    };
+
+    outcome.warnings = collect_ack_hook_warnings(
+        runtime,
+        config,
+        &actor,
+        &team,
+        &reply_target,
+        persisted.reply_message_id,
+        outcome.task_id.as_ref(),
+    );
+
+    record_ack_telemetry(
+        observability,
+        &actor,
+        team,
+        request.message_id,
+        persisted.task_id,
+    );
+
+    Ok(outcome)
+}
+
+#[derive(Clone)]
+struct LoadedAckSource {
+    row: boundary::MailStoreMailboxMetadataRow,
+    record: boundary::MailStoreMessageRecord,
+}
+
+struct PersistedAckReply {
+    reply_message_id: AtmMessageId,
+    reply_text: String,
+    task_id: Option<TaskId>,
+}
+
+fn load_ack_source<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &std::path::Path,
+    team: &TeamName,
+    actor: &AgentName,
+    message_id: AtmMessageId,
+) -> Result<LoadedAckSource, AtmError> {
+    let metadata_rows = runtime.query_mailbox_metadata_rows(home_dir, team, actor, None)?;
+    let source_row = find_ack_source_row(&metadata_rows, message_id, actor, team)?;
+    ensure_ack_target_is_terminal(&metadata_rows, message_id)?;
+    let source_record = load_ack_source_record(runtime, home_dir, team, actor, source_row)?;
+    ensure_ack_is_pending(message_id, &source_record.envelope)?;
+    Ok(LoadedAckSource {
+        row: source_row.clone(),
+        record: source_record,
+    })
+}
+
+fn find_ack_source_row<'a>(
+    metadata_rows: &'a [boundary::MailStoreMailboxMetadataRow],
+    message_id: AtmMessageId,
+    actor: &AgentName,
+    team: &TeamName,
+) -> Result<&'a boundary::MailStoreMailboxMetadataRow, AtmError> {
+    metadata_rows
         .iter()
-        .find(|row| row.message_id == Some(request.message_id))
+        .find(|row| row.message_id == Some(message_id))
         .ok_or_else(|| {
             AtmError::validation(format!(
                 "message {} was not found in {}@{}",
-                request.message_id, actor, team
+                message_id, actor, team
             ))
             .with_recovery(
                 "Refresh the mailbox with `atm read` and choose a message that is still present in the pending-ack surface.",
             )
-        })?;
+        })
+}
 
+fn ensure_ack_target_is_terminal(
+    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    message_id: AtmMessageId,
+) -> Result<(), AtmError> {
     if metadata_rows
         .iter()
-        .any(|row| row.parent_message_id == Some(request.message_id))
+        .any(|row| row.parent_message_id == Some(message_id))
     {
         return Err(AtmError::validation(format!(
             "message {} has been updated; acknowledge the current terminal message instead",
-            request.message_id
+            message_id
         ))
         .with_recovery(
             "Refresh the mailbox with `atm read` and acknowledge the latest message in the thread instead of an older parent message.",
         ));
     }
+    Ok(())
+}
 
-    let source_record = runtime
-        .load_message_record(&request.home_dir, &team, &actor, &source_row.message_key)?
+fn load_ack_source_record<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &std::path::Path,
+    team: &TeamName,
+    actor: &AgentName,
+    source_row: &boundary::MailStoreMailboxMetadataRow,
+) -> Result<boundary::MailStoreMessageRecord, AtmError> {
+    runtime
+        .load_message_record(home_dir, team, actor, &source_row.message_key)?
         .ok_or_else(|| {
             AtmError::validation(format!(
                 "message {} metadata could not be reloaded from sqlite",
-                request.message_id
+                source_row
+                    .message_id
+                    .map(|id| id.to_string())
+                    .unwrap_or_else(|| "<unknown>".to_string())
             ))
             .with_recovery(
                 "Repair or remove the malformed sqlite mailbox row before retrying `atm ack`.",
             )
-        })?;
+        })
+}
 
-    match (
-        state::derive_read_state(&source_record.envelope),
-        state::derive_ack_state(&source_record.envelope),
-    ) {
-        (crate::types::ReadState::Read, crate::types::AckState::PendingAck) => {}
-        (_, crate::types::AckState::Acknowledged) => {
-            return Err(AtmError::validation(format!(
-                "message {} is already acknowledged",
-                request.message_id
-            ))
-            .with_recovery(
-                "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
-            ));
-        }
-        _ => {
-            return Err(AtmError::validation(format!(
-                "message {} is not in the (read, pending_ack) state",
-                request.message_id
-            ))
-            .with_recovery(
-                "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
-            ));
-        }
+fn ensure_ack_is_pending(
+    message_id: AtmMessageId,
+    source: &MessageEnvelope,
+) -> Result<(), AtmError> {
+    match state::derive_ack_state(source) {
+        crate::types::AckState::PendingAck => Ok(()),
+        crate::types::AckState::Acknowledged => Err(AtmError::validation(format!(
+            "message {} is already acknowledged",
+            message_id
+        ))
+        .with_recovery(
+            "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
+        )),
+        crate::types::AckState::NoAckRequired => Err(AtmError::validation(format!(
+            "message {} is not pending acknowledgement",
+            message_id
+        ))
+        .with_recovery(
+            "Refresh the mailbox with `atm read` and choose a message that is still pending acknowledgement.",
+        )),
     }
+}
 
-    let (reply_agent, reply_team) = resolve_reply_target(&source_record.envelope, &team)?;
-    let reply_team_dir = runtime.team_dir(&request.home_dir, &reply_team)?;
+fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &std::path::Path,
+    source_record: &boundary::MailStoreMessageRecord,
+    current_team: &TeamName,
+) -> Result<ReplyTarget, AtmError> {
+    let (reply_agent, reply_team) = resolve_reply_target(&source_record.envelope, current_team);
+    let reply_team_dir = runtime.team_dir(home_dir, &reply_team)?;
     if !reply_team_dir.exists() {
         return Err(AtmError::team_not_found(&reply_team));
     }
@@ -242,10 +341,20 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         return Err(AtmError::agent_not_found(&reply_agent, &reply_team));
     }
 
+    Ok(ReplyTarget::new(reply_agent, reply_team))
+}
+
+fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    request: &AckRequest,
+    actor: &AgentName,
+    team: &TeamName,
+    source: &LoadedAckSource,
+    reply_target: &ReplyTarget,
+) -> Result<PersistedAckReply, AtmError> {
     let ack_timestamp = IsoTimestamp::now();
-    let reply_text = input::validate_message_text(request.reply_body)?;
+    let reply_text = input::validate_message_text(request.reply_body.clone())?;
     let reply_message_id = AtmMessageId::new();
-    let source_task_id = source_record.envelope.task_id.clone();
     let reply_message = MessageEnvelope {
         from: actor.clone(),
         text: reply_text.clone(),
@@ -268,95 +377,114 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         team: team.clone(),
         agent: actor.clone(),
         actor: actor.clone(),
-        message_key: source_row.message_key.clone(),
+        message_key: source.row.message_key.clone(),
         read: true,
         pending_ack_at: None,
         acknowledged_at: Some(ack_timestamp),
-        expires_at: source_record.envelope.expires_at,
+        expires_at: source.record.envelope.expires_at,
         deleted_at: None,
         updated_at: Some(ack_timestamp),
     })?;
 
-    let reply_inbox_path = runtime.inbox_path(&request.home_dir, &reply_team, &reply_agent)?;
+    let reply_inbox_path =
+        runtime.inbox_path(home_dir(request), &reply_target.team, &reply_target.agent)?;
     append_mailbox_message_and_seed_workflow(
         runtime,
-        &request.home_dir,
-        &reply_team,
-        &reply_agent,
+        home_dir(request),
+        &reply_target.team,
+        &reply_target.agent,
         &reply_inbox_path,
         &reply_message,
         false,
     )?;
 
-    let hook_reply_agent = reply_agent.clone();
-    let hook_reply_team = reply_team.clone();
-    let mut outcome = AckOutcome {
-        action: CommandAction::Ack,
-        team: team.clone(),
-        agent: actor.clone(),
-        message_id: request.message_id,
-        task_id: source_task_id.clone(),
-        reply_target: ReplyTarget::new(reply_agent, reply_team),
+    Ok(PersistedAckReply {
         reply_message_id,
-        reply_text: reply_text.clone(),
-        warnings: Vec::new(),
-    };
+        reply_text,
+        task_id: source.record.envelope.task_id.clone(),
+    })
+}
 
-    let hook_reply_recipient = ResolvedRecipient {
-        agent: hook_reply_agent,
-        team: hook_reply_team,
+fn home_dir(request: &AckRequest) -> &std::path::Path {
+    request.home_dir.as_path()
+}
+
+fn collect_ack_hook_warnings<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    config: Option<&crate::config::AtmConfig>,
+    actor: &AgentName,
+    team: &TeamName,
+    reply_target: &ReplyTarget,
+    reply_message_id: AtmMessageId,
+    task_id: Option<&TaskId>,
+) -> Vec<String> {
+    let reply_recipient = ResolvedRecipient {
+        agent: reply_target.agent.clone(),
+        team: reply_target.team.clone(),
     };
-    let mut hook_warnings = Vec::new();
+    let mut warnings = Vec::new();
     runtime.maybe_run_post_send_hook(
-        &mut hook_warnings,
+        &mut warnings,
         config,
         PostSendHookContext {
-            sender: &actor,
-            sender_team: Some(&team),
-            recipient: &hook_reply_recipient,
+            sender: actor,
+            sender_team: Some(team),
+            recipient: &reply_recipient,
             recipient_pane_id: None,
             message_id: reply_message_id,
             requires_ack: false,
             is_ack: true,
-            task_id: outcome.task_id.as_ref(),
+            task_id,
         },
     );
-    outcome.warnings = hook_warnings
+    warnings
         .into_iter()
         .map(|warning| warning.render())
-        .collect();
+        .collect()
+}
 
+fn record_ack_telemetry(
+    observability: &dyn ObservabilityPort,
+    actor: &AgentName,
+    team: TeamName,
+    message_id: AtmMessageId,
+    task_id: Option<TaskId>,
+) {
     if let Err(error) = observability.emit(CommandEvent {
         command: "ack",
         action: "ack",
         outcome: "ok",
         team,
         agent: actor.clone(),
-        sender: actor,
-        message_id: Some(request.message_id),
+        sender: actor.clone(),
+        message_id: Some(message_id),
         requires_ack: false,
         dry_run: false,
-        task_id: source_task_id,
+        task_id,
         error_code: None,
         error_message: None,
     }) {
-        tracing::warn!(%error, command = "ack", action = "ack", "failed to emit ack command event");
+        tracing::warn!(
+            %error,
+            subsystem = "ack",
+            outcome = "emit_failed",
+            command = "ack",
+            action = "ack",
+            "failed to emit ack command event"
+        );
     }
-
-    Ok(outcome)
 }
 
 fn resolve_reply_target(
     message: &MessageEnvelope,
     current_team: &TeamName,
-) -> Result<(AgentName, TeamName), AtmError> {
+) -> (AgentName, TeamName) {
     let identity = canonical_sender_identity(message);
     let team = message
         .source_team
         .clone()
-        .or_else(|| Some(current_team.clone()))
-        .ok_or_else(AtmError::team_unavailable)?;
-    Ok((identity, team))
+        .unwrap_or_else(|| current_team.clone());
+    (identity, team)
 }
 
 fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
@@ -402,8 +530,7 @@ mod tests {
         let mut message = message_with_from(ROLE_TEAM_LEAD);
         message.source_team = Some(TEST_TEAM.parse::<TeamName>().expect("team"));
 
-        let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM))
-            .expect("reply target");
+        let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM));
         assert_eq!(
             target,
             (

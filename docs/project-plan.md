@@ -3397,3 +3397,34 @@ Execution rules:
   QA scope; each restarted sprint must pass QA as a full sprint
 - `docs/phase-X/plan-phase-X.md` remains the authoritative execution plan for
   the Phase `X` sprint line
+
+## 30. Phase Y Pre-Smoke Trivial Fixes
+
+Branch:
+- `feature/pY-trivial-fixes`
+
+Target:
+- `develop`
+
+Status:
+- complete
+
+Scope:
+- small pre-Phase-`Y` cleanup items that should land before the dedicated
+  Phase `Y` planning and smoke-testing line starts
+
+Delivered:
+- shared `ATM_SERVICE_NAME` constant reuse in CLI observability fatal-event
+  emission
+- `atm ack` validation cleanup to remove redundant dual state derivation
+- architecture wording cleanup for the current clear-eligibility model
+- design proposals for GitHub issues `#78` and `#83` sent to `team-lead`
+- safe `#78` follow-up landed on the same branch:
+  - JSONL ingress regression coverage added
+  - current array-shaped ATM compatibility rewrite behavior documented and
+    regression-tested
+- trivial-fixes QA-1 follow-up landed on the same branch:
+  - generic internal fallback code for non-ATM fatal-error logging
+  - infallible `resolve_reply_target(...)` contract cleanup
+  - `atm ack` structured warn-field completion
+- `#83` implementation intentionally deferred to Phase `Y` Sprint `Y.1`

@@ -70,6 +70,9 @@ where
     let _guard = lock::acquire_many_sorted([path.to_path_buf()], timeout)?;
     let mut messages = load_compat_mailbox_messages(path)?;
     mutate(&mut messages)?;
+    // ATM accepts Claude-authored JSONL as ingress, but test-only mutations
+    // rewrite through the same array-shaped compatibility projection ATM uses
+    // for its own exports.
     store::write_compat_mailbox_projection(path, &messages)
 }
 
@@ -389,6 +392,45 @@ mod tests {
         let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages.len(), 1);
         assert_eq!(messages[0].text, "valid");
+    }
+
+    #[test]
+    fn read_messages_jsonl_format_still_works() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("jsonl-ingress-still-works.jsonl");
+        let first = sample_message(Uuid::new_v4(), "first");
+        let second = sample_message(Uuid::new_v4(), "second");
+        let contents = format!(
+            "{}\n{}\n",
+            serde_json::to_string(&first).expect("json"),
+            serde_json::to_string(&second).expect("json")
+        );
+        fs::write(&path, contents).expect("write");
+
+        let messages = load_compat_mailbox_messages(&path).expect("read");
+        assert_eq!(messages, vec![first, second]);
+    }
+
+    #[test]
+    fn json_array_inbox_remains_array_on_first_append() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let path = tempdir.path().join("array-remains-array-on-append.json");
+        let first = sample_message(Uuid::new_v4(), "first");
+        let second = sample_message(Uuid::new_v4(), "second");
+        fs::write(
+            &path,
+            serde_json::to_vec(&vec![first.clone()]).expect("json array"),
+        )
+        .expect("write");
+
+        append_message(&path, &second).expect("append");
+
+        let raw = fs::read_to_string(&path).expect("raw contents");
+        let values: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
+        assert_eq!(values.len(), 2);
+        assert!(raw.trim_start().starts_with('['));
+        let messages = load_compat_mailbox_messages(&path).expect("read");
+        assert_eq!(messages, vec![first, second]);
     }
 
     #[test]

@@ -17,6 +17,7 @@ pub(crate) enum AtmErrorKind {
     MailboxRead,
     MailboxWrite,
     FilePolicy,
+    Internal,
     Validation,
     Serialization,
     Timeout,
@@ -99,6 +100,10 @@ impl AtmError {
 
     pub fn is_file_policy(&self) -> bool {
         self.kind == AtmErrorKind::FilePolicy
+    }
+
+    pub fn is_internal(&self) -> bool {
+        self.kind == AtmErrorKind::Internal
     }
 
     pub fn is_validation(&self) -> bool {
@@ -479,6 +484,7 @@ impl AtmErrorKind {
             Self::MailboxRead => AtmErrorCode::MailboxReadFailed,
             Self::MailboxWrite => AtmErrorCode::MailboxWriteFailed,
             Self::FilePolicy => AtmErrorCode::FilePolicyRejected,
+            Self::Internal => AtmErrorCode::InternalError,
             Self::Validation => AtmErrorCode::MessageValidationFailed,
             Self::Serialization => AtmErrorCode::SerializationFailed,
             Self::Timeout => AtmErrorCode::WaitTimeout,
