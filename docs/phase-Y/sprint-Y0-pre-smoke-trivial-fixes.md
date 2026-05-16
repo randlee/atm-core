@@ -38,10 +38,17 @@ target: develop
     rewrites through the ATM-owned compatibility projection path
 - recorded that `#83` (`atm help`) remains deferred to Phase `Y` Sprint `Y.1`
   and is not part of this trivial-fixes branch
+- closed the trivial-fixes QA-1 follow-up on the same branch:
+  - non-ATM fatal-error fallback logging now uses a generic internal code
+    instead of `MessageValidationFailed`
+  - `resolve_reply_target(...)` now exposes its infallible contract directly
+  - the `atm ack` observability `warn!` path now carries `subsystem` and
+    `outcome` fields
 
 ## Validation
 
 - `cargo build --workspace`
 - `cargo clippy --workspace -- -D warnings`
+- `cargo test --workspace`
 - `cargo test -p agent-team-mail-core mailbox:: -- --nocapture`
 - `git diff --check`

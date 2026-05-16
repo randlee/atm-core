@@ -3423,4 +3423,8 @@ Delivered:
   - JSONL ingress regression coverage added
   - current array-shaped ATM compatibility rewrite behavior documented and
     regression-tested
+- trivial-fixes QA-1 follow-up landed on the same branch:
+  - generic internal fallback code for non-ATM fatal-error logging
+  - infallible `resolve_reply_target(...)` contract cleanup
+  - `atm ack` structured warn-field completion
 - `#83` implementation intentionally deferred to Phase `Y` Sprint `Y.1`

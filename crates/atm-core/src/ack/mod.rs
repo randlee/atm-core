@@ -224,7 +224,7 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         }
     }
 
-    let (reply_agent, reply_team) = resolve_reply_target(&source_record.envelope, &team)?;
+    let (reply_agent, reply_team) = resolve_reply_target(&source_record.envelope, &team);
     let reply_team_dir = runtime.team_dir(&request.home_dir, &reply_team)?;
     if !reply_team_dir.exists() {
         return Err(AtmError::team_not_found(&reply_team));
@@ -337,7 +337,14 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         error_code: None,
         error_message: None,
     }) {
-        tracing::warn!(%error, command = "ack", action = "ack", "failed to emit ack command event");
+        tracing::warn!(
+            %error,
+            subsystem = "ack",
+            outcome = "emit_failed",
+            command = "ack",
+            action = "ack",
+            "failed to emit ack command event"
+        );
     }
 
     Ok(outcome)
@@ -346,14 +353,13 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
 fn resolve_reply_target(
     message: &MessageEnvelope,
     current_team: &TeamName,
-) -> Result<(AgentName, TeamName), AtmError> {
+) -> (AgentName, TeamName) {
     let identity = canonical_sender_identity(message);
     let team = message
         .source_team
         .clone()
-        .or_else(|| Some(current_team.clone()))
-        .ok_or_else(AtmError::team_unavailable)?;
-    Ok((identity, team))
+        .unwrap_or_else(|| current_team.clone());
+    (identity, team)
 }
 
 fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
@@ -399,8 +405,7 @@ mod tests {
         let mut message = message_with_from(ROLE_TEAM_LEAD);
         message.source_team = Some(TEST_TEAM.parse::<TeamName>().expect("team"));
 
-        let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM))
-            .expect("reply target");
+        let target = resolve_reply_target(&message, &TeamName::from_validated(TEST_TEAM));
         assert_eq!(
             target,
             (

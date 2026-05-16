@@ -54,7 +54,7 @@ impl CliObservability {
         let (code, message) = if let Some(atm_error) = error.downcast_ref::<AtmError>() {
             (atm_error.code, atm_error.to_string())
         } else {
-            (AtmErrorCode::MessageValidationFailed, error.to_string())
+            (AtmErrorCode::InternalError, error.to_string())
         };
 
         let identity = std::env::var("ATM_IDENTITY").unwrap_or_else(|_| "unknown".to_string());
