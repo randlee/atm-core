@@ -504,7 +504,12 @@ fn resolve_read_context<R: RetainedServiceRuntime>(
 fn message_key_for_classified(
     message: &ClassifiedMessage,
 ) -> Result<boundary::MessageKey, AtmError> {
-    boundary::MessageKey::for_inbox_path(&message.source_path)
+    let message_id = message.envelope.message_id.ok_or_else(|| {
+        AtmError::validation("read message is missing a message_id").with_recovery(
+            "Repair or remove the malformed retained mailbox record before retrying `atm read`.",
+        )
+    })?;
+    boundary::MessageKey::new(format!("atm:{message_id}"))
 }
 
 fn load_checked_read_metadata(

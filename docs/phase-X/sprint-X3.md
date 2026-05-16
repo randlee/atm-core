@@ -2,9 +2,9 @@
 id: X.3
 title: Daemon Runtime Truth Unification
 status: complete
-branch: feature/pX-s3-runtime-truth-unification
-worktree: ../atm-core-worktrees/feature/pX-s3-runtime-truth-unification
-target: integrate/phase-X
+branch: feature/pXb-s3-runtime-truth-unification
+worktree: ../atm-core-worktrees/feature/pXb-s3-runtime-truth-unification
+target: integrate/phase-Xb
 ---
 
 # Sprint X.3 — Daemon Runtime Truth Unification
@@ -82,7 +82,7 @@ target: integrate/phase-X
 
 Implementation result:
 - the X.3 acceptance criteria are satisfied on
-  `feature/pX-s3-runtime-truth-unification`
+  `feature/pXb-s3-runtime-truth-unification`
 - `build_runtime_status_cache_state(...)` no longer uses `read_dir(...)` or
   `home_dir`
 - daemon runtime-status hydration now has one explicit durable team/member

@@ -1025,7 +1025,7 @@ mod tests {
             ),
             RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(ReadOutcome {
                 action: CommandAction::Read,
-                team: query.team_override.expect("team"),
+                team: query.team_override().cloned().expect("team"),
                 agent: "agent-b".parse().expect("agent"),
                 selection_mode: query.selection_mode,
                 mutation_applied: false,
