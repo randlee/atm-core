@@ -4,419 +4,59 @@
 <urn:atm:triage:finding/FTQ-003>
   a triage:Finding ;
   triage:findingId "FTQ-003" ;
-  triage:title "Cross-group serial token interference between mailbox and daemon tests" ;
-  triage:description "crates/atm-core/tests/mailbox_locking.rs uses #[serial_test::serial(env)] to serialise env-var-sensitive tests under the 'env' token. crates/atm-daemon/ tests use bare #[serial] (no token, default group). Both test suites mutate shared global state (INSTALL_RETAINED_RUNTIME_FACTORY, env vars) but are not serialised relative to each other because they use different serial tokens. This creates a potential race when both suites run in the same cargo test invocation." ;
+  triage:title "Cross-group serial token interference — partial fix residual" ;
+  triage:description "FIX-R1 at e195d86 (s4) converted 20 bare #[serial] → #[serial_test::serial(env)] in crates/atm-daemon/src/. However, lifecycle_control.rs:753 contains #[serial_test::serial] without the (env) token. This qualified-but-tokenless form was missed because the acceptance check was 'rg ^#\\[serial\\] = 0', which does not match the qualified namespace form. The token group must be (env) to ensure cross-suite serialization with mailbox_locking tests." ;
   triage:category "FTQ" ;
   triage:phaseId "phase-Xb" ;
-  triage:triageMode "initial_pass" ;
-  triage:severity "Important" ;
+  triage:triageMode "followup_pass" ;
+  triage:severity "Blocking" ;
   triage:repeatable true ;
-  triage:sweepScope "crates/atm-core/tests/, crates/atm-daemon/src/, crates/atm-daemon/tests/" ;
+  triage:sweepScope "crates/atm-daemon/src/" ;
   triage:status "open" ;
   triage:dispatchReady true ;
-  triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-5> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-6> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-7> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-8> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-9> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-10> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-11> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-12> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/mailbox-13> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-1> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-2> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-3> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-4> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-5> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-6> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-7> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-8> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-9> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-10> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-11> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-12> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-13> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-14> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-15> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-16> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-17> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-18> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-19> ;
-  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/s4/daemon-20> ;
-  triage:openOn <urn:atm:triage:worktree/s4/f10c9ec> ;
-  triage:promoteTo <urn:atm:triage:worktree/s4/f10c9ec> .
+  triage:triagedAt "2026-05-15T02:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-003/followup/s4-qualified-tokenless-1> ;
+  triage:openOn <urn:atm:triage:worktree/s4/e195d86> ;
+  triage:openOn <urn:atm:triage:worktree/s3/ceba612> ;
+  triage:openOn <urn:atm:triage:worktree/s2/2bd828d> ;
+  triage:openOn <urn:atm:triage:worktree/s1/2a0b3ec> ;
+  triage:promoteTo <urn:atm:triage:worktree/s4/e195d86> .
 
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 52 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 135 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 281 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-4>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 354 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-5>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 432 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-6>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 463 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-7>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 525 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-8>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 607 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-9>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 632 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-10>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 670 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-11>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 741 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-12>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 805 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/mailbox-13>
-  a triage:Occurrence ;
-  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
-  triage:line 841 ;
-  triage:snippet "#[serial_test::serial(env)]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-1>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 78 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-2>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 176 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-3>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 263 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-4>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests.rs" ;
-  triage:line 540 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-5>
+<urn:atm:triage:occurrence/FTQ-003/followup/s4-qualified-tokenless-1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
-  triage:line 623 ;
-  triage:snippet "#[serial]" ;
+  triage:line 753 ;
+  triage:snippet "#[serial_test::serial]" ;
   triage:status "open" ;
   triage:closed false ;
   triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
+  triage:headSha "e195d86" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/e195d86> .
 
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-6>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
-  triage:line 637 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-7>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
-  triage:line 650 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-8>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
-  triage:line 678 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-9>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests_lifecycle.rs" ;
-  triage:line 21 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-10>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 901 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-11>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/composition.rs" ;
-  triage:line 973 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-12>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
-  triage:line 958 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-13>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
-  triage:line 1015 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-14>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
-  triage:line 1109 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-15>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests_host_ownership.rs" ;
-  triage:line 71 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-16>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests_host_ownership.rs" ;
-  triage:line 97 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-17>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/tests_host_ownership.rs" ;
-  triage:line 125 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-18>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
-  triage:line 1088 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-19>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
-  triage:line 1136 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:occurrence/FTQ-003/s4/daemon-20>
-  a triage:Occurrence ;
-  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
-  triage:line 1179 ;
-  triage:snippet "#[serial]" ;
-  triage:status "open" ;
-  triage:closed false ;
-  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
-  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
-
-<urn:atm:triage:worktree/s4/f10c9ec>
+<urn:atm:triage:worktree/s4/e195d86>
   a triage:WorktreeSnapshot ;
   triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
-  triage:headSha "f10c9ec" ;
+  triage:headSha "e195d86" ;
   triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s3/ceba612>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "ceba612" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s2/2bd828d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "2bd828d" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s1/2a0b3ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:orderIndex 1 .

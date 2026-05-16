@@ -1,0 +1,120 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-F001" ;
+  triage:title "daemon_terminate_flag() calls install() per invocation — per-call initialization" ;
+  triage:description "crates/atm-daemon/src/peer_transport.rs approx line 662 — daemon_terminate_flag() calls .install() on every invocation rather than once at startup. This is a per-call signal/flag handler initialization pattern. install() should be called once (e.g., at daemon startup) and the flag/Arc shared, not re-initialized on every call to daemon_terminate_flag()." ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:category "RBP" ;
+  triage:severity "Important" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T20:31:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F001/s5/1> ;
+  triage:openOn <urn:atm:triage:worktree/s1/2a0b3ec> ;
+  triage:openOn <urn:atm:triage:worktree/s2/7c377d1> ;
+  triage:openOn <urn:atm:triage:worktree/s3/029992e> ;
+  triage:openOn <urn:atm:triage:worktree/s4/64ade30> ;
+  triage:openOn <urn:atm:triage:worktree/s5/45b1397> ;
+  triage:promoteTo <urn:atm:triage:worktree/s5/45b1397> ;
+  triage:highestOpenBranch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:highestOpenBranchOrder 5 .
+
+<urn:atm:triage:occurrence/RBP-F001/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 678 ;
+  triage:snippet "fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> { Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/RBP-F001/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 678 ;
+  triage:snippet "fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> { Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/s2/7c377d1> .
+
+<urn:atm:triage:occurrence/RBP-F001/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 678 ;
+  triage:snippet "fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> { Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/029992e> .
+
+<urn:atm:triage:occurrence/RBP-F001/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 662 ;
+  triage:snippet "fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> { Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/64ade30> .
+
+<urn:atm:triage:occurrence/RBP-F001/s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 662 ;
+  triage:snippet "fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> { Ok(crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/45b1397> .
+
+<urn:atm:triage:worktree/s1/2a0b3ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s2/7c377d1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s3/029992e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s4/64ade30>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s5/45b1397>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:orderIndex 5 .

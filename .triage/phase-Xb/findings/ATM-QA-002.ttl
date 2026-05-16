@@ -1,0 +1,139 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-002" ;
+  triage:title "project-plan.md missing Sprint X.4 entry in Phase Xb section" ;
+  triage:description "docs/project-plan.md Phase Xb section (sections 28-29) mentions Sprint X.4 (feature/pXb-s4-replay-and-ipc-consolidation) in the execution shape but lacks a dedicated sprint entry section (like '## 30. Sprint X.4' or similar). The sprint is referenced within section 28 (lines 3202-3204) and section 29 (lines 3291-3293) but has no standalone detailed plan section. All other sprints (X.1, X.2, X.3, X.5) have equivalent mentions in the execution shape without requiring dedicated sections, but X.4 work includes explicit deliverables (replay-persistence startup contract, peer-transport decomposition, same-host helper deduplication) that should be documented as a named section matching the pattern of prior phases." ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T20:35:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-002/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s1/2a0b3ec> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s2/7c377d1> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s3/029992e> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s4/64ade30> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s5/45b1397> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-Xb/cdeb063> ;
+  triage:promoteTo <urn:atm:triage:worktree/pXb-s5/45b1397> ;
+  triage:recommendedFix "Add a new section '## 30. Sprint X.4 Replay Persistence And IPC Consolidation' to docs/project-plan.md after section 29, documenting the X.4 sprint deliverables (replay-persistence startup contract, peer-transport decomposition, same-host helper deduplication) with explicit acceptance criteria and execution rules matching the style of prior sprint sections (X.1, X.2, X.3)" .
+
+<urn:atm:triage:occurrence/ATM-QA-002/s1/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 3202 ;
+  triage:snippet "Missing dedicated '## XX. Sprint X.4' section; X.4 only mentioned in execution shape at lines 3202-3204" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/s2/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 3202 ;
+  triage:snippet "Missing dedicated '## XX. Sprint X.4' section; X.4 only mentioned in execution shape" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s2/7c377d1> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/s3/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 3202 ;
+  triage:snippet "Missing dedicated '## XX. Sprint X.4' section; X.4 only mentioned in execution shape" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s3/029992e> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/s4/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 3202 ;
+  triage:snippet "Missing dedicated '## XX. Sprint X.4' section; X.4 only mentioned in execution shape" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/64ade30> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/s5/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 3202 ;
+  triage:snippet "Missing dedicated '## XX. Sprint X.4' section; X.4 only mentioned in execution shape" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s5/45b1397> .
+
+<urn:atm:triage:occurrence/ATM-QA-002/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 3202 ;
+  triage:snippet "Missing dedicated '## XX. Sprint X.4' section; X.4 only mentioned in execution shape" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:headSha "cdeb063" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-Xb/cdeb063> .
+
+<urn:atm:triage:worktree/pXb-s1/2a0b3ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pXb-s2/7c377d1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pXb-s3/029992e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pXb-s4/64ade30>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pXb-s5/45b1397>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-Xb/cdeb063>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Xb" ;
+  triage:headSha "cdeb063" ;
+  triage:orderIndex 6 .
