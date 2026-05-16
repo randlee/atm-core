@@ -599,7 +599,6 @@ mod tests {
     use super::{
         DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
     };
-    use serial_test::serial;
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
 
@@ -612,7 +611,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn bounded_shutdown_step_returns_after_deadline() {
         let _drain_guard = ShutdownFinalizerDrainGuard;
         let release = Arc::new((Mutex::new(false), Condvar::new()));
@@ -645,7 +644,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn bounded_shutdown_step_does_not_exceed_retained_finalizer_cap() {
         let _drain_guard = ShutdownFinalizerDrainGuard;
         DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();

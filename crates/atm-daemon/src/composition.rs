@@ -4,7 +4,7 @@ use crate::boundary_adapters::{
 };
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
-use crate::local_ipc_transport::{RuntimeServeHooks, SocketEndpointGuard};
+use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::sqlite_observability::DaemonSqliteObservability;
@@ -279,27 +279,21 @@ impl RuntimeComposition {
         self.request_dispatcher.finalize_shutdown();
     }
 
-    pub(crate) fn start(&self) -> Result<(), AtmError> {
+    fn begin_startup(&self) -> Result<(), AtmError> {
         self.composition_observability.emit_or_warn(
             "start_requested",
             "ok",
             "daemon start requested",
         );
         self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
+        self.resume_startup_replay()?;
+        self.start_background_lanes()
+    }
+
+    fn resume_startup_replay(&self) -> Result<(), AtmError> {
         // Startup replay must finish before the daemon binds its socket so
         // crash-recovered work cannot race newly accepted requests.
-        let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
-            Ok(summary) => summary,
-            Err(error) => {
-                self.composition_observability.emit_or_warn(
-                    "startup_failed",
-                    "failed",
-                    "daemon startup failed",
-                );
-                self.lifecycle.force_stopped()?;
-                return Err(error);
-            }
-        };
+        let replay_summary = self.peer_transport_runtime.resume_pending_replay()?;
         if replay_summary.delivered > 0
             || replay_summary.retained > 0
             || replay_summary.purged_expired > 0
@@ -311,33 +305,38 @@ impl RuntimeComposition {
                 "daemon startup replay sweep completed"
             );
         }
-        if let Err(error) = self.start_background_lanes() {
-            self.composition_observability.emit_or_warn(
-                "startup_failed",
-                "failed",
-                "daemon startup failed",
-            );
-            self.lifecycle.force_stopped()?;
-            return Err(error);
-        }
-        let mut runtime = match self.server_transport.prepare_runtime() {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                if let Err(shutdown_error) = self.shutdown_background_lanes() {
-                    tracing::warn!(
-                        %shutdown_error,
-                        "daemon background lane shutdown failed during runtime preparation rollback"
-                    );
-                }
-                self.composition_observability.emit_or_warn(
-                    "startup_failed",
-                    "failed",
-                    "daemon startup failed",
-                );
-                self.lifecycle.force_stopped()?;
-                return Err(error);
+        Ok(())
+    }
+
+    fn rollback_failed_startup<T>(&self, error: AtmError) -> Result<T, AtmError> {
+        self.composition_observability.emit_or_warn(
+            "startup_failed",
+            "failed",
+            "daemon startup failed",
+        );
+        self.lifecycle.force_stopped()?;
+        Err(error)
+    }
+
+    fn prepare_runtime_with<F>(
+        &self,
+        rollback_message: &'static str,
+        prepare_runtime: F,
+    ) -> Result<PreparedRuntimeServer, AtmError>
+    where
+        F: FnOnce(&LocalIpcServerTransportAdapter) -> Result<PreparedRuntimeServer, AtmError>,
+    {
+        prepare_runtime(&self.server_transport).inspect_err(|_| {
+            if let Err(shutdown_error) = self.shutdown_background_lanes() {
+                tracing::warn!(%shutdown_error, "{rollback_message}");
             }
-        };
+        })
+    }
+
+    fn activate_runtime(
+        &self,
+        runtime: &mut PreparedRuntimeServer,
+    ) -> Result<SocketEndpointGuard, AtmError> {
         self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
         self.lifecycle.transition(RuntimeLifecycleState::Running)?;
         self.composition_observability.emit_or_warn(
@@ -345,8 +344,19 @@ impl RuntimeComposition {
             "ok",
             "daemon startup completed",
         );
+        self.take_endpoint_guard()
+    }
+
+    fn serve_runtime<P>(
+        &self,
+        mut runtime: PreparedRuntimeServer,
+        publish_ready: P,
+    ) -> Result<(), AtmError>
+    where
+        P: Fn() -> Result<(), AtmError>,
+    {
         let request_dispatcher = Arc::clone(&self.request_dispatcher);
-        let endpoint_guard = self.take_endpoint_guard()?;
+        let endpoint_guard = self.activate_runtime(&mut runtime)?;
         let result = runtime.serve_with_runtime_hooks(
             self.request_dispatcher(),
             RuntimeServeHooks {
@@ -356,10 +366,22 @@ impl RuntimeComposition {
                 begin_shutdown: || self.begin_shutdown(),
                 reload_runtime_view: move || request_dispatcher.reload_runtime_view(),
                 finalize_shutdown: || self.finalize_shutdown(),
-                publish_ready: || Ok(()),
+                publish_ready,
             },
         );
         self.finish_runtime(result)
+    }
+
+    pub(crate) fn start(&self) -> Result<(), AtmError> {
+        self.begin_startup()
+            .or_else(|error| self.rollback_failed_startup(error))?;
+        let runtime = self
+            .prepare_runtime_with(
+                "daemon background lane shutdown failed during runtime preparation rollback",
+                |server_transport| server_transport.prepare_runtime(),
+            )
+            .or_else(|error| self.rollback_failed_startup(error))?;
+        self.serve_runtime(runtime, || Ok(()))
     }
 
     #[cfg(test)]
@@ -369,99 +391,27 @@ impl RuntimeComposition {
         socket_path: PathBuf,
         ready_signal: Option<std::sync::mpsc::SyncSender<()>>,
     ) -> Result<(), AtmError> {
-        self.composition_observability.emit_or_warn(
-            "start_requested",
-            "ok",
-            "daemon start requested",
-        );
-        self.lifecycle.transition(RuntimeLifecycleState::Starting)?;
-        let replay_summary = match self.peer_transport_runtime.resume_pending_replay() {
-            Ok(summary) => summary,
-            Err(error) => {
-                self.composition_observability.emit_or_warn(
-                    "startup_failed",
-                    "failed",
-                    "daemon startup failed",
-                );
-                self.lifecycle.force_stopped()?;
-                return Err(error);
+        self.begin_startup()
+            .or_else(|error| self.rollback_failed_startup(error))?;
+        let runtime = self
+            .prepare_runtime_with(
+                "daemon background lane shutdown failed during test runtime preparation rollback",
+                |server_transport| server_transport.prepare_runtime_at_socket_path(socket_path),
+            )
+            .or_else(|error| self.rollback_failed_startup(error))?;
+        self.serve_runtime(runtime, move || {
+            if let Some(signal) = ready_signal.as_ref() {
+                signal.send(()).map_err(|_| {
+                    AtmError::daemon_unavailable(
+                        "test runtime failed to publish the daemon ready signal",
+                    )
+                    .with_recovery(
+                        "Restore the bounded ready-signal handshake before retrying the same-host daemon runtime test.",
+                    )
+                })?;
             }
-        };
-        if replay_summary.delivered > 0
-            || replay_summary.retained > 0
-            || replay_summary.purged_expired > 0
-        {
-            tracing::info!(
-                replay_delivered = replay_summary.delivered,
-                replay_retained = replay_summary.retained,
-                replay_purged_expired = replay_summary.purged_expired,
-                "daemon startup replay sweep completed"
-            );
-        }
-        if let Err(error) = self.start_background_lanes() {
-            self.composition_observability.emit_or_warn(
-                "startup_failed",
-                "failed",
-                "daemon startup failed",
-            );
-            self.lifecycle.force_stopped()?;
-            return Err(error);
-        }
-        let mut runtime = match self
-            .server_transport
-            .prepare_runtime_at_socket_path(socket_path)
-        {
-            Ok(runtime) => runtime,
-            Err(error) => {
-                if let Err(shutdown_error) = self.shutdown_background_lanes() {
-                    tracing::warn!(
-                        %shutdown_error,
-                        "daemon background lane shutdown failed during test runtime preparation rollback"
-                    );
-                }
-                self.composition_observability.emit_or_warn(
-                    "startup_failed",
-                    "failed",
-                    "daemon startup failed",
-                );
-                self.lifecycle.force_stopped()?;
-                return Err(error);
-            }
-        };
-        self.replace_endpoint_guard(Some(runtime.take_endpoint_guard()?))?;
-        self.lifecycle.transition(RuntimeLifecycleState::Running)?;
-        self.composition_observability.emit_or_warn(
-            "startup_completed",
-            "ok",
-            "daemon startup completed",
-        );
-        let request_dispatcher = Arc::clone(&self.request_dispatcher);
-        let endpoint_guard = self.take_endpoint_guard()?;
-        let result = runtime.serve_with_runtime_hooks(
-            self.request_dispatcher(),
-            RuntimeServeHooks {
-                endpoint_guard,
-                graceful_drain_deadline: super::GRACEFUL_DRAIN_DEADLINE,
-                force_cancel_deadline: super::FORCE_CANCEL_DEADLINE,
-                begin_shutdown: || self.begin_shutdown(),
-                reload_runtime_view: move || request_dispatcher.reload_runtime_view(),
-                finalize_shutdown: || self.finalize_shutdown(),
-                publish_ready: move || {
-                    if let Some(signal) = ready_signal.as_ref() {
-                        signal.send(()).map_err(|_| {
-                            AtmError::daemon_unavailable(
-                                "test runtime failed to publish the daemon ready signal",
-                            )
-                            .with_recovery(
-                                "Restore the bounded ready-signal handshake before retrying the same-host daemon runtime test.",
-                            )
-                        })?;
-                    }
-                    Ok(())
-                },
-            },
-        );
-        self.finish_runtime(result)
+            Ok(())
+        })
     }
 
     #[cfg(test)]
@@ -820,7 +770,6 @@ pub(crate) fn compose_runtime(
 #[cfg(test)]
 mod tests {
     use atm_core::boundary::ServerTransport;
-    use serial_test::serial;
     use std::sync::mpsc;
     use std::time::{Duration, Instant};
     use tempfile::TempDir;
@@ -912,7 +861,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn runtime_composition_failed_startup_returns_to_stopped() {
         let tempdir = TempDir::new().expect("tempdir");
         let parent_file = tempdir.path().join("not-a-dir");
@@ -934,7 +883,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
         let tempdir = TempDir::new().expect("tempdir");
         let original_dir = std::env::current_dir().expect("cwd");
@@ -956,7 +905,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn runtime_composition_fails_closed_when_replay_store_cannot_open() {
         let tempdir = TempDir::new().expect("tempdir");
         let home_dir = tempdir.path().join("atm-home");
@@ -993,7 +942,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial_test::serial(env)]
     fn runtime_composition_fails_closed_when_peer_transport_config_is_invalid() {
         let tempdir = TempDir::new().expect("tempdir");
         let workspace_dir = tempdir.path().join("workspace");

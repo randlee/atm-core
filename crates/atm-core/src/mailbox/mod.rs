@@ -7,14 +7,15 @@ pub(crate) mod source;
 pub(crate) mod store;
 pub(crate) mod surface;
 
+use serde_json::Value;
 use std::fs;
 use std::path::Path;
-
-use serde_json::Value;
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
+use crate::mailbox::source::SourceFile;
 use crate::schema::{AtmMessageId, MessageEnvelope};
+use crate::types::{AgentName, TeamName};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// Append one message to a shared inbox file under the mailbox lock.
@@ -120,6 +121,27 @@ pub(crate) fn load_compat_mailbox_messages(path: &Path) -> Result<Vec<MessageEnv
     })?;
 
     parse_mailbox_contents(&raw, path)
+}
+
+pub(crate) fn import_compat_source_projections(
+    home_dir: &Path,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<SourceFile>, AtmError> {
+    store::load_compat_source_projections(home_dir, team, agent)
+}
+
+pub(crate) fn export_compat_source_projections(
+    source_files: &[SourceFile],
+) -> Result<(), AtmError> {
+    store::write_compat_source_projections(source_files)
+}
+
+pub(crate) fn export_compat_mailbox_projection(
+    path: &Path,
+    messages: &[MessageEnvelope],
+) -> Result<(), AtmError> {
+    store::write_compat_mailbox_projection(path, messages)
 }
 
 fn parse_mailbox_contents(raw: &str, path: &Path) -> Result<Vec<MessageEnvelope>, AtmError> {
