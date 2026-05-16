@@ -332,8 +332,6 @@ impl ReconcileRuntime {
                     ));
                 }
                 Err(ReconcileJoinStatus::Timeout) => {
-                    // Intentional detach: once the bounded deadline expires, shutdown returns the
-                    // typed timeout failure immediately instead of waiting forever on the helper.
                     drop(join_helper);
                     tracing::warn!(
                         thread_id = ?worker_thread_id,

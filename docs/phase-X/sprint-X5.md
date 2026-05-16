@@ -28,16 +28,11 @@ target: integrate/phase-Xb
 
 ## Remaining Restart Work
 
-- selectively replay only the audited `78d1e2c...`, `c8bd38a...`, and
-  `cdb1edd...` closeout work onto `feature/pXb-s5-guardrails-and-closeout`
-- exclude old merge-repair and branch-topology noise that is specific to the
-  abandoned `phase-X` line
-- preserve the corrected restart-line script inventory while replaying `X.5`:
-  - use `scripts/check-legacy-mailbox-paths.py`, not the old `.sh` name
-  - use `scripts/check-capability-degradation.py`, not the old `.sh` name
-- confirm the restarted branch satisfies every `X.5` guardrail, dependency, and
-  closeout acceptance criterion on the new line
-- run full `X.5` QA on `pXb-s5`
+- none for core sprint scope; `feature/pXb-s5-guardrails-and-closeout`
+  is the replayed and validated `X.5` baseline
+- only between-sprint finding fixes remain when new `X.5` findings are
+  promoted to this branch
+- run full `X.5` QA on `pXb-s5` after each promoted finding fix
 
 ## Goal
 
@@ -118,6 +113,22 @@ target: integrate/phase-Xb
 - added `atm-runtime-test-support` for SQLite retained-runtime test assembly,
   including a process-visible runtime-path guard that works for spawned threads
   without deadlocking multi-fixture tests
+
+### Closed Findings
+
+- `ATM-QA-S4-001`
+  - `crates/atm-daemon/src/peer_transport.rs`
+  - `PeerTransportConfig::from_config(...)` now emits `tracing::warn!` before
+    falling back to `DEFAULT_REMOTE_RETRY_BUDGET` when no config is provided
+- `FTQ-006`
+  - `crates/atm-daemon/src/composition.rs`
+  - `CwdGuard` with a `Drop` restore path now replaces every manual
+    `set_current_dir(...)` / restore pair in the touched tests
+- `RBP-F005`
+  - `crates/atm-daemon/src/local_ipc_transport.rs`
+  - `serve_with_deadlines_and_accept_probe(...)`, the extracted request worker,
+    and the touched reconcile runtime paths are all kept at or below the
+    `RULE-002` threshold on the replayed `X.5` branch
 
 ## Required Validation
 

@@ -4,7 +4,7 @@ use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::{Duration, Instant};
+use std::time::Duration;
 
 use atm_core::boundary::{self, AtmProtocol, RequestDispatcher};
 use atm_core::error::AtmError;
@@ -25,14 +25,18 @@ use crate::local_ipc_wake::{schedule_delayed_listener_wake, wake_listener};
 use crate::shutdown_beacon::ShutdownBeacon;
 
 mod request_worker;
+mod shutdown;
 
-#[cfg(unix)]
-use std::fs;
 use std::thread;
 
 use request_worker::handle_connection;
 #[cfg(all(test, unix))]
 use request_worker::install_injected_accept_error_for_test;
+use shutdown::{
+    emit_ready_signal_if_requested, finalize_serve_loop, finish_serve_shutdown,
+    prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal, remove_stale_endpoint,
+    write_shutdown_response,
+};
 
 const MAX_CONCURRENT_CONNECTIONS: usize = 64;
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
@@ -43,9 +47,8 @@ const TERMINATE_REJECTION_REQUEST_ID: u64 = NonZeroU64::MIN.get();
 #[derive(Debug, Default)]
 struct ServeLoopSignals {
     reload_requested: AtomicBool,
-    // The serve loop needs to retain the full typed accept failure for later propagation, so a
-    // mutex-backed slot is required here; an atomic flag alone could not carry the original
-    // `AtmError` across the lifecycle/accept thread boundary.
+    // A mutex-backed slot preserves one typed accept failure without queueing because the scoped
+    // waiter thread cannot outlive the owner and single-error semantics do not benefit from a channel.
     accept_error: Mutex<Option<AtmError>>,
 }
 
@@ -218,6 +221,32 @@ struct ServeShutdownContext<'a> {
     lifecycle_control: &'a LifecycleControlSourceAdapter,
 }
 
+struct ServeRuntimeScopeContext<
+    'a,
+    BeginShutdown,
+    ReloadRuntimeView,
+    FinalizeShutdown,
+    PublishReady,
+> {
+    listener: &'a LocalSocketListener,
+    dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
+    endpoint_path: &'a Path,
+    #[cfg(test)]
+    accept_error_inject: &'a mut Option<std::sync::mpsc::SyncSender<()>>,
+    lifecycle_control: LifecycleControlSourceAdapter,
+    registry: Arc<ActiveConnectionRegistry>,
+    force_shutdown: Arc<AtomicBool>,
+    codec: JsonAtmProtocolCodec,
+    observability: SubsystemObservability,
+    endpoint_guard: SocketEndpointGuard,
+    graceful_drain_deadline: Duration,
+    force_cancel_deadline: Duration,
+    begin_shutdown: BeginShutdown,
+    reload_runtime_view: ReloadRuntimeView,
+    finalize_shutdown: FinalizeShutdown,
+    publish_ready: PublishReady,
+}
+
 impl std::fmt::Debug for PreparedRuntimeServer {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("PreparedRuntimeServer")
@@ -355,47 +384,26 @@ impl PreparedRuntimeServer {
             codec,
             observability,
         } = self;
-        thread::scope(|scope| -> Result<(), AtmError> {
-            let shutdown_beacon = Arc::new(ShutdownBeacon::default());
-            let signals = Arc::new(ServeLoopSignals::default());
-            let lifecycle_waiter = spawn_lifecycle_waiter(
-                scope,
-                Arc::clone(&signals),
-                Arc::clone(&shutdown_beacon),
-                lifecycle_control.clone(),
-                endpoint_path.clone(),
-            )?;
-            publish_ready()?;
-            let mut accept_context = AcceptLoopContext {
-                listener: &listener,
-                lifecycle_control: &lifecycle_control,
-                registry: &registry,
-                force_shutdown: &force_shutdown,
-                codec: &codec,
-                observability: &observability,
-                dispatcher: &dispatcher,
-                signals: signals.as_ref(),
-                shutdown_beacon: shutdown_beacon.as_ref(),
-                endpoint_path: &endpoint_path,
-                #[cfg(test)]
-                accept_error_inject: &mut accept_error_inject,
-            };
-            let serve_error = run_accept_loop(scope, &mut accept_context, &reload_runtime_view)?;
-            let shutdown_error = finalize_serve_loop(
-                &begin_shutdown,
-                &finalize_shutdown,
-                ServeShutdownContext {
-                    endpoint_guard,
-                    graceful_drain_deadline,
-                    force_cancel_deadline,
-                    registry: &registry,
-                    force_shutdown: force_shutdown.as_ref(),
-                    lifecycle_control: &lifecycle_control,
-                },
-                lifecycle_waiter,
-            );
-            finish_serve_shutdown(serve_error, shutdown_error)
-        })
+        let serve_context = ServeRuntimeScopeContext {
+            listener: &listener,
+            dispatcher,
+            endpoint_path: &endpoint_path,
+            #[cfg(test)]
+            accept_error_inject: &mut accept_error_inject,
+            lifecycle_control,
+            registry,
+            force_shutdown,
+            codec,
+            observability,
+            endpoint_guard,
+            graceful_drain_deadline,
+            force_cancel_deadline,
+            begin_shutdown,
+            reload_runtime_view,
+            finalize_shutdown,
+            publish_ready,
+        };
+        thread::scope(|scope| serve_runtime_scope(scope, serve_context))
     }
 
     pub(crate) fn take_endpoint_guard(&mut self) -> Result<SocketEndpointGuard, AtmError> {
@@ -406,6 +414,84 @@ impl PreparedRuntimeServer {
                 )
         })
     }
+}
+
+fn serve_runtime_scope<'scope, BeginShutdown, ReloadRuntimeView, FinalizeShutdown, PublishReady>(
+    scope: &'scope thread::Scope<'scope, '_>,
+    context: ServeRuntimeScopeContext<
+        '_,
+        BeginShutdown,
+        ReloadRuntimeView,
+        FinalizeShutdown,
+        PublishReady,
+    >,
+) -> Result<(), AtmError>
+where
+    BeginShutdown: Fn() -> Result<(), AtmError>,
+    ReloadRuntimeView: Fn() -> Result<(), AtmError>,
+    FinalizeShutdown: Fn(),
+    PublishReady: Fn() -> Result<(), AtmError>,
+{
+    let ServeRuntimeScopeContext {
+        listener,
+        dispatcher,
+        endpoint_path,
+        #[cfg(test)]
+        accept_error_inject,
+        lifecycle_control,
+        registry,
+        force_shutdown,
+        codec,
+        observability,
+        endpoint_guard,
+        graceful_drain_deadline,
+        force_cancel_deadline,
+        begin_shutdown,
+        reload_runtime_view,
+        finalize_shutdown,
+        publish_ready,
+    } = context;
+    let (shutdown_beacon, signals) = (
+        Arc::new(ShutdownBeacon::default()),
+        Arc::new(ServeLoopSignals::default()),
+    );
+    let lifecycle_waiter = spawn_lifecycle_waiter(
+        scope,
+        Arc::clone(&signals),
+        Arc::clone(&shutdown_beacon),
+        lifecycle_control.clone(),
+        endpoint_path.to_path_buf(),
+    )?;
+    publish_ready()?;
+    let mut accept_context = AcceptLoopContext {
+        listener,
+        lifecycle_control: &lifecycle_control,
+        registry: &registry,
+        force_shutdown: &force_shutdown,
+        codec: &codec,
+        observability: &observability,
+        dispatcher: &dispatcher,
+        signals: signals.as_ref(),
+        shutdown_beacon: shutdown_beacon.as_ref(),
+        endpoint_path,
+        #[cfg(test)]
+        accept_error_inject,
+    };
+    let serve_error = run_accept_loop(scope, &mut accept_context, &reload_runtime_view)?;
+    let shutdown_error = finalize_serve_loop(
+        &begin_shutdown,
+        &finalize_shutdown,
+        ServeShutdownContext {
+            endpoint_guard,
+            graceful_drain_deadline,
+            force_cancel_deadline,
+            registry: &registry,
+            force_shutdown: force_shutdown.as_ref(),
+            lifecycle_control: &lifecycle_control,
+        },
+        lifecycle_waiter,
+    );
+    finish_serve_shutdown(serve_error, shutdown_error)
 }
 
 fn spawn_lifecycle_waiter<'scope, 'env>(
@@ -521,11 +607,7 @@ where
     )? {
         return Ok(AcceptLoopOutcome::Break(Some(error)));
     }
-    if maybe_reload_runtime_view(
-        context.signals,
-        reload_runtime_view,
-        context.observability,
-    ) {
+    if maybe_reload_runtime_view(context.signals, reload_runtime_view, context.observability) {
         return Ok(AcceptLoopOutcome::Continue);
     }
     #[cfg(test)]
@@ -569,11 +651,7 @@ where
     )? {
         return Ok(AcceptLoopOutcome::Break(Some(error)));
     }
-    if maybe_reload_runtime_view(
-        context.signals,
-        reload_runtime_view,
-        context.observability,
-    ) {
+    if maybe_reload_runtime_view(context.signals, reload_runtime_view, context.observability) {
         drop(stream);
         return Ok(AcceptLoopOutcome::Continue);
     }
@@ -756,106 +834,6 @@ fn spawn_connection_worker<'scope>(
         })
 }
 
-fn finalize_serve_loop<BeginShutdown, FinalizeShutdown>(
-    begin_shutdown: &BeginShutdown,
-    finalize_shutdown: &FinalizeShutdown,
-    context: ServeShutdownContext<'_>,
-    lifecycle_waiter: std::thread::ScopedJoinHandle<'_, ()>,
-) -> Option<AtmError>
-where
-    BeginShutdown: Fn() -> Result<(), AtmError>,
-    FinalizeShutdown: Fn(),
-{
-    let mut shutdown_error = begin_shutdown().err();
-    let shutdown_started = Instant::now();
-    if let Err(error) = drain_active_connections_for_shutdown(
-        context.registry.as_ref(),
-        context.force_shutdown,
-        context.graceful_drain_deadline,
-        context.force_cancel_deadline,
-        shutdown_started,
-        TRACKED_DISPATCH_JOIN_DEADLINE,
-    ) {
-        append_shutdown_error(&mut shutdown_error, "drain_error", error);
-    }
-    let _ = context.lifecycle_control.notify_state_change();
-    if let Err(error) = wake_listener(context.endpoint_guard.endpoint_path()) {
-        tracing::debug!(%error, "daemon local IPC listener wake was unnecessary during shutdown");
-    }
-    if lifecycle_waiter.join().is_err() {
-        append_shutdown_error(
-            &mut shutdown_error,
-            "lifecycle_waiter_error",
-            AtmError::daemon_lifecycle_wedge(
-                "daemon lifecycle waiter panicked during transport shutdown",
-            )
-            .with_recovery(
-                "Restart the daemon; the same-host lifecycle waiter crashed while the runtime was transitioning out of serving state.",
-            ),
-        );
-    }
-    if let Err(error) = context.lifecycle_control.shutdown_worker_with_timeout() {
-        append_shutdown_error(&mut shutdown_error, "lifecycle_worker_error", error);
-    }
-    if let Err(error) = context.endpoint_guard.unpublish() {
-        append_shutdown_error(&mut shutdown_error, "endpoint_cleanup_error", error);
-    }
-    finalize_shutdown();
-    shutdown_error
-}
-
-fn finish_serve_shutdown(
-    serve_error: Option<AtmError>,
-    shutdown_error: Option<AtmError>,
-) -> Result<(), AtmError> {
-    if let Some(serve_error) = serve_error {
-        if let Some(shutdown_error) = shutdown_error {
-            tracing::warn!(
-                %shutdown_error,
-                %serve_error,
-                "daemon shutdown encountered an additional error after a serve error"
-            );
-        } else {
-            tracing::warn!(
-                %serve_error,
-                "daemon serve loop exited with an error after shutdown finalization"
-            );
-        }
-        return Err(serve_error);
-    }
-    shutdown_error.map_or(Ok(()), Err)
-}
-
-fn append_shutdown_error(shutdown_error: &mut Option<AtmError>, field_name: &str, error: AtmError) {
-    if let Some(existing) = shutdown_error.as_ref() {
-        tracing::warn!(
-            begin_shutdown_error = %existing,
-            error_field = field_name,
-            additional_error = %error,
-            "daemon shutdown encountered an additional error after an earlier shutdown-start error"
-        );
-    } else {
-        *shutdown_error = Some(error);
-    }
-}
-
-fn record_serve_error(
-    lifecycle_control: &LifecycleControlSourceAdapter,
-    shutdown_beacon: &ShutdownBeacon,
-    error: AtmError,
-) -> AtmError {
-    record_shutdown_signal(lifecycle_control, shutdown_beacon);
-    error
-}
-
-fn record_shutdown_signal(
-    lifecycle_control: &LifecycleControlSourceAdapter,
-    shutdown_beacon: &ShutdownBeacon,
-) {
-    shutdown_beacon.trip();
-    let _ = lifecycle_control.notify_state_change();
-}
-
 #[derive(Debug, Clone)]
 pub(crate) struct LocalIpcServerTransportAdapter {
     observability: SubsystemObservability,
@@ -914,113 +892,6 @@ impl boundary::ServerTransport for LocalIpcServerTransportAdapter {
             "Enter the daemon through RuntimeComposition::start() so lifecycle state, host ownership, and shutdown handling stay consistent.",
         ))
     }
-}
-
-#[cfg(unix)]
-fn prepare_local_ipc_endpoint(
-    endpoint_path: &Path,
-) -> Result<LocalIpcEndpointPreparation, AtmError> {
-    if let Some(parent) = endpoint_path.parent() {
-        fs::create_dir_all(parent).map_err(|source| {
-            AtmError::daemon_unavailable(format!(
-                "failed to create daemon local IPC directory at {}",
-                parent.display()
-            ))
-            .with_recovery(
-                "Grant write access to the daemon socket parent directory or choose a writable ATM_HOME before retrying.",
-            )
-            .with_source(source)
-        })?;
-    }
-    remove_stale_endpoint(endpoint_path)?;
-    Ok(LocalIpcEndpointPreparation::FilesystemEndpointPrepared)
-}
-
-#[cfg(not(unix))]
-fn prepare_local_ipc_endpoint(
-    _endpoint_path: &Path,
-) -> Result<LocalIpcEndpointPreparation, AtmError> {
-    // Windows named-pipe-backed local IPC does not allocate a filesystem socket path, so
-    // endpoint preparation is explicitly a non-filesystem step rather than a silent no-op.
-    Ok(LocalIpcEndpointPreparation::NonFilesystemEndpointPrepared)
-}
-
-#[cfg(unix)]
-fn remove_stale_endpoint(endpoint_path: &Path) -> Result<(), AtmError> {
-    if !endpoint_path.exists() {
-        return Ok(());
-    }
-    match fs::remove_file(endpoint_path) {
-        Ok(()) => Ok(()),
-        Err(source) if source.kind() == std::io::ErrorKind::NotFound => Ok(()),
-        Err(source) => Err(AtmError::daemon_unavailable(format!(
-            "failed to remove stale daemon local IPC endpoint at {}",
-            endpoint_path.display()
-        ))
-        .with_recovery(
-            "Stop the conflicting daemon or remove the stale same-host socket path before restarting atm-daemon.",
-        )
-        .with_source(source)),
-    }
-}
-
-fn write_shutdown_response(
-    stream: &mut LocalSocketStream,
-    codec: &JsonAtmProtocolCodec,
-) -> Result<ShutdownResponseOutcome, AtmError> {
-    let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE));
-    let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));
-    let Some(frame) = atm_core::protocol::read_frame(
-        stream,
-        "failed to read daemon request frame during shutdown rejection",
-        "daemon request frame exceeded the maximum supported size during shutdown rejection",
-    )?
-    else {
-        return Ok(ShutdownResponseOutcome::NoFrame);
-    };
-    let Ok((request_id, _request)) = codec.request_from_frame(frame) else {
-        return Ok(ShutdownResponseOutcome::NoFrame);
-    };
-    let response = ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-        &AtmError::daemon_unavailable("daemon is shutting down and not accepting new requests")
-            .with_recovery("Retry the ATM command after the daemon restarts."),
-    ));
-    let frame = codec.response_to_frame(request_id, response)?;
-    atm_core::protocol::write_frame(
-        stream,
-        &frame,
-        "failed to write daemon shutdown rejection response frame",
-    )?;
-    stream.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon shutdown rejection response frame")
-            .with_recovery(
-                "Retry the ATM command after the daemon restarts; the shutdown rejection response could not be delivered cleanly.",
-            )
-            .with_source(source)
-    })?;
-    Ok(ShutdownResponseOutcome::RejectedRequest)
-}
-
-fn emit_ready_signal_if_requested() -> Result<(), AtmError> {
-    if std::env::var_os("ATM_DAEMON_READY_STDOUT").is_none() {
-        return Ok(());
-    }
-    let mut stdout = std::io::stdout().lock();
-    writeln!(stdout, "ATM_DAEMON_READY").map_err(|source| {
-        AtmError::daemon_unavailable("failed to emit daemon ready signal")
-            .with_recovery(
-                "Restart the daemon after confirming the parent process still accepts the ready signal on stdout.",
-            )
-            .with_source(source)
-    })?;
-    stdout.flush().map_err(|source| {
-        AtmError::daemon_unavailable("failed to flush daemon ready signal")
-            .with_recovery(
-                "Restart the daemon after confirming the parent process still accepts the ready signal on stdout.",
-            )
-            .with_source(source)
-    })?;
-    Ok(())
 }
 
 #[cfg(test)]
