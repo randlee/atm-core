@@ -75,11 +75,25 @@ classes only:
    - owned by one daemon-private watcher/import/export or closely related
      file-writer subsystem
    - synchronized inside that owned subsystem
+   - `Claude Code` harness only
+   - never selected by model alone; harness type is the gate
    - append-only if the approved compatibility wire format allows it
 
 2. explicit admin / restore / repair staging path
    - not part of normal send/ack/read/clear runtime flow
    - must remain staged, atomic, and separately documented
+
+Normal runtime behavior must therefore converge on:
+
+- one SQLite-backed delivery/state flow for all harnesses
+- one Claude-Code-only compatibility append branch after that delivery/state
+  flow
+- no JSONL append for non-Claude harnesses
+- one explicit companion error contract when SQLite delivery fails:
+  - original outward delivery still proceeds
+  - an additional `atm-system@<team>` error message is emitted
+  - the nudge path mirrors that two-message behavior
+  - no alternate fallback path may replace that companion error emission
 
 Normal command paths must not own direct compatibility inbox rewrites once the
 Phase `Y` line is complete.
@@ -93,6 +107,7 @@ The following must be completed on the planning branch before numbered Phase
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
 - backlog list for any missing command/request/query diagrams
+- line-numbered write/removal ledger for every inbox/config write stack
 - approved implementation scopes for the first two small pre-smoke sprints
 
 These are planning deliverables, not execution sprints.
@@ -129,6 +144,8 @@ Purpose:
 - make the owner daemon-private or tightly coupled to the watcher/import/export
   subsystem
 - add machine-checkable enforcement so command code cannot bypass that owner
+- execute the line-numbered removal ledger from
+  `docs/phase-Y/inbox-write-path-audit.md`
 
 ### Y.4 Mutable Compatibility-Field Removal And Dependency Exposure
 
@@ -137,6 +154,7 @@ Purpose:
 - remove mutable ATM workflow-state fields from compatibility output
 - let breakage expose hidden logic dependencies
 - delete or refactor those obsolete dependencies instead of preserving them
+- justify every remaining compatibility field explicitly
 
 ### Y.5 Append-Only Compatibility Export Cutover
 
@@ -181,6 +199,8 @@ Purpose:
 - do not preserve mutable ATM workflow state in the compatibility inbox merely
   because older code still consumes it
 - use data removal to expose hidden dependencies early
+- every write-stack removal or retention decision must be documented by file,
+  line, and function name before the corresponding sprint starts
 - do not treat command-path direct inbox rewrites as an acceptable long-term
   boundary outcome
 - every CLI command, every client-socket command family, and every SQLite

@@ -3478,4 +3478,7 @@ Immediate planning outputs:
 - `docs/plan-phase-Y.md`
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/phase-Y/sprint-Y3.md`
+- `docs/phase-Y/sprint-Y4.md`
+- `docs/phase-Y/sprint-Y5.md`
 - approved implementation scopes for `Y.1` and `Y.2`
