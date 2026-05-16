@@ -47,21 +47,13 @@ target: integrate/phase-Xb
 ## Exact Targets
 
 - `crates/atm-core/src/read/mod.rs`
-- `crates/atm-core/src/list.rs`
+- `crates/atm-core/src/read/legacy_path.rs`
+- `crates/atm-core/src/ack/mod.rs`
+- `crates/atm-core/src/clear/mod.rs`
 - `crates/atm-core/src/send/mod.rs`
-- `crates/atm-core/src/boundary/mail.rs`
 - `crates/atm-core/src/boundary_support.rs`
-- `crates/atm-core/src/lib.rs`
-- `crates/atm-core/src/mailbox/mod.rs`
-- `crates/atm-core/src/mailbox/source.rs`
 - `crates/atm-core/src/mailbox/store.rs`
-- `crates/atm-core/src/workflow.rs`
-- `crates/atm-daemon/src/peer_transport.rs`
-- `crates/atm-rusqlite/src/lib.rs`
-- `crates/atm-rusqlite/src/mailbox_metadata.rs`
 - `docs/atm-core/boundaries.md`
-- `docs/atm-core/architecture.md`
-- `docs/project-plan.md`
 
 ## Required Work
 
@@ -90,6 +82,7 @@ target: integrate/phase-Xb
 - command logic no longer branches on mailbox backend selection
 - mailbox command behavior remains routed through one store-backed path
 
+<<<<<<< HEAD
 ## Delivered
 
 - removed the remaining production `legacy:` mailbox-key branches from
@@ -115,6 +108,8 @@ Implementation result:
   returns only test names in `mailbox/mod.rs`, not production helper or
   command-path matches
 
+=======
+>>>>>>> feature/pXb-s1-mailbox-runtime-cutover
 ## Required Validation
 
 - `cargo build --workspace`

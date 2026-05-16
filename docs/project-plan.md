@@ -3173,6 +3173,15 @@ Restart note:
   QA must still validate each restarted sprint end to end after any cherry-pick
   or selective reapplication
 
+Status note:
+- `X.0` complete on `feature/pX-lint-gates`
+  - target: `develop`
+  - scope: silent-emit regression gate and RULE-002 function-length gate
+- `X.1` complete on `feature/pXb-s1-mailbox-runtime-cutover`
+  - target: `integrate/phase-Xb`
+  - scope: mailbox runtime cutover and dual-mode retained-runtime surface
+    deletion
+
 Pre-phase prerequisite:
 - already satisfied on `develop` before `integrate/phase-Xb` starts via
   `feature/pX-lint-gates`:

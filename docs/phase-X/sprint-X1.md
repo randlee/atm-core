@@ -9,31 +9,6 @@ target: integrate/phase-Xb
 
 # Sprint X.1 — Mailbox Runtime Cutover
 
-## Modification
-
-- This sprint is a restart replay on `feature/pXb-s1-mailbox-runtime-cutover`.
-- Prior Phase `X` work already completed most of the intended `X.1` scope:
-  - `70460f9b4fca061dd069b7b4245215c635ceb693`
-    - `feat: complete phase X mailbox runtime cutover`
-  - `6143bdab6cd2279558c62da836b5cb9aab054262`
-    - `fix: close phase X1 follow-up findings`
-- Execute this sprint by cherry-picking or selectively reapplying that prior
-  work onto `pXb-s1` after audit; do not re-derive the design from scratch.
-- The old `feature/pX-s1-mailbox-runtime-cutover` branch is a salvage source,
-  not the new execution branch.
-- QA must validate the entire `X.1` sprint on `pXb-s1`, not only the replayed
-  delta from those commits.
-
-## Remaining Restart Work
-
-- replay or selectively re-implement the audited `70460f9...` and `6143bda...`
-  changes onto `feature/pXb-s1-mailbox-runtime-cutover`
-- reconcile any drift between the old `phase-X` implementation base and the new
-  `develop`-based restart line
-- confirm the restarted branch actually satisfies every `X.1` deletion and
-  boundary acceptance criterion on the new line
-- run full `X.1` QA on `pXb-s1`; do not treat prior completion as sufficient
-
 ## Goal
 
 - remove dual mailbox runtime selection from the retained runtime surface
@@ -42,7 +17,7 @@ target: integrate/phase-Xb
 ## Hard Dependencies
 
 - `X.0` merged on `develop`
-- `integrate/phase-Xb` created from `develop` after `X.0` was already live
+- `integrate/phase-Xb` created from a validated `develop` restart baseline
 - no fallback path may be preserved for later cleanup once this sprint starts
 
 ## Exact Targets
