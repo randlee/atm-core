@@ -1,0 +1,36 @@
+%% title: `Claude Harness New Message`
+%% summary: New-message state machine for Claude Code harness delivery.
+%% commentary: This machine persists SQLite first on the success path, allows Claude-only compatibility append after commit, and on SQLite failure still emits the original plus an `atm-system@<team>` error companion with mirrored nudges.
+%% notes: harness gate: ClaudeCode only | sqlite failure emits original + error companion | append failure after sqlite success falls back to post-send-hook
+%% sets: delivery
+flowchart TD
+    A["<b>ClaudeHarnessNewMessage</b><br/>Received"] --> B["PersistSqlite
+durable message/state write"]
+    B -->|sqlite_ok| C["SqliteCommitted"]
+    B -->|sqlite_err| D["Append original compatibility message
+retain sqlite diagnostics"]
+    C --> D
+    D -->|append_ok_after_sqlite_ok| E["RunPrimaryNudge
+original message only"]
+    D -->|append_err_after_sqlite_ok| F["RunPostSendHookFallback
+notification degradation only"]
+    D -->|append_ok_after_sqlite_err| G["Append atm-system@<team> error message"]
+    D -->|append_err_after_sqlite_err| X1["Failed
+blocking append failure after sqlite failure"]
+    G -->|append_ok| H["RunPrimaryNudge
+original message"]
+    G -->|append_err| X2["Failed
+blocking error-companion append failure"]
+    H --> I["RunErrorNudge
+atm-system@<team> error message"]
+    E --> O["Delivered"]
+    F --> O
+    I --> O
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,C,O happy;
+    class X1,X2 error;
+    class B,D,E,F,G,H,I neutral;

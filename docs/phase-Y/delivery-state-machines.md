@@ -6,6 +6,11 @@ Make every write-affecting mail event auditable through one central
 delivery-policy layer and one event-family state machine, rather than through
 scattered command-local `if` branches.
 
+Diagram viewer:
+
+- [state-diagrams.md](./state-diagrams.md)
+- [delivery-state-diagrams.html](../reports/delivery-state-diagrams.html)
+
 ## Core Rule
 
 Delivery policy must be centralized, but the event machines must stay narrow.

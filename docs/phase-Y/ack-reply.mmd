@@ -1,0 +1,28 @@
+%% title: `Ack Reply`
+%% summary: Ack legality, ack-state persistence, and delegated reply delivery.
+%% commentary: This machine validates the ack target, commits the ack transition first, then builds one reply delivery request and delegates the outward reply path to the approved new-message machine instead of embedding reply logic back into `ack`.
+%% notes: ack legality distinct from new-message | reply delegates to NewMessageStateMachine | observable ack-state commit required
+%% sets: delivery
+flowchart TD
+    A["<b>AckReplyStateMachine</b><br/>Received"] --> B["ValidateAckTargetExists"]
+    B -->|target_missing| E1["Rejected
+validation error"]
+    B -->|target_found| C["ValidateReplyTargetAllowed"]
+    C -->|reply_rejected| E2["Rejected
+validation error"]
+    C -->|reply_allowed| D["PersistAckTransition
+commit ack-state mutation"]
+    D -->|sqlite_err| X["Failed
+ack-state persistence failure"]
+    D -->|sqlite_ok| F["BuildReplyDeliveryRequest"]
+    F --> G["DispatchReplyByHarness
+delegate to approved NewMessage machine"]
+    G --> O["Delivered"]
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,O happy;
+    class E1,E2,X error;
+    class B,C,D,F,G neutral;

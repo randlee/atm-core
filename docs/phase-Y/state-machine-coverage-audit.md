@@ -23,22 +23,14 @@ Current gap notes:
 - clap `--help` output already exists; the missing item is an `atm help`
   subcommand or equivalent Phase `Y` UX surface, which `Y.1` is expected to
   implement
-- there is no dedicated state-machine diagram for the compatibility inbox
-  export/write path itself
-- there is no dedicated state-machine diagram for watcher/import/export write
-  ownership
-- there is no dedicated state-machine diagram for the central delivery-policy
-  coordinator
-- there is no dedicated state-machine diagram for:
-  - `ClaudeHarnessNewMessage`
-  - `NonClaudeHarnessNewMessage`
-  - `ThreadUpdateStateMachine`
-  - `AckReplyStateMachine`
-  - `InboxRepairStateMachine`
-  - `RestoreInboxRebuildStateMachine`
-- the normative enum + transition definitions now live in
-  `docs/phase-Y/delivery-state-machines.md`; the remaining gap is the diagram
-  artifact set QA will compare against implementation
+- the delivery-machine diagram set now exists in:
+  - `docs/phase-Y/state-diagrams.md`
+  - `docs/reports/delivery-state-diagrams.html`
+- the normative enum + transition definitions live in:
+  - `docs/phase-Y/delivery-state-machines.md`
+- remaining missing ownership diagrams:
+  - compatibility inbox export / rewrite owner
+  - watcher/import/export write ownership
 
 ## 2. Client-Socket / Daemon Request Coverage
 
@@ -95,7 +87,7 @@ Current gap notes:
 - missing write-ownership diagrams:
   - compatibility inbox export / rewrite owner
   - `config.json` write owner and allowed admin/recovery flows
-- missing delivery-policy diagrams:
+- delivery-policy diagrams now exist for:
   - central event-family dispatcher keyed by `RosterHarness`
   - Claude-harness new-message flow
   - non-Claude-harness new-message flow

@@ -1,0 +1,31 @@
+%% title: `Inbox Repair`
+%% summary: Explicit staged rebuild for a Claude inbox repair request.
+%% commentary: This machine is the approved bulk mailbox creation or rebuild path. It validates Claude harness ownership, loads a bounded repair projection, filters deleted messages, stages the rebuild, and publishes atomically.
+%% notes: explicit repair only | ClaudeCode harness only | bounded non-deleted history projection
+%% sets: delivery
+flowchart TD
+    A["<b>InboxRepairStateMachine</b><br/>Received"] --> B["ValidateClaudeHarness"]
+    B -->|non_claude| E1["Rejected
+validation error"]
+    B -->|claude_ok| C["LoadRepairProjection
+bounded historical set"]
+    C -->|projection_err| X1["Failed
+projection load failure"]
+    C -->|projection_loaded| D["FilterDeletedMessages"]
+    D --> E["StageInboxRebuild
+temp/staged output"]
+    E -->|stage_err| X2["Failed
+staging failure"]
+    E -->|stage_ok| F["PublishInboxRebuild
+atomic install"]
+    F -->|publish_err| X3["Failed
+publish failure"]
+    F -->|publish_ok| O["Delivered"]
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,O happy;
+    class E1,X1,X2,X3 error;
+    class B,C,D,E,F neutral;

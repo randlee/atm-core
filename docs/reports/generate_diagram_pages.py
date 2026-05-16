@@ -15,6 +15,7 @@ import tempfile
 ROOT = Path(__file__).resolve().parents[2]
 ATM_DOCS = ROOT / "docs" / "atm"
 SQLITE_DOCS = ROOT / "docs" / "atm-rusqlite"
+PHASE_Y_DOCS = ROOT / "docs" / "phase-Y"
 REPORTS_DIR = ROOT / "docs" / "reports"
 PANELS_DIR = REPORTS_DIR / "panels"
 TEMPLATES_DIR = ROOT / "docs" / "templates" / "diagram-report"
@@ -74,6 +75,14 @@ PAGE_CONFIG = {
         "intro": "SQLite is the mailbox SSOT. These panels show the target query shapes: status-first selection, deleted-row exclusion in normal queries, and full message fetch only when a message must actually be rendered.",
         "output_path": REPORTS_DIR / "query-diagrams.html",
         "json_output_path": REPORTS_DIR / "query-diagrams.json",
+        "stylesheet_href": "./assets/diagram-panels.css",
+        "script_href": "./assets/diagram-panels.js",
+    },
+    "delivery": {
+        "title": "Delivery State Machines",
+        "intro": "These panels visualize the Phase Y delivery-policy coordinator and the required event-family state machines so harness routing, companion-error behavior, and staged rebuild flows stay auditable.",
+        "output_path": REPORTS_DIR / "delivery-state-diagrams.html",
+        "json_output_path": REPORTS_DIR / "delivery-state-diagrams.json",
         "stylesheet_href": "./assets/diagram-panels.css",
         "script_href": "./assets/diagram-panels.js",
     },
@@ -180,7 +189,11 @@ def schema_map() -> dict[str, str]:
 
 def all_panels() -> tuple[Panel, ...]:
     panels = []
-    source_paths = sorted(ATM_DOCS.glob("*.mmd")) + sorted(SQLITE_DOCS.glob("*.mmd"))
+    source_paths = (
+        sorted(ATM_DOCS.glob("*.mmd"))
+        + sorted(SQLITE_DOCS.glob("*.mmd"))
+        + sorted(PHASE_Y_DOCS.glob("*.mmd"))
+    )
     for source_path in source_paths:
         metadata = parse_metadata(source_path)
         missing = {"title", "summary", "commentary", "sets"} - set(metadata)

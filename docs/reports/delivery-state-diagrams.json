@@ -1,0 +1,134 @@
+{
+  "title": "Delivery State Machines",
+  "generated_at": "2026-05-16T23:18:17.522289+00:00",
+  "set": "delivery",
+  "output_path": "docs/reports/delivery-state-diagrams.html",
+  "sections": [
+    {
+      "key": "ack-reply",
+      "title": "Ack Reply",
+      "summary": "Ack legality, ack-state persistence, and delegated reply delivery.",
+      "commentary": "This machine validates the ack target, commits the ack transition first, then builds one reply delivery request and delegates the outward reply path to the approved new-message machine instead of embedding reply logic back into `ack`.",
+      "notes": [
+        "ack legality distinct from new-message",
+        "reply delegates to NewMessageStateMachine",
+        "observable ack-state commit required"
+      ],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/phase-Y/ack-reply.mmd",
+      "fragment_path": "docs/reports/panels/ack-reply.html",
+      "sets": [
+        "delivery"
+      ]
+    },
+    {
+      "key": "delivery-policy-coordinator",
+      "title": "Delivery Policy Coordinator",
+      "summary": "Central dispatcher for write-affecting mail events.",
+      "commentary": "This coordinator resolves event family and canonical roster harness, then dispatches into the required event-family state machine without letting command-local conditionals own delivery policy.",
+      "notes": [
+        "dispatcher only",
+        "no event legality inside coordinator",
+        "observable transitions required"
+      ],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/phase-Y/delivery-policy-coordinator.mmd",
+      "fragment_path": "docs/reports/panels/delivery-policy-coordinator.html",
+      "sets": [
+        "delivery"
+      ]
+    },
+    {
+      "key": "inbox-repair",
+      "title": "Inbox Repair",
+      "summary": "Explicit staged rebuild for a Claude inbox repair request.",
+      "commentary": "This machine is the approved bulk mailbox creation or rebuild path. It validates Claude harness ownership, loads a bounded repair projection, filters deleted messages, stages the rebuild, and publishes atomically.",
+      "notes": [
+        "explicit repair only",
+        "ClaudeCode harness only",
+        "bounded non-deleted history projection"
+      ],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/phase-Y/inbox-repair.mmd",
+      "fragment_path": "docs/reports/panels/inbox-repair.html",
+      "sets": [
+        "delivery"
+      ]
+    },
+    {
+      "key": "new-message-claude",
+      "title": "Claude Harness New Message",
+      "summary": "New-message state machine for Claude Code harness delivery.",
+      "commentary": "This machine persists SQLite first on the success path, allows Claude-only compatibility append after commit, and on SQLite failure still emits the original plus an `atm-system@<team>` error companion with mirrored nudges.",
+      "notes": [
+        "harness gate: ClaudeCode only",
+        "sqlite failure emits original + error companion",
+        "append failure after sqlite success falls back to post-send-hook"
+      ],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/phase-Y/new-message-claude.mmd",
+      "fragment_path": "docs/reports/panels/new-message-claude.html",
+      "sets": [
+        "delivery"
+      ]
+    },
+    {
+      "key": "new-message-non-claude",
+      "title": "Non-Claude Harness New Message",
+      "summary": "New-message state machine for non-Claude harness delivery.",
+      "commentary": "This machine never appends JSONL. It persists SQLite on the success path, routes the original message through the non-Claude delivery path, and on SQLite failure still emits the original plus an `atm-system@<team>` error companion through that same non-Claude path.",
+      "notes": [
+        "no JSONL append ever",
+        "harness gate: NonClaude only",
+        "sqlite failure emits original + error companion"
+      ],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/phase-Y/new-message-non-claude.mmd",
+      "fragment_path": "docs/reports/panels/new-message-non-claude.html",
+      "sets": [
+        "delivery"
+      ]
+    },
+    {
+      "key": "restore-inbox-rebuild",
+      "title": "Restore Inbox Rebuild",
+      "summary": "Restore-marker-scoped staged publish for inbox restore recovery.",
+      "commentary": "This machine stays distinct from normal repair because it is a privileged recovery path with restore-marker validation, staged restore output, and restore-specific publish semantics.",
+      "notes": [
+        "restore marker required",
+        "ClaudeCode harness only",
+        "staged restore publish"
+      ],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/phase-Y/restore-inbox-rebuild.mmd",
+      "fragment_path": "docs/reports/panels/restore-inbox-rebuild.html",
+      "sets": [
+        "delivery"
+      ]
+    },
+    {
+      "key": "thread-update",
+      "title": "Thread Update",
+      "summary": "Add-details and supersede legality plus harness-dispatched delivery.",
+      "commentary": "This machine is distinct from new-message delivery because it must prove parent existence, root existence, original-sender identity, and one-successor linearity before persisting or dispatching any outward effect.",
+      "notes": [
+        "modes: add-details, supersede",
+        "legality first",
+        "dispatch after sqlite commit"
+      ],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/phase-Y/thread-update.mmd",
+      "fragment_path": "docs/reports/panels/thread-update.html",
+      "sets": [
+        "delivery"
+      ]
+    }
+  ]
+}
