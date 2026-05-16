@@ -3216,6 +3216,43 @@ Execution shape:
 - `X.5` systemic guardrails, dependency-ownership validation, and closeout
   verification on `feature/pXb-s5-guardrails-and-closeout`
 
+#### Sprint X.4 — Replay Persistence Contract, Peer Transport, And Same-Host IPC Helpers
+
+Branch:
+- `feature/pXb-s4-replay-and-ipc-consolidation`
+
+PR:
+- `#290`
+
+Status:
+- complete
+
+Deliverables:
+- fail-closed replay-store startup contract documented and enforced in daemon
+  composition
+- peer-transport helper decomposition with the shared ATM error and recovery
+  contract preserved
+- same-host helper ownership consolidated into `atm-daemon-client`
+- CLI and graft same-host wrappers aligned to the shared daemon-client helper
+  line
+- daemon ingress/export error visibility tightened around config load, source
+  import, and source/mailbox projection rewrites
+- machine-readable and prose daemon-client boundary records aligned with the
+  replayed helper ownership
+
+Acceptance criteria:
+- one replay-persistence startup contract is documented in product and
+  daemon-local docs
+- daemon startup behavior in `composition.rs` matches the documented contract
+- `send_to_endpoint(...)` is under `80` lines
+- `send_once(...)` is under `80` lines
+- `rg -n "fn try_connect\\(|fn exchange\\(|fn unexpected_response\\(" crates/atm crates/atm-graft crates/atm-daemon-client`
+  finds one shared helper definition per helper name
+- CLI and graft same-host paths share the same daemon-unavailable and
+  unexpected-response behavior
+- peer transport preserves the shared ATM error and recovery contract after the
+  `send_to_endpoint(...)` and `send_once(...)` refactor
+
 Execution rules:
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
 - SQLite/store is the only durable retained mailbox implementation after the

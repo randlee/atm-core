@@ -1,6 +1,6 @@
 ---
 id: X.4
-title: Replay Contract And IPC Helper Consolidation
+title: Replay Persistence Contract, Peer Transport, And Same-Host IPC Helpers
 status: complete
 branch: feature/pXb-s4-replay-and-ipc-consolidation
 worktree: ../atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation
@@ -122,6 +122,11 @@ Exact-target disposition:
   definitions live in `crates/atm-daemon-client/src/lib.rs`
 - updated CLI and graft same-host client wrappers to call the shared
   daemon-client helper line without keeping duplicate helper definitions
+- `crates/atm/src/composition.rs`, `crates/atm-graft/src/lib.rs`,
+  `crates/atm-graft/src/runtime.rs`, and `crates/atm-graft/src/transport.rs`
+  remain unchanged on `pXb-s4` because the replayed branch already collapsed
+  same-host helper ownership into `atm-daemon-client`; this sprint treats them
+  as QA parity witnesses rather than fresh edit targets
 - moved peer transport retry-budget resolution up into daemon composition via
   `ConfigIngress` so the runtime no longer self-loads workspace config or
   silently defaults the retry budget after a config-load failure
