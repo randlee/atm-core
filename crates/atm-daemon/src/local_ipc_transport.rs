@@ -29,12 +29,14 @@ mod shutdown;
 
 use std::thread;
 
+#[cfg(unix)]
+use crate::local_ipc_transport::shutdown::remove_stale_endpoint;
 use request_worker::handle_connection;
 #[cfg(all(test, unix))]
 use request_worker::install_injected_accept_error_for_test;
 use shutdown::{
     emit_ready_signal_if_requested, finalize_serve_loop, finish_serve_shutdown,
-    prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal, remove_stale_endpoint,
+    prepare_local_ipc_endpoint, record_serve_error, record_shutdown_signal,
     write_shutdown_response,
 };
 
@@ -47,8 +49,9 @@ const TERMINATE_REJECTION_REQUEST_ID: u64 = NonZeroU64::MIN.get();
 #[derive(Debug, Default)]
 struct ServeLoopSignals {
     reload_requested: AtomicBool,
-    // A mutex-backed slot preserves one typed accept failure without queueing because the scoped
-    // waiter thread cannot outlive the owner and single-error semantics do not benefit from a channel.
+    // Mutex-backed slot: AtmError is non-Copy so cannot be stored atomically without unsafe;
+    // single-error semantics do not benefit from a channel because the scoped waiter thread
+    // cannot outlive the owner.
     accept_error: Mutex<Option<AtmError>>,
 }
 

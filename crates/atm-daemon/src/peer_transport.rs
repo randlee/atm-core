@@ -679,7 +679,10 @@ fn wait_for_retry_backoff(terminate: &Arc<AtomicBool>, sleep_for: Duration) -> b
 }
 
 fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
-    // The lifecycle signal is cached globally because the handler requires one shared terminate flag, not per-transport construction wiring.
+    // Global terminate flag for signal handler: handler requires one shared terminate flag;
+    // Mutex<Option<...>> is required because LifecycleControlSourceAdapter::install() is
+    // fallible and OnceLock cannot propagate errors from its once-setter; channel unnecessary
+    // (read-cache, not a queue).
     static DAEMON_TERMINATE_FLAG: Mutex<Option<Arc<AtomicBool>>> = Mutex::new(None);
 
     let mut cached_flag = DAEMON_TERMINATE_FLAG.lock().map_err(|_| {
