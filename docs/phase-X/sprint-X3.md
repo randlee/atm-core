@@ -1,10 +1,10 @@
 ---
 id: X.3
 title: Daemon Runtime Truth Unification
-status: planned
-branch: feature/pX-s3-runtime-truth-unification
-worktree: ../atm-core-worktrees/feature/pX-s3-runtime-truth-unification
-target: integrate/phase-X
+status: replayed
+branch: feature/pXb-s3-runtime-truth-unification
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification
+target: integrate/phase-Xb
 ---
 
 # Sprint X.3 — Daemon Runtime Truth Unification
@@ -19,6 +19,30 @@ target: integrate/phase-X
 - `X.0` merged on `develop`
 - `X.1` and `X.2` complete because daemon/runtime truth should be unified after
   mailbox SSOT cutover and command-path simplification are in place
+
+## Replay Status
+
+- replayed on `feature/pXb-s3-runtime-truth-unification` at `adc7c4b`
+- replayed from prior Phase `X` salvage commit:
+  - `9264c3e`
+- `quality-mgr` alignment review already confirmed the replayed branch matches
+  the intended sprint deliverables at a non-critical level
+
+## Already Complete On Restart Branch
+
+- roster-store-backed team enumeration is replayed onto the restart branch
+- the filesystem-plus-SQLite hybrid team discovery path is replaced on the
+  replayed branch by the store-owned runtime truth implementation
+- the sprint already contains the intended runtime-status-cache refactor
+
+## Remaining Restart Work
+
+- run full sprint QA and validation on
+  `feature/pXb-s3-runtime-truth-unification`
+- no branch-local corrective backlog is known as of `2026-05-15`
+- if later full-stack work still needs a RULE-002 cleanup in
+  `crates/atm-daemon/src/reconcile_runtime.rs`, keep that correction on `X.5`
+  unless a direct `X.3` regression is proven
 
 ## Exact Targets
 

@@ -12,15 +12,24 @@ target: develop
 ## Goal
 
 - land the shared lint gates that must already be active before any
-  `integrate/phase-X` sprint branch is created
+  `integrate/phase-Xb` sprint branch is created
 - make silent-emit and RULE-002 regressions fail from the first push on every
   Phase `X` implementation branch
 
 ## Hard Dependencies
 
 - `integrate/phase-W` remains the code baseline for the new guard behavior
-- this sprint lands on `develop`, not `integrate/phase-X`
+- this sprint lands on `develop`, not `integrate/phase-Xb`
 - `X.1` through `X.5` must not start until this sprint is merged
+
+## Current Reality
+
+- this sprint is already complete on `feature/pX-lint-gates`
+- the delivered guardrails are inherited by the `pXb` restart line from
+  `develop`
+- there is no remaining implementation work in `X.0`
+- later sprint QA must still verify the inherited gate wiring remains live
+  after replay on the restart branches
 
 ## Exact Targets
 
@@ -56,12 +65,12 @@ target: develop
 
 - the silent-emit gate is runnable through the normal lint entrypoint
 - the RULE-002 gate is runnable through the normal lint entrypoint
-- both gates run on `develop` before `integrate/phase-X` is created
+- both gates run on `develop` before `integrate/phase-Xb` is created
 - silent `let _ = ...emit(...)` discards fail immediately in non-test Rust
 - unchanged pre-existing `80+` RULE-002 violations do not block the pre-phase
   gate, but any new diff-overlapping `80+` violation fails
 - Phase `X` planning docs treat these gates as pre-phase prerequisites, not
-  internal `integrate/phase-X` sprint work
+  internal `integrate/phase-Xb` sprint work
 
 ## Required Validation
 

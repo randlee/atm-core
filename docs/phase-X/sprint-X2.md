@@ -1,10 +1,10 @@
 ---
 id: X.2
 title: Command Path Simplification
-status: planned
-branch: feature/pX-s2-command-path-simplification
-worktree: ../atm-core-worktrees/feature/pX-s2-command-path-simplification
-target: integrate/phase-X
+status: replayed
+branch: feature/pXb-s2-command-path-simplification
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification
+target: integrate/phase-Xb
 ---
 
 # Sprint X.2 — Command Path Simplification And Legacy Path Deletion
@@ -21,6 +21,32 @@ target: integrate/phase-X
 - `X.1` complete because this sprint assumes the dual runtime selection has
   already been removed
 
+## Replay Status
+
+- replayed on `feature/pXb-s2-command-path-simplification` at `e508ecb`
+- replayed from prior Phase `X` salvage commit:
+  - `0580c0e`
+- `quality-mgr` alignment review already confirmed the replayed branch matches
+  the intended sprint deliverables at a non-critical level
+
+## Already Complete On Restart Branch
+
+- the legacy command-path deletion work is replayed onto the restart branch
+- the replayed branch already carries the primary file deletions and
+  simplification of command-path control flow away from file-backed mailbox
+  branches
+
+## Remaining Restart Work
+
+- split `crates/atm-core/src/clear/mod.rs:clear_mail_with_runtime_impl` below
+  the RULE-002 `80`-line limit
+- replace the fixed sleeps in
+  `crates/atm-core/tests/mailbox_locking.rs` lines `1011` and `1041` with a
+  bounded synchronization approach that passes the fixed-sleep lint
+- run full sprint QA and validation on `feature/pXb-s2-command-path-simplification`
+- keep these corrections on `X.2`; do not defer them to later branches because
+  they are direct residuals in the command-path sprint surface
+
 ## Exact Targets
 
 - `crates/atm-core/src/read/mod.rs`
@@ -30,6 +56,7 @@ target: integrate/phase-X
 - `crates/atm-core/src/send/mod.rs`
 - `crates/atm-core/src/boundary_support.rs`
 - `crates/atm-core/src/mailbox/store.rs`
+- `crates/atm-core/tests/mailbox_locking.rs`
 - `docs/atm-core/boundaries.md`
 
 ## Required Work
@@ -42,8 +69,8 @@ target: integrate/phase-X
   ingress boundary rather than the general command runtime trait
 - narrow or delete `boundary_support.rs` helpers that still keep file-backed
   mailbox behavior on the production path
-- remove the retained boundary-adapter stubs in
-  `service_runtime_store.rs:305-315`
+- remove any retained boundary-adapter stubs in `service_runtime_store.rs`
+  that keep file-backed mailbox behavior reachable
 - document any remaining source-file helper ownership as daemon-private
   ingress/migration-only scope
 
