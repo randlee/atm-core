@@ -139,6 +139,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => {
             AtmErrorKind::FilePolicy
         }
+        AtmErrorCode::InternalError => AtmErrorKind::Internal,
         AtmErrorCode::SerializationFailed => AtmErrorKind::Serialization,
         AtmErrorCode::WaitTimeout => AtmErrorKind::Timeout,
         AtmErrorCode::ObservabilityEmitFailed => AtmErrorKind::ObservabilityEmit,

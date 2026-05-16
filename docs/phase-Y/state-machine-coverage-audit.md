@@ -10,10 +10,6 @@ Existing command diagrams under `docs/atm/`:
 
 - `atm-clear.mmd`
 - `atm-doctor.mmd`
-- `atm-graft-drain.mmd`
-- `atm-graft-fetch.mmd`
-- `atm-graft-register.mmd`
-- `atm-graft-unregister.mmd`
 - `atm-list.mmd`
 - `atm-log.mmd`
 - `atm-members.mmd`
@@ -24,7 +20,9 @@ Existing command diagrams under `docs/atm/`:
 
 Current gap notes:
 
-- `atm help` does not exist yet and therefore has no state machine
+- clap `--help` output already exists; the missing item is an `atm help`
+  subcommand or equivalent Phase `Y` UX surface, which `Y.1` is expected to
+  implement
 - there is no dedicated state-machine diagram for the compatibility inbox
   export/write path itself
 - there is no dedicated state-machine diagram for watcher/import/export write
@@ -36,7 +34,20 @@ Current documentation sources:
 
 - `docs/atm-daemon/protocol-icd.md`
 - `docs/atm-graft/architecture.md`
-- the graft request-family command diagrams above
+- dedicated request-family diagrams:
+  - note: `atm-graft` is a library crate, not an `atm` CLI subcommand surface;
+    the `atm-graft-*.mmd` diagrams belong here in daemon/client request
+    coverage rather than in the CLI command list above
+  - `atm-list.mmd`
+  - `atm-read.mmd`
+  - `atm-send-compose.mmd`
+  - `atm-send-ack.mmd`
+  - `atm-clear.mmd`
+  - `atm-doctor.mmd`
+  - `atm-graft-register.mmd`
+  - `atm-graft-unregister.mmd`
+  - `atm-graft-fetch.mmd`
+  - `atm-graft-drain.mmd`
 
 Current gap notes:
 
@@ -57,6 +68,8 @@ Current gap notes:
   - `send_compose`
   - `send_acknowledge`
   - `list`
+    - `atm-list.mmd` covers both the CLI `atm list` surface and the
+      `list_request (0x0004)` daemon packet family
   - `receive`
   - `clear`
   - `doctor`
@@ -93,9 +106,12 @@ Current gap notes:
     - `query_membership`
     - `list_teams`
   - replay state:
-    - `record_remote_replay_state`
-    - `load_remote_replay_states`
-    - ingest replay state record/load
+    - per-agent `mail_ingest_replay_states` via
+      `MailStore::record_ingest_replay_state` /
+      `MailStore::load_ingest_replay_state`
+    - daemon-global `daemon_remote_replay_states` via
+      `SqliteBoundaryAssembly::record_remote_replay_state` /
+      `SqliteBoundaryAssembly::load_remote_replay_states`
   - task store:
     - `load_task`
     - `query_task_metadata`

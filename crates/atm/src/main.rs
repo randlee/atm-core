@@ -1,5 +1,6 @@
 mod commands;
 mod composition;
+mod constants;
 mod observability;
 mod output;
 
@@ -31,7 +32,6 @@ use serde_json::Map;
 use time::OffsetDateTime;
 use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
-const ATM_SERVICE_NAME: &str = "atm";
 const ATM_COMMAND_TARGET: &str = "atm.command";
 const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
@@ -103,7 +103,7 @@ fn init_observability(stderr_logs: bool) -> Result<observability::CliObservabili
     } else {
         ConsoleLogRoute::Disabled
     };
-    let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|source| {
+    let service_name = ServiceName::new(constants::ATM_SERVICE_NAME).map_err(|source| {
         AtmError::observability_bootstrap("failed to validate ATM service name").with_source(source)
     })?;
     let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|source| {
@@ -681,7 +681,7 @@ pub(crate) fn new_adapter_port(
     home_dir: &std::path::Path,
     stderr_logs: bool,
 ) -> Result<Box<dyn ObservabilityPort + Send + Sync>, AtmError> {
-    let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|source| {
+    let service_name = ServiceName::new(constants::ATM_SERVICE_NAME).map_err(|source| {
         AtmError::observability_bootstrap("failed to validate ATM service name").with_source(source)
     })?;
     let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|source| {

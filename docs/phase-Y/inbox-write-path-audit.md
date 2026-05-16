@@ -53,7 +53,7 @@ Current assessment:
 
 Code:
 
-- `crates/atm-core/src/boundary_support.rs::export_compat_source_projections(...)`
+- `crates/atm-core/src/boundary_support.rs::export_source_files(...)`
 - `crates/atm-core/src/mailbox/mod.rs::export_compat_source_projections(...)`
 - `crates/atm-core/src/mailbox/store.rs::write_compat_source_projections(...)`
 - `crates/atm-core/src/mailbox/store.rs::write_compat_mailbox_projection(...)`
@@ -70,7 +70,31 @@ Current assessment:
 - this is the best candidate to survive as the sole normal runtime writer
   shape after boundary cleanup
 
-### Path D — Team Config Write Paths
+### Path D — Team-Admin Inbox Creation Path
+
+Code:
+
+- `crates/atm-core/src/team_admin.rs::add_member(...)`
+- `crates/atm-core/src/team_admin.rs::ensure_inbox_exists(...)`
+
+Behavior:
+
+- create a new inbox file for a newly added member
+- use `OpenOptions::new().write(true).create_new(true)` to create the inbox
+  without rewriting an existing mailbox
+- used by admin/recovery flows, not by normal `send` / `read` / `ack` /
+  `clear` runtime flow
+
+Current assessment:
+
+- this is an approved exceptional inbox-write path
+- it belongs to the retained admin boundary, not to the normal runtime
+  compatibility export owner
+- the original Phase `Y` framing focused on normal runtime writes; this audit
+  expands scope deliberately so approved admin inbox creation is documented and
+  auditable too
+
+### Path E — Team Config Write Paths
 
 Code:
 
@@ -104,16 +128,20 @@ Current assessment:
 
 ## 3. Final Allowed Write Classes
 
-Phase `Y` should converge on only these ATM-authored Claude-inbox write
-classes:
+Phase `Y` should converge on only these approved ATM-authored Claude-inbox
+write classes:
 
-1. normal runtime compatibility export
+1. append one message to a Claude Code inbox
    - daemon-private or tightly watcher-owned
    - synchronized inside the owned writer subsystem
+   - must skip non-Claude harnesses for normal runtime compatibility writes
    - append-only if and only if the approved compatibility wire contract
      supports it
 
-2. explicit admin / restore / repair staging path
+2. bulk mailbox creation / rebuild for a new or repaired inbox
+   - explicit admin / restore / repair path
+   - may project a bounded historical message set such as the last 24 hours of
+     non-deleted messages into a newly created inbox
    - not part of normal runtime command flow
    - staged and atomic by design
 
@@ -131,8 +159,8 @@ classes:
   the shared inbox surface once SQLite is the sole mutable truth
 - whether the current array-shaped ATM-authored compatibility output remains an
   approved contract or should be retired in favor of append-only JSONL
-- whether the watcher/import/export subsystem itself should own the writer, or
-  whether a smaller daemon-private compatibility-export sub-boundary should sit
-  beside it
+- whether the watcher/import/export subsystem itself should own both approved
+  inbox-write classes, or whether the bulk-mailbox-creation path should remain
+  a separately owned admin/repair boundary
 - whether any shared-inbox mutable ATM field still has a legitimate
   compatibility role

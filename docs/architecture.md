@@ -1241,7 +1241,7 @@ The clear pipeline stages are:
 1. resolve actor identity and target inbox
 2. load the persisted inbox surface
 3. classify each message into read axis and ack axis
-4. compute clear eligibility from the two-axis model plus pending-ack override
+4. compute clear eligibility from the two-axis read and acknowledgement model
 5. apply optional age and idle-only filters
 6. atomically persist the kept set when not in dry-run mode
 7. emit command lifecycle records

@@ -3407,19 +3407,24 @@ Target:
 - `develop`
 
 Status:
-- in progress
+- complete
 
 Scope:
 - small pre-Phase-`Y` cleanup items that should land before the dedicated
   Phase `Y` planning and smoke-testing line starts
 
-Delivered / active scope:
+Delivered:
 - shared `ATM_SERVICE_NAME` constant reuse in CLI observability fatal-event
   emission
 - `atm ack` validation cleanup to remove redundant dual state derivation
 - architecture wording cleanup for the current clear-eligibility model
 - safe `GH #78` follow-up to preserve the working compatibility inbox contract
   while adding regression coverage
+- design proposals for GitHub issues `#78` and `#83` sent to `team-lead`
+- trivial-fixes QA-1 follow-up landed on the same branch:
+  - generic internal fallback code for non-ATM fatal-error logging
+  - infallible `resolve_reply_target(...)` contract cleanup
+  - `atm ack` structured warn-field completion
 - `GH #83` implementation intentionally deferred to Phase `Y` Sprint `Y.1`
 
 ## 31. Phase Y Daemon Release Readiness, Compatibility Write Simplification, And Smoke Rollout
@@ -3439,6 +3444,9 @@ Target:
 
 Status:
 - planning
+
+Authoritative plan:
+- `docs/plan-phase-Y.md`
 
 Goal:
 - make the first daemon + SQLite mail-SSOT release safe for real operator use

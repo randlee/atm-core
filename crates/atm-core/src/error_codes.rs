@@ -63,6 +63,8 @@ pub enum AtmErrorCode {
     MailboxLockReadOnlyFilesystem,
     /// Acquiring a mailbox lock timed out.
     MailboxLockTimeout,
+    /// An unexpected non-ATM internal failure occurred.
+    InternalError,
     /// Message validation failed.
     MessageValidationFailed,
     /// Serialization or deserialization failed.
@@ -154,6 +156,7 @@ impl AtmErrorCode {
             Self::MailboxLockFailed => "ATM_MAILBOX_LOCK_FAILED",
             Self::MailboxLockReadOnlyFilesystem => "ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM",
             Self::MailboxLockTimeout => "ATM_MAILBOX_LOCK_TIMEOUT",
+            Self::InternalError => "ATM_INTERNAL_ERROR",
             Self::MessageValidationFailed => "ATM_MESSAGE_VALIDATION_FAILED",
             Self::SerializationFailed => "ATM_SERIALIZATION_FAILED",
             Self::FilePolicyRejected => "ATM_FILE_POLICY_REJECTED",
@@ -221,6 +224,7 @@ impl FromStr for AtmErrorCode {
             "ATM_MAILBOX_LOCK_FAILED" => Ok(Self::MailboxLockFailed),
             "ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM" => Ok(Self::MailboxLockReadOnlyFilesystem),
             "ATM_MAILBOX_LOCK_TIMEOUT" => Ok(Self::MailboxLockTimeout),
+            "ATM_INTERNAL_ERROR" => Ok(Self::InternalError),
             "ATM_MESSAGE_VALIDATION_FAILED" => Ok(Self::MessageValidationFailed),
             "ATM_SERIALIZATION_FAILED" => Ok(Self::SerializationFailed),
             "ATM_FILE_POLICY_REJECTED" => Ok(Self::FilePolicyRejected),
