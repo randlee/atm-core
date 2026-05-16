@@ -194,7 +194,7 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         outcome.task_id.as_ref(),
     );
 
-    emit_ack_command_event(
+    record_ack_telemetry(
         observability,
         &actor,
         team,
@@ -227,7 +227,7 @@ fn load_ack_source<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     let metadata_rows = runtime.query_mailbox_metadata_rows(home_dir, team, actor, None)?;
     let source_row = find_ack_source_row(&metadata_rows, message_id, actor, team)?;
     ensure_ack_target_is_terminal(&metadata_rows, message_id)?;
-    let source_record = load_ack_source_record(runtime, home_dir, team, actor, &source_row)?;
+    let source_record = load_ack_source_record(runtime, home_dir, team, actor, source_row)?;
     ensure_ack_is_pending(message_id, &source_record.envelope)?;
     Ok(LoadedAckSource {
         row: source_row.clone(),
@@ -443,7 +443,7 @@ fn collect_ack_hook_warnings<R: RetainedServiceRuntime + RetainedMailboxRuntime>
         .collect()
 }
 
-fn emit_ack_command_event(
+fn record_ack_telemetry(
     observability: &dyn ObservabilityPort,
     actor: &AgentName,
     team: TeamName,
