@@ -12,9 +12,10 @@
   triage:severity "blocking" ;
   triage:repeatable false ;
   triage:sweepScope "docs/phase-X/" ;
-  triage:status "open" ;
+  triage:status "fixed_partial" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
+  triage:resolutionNote "s1-s4 CLOSED confirmed by QA rounds: S1-QA-4, S2-QA-3, S3-QA-2 (closed), S4-QA-1 (DISMISSED — XB-S4-FIX-R1 included pXb doc ref fixes). integrate/phase-Xb historical 'old branch' notes at sprint-X1/X2/X3.md are intentional context, not violations. s5 (sprint-X5.md:5-6) still open — fix expected via FIX-R2 merge-forward or s5 DEV." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s1/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s1/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s2/1> ;
@@ -45,8 +46,8 @@
   triage:file "docs/phase-X/sprint-X1.md" ;
   triage:line 5 ;
   triage:snippet "branch: feature/pX-s1-mailbox-runtime-cutover" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
   triage:headSha "ae0e20b" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s1/ae0e20b> .
@@ -56,8 +57,8 @@
   triage:file "docs/phase-X/sprint-X1.md" ;
   triage:line 6 ;
   triage:snippet "worktree: ../atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
   triage:headSha "ae0e20b" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s1/ae0e20b> .
@@ -67,8 +68,8 @@
   triage:file "docs/phase-X/sprint-X2.md" ;
   triage:line 5 ;
   triage:snippet "branch: feature/pX-s2-command-path-simplification" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s2-command-path-simplification" ;
   triage:headSha "5dd2380" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s2/5dd2380> .
@@ -78,8 +79,8 @@
   triage:file "docs/phase-X/sprint-X2.md" ;
   triage:line 6 ;
   triage:snippet "worktree: ../atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s2-command-path-simplification" ;
   triage:headSha "5dd2380" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s2/5dd2380> .
@@ -89,8 +90,8 @@
   triage:file "docs/phase-X/sprint-X2.md" ;
   triage:line 87 ;
   triage:snippet "`feature/pX-s2-command-path-simplification`" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s2-command-path-simplification" ;
   triage:headSha "5dd2380" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s2/5dd2380> .
@@ -100,8 +101,8 @@
   triage:file "docs/phase-X/sprint-X3.md" ;
   triage:line 5 ;
   triage:snippet "branch: feature/pX-s3-runtime-truth-unification" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s3-runtime-truth-unification" ;
   triage:headSha "adc7c4b" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s3/adc7c4b> .
@@ -111,8 +112,8 @@
   triage:file "docs/phase-X/sprint-X3.md" ;
   triage:line 6 ;
   triage:snippet "worktree: ../atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s3-runtime-truth-unification" ;
   triage:headSha "adc7c4b" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s3/adc7c4b> .
@@ -122,8 +123,8 @@
   triage:file "docs/phase-X/sprint-X3.md" ;
   triage:line 85 ;
   triage:snippet "`feature/pX-s3-runtime-truth-unification`" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s3-runtime-truth-unification" ;
   triage:headSha "adc7c4b" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s3/adc7c4b> .
@@ -133,8 +134,8 @@
   triage:file "docs/phase-X/sprint-X4.md" ;
   triage:line 5 ;
   triage:snippet "branch: feature/pX-s4-replay-and-ipc-consolidation" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
   triage:headSha "f10c9ec" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s4/f10c9ec> .
@@ -144,8 +145,8 @@
   triage:file "docs/phase-X/sprint-X4.md" ;
   triage:line 6 ;
   triage:snippet "worktree: ../atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
   triage:headSha "f10c9ec" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s4/f10c9ec> .
@@ -155,8 +156,8 @@
   triage:file "docs/phase-X/sprint-X4.md" ;
   triage:line 97 ;
   triage:snippet "`feature/pX-s4-replay-and-ipc-consolidation`" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
   triage:headSha "f10c9ec" ;
   triage:occursIn <urn:atm:triage:worktree/pXb-s4/f10c9ec> .

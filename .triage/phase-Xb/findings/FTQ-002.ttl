@@ -12,11 +12,12 @@
   triage:severity "blocking" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-core/tests/" ;
-  triage:status "fixed_partial" ;
-  triage:dispatchReady true ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
-  triage:highestOpenBranch "feature/pXb-s3-runtime-truth-unification" ;
-  triage:highestFixedBranch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:resolvedAt "2026-05-16T00:00:00Z"^^xsd:dateTime ;
+  triage:resolutionNote "S3-QA-2 (quality-mgr) confirmed CLOSED: bounded 5ms retry in place, rg 'yield_now' = 0. s1/s2 were carry-forward non-blocking; s3 was highest open branch and fix propagated to s4/s5 via merge-forward." ;
+  triage:highestFixedBranch "feature/pXb-s3-runtime-truth-unification" ;
   triage:promoteTo <urn:atm:triage:worktree/s3/adc7c4b> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/s1/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-002/s1/2> ;
@@ -85,8 +86,8 @@
   triage:line 990 ;
   triage:snippet "thread::yield_now();" ;
   triage:context "wait_for_missing_config_notice loop" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s3-runtime-truth-unification" ;
   triage:headSha "adc7c4b" ;
   triage:occursIn <urn:atm:triage:worktree/s3/adc7c4b> .
@@ -97,8 +98,8 @@
   triage:line 1020 ;
   triage:snippet "thread::yield_now();" ;
   triage:context "wait_for_workflow_state_for_message loop" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "fixed" ;
+  triage:closed true ;
   triage:branch "feature/pXb-s3-runtime-truth-unification" ;
   triage:headSha "adc7c4b" ;
   triage:occursIn <urn:atm:triage:worktree/s3/adc7c4b> .
