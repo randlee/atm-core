@@ -27,9 +27,21 @@ target: develop
   model
 - reviewed GitHub issues `#78` and `#83` and sent the requested design
   proposals to `team-lead` before any implementation work for those issues
+- landed the approved `#78` follow-up safely against the current release
+  contract:
+  - added explicit regression coverage that Claude-style JSONL ingress still
+    reads correctly
+  - added explicit regression coverage that the current ATM compatibility write
+    path continues to rewrite back to the existing array-shaped file format on
+    first mutation
+  - documented that `locked_read_modify_write(...)` reads JSONL ingress but
+    rewrites through the ATM-owned compatibility projection path
+- recorded that `#83` (`atm help`) remains deferred to Phase `Y` Sprint `Y.1`
+  and is not part of this trivial-fixes branch
 
 ## Validation
 
 - `cargo build --workspace`
 - `cargo clippy --workspace -- -D warnings`
+- `cargo test -p agent-team-mail-core mailbox:: -- --nocapture`
 - `git diff --check`

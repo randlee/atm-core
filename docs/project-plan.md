@@ -3419,3 +3419,8 @@ Delivered:
 - `atm ack` validation cleanup to remove redundant dual state derivation
 - architecture wording cleanup for the current clear-eligibility model
 - design proposals for GitHub issues `#78` and `#83` sent to `team-lead`
+- safe `#78` follow-up landed on the same branch:
+  - JSONL ingress regression coverage added
+  - current array-shaped ATM compatibility rewrite behavior documented and
+    regression-tested
+- `#83` implementation intentionally deferred to Phase `Y` Sprint `Y.1`
