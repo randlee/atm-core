@@ -2,7 +2,7 @@
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, Once, OnceLock};
+use std::sync::{Mutex, MutexGuard, Once, OnceLock};
 
 use atm_core::LocalServiceRuntime;
 use atm_core::error::AtmError;
@@ -15,6 +15,11 @@ static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime
 const MAX_SQLITE_RUNTIME_CACHE_ENTRIES: usize = 16;
 pub const SQLITE_RUNTIME_PATH_ENV: &str = "ATM_TEST_SQLITE_RUNTIME_PATH";
 
+fn env_lock() -> &'static Mutex<()> {
+    static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
+    LOCK.get_or_init(|| Mutex::new(()))
+}
+
 pub fn install_sqlite_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
         atm_core::install_default_runtime_factory(sqlite_retained_runtime);
@@ -23,14 +28,19 @@ pub fn install_sqlite_retained_runtime_factory() {
 
 pub struct SqliteRuntimeGuard {
     previous: Option<PathBuf>,
+    _env_lock: MutexGuard<'static, ()>,
 }
 
 impl SqliteRuntimeGuard {
     pub fn install(path: impl Into<PathBuf>) -> Self {
         install_sqlite_retained_runtime_factory();
+        let env_guard = env_lock().lock().expect("env lock");
         let previous = std::env::var_os(SQLITE_RUNTIME_PATH_ENV).map(PathBuf::from);
         set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());
-        Self { previous }
+        Self {
+            previous,
+            _env_lock: env_guard,
+        }
     }
 }
 

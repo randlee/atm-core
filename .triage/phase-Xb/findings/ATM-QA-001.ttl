@@ -1,0 +1,259 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "Sprint X.1 plan docs still reference old phase-X branch/worktree names (pX→pXb)" ;
+  triage:description "docs/phase-X/sprint-X1.md lines 5-6 and all sprint plan docs reference 'feature/pX-s1-mailbox-runtime-cutover' instead of 'feature/pXb-s1-mailbox-runtime-cutover'. Affects all sprint plan files (sprint-X1.md through sprint-X5.md) across all worktrees. 62 total occurrences across all branches." ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "documentation" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/phase-X/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s2/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s3/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s4/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/s5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/integrate/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/integrate/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/integrate/3> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s1/ae0e20b> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s2/5dd2380> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s3/adc7c4b> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s4/f10c9ec> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s5/5d4c92a> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-Xb/b1e70b6> ;
+  triage:promoteTo <urn:atm:triage:worktree/pXb-s5/5d4c92a> ;
+  triage:recommendedFix "Replace all 'pX-s1', 'pX-s2', 'pX-s3', 'pX-s4', 'pX-s5' with 'pXb-s1', 'pXb-s2', 'pXb-s3', 'pXb-s4', 'pXb-s5' in all docs/phase-X/sprint-*.md files" .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s1/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X1.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/ae0e20b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s1/2>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X1.md" ;
+  triage:line 6 ;
+  triage:snippet "worktree: ../atm-core-worktrees/feature/pX-s1-mailbox-runtime-cutover" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/ae0e20b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s2/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X2.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: feature/pX-s2-command-path-simplification" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s2/5dd2380> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s2/2>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X2.md" ;
+  triage:line 6 ;
+  triage:snippet "worktree: ../atm-core-worktrees/feature/pX-s2-command-path-simplification" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s2/5dd2380> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s2/3>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X2.md" ;
+  triage:line 87 ;
+  triage:snippet "`feature/pX-s2-command-path-simplification`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s2/5dd2380> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s3/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X3.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: feature/pX-s3-runtime-truth-unification" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s3/adc7c4b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s3/2>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X3.md" ;
+  triage:line 6 ;
+  triage:snippet "worktree: ../atm-core-worktrees/feature/pX-s3-runtime-truth-unification" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s3/adc7c4b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s3/3>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X3.md" ;
+  triage:line 85 ;
+  triage:snippet "`feature/pX-s3-runtime-truth-unification`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s3/adc7c4b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s4/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X4.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s4/2>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X4.md" ;
+  triage:line 6 ;
+  triage:snippet "worktree: ../atm-core-worktrees/feature/pX-s4-replay-and-ipc-consolidation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s4/3>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X4.md" ;
+  triage:line 97 ;
+  triage:snippet "`feature/pX-s4-replay-and-ipc-consolidation`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s5/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X5.md" ;
+  triage:line 5 ;
+  triage:snippet "branch: feature/pX-s5-guardrails-and-closeout" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/s5/2>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X5.md" ;
+  triage:line 6 ;
+  triage:snippet "worktree: ../atm-core-worktrees/feature/pX-s5-guardrails-and-closeout" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s5/5d4c92a> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X1.md" ;
+  triage:line 22 ;
+  triage:snippet "- The old `feature/pX-s1-mailbox-runtime-cutover` branch is a salvage source," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:headSha "b1e70b6" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-Xb/b1e70b6> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/integrate/2>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X2.md" ;
+  triage:line 19 ;
+  triage:snippet "- The old `feature/pX-s2-command-path-simplification` branch head is" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:headSha "b1e70b6" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-Xb/b1e70b6> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/integrate/3>
+  a triage:Occurrence ;
+  triage:file "docs/phase-X/sprint-X3.md" ;
+  triage:line 19 ;
+  triage:snippet "- The old `feature/pX-s3-runtime-truth-unification` branch ref is contaminated" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:headSha "b1e70b6" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-Xb/b1e70b6> .
+
+<urn:atm:triage:worktree/pXb-s1/ae0e20b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pXb-s2/5dd2380>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pXb-s3/adc7c4b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pXb-s4/f10c9ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pXb-s5/5d4c92a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-Xb/b1e70b6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Xb" ;
+  triage:headSha "b1e70b6" ;
+  triage:orderIndex 6 .

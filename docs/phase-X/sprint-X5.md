@@ -1,13 +1,43 @@
 ---
 id: X.5
 title: Guardrails And Closeout Verification
-status: complete
-branch: feature/pX-s5-guardrails-and-closeout
-worktree: ../atm-core-worktrees/feature/pX-s5-guardrails-and-closeout
-target: integrate/phase-X
+status: planned
+branch: feature/pXb-s5-guardrails-and-closeout
+worktree: ../atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout
+target: integrate/phase-Xb
 ---
 
 # Sprint X.5 — Guardrails, Dependency Ownership, And Closeout Verification
+
+## Modification
+
+- This sprint is a restart replay on `feature/pXb-s5-guardrails-and-closeout`.
+- Prior Phase `X` already completed the main `X.5` implementation and two
+  follow-up fix rounds:
+  - `78d1e2ceb3ae8862b5179408090e0b65ac2fb07c`
+    - `feat: complete phase X guardrails and closeout`
+  - `c8bd38a6561623276b3b7bc0874417757b64dab6`
+    - `fix: close phase X5 follow-up findings`
+  - `cdb1edd2b215afb3a489ae335fce7d9279bfa53f`
+    - `fix: close phase X follow-up queue`
+- Replay this sprint selectively after audit. Do not blindly replay the old
+  branch head because it also contains merge-repair and cross-sprint carry
+  forward noise.
+- QA must validate the entire `X.5` sprint on `pXb-s5`, not only the replayed
+  delta from those prior commits.
+
+## Remaining Restart Work
+
+- selectively replay only the audited `78d1e2c...`, `c8bd38a...`, and
+  `cdb1edd...` closeout work onto `feature/pXb-s5-guardrails-and-closeout`
+- exclude old merge-repair and branch-topology noise that is specific to the
+  abandoned `phase-X` line
+- preserve the corrected restart-line script inventory while replaying `X.5`:
+  - use `scripts/check-legacy-mailbox-paths.py`, not the old `.sh` name
+  - use `scripts/check-capability-degradation.py`, not the old `.sh` name
+- confirm the restarted branch satisfies every `X.5` guardrail, dependency, and
+  closeout acceptance criterion on the new line
+- run full `X.5` QA on `pXb-s5`
 
 ## Goal
 
@@ -55,7 +85,7 @@ target: integrate/phase-X
 - the legacy-mailbox-regression gate is runnable in CI
 - the replay-capability-degradation regression gate is runnable in CI
 - the pre-phase silent-emit and RULE-002 gates are treated as already-live
-  prerequisites, not delayed `integrate/phase-X` sprint work
+  prerequisites, not delayed `integrate/phase-Xb` sprint work
 - the local lint entrypoints include dependency-ownership validation
 - the `TASK-1515` baseline artifacts remain present and consistent at Phase `X`
   closeout
