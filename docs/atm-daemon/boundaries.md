@@ -199,6 +199,10 @@ Notes:
   `atm_daemon::peer_transport`.
 - Runtime composition owns replay resume and exposes the transport only through
   the shared `ClientTransport` contract.
+- Runtime composition also owns peer-transport config resolution through the
+  daemon-side `ConfigIngress` adapter; `PeerClientTransport` must not call the
+  workspace config loader directly or silently fall back to defaults after a
+  config-load failure.
 - The peer transport must reuse the shared ATM frame header and packet DTOs
   used by the same-host local IPC boundary; host-host traffic is not a second
   daemon message system.

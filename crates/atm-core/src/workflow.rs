@@ -28,8 +28,7 @@ pub(crate) struct WorkflowStateFile {
 
 /// Workflow sidecar key for one ATM-owned message identity.
 ///
-/// Per ADR-012, workflow sidecar identity is always encoded with the `atm:`
-/// prefix.
+/// Per ADR-012, all workflow sidecar keys use the `atm:` prefix.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) struct WorkflowMessageKey(AtmMessageId);
 
@@ -398,7 +397,7 @@ mod tests {
 
     #[test]
     fn workflow_message_key_rejects_non_atm_prefix() {
-        let error = "mail:01KRFK5QTF2R6NRS3Q0F8Z9K0S"
+        let error = "legacy:01KRFK5QTF2R6NRS3Q0F8Z9K0S"
             .parse::<WorkflowMessageKey>()
             .expect_err("workflow key should reject non-workflow prefixes");
 

@@ -3147,13 +3147,13 @@ Acceptance:
 ## 28. Phase X SQLite SSOT And Daemon Boundary Simplification
 
 Planning branch:
-- `feature/pX-s0-planning`
+- `feature/pXb-s0-planning`
 
 Base branch:
 - `integrate/phase-W`
 
 Integration branch:
-- `integrate/phase-X`
+- `integrate/phase-Xb`
 
 Goal:
 - remove the dual mailbox/runtime implementation so ATM has one durable
@@ -3164,16 +3164,16 @@ Goal:
   earlier in development
 
 Pre-phase prerequisite:
-- before `integrate/phase-X` starts, a standalone develop-targeting PR
+- before `integrate/phase-Xb` starts, a standalone develop-targeting PR
   (for example `feature/pX-lint-gates`) must land the shared:
   - silent-emit regression gate
   - RULE-002 function-length gate
 - those guards must already be live on every Phase `X` sprint branch from the
-  first push; they are not part of the `integrate/phase-X` sprint sequence
+  first push; they are not part of the `integrate/phase-Xb` sprint sequence
 
 Execution shape:
 - pre-phase prerequisite:
-  - standalone develop-targeting lint-gate PR before `integrate/phase-X`
+  - standalone develop-targeting lint-gate PR before `integrate/phase-Xb`
 - `X.1` mailbox runtime cutover and dual-mode surface deletion
 - `X.2` command-path simplification and legacy mailbox path deletion
 - `X.3` daemon runtime truth unification and runtime-status-cache refactor
@@ -3206,7 +3206,7 @@ Acceptance:
   - replay-capability-degradation regression
   - dependency-ownership validation via `cargo-shear`
 - the silent-emit and RULE-002 gates are treated as already-live pre-phase
-  develop prerequisites, not delayed `integrate/phase-X` sprint work
+  develop prerequisites, not delayed `integrate/phase-Xb` sprint work
 - each sprint names the shared ATM error / protocol / doctor paths it must
   reuse and the current `main` CLI baseline it must preserve
 - duplicate interface-specific error/reporting implementations for the same
@@ -3220,7 +3220,7 @@ Acceptance:
 ## 28. Phase X Planning And Pre-Phase Lint Prerequisite
 
 Planning branch:
-- `feature/pX-s0-planning`
+- `feature/pXb-s0-planning`
 
 Pre-phase prerequisite branch:
 - `feature/pX-lint-gates`
@@ -3229,7 +3229,7 @@ Base branch:
 - `integrate/phase-W`
 
 Integration branch:
-- `integrate/phase-X`
+- `integrate/phase-Xb`
 
 Goal:
 - remove the remaining legacy mailbox/runtime branches behind the retained
@@ -3242,23 +3242,23 @@ Status note:
 - `X.0` complete on `feature/pX-lint-gates`
   - target: `develop`
   - scope: silent-emit regression gate and RULE-002 function-length gate
-- `X.1` complete on `feature/pX-s1-mailbox-runtime-cutover`
-  - target: `integrate/phase-X`
+- `X.1` complete on `feature/pXb-s1-mailbox-runtime-cutover`
+  - target: `integrate/phase-Xb`
   - scope: retained mailbox runtime cutover to a fail-closed SQLite/store-backed path
-- `X.2` complete on `feature/pX-s2-command-path-simplification`
-  - target: `integrate/phase-X`
+- `X.2` complete on `feature/pXb-s2-command-path-simplification`
+  - target: `integrate/phase-Xb`
   - scope: removed the remaining production legacy-key branches, moved send
     threading/export to a store-backed projection load, and confined
     compatibility inbox file helpers to the hidden daemon ingress/export seam
-- `X.3` complete on `feature/pX-s3-runtime-truth-unification`
-  - target: `integrate/phase-X`
+- `X.3` complete on `feature/pXb-s3-runtime-truth-unification`
+  - target: `integrate/phase-Xb`
   - scope: removed filesystem team discovery from daemon runtime hydration,
     added explicit `RosterStore` team enumeration, and aligned core/daemon
     boundary docs with store-owned team/member runtime truth
 
 Execution shape:
 - pre-phase prerequisite:
-  - `X.0` shared lint gates on `develop` before `integrate/phase-X` starts
+  - `X.0` shared lint gates on `develop` before `integrate/phase-Xb` starts
 - `X.1` mailbox runtime cutover and dual-mode surface deletion
 - `X.2` command-path simplification and legacy mailbox path deletion
 - `X.3` daemon runtime truth unification and runtime-status-cache refactor
@@ -3270,12 +3270,12 @@ Execution shape:
 Execution rules:
 - no Phase `X` sprint may preserve or add a mailbox durability fallback path
 - the silent-emit and RULE-002 gates are treated as already-live pre-phase
-  develop prerequisites, not delayed `integrate/phase-X` sprint work
+  develop prerequisites, not delayed `integrate/phase-Xb` sprint work
 - file watchers may remain only as ingress/reconcile edges, not as a parallel
   mailbox backend
 - no Phase `X` scope item relies on an implicit discovery sprint
 - Phase `X` closes only when the legacy mailbox/runtime deletion gates,
   same-host helper deduplication, and daemon SQLite-runtime truth rules are
-  revalidated on `integrate/phase-X`
+  revalidated on `integrate/phase-Xb`
 - `docs/phase-X/plan-phase-X.md` remains the authoritative execution plan for
   the Phase `X` sprint line

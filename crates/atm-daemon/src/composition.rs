@@ -10,9 +10,9 @@ use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::sqlite_observability::DaemonSqliteObservability;
 use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    sqlite_remote_replay_store_from_path_with_observability,
+    peer_transport::PeerTransportConfig, sqlite_remote_replay_store_from_path_with_observability,
 };
-use atm_core::boundary::RequestDispatcher;
+use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RequestDispatcher};
 use atm_core::error::AtmError;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
@@ -165,6 +165,7 @@ impl RuntimeComposition {
         replay_store_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
+        let config_ingress = DaemonConfigIngress::new();
         let status_cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
@@ -183,6 +184,15 @@ impl RuntimeComposition {
         let inbox_ingress = DaemonInboxIngress::new();
         let composition_observability =
             SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
+        let peer_transport_config =
+            load_peer_transport_config(&config_ingress, &composition_observability)?;
+        let server_transport = build_server_transport(&observability);
+        let request_dispatcher = build_request_dispatcher(
+            home_dir,
+            &status_cache,
+            &observability,
+            Arc::clone(&sqlite_observability),
+        );
         let replay_store = sqlite_remote_replay_store_from_path_with_observability(
             replay_store_path,
             Arc::clone(&sqlite_observability),
@@ -197,26 +207,8 @@ impl RuntimeComposition {
                 ),
             ),
             endpoint_guard: Mutex::new(None),
-            server_transport: LocalIpcServerTransportAdapter::new_with_observability(
-                SubsystemObservability::new(
-                    DaemonSubsystem::LocalIpcTransport,
-                    Arc::clone(&observability),
-                ),
-                SubsystemObservability::new(
-                    DaemonSubsystem::HostOwnership,
-                    Arc::clone(&observability),
-                ),
-                SubsystemObservability::new(
-                    DaemonSubsystem::LifecycleControl,
-                    Arc::clone(&observability),
-                ),
-            ),
-            request_dispatcher: Arc::new(DaemonRequestDispatcher::new(
-                home_dir,
-                status_cache.clone(),
-                Arc::clone(&observability),
-                sqlite_observability,
-            )),
+            server_transport,
+            request_dispatcher,
             composition_observability,
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
@@ -230,11 +222,12 @@ impl RuntimeComposition {
                     Arc::clone(&observability),
                 ),
             ),
-            _config_ingress: DaemonConfigIngress::new(),
+            _config_ingress: config_ingress,
             _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
             peer_transport_runtime: PeerTransportRuntime::new_with_observability(
                 Some(replay_store),
+                peer_transport_config,
                 SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
             ),
         })
@@ -632,6 +625,70 @@ fn replay_store_assembly_failed(
     .with_source(error)
 }
 
+fn load_peer_transport_config(
+    config_ingress: &DaemonConfigIngress,
+    observability: &SubsystemObservability,
+) -> Result<PeerTransportConfig, AtmError> {
+    let current_dir = std::env::current_dir().map_err(|source| {
+        observability.emit_or_warn(
+            "peer_transport_config_resolution",
+            "failed",
+            "daemon startup could not resolve the current working directory for peer transport config",
+        );
+        AtmError::daemon_unavailable(
+            "failed to resolve the current working directory for daemon peer transport config",
+        )
+        .with_recovery(
+            "Start atm-daemon from a readable ATM workspace so the daemon can load and validate peer transport settings before serving requests.",
+        )
+        .with_source(source)
+    })?;
+    let config = config_ingress
+        .load_config(ConfigLoadRequest { current_dir })
+        .inspect_err(|_| {
+            observability.emit_or_warn(
+                "peer_transport_config_load",
+                "failed",
+                "daemon startup could not load peer transport config through ConfigIngress",
+            );
+        })?
+        .config;
+    PeerTransportConfig::from_config(config.as_ref()).inspect_err(|_| {
+        observability.emit_or_warn(
+            "peer_transport_config_validation",
+            "failed",
+            "daemon startup rejected invalid peer transport configuration",
+        );
+    })
+}
+
+fn build_request_dispatcher(
+    home_dir: AtmHomeDir,
+    status_cache: &RuntimeStatusCache,
+    observability: &Arc<dyn DaemonRuntimeObservability>,
+    sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability>,
+) -> Arc<DaemonRequestDispatcher> {
+    Arc::new(DaemonRequestDispatcher::new(
+        home_dir,
+        status_cache.clone(),
+        Arc::clone(observability),
+        sqlite_observability,
+    ))
+}
+
+fn build_server_transport(
+    observability: &Arc<dyn DaemonRuntimeObservability>,
+) -> LocalIpcServerTransportAdapter {
+    LocalIpcServerTransportAdapter::new_with_observability(
+        SubsystemObservability::new(
+            DaemonSubsystem::LocalIpcTransport,
+            Arc::clone(observability),
+        ),
+        SubsystemObservability::new(DaemonSubsystem::HostOwnership, Arc::clone(observability)),
+        SubsystemObservability::new(DaemonSubsystem::LifecycleControl, Arc::clone(observability)),
+    )
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 struct StartedLanes {
     watch_started: bool,
@@ -877,13 +934,18 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn server_transport_cannot_bootstrap_outside_runtime_composition_start() {
         let tempdir = TempDir::new().expect("tempdir");
+        let original_dir = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
+
         let runtime = RuntimeComposition::new(tempdir.path().to_path_buf()).expect("runtime");
 
         let error = ServerTransport::serve(&runtime.server_transport, runtime.request_dispatcher())
             .expect_err("direct transport bootstrap should be rejected");
 
+        std::env::set_current_dir(original_dir).expect("restore cwd");
         assert!(error.is_daemon_unavailable());
         assert!(
             error
@@ -894,12 +956,15 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn runtime_composition_fails_closed_when_replay_store_cannot_open() {
         let tempdir = TempDir::new().expect("tempdir");
         let home_dir = tempdir.path().join("atm-home");
         std::fs::create_dir_all(&home_dir).expect("atm home");
         let replay_parent_file = tempdir.path().join("not-a-dir");
         std::fs::write(&replay_parent_file, "x").expect("parent file");
+        let original_dir = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(tempdir.path()).expect("set isolated cwd");
         let observability = std::sync::Arc::new(
             crate::test_observability::TestDaemonObservability::new(
                 atm_core::home::host_log_dir_from_home(&home_dir),
@@ -914,6 +979,7 @@ mod tests {
         )
         .expect_err("replay-store assembly should fail closed");
 
+        std::env::set_current_dir(original_dir).expect("restore cwd");
         assert_eq!(
             error.code,
             atm_core::error_codes::AtmErrorCode::DaemonUnavailable
@@ -922,6 +988,40 @@ mod tests {
             error
                 .to_string()
                 .contains("remote replay store is unavailable"),
+            "{error}"
+        );
+    }
+
+    #[test]
+    #[serial]
+    fn runtime_composition_fails_closed_when_peer_transport_config_is_invalid() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let workspace_dir = tempdir.path().join("workspace");
+        let home_dir = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+        std::fs::create_dir_all(&home_dir).expect("atm home");
+        std::fs::write(
+            workspace_dir.join(".atm.toml"),
+            "[daemon]\nremote_retry_budget = \"100ms\"\n",
+        )
+        .expect("invalid config");
+        let original_dir = std::env::current_dir().expect("cwd");
+        std::env::set_current_dir(&workspace_dir).expect("set workspace cwd");
+
+        let result = RuntimeComposition::new(home_dir.clone());
+
+        std::env::set_current_dir(original_dir).expect("restore cwd");
+        let error = result.expect_err("invalid peer transport config should fail closed");
+        assert_eq!(
+            error.code,
+            atm_core::error_codes::AtmErrorCode::MessageValidationFailed
+        );
+        assert!(
+            error
+                .recovery
+                .as_deref()
+                .expect("recovery guidance")
+                .contains("at least one second"),
             "{error}"
         );
     }

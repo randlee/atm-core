@@ -10,6 +10,7 @@ use crate::address::AgentAddress;
 use crate::boundary;
 use crate::error::AtmError;
 use crate::identity;
+use crate::mailbox::source::ResolvedTarget;
 use crate::mailbox::source::resolve_target;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
@@ -83,11 +84,62 @@ pub fn clear_mail_with_runtime(
     clear_mail_with_runtime_impl(query, observability, runtime)
 }
 
+struct ClearRuntimeContext {
+    actor: AgentName,
+    target: ResolvedTarget,
+    metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+    removable: Vec<(boundary::MessageKey, MessageEnvelope, MessageClass)>,
+}
+
 fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<ClearOutcome, AtmError> {
+    let context = load_clear_runtime_context(runtime, &query)?;
+    if !query.dry_run {
+        persist_deleted_messages(runtime, &context.target, &context.removable)?;
+    }
+    let mut removed_by_class = RemovedByClass::default();
+    for (_, _, class) in &context.removable {
+        count_removed(&mut removed_by_class, *class);
+    }
+    let removed_total = context.removable.len();
+    let remaining_total = context.metadata_rows.len().saturating_sub(removed_total);
+
+    let outcome = ClearOutcome {
+        action: CommandAction::Clear,
+        team: context.target.team.clone(),
+        agent: context.target.agent.clone(),
+        removed_total,
+        remaining_total,
+        removed_by_class,
+    };
+
+    if let Err(error) = observability.emit(CommandEvent {
+        command: "clear",
+        action: "clear",
+        outcome: if query.dry_run { "dry_run" } else { "ok" },
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: context.actor,
+        message_id: None,
+        requires_ack: false,
+        dry_run: query.dry_run,
+        task_id: None,
+        error_code: None,
+        error_message: None,
+    }) {
+        tracing::warn!(%error, command = "clear", action = "clear", "failed to emit clear command event");
+    }
+
+    Ok(outcome)
+}
+
+fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    query: &ClearQuery,
+) -> Result<ClearRuntimeContext, AtmError> {
     let config = runtime.load_config(&query.current_dir)?;
     let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
     let target = resolve_target(
@@ -97,7 +149,34 @@ fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRunti
         config.as_ref(),
     )?;
 
-    let team_dir = runtime.team_dir(&query.home_dir, &target.team)?;
+    validate_clear_target(runtime, &query.home_dir, &target)?;
+
+    let cutoff = cutoff_timestamp(query.older_than)?;
+    let metadata_rows =
+        runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
+    let removable = sqlite_removable_messages(
+        runtime,
+        &query.home_dir,
+        &target.team,
+        &target.agent,
+        &metadata_rows,
+        cutoff,
+        query.idle_only,
+    )?;
+    Ok(ClearRuntimeContext {
+        actor,
+        target,
+        metadata_rows,
+        removable,
+    })
+}
+
+fn validate_clear_target<R: RetainedServiceRuntime>(
+    runtime: &R,
+    home_dir: &std::path::Path,
+    target: &ResolvedTarget,
+) -> Result<(), AtmError> {
+    let team_dir = runtime.team_dir(home_dir, &target.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&target.team).with_recovery(
             "Create the team config for the requested team or target a different team before retrying `atm clear`.",
@@ -118,69 +197,30 @@ fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRunti
         );
     }
 
-    let cutoff = cutoff_timestamp(query.older_than)?;
-    let metadata_rows =
-        runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
-    let removable = sqlite_removable_messages(
-        runtime,
-        &query.home_dir,
-        &target.team,
-        &target.agent,
-        &metadata_rows,
-        cutoff,
-        query.idle_only,
-    )?;
-    if !query.dry_run {
-        let deleted_at = IsoTimestamp::now();
-        for (message_key, envelope, _) in &removable {
-            runtime.persist_message_state(boundary::MailMessageState {
-                team: target.team.clone(),
-                agent: target.agent.clone(),
-                actor: target.agent.clone(),
-                message_key: message_key.clone(),
-                read: envelope.read,
-                pending_ack_at: envelope.pending_ack_at,
-                acknowledged_at: envelope.acknowledged_at,
-                expires_at: envelope.expires_at,
-                deleted_at: Some(deleted_at),
-                updated_at: Some(deleted_at),
-            })?;
-        }
-    }
-    let mut removed_by_class = RemovedByClass::default();
-    for (_, _, class) in &removable {
-        count_removed(&mut removed_by_class, *class);
-    }
-    let removed_total = removable.len();
-    let remaining_total = metadata_rows.len().saturating_sub(removed_total);
+    Ok(())
+}
 
-    let outcome = ClearOutcome {
-        action: CommandAction::Clear,
-        team: target.team.clone(),
-        agent: target.agent.clone(),
-        removed_total,
-        remaining_total,
-        removed_by_class,
-    };
-
-    if let Err(error) = observability.emit(CommandEvent {
-        command: "clear",
-        action: "clear",
-        outcome: if query.dry_run { "dry_run" } else { "ok" },
-        team: outcome.team.clone(),
-        agent: outcome.agent.clone(),
-        sender: actor,
-        message_id: None,
-        requires_ack: false,
-        dry_run: query.dry_run,
-        task_id: None,
-        error_code: None,
-        error_message: None,
-    }) {
-        tracing::warn!(%error, command = "clear", action = "clear", "failed to emit clear command event");
+fn persist_deleted_messages<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    target: &ResolvedTarget,
+    removable: &[(boundary::MessageKey, MessageEnvelope, MessageClass)],
+) -> Result<(), AtmError> {
+    let deleted_at = IsoTimestamp::now();
+    for (message_key, envelope, _) in removable {
+        runtime.persist_message_state(boundary::MailMessageState {
+            team: target.team.clone(),
+            agent: target.agent.clone(),
+            actor: target.agent.clone(),
+            message_key: message_key.clone(),
+            read: envelope.read,
+            pending_ack_at: envelope.pending_ack_at,
+            acknowledged_at: envelope.acknowledged_at,
+            expires_at: envelope.expires_at,
+            deleted_at: Some(deleted_at),
+            updated_at: Some(deleted_at),
+        })?;
     }
-
-    Ok(outcome)
+    Ok(())
 }
 
 fn sqlite_removable_messages<R: RetainedMailboxRuntime>(

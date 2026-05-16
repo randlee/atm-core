@@ -697,6 +697,9 @@ Required timeout defaults:
 - per-leg TCP/TLS read/write deadline: `5s`
 - total remote retry budget default: `30s` via
   `daemon.remote_retry_budget`
+- peer-transport retry-budget config is resolved once through daemon
+  `ConfigIngress` during runtime composition; invalid config is a startup
+  error, not a silent fallback to the default budget
 - SQLite `busy_timeout`: `5000ms`
 - ingest batch processing slice: `2s` max before yielding
 - daemon health query used by `atm doctor`: `3s`

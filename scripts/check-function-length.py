@@ -125,12 +125,21 @@ def find_function_spans(path: Path) -> list[FunctionSpan]:
 
         name = match.group(1)
         signature_end = index
-        while signature_end < len(lines) and "{" not in lines[signature_end]:
-            if ";" in lines[signature_end]:
-                signature_end = -1
+        saw_semicolon_only_signature = False
+        while signature_end < len(lines):
+            line = lines[signature_end]
+            brace_index = line.find("{")
+            semicolon_index = line.find(";")
+            if semicolon_index != -1 and (brace_index == -1 or semicolon_index < brace_index):
+                saw_semicolon_only_signature = True
+                break
+            if brace_index != -1:
                 break
             signature_end += 1
-        if signature_end < 0 or signature_end >= len(lines):
+        if saw_semicolon_only_signature:
+            index += 1
+            continue
+        if signature_end >= len(lines):
             index += 1
             continue
 

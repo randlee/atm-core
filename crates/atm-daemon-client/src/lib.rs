@@ -494,117 +494,168 @@ impl DaemonSupervisor {
     where
         F: FnMut() -> Result<(), AtmError>,
     {
-        match try_connect() {
-            Ok(()) => {
-                if let Some(traceability) = traceability {
-                    traceability.emit("daemon_connect", "connected", None);
-                }
-                return Ok(());
-            }
-            Err(error) => {
-                if let Some(traceability) = traceability {
-                    traceability.emit("daemon_connect", "initial_miss", Some(&error));
-                }
-            }
+        if self.try_connect_with_traceability(&mut try_connect, traceability, "initial_miss")? {
+            return Ok(());
         }
         let deadline = Instant::now() + publish_timeout;
         let mut gate_contention_reported = false;
         loop {
-            if let Some(traceability) = traceability {
-                traceability.emit("daemon_connect", "retry_attempt", None);
-            }
-            match try_connect() {
-                Ok(()) => {
-                    if let Some(traceability) = traceability {
-                        traceability.emit("daemon_connect", "connected", None);
-                    }
-                    return Ok(());
-                }
-                Err(error) => {
-                    if let Some(traceability) = traceability {
-                        traceability.emit("daemon_connect", "pending", Some(&error));
-                    }
-                }
+            self.emit_trace(traceability, "daemon_connect", "retry_attempt", None);
+            if self.try_connect_with_traceability(&mut try_connect, traceability, "pending")? {
+                return Ok(());
             }
             let launch_gate = match LaunchGateGuard::try_acquire_at(launch_lock_path.clone()) {
                 Ok(launch_gate) => launch_gate,
                 Err(error) => {
-                    if let Some(traceability) = traceability {
-                        traceability.emit("daemon_connect", "error", Some(&error));
-                    }
+                    self.emit_trace(traceability, "daemon_connect", "error", Some(&error));
                     return Err(error);
                 }
             };
             if let Some(_guard) = launch_gate {
-                if let Some(traceability) = traceability {
-                    traceability.emit("daemon_launch_gate", "acquired", None);
-                }
-                if try_connect().is_ok() {
-                    if let Some(traceability) = traceability {
-                        traceability.emit("daemon_connect", "connected", None);
-                    }
+                self.emit_trace(traceability, "daemon_launch_gate", "acquired", None);
+                if self.try_connect_with_traceability(
+                    &mut try_connect,
+                    traceability,
+                    "connected",
+                )? {
                     return Ok(());
                 }
-                if let Some(traceability) = traceability {
-                    traceability.emit("daemon_auto_start", "spawn_requested", None);
-                }
-                if let Err(error) = self.spawn_daemon() {
-                    if let Some(traceability) = traceability {
-                        traceability.emit("daemon_auto_start", "error", Some(&error));
-                    }
-                    return Err(error);
-                }
-                if let Some(traceability) = traceability {
-                    traceability.emit("daemon_auto_start", "publish_wait_started", None);
-                }
-                let halfway_deadline = Instant::now() + (publish_timeout / 2);
-                let mut halfway_reported = false;
-                while Instant::now() < deadline {
-                    if try_connect().is_ok() {
-                        if let Some(traceability) = traceability {
-                            traceability.emit("daemon_connect", "connected", None);
-                        }
-                        return Ok(());
-                    }
-                    if !halfway_reported && Instant::now() >= halfway_deadline {
-                        tracing::warn!(
-                            endpoint = %self.endpoint.display(),
-                            publish_timeout_ms = publish_timeout.as_millis(),
-                            "daemon auto-start is still waiting for the same-host IPC endpoint halfway through the publish budget"
-                        );
-                        halfway_reported = true;
-                    }
-                    if let Some(traceability) = traceability {
-                        traceability.emit("daemon_auto_start", "publish_wait_continuing", None);
-                    }
-                    thread::sleep(poll_interval);
-                }
-                let error = AtmError::daemon_auto_start_failed(format!(
-                    "failed to connect to daemon local IPC endpoint at {} after auto-start",
-                    self.endpoint.display()
-                ))
-                .with_recovery(
-                    "Inspect atm-daemon startup logs, confirm the daemon publishes its local IPC endpoint, and retry only after the same-host socket becomes reachable.",
+                return self.spawn_and_wait_for_daemon(
+                    &mut try_connect,
+                    deadline,
+                    publish_timeout,
+                    poll_interval,
+                    traceability,
                 );
-                if let Some(traceability) = traceability {
-                    traceability.emit("daemon_auto_start", "timeout_exhausted", Some(&error));
-                }
-                return Err(error);
             }
             if !gate_contention_reported {
-                if let Some(traceability) = traceability {
-                    traceability.emit("daemon_launch_gate", "contended", None);
-                }
+                self.emit_trace(traceability, "daemon_launch_gate", "contended", None);
                 gate_contention_reported = true;
             }
             if Instant::now() >= deadline {
                 let error = LaunchGateGuard::rejected_error(&self.endpoint);
-                if let Some(traceability) = traceability {
-                    traceability.emit("daemon_launch_gate", "timeout_exhausted", Some(&error));
-                }
+                self.emit_trace(
+                    traceability,
+                    "daemon_launch_gate",
+                    "timeout_exhausted",
+                    Some(&error),
+                );
                 return Err(error);
             }
             thread::sleep(poll_interval);
+        }
+    }
+
+    fn try_connect_with_traceability<F>(
+        &self,
+        try_connect: &mut F,
+        traceability: Option<&BootstrapTraceability<'_>>,
+        miss_stage: &'static str,
+    ) -> Result<bool, AtmError>
+    where
+        F: FnMut() -> Result<(), AtmError>,
+    {
+        match try_connect() {
+            Ok(()) => {
+                self.emit_trace(traceability, "daemon_connect", "connected", None);
+                Ok(true)
+            }
+            Err(error) => {
+                self.emit_trace(traceability, "daemon_connect", miss_stage, Some(&error));
+                Ok(false)
+            }
+        }
+    }
+
+    fn spawn_and_wait_for_daemon<F>(
+        &self,
+        try_connect: &mut F,
+        deadline: Instant,
+        publish_timeout: Duration,
+        poll_interval: Duration,
+        traceability: Option<&BootstrapTraceability<'_>>,
+    ) -> Result<(), AtmError>
+    where
+        F: FnMut() -> Result<(), AtmError>,
+    {
+        self.emit_trace(traceability, "daemon_auto_start", "spawn_requested", None);
+        if let Err(error) = self.spawn_daemon() {
+            self.emit_trace(traceability, "daemon_auto_start", "error", Some(&error));
+            return Err(error);
+        }
+        self.emit_trace(
+            traceability,
+            "daemon_auto_start",
+            "publish_wait_started",
+            None,
+        );
+        self.wait_for_published_daemon(
+            try_connect,
+            deadline,
+            publish_timeout,
+            poll_interval,
+            traceability,
+        )
+    }
+
+    fn wait_for_published_daemon<F>(
+        &self,
+        try_connect: &mut F,
+        deadline: Instant,
+        publish_timeout: Duration,
+        poll_interval: Duration,
+        traceability: Option<&BootstrapTraceability<'_>>,
+    ) -> Result<(), AtmError>
+    where
+        F: FnMut() -> Result<(), AtmError>,
+    {
+        let halfway_deadline = Instant::now() + (publish_timeout / 2);
+        let mut halfway_reported = false;
+        while Instant::now() < deadline {
+            if self.try_connect_with_traceability(try_connect, traceability, "pending")? {
+                return Ok(());
+            }
+            if !halfway_reported && Instant::now() >= halfway_deadline {
+                tracing::warn!(
+                    endpoint = %self.endpoint.display(),
+                    publish_timeout_ms = publish_timeout.as_millis(),
+                    "daemon auto-start is still waiting for the same-host IPC endpoint halfway through the publish budget"
+                );
+                halfway_reported = true;
+            }
+            self.emit_trace(
+                traceability,
+                "daemon_auto_start",
+                "publish_wait_continuing",
+                None,
+            );
+            thread::sleep(poll_interval);
+        }
+        let error = AtmError::daemon_auto_start_failed(format!(
+            "failed to connect to daemon local IPC endpoint at {} after auto-start",
+            self.endpoint.display()
+        ))
+        .with_recovery(
+            "Inspect atm-daemon startup logs, confirm the daemon publishes its local IPC endpoint, and retry only after the same-host socket becomes reachable.",
+        );
+        self.emit_trace(
+            traceability,
+            "daemon_auto_start",
+            "timeout_exhausted",
+            Some(&error),
+        );
+        Err(error)
+    }
+
+    fn emit_trace(
+        &self,
+        traceability: Option<&BootstrapTraceability<'_>>,
+        action: &'static str,
+        outcome: &'static str,
+        error: Option<&AtmError>,
+    ) {
+        if let Some(traceability) = traceability {
+            traceability.emit(action, outcome, error);
         }
     }
 
