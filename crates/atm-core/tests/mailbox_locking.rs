@@ -195,8 +195,6 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         arch_inbox
     );
     drop(clear_fixture);
-
-    drop(clear_fixture);
     let ack_fixture = Fixture::new();
     let pending_message_id = AtmMessageId::from(Uuid::new_v4());
     ack_fixture.write_primary_inbox(
@@ -700,8 +698,6 @@ fn read_store_backed_display_mutation_ignores_mailbox_file_lock() {
     let mutation_outcome = read_mail(mutation_query, &observability).expect("read with mutation");
     assert_eq!(mutation_outcome.count, 1);
     assert!(mutation_outcome.mutation_applied);
-    drop(mutation_fixture);
-
     drop(mutation_fixture);
     let no_mutation_fixture = Fixture::new();
     no_mutation_fixture.write_primary_inbox(
