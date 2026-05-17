@@ -2,7 +2,10 @@
 
 ## Status
 
-Proposed
+Accepted
+
+Accepted note: Implementation complete through `Phase Yb Y.8`
+(`feature/pYb-s8-policy-cleanup-and-impossible-path-removal`).
 
 ## Context
 

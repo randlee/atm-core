@@ -1,7 +1,7 @@
 ---
 id: Y.8
 title: Policy Cleanup And Impossible-Path Removal
-status: planned
+status: complete
 branch: feature/pYb-s8-policy-cleanup-and-impossible-path-removal
 worktree: ../atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal
 target: integrate/phase-Yb
@@ -80,6 +80,16 @@ transition surfaces from the runtime.
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
 
+## Intentional Carry-Forwards
+
+- `YB-001` and `YB-004` are not Y.8-native implementation work and do not
+  close on this branch; triage keeps both promoted through `Y.11`.
+- `YB-003` defers to `Y.9`, where the dedicated
+  `NonClaudeOutboundDeliveryWriter` boundary makes real outbound payload proof
+  possible.
+- `YB-005` defers to `Y.11` per triage promotion, where the remaining
+  post-send-hook escape hatch is closed on the final boundary-hardening line.
+
 ## Required Validation
 
 ```bash
@@ -89,3 +99,20 @@ cargo build --workspace
 cargo test --workspace
 git diff --check
 ```
+
+## Validation Record
+
+- branch closeout validated with:
+  - `cargo fmt --all --check`
+  - `python3 .just/run_lint.py all`
+  - `cargo build --workspace`
+  - `cargo test --workspace`
+  - `git diff --check`
+- acceptance grep proof:
+  - command:
+    `rg -n 'DeliveryHarnessPath|allows_claude_jsonl_append' crates/atm-core/src/send/mod.rs crates/atm-core/src/send/persistence.rs crates/atm-core/src/ack/mod.rs`
+  - output:
+    `crates/atm-core/src/ack/mod.rs:674:            harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,`
+  - interpretation:
+    the remaining hit is a test-only fixture snapshot, not a production
+    harness-policy branch outside approved machine/executor modules
