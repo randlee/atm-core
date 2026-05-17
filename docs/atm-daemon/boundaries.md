@@ -10,6 +10,13 @@ Current design assumption:
 - Runtime test doubles now exist for the watch/reconcile/notifier lanes so
   boundary tests can exercise the daemon-owned runtimes without bypassing the
   declared contracts.
+- Phase `Y.3` tightened the retained runtime shape so normal compatibility
+  rewrites now hang off one post-durability runtime refresh owner; `ack` and
+  `clear` state transitions must not reintroduce daemon-bypassing source-inbox
+  rewrite paths.
+- Phase `Y.4` adds the retained delivery-policy coordinator/state-machine seam
+  above that owner boundary; harness-specific compatibility-export policy must
+  now stay centralized there rather than leaking back into command callers.
 
 Important daemon-private control-plane structs that must stay visible in review,
 even though they are not public cross-crate traits:

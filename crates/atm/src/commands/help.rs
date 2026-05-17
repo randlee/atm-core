@@ -1,6 +1,7 @@
 use std::io::Cursor;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
+use atm_core::error::AtmError;
 use clap::{Args, CommandFactory};
 
 use super::Cli;
@@ -46,8 +47,9 @@ impl HelpCommand {
             return Ok(HelpResult::command_help(target, body));
         }
 
-        bail!(
-            "unknown help topic or subcommand `{target}`. Use `atm help --list` to inspect the available help targets."
+        Err(
+            AtmError::help_topic_not_found(format!("unknown help topic or subcommand `{target}`"))
+                .into(),
         )
     }
 }
@@ -221,8 +223,17 @@ impl HelpTopic {
 
     fn body(self) -> &'static str {
         match self {
-            Self::Config => {
-                "\
+            Self::Config => config_body(),
+            Self::Errors => errors_body(),
+            Self::Hooks => hooks_body(),
+            Self::Identity => identity_body(),
+            Self::Skills => skills_body(),
+        }
+    }
+}
+
+fn config_body() -> &'static str {
+    "\
 ATM Help: config
 
 ATM reads local configuration from `.atm.toml` and the documented ATM host paths.
@@ -238,9 +249,10 @@ Config does not change the durable-truth rule:
 - SQLite + daemon own ATM durable state
 - shared inbox JSONL remains a compatibility output surface
 "
-            }
-            Self::Errors => {
-                "\
+}
+
+fn errors_body() -> &'static str {
+    "\
 ATM Help: errors
 
 ATM surfaces typed errors with stable ATM-owned error codes.
@@ -256,46 +268,74 @@ The daemon + SQLite line keeps durable truth in SQLite. Compatibility output
 problems may degrade nudges or projections, but they do not redefine durable
 ATM state.
 "
-            }
-            Self::Hooks => {
-                "\
+}
+
+fn hooks_body() -> &'static str {
+    "\
 ATM Help: hooks
 
 Post-send hooks are ATM-owned automation that run after ATM processes a send.
 They are for notification and integration side effects, not for replacing ATM's
 durable store or command contract.
 
-Current Y.1 status:
-- hook semantics remain supported
-- Y.2 will add more worked troubleshooting examples for hook authoring
+Operator examples:
+- add a recipient-scoped hook in `.atm.toml`:
+  [[atm.post_send_hooks]]
+  recipient = \"team-lead\"
+  command = [\"python3\", \"scripts/notify.py\"]
+- keep hooks best-effort: a hook may report a degraded notification path, but
+  it does not redefine whether ATM durably accepted the message
+- use hooks for notification and local integration only; do not use them to
+  emulate message persistence, inbox mutation, or reply-state tracking
+
+Troubleshooting:
+- if a hook does not run, inspect the recipient selector first
+- path-like `command[0]` values resolve relative to the declaring `.atm.toml`
+- combine `ATM_LOG=debug` with `--stderr-logs` when you need hook diagnostics
 "
-            }
-            Self::Identity => {
-                "\
+}
+
+fn identity_body() -> &'static str {
+    "\
 ATM Help: identity
 
 ATM command identity is about the sending agent, the selected team, and the
 resolved runtime destination. Harness and model are not the same thing.
 
-Current Y.1 status:
-- actor and team overrides remain documented through command help
-- Y.2 will expand examples for override-driven troubleshooting and operator UX
+Send identity precedence:
+- `atm send --from alice team-lead \"...\"` uses `alice` immediately
+- if `--from` is absent, ATM falls back to hook-file identity
+- if hook-file identity is absent, ATM falls back to `ATM_IDENTITY`
+
+Read/clear operator examples:
+- `atm read --as alice` changes the acting identity for that command
+- `atm read --team atm-dev` changes the selected team, not the sender identity
+
+Troubleshooting:
+- repo-local `[atm].identity` is obsolete and does not count as runtime identity
+- if ATM cannot resolve the required identity, fix the override, hook file, or
+  `ATM_IDENTITY` rather than guessing with mailbox-local state
 "
-            }
-            Self::Skills => {
-                "\
+}
+
+fn skills_body() -> &'static str {
+    "\
 ATM Help: skills
 
 Skills are repo-local execution instructions used by agent harnesses while they
 work on ATM tasks. They are not part of ATM durable mail semantics.
 
-Current Y.1 status:
-- this topic exists to anchor the conceptual surface
-- Y.2 will expand examples for skill-driven team workflows and operator usage
+Operator examples:
+- use repo-local skills to standardize how agents perform sprint, QA, or audit work
+- skills may tell an agent which docs to read, which tests to run, or which
+  orchestration templates to follow
+- harness decides whether Claude-compatible inbox append is allowed; model name
+  alone does not
+
+Boundary rule:
+- skills shape agent execution around ATM work, but they do not change durable
+  ATM delivery state, routing truth, or SQLite ownership
 "
-            }
-        }
-    }
 }
 
 fn help_topics() -> Vec<HelpTopicSummary> {
@@ -386,6 +426,44 @@ mod tests {
     fn concept_topics_are_case_insensitive() {
         assert_eq!(HelpTopic::parse("ConFiG"), Some(HelpTopic::Config));
         assert_eq!(HelpTopic::parse("ERRORS"), Some(HelpTopic::Errors));
+    }
+
+    #[test]
+    fn tier_two_topics_include_concrete_examples_after_y2() {
+        let hooks = HelpCommand {
+            target: Some("hooks".to_string()),
+            list: false,
+            json: false,
+        }
+        .render()
+        .expect("hooks help");
+        let identity = HelpCommand {
+            target: Some("identity".to_string()),
+            list: false,
+            json: false,
+        }
+        .render()
+        .expect("identity help");
+        let skills = HelpCommand {
+            target: Some("skills".to_string()),
+            list: false,
+            json: false,
+        }
+        .render()
+        .expect("skills help");
+
+        assert!(hooks.body.contains("[[atm.post_send_hooks]]"));
+        assert!(hooks.body.contains("ATM_LOG=debug"));
+        assert!(identity.body.contains("`ATM_IDENTITY`"));
+        assert!(identity.body.contains("`atm read --as alice`"));
+        assert!(
+            skills
+                .body
+                .contains("harness decides whether Claude-compatible")
+        );
+        assert!(!hooks.body.contains("Y.2 will"));
+        assert!(!identity.body.contains("Y.2 will"));
+        assert!(!skills.body.contains("Y.2 will"));
     }
 
     #[test]
