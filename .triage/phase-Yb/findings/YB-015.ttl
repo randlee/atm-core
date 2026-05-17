@@ -1,0 +1,53 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-015>
+  a triage:Finding ;
+  triage:findingId "YB-015" ;
+  triage:title "LINT-BOUNDARY-INBOX-EXPORT-REFERENCES named in TOML but not implemented in lint_boundaries.py" ;
+  triage:description ".just/lint_boundaries.py references LINT-BOUNDARY-INBOX-EXPORT-REFERENCES as a concrete named rule but does not implement it. Plan must match reality." ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:phaseId "phase-Yb" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "absent" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:notes "Y.10 ATM-QA-005. Either implement check or remove named-rule claim. No occurrences found across all branches." .
+
+<urn:atm:triage:worktree/pYb-s7/29f8c388>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "29f8c388" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pYb-s8/6b7725bc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:headSha "6b7725bc" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pYb-s9/c3426bb4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pYb-s10/c531c3ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pYb-s11/29f8c388>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "29f8c388" ;
+  triage:orderIndex 5 .
