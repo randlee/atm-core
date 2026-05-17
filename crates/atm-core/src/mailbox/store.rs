@@ -16,6 +16,8 @@ use crate::types::{AgentName, TeamName};
 /// The mailbox layer owns writes to the Claude-owned inbox compatibility
 /// surface. Callers should express mailbox intent here instead of reaching
 /// down to low-level atomic replacement directly.
+///
+/// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 pub(crate) fn write_compat_mailbox_projection(
     path: &Path,
     messages: &[MessageEnvelope],
@@ -32,6 +34,7 @@ pub(crate) fn append_compat_mailbox_message(
     atomic::append_message(path, message, export_policy)
 }
 
+/// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 fn write_compat_mailbox_projection_with_policy(
     path: &Path,
     messages: &[MessageEnvelope],

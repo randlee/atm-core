@@ -222,14 +222,16 @@ write classes:
      - status: retained behind runtime refresh owner; loads immutable stored envelopes
    - mailbox projection writer: `crates/atm-core/src/mailbox/store.rs:19`
      - `write_compat_mailbox_projection(...)`
-     - status: reachable only through retained runtime refresh or explicit repair/rebuild owner
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
    - mailbox projection policy helper: `crates/atm-core/src/mailbox/store.rs:27`
      - `write_compat_mailbox_projection_with_policy(...)`
-     - status: reachable only through retained runtime refresh or explicit repair/rebuild owner
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
    - low-level serializer: `crates/atm-core/src/mailbox/atomic.rs:28`
      - `write_messages(...)`
-     - status: retained only behind the surviving owner boundary or deleted in
-       `Y.6` if append-only cutover replaces array rewrite
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
 
 2. Ack reply compatibility rewrite stack
    - caller: `crates/atm-core/src/ack/mod.rs:347`
@@ -249,14 +251,16 @@ write classes:
      - status: ack reply path no longer gives this stack inbox-file ownership in `Y.3`
    - mailbox projection writer: `crates/atm-core/src/mailbox/store.rs:19`
      - `write_compat_mailbox_projection(...)`
-     - status: ack stack no longer reaches this directly in `Y.3`
+     - status: ack stack no longer reaches this directly in `Y.3`; retained in
+       `Y.6` for repair/rebuild use only
    - mailbox projection policy helper: `crates/atm-core/src/mailbox/store.rs:27`
      - `write_compat_mailbox_projection_with_policy(...)`
-     - status: ack stack no longer reaches this directly in `Y.3`
+     - status: ack stack no longer reaches this directly in `Y.3`; retained in
+       `Y.6` for repair/rebuild use only
    - low-level serializer: `crates/atm-core/src/mailbox/atomic.rs:28`
      - `write_messages(...)`
-     - status: retained only behind surviving owner boundary or deleted in
-       `Y.6`
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
 
 ### Retain Behind One Owned Boundary
 
@@ -275,10 +279,12 @@ write classes:
      - status: retain behind one owner in `Y.3`; reevaluate in `Y.6`
    - mailbox projection policy helper: `crates/atm-core/src/mailbox/store.rs:27`
      - `write_compat_mailbox_projection_with_policy(...)`
-     - status: retain only behind the sole runtime owner until `Y.6`
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
    - low-level serializer: `crates/atm-core/src/mailbox/atomic.rs:28`
      - `write_messages(...)`
-     - status: retained only until append-only cutover lands
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
 
 ### Retain As Notification / Fallback Side-Effect Stack
 

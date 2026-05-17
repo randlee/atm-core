@@ -27,6 +27,8 @@ use crate::schema::inbox_message::{SharedInboxExportPolicy, to_shared_inbox_valu
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when message
 /// serialization fails or the mailbox temp-file write, fsync, rename, or
 /// parent-directory durability step cannot be completed.
+///
+/// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 pub fn write_messages(
     path: &Path,
     messages: &[MessageEnvelope],
