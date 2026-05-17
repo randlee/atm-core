@@ -12,8 +12,10 @@
   triage:severity "Minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
-  triage:status "open" ;
-  triage:dispatchReady true ;
+  triage:status "deferred" ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "PYB-PHASE-END-QA-2" ;
+  triage:dispatchReady false ;
   triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
   triage:followupAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
   triage:followupNote "QA-2 re-run disputes Important severity: MAX_DAEMON_FRAME_BYTES (1 MiB) at protocol.rs:180 caps IPC frame upstream before deserialization, bounding NonClaudeOutboundDeliveryRequest before it reaches deliver_payloads. Resolution: add comment documenting upstream cap rather than adding new guard. Severity downgraded to Minor (no code gap; comment-only fix to address documentation of existing bounds)." ;
