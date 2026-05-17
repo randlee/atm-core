@@ -513,3 +513,19 @@ Required runtime rules:
 - daemon must expose one explicit health/status query interface for `atm doctor`
 - no `atm-daemon` crate API, helper, or test support path may bless daemon
   spawning as a routine correctness strategy
+
+## Phase Yb Non-Claude Delivery Adapter
+
+Requirement IDs:
+
+- `REQ-ATM-DAEMON-YB-001`
+
+Required daemon rules:
+
+- `atm-daemon` must implement
+  `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
+- the daemon adapter must preserve the same logical `message[]` payload set
+  used by the Claude path
+- the daemon adapter must not degrade non-Claude message delivery into
+  notification-only metadata
+- only the approved delivery executor seam may call the adapter directly

@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-NonClaudeOutbound-Daemon"
+owner_package = "atm-daemon"
+owner_crate_path = "atm_daemon"
+name = "DaemonNonClaudeOutboundAdapter"
+
+[public]
+trait = "NonClaudeOutbound"
+
+[implementation]
+type = "DaemonNonClaudeOutbound"
+module = "atm_daemon::non_claude_outbound_runtime"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
+
+[composition]
+roots = ["atm_daemon::composition::compose_runtime"]
+
+[ownership]
+io_owns = ["outbound_non_claude_payload_delivery"]
+io_forbidden = ["sqlite", "compatibility_jsonl_append"]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core", "atm-rusqlite"]
+forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["DaemonNonClaudeOutbound", "std::process::Command"]
+
+[contracts]
+request_types = ["logical message delivery requests"]
+response_types = ["typed non-Claude delivery results"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["NotificationSink"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-NON-CLAUDE-OUTBOUND-DAEMON-REFERENCES"]
+review_gates = ["no_public_impl", "no_notification_only_fallback"]
+
+[status]
+state = "planned"
+notes = ["Phase Yb planning boundary; implementation lands in Y.9"]

@@ -217,6 +217,13 @@ Notes:
     `metadata` object
 - See [docs/phase-Y/inbox-field-inventory.md](../phase-Y/inbox-field-inventory.md)
   for the full field inventory.
+- Phase `Yb` adds a stricter rule:
+  - only approved delivery executors may call the write-facing export/append
+    primitives behind this boundary
+  - send/ack/persistence modules must not call them directly
+  - see:
+    - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
+    - [../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md](../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
 
 ## NotificationSink
 
@@ -232,6 +239,26 @@ Notes:
 - Notification fallback policy for delivery state machines belongs here as a
   sink-side effect, but event legality still belongs to the event-family state
   machine rather than to the sink adapter.
+- Phase `Yb` clarifies that this boundary is notification-only:
+  - hook or notifier invocation is not proof of logical message delivery
+  - non-Claude outbound payload delivery must use a dedicated delivery
+    boundary, not NotificationSink as a stand-in
+
+## NonClaudeOutbound
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/non-claude-outbound.toml](../../boundaries/atm-core/non-claude-outbound.toml)
+
+
+Purpose:
+- Owns first-class non-Claude logical message delivery after the
+  state-machine/coordinator seam has produced a typed delivery plan.
+
+Notes:
+- This boundary must receive the same `LogicalMessage` payload set that the
+  Claude path receives; only transport target differs.
+- `NotificationSink` must not be used as a substitute for this boundary.
+- only approved delivery executors may call this boundary directly.
 
 ## StatusSource
 

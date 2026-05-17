@@ -318,6 +318,14 @@ Purpose:
 
 Notes:
 - This adapter owns compatibility export and write-bound projection behavior at the daemon boundary.
+- Phase `Yb` tightens this adapter further:
+  - runtime compatibility export and repair/rebuild export must be reviewed as
+    separate caller classes
+  - only approved delivery executors may invoke normal runtime export
+  - repair/rebuild re-export must remain outside the normal send/ack path
+  - see:
+    - [../phase-Yb/plan-phase-Yb.md](../phase-Yb/plan-phase-Yb.md)
+    - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
 
 ## Policy Placement
 
@@ -333,6 +341,11 @@ Compatibility and recovery policy placement for daemon-owned config/inbox adapte
   - whether a given event may use compatibility export
   - which harness path applies
   - which event-family state machine owns the transition
+- Phase `Yb` adds:
+  - the coordinator and state machines must emit one uniform delivery plan
+  - the daemon must not branch on harness outside that plan-to-executor seam
+  - notification fallback remains a side effect after the plan, not a second
+    delivery policy surface
 
 ## DaemonNotificationSinkAdapter
 
@@ -356,6 +369,21 @@ Notes:
   - callers outside `RuntimeComposition` must use
     `NotificationSink::deliver(...)` only and must not open plugin/agent
     delivery paths directly
+
+## DaemonNonClaudeOutboundAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/daemon-non-claude-outbound.toml](../../boundaries/atm-daemon/daemon-non-claude-outbound.toml)
+
+
+Purpose:
+- Owns the daemon runtime adapter behind the `NonClaudeOutbound` boundary.
+
+Notes:
+- This adapter must deliver the same logical `message[]` payload set that the
+  Claude path receives.
+- It must not downgrade message delivery into notification-only metadata.
+- Its callers are limited to the approved delivery executor seam.
 
 ## DaemonStatusSourceAdapter
 

@@ -3258,6 +3258,35 @@ mail correctness.
     - the fallback notification path is post-send-hook execution
   - no alternate fallback path may replace the companion error-message rule
 
+- `REQ-CORE-COMPAT-006` Yb must introduce one uniform typed delivery-plan seam
+  for new-message and ack-reply execution.
+
+  Required behavior:
+  - `crates/atm-core/src/delivery_plan.rs` defines:
+    - `atm_core::delivery_plan::DeliveryPlan`
+    - `atm_core::delivery_plan::ReplyDeliveryPlan`
+    - `atm_core::delivery_plan::LogicalMessage`
+    - `atm_core::delivery_plan::DeliveryTarget`
+    - `atm_core::delivery_plan::NotificationTarget`
+    - `atm_core::delivery_plan::DeliveryPlanDisposition`
+  - `crates/atm-core/src/delivery_execution.rs` defines:
+    - `atm_core::delivery_execution::execute_delivery_plan(...)`
+    - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+  - Claude and non-Claude machines must emit the same typed plan shape
+  - outer send/ack/persistence code must not branch on harness after the plan
+    is produced
+
+- `REQ-CORE-COMPAT-007` Yb must formalize a dedicated non-Claude outbound
+  payload boundary.
+
+  Required behavior:
+  - `atm_core::boundary::NonClaudeOutbound` is the only approved non-Claude
+    message-delivery boundary
+  - `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound` is the
+    daemon-owned runtime adapter for that boundary
+  - `NotificationSink` remains notification-only and must not stand in for
+    non-Claude message delivery
+
 ### 22.6 Lock Elimination Target
 
 - `REQ-CORE-LOCK-RETIRE-001` ATM mail correctness must stop depending on
