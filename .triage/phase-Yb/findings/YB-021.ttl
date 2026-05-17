@@ -1,0 +1,95 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-021>
+  a triage:Finding ;
+  triage:findingId "YB-021" ;
+  triage:title "service_runtime.rs:146-175 LocalFileNonClaudeOutbound missing doc comment identifying role" ;
+  triage:description "service_runtime.rs:146-175 LocalFileNonClaudeOutbound has no doc comment explaining it is the non-daemon production fallback (not a test double)." ;
+  triage:phaseId "phase-Yb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:highestOpenBranch "feature/pYb-s11-y10-gap-closure" ;
+  triage:highestFixedBranch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:promoteToBranch "feature/pYb-s11-y10-gap-closure" ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-021/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-021/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-021/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s9/c3426bb4> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s10/c531c3ab> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s11/29f8c388> ;
+  triage:fixedOn <urn:atm:triage:worktree/pYb-s7/29f8c388> .
+
+<urn:atm:triage:occurrence/YB-021/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 147 ;
+  triage:snippet "struct LocalFileNonClaudeOutbound;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s9/c3426bb4> .
+
+<urn:atm:triage:occurrence/YB-021/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 147 ;
+  triage:snippet "struct LocalFileNonClaudeOutbound;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s10/c531c3ab> .
+
+<urn:atm:triage:occurrence/YB-021/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/service_runtime.rs" ;
+  triage:line 144 ;
+  triage:snippet "struct LocalFileNonClaudeOutbound;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "29f8c388" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s11/29f8c388> .
+
+<urn:atm:triage:worktree/pYb-s7/29f8c388>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "29f8c388" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pYb-s8/6b7725bc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:headSha "6b7725bc" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pYb-s9/c3426bb4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pYb-s10/c531c3ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pYb-s11/29f8c388>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "29f8c388" ;
+  triage:orderIndex 5 .
