@@ -33,17 +33,27 @@ target: integrate/phase-Y
   append optional prose; clap output is the single source of truth for flag
   docs — no parallel text maintained
 - concept topics (no clap equivalent) are authored in the topic registry:
-  - tier 1 (must ship): `config`, `errors`
-  - tier 2 (may ship incomplete in v1.1): `hooks`, `identity`, `skills`
+- tier 1 (must ship): `config`, `errors`
+- tier 2 (may ship incomplete in v1.1): `hooks`, `identity`, `skills`
 - v1.1 scope: `atm help --list`, `atm help <topic>`, `atm help <topic> --json`
 - location: `crates/atm/src/commands/help.rs` with typed topic registry
 - no asset-install/init entanglement in this delivery
+- current CLI JSON status:
+  - `--json` output already exists on the 9 retained commands
+  - no Phase `Y` output retrofit is needed
+  - JSON input remains out of scope for `Phase Y` and `Phase Z`
+  - `atm help <topic> --json` is only an extension of the existing output
+    pattern to the new help command
 
 ## Exact Targets
 
 - `crates/atm/src/main.rs`
+- `crates/atm/src/commands/mod.rs`
+- `crates/atm/src/commands/help.rs`
 - `crates/atm/src/output.rs`
-- `docs/atm/`
+- `docs/atm/commands/help.md`
+- `docs/atm/requirements.md`
+- `docs/atm/architecture.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/phase-Y/sprint-Y1.md`
@@ -52,6 +62,12 @@ target: integrate/phase-Y
 ## Required Work
 
 - implement `atm help` per the GH #83 design ruling above
+- keep `Y.1` scoped to `atm help` and adjacent wording cleanup only
+- do not broaden `Y.1` into general CLI JSON I/O work
+- document that the retained command surface already has JSON output on the
+  existing 9 commands
+- document that structured JSON input is a later follow-up after `Phase Z`,
+  not a `Y.1` or `Phase Z` gate
 - make daemon + SQLite ownership expectations explicit in user-facing help
   where it prevents operator confusion
 - remove or rewrite stale help/output text that suggests:
@@ -68,6 +84,10 @@ target: integrate/phase-Y
 - tier-1 concept topics (`config`, `errors`) have authored content
 - tier-2 topics (`hooks`, `identity`, `skills`) either have content or are explicitly listed as deferred to `Y.2`
 - command help/output no longer makes stale file-SSOT claims
+- requirements, architecture, and command docs explicitly describe `atm help`
+  as the new additive CLI feature
+- `Y.1` planning/docs do not claim missing JSON output on the retained
+  commands or JSON-input work inside `Phase Y`
 - any intentionally deferred UX/help items are explicitly listed for `Y.2`
 
 ## Required Validation

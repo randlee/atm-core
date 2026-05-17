@@ -31,6 +31,9 @@ The retained product surface is:
 - `atm teams`
 - `atm members`
 
+Approved additive CLI feature for the Phase `Y` line:
+- `atm help`
+
 The system must preserve the retained command behavior unless these
 requirements explicitly retire or change it.
 
@@ -1740,6 +1743,58 @@ JSON output must include:
 Each member object must expose at least:
 - `name`
 - persisted local member metadata when present
+
+## 13.5 `atm help` (Phase Y additive CLI feature)
+
+Product requirement ID:
+- `REQ-P-HELP-001` `atm help` must satisfy the documented conceptual-help
+  contract for the daemon + SQLite release line.
+
+Satisfied by:
+- `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
+- `REQ-ATM-OUT-001` for human-readable and JSON output aspects
+
+### 13.5.1 Purpose
+
+Provide one ATM-owned conceptual help surface that complements clap-generated
+syntax help without duplicating the flag/argument contract already exposed by
+`--help`.
+
+### 13.5.2 Required Behavior
+
+`atm help` must:
+- remain a separate subcommand from clap-generated `atm --help`
+- provide `atm help --list`
+- provide `atm help <topic>`
+- provide `atm help <topic> --json`
+- delegate `atm help <subcommand>` to the authoritative clap `--help` output
+  first, with any ATM-owned prose appended after that output when needed
+- treat clap output as the single source of truth for command flag
+  documentation
+- keep concept topics in one typed topic registry rather than scattered prose
+  fragments
+
+Tier-1 concept topics for the first delivery:
+- `config`
+- `errors`
+
+Tier-2 concept topics for the first delivery:
+- `hooks`
+- `identity`
+- `skills`
+
+### 13.5.3 Output Contract
+
+Human output must:
+- clearly distinguish concept topics from command syntax help
+- preserve clap output verbatim when the target is a subcommand
+
+JSON output must:
+- expose the requested topic or command target
+- identify whether the result is:
+  - `concept_topic`
+  - `command_help`
+- include the rendered help body in a structured field suitable for agent use
 
 ## 14. Message And Workflow Model
 

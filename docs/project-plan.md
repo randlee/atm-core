@@ -3475,8 +3475,10 @@ Execution shape:
   allows it
 
 Follow-on validation phase:
-- pre-phase CLI JSON I/O audit to lock the agent-facing structured I/O contract
-  before smoke execution planning
+- completed CLI JSON I/O audit recorded in
+  `docs/phase-Z/cli-json-io-audit.md`
+- retained-command JSON output already exists; structured JSON input is
+  deferred until after `Phase Z`
 - `Z.1` executable smoke bring-up
 - `Z.2` fix and revalidate
 - `Z.3` `atm-dev` canary / dogfood
@@ -3488,6 +3490,8 @@ Immediate planning outputs:
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
 - `docs/phase-Y/delivery-state-machines.md`
+- `docs/phase-Y/sprint-Y1.md`
+- `docs/phase-Y/sprint-Y2.md`
 - `docs/phase-Y/sprint-Y3.md`
 - `docs/phase-Y/sprint-Y4.md`
 - `docs/phase-Y/sprint-Y5.md`
@@ -3497,4 +3501,5 @@ Immediate planning outputs:
 - `docs/phase-Z/sprint-Z2.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
-- approved implementation scopes for `Y.1` and `Y.2`
+- approved implementation scopes for `Y.1` and `Y.2`, with `Y.1` kept
+  strictly on `atm help` and adjacent UX wording

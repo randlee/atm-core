@@ -31,33 +31,23 @@ not be mixed into the architectural cleanup history:
 - `Y.0` trivial fixes and `Y.1` through `Y.6` implementation work are merged
   onto the authoritative integration line
 
-## Pre-Phase Audit
+## Pre-Phase JSON I/O Status
 
-Before `Z.1` begins, ATM must complete one agent-facing CLI JSON I/O audit so
-the smoke and dogfood phase knows exactly which structured interfaces are
-already stable, which are missing, and which must not be broadened casually.
+The CLI JSON I/O audit is already complete:
 
-Required audit outputs:
+- audit record: `docs/phase-Z/cli-json-io-audit.md`
+- retained-command `--json` output is already implemented on all 9 commands
+- no `Phase Y` or `Phase Z` output retrofit work is required
+- structured JSON input remains absent and is explicitly deferred until after
+  `Phase Z`
 
-- `docs/phase-Z/cli-json-io-audit.md`
-- command-by-command inventory of current `--json` output support
-- exact inventory of commands that still lack stable JSON output
-- exact inventory of commands that currently accept only text/stdin/file input
-- recommendation for the first approved JSON-input DTOs, with `atm send` as
-  the leading candidate unless the audit disproves that priority
-- explicit distinction between:
-  - stable public CLI JSON contract
-  - internal daemon/protocol/storage JSON that must not be exposed as-is
-- recommendation on whether any JSON I/O work belongs in a `Phase Y` follow-up
-  implementation slice, a `Phase Z` pre-smoke fix, or a later phase entirely
+The planning consequence is intentional:
 
-Audit rules:
-
-- use the code, requirements, and current docs as the source of truth
-- do not assume existing internal serde shapes are safe public CLI contracts
-- treat any stale documentation that claims missing JSON output where code
-  already supports it as an audit finding
-- feed the audit result back into planning before broad smoke/dogfood begins
+- `Phase Z` is not blocked on a JSON-output expansion sprint
+- `Phase Z` smoke/dogfood should validate the existing public JSON outputs as
+  part of normal executable coverage
+- any future JSON-input work must start from a separate public DTO design and
+  must not be smuggled into the smoke/release validation line
 
 ## Sprint Sequence
 

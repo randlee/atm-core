@@ -28,6 +28,9 @@ The retained command surface is:
 - `teams`
 - `members`
 
+Approved additive CLI feature for the Phase `Y` line:
+- `help`
+
 ## 1.1 Documentation Structure
 
 Documentation structure is governed by

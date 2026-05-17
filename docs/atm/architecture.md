@@ -25,6 +25,7 @@ The `atm` crate is responsible for:
 - constructing the production daemon client / runtime request adapter
 - maintaining the retained CLI subcommand surface, including `teams` and
   `members`
+- maintaining the approved additive `atm help` conceptual-help surface
 - maintaining the queue-inspection command split where `atm list` is the
   metadata-search surface and `atm read` is the single-message detail surface
 
