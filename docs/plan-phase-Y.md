@@ -243,6 +243,18 @@ Purpose:
 - keep the append/no-append decision inside the harness-specific new-message
   state machines rather than in scattered writer call sites
 
+Current status:
+
+- complete on `feature/pY-s6-append-only-compatibility-export`
+- retained normal-runtime Claude Code compatibility writes now append one JSONL
+  record at a time after the durable SQLite/workflow step
+- retained non-Claude harnesses still never receive ATM-authored JSONL append
+  output
+- retained runtime legacy array inboxes now rebuild/re-export once before they
+  join the append-only path
+- retained SQLite-failure recovery now emits the documented original-plus-error
+  outward delivery contract instead of silently downgrading to a warning only
+
 ## Phase Boundary
 
 `Phase Y` closes when:

@@ -3500,6 +3500,14 @@ Execution shape:
     files
 - `Y.6` append-only compatibility export cutover if the approved wire contract
   allows it
+  - complete on `feature/pY-s6-append-only-compatibility-export`
+  - retained normal-runtime Claude Code compatibility writes now append one
+    JSONL record at a time after the durable SQLite/workflow step
+  - retained non-Claude harnesses still never receive ATM-authored JSONL
+    append output
+  - retained SQLite-failure recovery now emits the documented
+    original-plus-`atm-system@<team>` companion contract instead of silently
+    downgrading to a warning-only path
 
 Follow-on validation phase:
 - completed CLI JSON I/O audit recorded in

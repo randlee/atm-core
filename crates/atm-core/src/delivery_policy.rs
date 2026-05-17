@@ -503,7 +503,6 @@ pub(crate) fn persisted_success_transition_names(
     }
 }
 
-#[cfg(test)]
 pub(crate) fn new_message_sqlite_failure_transitions(
     harness: DeliveryHarnessPath,
 ) -> &'static [&'static str] {
@@ -531,7 +530,18 @@ pub(crate) fn new_message_sqlite_failure_transitions(
     }
 }
 
-#[cfg(test)]
+pub(crate) fn sqlite_failure_transition_names(
+    harness: DeliveryHarnessPath,
+) -> &'static [&'static str] {
+    new_message_sqlite_failure_transitions(harness)
+}
+
+pub(crate) fn append_failure_transition_names(
+    harness: DeliveryHarnessPath,
+) -> &'static [&'static str] {
+    append_failure_transitions(harness)
+}
+
 pub(crate) fn append_failure_transitions(harness: DeliveryHarnessPath) -> &'static [&'static str] {
     match harness {
         DeliveryHarnessPath::ClaudeCode => &[

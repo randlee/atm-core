@@ -575,10 +575,16 @@ mod tests {
 
         fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
             let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-            let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
-            values
-                .into_iter()
-                .map(|value| serde_json::from_value(value).expect("message envelope"))
+            if raw.trim_start().starts_with('[') {
+                let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
+                return values
+                    .into_iter()
+                    .map(|value| serde_json::from_value(value).expect("message envelope"))
+                    .collect();
+            }
+            raw.lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| serde_json::from_str::<MessageEnvelope>(line).expect("json line"))
                 .collect()
         }
 
@@ -1052,7 +1058,7 @@ mod tests {
 
         let sender_inbox = fixture.inbox_contents(TEST_SENDER);
         assert_eq!(sender_inbox.len(), 1);
-        assert!(sender_inbox[0].pending_ack_at.is_none());
+        assert!(sender_inbox[0].pending_ack_at.is_some());
         assert!(sender_inbox[0].acknowledged_at.is_none());
         let replies = fixture.inbox_contents(TEST_LEAD);
         assert_eq!(replies.len(), 1);

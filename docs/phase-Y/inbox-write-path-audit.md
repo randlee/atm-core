@@ -125,16 +125,17 @@ Current assessment:
 
 ## 2. Current Write Semantics
 
-- ATM-authored compatibility inbox writes are currently full-file atomic
+- before `Y.6`, ATM-authored compatibility inbox writes were full-file atomic
   rewrites, not append-only writes
-- the current writer emits one JSON array document, not one appended JSONL
-  record per write
-- workflow + mailbox writes are still lock-coordinated through
-  `workflow::commit_workflow_state(...)`
-- the low-level Claude-surface writer is `mailbox::atomic::write_messages(...)`,
-  which serializes the full mailbox projection and atomically replaces the file
-- with the current array-shaped wire format, append-only lock-free writes are
-  not available without a compatibility-contract change
+- after `Y.6`, normal retained Claude Code compatibility output appends one
+  JSONL record at a time through `mailbox::atomic::append_message(...)`
+- explicit repair/rebuild flows and first-write legacy-array migration still
+  use the staged rewrite/re-export path
+- workflow + mailbox writes no longer keep normal runtime compatibility output
+  on the hot rewrite path; the durable SQLite/workflow step happens first and
+  the compatibility append follows afterward
+- the low-level Claude-surface rewrite helper `mailbox::atomic::write_messages(...)`
+  now survives only for explicit repair/rebuild and legacy-array migration
 
 ## 3. Agreed Phase Y Runtime Rules
 
@@ -172,7 +173,7 @@ Current assessment:
 
 ## 4. Final Allowed Write Classes
 
-Phase `Y` should converge on only these approved ATM-authored Claude-inbox
+Phase `Y` converges on only these approved ATM-authored Claude-inbox
 write classes:
 
 1. append one message to a Claude Code inbox

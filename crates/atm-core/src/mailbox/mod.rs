@@ -18,11 +18,12 @@ use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::types::{AgentName, TeamName};
 
 const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
-/// Append one message to a shared inbox file under the mailbox lock.
+/// Append one message to a shared inbox file as one JSONL record.
 ///
-/// Production send flows use the same lock discipline through
-/// `mailbox::store::write_compat_mailbox_projection()`. This helper is
-/// test-only because production callers must also coordinate workflow seeding.
+/// Production send flows use the same append-only compatibility writer through
+/// the retained runtime boundary. This helper stays test-only because
+/// production callers must also coordinate workflow persistence and delivery
+/// policy routing.
 ///
 /// # Errors
 ///
@@ -34,10 +35,7 @@ const MAX_MAILBOX_READ_BYTES: u64 = 10 * 1024 * 1024;
 /// cannot be loaded, locked, or atomically replaced.
 #[cfg(test)]
 pub fn append_message(path: &Path, envelope: &MessageEnvelope) -> Result<(), AtmError> {
-    locked_read_modify_write(path, lock::default_lock_timeout(), |messages| {
-        messages.push(envelope.clone());
-        Ok(())
-    })
+    store::append_compat_mailbox_message(path, envelope)
 }
 
 /// Lock, load, mutate, and atomically rewrite one mailbox file.
@@ -308,7 +306,7 @@ mod tests {
     use crate::mailbox::lock;
 
     #[test]
-    fn append_message_persists_one_array_record() {
+    fn append_message_persists_one_jsonl_record() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("append-message.json");
         let envelope = sample_message(Uuid::new_v4(), "first");
@@ -316,9 +314,7 @@ mod tests {
         append_message(&path, &envelope).expect("append");
 
         let raw = fs::read_to_string(&path).expect("raw contents");
-        let values: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
-        assert_eq!(values.len(), 1);
-        assert_eq!(values[0]["text"], "first");
+        assert_eq!(raw.lines().count(), 1);
         let read_back = load_compat_mailbox_messages(&path).expect("read back");
         assert_eq!(read_back.len(), 1);
         assert_eq!(read_back[0].text, envelope.text);
@@ -335,8 +331,8 @@ mod tests {
         append_message(&path, &envelope).expect("append");
 
         let raw = fs::read_to_string(&path).expect("raw contents");
-        let values: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
-        let object = values[0].as_object().expect("message object");
+        let value: serde_json::Value = serde_json::from_str(raw.trim_end()).expect("json line");
+        let object = value.as_object().expect("message object");
         assert!(!object.contains_key("metadata"));
         assert!(object.contains_key("message_id"));
         assert!(!object.contains_key("source_team"));
@@ -381,7 +377,7 @@ mod tests {
 
         append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
 
-        assert!(!lock::sentinel_path(&path).exists());
+        assert!(lock::sentinel_path(&path).exists());
     }
 
     #[test]
@@ -415,28 +411,26 @@ mod tests {
     }
 
     #[test]
-    fn json_array_inbox_remains_array_on_first_append() {
+    fn append_message_appends_after_existing_jsonl_record() {
         let tempdir = TempDir::new().expect("tempdir");
-        let path = tempdir.path().join("array-remains-array-on-append.json");
+        let path = tempdir.path().join("jsonl-appends-second-record.jsonl");
         let first = sample_message(Uuid::new_v4(), "first");
         let second = sample_message(Uuid::new_v4(), "second");
         fs::write(
             &path,
-            serde_json::to_vec(&vec![first.clone()]).expect("json array"),
+            format!("{}\n", serde_json::to_string(&first).expect("json line")),
         )
         .expect("write");
 
         append_message(&path, &second).expect("append");
 
         let raw = fs::read_to_string(&path).expect("raw contents");
-        let values: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
-        assert_eq!(values.len(), 2);
-        assert!(raw.trim_start().starts_with('['));
+        assert_eq!(raw.lines().count(), 2);
         let messages = load_compat_mailbox_messages(&path).expect("read");
         assert_eq!(messages.len(), 2);
         assert_eq!(messages[0].text, first.text);
         assert_eq!(messages[0].message_id, first.message_id);
-        assert!(messages[0].source_team.is_none());
+        assert_eq!(messages[0].source_team, first.source_team);
         assert_eq!(messages[1].text, second.text);
         assert_eq!(messages[1].message_id, second.message_id);
         assert!(messages[1].source_team.is_none());

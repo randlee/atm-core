@@ -1,6 +1,5 @@
 //! Send command service implementation and post-send hook handling.
 
-use std::iter;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -8,7 +7,6 @@ use serde_json::Map;
 use tracing::warn;
 
 use crate::address::AgentAddress;
-use crate::boundary;
 use crate::config;
 use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
@@ -23,13 +21,19 @@ use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
-use crate::workflow;
 
 mod alert_state;
+mod delivery_persistence;
 pub(crate) mod file_policy;
 pub(super) mod hook;
 pub(crate) mod input;
+mod persistence;
 pub(crate) mod summary;
+
+pub(crate) use delivery_persistence::{
+    CompanionNudgePlan, DeliveryPersistenceDisposition, DeliveryPersistenceResult,
+};
+pub(crate) use persistence::persist_message_and_seed_workflow;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
@@ -185,7 +189,7 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     let message_id = AtmMessageId::new();
     let timestamp = IsoTimestamp::now();
 
-    persist_send_message(
+    let persistence = persist_send_message(
         runtime,
         observability,
         &request,
@@ -197,8 +201,84 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         requires_ack,
         task_id.clone(),
     )?;
+    finalize_send_outcome(
+        runtime,
+        observability,
+        &request,
+        &context,
+        &body,
+        &summary,
+        message_id,
+        requires_ack,
+        task_id,
+        persistence,
+    )
+}
 
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Y.6 closeout keeps the explicit send outcome pieces visible at the sprint seam."
+)]
+fn finalize_send_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    observability: &dyn ObservabilityPort,
+    request: &SendRequest,
+    context: &SendExecutionContext,
+    body: &str,
+    summary: &str,
+    message_id: AtmMessageId,
+    requires_ack: bool,
+    task_id: Option<TaskId>,
+    persistence: DeliveryPersistenceResult,
+) -> Result<SendOutcome, AtmError> {
     let command_outcome = if request.dry_run { "dry_run" } else { "sent" };
+    let mut outcome = build_send_outcome(
+        request,
+        context,
+        body,
+        summary,
+        message_id,
+        requires_ack,
+        task_id.clone(),
+        command_outcome,
+        &persistence,
+    );
+    if !request.dry_run {
+        run_send_post_send_hooks(
+            runtime,
+            context,
+            message_id,
+            requires_ack,
+            task_id.as_ref(),
+            &persistence,
+            &mut outcome.warnings,
+        );
+    }
+    emit_send_command_event(
+        observability,
+        command_outcome,
+        &outcome,
+        task_id,
+        &context.canonical_sender,
+    );
+    Ok(outcome)
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Y.6 closeout keeps the explicit send outcome fields aligned with the command contract."
+)]
+fn build_send_outcome(
+    request: &SendRequest,
+    context: &SendExecutionContext,
+    body: &str,
+    summary: &str,
+    message_id: AtmMessageId,
+    requires_ack: bool,
+    task_id: Option<TaskId>,
+    command_outcome: &str,
+    persistence: &DeliveryPersistenceResult,
+) -> SendOutcome {
     let mut outcome = SendOutcome {
         action: CommandAction::Send,
         team: context.recipient.team.clone(),
@@ -207,39 +287,51 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         outcome: command_outcome.to_string(),
         message_id,
         requires_ack,
-        task_id: task_id.clone(),
-        summary: Some(summary),
-        message: request.dry_run.then_some(body.clone()),
+        task_id,
+        summary: Some(summary.to_string()),
+        message: request.dry_run.then_some(body.to_string()),
         warnings: context.warnings.clone(),
         dry_run: request.dry_run,
     };
+    outcome
+        .warnings
+        .extend(persistence.warnings.iter().cloned());
+    outcome
+}
 
-    if !request.dry_run {
-        runtime.maybe_run_post_send_hook(
-            &mut outcome.warnings,
+fn run_send_post_send_hooks<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    context: &SendExecutionContext,
+    message_id: AtmMessageId,
+    requires_ack: bool,
+    task_id: Option<&TaskId>,
+    persistence: &DeliveryPersistenceResult,
+    warnings: &mut Vec<WarningEntry>,
+) {
+    runtime.maybe_run_post_send_hook(
+        warnings,
+        context.config.as_ref(),
+        PostSendHookContext {
+            sender: &context.canonical_sender,
+            sender_team: context.sender_team.as_ref(),
+            recipient: &context.recipient,
+            recipient_pane_id: context.delivery_snapshot.recipient_pane_id.as_deref(),
+            message_id,
+            requires_ack,
+            is_ack: false,
+            task_id,
+        },
+    );
+    if let Some(companion_nudge) = persistence.companion_nudge.as_ref() {
+        maybe_run_companion_post_send_hook(
+            runtime,
+            warnings,
             context.config.as_ref(),
-            PostSendHookContext {
-                sender: &context.canonical_sender,
-                sender_team: context.sender_team.as_ref(),
-                recipient: &context.recipient,
-                recipient_pane_id: context.delivery_snapshot.recipient_pane_id.as_deref(),
-                message_id,
-                requires_ack,
-                is_ack: false,
-                task_id: task_id.as_ref(),
-            },
+            &context.recipient,
+            context.delivery_snapshot.recipient_pane_id.as_deref(),
+            companion_nudge,
         );
     }
-
-    emit_send_command_event(
-        observability,
-        command_outcome,
-        &outcome,
-        task_id,
-        &context.canonical_sender,
-    );
-
-    Ok(outcome)
 }
 
 struct SendExecutionContext {
@@ -411,9 +503,9 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     timestamp: IsoTimestamp,
     requires_ack: bool,
     task_id: Option<TaskId>,
-) -> Result<(), AtmError> {
+) -> Result<DeliveryPersistenceResult, AtmError> {
     if request.dry_run {
-        return Ok(());
+        return Ok(DeliveryPersistenceResult::persisted());
     }
     let envelope = MessageEnvelope {
         from: context.display_sender.clone(),
@@ -435,7 +527,7 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         task_id: task_id.clone(),
         extra: Map::new(),
     };
-    persist_message_and_seed_workflow(
+    let persistence = persist_message_and_seed_workflow(
         runtime,
         &request.home_dir,
         &context.delivery_snapshot,
@@ -443,8 +535,17 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &envelope,
         false,
     )?;
-    emit_delivery_transitions(observability, context, message_id, task_id);
-    Ok(())
+    for warning in &persistence.warnings {
+        warn!(message = %warning.message, "delivery persistence degraded");
+    }
+    emit_delivery_transitions(
+        observability,
+        context,
+        message_id,
+        task_id,
+        persistence.disposition,
+    );
+    Ok(persistence)
 }
 
 fn emit_delivery_transitions(
@@ -452,11 +553,23 @@ fn emit_delivery_transitions(
     context: &SendExecutionContext,
     message_id: AtmMessageId,
     task_id: Option<TaskId>,
+    disposition: DeliveryPersistenceDisposition,
 ) {
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let route = delivery_policy
         .route_persisted_delivery(context.delivery_family, &context.delivery_snapshot);
-    for transition in persisted_success_transition_names(context.delivery_family, route.harness) {
+    let transitions = match disposition {
+        DeliveryPersistenceDisposition::Persisted => {
+            persisted_success_transition_names(context.delivery_family, route.harness)
+        }
+        DeliveryPersistenceDisposition::AppendDegraded => {
+            crate::delivery_policy::append_failure_transition_names(route.harness).to_vec()
+        }
+        DeliveryPersistenceDisposition::SqliteFailedRecovered => {
+            crate::delivery_policy::sqlite_failure_transition_names(route.harness).to_vec()
+        }
+    };
+    for transition in transitions {
         delivery_policy.emit_transition(
             observability,
             DeliveryTransitionEvent {
@@ -676,103 +789,18 @@ fn persist_missing_config_notice(
     team_lead_inbox: &Path,
     notice: &MessageEnvelope,
 ) -> Result<(), AtmError> {
-    persist_message_and_seed_workflow(runtime, home_dir, snapshot, team_lead_inbox, notice, true)
-}
-
-pub(crate) fn persist_message_and_seed_workflow(
-    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
-    home_dir: &Path,
-    recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
-    inbox_path: &Path,
-    envelope: &MessageEnvelope,
-    require_existing_inbox: bool,
-) -> Result<(), AtmError> {
-    if require_existing_inbox && !inbox_path.exists() {
-        return Ok(());
-    }
-
-    let mut prepared = envelope.clone();
-    let inbox_messages =
-        load_store_backed_mailbox_projection(runtime, home_dir, &recipient.team, &recipient.agent)?;
-    prepare_threaded_message(&mut prepared, &inbox_messages)?;
-
-    runtime.commit_workflow_state(
+    let persistence = persist_message_and_seed_workflow(
+        runtime,
         home_dir,
-        &recipient.team,
-        &recipient.agent,
-        iter::empty(),
-        runtime.mailbox_timeout_policy().workflow_lock_timeout,
-        |workflow_state| {
-            mirror_message_to_store(runtime, &recipient.team, &recipient.agent, &prepared)?;
-            Ok((
-                (),
-                workflow::remember_initial_state(workflow_state, &prepared),
-            ))
-        },
+        snapshot,
+        team_lead_inbox,
+        notice,
+        true,
     )?;
-    runtime.refresh_compat_inbox_projection(home_dir, recipient)
-}
-
-fn load_store_backed_mailbox_projection(
-    runtime: &(impl RetainedMailboxRuntime + ?Sized),
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-) -> Result<Vec<MessageEnvelope>, AtmError> {
-    let mut metadata_rows = runtime.query_mailbox_metadata_rows(home_dir, team, agent, None)?;
-    metadata_rows.sort_by(|left, right| {
-        left.message_at
-            .cmp(&right.message_at)
-            .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
-    });
-
-    metadata_rows
-        .into_iter()
-        .map(|row| {
-            runtime
-                .load_message_record(home_dir, team, agent, &row.message_key)?
-                .map(|record| record.envelope)
-                .ok_or_else(|| {
-                    AtmError::validation(format!(
-                        "sqlite mailbox metadata row {} could not be reloaded for compatibility inbox export",
-                        row.message_key
-                    ))
-                    .with_recovery(
-                        "Repair or remove the malformed sqlite mailbox row before retrying the ATM command.",
-                    )
-                })
-        })
-        .collect()
-}
-
-fn mirror_message_to_store(
-    runtime: &(impl RetainedMailboxRuntime + ?Sized),
-    team: &TeamName,
-    agent: &AgentName,
-    envelope: &MessageEnvelope,
-) -> Result<(), AtmError> {
-    let Some(message_id) = envelope.message_id else {
-        return Ok(());
-    };
-    let message_key = boundary::MessageKey::new(format!("atm:{message_id}"))?;
-    runtime.persist_message_record(boundary::MailStoreMessageRecord {
-        team: team.clone(),
-        agent: agent.clone(),
-        message_key: message_key.clone(),
-        envelope: envelope.clone(),
-    })?;
-    runtime.persist_message_state(boundary::MailMessageState {
-        team: team.clone(),
-        agent: agent.clone(),
-        actor: agent.clone(),
-        message_key,
-        read: envelope.read,
-        pending_ack_at: envelope.pending_ack_at,
-        acknowledged_at: envelope.acknowledged_at,
-        expires_at: envelope.expires_at,
-        deleted_at: None,
-        updated_at: Some(IsoTimestamp::now()),
-    })
+    for warning in persistence.warnings {
+        warn!(message = %warning.message, "compatibility append degraded for missing-config notice");
+    }
+    Ok(())
 }
 
 fn prepare_threaded_message(
@@ -910,19 +938,61 @@ pub(crate) fn maybe_run_post_send_hook(
     hook::maybe_run_post_send_hook(warnings, config, context);
 }
 
+pub(crate) fn maybe_run_companion_post_send_hook<R: RetainedServiceRuntime + ?Sized>(
+    runtime: &R,
+    warnings: &mut Vec<WarningEntry>,
+    config: Option<&crate::config::AtmConfig>,
+    recipient: &ResolvedRecipient,
+    recipient_pane_id: Option<&str>,
+    companion: &CompanionNudgePlan,
+) {
+    runtime.maybe_run_post_send_hook(
+        warnings,
+        config,
+        PostSendHookContext {
+            sender: &companion.sender,
+            sender_team: companion.sender_team.as_ref(),
+            recipient,
+            recipient_pane_id,
+            message_id: companion.message_id,
+            requires_ack: companion.requires_ack,
+            is_ack: companion.is_ack,
+            task_id: companion.task_id.as_ref(),
+        },
+    );
+}
+
 #[cfg(test)]
 mod tests {
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    use std::time::Duration;
+
     use serde_json::Map;
     use std::fs;
     use tempfile::tempdir;
 
-    use super::{alert_state, prepare_threaded_message};
+    use super::{
+        CompanionNudgePlan, DeliveryPersistenceDisposition, PostSendHookContext, ResolvedRecipient,
+        alert_state, maybe_run_companion_post_send_hook, persist_message_and_seed_workflow,
+        prepare_threaded_message,
+    };
+    use crate::boundary::{
+        MailMessageState, MailStoreMailboxMetadataRow, MailStoreMessageRecord, MessageKey,
+    };
+    use crate::config::AtmConfig;
+    use crate::delivery_policy::{DeliveryHarnessPath, DeliveryRecipientSnapshot};
+    use crate::error::AtmError;
     use crate::process::process_is_alive;
     use crate::roles::ROLE_TEAM_LEAD;
+    use crate::schema::TeamConfig;
     use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
     use crate::send::{SendMessageSource, SendRequest};
+    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+    use crate::workflow::WorkflowStateFile;
 
     fn message(
         from: &str,
@@ -949,6 +1019,221 @@ mod tests {
         }
     }
 
+    #[derive(Debug)]
+    struct HookCapture {
+        sender: AgentName,
+        sender_team: Option<TeamName>,
+        recipient: ResolvedRecipient,
+        message_id: AtmMessageId,
+        requires_ack: bool,
+        is_ack: bool,
+        task_id: Option<TaskId>,
+    }
+
+    struct TestRuntime {
+        commit_error_message: Option<&'static str>,
+        append_error_message: Option<&'static str>,
+        appended_messages: Mutex<Vec<MessageEnvelope>>,
+        hook_captures: Mutex<Vec<HookCapture>>,
+    }
+
+    impl TestRuntime {
+        fn new(
+            commit_error_message: Option<&'static str>,
+            append_error_message: Option<&'static str>,
+        ) -> Self {
+            Self {
+                commit_error_message,
+                append_error_message,
+                appended_messages: Mutex::new(Vec::new()),
+                hook_captures: Mutex::new(Vec::new()),
+            }
+        }
+    }
+
+    impl RetainedServiceRuntime for TestRuntime {
+        fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
+            Ok(None)
+        }
+
+        fn load_team_config(&self, _team_dir: &Path) -> Result<TeamConfig, AtmError> {
+            Ok(TeamConfig::default())
+        }
+
+        fn team_dir(&self, home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
+            Ok(home_dir.to_path_buf())
+        }
+
+        fn inbox_path(
+            &self,
+            home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, AtmError> {
+            Ok(home_dir.join("inbox.jsonl"))
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_millis(1),
+            }
+        }
+
+        fn maybe_run_post_send_hook(
+            &self,
+            _warnings: &mut Vec<super::WarningEntry>,
+            _config: Option<&AtmConfig>,
+            context: PostSendHookContext<'_>,
+        ) {
+            self.hook_captures
+                .lock()
+                .expect("hook captures lock")
+                .push(HookCapture {
+                    sender: context.sender.clone(),
+                    sender_team: context.sender_team.cloned(),
+                    recipient: ResolvedRecipient {
+                        agent: context.recipient.agent.clone(),
+                        team: context.recipient.team.clone(),
+                    },
+                    message_id: context.message_id,
+                    requires_ack: context.requires_ack,
+                    is_ack: context.is_ack,
+                    task_id: context.task_id.cloned(),
+                });
+        }
+
+        fn refresh_compat_inbox_projection(
+            &self,
+            _home_dir: &Path,
+            _recipient: &DeliveryRecipientSnapshot,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn append_compat_inbox_message(
+            &self,
+            _inbox_path: &Path,
+            _recipient: &DeliveryRecipientSnapshot,
+            message: &MessageEnvelope,
+        ) -> Result<(), AtmError> {
+            if let Some(message) = self.append_error_message {
+                return Err(AtmError::mailbox_write(message));
+            }
+            self.appended_messages
+                .lock()
+                .expect("append captures lock")
+                .push(message.clone());
+            Ok(())
+        }
+
+        fn load_roster_member(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError> {
+            Ok(None)
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            body: F,
+        ) -> Result<T, AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
+        {
+            if let Some(message) = self.commit_error_message {
+                return Err(AtmError::mailbox_write(message));
+            }
+            let mut workflow = WorkflowStateFile::default();
+            body(&mut workflow).map(|(value, _dirty)| value)
+        }
+    }
+
+    impl RetainedMailboxRuntime for TestRuntime {
+        fn query_mailbox_metadata_rows(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _limit: Option<usize>,
+        ) -> Result<Vec<MailStoreMailboxMetadataRow>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn load_message_record(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _message_key: &MessageKey,
+        ) -> Result<Option<MailStoreMessageRecord>, AtmError> {
+            Ok(None)
+        }
+
+        fn persist_message_record(&self, _record: MailStoreMessageRecord) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn persist_message_state(&self, _state: MailMessageState) -> Result<(), AtmError> {
+            Ok(())
+        }
+    }
+
+    fn delivery_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot {
+        DeliveryRecipientSnapshot {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated(TEST_TEAM),
+            harness,
+            recipient_pane_id: None,
+            roster_backed: true,
+        }
+    }
+
+    fn outbound_message() -> MessageEnvelope {
+        MessageEnvelope {
+            from: AgentName::from_validated(TEST_SENDER),
+            text: "hello".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(TeamName::from_validated(TEST_TEAM)),
+            summary: Some("hello".to_string()),
+            message_id: Some(AtmMessageId::new()),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: Some("task-123".parse().expect("task id")),
+            extra: Map::new(),
+        }
+    }
+
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {
         let tempdir = tempdir().expect("tempdir");
@@ -960,6 +1245,131 @@ mod tests {
 
         let error = alert_state::load(&path).expect_err("malformed state");
         assert!(error.is_config());
+    }
+
+    #[test]
+    fn sqlite_failure_for_claude_appends_original_and_companion_error() {
+        let runtime = TestRuntime::new(Some("sqlite write failed"), None);
+        let tempdir = tempdir().expect("tempdir");
+        let inbox_path = tempdir.path().join("recipient.jsonl");
+
+        let result = persist_message_and_seed_workflow(
+            &runtime,
+            tempdir.path(),
+            &delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
+            &inbox_path,
+            &outbound_message(),
+            false,
+        )
+        .expect("sqlite fallback recovery");
+
+        assert_eq!(
+            result.disposition,
+            DeliveryPersistenceDisposition::SqliteFailedRecovered
+        );
+        assert_eq!(result.warnings.len(), 1);
+        let appended = runtime.appended_messages.lock().expect("append lock");
+        assert_eq!(appended.len(), 2);
+        assert_eq!(appended[0].from.as_str(), TEST_SENDER);
+        assert_eq!(appended[1].from.as_str(), "atm-system");
+        assert!(appended[1].text.contains("SQLite persistence failed"));
+        assert!(result.companion_nudge.is_some());
+    }
+
+    #[test]
+    fn sqlite_failure_for_non_claude_skips_jsonl_append_but_keeps_companion_nudge() {
+        let runtime = TestRuntime::new(Some("sqlite write failed"), None);
+        let tempdir = tempdir().expect("tempdir");
+        let inbox_path = tempdir.path().join("recipient.jsonl");
+
+        let result = persist_message_and_seed_workflow(
+            &runtime,
+            tempdir.path(),
+            &delivery_snapshot(DeliveryHarnessPath::NonClaude),
+            &inbox_path,
+            &outbound_message(),
+            false,
+        )
+        .expect("sqlite fallback recovery");
+
+        assert_eq!(
+            result.disposition,
+            DeliveryPersistenceDisposition::SqliteFailedRecovered
+        );
+        assert!(
+            runtime
+                .appended_messages
+                .lock()
+                .expect("append lock")
+                .is_empty()
+        );
+        assert!(result.companion_nudge.is_some());
+    }
+
+    #[test]
+    fn append_failure_after_sqlite_commit_is_warning_only() {
+        let runtime = TestRuntime::new(None, Some("append failed"));
+        let tempdir = tempdir().expect("tempdir");
+        let inbox_path = tempdir.path().join("recipient.jsonl");
+
+        let result = persist_message_and_seed_workflow(
+            &runtime,
+            tempdir.path(),
+            &delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
+            &inbox_path,
+            &outbound_message(),
+            false,
+        )
+        .expect("append degradation");
+
+        assert_eq!(
+            result.disposition,
+            DeliveryPersistenceDisposition::AppendDegraded
+        );
+        assert_eq!(result.warnings.len(), 1);
+        assert!(result.companion_nudge.is_none());
+    }
+
+    #[test]
+    fn companion_post_send_hook_uses_companion_message_identity() {
+        let runtime = TestRuntime::new(None, None);
+        let companion = CompanionNudgePlan {
+            sender: AgentName::from_validated("atm-system"),
+            sender_team: Some(TeamName::from_validated(TEST_TEAM)),
+            message_id: AtmMessageId::new(),
+            requires_ack: false,
+            task_id: Some("task-123".parse().expect("task id")),
+            is_ack: false,
+        };
+        let mut warnings = Vec::new();
+        let recipient = ResolvedRecipient {
+            agent: AgentName::from_validated("recipient"),
+            team: TeamName::from_validated(TEST_TEAM),
+        };
+
+        maybe_run_companion_post_send_hook(
+            &runtime,
+            &mut warnings,
+            None,
+            &recipient,
+            None,
+            &companion,
+        );
+
+        assert!(warnings.is_empty());
+        let captures = runtime.hook_captures.lock().expect("hook capture lock");
+        assert_eq!(captures.len(), 1);
+        assert_eq!(captures[0].sender.as_str(), "atm-system");
+        assert_eq!(
+            captures[0].sender_team.as_ref().map(TeamName::as_str),
+            Some(TEST_TEAM)
+        );
+        assert_eq!(captures[0].recipient.agent.as_str(), "recipient");
+        assert_eq!(captures[0].recipient.team.as_str(), TEST_TEAM);
+        assert_eq!(captures[0].message_id, companion.message_id);
+        assert!(!captures[0].requires_ack);
+        assert!(!captures[0].is_ack);
+        assert_eq!(captures[0].task_id.as_ref(), companion.task_id.as_ref());
     }
 
     #[test]

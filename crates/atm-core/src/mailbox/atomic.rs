@@ -1,3 +1,5 @@
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::Path;
 
 use serde_json::Value;
@@ -44,4 +46,49 @@ pub fn write_messages(
         "mailbox file",
         "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
     )
+}
+
+pub fn append_message(
+    path: &Path,
+    message: &MessageEnvelope,
+    export_policy: SharedInboxExportPolicy,
+) -> Result<(), AtmError> {
+    let encoded = to_shared_inbox_value_with_policy(message, export_policy)?;
+    let mut bytes = serde_json::to_vec(&encoded)?;
+    bytes.push(b'\n');
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| {
+            AtmError::new(
+                AtmErrorKind::MailboxWrite,
+                format!("failed to open mailbox file {} for append: {error}", path.display()),
+            )
+            .with_recovery(
+                "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
+            )
+            .with_source(error)
+        })?;
+    file.write_all(&bytes).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxWrite,
+            format!("failed to append mailbox record {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
+        )
+        .with_source(error)
+    })?;
+    file.sync_data().map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxWrite,
+            format!("failed to sync appended mailbox record {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
+        )
+        .with_source(error)
+    })
 }

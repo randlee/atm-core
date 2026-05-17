@@ -24,6 +24,14 @@ pub(crate) fn write_compat_mailbox_projection(
     write_compat_mailbox_projection_with_policy(path, messages, export_policy)
 }
 
+pub(crate) fn append_compat_mailbox_message(
+    path: &Path,
+    message: &MessageEnvelope,
+) -> Result<(), AtmError> {
+    let export_policy = load_export_policy(path)?;
+    atomic::append_message(path, message, export_policy)
+}
+
 fn write_compat_mailbox_projection_with_policy(
     path: &Path,
     messages: &[MessageEnvelope],
@@ -77,7 +85,10 @@ pub(crate) fn load_source_projections(
 mod tests {
     use tempfile::tempdir;
 
-    use super::{write_compat_mailbox_projection, write_compat_source_projections};
+    use super::{
+        append_compat_mailbox_message, write_compat_mailbox_projection,
+        write_compat_source_projections,
+    };
     use crate::mailbox::load_compat_mailbox_messages;
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -144,6 +155,24 @@ mod tests {
             encoded[0]["summary"],
             serde_json::Value::String("stub summary".into())
         );
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_writes_jsonl_records() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
+        let first = sample_message(ROLE_TEAM_LEAD, "first line");
+        let second = sample_message(TEST_QA, "second line");
+
+        append_compat_mailbox_message(&path, &first).expect("append first");
+        append_compat_mailbox_message(&path, &second).expect("append second");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        assert_eq!(raw.lines().count(), 2);
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), 2);
+        assert_eq!(read_back[0].text, first.text);
+        assert_eq!(read_back[1].text, second.text);
     }
 
     #[test]
