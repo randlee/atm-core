@@ -244,7 +244,7 @@ fn load_projection_message(
 ) -> Result<MessageEnvelope, AtmError> {
     runtime
         .mail_store
-        .load_stored_message(crate::boundary::MailStoreLoadStoredMessageRequest {
+        .load_message(crate::boundary::MailStoreLoadMessageRequest {
             team: team.clone(),
             agent: agent.clone(),
             message_key: message_key.clone(),

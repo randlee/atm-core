@@ -319,6 +319,18 @@ fn strip_metadata_atm_namespace(object: &mut Map<String, Value>) {
     }
 }
 
+fn strip_removed_compatibility_fields(object: &mut Map<String, Value>) {
+    for field in [
+        "source_team",
+        "pendingAckAt",
+        "acknowledgedAt",
+        "acknowledgesMessageId",
+        "expiresAt",
+    ] {
+        object.remove(field);
+    }
+}
+
 pub(crate) fn to_shared_inbox_value_with_policy(
     message: &MessageEnvelope,
     policy: SharedInboxExportPolicy,
@@ -342,6 +354,7 @@ pub(crate) fn to_shared_inbox_value_with_policy(
             )
         })?;
     strip_metadata_atm_namespace(object);
+    strip_removed_compatibility_fields(object);
     if should_export_retrieval_stub(message, policy)? {
         let retrieval_stub = retrieval_stub_text(message)?;
         object.insert("text".to_string(), Value::String(retrieval_stub));
@@ -556,7 +569,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_inbox_write_keeps_machine_fields_top_level() {
+    fn shared_inbox_write_keeps_only_approved_immutable_fields() {
         let envelope = MessageEnvelope {
             from: TEST_SENDER.parse().expect("agent"),
             text: "hello".into(),
@@ -586,8 +599,8 @@ mod tests {
         let encoded = to_shared_inbox_value(&envelope).expect("encode");
         let object = encoded.as_object().expect("object");
         assert!(object.contains_key("message_id"));
-        assert!(object.contains_key("source_team"));
-        assert!(object.contains_key("pendingAckAt"));
+        assert!(!object.contains_key("source_team"));
+        assert!(!object.contains_key("pendingAckAt"));
         assert!(object.contains_key("taskId"));
         assert!(
             object
@@ -599,7 +612,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_inbox_write_keeps_ack_fields_top_level() {
+    fn shared_inbox_write_strips_ack_workflow_fields_from_export() {
         let acknowledged_at = IsoTimestamp::from_datetime(
             Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 2)
                 .single()
@@ -629,11 +642,8 @@ mod tests {
 
         let encoded = to_shared_inbox_value(&envelope).expect("encode");
         let object = encoded.as_object().expect("object");
-        assert_eq!(
-            object.get("acknowledgedAt"),
-            Some(&json!("2026-03-30T00:00:02Z"))
-        );
-        assert!(object["acknowledgesMessageId"].as_str().is_some());
+        assert!(!object.contains_key("acknowledgedAt"));
+        assert!(!object.contains_key("acknowledgesMessageId"));
     }
 
     #[test]

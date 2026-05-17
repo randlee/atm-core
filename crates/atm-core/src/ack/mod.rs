@@ -173,6 +173,7 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         &actor,
         request.message_id,
     )?;
+    let source_snapshot = delivery_policy.resolve_recipient_snapshot(runtime, &team, &actor)?;
     let reply_target = validate_reply_target(runtime, &request.home_dir, &source.record, &team)?;
     let reply_snapshot = delivery_policy.resolve_recipient_snapshot(
         runtime,
@@ -181,66 +182,30 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
     )?;
     let persisted = persist_ack_reply(
         runtime,
-        &request,
-        &actor,
-        &team,
-        &source,
-        &reply_target,
-        &reply_snapshot,
-    )?;
-
-    let mut outcome = AckOutcome {
-        action: CommandAction::Ack,
-        team: team.clone(),
-        agent: actor.clone(),
-        message_id: request.message_id,
-        task_id: persisted.task_id.clone(),
-        reply_target: reply_target.clone(),
-        reply_message_id: persisted.reply_message_id,
-        reply_text: persisted.reply_text.clone(),
-        warnings: Vec::new(),
-    };
-
-    outcome.warnings = collect_ack_hook_warnings(
-        runtime,
-        config,
-        AckHookDispatch {
+        AckPersistenceContext {
+            request: &request,
             actor: &actor,
             team: &team,
+            source: &source,
+            source_snapshot: &source_snapshot,
             reply_target: &reply_target,
             reply_snapshot: &reply_snapshot,
-            reply_message_id: persisted.reply_message_id,
-            task_id: outcome.task_id.as_ref(),
         },
-    );
-    let route =
-        delivery_policy.route_persisted_delivery(DeliveryEventFamily::AckReply, &reply_snapshot);
-    for transition in
-        persisted_success_transition_names(DeliveryEventFamily::AckReply, route.harness)
-    {
-        delivery_policy.emit_transition(
-            observability,
-            DeliveryTransitionEvent {
-                family: DeliveryEventFamily::AckReply,
-                outcome: transition,
-                team: &reply_target.team,
-                agent: &reply_target.agent,
-                sender: &actor,
-                message_id: Some(persisted.reply_message_id),
-                task_id: persisted.task_id.clone(),
-            },
-        );
-    }
-
-    record_ack_telemetry(
+    )?;
+    finalize_ack_outcome(
+        runtime,
         observability,
-        &actor,
-        team,
-        request.message_id,
-        persisted.task_id,
-    );
-
-    Ok(outcome)
+        config,
+        FinalizeAckContext {
+            delivery_policy: &delivery_policy,
+            actor: &actor,
+            team: &team,
+            request_message_id: request.message_id,
+            reply_target: &reply_target,
+            reply_snapshot: &reply_snapshot,
+            persisted: &persisted,
+        },
+    )
 }
 
 #[derive(Clone)]
@@ -253,6 +218,26 @@ struct PersistedAckReply {
     reply_message_id: AtmMessageId,
     reply_text: String,
     task_id: Option<TaskId>,
+}
+
+struct FinalizeAckContext<'a> {
+    delivery_policy: &'a DeliveryPolicyCoordinator,
+    actor: &'a AgentName,
+    team: &'a TeamName,
+    request_message_id: AtmMessageId,
+    reply_target: &'a ReplyTarget,
+    reply_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
+    persisted: &'a PersistedAckReply,
+}
+
+struct AckPersistenceContext<'a> {
+    request: &'a AckRequest,
+    actor: &'a AgentName,
+    team: &'a TeamName,
+    source: &'a LoadedAckSource,
+    source_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
+    reply_target: &'a ReplyTarget,
+    reply_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
 }
 
 fn load_ack_source<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
@@ -384,27 +369,22 @@ fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
 fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
-    request: &AckRequest,
-    actor: &AgentName,
-    team: &TeamName,
-    source: &LoadedAckSource,
-    reply_target: &ReplyTarget,
-    reply_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
+    context: AckPersistenceContext<'_>,
 ) -> Result<PersistedAckReply, AtmError> {
     let ack_timestamp = IsoTimestamp::now();
-    let reply_text = input::validate_message_text(request.reply_body.clone())?;
+    let reply_text = input::validate_message_text(context.request.reply_body.clone())?;
     let reply_message_id = AtmMessageId::new();
     let reply_message = MessageEnvelope {
-        from: actor.clone(),
+        from: context.actor.clone(),
         text: reply_text.clone(),
         timestamp: ack_timestamp,
         read: false,
-        source_team: Some(team.clone()),
+        source_team: Some(context.team.clone()),
         summary: Some(summary::build_summary(&reply_text, None)),
         message_id: Some(reply_message_id),
         pending_ack_at: None,
         acknowledged_at: None,
-        acknowledges_message_id: Some(request.message_id),
+        acknowledges_message_id: Some(context.request.message_id),
         parent_message_id: None,
         thread_mode: None,
         expires_at: None,
@@ -413,24 +393,28 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     };
 
     runtime.persist_message_state(boundary::MailMessageState {
-        team: team.clone(),
-        agent: actor.clone(),
-        actor: actor.clone(),
-        message_key: source.row.message_key.clone(),
+        team: context.team.clone(),
+        agent: context.actor.clone(),
+        actor: context.actor.clone(),
+        message_key: context.source.row.message_key.clone(),
         read: true,
         pending_ack_at: None,
         acknowledged_at: Some(ack_timestamp),
-        expires_at: source.record.envelope.expires_at,
+        expires_at: context.source.record.envelope.expires_at,
         deleted_at: None,
         updated_at: Some(ack_timestamp),
     })?;
+    runtime.refresh_compat_inbox_projection(home_dir(context.request), context.source_snapshot)?;
 
-    let reply_inbox_path =
-        runtime.inbox_path(home_dir(request), &reply_target.team, &reply_target.agent)?;
+    let reply_inbox_path = runtime.inbox_path(
+        home_dir(context.request),
+        &context.reply_target.team,
+        &context.reply_target.agent,
+    )?;
     persist_message_and_seed_workflow(
         runtime,
-        home_dir(request),
-        reply_snapshot,
+        home_dir(context.request),
+        context.reply_snapshot,
         &reply_inbox_path,
         &reply_message,
         false,
@@ -439,12 +423,77 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     Ok(PersistedAckReply {
         reply_message_id,
         reply_text,
-        task_id: source.record.envelope.task_id.clone(),
+        task_id: context.source.record.envelope.task_id.clone(),
     })
 }
 
 fn home_dir(request: &AckRequest) -> &std::path::Path {
     request.home_dir.as_path()
+}
+
+fn finalize_ack_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    observability: &dyn ObservabilityPort,
+    config: Option<&crate::config::AtmConfig>,
+    context: FinalizeAckContext<'_>,
+) -> Result<AckOutcome, AtmError> {
+    let mut outcome = AckOutcome {
+        action: CommandAction::Ack,
+        team: context.team.clone(),
+        agent: context.actor.clone(),
+        message_id: context.request_message_id,
+        task_id: context.persisted.task_id.clone(),
+        reply_target: context.reply_target.clone(),
+        reply_message_id: context.persisted.reply_message_id,
+        reply_text: context.persisted.reply_text.clone(),
+        warnings: Vec::new(),
+    };
+    outcome.warnings = collect_ack_hook_warnings(
+        runtime,
+        config,
+        AckHookDispatch {
+            actor: context.actor,
+            team: context.team,
+            reply_target: context.reply_target,
+            reply_snapshot: context.reply_snapshot,
+            reply_message_id: context.persisted.reply_message_id,
+            task_id: outcome.task_id.as_ref(),
+        },
+    );
+    emit_ack_delivery_transitions(observability, &context);
+    record_ack_telemetry(
+        observability,
+        context.actor,
+        context.team.clone(),
+        context.request_message_id,
+        context.persisted.task_id.clone(),
+    );
+    Ok(outcome)
+}
+
+fn emit_ack_delivery_transitions(
+    observability: &dyn ObservabilityPort,
+    context: &FinalizeAckContext<'_>,
+) {
+    let route = context
+        .delivery_policy
+        .route_persisted_delivery(DeliveryEventFamily::AckReply, context.reply_snapshot);
+    for transition in
+        persisted_success_transition_names(DeliveryEventFamily::AckReply, route.harness)
+    {
+        context.delivery_policy.emit_transition(
+            observability,
+            DeliveryTransitionEvent {
+                family: DeliveryEventFamily::AckReply,
+                outcome: transition,
+                team: &context.reply_target.team,
+                agent: &context.reply_target.agent,
+                sender: context.actor,
+                message_id: Some(context.persisted.reply_message_id),
+                task_id: context.persisted.task_id.clone(),
+            },
+        );
+    }
 }
 
 fn collect_ack_hook_warnings<R: RetainedServiceRuntime + RetainedMailboxRuntime>(

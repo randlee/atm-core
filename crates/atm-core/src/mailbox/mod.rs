@@ -320,7 +320,10 @@ mod tests {
         assert_eq!(values.len(), 1);
         assert_eq!(values[0]["text"], "first");
         let read_back = load_compat_mailbox_messages(&path).expect("read back");
-        assert_eq!(read_back, vec![envelope]);
+        assert_eq!(read_back.len(), 1);
+        assert_eq!(read_back[0].text, envelope.text);
+        assert_eq!(read_back[0].message_id, envelope.message_id);
+        assert!(read_back[0].source_team.is_none());
     }
 
     #[test]
@@ -336,7 +339,7 @@ mod tests {
         let object = values[0].as_object().expect("message object");
         assert!(!object.contains_key("metadata"));
         assert!(object.contains_key("message_id"));
-        assert!(object.contains_key("source_team"));
+        assert!(!object.contains_key("source_team"));
     }
 
     #[test]
@@ -430,7 +433,13 @@ mod tests {
         assert_eq!(values.len(), 2);
         assert!(raw.trim_start().starts_with('['));
         let messages = load_compat_mailbox_messages(&path).expect("read");
-        assert_eq!(messages, vec![first, second]);
+        assert_eq!(messages.len(), 2);
+        assert_eq!(messages[0].text, first.text);
+        assert_eq!(messages[0].message_id, first.message_id);
+        assert!(messages[0].source_team.is_none());
+        assert_eq!(messages[1].text, second.text);
+        assert_eq!(messages[1].message_id, second.message_id);
+        assert!(messages[1].source_team.is_none());
     }
 
     #[test]

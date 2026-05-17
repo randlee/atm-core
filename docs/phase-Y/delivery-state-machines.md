@@ -52,6 +52,23 @@ Current `Y.4` landing points:
 - retained ack integration:
   - `crates/atm-core/src/ack/mod.rs`
 
+Current `Y.5` export contract:
+
+- ATM-authored shared inbox export keeps only immutable correlation/context
+  fields:
+  - `message_id`
+  - `parentMessageId`
+  - `threadMode`
+  - `taskId`
+- mutable workflow and lifecycle fields are stripped from compatibility export:
+  - `source_team`
+  - `pendingAckAt`
+  - `acknowledgedAt`
+  - `acknowledgesMessageId`
+  - `expiresAt`
+- compatibility export loads the stored message record, not the workflow-joined
+  projected envelope, so export no longer depends on read/ack projection state
+
 ## Synchronization Minimization
 
 Phase `Y` must remove or isolate broad application-level locking rather than

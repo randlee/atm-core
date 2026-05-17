@@ -22,10 +22,11 @@ Decision rule:
 | `parentMessageId` | immutable thread/update lineage pointer | `keep` | required to correlate thread/update records without reconstructing lineage heuristically |
 | `threadMode` | immutable thread/update mode (`add-details`, `supersede`, etc.) | `keep` | part of the authored message semantics, not mutable workflow state |
 | `taskId` | immutable task correlation id when present | `keep` | task linkage is correlation context, not mutable workflow truth |
-| `source_team` | sender/source routing context | `undecided` | keep only if a real shared-inbox consumer still needs it after Y.5 audit |
+| `source_team` | sender/source routing context | `remove` | recipient path plus SQLite lookup are sufficient; no approved shared-inbox consumer requires it |
 | `pendingAckAt` | mutable ack workflow state | `remove` | belongs in SQLite workflow truth |
 | `acknowledgedAt` | mutable ack workflow state | `remove` | belongs in SQLite workflow truth |
-| `acknowledgesMessageId` | reply/ack linkage emitted by ATM | `undecided` | may be retained as immutable correlation, but only if a concrete consumer still needs it |
+| `acknowledgesMessageId` | reply/ack linkage emitted by ATM | `remove` | no approved shared-inbox consumer requires it; SQLite/read outcomes already preserve ack linkage |
+| `expiresAt` | mutable expiry lifecycle state | `remove` | expiry truth belongs in SQLite lifecycle state, not compatibility output |
 | `metadata.atm.*` mutable workflow projections | legacy mutable ATM state carrier | `remove` | Phase Y target is to stop projecting mutable workflow truth into compatibility output |
 
 ## Decision Framework For Y.5
@@ -46,8 +47,8 @@ Disposition rules:
   - explicit consumer justification
   - written statement for why SQLite-only lookup is insufficient
 - `remove` is the default when the field carries mutable workflow truth
-- `undecided` is temporary and must be resolved during `Y.5`; it is not a
-  release-ready final state
+- no field remains `undecided` after `Y.5`; unresolved dependency is a blocking
+  finding, not an accepted release state
 
 ## Y.5 Expected Outcome
 

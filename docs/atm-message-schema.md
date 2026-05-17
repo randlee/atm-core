@@ -22,20 +22,15 @@ Enforcement model in this repo:
 
 ## 2. Supported Additive Compatibility Fields
 
-The shared Claude inbox surface may contain these ATM additive fields when ATM
-needs compatibility with existing Claude-side consumers:
+The shared Claude inbox surface may contain only these ATM additive fields:
 
 - `message_id`
-- `source_team`
-- `pendingAckAt`
-- `acknowledgedAt`
-- `acknowledgesMessageId`
 - `parentMessageId`
 - `threadMode`
 - `taskId`
 
-These fields are compatibility fields only. They are not the durable ATM-owned
-source of truth for mailbox state.
+These fields are immutable compatibility fields only. They are not the durable
+ATM-owned source of truth for mailbox state.
 
 Phase `Y` rule:
 
@@ -43,7 +38,8 @@ Phase `Y` rule:
   machine plus the central delivery-policy coordinator
 - fields must not persist merely because scattered command code still reads
   them
-- `Y.5` is the sprint that decides which of these fields actually survive
+- `Y.5` removed the mutable/shared-projection fields that previously leaked
+  workflow state into compatibility output
 
 ## 3. One Message Identity
 
@@ -94,7 +90,26 @@ Interpretation rules:
 The durable current-state meaning of those fields belongs in SQLite-backed read
 and workflow logic, not in repeated JSON reads.
 
-## 6. No Active `metadata.atm` Namespace
+## 6. Removed Compatibility Fields
+
+The following ATM-owned fields must not be emitted in ATM-authored shared inbox
+output:
+
+- `source_team`
+- `pendingAckAt`
+- `acknowledgedAt`
+- `acknowledgesMessageId`
+- `expiresAt`
+
+Rationale:
+
+- they are mutable workflow truth, delivery-side routing detail, or admin
+  lifecycle data rather than immutable shared-inbox correlation context
+- SQLite-backed query and workflow paths own their current-state meaning
+- if a consumer still depends on one of these fields, that dependency is
+  obsolete and must be removed or explicitly reapproved
+
+## 7. No Active `metadata.atm` Namespace
 
 `metadata.atm` is not an approved namespace in the Phase U architecture.
 

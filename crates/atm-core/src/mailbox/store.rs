@@ -82,8 +82,8 @@ mod tests {
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AtmMessageId, MessageEnvelope};
-    use crate::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use crate::test_support::{TEST_QA, TEST_SENDER};
+    use crate::types::{AgentName, IsoTimestamp};
 
     #[test]
     fn write_compat_mailbox_projection_rewrites_mailbox_array_with_only_new_messages() {
@@ -102,9 +102,19 @@ mod tests {
         let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
         assert_eq!(encoded.len(), 2);
         assert!(raw.ends_with('\n'));
-        assert_eq!(
-            load_compat_mailbox_messages(&path).expect("read mailbox"),
-            messages
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), messages.len());
+        assert_eq!(read_back[0].text, messages[0].text);
+        assert_eq!(read_back[1].text, messages[1].text);
+        assert!(
+            read_back
+                .iter()
+                .all(|message| message.source_team.is_none())
+        );
+        assert!(
+            read_back.iter().all(
+                |message| message.pending_ack_at.is_none() && message.acknowledged_at.is_none()
+            )
         );
     }
 
@@ -159,14 +169,15 @@ mod tests {
         ])
         .expect("commit source files");
 
-        assert_eq!(
-            load_compat_mailbox_messages(&left_path).expect("left inbox"),
-            left_messages
-        );
-        assert_eq!(
-            load_compat_mailbox_messages(&right_path).expect("right inbox"),
-            right_messages
-        );
+        let left = load_compat_mailbox_messages(&left_path).expect("left inbox");
+        let right = load_compat_mailbox_messages(&right_path).expect("right inbox");
+        assert_eq!(left.len(), left_messages.len());
+        assert_eq!(right.len(), right_messages.len());
+        assert_eq!(left[0].text, left_messages[0].text);
+        assert_eq!(right[0].text, right_messages[0].text);
+        assert_eq!(right[1].text, right_messages[1].text);
+        assert!(left.iter().all(|message| message.source_team.is_none()));
+        assert!(right.iter().all(|message| message.source_team.is_none()));
     }
 
     #[test]
@@ -210,7 +221,7 @@ mod tests {
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team name")),
+            source_team: None,
             summary: None,
             message_id: Some(message_id),
             pending_ack_at: None,

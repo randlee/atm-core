@@ -1,7 +1,7 @@
 ---
 id: Y.5
 title: Mutable Compatibility-Field Removal And Dependency Exposure
-status: planned
+status: complete
 branch: feature/pY-s5-mutable-compatibility-field-removal
 worktree: ../atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal
 target: integrate/phase-Y
@@ -122,3 +122,22 @@ whole point of `Y.5` is to expose hidden dependencies immediately.
 
 - “temporarily keep it” is usually how obsolete logic survives release prep
 - remove the data first; let the failures show you what still needs deletion
+
+## Completion Notes
+
+- complete on `feature/pY-s5-mutable-compatibility-field-removal`
+- compatibility export now keeps only:
+  - `message_id`
+  - `parentMessageId`
+  - `threadMode`
+  - `taskId`
+- compatibility export now strips:
+  - `source_team`
+  - `pendingAckAt`
+  - `acknowledgedAt`
+  - `acknowledgesMessageId`
+  - `expiresAt`
+  - `metadata.atm.*`
+- retained compatibility export now reloads stored message records instead of
+  workflow-joined projected envelopes so removed workflow fields cannot leak
+  back in through export joins
