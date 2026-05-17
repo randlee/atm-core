@@ -1,6 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use atm_core::boundary::{
@@ -16,13 +16,6 @@ use atm_core::error::AtmError;
     )
 )]
 type OutputPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "Retained for the sealed non-Claude boundary implementation and targeted tests while production wiring stays on the retained runtime seam."
-    )
-)]
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 #[cfg_attr(
     not(test),
@@ -78,26 +71,6 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
         // the correct execution model here and `spawn_blocking` would violate
         // the trait contract rather than improve it.
         let output_path = (self.path_factory)()?;
-        let parent = output_path.parent().ok_or_else(|| {
-            AtmError::mailbox_write(format!(
-                "non-Claude outbound path {} has no parent directory",
-                output_path.display()
-            ))
-            .with_recovery(
-                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-            )
-        })?;
-        std::fs::create_dir_all(parent).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to create non-Claude outbound directory {}: {error}",
-                parent.display()
-            ))
-            .with_recovery(
-                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-            )
-            .with_source(error)
-        })?;
-
         let mut bytes = serde_json::to_vec(&request)?;
         if bytes.len() > MAX_NON_CLAUDE_PAYLOAD_BYTES {
             return Err(AtmError::mailbox_write(format!(
@@ -109,49 +82,74 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
             ));
         }
         bytes.push(b'\n');
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&output_path)
-            .map_err(|error| {
-                AtmError::mailbox_write(format!(
-                    "failed to open non-Claude outbound sink {} for append: {error}",
-                    output_path.display()
-                ))
-                .with_recovery(
-                    "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-                )
-                .with_source(error)
-            })?;
-        // MAX_CONCURRENT_CONNECTIONS bounds callers here; FS stall under that
-        // ceiling is accepted delivery latency.
-        file.write_all(&bytes).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to append non-Claude outbound payload {}: {error}",
-                output_path.display()
-            ))
-            .with_recovery(
-                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-            )
-            .with_source(error)
-        })?;
-        // MAX_CONCURRENT_CONNECTIONS bounds callers here; FS stall under that
-        // ceiling is accepted delivery latency.
-        file.sync_data().map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to sync non-Claude outbound payload {}: {error}",
-                output_path.display()
-            ))
-            .with_recovery(
-                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-            )
-            .with_source(error)
-        })?;
+        append_payload_to_file(&output_path, &bytes)?;
 
         Ok(NonClaudeOutboundDeliveryResponse {
             delivered_messages: request.messages.len(),
         })
     }
+}
+
+fn append_payload_to_file(output_path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
+    let parent = output_path.parent().ok_or_else(|| {
+        AtmError::mailbox_write(format!(
+            "non-Claude outbound path {} has no parent directory",
+            output_path.display()
+        ))
+        .with_recovery(
+            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+        )
+    })?;
+    std::fs::create_dir_all(parent).map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to create non-Claude outbound directory {}: {error}",
+            parent.display()
+        ))
+        .with_recovery(
+            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+        )
+        .with_source(error)
+    })?;
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(output_path)
+        .map_err(|error| {
+            AtmError::mailbox_write(format!(
+                "failed to open non-Claude outbound sink {} for append: {error}",
+                output_path.display()
+            ))
+            .with_recovery(
+                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+            )
+            .with_source(error)
+        })?;
+    // MAX_CONCURRENT_CONNECTIONS bounds callers here; FS stall under that
+    // ceiling is accepted delivery latency.
+    file.write_all(bytes).map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to append non-Claude outbound payload {}: {error}",
+            output_path.display()
+        ))
+        .with_recovery(
+            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+        )
+        .with_source(error)
+    })?;
+    // MAX_CONCURRENT_CONNECTIONS bounds callers here; FS stall under that
+    // ceiling is accepted delivery latency.
+    file.sync_data().map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to sync non-Claude outbound payload {}: {error}",
+            output_path.display()
+        ))
+        .with_recovery(
+            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+        )
+        .with_source(error)
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]
