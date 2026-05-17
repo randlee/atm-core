@@ -23,15 +23,6 @@ type OutputPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync
         reason = "Retained for the sealed non-Claude boundary implementation and targeted tests while production wiring stays on the retained runtime seam."
     )
 )]
-const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
-
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "Retained for the sealed non-Claude boundary implementation and targeted tests while production wiring stays on the retained runtime seam."
-    )
-)]
 #[derive(Clone)]
 pub(crate) struct DaemonNonClaudeOutbound {
     path_factory: OutputPathFactory,
@@ -75,9 +66,11 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
         &self,
         request: NonClaudeOutboundDeliveryRequest,
     ) -> Result<NonClaudeOutboundDeliveryResponse, AtmError> {
-        // This trait is intentionally synchronous; blocking filesystem I/O is
-        // the correct execution model here and `spawn_blocking` would violate
-        // the trait contract rather than improve it.
+        // Daemon uses a thread-per-connection IPC model (`std::thread`), not
+        // an async runtime. `spawn_blocking` is not applicable here; blocking
+        // filesystem I/O is appropriate in this context.
+        // Payload size is bounded upstream by `MAX_DAEMON_FRAME_BYTES` in
+        // `atm_core::protocol`.
         let output_path = (self.path_factory)()?;
         let parent = output_path.parent().ok_or_else(|| {
             AtmError::mailbox_write(format!(
@@ -100,15 +93,6 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
         })?;
 
         let mut bytes = serde_json::to_vec(&request)?;
-        if bytes.len() > MAX_NON_CLAUDE_PAYLOAD_BYTES {
-            return Err(AtmError::mailbox_write(format!(
-                "non-Claude outbound payload for {} exceeded {MAX_NON_CLAUDE_PAYLOAD_BYTES} bytes",
-                output_path.display()
-            ))
-            .with_recovery(
-                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink.",
-            ));
-        }
         bytes.push(b'\n');
         let mut file = OpenOptions::new()
             .create(true)
@@ -124,6 +108,11 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
                 )
                 .with_source(error)
             })?;
+        // Blocking filesystem I/O here is bounded by
+        // `MAX_CONCURRENT_CONNECTIONS` (64) connections. A filesystem stall
+        // holds one thread; `REQUEST_DEADLINE` bounds socket I/O only. The
+        // connection ceiling is the accepted defense against thread
+        // exhaustion.
         file.write_all(&bytes).map_err(|error| {
             AtmError::mailbox_write(format!(
                 "failed to append non-Claude outbound payload {}: {error}",
@@ -134,6 +123,9 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
             )
             .with_source(error)
         })?;
+        // The same connection-ceiling defense applies to `sync_data()`: a
+        // stalled durability flush consumes one bounded thread-per-connection
+        // slot rather than creating unbounded worker growth.
         file.sync_data().map_err(|error| {
             AtmError::mailbox_write(format!(
                 "failed to sync non-Claude outbound payload {}: {error}",
@@ -204,41 +196,5 @@ mod tests {
         assert_eq!(record.agent.as_str(), "recipient");
         assert_eq!(record.messages.len(), 1);
         assert_eq!(record.messages[0].from.as_str(), TEST_SENDER);
-    }
-
-    #[test]
-    fn daemon_non_claude_outbound_rejects_payloads_above_size_cap() {
-        let tempdir = TempDir::new().expect("tempdir");
-        let output_path = tempdir.path().join("non_claude_outbound.jsonl");
-        let runtime = DaemonNonClaudeOutbound::new_for_test_with_path(output_path.clone());
-
-        let oversized = NonClaudeOutboundDeliveryRequest {
-            team: TEST_TEAM.parse().expect("team"),
-            agent: "recipient".parse().expect("agent"),
-            recipient_pane_id: Some("pane-1".to_string()),
-            messages: vec![MessageEnvelope {
-                from: TEST_SENDER.parse().expect("sender"),
-                text: "x".repeat(1024 * 1024),
-                timestamp: IsoTimestamp::now(),
-                read: false,
-                source_team: Some(TEST_TEAM.parse().expect("source team")),
-                summary: Some("oversized".to_string()),
-                message_id: Some(AtmMessageId::new()),
-                pending_ack_at: None,
-                acknowledged_at: None,
-                acknowledges_message_id: None,
-                parent_message_id: None,
-                thread_mode: None,
-                expires_at: None,
-                task_id: None,
-                extra: Map::new(),
-            }],
-        };
-
-        let error = runtime
-            .deliver_payloads(oversized)
-            .expect_err("oversized payload must fail");
-        assert!(error.to_string().contains("exceeded"));
-        assert!(!output_path.exists());
     }
 }
