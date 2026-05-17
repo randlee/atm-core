@@ -1,7 +1,7 @@
 ---
 id: Y.1
 title: ATM Help And UX Improvements
-status: planned
+status: complete
 branch: feature/pY-s1-atm-help-and-ux
 worktree: ../atm-core-worktrees/feature/pY-s1-atm-help-and-ux
 target: integrate/phase-Y
@@ -98,3 +98,9 @@ target: integrate/phase-Y
 - `cargo build --workspace`
 - `cargo test --workspace`
 - `git diff --check`
+
+## Deferred Y.2 UX Items
+
+- add worked troubleshooting examples for post-send hook authoring and failure diagnosis
+- expand identity/actor/team override examples for operator-facing help
+- expand skills-topic examples for team workflow guidance without broadening CLI surface area

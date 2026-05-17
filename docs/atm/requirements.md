@@ -171,6 +171,9 @@ Required Phase R rules:
 - `atm` must not contain business logic that duplicates `atm-core`
 - `atm` test coverage must be able to use in-process harnesses rather than
   depending on daemon process spawning
+- `atm help` remains an additive CLI-owned conceptual-help surface layered on
+  top of the retained command set; it must not become a general structured
+  JSON-input expansion point inside `Phase Y`
 - `atm` owns legacy queue-flag deprecation warnings and the exact
   `atm read --message-id <id>` retrieval guidance shown for ATM-authored JSONL
   body stubs

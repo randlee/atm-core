@@ -3467,6 +3467,8 @@ Execution shape:
 - planning-branch audits and the shared-inbox field decision framework
   complete before numbered sprint execution begins
 - `Y.1` `atm help` and UX improvements
+  - deliver `atm help`, `atm help --list`, typed concept-topic help, and
+    delegated clap subcommand help without broadening into general JSON-input work
 - `Y.2` pre-smoke easy fixes and validation
 - `Y.3` hard write-boundary consolidation
 - `Y.4` delivery coordinator and event-family state machines
