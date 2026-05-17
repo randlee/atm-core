@@ -19,6 +19,13 @@ implementation.
   `integrate/phase-Y` at `b8785617`
 - future integration branch for approved implementation work:
   `integrate/phase-Yb`
+- `integrate/phase-Yb` must be created from `integrate/phase-Y` at
+  `b8785617`, not from `develop`
+- the `integrate/phase-Y` baseline at `b8785617` includes
+  `crates/atm-core/src/send/persistence.rs` and the other message-path files
+  targeted by the Yb removal ledger
+- all sprint grep-based acceptance criteria assume that `integrate/phase-Y`
+  baseline is present in `integrate/phase-Yb`
 
 ## Planning Direction
 
@@ -41,14 +48,16 @@ implementation.
 
 ### A. Delivery Contract
 
-- Claude and non-Claude paths must produce the same logical payload set.
+- `RosterHarness::ClaudeCode` and non-Claude harness paths must produce the same
+  logical payload set.
 - Success:
   - `message[1] = original message`
 - SQLite failure:
   - `message[1] = original message`
   - `message[2] = atm-system@<team>` error message
-- The only difference between Claude and non-Claude is where the messages are
-  delivered.
+- The only difference between
+  `DeliveryHarnessPath::ClaudeCode` and `DeliveryHarnessPath::NonClaude` is
+  where the messages are delivered.
 - Message count, ordering, and content must be identical across harness
   families.
 
@@ -60,7 +69,8 @@ Planning artifacts:
 
 ### B. State-Machine Boundary
 
-- Claude and non-Claude state machines must expose the same interface.
+- `DeliveryHarnessPath::ClaudeCode` and `DeliveryHarnessPath::NonClaude`
+  state machines must expose the same interface.
 - Outside the state machines, callers must not branch on harness.
 - The state machine decides the plan.
 - Shared executors then run that plan through the same outer call pattern.
@@ -107,7 +117,7 @@ Required planning decision:
 
 - the coordinator dispatches by:
   - event family
-  - canonical roster `harness`
+  - canonical roster `harness` via `RosterHarness`
 - but the machines own legality, payload construction, and failure contracts
 - explicit introduction ownership:
   - `AckReplyStateMachine` lands in `Y.7`
@@ -131,13 +141,13 @@ Required planning decision:
 - post-send-hook execution remains notification-only and must not stand in for
   message delivery semantics
 - the shared executors and their owning seams are:
-  - Claude payload delivery:
+  - `DeliveryHarnessPath::ClaudeCode` payload delivery:
     - `atm_core::boundary::InboxExport`
     - executor module:
       `atm_core::delivery_execution::execute_delivery_plan(...)`
     - executor type introduced in `Y.7`:
       `atm_core::delivery_execution::ClaudeInboxWriter`
-  - non-Claude payload delivery:
+  - `DeliveryHarnessPath::NonClaude` payload delivery:
     - `atm_core::boundary::NonClaudeOutbound`
     - daemon adapter:
       `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
@@ -154,7 +164,8 @@ Required planning decision:
 
 - Remove direct/historical logic where command or persistence code makes
   harness-specific delivery decisions.
-- No `"if Claude do X, else do Y"` outside the state machines.
+- No `"if DeliveryHarnessPath::ClaudeCode do X, else do Y"` outside the state
+  machines.
 - No `"two hook invocations imply two delivered messages"` behavior.
 - Non-Claude needs a real outbound payload boundary, not metadata-only
   stand-ins.
@@ -228,7 +239,7 @@ message-path contract underspecified or implemented in the wrong layers:
 
 - `Y.7`: planning-approved degraded-delivery contract hardening
 - `Y.8`: policy cleanup and impossible-path removal
-- `Y.9`: non-Claude outbound boundary formalization
+- `Y.9`: `DeliveryHarnessPath::NonClaude` outbound boundary formalization
 - `Y.10`: boundary enforcement, validation closure, and smoke-handoff
   preparation
 - Later sprints as needed for migration, validation, and smoke/dogfood
@@ -239,7 +250,8 @@ message-path contract underspecified or implemented in the wrong layers:
 
 Purpose:
 
-- make the logical message contract exact for both harness families
+- make the logical message contract exact for both harness families, including
+  `RosterHarness::ClaudeCode`
 - eliminate partial Claude SQLite-failure delivery
 - force proof of payload equivalence for success and SQLite-failure branches
 
@@ -275,7 +287,8 @@ Hard dependency:
 
 Purpose:
 
-- introduce a dedicated non-Claude outbound payload boundary
+- introduce a dedicated `DeliveryHarnessPath::NonClaude` outbound payload
+  boundary
 - stop treating metadata-only post-send-hook execution as message delivery
 - make Claude and non-Claude paths use the same outer executor contract
 - delete the retained non-Claude fallback surfaces only after the new boundary
