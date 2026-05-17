@@ -79,13 +79,13 @@ Closed rows:
 
 Implemented seam on this branch:
 
-- `crates/atm-core/src/send/persistence.rs:17`
+- [send/persistence.rs:17](../../crates/atm-core/src/send/persistence.rs)
   now persists only and returns typed degraded payloads
-- `crates/atm-core/src/send/mod.rs:323`
+- [send/mod.rs:323](../../crates/atm-core/src/send/mod.rs)
   builds `DeliveryPlan`
-- `crates/atm-core/src/delivery_execution.rs:97`
+- [delivery_execution.rs:97](../../crates/atm-core/src/delivery_execution.rs)
   executes `DeliveryPlan`
-- `crates/atm-core/src/ack/mod.rs:514`
+- [ack/mod.rs:514](../../crates/atm-core/src/ack/mod.rs)
   routes reply delivery through
   `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine -> ReplyDeliveryPlan`
 
@@ -151,19 +151,19 @@ Closed rows:
 
 Implemented seam on this branch:
 
-- `crates/atm-core/src/delivery_execution.rs:112`
+- [delivery_execution.rs:112](../../crates/atm-core/src/delivery_execution.rs)
   now owns `NonClaudeOutboundDeliveryWriter`
-- `crates/atm-core/src/service_runtime.rs:295`
+- [service_runtime.rs:295](../../crates/atm-core/src/service_runtime.rs)
   now hands typed non-Claude payloads to
   `atm_core::boundary::NonClaudeOutbound`
-- `crates/atm-daemon/src/non_claude_outbound_runtime.rs:14`
+- [non_claude_outbound_runtime.rs:14](../../crates/atm-daemon/src/non_claude_outbound_runtime.rs)
   now provides the daemon-owned
   `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound` adapter
-- `crates/atm-core/src/delivery_policy.rs:300`
+- [delivery_policy.rs:300](../../crates/atm-core/src/delivery_policy.rs)
   now fails closed when roster-backed harness data is missing
-- `crates/atm-core/src/delivery_policy.rs:506`
+- [delivery_policy.rs:506](../../crates/atm-core/src/delivery_policy.rs)
   now keeps append-degraded transitions Claude-only
-- `crates/atm-core/src/send/mod.rs:1538`
+- [send/mod.rs:1538](../../crates/atm-core/src/send/mod.rs)
   now proves non-Claude delivery through the outbound payload boundary rather
   than through hook metadata alone
 
