@@ -8,22 +8,8 @@ use atm_core::boundary::{
 };
 use atm_core::error::AtmError;
 
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "Retained for the sealed non-Claude boundary implementation and targeted tests while production wiring stays on the retained runtime seam."
-    )
-)]
 type OutputPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "Retained for the sealed non-Claude boundary implementation and targeted tests while production wiring stays on the retained runtime seam."
-    )
-)]
 #[derive(Clone)]
 pub(crate) struct DaemonNonClaudeOutbound {
     path_factory: OutputPathFactory,
@@ -35,15 +21,14 @@ impl std::fmt::Debug for DaemonNonClaudeOutbound {
     }
 }
 
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "Retained for the sealed non-Claude boundary implementation and targeted tests while production wiring stays on the retained runtime seam."
-    )
-)]
 impl DaemonNonClaudeOutbound {
-    #[allow(dead_code, reason = "Public constructor retained for production wiring; not yet wired in the daemon composition layer.")]
+    #[cfg_attr(
+        test,
+        allow(
+            dead_code,
+            reason = "Production runtime wiring is compiled out in daemon lib tests; the constructor stays exercised in non-test builds and targeted adapter tests."
+        )
+    )]
     pub(crate) fn new() -> Self {
         Self::new_with_path_factory(Arc::new(|| {
             Ok(atm_core::home::host_runtime_dir()?.join("non_claude_outbound.jsonl"))

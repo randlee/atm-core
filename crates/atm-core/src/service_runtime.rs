@@ -51,7 +51,10 @@ pub(crate) trait RetainedServiceRuntime {
         config: Option<&AtmConfig>,
         context: PostSendHookContext<'_>,
     );
-    #[allow(dead_code, reason = "Repair/rebuild-only seam; called from tests and explicit repair paths, not from the normal runtime delivery pipeline.")]
+    #[allow(
+        dead_code,
+        reason = "Repair/rebuild-only seam; called from tests and explicit repair paths, not from the normal runtime delivery pipeline."
+    )]
     fn rebuild_compat_inbox_projection(
         &self,
         inbox_path: &Path,
@@ -314,7 +317,10 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     }
 }
 
-#[allow(dead_code, reason = "Called only from rebuild_compat_inbox_projection, which is a repair/rebuild-only seam exercised via tests and explicit repair paths.")]
+#[allow(
+    dead_code,
+    reason = "Called only from rebuild_compat_inbox_projection, which is a repair/rebuild-only seam exercised via tests and explicit repair paths."
+)]
 fn load_store_backed_mailbox_projection(
     runtime: &LocalServiceRuntime,
     team: &TeamName,
@@ -340,7 +346,10 @@ fn load_store_backed_mailbox_projection(
         .collect()
 }
 
-#[allow(dead_code, reason = "Called only from load_store_backed_mailbox_projection, which is a repair/rebuild-only seam exercised via tests and explicit repair paths.")]
+#[allow(
+    dead_code,
+    reason = "Called only from load_store_backed_mailbox_projection, which is a repair/rebuild-only seam exercised via tests and explicit repair paths."
+)]
 fn load_projection_message(
     runtime: &LocalServiceRuntime,
     team: &TeamName,

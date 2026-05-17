@@ -497,7 +497,11 @@ impl AckReplyStateMachine {
         persistence: &crate::send::DeliveryPersistenceResult,
     ) -> Result<Self, AtmError> {
         let messages = logical_messages_from_persistence(persistence, false, true)
-            .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
+            .map_err(|error| {
+                AtmError::mailbox_write(error.to_string()).with_recovery(
+                    "Repair the persisted reply-delivery record shape before retrying ack reply execution.",
+                )
+            })?;
         let warnings = persistence.warnings.clone();
         Ok(match persistence.disposition {
             crate::send::DeliveryPersistenceDisposition::Persisted => {

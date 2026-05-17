@@ -27,7 +27,8 @@ use atm_core::{
     send::send_mail,
 };
 use atm_rusqlite::{
-    SqliteBoundaryAssembly, SqliteObservability, assemble_default_boundary_with_observability,
+    SqliteBoundaryAssembly, SqliteObservability, assemble_default_boundary,
+    assemble_default_boundary_with_observability,
 };
 
 use crate::AtmHomeDir;
@@ -35,6 +36,7 @@ use crate::advisory_runtime::AdvisoryRuntime;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -51,6 +53,14 @@ const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 // to recover and join those retained workers later.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
+#[cfg_attr(
+    test,
+    allow(
+        dead_code,
+        reason = "Production retained-runtime installation is compiled out in daemon lib tests."
+    )
+)]
+static INSTALL_DAEMON_RUNTIME_FACTORY: std::sync::Once = std::sync::Once::new();
 
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,
@@ -212,6 +222,8 @@ impl DaemonRequestDispatcher {
         observability: Arc<dyn DaemonRuntimeObservability>,
         sqlite_observability: Arc<dyn SqliteObservability>,
     ) -> Self {
+        #[cfg(not(test))]
+        install_daemon_runtime_factory();
         let home_dir = home_dir.into_inner();
         let advisory_runtime_observability = SubsystemObservability::new(
             DaemonSubsystem::AdvisoryRuntime,
@@ -259,6 +271,36 @@ impl DaemonRequestDispatcher {
             ),
         }
     }
+}
+
+#[cfg_attr(
+    test,
+    allow(
+        dead_code,
+        reason = "Production retained-runtime installation is compiled out in daemon lib tests."
+    )
+)]
+fn install_daemon_runtime_factory() {
+    INSTALL_DAEMON_RUNTIME_FACTORY.call_once(|| {
+        atm_core::install_default_runtime_factory(daemon_local_runtime);
+    });
+}
+
+#[cfg_attr(
+    test,
+    allow(
+        dead_code,
+        reason = "Production retained-runtime installation is compiled out in daemon lib tests."
+    )
+)]
+fn daemon_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
+    let assembly = assemble_default_boundary()?;
+    Ok(atm_core::LocalServiceRuntime::new_with_non_claude_outbound(
+        assembly.mail_store_arc(),
+        assembly.task_store_arc(),
+        assembly.roster_store_arc(),
+        Arc::new(DaemonNonClaudeOutbound::new()),
+    ))
 }
 
 fn with_shutdown_finalizer_registry<R>(

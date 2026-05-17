@@ -342,7 +342,11 @@ fn build_send_delivery_plan(
         context.recipient.clone(),
         context.delivery_snapshot.recipient_pane_id.clone(),
         logical_messages_from_persistence(persistence, requires_ack, false)
-            .map_err(|error| AtmError::mailbox_write(error.to_string()))?,
+            .map_err(|error| {
+                AtmError::mailbox_write(error.to_string()).with_recovery(
+                    "Repair the persisted delivery record shape before retrying delivery-plan execution.",
+                )
+            })?,
         persistence.warnings.clone(),
     ))
 }
