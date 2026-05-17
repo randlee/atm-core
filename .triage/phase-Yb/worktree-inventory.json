@@ -1,8 +1,8 @@
 {
   "phase_id": "phase-Yb",
-  "integration_branch": "integrate/phase-Yb",
-  "integration_worktree_path": "../atm-core-worktrees/integrate/phase-Yb",
-  "triage_root": "../atm-core-worktrees/integrate/phase-Yb/.triage",
+  "integration_branch": "integrate/phase-Y",
+  "integration_worktree_path": "../atm-core-worktrees/integrate/phase-Y",
+  "triage_root": "../atm-core-worktrees/integrate/phase-Y/.triage",
   "worktrees": [
     {
       "order": 1,
