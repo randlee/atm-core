@@ -159,8 +159,7 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    #[allow(dead_code)]
-    // ARCH: reserved for future phase that inspects the active transport variant.
+    #[expect(dead_code, reason = "reserved for future phase that inspects the active transport variant")]
     pub(crate) fn transport(&self) -> &(dyn ClientTransport + Send + Sync + 'a) {
         self.transport.as_ref()
     }
@@ -175,20 +174,17 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    #[allow(dead_code)]
-    // ARCH: reserved for future phase that threads observability port into command helpers.
+    #[expect(dead_code, reason = "reserved for future phase that threads observability port into command helpers")]
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
         self.observability_port
     }
 
-    #[allow(dead_code)]
-    // ARCH: reserved for future command-routing phase — exposes send entry-point to callers.
+    #[expect(dead_code, reason = "reserved for future command-routing phase — exposes send entry-point to callers")]
     pub(crate) fn send_command(&self) -> &SendCommandEntryPoint {
         &self.send_command
     }
 
-    #[allow(dead_code)]
-    // ARCH: reserved for future command-routing phase — exposes receive entry-point to callers.
+    #[expect(dead_code, reason = "reserved for future command-routing phase — exposes receive entry-point to callers")]
     pub(crate) fn receive_command(&self) -> &ReceiveCommandEntryPoint {
         &self.receive_command
     }

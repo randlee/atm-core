@@ -3443,7 +3443,7 @@ Target:
 - `integrate/phase-Y` for the execution line
 
 Status:
-- in_progress
+- complete
 
 Status note:
 - `Y.1` merged to `integrate/phase-Y`

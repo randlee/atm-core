@@ -587,7 +587,6 @@ pub(crate) fn append_failure_transition_names(
             "delivery_policy.new_message.harness_non_claude",
             "delivery_policy.new_message.sqlite_committed",
             "delivery_policy.new_message.non_claude_original",
-            "delivery_policy.new_message.post_send_hook_fallback",
             "delivery_policy.new_message.failed",
         ],
     }
