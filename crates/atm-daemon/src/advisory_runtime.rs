@@ -15,7 +15,9 @@ use atm_core::protocol::ResponseEnvelope;
 use atm_core::send::SendOutcome;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
-use crate::{DaemonSubsystem, SubsystemObservability};
+#[cfg(test)]
+use crate::DaemonSubsystem;
+use crate::SubsystemObservability;
 
 const MAX_ADVISORY_SESSIONS: usize = 128;
 const MAX_ADVISORY_EVENTS_PER_SESSION: usize = 256;
@@ -49,13 +51,6 @@ struct RegisteredAdvisorySession {
 }
 
 impl AdvisoryRuntime {
-    #[allow(dead_code)]
-    pub(crate) fn new() -> Self {
-        Self::new_with_observability(SubsystemObservability::disabled(
-            DaemonSubsystem::AdvisoryRuntime,
-        ))
-    }
-
     pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self {
             state: RwLock::new(AdvisoryRuntimeState::default()),

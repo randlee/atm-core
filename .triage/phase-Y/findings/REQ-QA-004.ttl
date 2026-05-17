@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/REQ-QA-004>
+  a triage:Finding ;
+  triage:findingId "REQ-QA-004" ;
+  triage:title "docs/atm-core/modules/team_admin.md not updated — exceptional write paths undocumented" ;
+  triage:description "Sprint Y.3 sub-task 3 explicitly requires updating docs/atm-core/modules/team_admin.md to document the retained admin/repair exceptional write paths (ensure_inbox_exists at team_admin.rs:313 and :455, write_team_config at :333 and :486). The file contains no mention of approved exceptional inbox-write paths or their Y.3 status. Fix: add a section documenting these as retained exceptional write paths per the Y.3 Removal Ledger, cross-referencing docs/phase-Y/inbox-write-path-audit.md section 5." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/atm-core/modules/team_admin.md" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQ-QA-004/pY-s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s3/cd2c64c3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s3/cd2c64c3> .
+
+<urn:atm:triage:occurrence/REQ-QA-004/pY-s3/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/modules/team_admin.md" ;
+  triage:line 1 ;
+  triage:snippet "docs/atm-core/modules/team_admin.md — no Y.3 exceptional write path documentation present" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "cd2c64c3" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s3/cd2c64c3> .
+
+<urn:atm:triage:worktree/pY-s3/cd2c64c3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "cd2c64c3" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

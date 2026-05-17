@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RUST-QA-003>
+  a triage:Finding ;
+  triage:findingId "RUST-QA-003" ;
+  triage:title "send_mail_with_runtime_impl 178 lines — RULE-002 hard violation, new in Y.3 diff" ;
+  triage:description "crates/atm-core/src/send/mod.rs:166-343 send_mail_with_runtime_impl is 178 lines. RULE-002 hard threshold is 80 lines. Y.3 added refresh_compat_inbox_projection wiring that pushed this function over threshold. Fix: extract team-config validation block (~lines 196-248) and envelope+persist block (~lines 263-290) into named helper functions <= 80 lines each." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RUST-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/send/mod.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-003/pY-s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s3/cd2c64c3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s3/cd2c64c3> .
+
+<urn:atm:triage:occurrence/RUST-QA-003/pY-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 166 ;
+  triage:snippet "pub async fn send_mail_with_runtime_impl(...) -> Result<SendResult, AtmError> { // 178 lines" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "cd2c64c3" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s3/cd2c64c3> .
+
+<urn:atm:triage:worktree/pY-s3/cd2c64c3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "cd2c64c3" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
