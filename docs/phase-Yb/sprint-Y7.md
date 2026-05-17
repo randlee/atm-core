@@ -26,6 +26,8 @@ non-Claude harnesses.
 - `docs/phase-Yb/qa-handoff.md`
 - `docs/phase-Yb/testing-and-validation.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-daemon/boundaries.md`
 
 ## Exact Code And Document Targets
 
@@ -73,6 +75,33 @@ non-Claude harnesses.
     `send/mod.rs` and `ack/mod.rs`, but the degraded-delivery contract itself
     must already be owned by the typed plan seam before Y.8 starts.
 
+## Architecture Review Focus
+
+`arch-qa` must review Y.7 as an architecture-seam sprint, not just a behavior
+change sprint.
+
+The implementation must be rejected if any of these remain true after Y.7:
+
+1. `send/persistence.rs` still decides harness routing, append ordering,
+   fallback choice, or notification strategy instead of emitting typed results
+   into the `DeliveryPlan` / `ReplyDeliveryPlan` seam.
+2. `send/mod.rs` or `ack/mod.rs` still branches on harness or degraded-delivery
+   outcomes after the state machine has emitted the plan.
+3. Claude and non-Claude paths do not expose the same outer execution
+   interface, even if end behavior looks correct.
+4. Non-Claude degraded delivery is still represented by notification metadata,
+   hook count, or implied behavior instead of first-class logical messages in
+   the plan.
+5. `delivery_execution.rs` becomes a second policy layer that constructs or
+   rewrites message semantics instead of executing state-machine-owned plans.
+6. The Claude SQLite-failure path still allows "original delivered, companion
+   error silently absent" as an untyped partial-success branch.
+7. Ack reply continues to use a separate outer call graph instead of the same
+   typed reply-plan seam.
+
+`arch-qa` should prefer a slightly more explicit typed seam over a "clever"
+implementation that preserves convenience helpers with hidden policy.
+
 ## Acceptance Criteria
 
 - `crates/atm-core/src/delivery_plan.rs` defines `DeliveryPlan` and
@@ -87,6 +116,12 @@ non-Claude harnesses.
 - `rg -n "allows_claude_jsonl_append|append_compat_inbox_message"
   crates/atm-core/src/send/persistence.rs` does not show direct outward
   delivery branching in the persistence layer
+- `rg -n "allows_claude_jsonl_append|DeliveryHarnessPath"
+  crates/atm-core/src/send/mod.rs crates/atm-core/src/ack/mod.rs` does not
+  show harness-policy branching after the state-machine seam
+- `rg -n "run_send_post_send_hooks|collect_ack_hook_warnings"
+  crates/atm-core/src/send/persistence.rs` does not show notification logic
+  standing in for message delivery in the persistence layer
 - named tests prove:
   - SQLite success + Claude success
   - SQLite success + Claude append degradation
@@ -96,6 +131,13 @@ non-Claude harnesses.
 - payload assertions prove identical logical message count, ordering, and
   content across harness families
 - no metadata-only hook behavior is accepted as proof of non-Claude delivery
+- `arch-qa` can point to one typed ownership seam for:
+  - payload construction in state machines
+  - payload execution in shared executors
+  - notification execution as a side-effect-only layer
+- any remaining outer scaffolding is transitional only and does not own
+  degraded-delivery semantics, payload construction, or harness-specific
+  branching
 
 ## Required Document Updates
 
