@@ -196,6 +196,16 @@ Purpose:
 - make harness routing, failure behavior, and transition observability auditable
   in one place
 
+Current status:
+
+- complete on `feature/pY-s4-delivery-coordinator-and-state-machines`
+- the retained coordinator/state-machine seam now lives in
+  `crates/atm-core/src/delivery_policy.rs`
+- retained `send` and `ack` now resolve copied roster snapshots through
+  `RetainedServiceRuntime::load_roster_member(...)`
+- retained compatibility export now remains enabled only for `Claude Code`
+  harnesses; non-Claude harnesses skip ATM-authored JSONL export
+
 ### Y.5 Mutable Compatibility-Field Removal And Dependency Exposure
 
 Purpose:

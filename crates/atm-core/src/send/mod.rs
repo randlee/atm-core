@@ -10,6 +10,7 @@ use tracing::warn;
 use crate::address::AgentAddress;
 use crate::boundary;
 use crate::config;
+use crate::delivery_policy::DeliveryPolicyCoordinator;
 use crate::error::{AtmError, AtmErrorCode};
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort};
@@ -691,7 +692,9 @@ pub(crate) fn persist_message_and_seed_workflow(
             ))
         },
     )?;
-    runtime.refresh_compat_inbox_projection(home_dir, team, agent)
+    let delivery_snapshot =
+        DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(runtime, team, agent)?;
+    runtime.refresh_compat_inbox_projection(home_dir, &delivery_snapshot)
 }
 
 fn load_store_backed_mailbox_projection(
@@ -903,6 +906,7 @@ mod tests {
     use super::{alert_state, prepare_threaded_message, send_mail_with_runtime_impl};
     use crate::boundary;
     use crate::config::AtmConfig;
+    use crate::delivery_policy::DeliveryRecipientSnapshot;
     use crate::error::AtmError;
     use crate::observability::NullObservability;
     use crate::process::process_is_alive;
@@ -1013,11 +1017,18 @@ mod tests {
         fn refresh_compat_inbox_projection(
             &self,
             _home_dir: &Path,
-            _team: &TeamName,
-            _agent: &AgentName,
+            _recipient: &DeliveryRecipientSnapshot,
         ) -> Result<(), AtmError> {
             self.compat_export_called.set(true);
             Ok(())
+        }
+
+        fn load_roster_member(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
+            Ok(None)
         }
 
         fn commit_workflow_state<T, I, F>(
