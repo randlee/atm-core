@@ -80,6 +80,16 @@ transition surfaces from the runtime.
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
 
+## Intentional Carry-Forwards
+
+- `YB-001` and `YB-004` close on this branch only via merge-forward from
+  `6ea1502d`; they are not Y.8-native implementation work.
+- `YB-003` defers to `Y.9`, where the dedicated
+  `NonClaudeOutboundDeliveryWriter` boundary makes real outbound payload proof
+  possible.
+- `YB-005` defers to `Y.11` per triage promotion, where the remaining
+  post-send-hook escape hatch is closed on the final boundary-hardening line.
+
 ## Required Validation
 
 ```bash
@@ -98,3 +108,11 @@ git diff --check
   - `cargo build --workspace`
   - `cargo test --workspace`
   - `git diff --check`
+- acceptance grep proof:
+  - command:
+    `rg -n 'DeliveryHarnessPath|allows_claude_jsonl_append' crates/atm-core/src/send/mod.rs crates/atm-core/src/send/persistence.rs crates/atm-core/src/ack/mod.rs`
+  - output:
+    `crates/atm-core/src/ack/mod.rs:674:            harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,`
+  - interpretation:
+    the remaining hit is a test-only fixture snapshot, not a production
+    harness-policy branch outside approved machine/executor modules
