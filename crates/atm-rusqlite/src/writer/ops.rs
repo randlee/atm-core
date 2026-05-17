@@ -33,6 +33,7 @@ pub(crate) fn execute(
         }
         WriteOp::UpsertMessageState(request) => {
             execute_upsert_message_state(request, connection, cache, target)
+                .map(|()| WriteOpResult::Unit)
         }
     }
 }
@@ -277,7 +278,7 @@ fn execute_upsert_message_state(
     connection: &Connection,
     cache: &mut WriterStatementCache,
     target: &SharedDbTarget,
-) -> Result<WriteOpResult, AtmError> {
+) -> Result<(), AtmError> {
     let state_timestamp = request.state.updated_at.unwrap_or_else(IsoTimestamp::now);
     if request
         .state
@@ -326,7 +327,7 @@ fn execute_upsert_message_state(
                 error,
             )
         })?;
-    Ok(WriteOpResult::Unit)
+    Ok(())
 }
 
 #[derive(Serialize)]

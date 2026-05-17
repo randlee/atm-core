@@ -32,6 +32,12 @@ max_scoped_code_lines = 0
 "crates/atm-rusqlite/src/tests.rs" = "Q.6 split pending"
 
 [cargo_shear.allowed_empty_files]
+"src/config/bridge.rs" = "deferred bridge-hostname config scope; placeholder module reserved for future phase"
+"src/log/filters.rs" = "deferred retained-log filter helpers; placeholder module reserved for future phase"
+"src/mailbox/hash.rs" = "deferred mailbox hashing helpers; placeholder module reserved for future phase"
+"src/model_registry.rs" = "deferred model-registry integration surface; placeholder module reserved for future phase"
+"src/schema/permissions.rs" = "deferred permissions schema models; placeholder module reserved for future phase"
+"src/schema/settings.rs" = "deferred settings schema models; placeholder module reserved for future phase"
 
 [cargo_shear.allowed_unlinked_files]
 

@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-QA-Y6-003>
+  a triage:Finding ;
+  triage:findingId "RBP-QA-Y6-003" ;
+  triage:title "SendOutcome::outcome bare String status discriminant — RBP-004" ;
+  triage:description "SendOutcome::outcome at send/mod.rs:105 is typed as String but used exclusively as a two-value status discriminant ('sent' or 'dry_run'). The literal strings are hardcoded at two separate assignment sites (line 236 and line 259). A raw String provides no exhaustiveness guarantee and can silently diverge. Fix: introduce a small enum (e.g., SendCommandOutcome with Sent and DryRun variants) or extract named constants to prevent silent divergence. This matches the existing CommandAction newtype pattern in the module." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/send/mod.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-QA-Y6-003/pY-s6/1> .
+
+<urn:atm:triage:occurrence/RBP-QA-Y6-003/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 105 ;
+  triage:snippet "outcome: String, // hardcoded as \"sent\" or \"dry_run\" at lines 236, 259" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/2b808428> .
+
+<urn:atm:triage:worktree/pY-s6/2b808428>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

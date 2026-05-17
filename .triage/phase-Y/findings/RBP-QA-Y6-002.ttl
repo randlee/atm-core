@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-QA-Y6-002>
+  a triage:Finding ;
+  triage:findingId "RBP-QA-Y6-002" ;
+  triage:title "execute_upsert_message_state returns WriteOpResult::Unit instead of () — RBP-007" ;
+  triage:description "execute_upsert_message_state in ops.rs returns Result<WriteOpResult, AtmError> where the success value is always WriteOpResult::Unit. The Unit variant carries no information; none of the call sites inspect the success payload. Result<(), AtmError> is the correct type for a fallible operation returning no value. Fix: change return type to Result<(), AtmError>, remove WriteOpResult::Unit if it has no other uses." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-QA-Y6-002/pY-s6/1> .
+
+<urn:atm:triage:occurrence/RBP-QA-Y6-002/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 234 ;
+  triage:snippet "fn execute_upsert_message_state(...) -> Result<WriteOpResult, AtmError> { ... Ok(WriteOpResult::Unit) } — Unit carries no information" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/2b808428> .
+
+<urn:atm:triage:worktree/pY-s6/2b808428>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

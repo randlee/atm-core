@@ -198,13 +198,14 @@ impl NonClaudeHarnessNewMessageState {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ThreadUpdateStateMachine {
     Received,
-    ValidateParent,
-    ValidateRoot,
-    ValidateSender,
-    ValidateLinearity,
+    ValidateParentExists,
+    ValidateRootExists,
+    ValidateOriginalSender,
+    ValidateLinearSuccessor,
     PersistSqlite,
-    RouteDelivery,
+    DispatchByHarness,
     Delivered,
+    Rejected,
     Failed,
 }
 
@@ -212,13 +213,18 @@ impl ThreadUpdateStateMachine {
     fn transition_name(self) -> &'static str {
         match self {
             Self::Received => "delivery_policy.thread_update.received",
-            Self::ValidateParent => "delivery_policy.thread_update.validate_parent",
-            Self::ValidateRoot => "delivery_policy.thread_update.validate_root",
-            Self::ValidateSender => "delivery_policy.thread_update.validate_sender",
-            Self::ValidateLinearity => "delivery_policy.thread_update.validate_linearity",
+            Self::ValidateParentExists => "delivery_policy.thread_update.validate_parent_exists",
+            Self::ValidateRootExists => "delivery_policy.thread_update.validate_root_exists",
+            Self::ValidateOriginalSender => {
+                "delivery_policy.thread_update.validate_original_sender"
+            }
+            Self::ValidateLinearSuccessor => {
+                "delivery_policy.thread_update.validate_linear_successor"
+            }
             Self::PersistSqlite => "delivery_policy.thread_update.persist_sqlite",
-            Self::RouteDelivery => "delivery_policy.thread_update.route_delivery",
+            Self::DispatchByHarness => "delivery_policy.thread_update.dispatch_by_harness",
             Self::Delivered => "delivery_policy.thread_update.delivered",
+            Self::Rejected => "delivery_policy.thread_update.rejected",
             Self::Failed => "delivery_policy.thread_update.failed",
         }
     }
@@ -231,10 +237,13 @@ impl ThreadUpdateStateMachine {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum AckReplyStateMachine {
     Received,
-    ValidateTarget,
-    PersistAckState,
-    DelegateReplyDelivery,
+    ValidateAckTargetExists,
+    ValidateReplyTargetAllowed,
+    PersistAckTransition,
+    BuildReplyDeliveryRequest,
+    DispatchReplyByHarness,
     Delivered,
+    Rejected,
     Failed,
 }
 
@@ -242,10 +251,17 @@ impl AckReplyStateMachine {
     fn transition_name(self) -> &'static str {
         match self {
             Self::Received => "delivery_policy.ack_reply.received",
-            Self::ValidateTarget => "delivery_policy.ack_reply.validate_target",
-            Self::PersistAckState => "delivery_policy.ack_reply.persist_ack_state",
-            Self::DelegateReplyDelivery => "delivery_policy.ack_reply.delegate_reply_delivery",
+            Self::ValidateAckTargetExists => "delivery_policy.ack_reply.validate_ack_target_exists",
+            Self::ValidateReplyTargetAllowed => {
+                "delivery_policy.ack_reply.validate_reply_target_allowed"
+            }
+            Self::PersistAckTransition => "delivery_policy.ack_reply.persist_ack_transition",
+            Self::BuildReplyDeliveryRequest => {
+                "delivery_policy.ack_reply.build_reply_delivery_request"
+            }
+            Self::DispatchReplyByHarness => "delivery_policy.ack_reply.dispatch_reply_by_harness",
             Self::Delivered => "delivery_policy.ack_reply.delivered",
+            Self::Rejected => "delivery_policy.ack_reply.rejected",
             Self::Failed => "delivery_policy.ack_reply.failed",
         }
     }
@@ -258,11 +274,13 @@ impl AckReplyStateMachine {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum InboxRepairStateMachine {
     Received,
-    ResolveHarness,
-    LoadProjection,
-    StageOutput,
-    PublishOutput,
-    Completed,
+    ValidateClaudeHarness,
+    LoadRepairProjection,
+    FilterDeletedMessages,
+    StageInboxRebuild,
+    PublishInboxRebuild,
+    Delivered,
+    Rejected,
     Failed,
 }
 
@@ -274,12 +292,12 @@ pub(crate) enum InboxRepairStateMachine {
 pub(crate) enum RestoreInboxRebuildStateMachine {
     Received,
     ValidateRestoreMarker,
-    ResolveHarness,
-    LoadProjection,
-    StageOutput,
-    PublishOutput,
-    CleanupStaging,
-    Completed,
+    ValidateClaudeHarness,
+    LoadRestoreProjection,
+    StageRestoreOutput,
+    PublishRestoreOutput,
+    Delivered,
+    Rejected,
     Failed,
 }
 
@@ -332,6 +350,10 @@ impl DeliveryPolicyCoordinator {
         }
     }
 
+    #[allow(
+        dead_code,
+        reason = "Phase Y.4 keeps the documented event-family resolver explicit even when later branches dispatch directly from pre-resolved caller context."
+    )]
     pub(crate) fn resolve_send_family(
         parent_message_id: Option<AtmMessageId>,
         thread_mode: Option<ThreadMode>,
@@ -425,11 +447,23 @@ fn new_message_persisted_success_transitions(harness: DeliveryHarnessPath) -> Ve
 fn inbox_repair_transition_name(state: InboxRepairStateMachine) -> &'static str {
     match state {
         InboxRepairStateMachine::Received => "delivery_policy.inbox_repair.received",
-        InboxRepairStateMachine::ResolveHarness => "delivery_policy.inbox_repair.resolve_harness",
-        InboxRepairStateMachine::LoadProjection => "delivery_policy.inbox_repair.load_projection",
-        InboxRepairStateMachine::StageOutput => "delivery_policy.inbox_repair.stage_output",
-        InboxRepairStateMachine::PublishOutput => "delivery_policy.inbox_repair.publish_output",
-        InboxRepairStateMachine::Completed => "delivery_policy.inbox_repair.completed",
+        InboxRepairStateMachine::ValidateClaudeHarness => {
+            "delivery_policy.inbox_repair.validate_claude_harness"
+        }
+        InboxRepairStateMachine::LoadRepairProjection => {
+            "delivery_policy.inbox_repair.load_repair_projection"
+        }
+        InboxRepairStateMachine::FilterDeletedMessages => {
+            "delivery_policy.inbox_repair.filter_deleted_messages"
+        }
+        InboxRepairStateMachine::StageInboxRebuild => {
+            "delivery_policy.inbox_repair.stage_inbox_rebuild"
+        }
+        InboxRepairStateMachine::PublishInboxRebuild => {
+            "delivery_policy.inbox_repair.publish_inbox_rebuild"
+        }
+        InboxRepairStateMachine::Delivered => "delivery_policy.inbox_repair.delivered",
+        InboxRepairStateMachine::Rejected => "delivery_policy.inbox_repair.rejected",
         InboxRepairStateMachine::Failed => "delivery_policy.inbox_repair.failed",
     }
 }
@@ -442,23 +476,23 @@ fn restore_inbox_rebuild_transition_name(state: RestoreInboxRebuildStateMachine)
         RestoreInboxRebuildStateMachine::ValidateRestoreMarker => {
             "delivery_policy.restore_inbox_rebuild.validate_restore_marker"
         }
-        RestoreInboxRebuildStateMachine::ResolveHarness => {
-            "delivery_policy.restore_inbox_rebuild.resolve_harness"
+        RestoreInboxRebuildStateMachine::ValidateClaudeHarness => {
+            "delivery_policy.restore_inbox_rebuild.validate_claude_harness"
         }
-        RestoreInboxRebuildStateMachine::LoadProjection => {
-            "delivery_policy.restore_inbox_rebuild.load_projection"
+        RestoreInboxRebuildStateMachine::LoadRestoreProjection => {
+            "delivery_policy.restore_inbox_rebuild.load_restore_projection"
         }
-        RestoreInboxRebuildStateMachine::StageOutput => {
-            "delivery_policy.restore_inbox_rebuild.stage_output"
+        RestoreInboxRebuildStateMachine::StageRestoreOutput => {
+            "delivery_policy.restore_inbox_rebuild.stage_restore_output"
         }
-        RestoreInboxRebuildStateMachine::PublishOutput => {
-            "delivery_policy.restore_inbox_rebuild.publish_output"
+        RestoreInboxRebuildStateMachine::PublishRestoreOutput => {
+            "delivery_policy.restore_inbox_rebuild.publish_restore_output"
         }
-        RestoreInboxRebuildStateMachine::CleanupStaging => {
-            "delivery_policy.restore_inbox_rebuild.cleanup_staging"
+        RestoreInboxRebuildStateMachine::Delivered => {
+            "delivery_policy.restore_inbox_rebuild.delivered"
         }
-        RestoreInboxRebuildStateMachine::Completed => {
-            "delivery_policy.restore_inbox_rebuild.completed"
+        RestoreInboxRebuildStateMachine::Rejected => {
+            "delivery_policy.restore_inbox_rebuild.rejected"
         }
         RestoreInboxRebuildStateMachine::Failed => "delivery_policy.restore_inbox_rebuild.failed",
     }
@@ -532,36 +566,26 @@ pub(crate) fn new_message_sqlite_failure_transitions(
 }
 
 #[cfg(test)]
-pub(crate) fn append_failure_transitions(harness: DeliveryHarnessPath) -> &'static [&'static str] {
-    match harness {
-        DeliveryHarnessPath::ClaudeCode => &[
-            "delivery_policy.new_message.received",
-            "delivery_policy.new_message.harness_claude",
-            "delivery_policy.new_message.sqlite_committed",
-            "delivery_policy.new_message.compat_append_original",
-            "delivery_policy.new_message.post_send_hook_fallback",
-            "delivery_policy.new_message.failed",
-        ],
-        DeliveryHarnessPath::NonClaude => &[
-            "delivery_policy.new_message.received",
-            "delivery_policy.new_message.harness_non_claude",
-            "delivery_policy.new_message.sqlite_committed",
-            "delivery_policy.new_message.non_claude_original",
-            "delivery_policy.new_message.post_send_hook_fallback",
-            "delivery_policy.new_message.failed",
-        ],
-    }
+pub(crate) fn append_failure_transitions() -> &'static [&'static str] {
+    &[
+        "delivery_policy.new_message.received",
+        "delivery_policy.new_message.harness_claude",
+        "delivery_policy.new_message.sqlite_committed",
+        "delivery_policy.new_message.compat_append_original",
+        "delivery_policy.new_message.post_send_hook_fallback",
+        "delivery_policy.new_message.failed",
+    ]
 }
 
 pub(crate) fn thread_update_transitions() -> &'static [ThreadUpdateStateMachine] {
     &[
         ThreadUpdateStateMachine::Received,
-        ThreadUpdateStateMachine::ValidateParent,
-        ThreadUpdateStateMachine::ValidateRoot,
-        ThreadUpdateStateMachine::ValidateSender,
-        ThreadUpdateStateMachine::ValidateLinearity,
+        ThreadUpdateStateMachine::ValidateParentExists,
+        ThreadUpdateStateMachine::ValidateRootExists,
+        ThreadUpdateStateMachine::ValidateOriginalSender,
+        ThreadUpdateStateMachine::ValidateLinearSuccessor,
         ThreadUpdateStateMachine::PersistSqlite,
-        ThreadUpdateStateMachine::RouteDelivery,
+        ThreadUpdateStateMachine::DispatchByHarness,
         ThreadUpdateStateMachine::Delivered,
     ]
 }
@@ -569,9 +593,11 @@ pub(crate) fn thread_update_transitions() -> &'static [ThreadUpdateStateMachine]
 pub(crate) fn ack_reply_transitions() -> &'static [AckReplyStateMachine] {
     &[
         AckReplyStateMachine::Received,
-        AckReplyStateMachine::ValidateTarget,
-        AckReplyStateMachine::PersistAckState,
-        AckReplyStateMachine::DelegateReplyDelivery,
+        AckReplyStateMachine::ValidateAckTargetExists,
+        AckReplyStateMachine::ValidateReplyTargetAllowed,
+        AckReplyStateMachine::PersistAckTransition,
+        AckReplyStateMachine::BuildReplyDeliveryRequest,
+        AckReplyStateMachine::DispatchReplyByHarness,
         AckReplyStateMachine::Delivered,
     ]
 }
@@ -579,11 +605,12 @@ pub(crate) fn ack_reply_transitions() -> &'static [AckReplyStateMachine] {
 pub(crate) fn inbox_repair_transitions() -> &'static [InboxRepairStateMachine] {
     &[
         InboxRepairStateMachine::Received,
-        InboxRepairStateMachine::ResolveHarness,
-        InboxRepairStateMachine::LoadProjection,
-        InboxRepairStateMachine::StageOutput,
-        InboxRepairStateMachine::PublishOutput,
-        InboxRepairStateMachine::Completed,
+        InboxRepairStateMachine::ValidateClaudeHarness,
+        InboxRepairStateMachine::LoadRepairProjection,
+        InboxRepairStateMachine::FilterDeletedMessages,
+        InboxRepairStateMachine::StageInboxRebuild,
+        InboxRepairStateMachine::PublishInboxRebuild,
+        InboxRepairStateMachine::Delivered,
     ]
 }
 
@@ -591,12 +618,11 @@ pub(crate) fn restore_inbox_rebuild_transitions() -> &'static [RestoreInboxRebui
     &[
         RestoreInboxRebuildStateMachine::Received,
         RestoreInboxRebuildStateMachine::ValidateRestoreMarker,
-        RestoreInboxRebuildStateMachine::ResolveHarness,
-        RestoreInboxRebuildStateMachine::LoadProjection,
-        RestoreInboxRebuildStateMachine::StageOutput,
-        RestoreInboxRebuildStateMachine::PublishOutput,
-        RestoreInboxRebuildStateMachine::CleanupStaging,
-        RestoreInboxRebuildStateMachine::Completed,
+        RestoreInboxRebuildStateMachine::ValidateClaudeHarness,
+        RestoreInboxRebuildStateMachine::LoadRestoreProjection,
+        RestoreInboxRebuildStateMachine::StageRestoreOutput,
+        RestoreInboxRebuildStateMachine::PublishRestoreOutput,
+        RestoreInboxRebuildStateMachine::Delivered,
     ]
 }
 
@@ -693,7 +719,7 @@ mod tests {
     #[test]
     fn append_failure_routes_to_post_send_hook_fallback_only() {
         assert_eq!(
-            append_failure_transitions(DeliveryHarnessPath::ClaudeCode),
+            append_failure_transitions(),
             &[
                 "delivery_policy.new_message.received",
                 "delivery_policy.new_message.harness_claude",
@@ -711,12 +737,12 @@ mod tests {
             thread_update_transitions(),
             &[
                 super::ThreadUpdateStateMachine::Received,
-                super::ThreadUpdateStateMachine::ValidateParent,
-                super::ThreadUpdateStateMachine::ValidateRoot,
-                super::ThreadUpdateStateMachine::ValidateSender,
-                super::ThreadUpdateStateMachine::ValidateLinearity,
+                super::ThreadUpdateStateMachine::ValidateParentExists,
+                super::ThreadUpdateStateMachine::ValidateRootExists,
+                super::ThreadUpdateStateMachine::ValidateOriginalSender,
+                super::ThreadUpdateStateMachine::ValidateLinearSuccessor,
                 super::ThreadUpdateStateMachine::PersistSqlite,
-                super::ThreadUpdateStateMachine::RouteDelivery,
+                super::ThreadUpdateStateMachine::DispatchByHarness,
                 super::ThreadUpdateStateMachine::Delivered,
             ]
         );
@@ -724,9 +750,11 @@ mod tests {
             ack_reply_transitions(),
             &[
                 AckReplyStateMachine::Received,
-                AckReplyStateMachine::ValidateTarget,
-                AckReplyStateMachine::PersistAckState,
-                AckReplyStateMachine::DelegateReplyDelivery,
+                AckReplyStateMachine::ValidateAckTargetExists,
+                AckReplyStateMachine::ValidateReplyTargetAllowed,
+                AckReplyStateMachine::PersistAckTransition,
+                AckReplyStateMachine::BuildReplyDeliveryRequest,
+                AckReplyStateMachine::DispatchReplyByHarness,
                 AckReplyStateMachine::Delivered,
             ]
         );
@@ -734,11 +762,12 @@ mod tests {
             inbox_repair_transitions(),
             &[
                 InboxRepairStateMachine::Received,
-                InboxRepairStateMachine::ResolveHarness,
-                InboxRepairStateMachine::LoadProjection,
-                InboxRepairStateMachine::StageOutput,
-                InboxRepairStateMachine::PublishOutput,
-                InboxRepairStateMachine::Completed,
+                InboxRepairStateMachine::ValidateClaudeHarness,
+                InboxRepairStateMachine::LoadRepairProjection,
+                InboxRepairStateMachine::FilterDeletedMessages,
+                InboxRepairStateMachine::StageInboxRebuild,
+                InboxRepairStateMachine::PublishInboxRebuild,
+                InboxRepairStateMachine::Delivered,
             ]
         );
         assert_eq!(
@@ -746,12 +775,11 @@ mod tests {
             &[
                 RestoreInboxRebuildStateMachine::Received,
                 RestoreInboxRebuildStateMachine::ValidateRestoreMarker,
-                RestoreInboxRebuildStateMachine::ResolveHarness,
-                RestoreInboxRebuildStateMachine::LoadProjection,
-                RestoreInboxRebuildStateMachine::StageOutput,
-                RestoreInboxRebuildStateMachine::PublishOutput,
-                RestoreInboxRebuildStateMachine::CleanupStaging,
-                RestoreInboxRebuildStateMachine::Completed,
+                RestoreInboxRebuildStateMachine::ValidateClaudeHarness,
+                RestoreInboxRebuildStateMachine::LoadRestoreProjection,
+                RestoreInboxRebuildStateMachine::StageRestoreOutput,
+                RestoreInboxRebuildStateMachine::PublishRestoreOutput,
+                RestoreInboxRebuildStateMachine::Delivered,
             ]
         );
     }

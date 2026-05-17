@@ -127,10 +127,9 @@ impl RuntimeLifecycle {
 #[derive(Debug)]
 pub(crate) struct RuntimeComposition {
     lifecycle: Arc<RuntimeLifecycle>,
-    #[allow(dead_code)]
     // Holding the ownership adapter in the composition keeps host-runtime ownership tied to the
     // full daemon runtime lifetime even though the field is not read after construction.
-    host_ownership_adapter: HostOwnershipAdapter,
+    _host_ownership_adapter: HostOwnershipAdapter,
     // Endpoint cleanup ownership moves between startup, serve, and teardown transitions, so this
     // mutex protects exclusive handoff/drop of the guard rather than a simple ready flag.
     endpoint_guard: Mutex<Option<SocketEndpointGuard>>,
@@ -200,7 +199,7 @@ impl RuntimeComposition {
         .map_err(|error| replay_store_assembly_failed(error, &composition_observability))?;
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
-            host_ownership_adapter: HostOwnershipAdapter::new_with_observability(
+            _host_ownership_adapter: HostOwnershipAdapter::new_with_observability(
                 SubsystemObservability::new(
                     DaemonSubsystem::HostOwnership,
                     Arc::clone(&observability),

@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-Y6-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-Y6-001" ;
+  triage:title "Non-Claude SQLite-failure delivery path missing outward delivery" ;
+  triage:description "persist_message_and_seed_workflow in persistence.rs:85-110: when SQLite fails and !allows_claude_jsonl_append(), recover_after_sqlite_failure only queues a companion_nudge plan (used by post-send-hook) but does NOT perform actual non-Claude outward delivery of the original message or the atm-system error message. Sprint Y.6 and delivery-state-machines.md §Non-Claude Harness SQLite failure require 'ATM emits the original message through the non-Claude delivery path' and 'ATM emits a second error message from atm-system@<team> through the same non-Claude delivery path'. DeliveryPersistenceResult::companion_nudge only fires post-send-hook, not non-Claude delivery." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/send/persistence.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-Y6-001/pY-s6/1> .
+
+<urn:atm:triage:occurrence/ATM-QA-Y6-001/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/persistence.rs" ;
+  triage:line 85 ;
+  triage:snippet "recover_after_sqlite_failure — non-Claude path queues companion_nudge only, no outward delivery" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/2b808428> .
+
+<urn:atm:triage:worktree/pY-s6/2b808428>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-QA-Y6-001>
+  a triage:Finding ;
+  triage:findingId "RBP-QA-Y6-001" ;
+  triage:title "retrieval_stub_text dead error branch — RBP-007 infallible usage" ;
+  triage:description "retrieval_stub_text at inbox_message.rs:386 returns Result<String, AtmError> with an error branch for message_id being None (lines 388-393). The function's only caller (to_shared_inbox_value_with_policy) reaches it exclusively via should_export_retrieval_stub which returns true only when message.message_id.is_some(). The None error arm is structurally unreachable. Fix: remove the Result wrapper and return String directly, or accept message_id by value from the caller which already holds the Some guard." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-QA-Y6-001/pY-s6/1> .
+
+<urn:atm:triage:occurrence/RBP-QA-Y6-001/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 386 ;
+  triage:snippet "fn retrieval_stub_text(...) -> Result<String, AtmError> { let Some(message_id) = message.message_id else { return Err(...) }; // dead: only called when should_export_retrieval_stub() == true, which requires message_id.is_some()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/2b808428> .
+
+<urn:atm:triage:worktree/pY-s6/2b808428>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
