@@ -82,8 +82,8 @@ transition surfaces from the runtime.
 
 ## Intentional Carry-Forwards
 
-- `YB-001` and `YB-004` close on this branch only via merge-forward from
-  `6ea1502d`; they are not Y.8-native implementation work.
+- `YB-001` and `YB-004` are not Y.8-native implementation work and do not
+  close on this branch; triage keeps both promoted through `Y.11`.
 - `YB-003` defers to `Y.9`, where the dedicated
   `NonClaudeOutboundDeliveryWriter` boundary makes real outbound payload proof
   possible.
