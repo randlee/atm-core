@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-018>
+  a triage:Finding ;
+  triage:findingId "YB-018" ;
+  triage:title "atm/src/composition.rs:98 blocking IPC I/O doc comment warns but no API enforcement" ;
+  triage:description "Doc comment at atm/src/composition.rs:98 warns about blocking IPC I/O but no spawn_blocking example or API enforcement exists." ;
+  triage:phaseId "phase-Yb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T14:05:40Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-018/pYb-s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-018/pYb-s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-018/pYb-s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-018/pYb-s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-018/pYb-s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s7/29f8c388> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s8/6b7725bc> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s9/c3426bb4> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s10/c531c3ab> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s11/29f8c388> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYb-s7/29f8c388> .
+
+<urn:atm:triage:occurrence/YB-018/pYb-s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 96 ;
+  triage:snippet "/// This function performs blocking IPC I/O. Callers in async contexts must" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "29f8c388" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s7/29f8c388> .
+
+<urn:atm:triage:occurrence/YB-018/pYb-s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 96 ;
+  triage:snippet "/// This function performs blocking IPC I/O. Callers in async contexts must" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:headSha "6b7725bc" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s8/6b7725bc> .
+
+<urn:atm:triage:occurrence/YB-018/pYb-s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 96 ;
+  triage:snippet "/// This function performs blocking IPC I/O. Callers in async contexts must" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s9/c3426bb4> .
+
+<urn:atm:triage:occurrence/YB-018/pYb-s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 96 ;
+  triage:snippet "/// This function performs blocking IPC I/O. Callers in async contexts must" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s10/c531c3ab> .
+
+<urn:atm:triage:occurrence/YB-018/pYb-s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 96 ;
+  triage:snippet "/// This function performs blocking IPC I/O. Callers in async contexts must" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "29f8c388" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s11/29f8c388> .
+
+<urn:atm:triage:worktree/pYb-s7/29f8c388>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "29f8c388" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pYb-s8/6b7725bc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:headSha "6b7725bc" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pYb-s9/c3426bb4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pYb-s10/c531c3ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pYb-s11/29f8c388>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "29f8c388" ;
+  triage:orderIndex 5 .
