@@ -217,6 +217,21 @@ pub struct MailStoreLoadMessageResponse {
     pub record: Option<MailStoreMessageRecord>,
 }
 
+/// Stub mail-store load-stored-message request for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct MailStoreLoadStoredMessageRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub message_key: MessageKey,
+}
+
+/// Stub mail-store load-stored-message response for the Phase R skeleton.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct MailStoreLoadStoredMessageResponse {
+    #[serde(default)]
+    pub record: Option<MailStoreMessageRecord>,
+}
+
 /// Stub mail-store upsert-message-state request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct UpsertMailMessageStateRequest {
@@ -347,6 +362,14 @@ pub trait MailStore: sealed::Sealed {
         &self,
         request: MailStoreLoadMessageRequest,
     ) -> Result<MailStoreLoadMessageResponse, AtmError>;
+
+    /// # Errors
+    ///
+    /// Returns `AtmError` when the requested stored message cannot be loaded.
+    fn load_stored_message(
+        &self,
+        request: MailStoreLoadStoredMessageRequest,
+    ) -> Result<MailStoreLoadStoredMessageResponse, AtmError>;
 
     /// # Errors
     ///

@@ -8,8 +8,7 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::send::{
-    PostSendHookContext, ResolvedRecipient, append_mailbox_message_and_seed_workflow, input,
-    summary,
+    PostSendHookContext, ResolvedRecipient, input, persist_message_and_seed_workflow, summary,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -388,7 +387,7 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
     let reply_inbox_path =
         runtime.inbox_path(home_dir(request), &reply_target.team, &reply_target.agent)?;
-    append_mailbox_message_and_seed_workflow(
+    persist_message_and_seed_workflow(
         runtime,
         home_dir(request),
         &reply_target.team,

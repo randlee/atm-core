@@ -3479,6 +3479,9 @@ Execution shape:
   - close the deferred `Y.1` tier-2 help follow-ups for `hooks`, `identity`,
     and `skills` without changing the compatibility inbox wire contract
 - `Y.3` hard write-boundary consolidation
+  - complete on `feature/pY-s3-hard-write-boundary-consolidation`
+  - normal retained compatibility rewrite now routes only through
+    `RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
 - `Y.4` delivery coordinator and event-family state machines
 - `Y.5` mutable compatibility-field removal and hidden-dependency exposure
 - `Y.6` append-only compatibility export cutover if the approved wire contract

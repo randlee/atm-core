@@ -1,7 +1,7 @@
 ---
 id: Y.3
 title: Hard Write-Boundary Consolidation
-status: planned
+status: complete
 branch: feature/pY-s3-hard-write-boundary-consolidation
 worktree: ../atm-core-worktrees/feature/pY-s3-hard-write-boundary-consolidation
 target: integrate/phase-Y
@@ -53,7 +53,7 @@ before append-only work or smoke testing begins.
 ## Hard Dependencies
 
 - `docs/phase-Y/inbox-write-path-audit.md`
-- the current `feature/pY-trivial-fixes` call stacks sampled in that audit
+- the current sampled implementation call stacks recorded in that audit
 
 ## Non-Goals
 
@@ -69,10 +69,10 @@ before append-only work or smoke testing begins.
 Development work:
 - remove direct compatibility inbox ownership from:
   - `crates/atm-core/src/send/mod.rs:280`
-  - `crates/atm-core/src/send/mod.rs:463`
-  - `crates/atm-core/src/ack/mod.rs:391`
-- delete or narrow the shared helper at:
-  - `crates/atm-core/src/send/mod.rs:482`
+  - `crates/atm-core/src/send/mod.rs:464`
+  - `crates/atm-core/src/ack/mod.rs:347`
+- narrow the shared helper at:
+  - `crates/atm-core/src/send/mod.rs:483`
 - ensure `crates/atm-core/src/workflow.rs:166` no longer coordinates mailbox
   file writes for normal runtime send/ack
 
@@ -133,27 +133,33 @@ Keep/delete/move decisions are authoritative and must be traced by file,
 function, and line number.
 
 - `crates/atm-core/src/send/mod.rs:280`
-  - `append_mailbox_message_and_seed_workflow(...)`
-  - decision: delete command ownership
-- `crates/atm-core/src/send/mod.rs:463`
-  - `append_mailbox_message_and_seed_workflow(...)`
-  - decision: delete command ownership
-- `crates/atm-core/src/ack/mod.rs:391`
-  - `append_mailbox_message_and_seed_workflow(...)`
-  - decision: delete command ownership
-- `crates/atm-core/src/send/mod.rs:482`
-  - `append_mailbox_message_and_seed_workflow(...)`
-  - decision: delete or narrow to non-compatibility persistence only
-- `crates/atm-core/src/send/mod.rs:516`
+  - `persist_message_and_seed_workflow(...)`
+  - decision: direct compatibility rewrite deleted; post-commit runtime refresh only
+- `crates/atm-core/src/send/mod.rs:464`
+  - `persist_message_and_seed_workflow(...)`
+  - decision: direct compatibility rewrite deleted; post-commit runtime refresh only
+- `crates/atm-core/src/ack/mod.rs:347`
+  - `persist_message_and_seed_workflow(...)`
+  - decision: reply emission retained as send-shaped persistence only
+- `crates/atm-core/src/send/mod.rs:483`
+  - `persist_message_and_seed_workflow(...)`
+  - decision: narrowed to SQLite/workflow persistence plus post-commit runtime refresh
+- `crates/atm-core/src/send/mod.rs:517`
   - `load_store_backed_mailbox_projection(...)`
   - decision: remove from the runtime write stack unless a separate read-only
     projection use remains justified
-- `crates/atm-core/src/send/mod.rs:548`
+- `crates/atm-core/src/send/mod.rs:549`
   - `mirror_message_to_store(...)`
   - decision: retain or move as SQLite-only persistence helper
 - `crates/atm-core/src/workflow.rs:166`
   - `commit_workflow_state(...)`
   - decision: stop coordinating normal runtime inbox-file writes
+- `crates/atm-core/src/service_runtime.rs:51`
+  - `refresh_compat_inbox_projection(...)`
+  - decision: retain as the sole normal runtime compatibility rewrite owner
+- `crates/atm-core/src/service_runtime.rs:192`
+  - `load_store_backed_mailbox_projection(...)`
+  - decision: retain behind the runtime refresh owner and load immutable stored envelopes
 - `crates/atm-core/src/mailbox/store.rs:19`
   - `write_compat_mailbox_projection(...)`
   - decision: retain for repair/rebuild only after Y.3
@@ -238,5 +244,16 @@ second, but do not leave the repo in a mixed command-owned state between them.
 
 - this sprint must not invent a second runtime writer under a different name
 - keep harness gating explicit; model-based branching is incorrect
+
+## Completion Notes
+
+- normal `send` and missing-config notice flows now persist SQLite/workflow
+  state first and reach compatibility rewrite only through
+  `RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
+- `ack` no longer owns source-inbox compatibility rewrites; only reply emission
+  reuses the narrowed send-shaped persistence helper
+- `clear` remains SQLite/state-only and does not own a compatibility rewrite
+- the retained runtime refresh path now exports immutable stored envelopes so
+  post-send state transitions do not rewrite prior compatibility message state
 - if an old dependency appears, remove or document it now rather than preserving
   it silently for later

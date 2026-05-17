@@ -486,6 +486,13 @@ mod tests {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
+        fn load_stored_message(
+            &self,
+            _request: boundary::MailStoreLoadStoredMessageRequest,
+        ) -> Result<boundary::MailStoreLoadStoredMessageResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
         fn query_mailbox_metadata(
             &self,
             _request: boundary::MailStoreQueryMailboxMetadataRequest,

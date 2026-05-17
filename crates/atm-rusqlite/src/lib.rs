@@ -160,6 +160,43 @@ impl SqliteMailStore {
         }
         envelope
     }
+
+    fn load_stored_message_record(
+        &self,
+        request: &boundary::MailStoreLoadStoredMessageRequest,
+    ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+        let envelope_json = self.db.with_connection(|connection| {
+            connection
+                .query_row(
+                    "SELECT envelope_json
+                     FROM mail_messages
+                     WHERE team = ?1 AND agent = ?2 AND message_key = ?3;",
+                    params![
+                        request.team.as_str(),
+                        request.agent.as_str(),
+                        request.message_key.as_ref()
+                    ],
+                    |row| row.get::<_, String>(0),
+                )
+                .optional()
+                .map_err(|error| {
+                    self.db
+                        .error("failed to load stored mail-store message", error)
+                })
+        })?;
+
+        envelope_json
+            .map(|envelope_json| {
+                let envelope = deserialize_json(&envelope_json, "stored mail-store envelope")?;
+                Ok(boundary::MailStoreMessageRecord {
+                    team: request.team.clone(),
+                    agent: request.agent.clone(),
+                    message_key: request.message_key.clone(),
+                    envelope,
+                })
+            })
+            .transpose()
+    }
 }
 
 impl boundary::sealed::Sealed for SqliteMailStore {}
@@ -248,6 +285,15 @@ impl boundary::MailStore for SqliteMailStore {
         };
 
         Ok(boundary::MailStoreLoadMessageResponse { record })
+    }
+
+    fn load_stored_message(
+        &self,
+        request: boundary::MailStoreLoadStoredMessageRequest,
+    ) -> Result<boundary::MailStoreLoadStoredMessageResponse, AtmError> {
+        Ok(boundary::MailStoreLoadStoredMessageResponse {
+            record: self.load_stored_message_record(&request)?,
+        })
     }
 
     fn query_mailbox_metadata(
@@ -1464,13 +1510,13 @@ mod tests {
                     })?;
                 let stored: MessageEnvelope =
                     deserialize_json(&envelope_json, "stored mail envelope")?;
-                assert!(!stored.read);
-                assert!(stored.pending_ack_at.is_none());
+                assert_eq!(stored.read, record.envelope.read);
+                assert_eq!(stored.pending_ack_at, record.envelope.pending_ack_at);
                 assert!(stored.acknowledged_at.is_none());
-                assert!(stored.expires_at.is_none());
+                assert_eq!(stored.expires_at, record.envelope.expires_at);
                 Ok(())
             })
-            .expect("content row strips mutable state");
+            .expect("content row preserves original compatibility envelope");
     }
 
     #[test]
