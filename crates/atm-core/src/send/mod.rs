@@ -8,6 +8,8 @@ use tracing::warn;
 
 use crate::address::AgentAddress;
 use crate::config;
+use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
+use crate::delivery_plan::{DeliveryPlan, DeliveryPlanDisposition, DeliveryTarget, LogicalMessage};
 use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
     DeliveryTransitionEvent, persisted_success_transition_names,
@@ -30,9 +32,7 @@ pub(crate) mod input;
 mod persistence;
 pub(crate) mod summary;
 
-pub(crate) use delivery_persistence::{
-    CompanionNudgePlan, DeliveryPersistenceDisposition, DeliveryPersistenceResult,
-};
+pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
 pub(crate) use persistence::persist_message_and_seed_workflow;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -207,7 +207,6 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
 
     let persistence = persist_send_message(
         runtime,
-        observability,
         &request,
         &context,
         &body,
@@ -264,14 +263,16 @@ fn finalize_send_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &persistence,
     );
     if !request.dry_run {
-        run_send_post_send_hooks(
-            runtime,
+        let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
+        let execution = execute_delivery_plan(runtime, context.config.as_ref(), &plan)?;
+        outcome.warnings.extend(execution.warnings);
+        emit_delivery_transitions(
+            observability,
             context,
             message_id,
-            requires_ack,
-            task_id.as_ref(),
-            &persistence,
-            &mut outcome.warnings,
+            task_id.clone(),
+            &plan,
+            execution.disposition,
         );
     }
     emit_send_command_event(
@@ -319,39 +320,34 @@ fn build_send_outcome(
     outcome
 }
 
-fn run_send_post_send_hooks<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
-    runtime: &R,
+fn build_send_delivery_plan(
     context: &SendExecutionContext,
-    message_id: AtmMessageId,
     requires_ack: bool,
-    task_id: Option<&TaskId>,
     persistence: &DeliveryPersistenceResult,
-    warnings: &mut Vec<WarningEntry>,
-) {
-    runtime.maybe_run_post_send_hook(
-        warnings,
-        context.config.as_ref(),
-        PostSendHookContext {
-            sender: &context.canonical_sender,
-            sender_team: context.sender_team.as_ref(),
-            recipient: &context.recipient,
-            recipient_pane_id: context.delivery_snapshot.recipient_pane_id.as_deref(),
-            message_id,
-            requires_ack,
-            is_ack: false,
-            task_id,
-        },
-    );
-    if let Some(companion_nudge) = persistence.companion_nudge.as_ref() {
-        maybe_run_companion_post_send_hook(
-            runtime,
-            warnings,
-            context.config.as_ref(),
-            &context.recipient,
-            context.delivery_snapshot.recipient_pane_id.as_deref(),
-            companion_nudge,
+) -> Result<DeliveryPlan, AtmError> {
+    let mut messages = vec![
+        LogicalMessage::new(persistence.original_message.clone(), requires_ack, false)
+            .map_err(AtmError::mailbox_write)?,
+    ];
+    if let Some(companion_message) = persistence.companion_message.clone() {
+        messages.push(
+            LogicalMessage::new(companion_message, false, false)
+                .map_err(AtmError::mailbox_write)?,
         );
     }
+    Ok(DeliveryPlan::new(
+        match persistence.disposition {
+            DeliveryPersistenceDisposition::Persisted => DeliveryPlanDisposition::Persisted,
+            DeliveryPersistenceDisposition::SqliteFailedRecovered => {
+                DeliveryPlanDisposition::SqliteFailedRecovered
+            }
+        },
+        build_delivery_target(&context.inbox_path, &context.delivery_snapshot),
+        context.recipient.clone(),
+        context.delivery_snapshot.recipient_pane_id.clone(),
+        messages,
+        persistence.warnings.clone(),
+    ))
 }
 
 struct SendExecutionContext {
@@ -514,7 +510,6 @@ fn missing_config_warning(recipient: &ResolvedRecipient, team_dir: &Path) -> War
 )]
 fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
-    observability: &dyn ObservabilityPort,
     request: &SendRequest,
     context: &SendExecutionContext,
     body: &str,
@@ -525,7 +520,26 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     task_id: Option<TaskId>,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     if request.dry_run {
-        return Ok(DeliveryPersistenceResult::persisted());
+        return Ok(DeliveryPersistenceResult::persisted(MessageEnvelope {
+            from: context.display_sender.clone(),
+            text: body.to_string(),
+            timestamp,
+            read: false,
+            source_team: context
+                .sender_team
+                .clone()
+                .or_else(|| Some(context.recipient.team.clone())),
+            summary: Some(summary.to_string()),
+            message_id: Some(message_id),
+            pending_ack_at: requires_ack.then_some(timestamp),
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: request.parent_message_id,
+            thread_mode: request.thread_mode,
+            expires_at: request.expires_at,
+            task_id: task_id.clone(),
+            extra: Map::new(),
+        }));
     }
     let envelope = MessageEnvelope {
         from: context.display_sender.clone(),
@@ -555,16 +569,6 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &envelope,
         false,
     )?;
-    for warning in &persistence.warnings {
-        warn!(message = %warning.message, "delivery persistence degraded");
-    }
-    emit_delivery_transitions(
-        observability,
-        context,
-        message_id,
-        task_id,
-        persistence.disposition,
-    );
     Ok(persistence)
 }
 
@@ -573,20 +577,21 @@ fn emit_delivery_transitions(
     context: &SendExecutionContext,
     message_id: AtmMessageId,
     task_id: Option<TaskId>,
-    disposition: DeliveryPersistenceDisposition,
+    plan: &DeliveryPlan,
+    execution_disposition: DeliveryExecutionDisposition,
 ) {
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let route = delivery_policy
         .route_persisted_delivery(context.delivery_family, &context.delivery_snapshot);
-    let transitions = match disposition {
-        DeliveryPersistenceDisposition::Persisted => {
-            persisted_success_transition_names(context.delivery_family, route.harness)
+    let transitions = match (plan.disposition, execution_disposition) {
+        (DeliveryPlanDisposition::SqliteFailedRecovered, _) => {
+            crate::delivery_policy::sqlite_failure_transition_names(route.harness).to_vec()
         }
-        DeliveryPersistenceDisposition::AppendDegraded => {
+        (_, DeliveryExecutionDisposition::AppendDegraded) => {
             crate::delivery_policy::append_failure_transition_names(route.harness).to_vec()
         }
-        DeliveryPersistenceDisposition::SqliteFailedRecovered => {
-            crate::delivery_policy::sqlite_failure_transition_names(route.harness).to_vec()
+        (_, DeliveryExecutionDisposition::Delivered) => {
+            persisted_success_transition_names(context.delivery_family, route.harness)
         }
     };
     for transition in transitions {
@@ -630,7 +635,22 @@ fn emit_send_command_event(
     }
 }
 
-#[derive(Debug)]
+pub(crate) fn build_delivery_target(
+    inbox_path: &Path,
+    delivery_snapshot: &DeliveryRecipientSnapshot,
+) -> DeliveryTarget {
+    match delivery_snapshot.harness {
+        crate::delivery_policy::DeliveryHarnessPath::ClaudeCode => DeliveryTarget::ClaudeCode {
+            inbox_path: inbox_path.to_path_buf(),
+            recipient: delivery_snapshot.clone(),
+        },
+        crate::delivery_policy::DeliveryHarnessPath::NonClaude => DeliveryTarget::NonClaude {
+            recipient: delivery_snapshot.clone(),
+        },
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedRecipient {
     pub(crate) agent: AgentName,
     pub(crate) team: TeamName,
@@ -817,7 +837,37 @@ fn persist_missing_config_notice(
         notice,
         true,
     )?;
-    for warning in persistence.warnings {
+    let mut messages = vec![
+        LogicalMessage::new(persistence.original_message, false, false)
+            .map_err(AtmError::mailbox_write)?,
+    ];
+    if let Some(companion_message) = persistence.companion_message {
+        messages.push(
+            LogicalMessage::new(companion_message, false, false)
+                .map_err(AtmError::mailbox_write)?,
+        );
+    }
+    let plan = DeliveryPlan::new(
+        match persistence.disposition {
+            DeliveryPersistenceDisposition::Persisted => DeliveryPlanDisposition::Persisted,
+            DeliveryPersistenceDisposition::SqliteFailedRecovered => {
+                DeliveryPlanDisposition::SqliteFailedRecovered
+            }
+        },
+        build_delivery_target(team_lead_inbox, snapshot),
+        ResolvedRecipient {
+            agent: AgentName::from_validated(ROLE_TEAM_LEAD),
+            team: snapshot.team.clone(),
+        },
+        snapshot.recipient_pane_id.clone(),
+        messages,
+        persistence.warnings,
+    );
+    let execution = execute_delivery_plan(runtime, None, &plan)?;
+    for warning in plan.warnings {
+        warn!(message = %warning.message, "compatibility append degraded for missing-config notice");
+    }
+    for warning in execution.warnings {
         warn!(message = %warning.message, "compatibility append degraded for missing-config notice");
     }
     Ok(())
@@ -958,30 +1008,6 @@ pub(crate) fn maybe_run_post_send_hook(
     hook::maybe_run_post_send_hook(warnings, config, context);
 }
 
-pub(crate) fn maybe_run_companion_post_send_hook<R: RetainedServiceRuntime + ?Sized>(
-    runtime: &R,
-    warnings: &mut Vec<WarningEntry>,
-    config: Option<&crate::config::AtmConfig>,
-    recipient: &ResolvedRecipient,
-    recipient_pane_id: Option<&str>,
-    companion: &CompanionNudgePlan,
-) {
-    runtime.maybe_run_post_send_hook(
-        warnings,
-        config,
-        PostSendHookContext {
-            sender: &companion.sender,
-            sender_team: companion.sender_team.as_ref(),
-            recipient,
-            recipient_pane_id,
-            message_id: companion.message_id,
-            requires_ack: companion.requires_ack,
-            is_ack: companion.is_ack,
-            task_id: companion.task_id.as_ref(),
-        },
-    );
-}
-
 #[cfg(test)]
 mod tests {
     use std::path::{Path, PathBuf};
@@ -993,16 +1019,19 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        CompanionNudgePlan, DeliveryPersistenceDisposition, PostSendHookContext, ResolvedRecipient,
-        alert_state, maybe_run_companion_post_send_hook, persist_message_and_seed_workflow,
-        prepare_threaded_message,
+        DeliveryPersistenceDisposition, PostSendHookContext, ResolvedRecipient,
+        SendExecutionContext, WarningEntry, alert_state, build_send_delivery_plan,
+        persist_message_and_seed_workflow, prepare_threaded_message,
     };
     use crate::boundary::{
         MailMessageState, MailStoreMailboxMetadataRow, MailStoreMessageRecord, MessageKey,
         RosterHarness, RosterMemberKind, RosterMemberRecord,
     };
     use crate::config::AtmConfig;
-    use crate::delivery_policy::{DeliveryHarnessPath, DeliveryRecipientSnapshot};
+    use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
+    use crate::delivery_policy::{
+        DeliveryEventFamily, DeliveryHarnessPath, DeliveryRecipientSnapshot,
+    };
     use crate::error::AtmError;
     use crate::observability::{
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
@@ -1343,7 +1372,7 @@ mod tests {
     }
 
     #[test]
-    fn sqlite_failure_for_claude_appends_original_and_companion_error() {
+    fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
         let runtime = TestRuntime::new(
             Some("sqlite write failed"),
             None,
@@ -1367,16 +1396,20 @@ mod tests {
             DeliveryPersistenceDisposition::SqliteFailedRecovered
         );
         assert_eq!(result.warnings.len(), 1);
-        let appended = runtime.appended_messages.lock().expect("append lock");
-        assert_eq!(appended.len(), 2);
-        assert_eq!(appended[0].from.as_str(), TEST_SENDER);
-        assert_eq!(appended[1].from.as_str(), "atm-system");
-        assert!(appended[1].text.contains("SQLite persistence failed"));
-        assert!(result.companion_nudge.is_some());
+        assert_eq!(result.original_message.from.as_str(), TEST_SENDER);
+        assert_eq!(
+            result
+                .companion_message
+                .as_ref()
+                .expect("companion")
+                .from
+                .as_str(),
+            "atm-system"
+        );
     }
 
     #[test]
-    fn sqlite_failure_for_non_claude_skips_jsonl_append_but_keeps_companion_nudge() {
+    fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
         let runtime = TestRuntime::new(
             Some("sqlite write failed"),
             None,
@@ -1399,81 +1432,131 @@ mod tests {
             result.disposition,
             DeliveryPersistenceDisposition::SqliteFailedRecovered
         );
-        assert!(
-            runtime
-                .appended_messages
-                .lock()
-                .expect("append lock")
-                .is_empty()
+        assert_eq!(result.original_message.from.as_str(), TEST_SENDER);
+        assert_eq!(
+            result
+                .companion_message
+                .as_ref()
+                .expect("companion")
+                .from
+                .as_str(),
+            "atm-system"
         );
-        assert!(result.companion_nudge.is_some());
     }
 
     #[test]
-    fn append_failure_after_sqlite_commit_is_warning_only() {
+    fn append_failure_after_sqlite_commit_is_execution_only() {
         let runtime =
             TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
         let tempdir = tempdir().expect("tempdir");
-        let inbox_path = tempdir.path().join("recipient.jsonl");
-
-        let result = persist_message_and_seed_workflow(
-            &runtime,
-            tempdir.path(),
-            &delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
-            &inbox_path,
-            &outbound_message(),
-            false,
-        )
-        .expect("append degradation");
+        let context = SendExecutionContext {
+            config: None,
+            recipient: ResolvedRecipient {
+                agent: AgentName::from_validated("recipient"),
+                team: TeamName::from_validated(TEST_TEAM),
+            },
+            sender_team: Some(TeamName::from_validated(TEST_TEAM)),
+            canonical_sender: AgentName::from_validated(TEST_SENDER),
+            display_sender: AgentName::from_validated(TEST_SENDER),
+            inbox_path: tempdir.path().join("recipient.jsonl"),
+            delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
+            delivery_family: DeliveryEventFamily::NewMessage,
+            warnings: Vec::new(),
+        };
+        let persistence = crate::send::DeliveryPersistenceResult::persisted(outbound_message());
+        let plan = build_send_delivery_plan(&context, false, &persistence).expect("plan");
+        let execution =
+            execute_delivery_plan(&runtime, None, &plan).expect("append degraded execution");
 
         assert_eq!(
-            result.disposition,
-            DeliveryPersistenceDisposition::AppendDegraded
+            execution.disposition,
+            DeliveryExecutionDisposition::AppendDegraded
         );
-        assert_eq!(result.warnings.len(), 1);
-        assert!(result.companion_nudge.is_none());
+        assert_eq!(execution.warnings.len(), 1);
     }
 
     #[test]
-    fn companion_post_send_hook_uses_companion_message_identity() {
-        let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
-        let companion = CompanionNudgePlan {
-            sender: AgentName::from_validated("atm-system"),
+    fn named_plan_builder_proves_payload_equality_across_harnesses() {
+        let tempdir = tempdir().expect("tempdir");
+        let original = outbound_message();
+        let companion = MessageEnvelope {
+            from: AgentName::from_validated("atm-system"),
+            text: "sqlite failed".to_string(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(TeamName::from_validated(TEST_TEAM)),
+            summary: Some("sqlite failed".to_string()),
+            message_id: Some(AtmMessageId::new()),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: original.task_id.clone(),
+            extra: Map::new(),
+        };
+        let persistence = crate::send::DeliveryPersistenceResult::sqlite_failed_recovered(
+            original.clone(),
+            companion.clone(),
+            WarningEntry::new("sqlite failed", Some("repair sqlite")),
+        );
+        let base_context = SendExecutionContext {
+            config: None,
+            recipient: ResolvedRecipient {
+                agent: AgentName::from_validated("recipient"),
+                team: TeamName::from_validated(TEST_TEAM),
+            },
             sender_team: Some(TeamName::from_validated(TEST_TEAM)),
-            message_id: AtmMessageId::new(),
-            requires_ack: false,
-            task_id: Some("task-123".parse().expect("task id")),
-            is_ack: false,
+            canonical_sender: AgentName::from_validated(TEST_SENDER),
+            display_sender: AgentName::from_validated(TEST_SENDER),
+            inbox_path: tempdir.path().join("recipient.jsonl"),
+            delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
+            delivery_family: DeliveryEventFamily::NewMessage,
+            warnings: Vec::new(),
         };
-        let mut warnings = Vec::new();
-        let recipient = ResolvedRecipient {
-            agent: AgentName::from_validated("recipient"),
-            team: TeamName::from_validated(TEST_TEAM),
+        let claude_plan =
+            build_send_delivery_plan(&base_context, false, &persistence).expect("claude plan");
+        let non_claude_context = SendExecutionContext {
+            delivery_snapshot: delivery_snapshot(DeliveryHarnessPath::NonClaude),
+            ..base_context
         };
+        let non_claude_plan = build_send_delivery_plan(&non_claude_context, false, &persistence)
+            .expect("non-claude plan");
 
-        maybe_run_companion_post_send_hook(
+        assert_eq!(claude_plan.messages, non_claude_plan.messages);
+        assert!(matches!(
+            claude_plan.delivery_target,
+            crate::delivery_plan::DeliveryTarget::ClaudeCode { .. }
+        ));
+        assert!(matches!(
+            non_claude_plan.delivery_target,
+            crate::delivery_plan::DeliveryTarget::NonClaude { .. }
+        ));
+    }
+
+    #[test]
+    fn named_companion_error_failure_handling_adds_explicit_warning() {
+        let runtime = TestRuntime::new(
+            Some("sqlite write failed"),
+            Some("append failed"),
+            DeliveryHarnessPath::ClaudeCode,
+        );
+        let observability = RecordingObservability::default();
+        let tempdir = tempdir().expect("tempdir");
+
+        let outcome = super::send_mail_with_runtime_impl(
+            send_request(tempdir.path()),
+            &observability,
             &runtime,
-            &mut warnings,
-            None,
-            &recipient,
-            None,
-            &companion,
-        );
+        )
+        .expect("send outcome");
 
-        assert!(warnings.is_empty());
-        let captures = runtime.hook_captures.lock().expect("hook capture lock");
-        assert_eq!(captures.len(), 1);
-        assert_eq!(captures[0].sender.as_str(), "atm-system");
-        assert_eq!(
-            captures[0].sender_team.as_ref().map(TeamName::as_str),
-            Some(TEST_TEAM)
-        );
-        assert_eq!(captures[0].recipient.agent.as_str(), "recipient");
-        assert_eq!(captures[0].recipient.team.as_str(), TEST_TEAM);
-        assert_eq!(captures[0].message_id, companion.message_id);
-        assert!(!captures[0].requires_ack);
-        assert!(!captures[0].is_ack);
-        assert_eq!(captures[0].task_id.as_ref(), companion.task_id.as_ref());
+        assert!(outcome.warnings.iter().any(|warning| {
+            warning
+                .message
+                .contains("degraded Claude Code delivery append failed")
+        }));
     }
 
     #[test]
@@ -1505,6 +1588,20 @@ mod tests {
         let captures = runtime.hook_captures.lock().expect("hook capture lock");
         assert_eq!(captures.len(), 2);
         assert_eq!(captures[0].sender.as_str(), TEST_SENDER);
+        assert!(captures[0].sender_team.is_some());
+        assert_eq!(captures[0].recipient.agent.as_str(), "recipient");
+        assert_eq!(captures[0].recipient.team.as_str(), TEST_TEAM);
+        assert!(captures[0].message_id.to_string().len() > 10);
+        let _requires_ack = captures[0].requires_ack;
+        let _is_ack = captures[0].is_ack;
+        assert_eq!(
+            captures[0]
+                .task_id
+                .as_ref()
+                .map(ToString::to_string)
+                .as_deref(),
+            Some("task-123")
+        );
         assert_eq!(captures[1].sender.as_str(), "atm-system");
         drop(captures);
 
