@@ -2,10 +2,12 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
+use crate::boundary::{InboxExportReexportMessageRequest, MessageKey};
 use crate::config::{self, AtmConfig};
+use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
 use crate::read::seen_state;
-use crate::schema::TeamConfig;
+use crate::schema::{MessageEnvelope, TeamConfig};
 use crate::send::{PostSendHookContext, maybe_run_post_send_hook};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
@@ -47,6 +49,16 @@ pub(crate) trait RetainedServiceRuntime {
         config: Option<&AtmConfig>,
         context: PostSendHookContext<'_>,
     );
+    fn refresh_compat_inbox_projection(
+        &self,
+        home_dir: &Path,
+        recipient: &DeliveryRecipientSnapshot,
+    ) -> Result<(), AtmError>;
+    fn load_roster_member(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError>;
 
     fn commit_workflow_state<T, I, F>(
         &self,
@@ -149,6 +161,39 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         maybe_run_post_send_hook(warnings, config, context);
     }
 
+    fn refresh_compat_inbox_projection(
+        &self,
+        home_dir: &Path,
+        recipient: &DeliveryRecipientSnapshot,
+    ) -> Result<(), AtmError> {
+        if !recipient.allows_claude_jsonl_append() {
+            return Ok(());
+        }
+        let inbox_path =
+            crate::home::inbox_path_from_home(home_dir, &recipient.team, &recipient.agent)?;
+        let messages =
+            load_store_backed_mailbox_projection(self, &recipient.team, &recipient.agent)?;
+
+        crate::direct_boundaries::reexport_messages(InboxExportReexportMessageRequest {
+            path: inbox_path,
+            messages,
+        })
+        .map(|_| ())
+    }
+
+    fn load_roster_member(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError> {
+        self.roster_store
+            .query_membership(crate::boundary::RosterStoreQueryMembershipRequest {
+                team: team.clone(),
+                member: agent.clone(),
+            })
+            .map(|response| response.member)
+    }
+
     fn commit_workflow_state<T, I, F>(
         &self,
         home_dir: &Path,
@@ -164,4 +209,55 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     {
         workflow::commit_workflow_state(home_dir, team, agent, extra_write_paths, timeout, body)
     }
+}
+
+fn load_store_backed_mailbox_projection(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &AgentName,
+) -> Result<Vec<MessageEnvelope>, AtmError> {
+    let mut metadata_rows = runtime
+        .mail_store
+        .query_mailbox_metadata(crate::boundary::MailStoreQueryMailboxMetadataRequest {
+            team: team.clone(),
+            agent: agent.clone(),
+            limit: None,
+        })?
+        .rows;
+    metadata_rows.sort_by(|left, right| {
+        left.message_at
+            .cmp(&right.message_at)
+            .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
+    });
+
+    metadata_rows
+        .into_iter()
+        .map(|row| load_projection_message(runtime, team, agent, &row.message_key))
+        .collect()
+}
+
+fn load_projection_message(
+    runtime: &LocalServiceRuntime,
+    team: &TeamName,
+    agent: &AgentName,
+    message_key: &MessageKey,
+) -> Result<MessageEnvelope, AtmError> {
+    runtime
+        .mail_store
+        .load_stored_message(crate::boundary::MailStoreLoadStoredMessageRequest {
+            team: team.clone(),
+            agent: agent.clone(),
+            message_key: message_key.clone(),
+        })?
+        .record
+        .map(|record| record.envelope)
+        .ok_or_else(|| {
+            AtmError::validation(format!(
+                "sqlite mailbox metadata row {} could not be reloaded for compatibility inbox export",
+                message_key
+            ))
+            .with_recovery(
+                "Repair or remove the malformed sqlite mailbox row before retrying the ATM command.",
+            )
+        })
 }

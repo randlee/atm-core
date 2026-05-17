@@ -1,7 +1,7 @@
 ---
 id: Y.2
 title: Pre-Smoke Easy Fixes And Validation
-status: planned
+status: complete
 branch: feature/pY-s2-pre-smoke-easy-fixes
 worktree: ../atm-core-worktrees/feature/pY-s2-pre-smoke-easy-fixes
 target: integrate/phase-Y
@@ -27,27 +27,35 @@ target: integrate/phase-Y
 
 ## Exact Targets
 
-- implementation files owned by the approved `Y.2` easy-fix set
-- user-facing docs touched by those easy fixes
+- `crates/atm/src/commands/help.rs`
+- `docs/phase-Y/help.md`
+- `docs/atm/commands/help.md`
 - `docs/phase-Y/sprint-Y2.md`
 - `docs/project-plan.md`
 
 ## Required Work
 
-- land only small, approved pre-smoke fixes
+- complete the explicitly deferred `Y.1` tier-2 help follow-ups only:
+  - add worked `hooks` authoring/troubleshooting examples
+  - add operator-facing `identity` precedence and override examples
+  - add `skills` workflow examples while keeping harness-vs-model boundaries explicit
 - keep scope tight enough that `Y.3` still owns the first serious
   compatibility-write boundary refactor
 - validate that `Y.1` and `Y.2` together do not change the working inbox wire
   contract accidentally
 - record any larger architectural leftovers for `Y.3+` instead of absorbing
   them here
+- do not introduce JSON input work, compatibility writer changes, or boundary
+  refactors in this sprint
 
 ## Acceptance Criteria
 
-- only explicitly approved easy fixes land
+- only the approved tier-2 help/UX easy fixes land
 - no accidental compatibility-inbox format change is introduced
 - larger boundary work remains queued for `Y.3` rather than partially started
   here
+- the three tier-2 topics no longer contain `Y.2 will ...` placeholder language
+- the docs clearly record that `Y.2` completed the deferred `Y.1` help follow-ups
 
 ## Required Validation
 

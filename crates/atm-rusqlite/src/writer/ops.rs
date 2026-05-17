@@ -318,6 +318,8 @@ struct StorageEnvelope<'a> {
     parent_message_id: Option<String>,
     #[serde(rename = "threadMode", skip_serializing_if = "Option::is_none")]
     thread_mode: &'a Option<atm_core::schema::ThreadMode>,
+    #[serde(rename = "expiresAt", skip_serializing_if = "Option::is_none")]
+    expires_at: Option<IsoTimestamp>,
     #[serde(rename = "taskId", skip_serializing_if = "Option::is_none")]
     task_id: &'a Option<atm_core::types::TaskId>,
     #[serde(flatten)]
@@ -330,15 +332,15 @@ impl<'a> StorageEnvelope<'a> {
             from: &envelope.from,
             text: envelope.text.as_str(),
             timestamp: envelope.timestamp,
-            read: false,
+            read: envelope.read,
             source_team: &envelope.source_team,
             summary: &envelope.summary,
             message_id: envelope
                 .message_id
                 .as_ref()
                 .map(|value| value.into_uuid_wire().to_string()),
-            pending_ack_at: None,
-            acknowledged_at: None,
+            pending_ack_at: envelope.pending_ack_at,
+            acknowledged_at: envelope.acknowledged_at,
             acknowledges_message_id: envelope
                 .acknowledges_message_id
                 .as_ref()
@@ -348,6 +350,7 @@ impl<'a> StorageEnvelope<'a> {
                 .as_ref()
                 .map(|value| value.into_uuid_wire().to_string()),
             thread_mode: &envelope.thread_mode,
+            expires_at: envelope.expires_at,
             task_id: &envelope.task_id,
             extra: &envelope.extra,
         }

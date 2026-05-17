@@ -1,0 +1,79 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CI-001>
+  a triage:Finding ;
+  triage:findingId "CI-001" ;
+  triage:title "RULE-002: body() function 105 lines — new hard violation in sprint diff" ;
+  triage:description "help.rs:222-326 body() is 105 lines, violating RULE-002 (max 75 lines). This is a new violation introduced in the Y.2 sprint diff. Fix: split into per-topic const or helper functions." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RULE-002" ;
+  triage:phaseId "phase-Y" ;
+  triage:severity "BLOCKING" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-16T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-001/pY-s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s2/63f9c1a8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/CI-001/pY-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/help.rs" ;
+  triage:line 222 ;
+  triage:snippet "fn body(self) -> &'static str { match self { Self::Config => { ... } Self::Errors => { ... } ... Self::Skills => { ... } } }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:worktree/pY-s2/63f9c1a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pY-s3/unknown>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 2 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/pY-s4/unknown>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s4-delivery-coordinator-and-state-machines" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s4-delivery-coordinator-and-state-machines" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 3 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/pY-s5/unknown>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 4 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/pY-s6/unknown>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 5 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/integrate-Y/c63574cb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "c63574cb" ;
+  triage:orderIndex 6 ;
+  triage:status "absent" .

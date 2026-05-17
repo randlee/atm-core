@@ -3443,7 +3443,13 @@ Target:
 - `integrate/phase-Y` for the execution line
 
 Status:
-- planning
+- in_progress
+
+Status note:
+- `Y.1` merged to `integrate/phase-Y`
+  - branch: `feature/pY-s1-pre-smoke-scaffolding`
+  - PR: `#296`
+  - merge commit: `c63574cb`
 
 Authoritative plans:
 - `docs/plan-phase-Y.md`
@@ -3470,8 +3476,18 @@ Execution shape:
   - deliver `atm help`, `atm help --list`, typed concept-topic help, and
     delegated clap subcommand help without broadening into general JSON-input work
 - `Y.2` pre-smoke easy fixes and validation
+  - close the deferred `Y.1` tier-2 help follow-ups for `hooks`, `identity`,
+    and `skills` without changing the compatibility inbox wire contract
 - `Y.3` hard write-boundary consolidation
+  - complete on `feature/pY-s3-hard-write-boundary-consolidation`
+  - normal retained compatibility rewrite now routes only through
+    `RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
 - `Y.4` delivery coordinator and event-family state machines
+  - complete on `feature/pY-s4-delivery-coordinator-and-state-machines`
+  - retained send/ack harness routing now resolves a copied roster snapshot in
+    `crates/atm-core/src/delivery_policy.rs`
+  - retained compatibility export now stays on the `Claude Code` harness path
+    only; non-Claude harnesses skip ATM-authored JSONL export
 - `Y.5` mutable compatibility-field removal and hidden-dependency exposure
 - `Y.6` append-only compatibility export cutover if the approved wire contract
   allows it
