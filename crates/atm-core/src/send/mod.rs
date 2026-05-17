@@ -169,6 +169,157 @@ struct ValidatedSendContext {
     warnings: Vec<WarningEntry>,
 }
 
+/// Resolved send payload: message body, summary, identifiers, and flags derived
+/// from the [`SendRequest`] and resolved recipient.
+struct SendPayload {
+    task_id: Option<TaskId>,
+    requires_ack: bool,
+    body: String,
+    summary: String,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+}
+
+/// Resolve the message body and build all derived send-time values.
+fn prepare_send_payload(
+    request: &SendRequest,
+    recipient: &ResolvedRecipient,
+) -> Result<SendPayload, AtmError> {
+    let task_id = request.task_id.clone();
+    let requires_ack = request.requires_ack || task_id.is_some();
+    let body = resolve_message_body(
+        &request.message_source,
+        &request.current_dir,
+        &request.home_dir,
+        &recipient.team,
+    )?;
+    let summary = summary::build_summary(&body, request.summary_override.clone());
+    let message_id = AtmMessageId::new();
+    let timestamp = IsoTimestamp::now();
+    Ok(SendPayload {
+        task_id,
+        requires_ack,
+        body,
+        summary,
+        message_id,
+        timestamp,
+    })
+}
+
+/// Resolved sender-side identities needed to build an envelope and run hooks.
+struct ResolvedSenderContext {
+    canonical_sender: AgentName,
+    sender_team: Option<TeamName>,
+    display_sender: AgentName,
+}
+
+/// Resolve sender identity, team, and display name from the request and config.
+fn resolve_sender_context(
+    request: &SendRequest,
+    recipient: &ResolvedRecipient,
+    config: Option<&config::AtmConfig>,
+) -> Result<ResolvedSenderContext, AtmError> {
+    let canonical_sender =
+        identity::resolve_sender_identity(request.sender_override.as_deref(), config)?;
+    let sender_team = config::resolve_team(None, config);
+    let display_sender = display_sender_identity(
+        &canonical_sender,
+        request.sender_override.as_ref(),
+        sender_team.as_ref(),
+        &recipient.team,
+        config,
+    );
+    Ok(ResolvedSenderContext {
+        canonical_sender,
+        sender_team,
+        display_sender,
+    })
+}
+
+/// Construct the [`SendOutcome`] from the resolved send state.
+fn build_send_outcome(
+    recipient: &ResolvedRecipient,
+    canonical_sender: AgentName,
+    payload: &SendPayload,
+    warnings: Vec<WarningEntry>,
+    dry_run: bool,
+    body: String,
+) -> SendOutcome {
+    let command_outcome = if dry_run { "dry_run" } else { "sent" };
+    SendOutcome {
+        action: CommandAction::Send,
+        team: recipient.team.clone(),
+        agent: recipient.agent.clone(),
+        sender: canonical_sender,
+        outcome: command_outcome.to_string(),
+        message_id: payload.message_id,
+        requires_ack: payload.requires_ack,
+        task_id: payload.task_id.clone(),
+        summary: Some(payload.summary.clone()),
+        message: dry_run.then_some(body),
+        warnings,
+        dry_run,
+    }
+}
+
+/// Fire the post-send hook when not in dry-run mode.
+#[allow(clippy::too_many_arguments)]
+fn emit_post_send_hook<R: RetainedServiceRuntime>(
+    runtime: &R,
+    dry_run: bool,
+    warnings: &mut Vec<WarningEntry>,
+    config: Option<&config::AtmConfig>,
+    canonical_sender: &AgentName,
+    sender_team: Option<&TeamName>,
+    recipient: &ResolvedRecipient,
+    message_id: AtmMessageId,
+    requires_ack: bool,
+    task_id: Option<&TaskId>,
+) {
+    if !dry_run {
+        runtime.maybe_run_post_send_hook(
+            warnings,
+            config,
+            PostSendHookContext {
+                sender: canonical_sender,
+                sender_team,
+                recipient,
+                recipient_pane_id: None,
+                message_id,
+                requires_ack,
+                is_ack: false,
+                task_id,
+            },
+        );
+    }
+}
+
+/// Emit a send command observability event, logging a warning on failure.
+fn emit_send_telemetry(
+    observability: &dyn ObservabilityPort,
+    outcome: &SendOutcome,
+    canonical_sender: AgentName,
+    command_outcome: &'static str,
+    task_id: Option<TaskId>,
+) {
+    if let Err(error) = observability.emit(CommandEvent {
+        command: "send",
+        action: "send",
+        outcome: command_outcome,
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: canonical_sender,
+        message_id: Some(outcome.message_id),
+        requires_ack: outcome.requires_ack,
+        dry_run: outcome.dry_run,
+        task_id,
+        error_code: None,
+        error_message: None,
+    }) {
+        warn!(%error, command = "send", action = "send", "failed to emit send command event");
+    }
+}
+
 /// Validate team config presence and membership for the resolved recipient.
 ///
 /// Returns the inbox path and any accumulated warnings.  On success the
@@ -297,21 +448,16 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     runtime: &R,
 ) -> Result<SendOutcome, AtmError> {
     let config = runtime.load_config(&request.current_dir)?;
-    let canonical_sender =
-        identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
     let recipient = resolve_recipient(
         &request.to,
         request.team_override.as_deref(),
         config.as_ref(),
     )?;
-    let sender_team = config::resolve_team(None, config.as_ref());
-    let display_sender = display_sender_identity(
-        &canonical_sender,
-        request.sender_override.as_ref(),
-        sender_team.as_ref(),
-        &recipient.team,
-        config.as_ref(),
-    );
+    let ResolvedSenderContext {
+        canonical_sender,
+        sender_team,
+        display_sender,
+    } = resolve_sender_context(&request, &recipient, config.as_ref())?;
 
     let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
@@ -323,17 +469,7 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         warnings,
     } = validate_team_config(runtime, &request, &recipient, &team_dir)?;
 
-    let task_id = request.task_id.clone();
-    let requires_ack = request.requires_ack || task_id.is_some();
-    let body = resolve_message_body(
-        &request.message_source,
-        &request.current_dir,
-        &request.home_dir,
-        &recipient.team,
-    )?;
-    let summary = summary::build_summary(&body, request.summary_override.clone());
-    let message_id = AtmMessageId::new();
-    let timestamp = IsoTimestamp::now();
+    let payload = prepare_send_payload(&request, &recipient)?;
 
     if !request.dry_run {
         build_and_persist_envelope(
@@ -343,63 +479,45 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
             &inbox_path,
             &display_sender,
             sender_team.as_ref(),
-            &body,
-            &summary,
-            message_id,
-            timestamp,
-            requires_ack,
+            &payload.body,
+            &payload.summary,
+            payload.message_id,
+            payload.timestamp,
+            payload.requires_ack,
         )?;
     }
 
     let command_outcome = if request.dry_run { "dry_run" } else { "sent" };
-    let mut outcome = SendOutcome {
-        action: CommandAction::Send,
-        team: recipient.team.clone(),
-        agent: recipient.agent.clone(),
-        sender: canonical_sender.clone(),
-        outcome: command_outcome.to_string(),
-        message_id,
-        requires_ack,
-        task_id: task_id.clone(),
-        summary: Some(summary),
-        message: request.dry_run.then_some(body),
+    let body = payload.body.clone();
+    let mut outcome = build_send_outcome(
+        &recipient,
+        canonical_sender.clone(),
+        &payload,
         warnings,
-        dry_run: request.dry_run,
-    };
+        request.dry_run,
+        body,
+    );
 
-    if !request.dry_run {
-        runtime.maybe_run_post_send_hook(
-            &mut outcome.warnings,
-            config.as_ref(),
-            PostSendHookContext {
-                sender: &canonical_sender,
-                sender_team: sender_team.as_ref(),
-                recipient: &recipient,
-                recipient_pane_id: None,
-                message_id,
-                requires_ack,
-                is_ack: false,
-                task_id: task_id.as_ref(),
-            },
-        );
-    }
+    emit_post_send_hook(
+        runtime,
+        request.dry_run,
+        &mut outcome.warnings,
+        config.as_ref(),
+        &canonical_sender,
+        sender_team.as_ref(),
+        &recipient,
+        payload.message_id,
+        payload.requires_ack,
+        payload.task_id.as_ref(),
+    );
 
-    if let Err(error) = observability.emit(CommandEvent {
-        command: "send",
-        action: "send",
-        outcome: command_outcome,
-        team: outcome.team.clone(),
-        agent: outcome.agent.clone(),
-        sender: canonical_sender,
-        message_id: Some(outcome.message_id),
-        requires_ack: outcome.requires_ack,
-        dry_run: outcome.dry_run,
-        task_id,
-        error_code: None,
-        error_message: None,
-    }) {
-        warn!(%error, command = "send", action = "send", "failed to emit send command event");
-    }
+    emit_send_telemetry(
+        observability,
+        &outcome,
+        canonical_sender,
+        command_outcome,
+        payload.task_id,
+    );
 
     Ok(outcome)
 }
