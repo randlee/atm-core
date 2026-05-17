@@ -1,5 +1,6 @@
 //! Send command service implementation and post-send hook handling.
 
+use std::iter;
 use std::path::{Path, PathBuf};
 
 use serde::{Deserialize, Serialize};
@@ -277,7 +278,7 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
             task_id: task_id.clone(),
             extra: Map::new(),
         };
-        append_mailbox_message_and_seed_workflow(
+        persist_message_and_seed_workflow(
             runtime,
             &request.home_dir,
             &recipient.team,
@@ -460,7 +461,7 @@ fn notify_team_lead_missing_config(
         extra: Map::new(),
     };
 
-    if let Err(error) = append_mailbox_message_and_seed_workflow(
+    if let Err(error) = persist_message_and_seed_workflow(
         runtime,
         home_dir,
         team,
@@ -479,7 +480,7 @@ fn notify_team_lead_missing_config(
     }
 }
 
-pub(crate) fn append_mailbox_message_and_seed_workflow(
+pub(crate) fn persist_message_and_seed_workflow(
     runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     home_dir: &Path,
     team: &TeamName,
@@ -488,29 +489,29 @@ pub(crate) fn append_mailbox_message_and_seed_workflow(
     envelope: &MessageEnvelope,
     require_existing_inbox: bool,
 ) -> Result<(), AtmError> {
+    if require_existing_inbox && !inbox_path.exists() {
+        return Ok(());
+    }
+
+    let mut prepared = envelope.clone();
+    let inbox_messages = load_store_backed_mailbox_projection(runtime, home_dir, team, agent)?;
+    prepare_threaded_message(&mut prepared, &inbox_messages)?;
+
     runtime.commit_workflow_state(
         home_dir,
         team,
         agent,
-        [inbox_path.to_path_buf()],
+        iter::empty(),
         runtime.mailbox_timeout_policy().workflow_lock_timeout,
         |workflow_state| {
-            if require_existing_inbox && !inbox_path.exists() {
-                return Ok(((), false));
-            }
-            let mut inbox_messages =
-                load_store_backed_mailbox_projection(runtime, home_dir, team, agent)?;
-            let mut prepared = envelope.clone();
-            prepare_threaded_message(&mut prepared, &inbox_messages)?;
-            inbox_messages.push(prepared.clone());
-            crate::mailbox::store::write_compat_mailbox_projection(inbox_path, &inbox_messages)?;
             mirror_message_to_store(runtime, team, agent, &prepared)?;
             Ok((
                 (),
                 workflow::remember_initial_state(workflow_state, &prepared),
             ))
         },
-    )
+    )?;
+    runtime.refresh_compat_inbox_projection(home_dir, team, agent)
 }
 
 fn load_store_backed_mailbox_projection(

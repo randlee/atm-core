@@ -298,6 +298,15 @@ impl AtmError {
         )
     }
 
+    pub fn help_topic_not_found(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::HelpTopicNotFound,
+            AtmErrorKind::Validation,
+            message,
+        )
+        .with_recovery("Use `atm help --list` to inspect available help topics and subcommands.")
+    }
+
     pub fn test_fake_transport_injection_failed(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::TestFakeTransportInjectionFailed,

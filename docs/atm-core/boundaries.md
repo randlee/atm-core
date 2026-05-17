@@ -129,6 +129,9 @@ Notes:
   errors instead of selecting a second mailbox backend.
 - Compatibility inbox files remain ingress/export surfaces, not a parallel
   durable mailbox implementation behind retained command logic.
+- After `Y.3`, retained `send` reaches compatibility rewrite only through the
+  post-commit runtime refresh owner; retained `ack` and `clear` no longer own
+  source-inbox compatibility rewrites.
 
 ## TaskStore
 
