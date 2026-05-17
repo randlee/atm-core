@@ -101,13 +101,10 @@ git diff --check
   - `git diff --check`
 - follow-up hardening notes:
   - `RSH-Y9-001` is waived because `NonClaudeOutbound::deliver_payloads(...)`
-    runs under the daemon's thread-per-connection (`std::thread`) IPC model,
-    so `spawn_blocking` is not applicable there
-  - `RSH-Y9-002` is a no-op on this branch because
-    `atm_core::protocol::MAX_DAEMON_FRAME_BYTES` already bounds the request
-    upstream before it reaches
-    `crates/atm-daemon/src/non_claude_outbound_runtime.rs`; the branch adds
-    the explicit code comment instead of a second size guard
-  - `RSH-001` is documented in-code only: blocking filesystem I/O here is
-    accepted because the daemon's thread-per-connection model is already
-    capped by `MAX_CONCURRENT_CONNECTIONS` (64)
+    is a synchronous trait seam; blocking filesystem I/O is the intended
+    execution model and `spawn_blocking` is not applicable there
+  - `RSH-Y9-002` is closed with
+    `MAX_NON_CLAUDE_PAYLOAD_BYTES = 1024 * 1024` in
+    `crates/atm-daemon/src/non_claude_outbound_runtime.rs`
+  - `RSH-001` is closed with the in-code `MAX_CONCURRENT_CONNECTIONS`
+    comments beside the retained `write_all(...)` and `sync_data(...)` calls
