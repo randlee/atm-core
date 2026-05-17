@@ -414,7 +414,8 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     persist_message_and_seed_workflow(
         runtime,
         home_dir(context.request),
-        context.reply_snapshot,
+        &context.reply_target.team,
+        &context.reply_target.agent,
         &reply_inbox_path,
         &reply_message,
         false,
