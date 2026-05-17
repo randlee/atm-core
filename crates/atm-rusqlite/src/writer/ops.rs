@@ -115,31 +115,51 @@ fn execute_upsert_message(
         })?
         == 1;
     if inserted {
-        cache
-            .upsert_message_state(
-                connection,
-                params![
-                    record.team.as_str(),
-                    record.agent.as_str(),
-                    record.message_key.as_ref(),
-                    i64::from(record.envelope.read),
-                    pending_ack_at,
-                    acknowledged_at,
-                    expires_at,
-                    Option::<String>::None,
-                    recorded_at,
-                ],
-            )
-            .map_err(|error| {
-                crate::shared_db::sqlite_error(
-                    target,
-                    "failed to upsert mail message state row",
-                    error,
-                )
-            })?;
+        let timestamps = InitialStateTimestamps {
+            pending_ack_at,
+            acknowledged_at,
+            expires_at,
+            recorded_at,
+        };
+        insert_initial_message_state(connection, cache, target, record, timestamps)?;
     }
 
     Ok(WriteOpResult::UpsertMessage { inserted })
+}
+
+struct InitialStateTimestamps {
+    pending_ack_at: Option<String>,
+    acknowledged_at: Option<String>,
+    expires_at: Option<String>,
+    recorded_at: String,
+}
+
+fn insert_initial_message_state(
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+    record: &boundary::MailStoreMessageRecord,
+    timestamps: InitialStateTimestamps,
+) -> Result<(), AtmError> {
+    cache
+        .upsert_message_state(
+            connection,
+            params![
+                record.team.as_str(),
+                record.agent.as_str(),
+                record.message_key.as_ref(),
+                i64::from(record.envelope.read),
+                timestamps.pending_ack_at,
+                timestamps.acknowledged_at,
+                timestamps.expires_at,
+                Option::<String>::None,
+                timestamps.recorded_at,
+            ],
+        )
+        .map_err(|error| {
+            crate::shared_db::sqlite_error(target, "failed to upsert mail message state row", error)
+        })?;
+    Ok(())
 }
 
 fn validate_message_record(
@@ -168,6 +188,19 @@ fn validate_message_record(
         ));
     }
 
+    validate_single_successor_invariant(record, connection, cache, target)?;
+    validate_message_id_uniqueness(record, connection, cache, target)?;
+
+    Ok(())
+}
+
+fn validate_single_successor_invariant(
+    record: &boundary::MailStoreMessageRecord,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    let message_key = record.message_key.as_ref();
     if let Some(parent_message_id) = record.envelope.parent_message_id {
         let owner = cache
             .load_successor_owner(
@@ -197,7 +230,16 @@ fn validate_message_record(
             ));
         }
     }
+    Ok(())
+}
 
+fn validate_message_id_uniqueness(
+    record: &boundary::MailStoreMessageRecord,
+    connection: &Connection,
+    cache: &mut WriterStatementCache,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    let message_key = record.message_key.as_ref();
     if let Some(message_id) = record.envelope.message_id {
         let owner = cache
             .load_message_id_owner(
@@ -227,7 +269,6 @@ fn validate_message_record(
             ));
         }
     }
-
     Ok(())
 }
 

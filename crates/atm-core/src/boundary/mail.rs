@@ -74,6 +74,31 @@ pub struct MailMessageState {
     pub updated_at: Option<IsoTimestamp>,
 }
 
+/// Opaque hash or content-addressable identifier that marks the last
+/// successfully ingested message boundary for a replay source. Used by
+/// incremental ingest workflows to resume without re-processing already-seen
+/// messages.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+pub struct MessageFingerprint(pub String);
+
+impl std::fmt::Display for MessageFingerprint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.0)
+    }
+}
+
+impl From<String> for MessageFingerprint {
+    fn from(s: String) -> Self {
+        Self(s)
+    }
+}
+
+impl AsRef<str> for MessageFingerprint {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MailStoreIngestReplayState {
     pub team: TeamName,
@@ -83,7 +108,7 @@ pub struct MailStoreIngestReplayState {
     /// synthesized from an empty or whitespace-only string.
     pub source: ReplaySource,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_fingerprint: Option<String>,
+    pub last_fingerprint: Option<MessageFingerprint>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_ingested_at: Option<IsoTimestamp>,
     #[serde(default)]
