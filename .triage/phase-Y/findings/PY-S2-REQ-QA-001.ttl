@@ -1,0 +1,82 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/PY-S2-REQ-QA-001>
+  a triage:Finding ;
+  triage:findingId "PY-S2-REQ-QA-001" ;
+  triage:title "project-plan.md Phase Y status still 'planning', no sprint completion records" ;
+  triage:description "docs/project-plan.md:3445-3446 — Phase Y status field still shows 'Status: planning'. No sprint completion records for Y.1 or Y.2. Prior phases (Phase W) have per-sprint completion records with PR numbers and merge commits. Fix: update Phase Y status to 'complete' and add Y.1/Y.2 completion records following prior phase pattern." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ" ;
+  triage:severity "BLOCKING" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-16T19:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-REQ-QA-001/pY-s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s2/63f9c1a8> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s3/unknown> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s4/unknown> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/unknown> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/unknown> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-Y/c63574cb> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s2/63f9c1a8> ;
+  triage:pattern "Phase plan status not updated after sprint completion" ;
+  triage:file "docs/project-plan.md" ;
+  triage:lineStart 3445 ;
+  triage:lineEnd 3446 .
+
+<urn:atm:triage:occurrence/PY-S2-REQ-QA-001/pY-s2/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 3445 ;
+  triage:snippet "Status:\n- planning" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:worktree/pY-s2/63f9c1a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pY-s3/unknown>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pY-s4/unknown>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s4-delivery-coordinator-and-state-machines" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s4-delivery-coordinator-and-state-machines" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pY-s5/unknown>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pY-s6/unknown>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-Y/c63574cb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "c63574cb" ;
+  triage:orderIndex 6 .
