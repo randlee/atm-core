@@ -1288,8 +1288,12 @@ fn find_inbox_json_line(raw: &str, text: &str) -> serde_json::Value {
 }
 
 fn write_inbox(path: &std::path::Path, messages: &[MessageEnvelope]) {
-    let raw = serde_json::to_string_pretty(messages).expect("json array");
-    fs::write(path, format!("{raw}\n")).expect("write inbox");
+    let mut raw = String::new();
+    for message in messages {
+        raw.push_str(&serde_json::to_string(message).expect("json line"));
+        raw.push('\n');
+    }
+    fs::write(path, raw).expect("write inbox");
 }
 
 fn sentinel_path(path: &std::path::Path) -> std::path::PathBuf {

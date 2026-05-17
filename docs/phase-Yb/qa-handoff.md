@@ -77,3 +77,7 @@ Y.10 is not complete unless QA can prove:
   primitives
 - smoke/dogfood planning can resume without reopening Yb path-consolidation
   work
+- normal Claude append delivery fails closed on legacy array inboxes instead of
+  silently rewriting them through the rebuild seam
+- rebuild/reexport rewrite remains available only through the explicit
+  repair/rebuild boundary path

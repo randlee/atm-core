@@ -3548,7 +3548,14 @@ Status summary:
   line, but the production-readiness review still found structural message-path
   issues that must be planned and implemented before broad smoke/dogfood work
   resumes.
-- Phase `Yb` is a planning-first correction line off `develop`.
+- Phase `Yb` is now fully implemented through `Y.10`.
+- the line closes with:
+  - shared delivery plans across Claude/non-Claude harness paths
+  - a dedicated `NonClaudeOutbound` payload boundary
+  - fail-closed handling for missing roster harness data
+  - repair/rebuild-only mailbox rewrite seams
+- smoke/dogfood work may now resume on the follow-on line without reopening
+  the same message-path consolidation issues.
 
 Goal:
 - lock down the exact message-path consolidation work needed after `Phase Y`

@@ -81,22 +81,35 @@ Enforcement point:
 1. only the approved Claude executor module may call:
    - `RetainedServiceRuntime::append_compat_inbox_message(...)`
    - `mailbox::store::append_compat_mailbox_message(...)`
+   - approved owner:
+     `atm_core::delivery_execution::ClaudeInboxWriter`
 2. only the approved non-Claude executor module may call:
    - `atm_core::boundary::NonClaudeOutbound`
-2. only approved repair/rebuild modules may call:
+   - approved owner:
+     `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
+3. only approved repair/rebuild modules may call:
    - `mailbox::store::write_compat_mailbox_projection(...)`
    - `direct_boundaries::reexport_messages(...)`
-3. `send/persistence.rs` must not call:
+   - approved owners:
+     - `atm_core::service_runtime::RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
+     - `atm_core::direct_boundaries::reexport_messages(...)`
+     - `atm_daemon::boundary_adapters::DaemonInboxExport::reexport_message(...)`
+4. `send/persistence.rs` must not call:
    - any compatibility append/write primitive
    - any post-send notification primitive
-4. `send/mod.rs` and `ack/mod.rs` must not:
+5. `send/mod.rs` and `ack/mod.rs` must not:
    - branch on `DeliveryHarnessPath`
    - branch on `allows_claude_jsonl_append()`
    - translate persistence dispositions into state-machine outcomes
    - translate execution dispositions into transition names
-5. `send/hook.rs` must not:
+6. `send/hook.rs` must not:
    - accept full `MessageEnvelope` delivery authority
    - become a second outbound payload boundary
+7. `service_runtime::append_compat_inbox_message(...)` must:
+   - fail closed on legacy array mailboxes
+   - direct callers to the explicit repair/rebuild projection seam
+   - never trigger `direct_boundaries::reexport_messages(...)` from the normal
+     append-only runtime path
 
 ### 3. Runtime fail-closed checks
 
@@ -114,6 +127,8 @@ Rules:
 4. append-degraded transition emission for `DeliveryHarnessPath::NonClaude`
    fails closed inside `delivery_execution` because non-Claude append
    degradation is not a valid runtime concept
+5. legacy array inboxes fail closed from the normal Claude append path and can
+   be rewritten only through the explicit repair/rebuild seam
 
 ### Module-ownership documentation
 

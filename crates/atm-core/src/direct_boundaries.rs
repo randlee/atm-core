@@ -44,5 +44,8 @@ pub fn export_source_files(
 pub fn reexport_messages(
     request: InboxExportReexportMessageRequest,
 ) -> Result<InboxExportReexportMessageResponse, AtmError> {
+    // Yb Y.10 constrains full mailbox re-export to explicit repair/rebuild
+    // seams. Normal runtime delivery must use append-only Claude execution or
+    // the typed non-Claude outbound boundary instead.
     crate::boundary_support::reexport_messages(request)
 }

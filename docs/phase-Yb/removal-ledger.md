@@ -178,3 +178,44 @@ Rows that remain intentionally open after `Y.9`:
 
 Those remaining rows are deferred to `Y.10` exactly as assigned above; they
 are not regressions in `Y.9`.
+
+## Y.10 Closure Notes
+
+`feature/pYb-s10-boundary-enforcement-and-smoke-handoff` closes the remaining
+`Y.10` rows by isolating full mailbox rewrite behind the explicit
+repair/rebuild seam and removing the last silent runtime fallback from append
+delivery into full re-export.
+
+Closed rows:
+
+- `YB-RM-017`
+- `YB-RM-018`
+- `YB-RM-020`
+- `YB-RM-021`
+- `YB-RM-022`
+- `YB-RM-023`
+- `YB-RM-024`
+- `YB-RM-025`
+
+Implemented seam on this branch:
+
+- `crates/atm-core/src/service_runtime.rs`
+  - `refresh_compat_inbox_projection(...)` remains the explicit
+    repair/rebuild-only rewrite seam
+  - `append_compat_inbox_message(...)` now fails closed on legacy array
+    inboxes instead of silently triggering full mailbox rewrite
+- `crates/atm-core/src/direct_boundaries.rs`
+  - `reexport_messages(...)` is now documented as repair/rebuild-only
+- `crates/atm-core/src/boundary_support.rs`
+  - `reexport_messages(...)` remains the low-level rebuild/write bridge only
+- `crates/atm-core/src/mailbox/mod.rs`
+  - `export_compat_mailbox_projection(...)` is now explicitly documented as
+    the repair/rebuild-only rewrite seam
+- `boundaries/atm-core/inbox-export.toml`
+  - final caller allowlists and repair/rebuild-only rewrite contract are
+    declared for the `InboxExport` boundary
+- `boundaries/atm-daemon/daemon-inbox-export.toml`
+  - final daemon adapter allowlists and repair/rebuild-only rewrite contract
+    are declared for the daemon `InboxExport` adapter
+
+No Yb removal-ledger rows remain open after `Y.10`.
