@@ -1,6 +1,6 @@
 use std::fs::OpenOptions;
 use std::io::Write;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use atm_core::boundary::{
@@ -8,8 +8,22 @@ use atm_core::boundary::{
 };
 use atm_core::error::AtmError;
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "Retained for the sealed non-Claude boundary implementation and targeted tests while production wiring stays on the retained runtime seam."
+    )
+)]
 type OutputPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
-
+const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "Retained for the sealed non-Claude boundary implementation and targeted tests while production wiring stays on the retained runtime seam."
+    )
+)]
 #[derive(Clone)]
 pub(crate) struct DaemonNonClaudeOutbound {
     path_factory: OutputPathFactory,
@@ -21,7 +35,15 @@ impl std::fmt::Debug for DaemonNonClaudeOutbound {
     }
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "Retained for the sealed non-Claude boundary implementation and targeted tests while production wiring stays on the retained runtime seam."
+    )
+)]
 impl DaemonNonClaudeOutbound {
+    #[allow(dead_code)]
     pub(crate) fn new() -> Self {
         Self::new_with_path_factory(Arc::new(|| {
             Ok(atm_core::home::host_runtime_dir()?.join("non_claude_outbound.jsonl"))
@@ -45,68 +67,89 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
         &self,
         request: NonClaudeOutboundDeliveryRequest,
     ) -> Result<NonClaudeOutboundDeliveryResponse, AtmError> {
+        // This trait is intentionally synchronous; blocking filesystem I/O is
+        // the correct execution model here and `spawn_blocking` would violate
+        // the trait contract rather than improve it.
         let output_path = (self.path_factory)()?;
-        let parent = output_path.parent().ok_or_else(|| {
-            AtmError::mailbox_write(format!(
-                "non-Claude outbound path {} has no parent directory",
-                output_path.display()
-            ))
-            .with_recovery(
-                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-            )
-        })?;
-        std::fs::create_dir_all(parent).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to create non-Claude outbound directory {}: {error}",
-                parent.display()
-            ))
-            .with_recovery(
-                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-            )
-            .with_source(error)
-        })?;
-
         let mut bytes = serde_json::to_vec(&request)?;
+        if bytes.len() > MAX_NON_CLAUDE_PAYLOAD_BYTES {
+            return Err(AtmError::mailbox_write(format!(
+                "non-Claude outbound payload for {} exceeded {MAX_NON_CLAUDE_PAYLOAD_BYTES} bytes",
+                output_path.display()
+            ))
+            .with_recovery(
+                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink.",
+            ));
+        }
         bytes.push(b'\n');
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&output_path)
-            .map_err(|error| {
-                AtmError::mailbox_write(format!(
-                    "failed to open non-Claude outbound sink {} for append: {error}",
-                    output_path.display()
-                ))
-                .with_recovery(
-                    "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-                )
-                .with_source(error)
-            })?;
-        file.write_all(&bytes).map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to append non-Claude outbound payload {}: {error}",
-                output_path.display()
-            ))
-            .with_recovery(
-                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-            )
-            .with_source(error)
-        })?;
-        file.sync_data().map_err(|error| {
-            AtmError::mailbox_write(format!(
-                "failed to sync non-Claude outbound payload {}: {error}",
-                output_path.display()
-            ))
-            .with_recovery(
-                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
-            )
-            .with_source(error)
-        })?;
+        append_payload_to_file(&output_path, &bytes)?;
 
         Ok(NonClaudeOutboundDeliveryResponse {
             delivered_messages: request.messages.len(),
         })
     }
+}
+
+fn append_payload_to_file(output_path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
+    let parent = output_path.parent().ok_or_else(|| {
+        AtmError::mailbox_write(format!(
+            "non-Claude outbound path {} has no parent directory",
+            output_path.display()
+        ))
+        .with_recovery(
+            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+        )
+    })?;
+    std::fs::create_dir_all(parent).map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to create non-Claude outbound directory {}: {error}",
+            parent.display()
+        ))
+        .with_recovery(
+            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+        )
+        .with_source(error)
+    })?;
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(output_path)
+        .map_err(|error| {
+            AtmError::mailbox_write(format!(
+                "failed to open non-Claude outbound sink {} for append: {error}",
+                output_path.display()
+            ))
+            .with_recovery(
+                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+            )
+            .with_source(error)
+        })?;
+    // MAX_CONCURRENT_CONNECTIONS bounds callers here; FS stall under that
+    // ceiling is accepted delivery latency.
+    file.write_all(bytes).map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to append non-Claude outbound payload {}: {error}",
+            output_path.display()
+        ))
+        .with_recovery(
+            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+        )
+        .with_source(error)
+    })?;
+    // MAX_CONCURRENT_CONNECTIONS bounds callers here; FS stall under that
+    // ceiling is accepted delivery latency.
+    file.sync_data().map_err(|error| {
+        AtmError::mailbox_write(format!(
+            "failed to sync non-Claude outbound payload {}: {error}",
+            output_path.display()
+        ))
+        .with_recovery(
+            "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+        )
+        .with_source(error)
+    })?;
+    Ok(())
 }
 
 #[cfg(test)]
@@ -162,5 +205,41 @@ mod tests {
         assert_eq!(record.agent.as_str(), "recipient");
         assert_eq!(record.messages.len(), 1);
         assert_eq!(record.messages[0].from.as_str(), TEST_SENDER);
+    }
+
+    #[test]
+    fn daemon_non_claude_outbound_rejects_payloads_above_size_cap() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let output_path = tempdir.path().join("non_claude_outbound.jsonl");
+        let runtime = DaemonNonClaudeOutbound::new_for_test_with_path(output_path.clone());
+
+        let oversized = NonClaudeOutboundDeliveryRequest {
+            team: TEST_TEAM.parse().expect("team"),
+            agent: "recipient".parse().expect("agent"),
+            recipient_pane_id: Some("pane-1".to_string()),
+            messages: vec![MessageEnvelope {
+                from: TEST_SENDER.parse().expect("sender"),
+                text: "x".repeat(1024 * 1024),
+                timestamp: IsoTimestamp::now(),
+                read: false,
+                source_team: Some(TEST_TEAM.parse().expect("source team")),
+                summary: Some("oversized".to_string()),
+                message_id: Some(AtmMessageId::new()),
+                pending_ack_at: None,
+                acknowledged_at: None,
+                acknowledges_message_id: None,
+                parent_message_id: None,
+                thread_mode: None,
+                expires_at: None,
+                task_id: None,
+                extra: Map::new(),
+            }],
+        };
+
+        let error = runtime
+            .deliver_payloads(oversized)
+            .expect_err("oversized payload must fail");
+        assert!(error.to_string().contains("exceeded"));
+        assert!(!output_path.exists());
     }
 }
