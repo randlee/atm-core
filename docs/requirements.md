@@ -31,6 +31,9 @@ The retained product surface is:
 - `atm teams`
 - `atm members`
 
+Approved additive CLI feature for the Phase `Y` line:
+- `atm help`
+
 The system must preserve the retained command behavior unless these
 requirements explicitly retire or change it.
 
@@ -1741,6 +1744,58 @@ Each member object must expose at least:
 - `name`
 - persisted local member metadata when present
 
+## 13.5 `atm help` (Phase Y additive CLI feature)
+
+Product requirement ID:
+- `REQ-P-HELP-001` `atm help` must satisfy the documented conceptual-help
+  contract for the daemon + SQLite release line.
+
+Satisfied by:
+- `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
+- `REQ-ATM-OUT-001` for human-readable and JSON output aspects
+
+### 13.5.1 Purpose
+
+Provide one ATM-owned conceptual help surface that complements clap-generated
+syntax help without duplicating the flag/argument contract already exposed by
+`--help`.
+
+### 13.5.2 Required Behavior
+
+`atm help` must:
+- remain a separate subcommand from clap-generated `atm --help`
+- provide `atm help --list`
+- provide `atm help <topic>`
+- provide `atm help <topic> --json`
+- delegate `atm help <subcommand>` to the authoritative clap `--help` output
+  first, with any ATM-owned prose appended after that output when needed
+- treat clap output as the single source of truth for command flag
+  documentation
+- keep concept topics in one typed topic registry rather than scattered prose
+  fragments
+
+Tier-1 concept topics for the first delivery:
+- `config`
+- `errors`
+
+Tier-2 concept topics for the first delivery:
+- `hooks`
+- `identity`
+- `skills`
+
+### 13.5.3 Output Contract
+
+Human output must:
+- clearly distinguish concept topics from command syntax help
+- preserve clap output verbatim when the target is a subcommand
+
+JSON output must:
+- expose the requested topic or command target
+- identify whether the result is:
+  - `concept_topic`
+  - `command_help`
+- include the rendered help body in a structured field suitable for agent use
+
 ## 14. Message And Workflow Model
 
 Product requirement ID:
@@ -3148,6 +3203,56 @@ mail correctness.
     of JSONL
   - the later agent plugin crate must align to this daemon API rather than
     introducing a parallel message transport
+
+- `REQ-CORE-COMPAT-003` Compatibility export and nudge policy must be owned by
+  explicit event-family state machines.
+
+  Required behavior:
+  - one central delivery-policy coordinator dispatches by event family and
+    canonical roster `harness`
+  - harness routing is based on `RosterHarness`, not model strings
+  - the coordinator must not collapse all delivery behavior into one universal
+    send state enum
+  - at minimum the implementation must expose:
+    - `NewMessageStateMachine`
+    - `ThreadUpdateStateMachine`
+  - `NewMessageStateMachine` must have distinct audited Claude-harness and
+    non-Claude-harness paths
+  - `ThreadUpdateStateMachine` must remain distinct because parent/root
+    legality, sender-match checks, and one-successor rules are not new-message
+    semantics
+  - observable transition emission is required for every write-affecting state
+    transition
+
+- `REQ-CORE-COMPAT-004` Non-Claude harnesses must never receive ATM-authored
+  JSONL append output.
+
+  Required behavior:
+  - only `RosterHarness::ClaudeCode` may take the compatibility JSONL append
+    branch
+  - `codex-cli`, `gemini-cli`, `opencode`, and later non-Claude harnesses must
+    use non-JSONL delivery/notification paths
+  - this branch must not depend on model strings
+
+- `REQ-CORE-COMPAT-005` New-message SQLite failure must emit a companion system
+  error message instead of silently degrading.
+
+  Required behavior:
+  - if the durable SQLite write succeeds:
+    - the original message proceeds normally
+  - if the durable SQLite write fails:
+    - the original outward message still proceeds
+    - for `RosterHarness::ClaudeCode`, ATM appends:
+      - the original message
+      - a second error message from `atm-system@<team>`
+    - for non-Claude harnesses, ATM emits:
+      - the original message through the non-Claude delivery path
+      - a second error message from `atm-system@<team>` through the same
+        non-Claude delivery path
+    - the notification/nudge behavior mirrors both messages
+  - if the Claude-harness append fails after a successful SQLite write:
+    - the fallback notification path is post-send-hook execution
+  - no alternate fallback path may replace the companion error-message rule
 
 ### 21.6 Lock Elimination Target
 

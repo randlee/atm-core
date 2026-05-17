@@ -322,6 +322,10 @@ Compatibility and recovery policy placement for daemon-owned config/inbox adapte
 - `InboxIngress` must not own read/ack/clear business policy, workflow-state mutation policy, or mailbox lifecycle transitions beyond import normalization.
 - `InboxExport` may own projection from ATM-owned source records back into compatibility mailbox shapes and write-bound export validation.
 - `InboxExport` must not own read-path reconciliation, task-state updates, or notification/runtime policy.
+- one delivery-policy coordinator above `InboxExport` must decide:
+  - whether a given event may use compatibility export
+  - which harness path applies
+  - which event-family state machine owns the transition
 
 ## DaemonNotificationSinkAdapter
 

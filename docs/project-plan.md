@@ -3418,13 +3418,90 @@ Delivered:
   emission
 - `atm ack` validation cleanup to remove redundant dual state derivation
 - architecture wording cleanup for the current clear-eligibility model
+- safe `GH #78` follow-up to preserve the working compatibility inbox contract
+  while adding regression coverage
 - design proposals for GitHub issues `#78` and `#83` sent to `team-lead`
-- safe `#78` follow-up landed on the same branch:
-  - JSONL ingress regression coverage added
-  - current array-shaped ATM compatibility rewrite behavior documented and
-    regression-tested
 - trivial-fixes QA-1 follow-up landed on the same branch:
   - generic internal fallback code for non-ATM fatal-error logging
   - infallible `resolve_reply_target(...)` contract cleanup
   - `atm ack` structured warn-field completion
-- `#83` implementation intentionally deferred to Phase `Y` Sprint `Y.1`
+- `GH #83` implementation intentionally deferred to Phase `Y` Sprint `Y.1`
+
+## 31. Phase Y Daemon Release Readiness, Compatibility Write Simplification, And Smoke Rollout
+
+Planning branch:
+- `feature/pY-s0-planning`
+
+Pre-phase implementation branch:
+- `feature/pY-trivial-fixes`
+
+Future integration branch:
+- `integrate/phase-Y`
+
+Target:
+- `develop` for planning / pre-phase setup
+- `integrate/phase-Y` for the execution line
+
+Status:
+- planning
+
+Authoritative plans:
+- `docs/plan-phase-Y.md`
+- `docs/plan-phase-Z.md`
+
+Goal:
+- make the first daemon + SQLite mail-SSOT release safe for real operator use
+- minimize ATM-authored metadata on the shared inbox surface
+- move all ATM-authored compatibility inbox/config writes behind one hard
+  owner boundary
+- centralize delivery routing into one coordinator plus explicit event-family
+  state machines
+- remove mutable workflow-state projection from compatibility output
+- document every CLI/client-socket write path and every SQLite query state
+  machine so QA can verify simplification directly
+- close implementation cleanup before progressive smoke and dogfood validation
+  begin on the next phase line
+
+Execution shape:
+- `Y.0` pre-smoke trivial fixes on `feature/pY-trivial-fixes`
+- planning-branch audits and the shared-inbox field decision framework
+  complete before numbered sprint execution begins
+- `Y.1` `atm help` and UX improvements
+- `Y.2` pre-smoke easy fixes and validation
+- `Y.3` hard write-boundary consolidation
+- `Y.4` delivery coordinator and event-family state machines
+- `Y.5` mutable compatibility-field removal and hidden-dependency exposure
+- `Y.6` append-only compatibility export cutover if the approved wire contract
+  allows it
+
+Follow-on validation phase:
+- completed CLI JSON I/O audit recorded in
+  `docs/phase-Z/cli-json-io-audit.md`
+- retained-command JSON output already exists; structured JSON input is
+  deferred until after `Phase Z`
+- `Z.1` executable smoke bring-up
+- `Z.2` fix and revalidate
+- `Z.3` `atm-dev` canary / dogfood
+- `Z.4` final fixes and release sign-off
+
+Immediate planning outputs:
+- `docs/plan-phase-Y.md`
+- `docs/plan-phase-Z.md`
+- `docs/phase-Y/inbox-write-path-audit.md`
+- `docs/phase-Y/inbox-field-inventory.md`
+- `docs/phase-Y/help.md`
+- `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/phase-Y/delivery-state-machines.md`
+- `docs/phase-Y/sprint-Y1.md`
+- `docs/phase-Y/sprint-Y2.md`
+- `docs/phase-Y/sprint-Y3.md`
+- `docs/phase-Y/sprint-Y4.md`
+- `docs/phase-Y/sprint-Y5.md`
+- `docs/phase-Y/sprint-Y6.md`
+- `docs/phase-Z/cli-json-io-audit.md`
+- `docs/phase-Z/sprint-Z1.md`
+- `docs/phase-Z/sprint-Z2.md`
+- `docs/phase-Z/sprint-Z3.md`
+- `docs/phase-Z/sprint-Z4.md`
+- approved implementation scopes for `Y.1` and `Y.2`, with `Y.1` kept
+  strictly on `atm help` and adjacent UX wording

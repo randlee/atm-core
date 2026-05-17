@@ -6,6 +6,7 @@ format: xml
 required_variables:
   - task_id
   - phase
+  - sprint_doc
   - branch
   - worktree_path
   - pr_target
@@ -26,6 +27,7 @@ defaults:
   <branch>{{ branch }}</branch>
   <worktree>{{ worktree_path }}</worktree>
   <pr-target>{{ pr_target }}</pr-target>
+  <authoritative-sprint-doc>{{ sprint_doc }}</authoritative-sprint-doc>
 
   <finding-ids>
 {{ finding_ids }}
@@ -53,11 +55,12 @@ defaults:
 
   <workflow>
     <step id="a">ACK this message immediately. Begin work in the same session unless blocked.</step>
-    <step id="b">Update the assigned worktree from the target branch before editing. Include all earlier-sprint fixes already merged forward to that branch.</step>
-    <step id="c">Read the referenced triage records first. Treat the listed occurrences as the minimum required scope on this branch.</step>
-    <step id="d">Fix every promoted-branch occurrence in scope. Do not stop at the first location when the triage record marks the finding as repeatable.</step>
-    <step id="e">As soon as the branch is pushable, commit and push immediately. Send branch name and commit hash right away so follow-up QA can start in parallel.</step>
-    <step id="f">Run the required validation after the push report and send a second report with PASS or FAIL plus concrete failure details.</step>
-    <step id="g">After the validation report, read ATM again for follow-up work.</step>
+    <step id="b">Read `{{ sprint_doc }}` before editing. Treat it as the authoritative source for sprint scope, retained requirements, deletion targets, validation, and acceptance criteria. If this assignment summary and the sprint doc differ, the sprint doc wins and the mismatch must be reported.</step>
+    <step id="c">Update the assigned worktree from the target branch before editing. Include all earlier-sprint fixes already merged forward to that branch.</step>
+    <step id="d">Read the referenced triage records first. Treat the listed occurrences as the minimum required scope on this branch.</step>
+    <step id="e">Fix every promoted-branch occurrence in scope. Do not stop at the first location when the triage record marks the finding as repeatable.</step>
+    <step id="f">As soon as the branch is pushable, commit and push immediately. Send branch name and commit hash right away so follow-up QA can start in parallel.</step>
+    <step id="g">Run the required validation after the push report and send a second report with PASS or FAIL plus concrete failure details.</step>
+    <step id="h">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>
