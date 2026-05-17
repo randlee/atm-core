@@ -1,6 +1,7 @@
 use std::io::Cursor;
 
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
+use atm_core::error::AtmError;
 use clap::{Args, CommandFactory};
 
 use super::Cli;
@@ -46,8 +47,9 @@ impl HelpCommand {
             return Ok(HelpResult::command_help(target, body));
         }
 
-        bail!(
-            "unknown help topic or subcommand `{target}`. Use `atm help --list` to inspect the available help targets."
+        Err(
+            AtmError::help_topic_not_found(format!("unknown help topic or subcommand `{target}`"))
+                .into(),
         )
     }
 }
@@ -221,8 +223,17 @@ impl HelpTopic {
 
     fn body(self) -> &'static str {
         match self {
-            Self::Config => {
-                "\
+            Self::Config => config_body(),
+            Self::Errors => errors_body(),
+            Self::Hooks => hooks_body(),
+            Self::Identity => identity_body(),
+            Self::Skills => skills_body(),
+        }
+    }
+}
+
+fn config_body() -> &'static str {
+    "\
 ATM Help: config
 
 ATM reads local configuration from `.atm.toml` and the documented ATM host paths.
@@ -238,9 +249,10 @@ Config does not change the durable-truth rule:
 - SQLite + daemon own ATM durable state
 - shared inbox JSONL remains a compatibility output surface
 "
-            }
-            Self::Errors => {
-                "\
+}
+
+fn errors_body() -> &'static str {
+    "\
 ATM Help: errors
 
 ATM surfaces typed errors with stable ATM-owned error codes.
@@ -256,9 +268,10 @@ The daemon + SQLite line keeps durable truth in SQLite. Compatibility output
 problems may degrade nudges or projections, but they do not redefine durable
 ATM state.
 "
-            }
-            Self::Hooks => {
-                "\
+}
+
+fn hooks_body() -> &'static str {
+    "\
 ATM Help: hooks
 
 Post-send hooks are ATM-owned automation that run after ATM processes a send.
@@ -280,9 +293,10 @@ Troubleshooting:
 - path-like `command[0]` values resolve relative to the declaring `.atm.toml`
 - combine `ATM_LOG=debug` with `--stderr-logs` when you need hook diagnostics
 "
-            }
-            Self::Identity => {
-                "\
+}
+
+fn identity_body() -> &'static str {
+    "\
 ATM Help: identity
 
 ATM command identity is about the sending agent, the selected team, and the
@@ -302,9 +316,10 @@ Troubleshooting:
 - if ATM cannot resolve the required identity, fix the override, hook file, or
   `ATM_IDENTITY` rather than guessing with mailbox-local state
 "
-            }
-            Self::Skills => {
-                "\
+}
+
+fn skills_body() -> &'static str {
+    "\
 ATM Help: skills
 
 Skills are repo-local execution instructions used by agent harnesses while they
@@ -321,9 +336,6 @@ Boundary rule:
 - skills shape agent execution around ATM work, but they do not change durable
   ATM delivery state, routing truth, or SQLite ownership
 "
-            }
-        }
-    }
 }
 
 fn help_topics() -> Vec<HelpTopicSummary> {
