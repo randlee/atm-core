@@ -27,6 +27,7 @@ forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 [references]
 scope = "outside_owner_crate"
 forbidden = ["DaemonInboxExport"]
+named_callers = ["atm_daemon::boundary_adapters::DaemonInboxExport::export_record", "atm_daemon::boundary_adapters::DaemonInboxExport::reexport_message"]
 
 [contracts]
 request_types = ["export write requests"]

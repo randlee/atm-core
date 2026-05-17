@@ -26,6 +26,7 @@ forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
 [references]
 scope = "outside_owner_crate"
 forbidden = ["finalize_send_outcome", "finalize_ack_outcome", "recover_after_sqlite_failure"]
+named_callers = ["atm_core::direct_boundaries::export_source_files", "atm_core::direct_boundaries::reexport_messages"]
 
 [contracts]
 request_types = ["export write requests"]
