@@ -208,6 +208,15 @@ Notes:
   `crates/atm-core/src/delivery_policy.rs`; retained `send` and `ack` now
   resolve roster snapshots through `RosterStore` before choosing whether
   compatibility export is allowed for the recipient harness.
+- `Y.5` removes mutable compatibility fields from the shared inbox export path
+  via two helper functions in
+  `crates/atm-core/src/schema/inbox_message.rs`:
+  - `strip_removed_compatibility_fields` — removes: `source_team`,
+    `pendingAckAt`, `acknowledgedAt`, `acknowledgesMessageId`, `expiresAt`
+  - `strip_metadata_atm_namespace` — removes the `atm` key from the
+    `metadata` object
+- See [docs/phase-Y/inbox-field-inventory.md](../phase-Y/inbox-field-inventory.md)
+  for the full field inventory.
 
 ## NotificationSink
 

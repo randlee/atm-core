@@ -3489,6 +3489,15 @@ Execution shape:
   - retained compatibility export now stays on the `Claude Code` harness path
     only; non-Claude harnesses skip ATM-authored JSONL export
 - `Y.5` mutable compatibility-field removal and hidden-dependency exposure
+  - complete on `feature/pY-s5-mutable-compatibility-field-removal`
+  - retained compatibility export now keeps only immutable correlation/context
+    fields: `message_id`, `parentMessageId`, `threadMode`, and `taskId`
+  - retained compatibility export now strips mutable/shared-projection fields:
+    `source_team`, `pendingAckAt`, `acknowledgedAt`,
+    `acknowledgesMessageId`, `expiresAt`, and `metadata.atm.*`
+  - retained compatibility export now reloads stored message records instead of
+    workflow-joined projected envelopes before writing Claude Code projection
+    files
 - `Y.6` append-only compatibility export cutover if the approved wire contract
   allows it
 

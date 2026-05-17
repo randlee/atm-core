@@ -694,10 +694,6 @@ Current persisted inbox superset may contain:
   - optional producer field `color`
 - ATM additive compatibility fields:
   - `message_id`
-  - `source_team`
-  - `pendingAckAt`
-  - `acknowledgedAt`
-  - `acknowledgesMessageId`
   - `parentMessageId`
   - `threadMode`
   - `taskId`
@@ -727,6 +723,9 @@ Architectural rules:
   compatibility wire form rather than as a second ATM-owned id.
 - Compatibility writes may preserve established top-level additive fields, but
   they must not become the place where new ATM-owned machine state accumulates.
+- removed compatibility fields such as `source_team`, `pendingAckAt`,
+  `acknowledgedAt`, `acknowledgesMessageId`, and `expiresAt` must stay
+  SQLite-only or workflow-only even if older inbox files still contain them.
 
 File-ownership rule:
 - the private watcher/import/export boundary is the only approved place that

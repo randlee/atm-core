@@ -890,7 +890,7 @@ mod tests {
             inbox[0].task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")
         );
-        assert!(inbox[0].pending_ack_at.is_some());
+        assert!(inbox[0].pending_ack_at.is_none());
     }
 
     #[test]
@@ -1052,12 +1052,12 @@ mod tests {
 
         let sender_inbox = fixture.inbox_contents(TEST_SENDER);
         assert_eq!(sender_inbox.len(), 1);
-        assert!(sender_inbox[0].pending_ack_at.is_some());
+        assert!(sender_inbox[0].pending_ack_at.is_none());
         assert!(sender_inbox[0].acknowledged_at.is_none());
         let replies = fixture.inbox_contents(TEST_LEAD);
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0].text, "received and starting");
-        assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
+        assert!(replies[0].acknowledges_message_id.is_none());
         assert!(replies[0].pending_ack_at.is_none());
     }
 
