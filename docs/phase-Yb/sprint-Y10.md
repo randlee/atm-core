@@ -1,7 +1,7 @@
 ---
 id: Y.10
 title: Boundary Enforcement And Smoke Handoff
-status: planned
+status: complete
 branch: feature/pYb-s10-boundary-enforcement-and-smoke-handoff
 worktree: ../atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff
 target: integrate/phase-Yb
@@ -76,3 +76,14 @@ cargo build --workspace
 cargo test --workspace
 git diff --check
 ```
+
+## Validation Record
+
+- branch closeout validated with:
+  - `cargo fmt --all --check`
+  - `python3 .just/run_lint.py all`
+  - `cargo build --workspace`
+  - `cargo test --workspace`
+  - `git diff --check`
+- post-sprint review reopened `YB-RM-029` and `YB-RM-030`; those are tracked
+  explicitly in `Y.11` rather than being silently ignored at `Y.10` closeout
