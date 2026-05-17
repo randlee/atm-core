@@ -1,7 +1,7 @@
 ---
 id: Y.11
 title: Post-Y.10 Boundary Gap Closure
-status: planned
+status: complete
 branch: feature/pYb-s11-y10-gap-closure
 worktree: ../atm-core-worktrees/feature/pYb-s11-y10-gap-closure
 target: integrate/phase-Yb
@@ -100,3 +100,12 @@ cargo build --workspace
 cargo test --workspace
 git diff --check
 ```
+
+## Validation Record
+
+- branch closeout validated with:
+  - `cargo fmt --all --check`
+  - `python3 .just/run_lint.py all`
+  - `cargo build --workspace`
+  - `cargo test --workspace`
+  - `git diff --check`
