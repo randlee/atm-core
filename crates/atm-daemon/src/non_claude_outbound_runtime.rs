@@ -24,7 +24,6 @@ type OutputPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync
     )
 )]
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
-
 #[cfg_attr(
     not(test),
     allow(
@@ -124,6 +123,8 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
                 )
                 .with_source(error)
             })?;
+        // MAX_CONCURRENT_CONNECTIONS bounds callers here; FS stall under that
+        // ceiling is accepted delivery latency.
         file.write_all(&bytes).map_err(|error| {
             AtmError::mailbox_write(format!(
                 "failed to append non-Claude outbound payload {}: {error}",
@@ -134,6 +135,8 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
             )
             .with_source(error)
         })?;
+        // MAX_CONCURRENT_CONNECTIONS bounds callers here; FS stall under that
+        // ceiling is accepted delivery latency.
         file.sync_data().map_err(|error| {
             AtmError::mailbox_write(format!(
                 "failed to sync non-Claude outbound payload {}: {error}",
