@@ -164,6 +164,12 @@ Approved executor ownership:
 
 - `atm_core::delivery_execution::execute_delivery_plan(...)`
 - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+- `atm_core::delivery_execution::ClaudeInboxWriter`
+  - introduced in `Y.7`
+- `atm_core::delivery_execution::PostSendNotificationExecutor`
+  - introduced in `Y.7`
+- `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
+  - introduced in `Y.9`
 - `atm_core::boundary::InboxExport` handles Claude delivery only
 - `atm_core::boundary::NonClaudeOutbound` handles non-Claude delivery only
 - `atm_core::boundary::NotificationSink` handles notification side effects only

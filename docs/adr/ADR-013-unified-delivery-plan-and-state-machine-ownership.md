@@ -119,3 +119,4 @@ The documented lintable boundary plan must forbid direct calls from:
 - `docs/phase-Yb/sprint-Y7.md`
 - `docs/phase-Yb/sprint-Y8.md`
 - `docs/phase-Yb/sprint-Y9.md`
+- `docs/phase-Yb/sprint-Y10.md`

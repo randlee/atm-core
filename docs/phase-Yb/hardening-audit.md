@@ -4,8 +4,8 @@
 
 HARDENING COMPLETE
 
-- Iterations: `2`
-- Total findings resolved: `8`
+- Iterations: `3`
+- Total findings resolved: `20`
 - Final finding count: `0`
 - Dev-agent decision points eliminated: `14`
 
@@ -50,9 +50,27 @@ This audit covers the full Phase `Yb` planning set:
 | 7 | `docs/adr/INDEX.md`, crate architecture/requirements docs | `CROSS-DOC` | ADR index and crate docs did not reflect the exact Yb corrective modules and boundaries. | Updated ADR index, `docs/atm-core/*`, and `docs/atm-daemon/*` to match the Yb plan. |
 | 8 | Phase Yb QA/process coverage | `GAP` | The planning set had no dedicated Yb QA handoff or validation matrix even though the sprint docs depend on mechanical review gates. | Added `qa-handoff.md` and `testing-and-validation.md`, and linked them from the phase plan and project plan. |
 
-## Iteration 2 Result
+## Iteration 2 Supplemental Findings
 
-Second audit pass found:
+Supplemental QA findings on the pre-hardening push required one more pass:
+
+1. add row ownership to `removal-ledger.md` and cite row IDs from sprint docs
+2. resplit `Y.8` and `Y.9` per the explicit ruling:
+   - `Y.8` removes Claude-specific and generic outer policy leakage
+   - `Y.9` introduces the non-Claude outbound boundary and deletes old
+     non-Claude routing surfaces atomically
+3. add `sprint-Y10.md` to ADR-013 required follow-on
+4. assign executor-type introduction sprints
+5. assign `AckReplyStateMachine` introduction sprint
+6. clarify `Y.8` prose-rule timeline versus `Y.10` machine-enforced timeline
+7. remove `docs/project-plan.md` from `Y.7` document-update scope
+8. add `ADR-013` to the Section G artifact list in `plan-phase-Yb.md`
+9. add `docs/phase-Yb/message-path-call-stacks.md` to `Y.8` governing
+   requirements
+
+## Iteration 3 Result
+
+Third audit pass found:
 
 - no missing sprint docs
 - no undefined Yb-specific plan types or boundaries

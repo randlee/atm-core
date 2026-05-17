@@ -46,6 +46,13 @@ Forbidden direct callers:
 
 ## Proposed Mechanical Enforcement
 
+Timeline:
+
+- `Y.8` lands the final prose ownership rules, grep-based QA checks, and
+  boundary-doc caller allowlists
+- `Y.10` converts those allowlists into the final machine-enforced
+  `sc-lint`/boundary gates and fail-closed runtime checks
+
 ### 1. Compile-time ownership rules
 
 Enforcement point:

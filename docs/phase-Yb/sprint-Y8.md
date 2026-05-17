@@ -22,6 +22,7 @@ transition surfaces from the runtime.
 
 - `docs/phase-Yb/plan-phase-Yb.md`
 - `docs/phase-Yb/removal-ledger.md`
+- `docs/phase-Yb/message-path-call-stacks.md`
 - `docs/phase-Yb/lintable-boundary-plan.md`
 - `docs/phase-Yb/qa-handoff.md`
 - `docs/phase-Yb/testing-and-validation.md`
@@ -40,15 +41,16 @@ transition surfaces from the runtime.
 ## Required Work
 
 1. Delete or move every removal target marked for `Y.8`.
-2. Remove fail-open or misleading routing helpers such as:
-   - default-Claude fallback behavior
-   - impossible non-Claude append-degradation surfaces
+2. Remove fail-open or misleading Claude-specific or generic outer routing
+   helpers only.
 3. Move transition emission and degradation translation into the
    coordinator/machine execution layer.
 4. Introduce fail-closed behavior for unsupported routing or deferred-machine
    requests.
 5. Land documented lintable boundaries for illegal direct callers.
-6. Remove or move every removal-ledger target assigned to Y.8 before closing
+6. Limit Y.8 to Claude-specific harness branching cleanup and generic outer
+   policy deletion; non-Claude fallback-surface deletion defers to Y.9.
+7. Remove or move every removal-ledger target assigned to Y.8 before closing
    the sprint.
 
 ## Acceptance Criteria
@@ -57,6 +59,12 @@ transition surfaces from the runtime.
   crates/atm-core/src/send/mod.rs crates/atm-core/src/send/persistence.rs
   crates/atm-core/src/ack/mod.rs` returns no harness-policy branches outside
   approved machine/executor modules
+- the sprint closes ledger rows:
+  - `YB-RM-006`
+  - `YB-RM-007`
+  - `YB-RM-009`
+  - `YB-RM-010`
+  - `YB-RM-011`
 - impossible transition surfaces are deleted, not merely ignored
 - unsupported requests fail closed with typed errors and named tests
 - `docs/phase-Yb/removal-ledger.md` marks all Y.8 targets closed, moved, or
@@ -67,6 +75,7 @@ transition surfaces from the runtime.
 ## Required Document Updates
 
 - `docs/phase-Yb/removal-ledger.md`
+- `docs/phase-Yb/message-path-call-stacks.md`
 - `docs/phase-Yb/lintable-boundary-plan.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`

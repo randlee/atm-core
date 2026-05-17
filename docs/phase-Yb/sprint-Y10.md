@@ -33,6 +33,8 @@ are verified.
 - `boundaries/atm-daemon/daemon-non-claude-outbound.toml`
 - `docs/phase-Yb/removal-ledger.md`
 - `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/phase-Yb/qa-handoff.md`
+- `docs/phase-Yb/testing-and-validation.md`
 - `docs/project-plan.md`
 
 ## Required Work
@@ -47,6 +49,10 @@ are verified.
 
 - only approved coordinator/executor modules can call delivery/write primitives
 - removal-ledger targets are either closed or explicitly tracked as blockers
+- the sprint closes ledger rows:
+  - `YB-RM-017`
+  - `YB-RM-018`
+  - `YB-RM-020` through `YB-RM-025`
 - `python3 .just/run_lint.py all` enforces the final boundary allowlists
 - final smoke handoff docs name no open Yb path-consolidation blocker that is
   not explicitly tracked
@@ -57,6 +63,8 @@ are verified.
 
 - `docs/phase-Yb/removal-ledger.md`
 - `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/phase-Yb/qa-handoff.md`
+- `docs/phase-Yb/testing-and-validation.md`
 - `docs/project-plan.md`
 
 ## Required Validation

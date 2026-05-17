@@ -109,6 +109,10 @@ Required planning decision:
   - event family
   - canonical roster `harness`
 - but the machines own legality, payload construction, and failure contracts
+- explicit introduction ownership:
+  - `AckReplyStateMachine` lands in `Y.7`
+  - `InboxRepairStateMachine` and `RestoreInboxRebuildStateMachine` remain
+    Phase `Y` artifacts unless a later Yb sprint needs them reopened
 
 ### D. Shared Execution Model
 
@@ -131,14 +135,20 @@ Required planning decision:
     - `atm_core::boundary::InboxExport`
     - executor module:
       `atm_core::delivery_execution::execute_delivery_plan(...)`
+    - executor type introduced in `Y.7`:
+      `atm_core::delivery_execution::ClaudeInboxWriter`
   - non-Claude payload delivery:
     - `atm_core::boundary::NonClaudeOutbound`
     - daemon adapter:
       `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
+    - executor type introduced in `Y.9`:
+      `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
   - notification side effects:
     - `atm_core::boundary::NotificationSink`
     - daemon adapter:
       `atm_daemon::notification_runtime::DaemonNotificationSink`
+    - executor type introduced in `Y.7`:
+      `atm_core::delivery_execution::PostSendNotificationExecutor`
 
 ### E. Boundary Tightening
 
@@ -194,6 +204,7 @@ Required planning artifacts:
 - [removal-ledger.md](./removal-ledger.md)
 - [message-path-call-stacks.md](./message-path-call-stacks.md)
 - [lintable-boundary-plan.md](./lintable-boundary-plan.md)
+- [ADR-013-unified-delivery-plan-and-state-machine-ownership.md](../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
 - [hardening-audit.md](./hardening-audit.md)
 
 ## Current Structural Issues
@@ -247,6 +258,9 @@ Purpose:
 - delete harness-policy leakage outside the machines
 - remove impossible transition surfaces
 - fail closed when unsupported routing or fallback requests are attempted
+- this sprint does not delete non-Claude fallback surfaces; those defer to
+  `Y.9` so the new non-Claude boundary and old non-Claude routing removals land
+  atomically
 
 Authoritative sprint doc:
 
@@ -264,6 +278,8 @@ Purpose:
 - introduce a dedicated non-Claude outbound payload boundary
 - stop treating metadata-only post-send-hook execution as message delivery
 - make Claude and non-Claude paths use the same outer executor contract
+- delete the retained non-Claude fallback surfaces only after the new boundary
+  exists
 
 Authoritative sprint doc:
 

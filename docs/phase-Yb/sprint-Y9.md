@@ -34,6 +34,7 @@ is no longer encoded as hook metadata plus implied behavior.
 - `crates/atm-daemon/src/non_claude_outbound_runtime.rs`
 - `boundaries/atm-core/non-claude-outbound.toml`
 - `boundaries/atm-daemon/daemon-non-claude-outbound.toml`
+- `docs/phase-Yb/removal-ledger.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
 
@@ -43,23 +44,32 @@ is no longer encoded as hook metadata plus implied behavior.
    - `atm_core::boundary::NonClaudeOutbound`
    - daemon adapter:
      `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
+   - executor type:
+     `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
 2. Make the shared executor contract identical around Claude and non-Claude
    plans.
 3. Ensure ack reply and thread update use the same outer executor shape where
    applicable.
 4. Remove any remaining dependency on metadata-only post-send-hook payloads as
    delivery proof.
-5. Add end-to-end tests for non-Claude outbound payload delivery.
+5. Delete the retained non-Claude fallback surfaces only after the dedicated
+   boundary exists.
+6. Add end-to-end tests for non-Claude outbound payload delivery.
 
 ## Acceptance Criteria
 
 - `boundaries/atm-core/non-claude-outbound.toml` and
   `boundaries/atm-daemon/daemon-non-claude-outbound.toml` exist and name the
   allowed caller/adapter relationship
+- `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter` exists and
+  is the only approved non-Claude payload executor type
 - non-Claude outbound delivery is a first-class payload boundary
 - state machines expose the same interface regardless of harness
 - the outer execution call graph is shared across harness families
 - post-send notification remains notification-only
+- the sprint closes ledger rows:
+  - `YB-RM-012` through `YB-RM-016`
+  - `YB-RM-019`
 - named end-to-end tests prove non-Claude payload delivery without relying on
   post-send-hook metadata as delivery evidence
 
