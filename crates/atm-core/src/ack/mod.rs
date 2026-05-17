@@ -189,7 +189,6 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
             source: &source,
             source_snapshot: &source_snapshot,
             reply_target: &reply_target,
-            reply_snapshot: &reply_snapshot,
         },
     )?;
     finalize_ack_outcome(
@@ -237,7 +236,6 @@ struct AckPersistenceContext<'a> {
     source: &'a LoadedAckSource,
     source_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
     reply_target: &'a ReplyTarget,
-    reply_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
 }
 
 fn load_ack_source<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
