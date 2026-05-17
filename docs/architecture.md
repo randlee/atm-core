@@ -30,6 +30,8 @@ The retained command surface is:
 
 Approved additive CLI feature for the Phase `Y` line:
 - `help`
+- the `help` addition stays on the CLI conceptual-help surface only; it does
+  not reopen mailbox-truth or boundary-ownership work inside `Y.1`
 
 ## 1.1 Documentation Structure
 
