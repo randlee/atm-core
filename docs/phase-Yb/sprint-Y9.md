@@ -1,7 +1,7 @@
 ---
 id: Y.9
 title: Non-Claude Outbound Boundary Formalization
-status: planned
+status: complete
 branch: feature/pYb-s9-non-claude-outbound-boundary-formalization
 worktree: ../atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization
 target: integrate/phase-Yb
@@ -90,3 +90,12 @@ cargo build --workspace
 cargo test --workspace
 git diff --check
 ```
+
+## Validation Record
+
+- branch closeout validated with:
+  - `cargo fmt --all --check`
+  - `python3 .just/run_lint.py all`
+  - `cargo build --workspace`
+  - `cargo test --workspace`
+  - `git diff --check`

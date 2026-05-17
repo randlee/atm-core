@@ -144,6 +144,9 @@ pub(crate) struct RuntimeComposition {
     _config_ingress: DaemonConfigIngress,
     _inbox_ingress: DaemonInboxIngress,
     _inbox_export: DaemonInboxExport,
+    // Keep the daemon-owned non-Claude outbound adapter attached to the composed runtime so the
+    // boundary remains an explicit part of daemon ownership even though delivery happens through
+    // retained-runtime executor seams rather than direct composition calls.
     _non_claude_outbound: DaemonNonClaudeOutbound,
     peer_transport_runtime: PeerTransportRuntime,
 }
