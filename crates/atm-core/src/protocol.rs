@@ -151,6 +151,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         AtmErrorCode::WarningSqliteHealthDegraded => AtmErrorKind::DaemonUnavailable,
         AtmErrorCode::ObservabilityBootstrapFailed => AtmErrorKind::ObservabilityBootstrap,
         AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::HelpTopicNotFound
         | AtmErrorCode::AckInvalidState
         | AtmErrorCode::ClearInvalidState
         | AtmErrorCode::WarningInvalidTeamMemberSkipped

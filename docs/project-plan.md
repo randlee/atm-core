@@ -3443,7 +3443,13 @@ Target:
 - `integrate/phase-Y` for the execution line
 
 Status:
-- planning
+- in_progress
+
+Status note:
+- `Y.1` merged to `integrate/phase-Y`
+  - branch: `feature/pY-s1-pre-smoke-scaffolding`
+  - PR: `#296`
+  - merge commit: `c63574cb`
 
 Authoritative plans:
 - `docs/plan-phase-Y.md`
