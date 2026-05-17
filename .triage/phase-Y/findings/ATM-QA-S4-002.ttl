@@ -1,0 +1,92 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S4-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S4-002" ;
+  triage:title "InboxRepairStateMachine missing FilterDeletedMessages and Rejected states; unauthorized renames" ;
+  triage:description "In crates/atm-core/src/delivery_policy.rs around L259, the InboxRepairStateMachine enum is missing FilterDeletedMessages and Rejected states required by the spec in docs/phase-Y/delivery-state-machines.md. Additional issue: states have been renamed relative to the spec without documented rationale (ResolveHarness vs ValidateClaudeHarness, LoadProjection vs LoadRepairProjection, StageOutput vs StageInboxRebuild, PublishOutput vs PublishInboxRebuild, Completed vs Delivered), creating a mismatch between the implementation and the authoritative delivery-state-machines.md specification." ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-16T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S4-002/pY-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S4-002/pY-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S4-002/pY-s6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s4/be48eb55> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/1dd78933> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/49876d17> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s4/be48eb55> .
+
+<urn:atm:triage:occurrence/ATM-QA-S4-002/pY-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_policy.rs" ;
+  triage:line 259 ;
+  triage:snippet "pub(crate) enum InboxRepairStateMachine { Received, ResolveHarness, LoadProjection, StageOutput, PublishOutput, Completed, Failed, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s4-delivery-coordinator-and-state-machines" ;
+  triage:headSha "be48eb55005af5fcc74b574566563e694384cc04" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s4/be48eb55> .
+
+<urn:atm:triage:occurrence/ATM-QA-S4-002/pY-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_policy.rs" ;
+  triage:line 259 ;
+  triage:snippet "pub(crate) enum InboxRepairStateMachine { Received, ResolveHarness, LoadProjection, StageOutput, PublishOutput, Completed, Failed, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933b65631f4b00ea11a3b2774897eea0247" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/ATM-QA-S4-002/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_policy.rs" ;
+  triage:line 259 ;
+  triage:snippet "pub(crate) enum InboxRepairStateMachine { Received, ResolveHarness, LoadProjection, StageOutput, PublishOutput, Completed, Failed, }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "49876d17b58837804961b99f0c90b8d964680d04" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/49876d17> .
+
+<urn:atm:triage:worktree/pY-s3/0894a328>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "0894a3280f98f41c68682dba317d2c3e65730921" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pY-s4/be48eb55>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s4-delivery-coordinator-and-state-machines" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s4-delivery-coordinator-and-state-machines" ;
+  triage:headSha "be48eb55005af5fcc74b574566563e694384cc04" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pY-s5/1dd78933>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933b65631f4b00ea11a3b2774897eea0247" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pY-s6/49876d17>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "49876d17b58837804961b99f0c90b8d964680d04" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate/afc0ec38>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "afc0ec38a2f0da59539d5b64c8e2d0fefb1a70c9" ;
+  triage:orderIndex 5 .

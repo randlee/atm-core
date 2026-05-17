@@ -179,6 +179,34 @@ mod tests {
     }
 
     #[test]
+    fn append_compat_mailbox_message_exports_retrieval_stub_when_config_cap_is_zero() {
+        let tempdir = tempdir().expect("tempdir");
+        std::fs::write(
+            tempdir.path().join(".atm.toml"),
+            "[atm]\nclaude_jsonl_body_export_max_bytes = 0\n",
+        )
+        .expect("config");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
+        let mut message = sample_message(ROLE_TEAM_LEAD, "full body retained elsewhere");
+        let message_id = message.message_id.expect("message id");
+        message.summary = Some("stub summary".to_string());
+
+        append_compat_mailbox_message(&path, &message).expect("append message");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        let first_line = raw.lines().next().expect("jsonl record");
+        let encoded: serde_json::Value = serde_json::from_str(first_line).expect("json object");
+        assert_eq!(
+            encoded["text"],
+            serde_json::Value::String(format!("atm read --message-id {message_id}"))
+        );
+        assert_eq!(
+            encoded["summary"],
+            serde_json::Value::String("stub summary".into())
+        );
+    }
+
+    #[test]
     fn write_compat_source_projections_commits_each_source_path() {
         let tempdir = tempdir().expect("tempdir");
         let left_path = tempdir.path().join(format!("{TEST_SENDER}.json"));

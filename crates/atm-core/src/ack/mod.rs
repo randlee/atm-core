@@ -188,7 +188,6 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
             team: &team,
             source: &source,
             reply_target: &reply_target,
-            reply_snapshot: &reply_snapshot,
         },
     )?;
     finalize_ack_outcome(
@@ -237,7 +236,6 @@ struct AckPersistenceContext<'a> {
     team: &'a TeamName,
     source: &'a LoadedAckSource,
     reply_target: &'a ReplyTarget,
-    reply_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
 }
 
 fn load_ack_source<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
@@ -410,10 +408,15 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &context.reply_target.team,
         &context.reply_target.agent,
     )?;
+    let reply_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
+        runtime,
+        &context.reply_target.team,
+        &context.reply_target.agent,
+    )?;
     let persistence = persist_message_and_seed_workflow(
         runtime,
         home_dir(context.request),
-        context.reply_snapshot,
+        &reply_snapshot,
         &reply_inbox_path,
         &reply_message,
         false,

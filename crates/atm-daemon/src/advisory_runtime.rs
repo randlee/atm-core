@@ -15,7 +15,9 @@ use atm_core::protocol::ResponseEnvelope;
 use atm_core::send::SendOutcome;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 
-use crate::{DaemonSubsystem, SubsystemObservability};
+#[cfg(test)]
+use crate::DaemonSubsystem;
+use crate::SubsystemObservability;
 
 const MAX_ADVISORY_SESSIONS: usize = 128;
 const MAX_ADVISORY_EVENTS_PER_SESSION: usize = 256;
@@ -49,13 +51,6 @@ struct RegisteredAdvisorySession {
 }
 
 impl AdvisoryRuntime {
-    #[allow(dead_code)]
-    pub(crate) fn new() -> Self {
-        Self::new_with_observability(SubsystemObservability::disabled(
-            DaemonSubsystem::AdvisoryRuntime,
-        ))
-    }
-
     pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self {
             state: RwLock::new(AdvisoryRuntimeState::default()),
@@ -395,7 +390,7 @@ mod tests {
         AdvisoryStreamRequest, AdvisoryStreamResponse,
     };
     use atm_core::protocol::ResponseEnvelope;
-    use atm_core::send::{SendOutcome, WarningEntry};
+    use atm_core::send::{SendCommandOutcome, SendOutcome, WarningEntry};
     use atm_core::types::{CommandAction, IsoTimestamp};
 
     fn registration_request() -> AdvisorySessionRegistrationRequest {
@@ -414,7 +409,7 @@ mod tests {
             team: "test-team".parse().expect("team"),
             agent: "test-agent".parse().expect("agent"),
             sender: "sender".parse().expect("sender"),
-            outcome: "sent".to_string(),
+            outcome: SendCommandOutcome::Sent,
             message_id: atm_core::schema::AtmMessageId::new(),
             requires_ack: false,
             task_id: None,

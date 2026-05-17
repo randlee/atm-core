@@ -101,7 +101,7 @@ pub struct SendOutcome {
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
-    pub outcome: String,
+    pub outcome: SendCommandOutcome,
     pub message_id: AtmMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -114,6 +114,22 @@ pub struct SendOutcome {
     pub warnings: Vec<WarningEntry>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SendCommandOutcome {
+    Sent,
+    DryRun,
+}
+
+impl SendCommandOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Sent => "sent",
+            Self::DryRun => "dry_run",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -231,7 +247,11 @@ fn finalize_send_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     task_id: Option<TaskId>,
     persistence: DeliveryPersistenceResult,
 ) -> Result<SendOutcome, AtmError> {
-    let command_outcome = if request.dry_run { "dry_run" } else { "sent" };
+    let command_outcome = if request.dry_run {
+        SendCommandOutcome::DryRun
+    } else {
+        SendCommandOutcome::Sent
+    };
     let mut outcome = build_send_outcome(
         request,
         context,
@@ -256,7 +276,7 @@ fn finalize_send_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     }
     emit_send_command_event(
         observability,
-        command_outcome,
+        command_outcome.as_str(),
         &outcome,
         task_id,
         &context.canonical_sender,
@@ -276,7 +296,7 @@ fn build_send_outcome(
     message_id: AtmMessageId,
     requires_ack: bool,
     task_id: Option<TaskId>,
-    command_outcome: &str,
+    command_outcome: SendCommandOutcome,
     persistence: &DeliveryPersistenceResult,
 ) -> SendOutcome {
     let mut outcome = SendOutcome {
@@ -284,7 +304,7 @@ fn build_send_outcome(
         team: context.recipient.team.clone(),
         agent: context.recipient.agent.clone(),
         sender: context.canonical_sender.clone(),
-        outcome: command_outcome.to_string(),
+        outcome: command_outcome,
         message_id,
         requires_ack,
         task_id,
@@ -979,15 +999,20 @@ mod tests {
     };
     use crate::boundary::{
         MailMessageState, MailStoreMailboxMetadataRow, MailStoreMessageRecord, MessageKey,
+        RosterHarness, RosterMemberKind, RosterMemberRecord,
     };
     use crate::config::AtmConfig;
     use crate::delivery_policy::{DeliveryHarnessPath, DeliveryRecipientSnapshot};
     use crate::error::AtmError;
+    use crate::observability::{
+        AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
+        CommandEvent, LogTailSession, ObservabilityPort,
+    };
     use crate::process::process_is_alive;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::TeamConfig;
+    use crate::schema::{AgentMember, TeamConfig};
     use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
-    use crate::send::{SendMessageSource, SendRequest};
+    use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
@@ -1034,6 +1059,7 @@ mod tests {
     struct TestRuntime {
         commit_error_message: Option<&'static str>,
         append_error_message: Option<&'static str>,
+        recipient_harness: DeliveryHarnessPath,
         appended_messages: Mutex<Vec<MessageEnvelope>>,
         hook_captures: Mutex<Vec<HookCapture>>,
     }
@@ -1042,10 +1068,12 @@ mod tests {
         fn new(
             commit_error_message: Option<&'static str>,
             append_error_message: Option<&'static str>,
+            recipient_harness: DeliveryHarnessPath,
         ) -> Self {
             Self {
                 commit_error_message,
                 append_error_message,
+                recipient_harness,
                 appended_messages: Mutex::new(Vec::new()),
                 hook_captures: Mutex::new(Vec::new()),
             }
@@ -1058,7 +1086,12 @@ mod tests {
         }
 
         fn load_team_config(&self, _team_dir: &Path) -> Result<TeamConfig, AtmError> {
-            Ok(TeamConfig::default())
+            Ok(TeamConfig {
+                members: vec![AgentMember::with_name(AgentName::from_validated(
+                    "recipient",
+                ))],
+                extra: Map::new(),
+            })
         }
 
         fn team_dir(&self, home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
@@ -1148,10 +1181,22 @@ mod tests {
 
         fn load_roster_member(
             &self,
-            _team: &TeamName,
-            _agent: &AgentName,
+            team: &TeamName,
+            agent: &AgentName,
         ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError> {
-            Ok(None)
+            Ok(Some(RosterMemberRecord {
+                team_name: team.clone(),
+                agent_name: agent.clone(),
+                member_kind: RosterMemberKind::Permanent,
+                harness: match self.recipient_harness {
+                    DeliveryHarnessPath::ClaudeCode => RosterHarness::ClaudeCode,
+                    DeliveryHarnessPath::NonClaude => RosterHarness::CodexCli,
+                },
+                agent_type: String::new(),
+                model: String::new(),
+                recipient_pane_id: None,
+                metadata_json: Map::new(),
+            }))
         }
 
         fn commit_workflow_state<T, I, F>(
@@ -1235,6 +1280,55 @@ mod tests {
         }
     }
 
+    fn send_request(home_dir: &Path) -> SendRequest {
+        SendRequest {
+            home_dir: home_dir.to_path_buf(),
+            current_dir: home_dir.to_path_buf(),
+            sender_override: Some(AgentName::from_validated(TEST_SENDER)),
+            to: format!("recipient@{TEST_TEAM}").parse().expect("address"),
+            team_override: None,
+            message_source: SendMessageSource::Inline("hello".to_string()),
+            summary_override: Some("hello".to_string()),
+            requires_ack: false,
+            task_id: Some("task-123".parse().expect("task id")),
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            dry_run: false,
+        }
+    }
+
+    #[derive(Default)]
+    struct RecordingObservability {
+        events: Mutex<Vec<CommandEvent>>,
+    }
+
+    impl crate::boundary::sealed::Sealed for RecordingObservability {}
+
+    impl ObservabilityPort for RecordingObservability {
+        fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
+            self.events.lock().expect("events lock").push(event);
+            Ok(())
+        }
+
+        fn query(&self, _req: AtmLogQuery) -> Result<AtmLogSnapshot, AtmError> {
+            Ok(AtmLogSnapshot::default())
+        }
+
+        fn follow(&self, _req: AtmLogQuery) -> Result<LogTailSession, AtmError> {
+            Ok(LogTailSession::empty())
+        }
+
+        fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
+            Ok(AtmObservabilityHealth {
+                active_log_path: None,
+                logging_state: AtmObservabilityHealthState::Unavailable,
+                query_state: Some(AtmObservabilityHealthState::Unavailable),
+                detail: Some("test observer".to_string()),
+            })
+        }
+    }
+
     #[test]
     fn load_send_alert_state_parse_errors_are_config_errors() {
         let tempdir = tempdir().expect("tempdir");
@@ -1250,7 +1344,11 @@ mod tests {
 
     #[test]
     fn sqlite_failure_for_claude_appends_original_and_companion_error() {
-        let runtime = TestRuntime::new(Some("sqlite write failed"), None);
+        let runtime = TestRuntime::new(
+            Some("sqlite write failed"),
+            None,
+            DeliveryHarnessPath::ClaudeCode,
+        );
         let tempdir = tempdir().expect("tempdir");
         let inbox_path = tempdir.path().join("recipient.jsonl");
 
@@ -1279,7 +1377,11 @@ mod tests {
 
     #[test]
     fn sqlite_failure_for_non_claude_skips_jsonl_append_but_keeps_companion_nudge() {
-        let runtime = TestRuntime::new(Some("sqlite write failed"), None);
+        let runtime = TestRuntime::new(
+            Some("sqlite write failed"),
+            None,
+            DeliveryHarnessPath::NonClaude,
+        );
         let tempdir = tempdir().expect("tempdir");
         let inbox_path = tempdir.path().join("recipient.jsonl");
 
@@ -1309,7 +1411,8 @@ mod tests {
 
     #[test]
     fn append_failure_after_sqlite_commit_is_warning_only() {
-        let runtime = TestRuntime::new(None, Some("append failed"));
+        let runtime =
+            TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
         let tempdir = tempdir().expect("tempdir");
         let inbox_path = tempdir.path().join("recipient.jsonl");
 
@@ -1333,7 +1436,7 @@ mod tests {
 
     #[test]
     fn companion_post_send_hook_uses_companion_message_identity() {
-        let runtime = TestRuntime::new(None, None);
+        let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
         let companion = CompanionNudgePlan {
             sender: AgentName::from_validated("atm-system"),
             sender_team: Some(TeamName::from_validated(TEST_TEAM)),
@@ -1371,6 +1474,77 @@ mod tests {
         assert!(!captures[0].requires_ack);
         assert!(!captures[0].is_ack);
         assert_eq!(captures[0].task_id.as_ref(), companion.task_id.as_ref());
+    }
+
+    #[test]
+    fn send_non_claude_sqlite_failure_delivers_original_and_error_via_hook_path() {
+        let runtime = TestRuntime::new(
+            Some("sqlite write failed"),
+            None,
+            DeliveryHarnessPath::NonClaude,
+        );
+        let observability = RecordingObservability::default();
+        let tempdir = tempdir().expect("tempdir");
+
+        let outcome = super::send_mail_with_runtime_impl(
+            send_request(tempdir.path()),
+            &observability,
+            &runtime,
+        )
+        .expect("send outcome");
+
+        assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
+        assert_eq!(outcome.warnings.len(), 1);
+        assert!(
+            runtime
+                .appended_messages
+                .lock()
+                .expect("append lock")
+                .is_empty()
+        );
+        let captures = runtime.hook_captures.lock().expect("hook capture lock");
+        assert_eq!(captures.len(), 2);
+        assert_eq!(captures[0].sender.as_str(), TEST_SENDER);
+        assert_eq!(captures[1].sender.as_str(), "atm-system");
+        drop(captures);
+
+        let events = observability.events.lock().expect("events lock");
+        assert!(events.iter().any(|event| {
+            event.command == "delivery_policy"
+                && event.outcome == "delivery_policy.new_message.non_claude_original"
+        }));
+        assert!(events.iter().any(|event| {
+            event.command == "delivery_policy"
+                && event.outcome == "delivery_policy.new_message.non_claude_error"
+        }));
+    }
+
+    #[test]
+    fn send_append_failure_routes_to_post_send_hook_fallback() {
+        let runtime =
+            TestRuntime::new(None, Some("append failed"), DeliveryHarnessPath::ClaudeCode);
+        let observability = RecordingObservability::default();
+        let tempdir = tempdir().expect("tempdir");
+
+        let outcome = super::send_mail_with_runtime_impl(
+            send_request(tempdir.path()),
+            &observability,
+            &runtime,
+        )
+        .expect("send outcome");
+
+        assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
+        assert_eq!(outcome.warnings.len(), 1);
+        let captures = runtime.hook_captures.lock().expect("hook capture lock");
+        assert_eq!(captures.len(), 1);
+        assert_eq!(captures[0].sender.as_str(), TEST_SENDER);
+        drop(captures);
+
+        let events = observability.events.lock().expect("events lock");
+        assert!(events.iter().any(|event| {
+            event.command == "delivery_policy"
+                && event.outcome == "delivery_policy.new_message.post_send_hook_fallback"
+        }));
     }
 
     #[test]

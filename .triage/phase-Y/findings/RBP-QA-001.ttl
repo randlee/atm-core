@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-QA-001>
+  a triage:Finding ;
+  triage:findingId "RBP-QA-001" ;
+  triage:title "execute_upsert_message_state returns WriteOpResult::Unit — should return Result<(), AtmError>" ;
+  triage:description "crates/atm-rusqlite/src/writer/ops.rs:234 execute_upsert_message_state returns WriteOpResult::Unit on success. WriteOpResult::Unit is semantically equivalent to (). RBP-001: should return Result<(), AtmError> instead. Fix: change return type to Result<(), AtmError> and return Ok(()) on success." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-QA-001/pY-s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s3/cd2c64c3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s3/cd2c64c3> .
+
+<urn:atm:triage:occurrence/RBP-QA-001/pY-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 234 ;
+  triage:snippet "fn execute_upsert_message_state(...) -> WriteOpResult { ... WriteOpResult::Unit }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "cd2c64c3" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s3/cd2c64c3> .
+
+<urn:atm:triage:worktree/pY-s3/cd2c64c3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "cd2c64c3" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
