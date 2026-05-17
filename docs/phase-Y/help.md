@@ -9,6 +9,8 @@ Purpose:
 Scope:
 
 - `atm help` is the approved additive CLI feature for `Y.1`
+- `Y.2` closes the intentionally deferred tier-2 topic examples without
+  broadening the command surface
 - `atm --help` remains clap-generated syntax help
 - `atm help` is ATM-owned conceptual/product help
 - `atm help <subcommand>` must begin with the authoritative clap `--help`
@@ -28,6 +30,13 @@ Required first-delivery topics:
   - `hooks`
   - `identity`
   - `skills`
+
+Y.2 follow-up scope:
+
+- replace the tier-2 placeholder notes with concrete operator examples
+- keep the follow-up limited to help text and adjacent docs
+- do not add JSON input, write-boundary refactors, or compatibility-format
+  changes in this phase slice
 
 Ownership split:
 
