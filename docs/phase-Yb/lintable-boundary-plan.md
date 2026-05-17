@@ -87,6 +87,7 @@ Primitive caller allowlist:
 | `RetainedServiceRuntime::deliver_non_claude_payloads(...)` | `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter` | `LINT-BOUNDARY-NON-CLAUDE-OUTBOUND-REFERENCES` |
 | `atm_core::boundary::NonClaudeOutbound::deliver_payloads(...)` | `atm_core::service_runtime::RetainedServiceRuntime::deliver_non_claude_payloads(...)` | daemon/runtime adapter seam only |
 | `RetainedServiceRuntime::maybe_run_post_send_hook(...)` | `atm_core::delivery_execution::PostSendNotificationExecutor` | notification-only seam; not accepted as delivery proof |
+| `send::hook::maybe_run_post_send_hook(...)` | `atm_core::service_runtime::LocalServiceRuntime` | pub(crate) required — caller is outside the send/ module; pub(super) would break the cross-module RetainedServiceRuntime trait-impl call pattern (introduced Y.8, documented Y.12) |
 | `mailbox::store::write_compat_mailbox_projection(...)` | explicit repair/rebuild-only seams | runtime delivery path forbidden |
 | `direct_boundaries::reexport_messages(...)` | explicit repair/rebuild-only seams | runtime delivery path forbidden |
 

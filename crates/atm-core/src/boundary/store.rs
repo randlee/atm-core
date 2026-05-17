@@ -69,7 +69,7 @@ pub struct RosterMemberRecord {
     #[serde(default)]
     pub model: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recipient_pane_id: Option<String>,
+    pub recipient_pane_id: Option<String>, // PaneId newtype deferred to post-Yb phase
     #[serde(default)]
     pub metadata_json: Map<String, Value>,
 }
@@ -441,6 +441,8 @@ pub struct NonClaudeOutboundDeliveryRequest {
     pub team: TeamName,
     pub agent: AgentName,
     pub recipient_pane_id: Option<String>,
+    /// Payload serialized to JSONL must not exceed `MAX_NON_CLAUDE_PAYLOAD_BYTES` (1 MiB),
+    /// enforced by `DaemonNonClaudeOutbound::deliver_payloads`.
     pub messages: Vec<MessageEnvelope>,
 }
 

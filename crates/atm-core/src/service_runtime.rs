@@ -51,7 +51,7 @@ pub(crate) trait RetainedServiceRuntime {
         config: Option<&AtmConfig>,
         context: PostSendHookContext<'_>,
     );
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Repair/rebuild-only seam; called from tests and explicit repair paths, not from the normal runtime delivery pipeline.")]
     fn rebuild_compat_inbox_projection(
         &self,
         inbox_path: &Path,
@@ -152,7 +152,13 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
         &self,
         request: crate::boundary::NonClaudeOutboundDeliveryRequest,
     ) -> Result<crate::boundary::NonClaudeOutboundDeliveryResponse, AtmError> {
-        let output_path = crate::home::host_runtime_dir()?.join("non_claude_outbound.jsonl");
+        let output_path = crate::home::host_runtime_dir()
+            .map_err(|e| {
+                e.with_recovery(
+                    "Set ATM_HOME to a writable directory or ensure the user home directory is accessible before retrying non-Claude outbound delivery.",
+                )
+            })?
+            .join("non_claude_outbound.jsonl");
         let parent = output_path.parent().ok_or_else(|| {
             AtmError::mailbox_write(format!(
                 "non-Claude outbound path {} has no parent directory",
@@ -308,7 +314,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     }
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Called only from rebuild_compat_inbox_projection, which is a repair/rebuild-only seam exercised via tests and explicit repair paths.")]
 fn load_store_backed_mailbox_projection(
     runtime: &LocalServiceRuntime,
     team: &TeamName,
@@ -334,7 +340,7 @@ fn load_store_backed_mailbox_projection(
         .collect()
 }
 
-#[allow(dead_code)]
+#[allow(dead_code, reason = "Called only from load_store_backed_mailbox_projection, which is a repair/rebuild-only seam exercised via tests and explicit repair paths.")]
 fn load_projection_message(
     runtime: &LocalServiceRuntime,
     team: &TeamName,

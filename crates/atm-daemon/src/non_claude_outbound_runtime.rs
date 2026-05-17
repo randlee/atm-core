@@ -43,7 +43,7 @@ impl std::fmt::Debug for DaemonNonClaudeOutbound {
     )
 )]
 impl DaemonNonClaudeOutbound {
-    #[allow(dead_code)]
+    #[allow(dead_code, reason = "Public constructor retained for production wiring; not yet wired in the daemon composition layer.")]
     pub(crate) fn new() -> Self {
         Self::new_with_path_factory(Arc::new(|| {
             Ok(atm_core::home::host_runtime_dir()?.join("non_claude_outbound.jsonl"))
