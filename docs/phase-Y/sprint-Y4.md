@@ -46,6 +46,11 @@ command and daemon code.
   through scattered `if` branches in command code
 - `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate machines
   with separate QA transition tables
+- coordinator and machine design must minimize synchronization:
+  - roster resolution should use a short-lived snapshot, not a long-held lock
+  - SQLite transaction scope is the durable mutation boundary
+  - compatibility export/nudge is post-commit side-effect work, not part of
+    message-truth locking
 - JSONL append is allowed only for `Claude Code` harnesses
 - harness selection is based on harness type, not model
 - non-Claude harnesses must never receive ATM-authored JSONL append output
@@ -91,6 +96,8 @@ Development work:
   - dispatches by event family
   - branches by `RosterHarness`
   - emits observable transition events
+- ensure the coordinator consumes copied roster snapshot facts rather than
+  carrying live lock guards through downstream state-machine work
 - ensure downstream command or daemon callers invoke the coordinator rather
   than carrying harness-specific delivery rules themselves
 
@@ -140,6 +147,9 @@ Development work:
   - append/nudge failure -> post-send-hook fallback for notification
     degradation only
 - do not add alternate fallback branches
+- do not widen application lock scope to make these branches look “atomic”
+- keep compatibility export and nudge as post-durability side effects rather
+  than a second correctness-lock boundary
 
 Required tests:
 - explicit acceptance tests for each approved branch
@@ -158,6 +168,8 @@ Required doc or boundary updates:
   and docs
 - no command path retains local harness/delivery policy branches that should
   belong to the coordinator or state machines
+- no new broad lock hierarchy is introduced across roster reads, SQLite
+  durability, and compatibility export/nudge work
 
 ## Required Validation
 

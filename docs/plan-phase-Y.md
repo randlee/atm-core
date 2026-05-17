@@ -110,6 +110,15 @@ Normal runtime behavior must therefore converge on:
   - an additional `atm-system@<team>` error message is emitted
   - the nudge path mirrors that two-message behavior
   - no alternate fallback path may replace that companion error emission
+- minimal synchronization in the delivery path:
+  - canonical roster data should be read as a short-lived snapshot, not held
+    as a long-lived coordination lock
+  - SQLite transaction scope is the durable mutation boundary
+  - compatibility export/nudge runs after the relevant durable decision point
+    and must not become part of message-truth locking
+  - cross-domain lock nesting between roster state, SQLite durability, and
+    compatibility mailbox/workflow state should be eliminated rather than
+    carefully expanded
 
 Normal command paths must not own direct compatibility inbox rewrites once the
 Phase `Y` line is complete.
@@ -121,6 +130,7 @@ The following must be completed on the planning branch before numbered Phase
 
 - shared-inbox field inventory plus the decision framework that `Y.5` will use
   to justify each surviving field
+- `docs/phase-Y/inbox-field-inventory.md`
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
 - `docs/phase-Y/delivery-state-machines.md`
@@ -226,6 +236,15 @@ then moves to `docs/plan-phase-Z.md`.
   - explicit transition table
   - explicit side effects
   - explicit observable transition names
+- delivery-state-machine design must prefer snapshots and post-commit
+  side effects over new application-level lock hierarchies
+- the planner should treat “who sees a membership change first” as low-value
+  race handling:
+  - if a message lands just before or just after a member is removed, that
+    edge is not a reason to add broad coordination locks
+  - if a member is added and a message is sent immediately after, correct
+    queueing and durable write sequencing should handle it without global
+    locking
 - harness-specific branching must live in the delivery-policy coordinator plus
   the relevant state machine, not in command code
 - do not treat command-path direct inbox rewrites as an acceptable long-term

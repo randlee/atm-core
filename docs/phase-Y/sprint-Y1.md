@@ -20,6 +20,7 @@ target: integrate/phase-Y
 
 - `Y.0` must land on `develop`
 - `docs/plan-phase-Y.md`
+- `docs/phase-Y/help.md`
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
 - `GH #83`
@@ -35,7 +36,8 @@ target: integrate/phase-Y
 - concept topics (no clap equivalent) are authored in the topic registry:
 - tier 1 (must ship): `config`, `errors`
 - tier 2 (may ship incomplete in v1.1): `hooks`, `identity`, `skills`
-- v1.1 scope: `atm help --list`, `atm help <topic>`, `atm help <topic> --json`
+- Y.1 delivery scope: `atm help --list`, `atm help <topic>`,
+  `atm help <topic> --json`
 - location: `crates/atm/src/commands/help.rs` with typed topic registry
 - no asset-install/init entanglement in this delivery
 - current CLI JSON status:
@@ -51,6 +53,7 @@ target: integrate/phase-Y
 - `crates/atm/src/commands/mod.rs`
 - `crates/atm/src/commands/help.rs`
 - `crates/atm/src/output.rs`
+- `docs/phase-Y/help.md`
 - `docs/atm/commands/help.md`
 - `docs/atm/requirements.md`
 - `docs/atm/architecture.md`

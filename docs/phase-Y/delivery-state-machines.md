@@ -41,6 +41,32 @@ But the write/nudge behavior is still spread across:
 
 That is the policy leakage Phase `Y` must remove.
 
+## Lock Ordering
+
+This is a transitional rule, not a permanent endorsement of broad locking.
+
+- preferred design:
+  - roster snapshot read
+  - SQLite durability step
+  - compatibility export / nudge side effects afterward
+- if a legacy mailbox/workflow lock still exists during `Y.3` / `Y.4`
+  transition work, the only allowed ordering is:
+  - read canonical roster snapshot without carrying a live roster lock forward
+  - perform the SQLite write/transaction
+  - only then enter any compatibility mailbox/workflow lock scope that still
+    survives behind the transitional export owner
+- forbidden ordering:
+  - mailbox/workflow lock -> roster lookup
+  - mailbox/workflow lock -> SQLite write -> roster lookup
+  - holding a live roster lock across SQLite I/O or compatibility export
+
+Why this exists:
+
+- it prevents deadlock during the overlap where `workflow.rs:166` style
+  compatibility-side lock ownership may still exist
+- it preserves the stronger Phase `Y` goal of minimizing lock use instead of
+  normalizing a larger lock hierarchy
+
 ## Required Central Coordinator
 
 Phase `Y` must introduce one daemon-private or tightly daemon-owned
@@ -63,6 +89,27 @@ Harness-resolution rule:
   - ad hoc command flags
   - stale config-side compatibility fields
 
+Synchronization rule:
+
+- the coordinator should resolve roster state through a short-lived snapshot
+  read, copy out the routing decision it needs, and release that read scope
+  immediately
+- the coordinator and machines must not introduce a broad application lock
+  hierarchy spanning roster state, SQLite durability, and compatibility
+  mailbox/workflow state
+- the preferred ordering is:
+  - read canonical roster snapshot
+  - perform the SQLite durability step
+  - perform compatibility export / outward nudge side effects afterward
+- if a legacy mailbox/workflow lock still exists during transition work, it is
+  a compatibility-side implementation detail to be minimized, not a new
+  correctness boundary for message truth
+- race handling should stay pragmatic:
+  - membership changes around the edge of one message delivery are acceptable
+    eventual-consistency cases
+  - those cases must not justify long-lived roster locks or widened
+    cross-subsystem locking
+
 Required top-level enums:
 
 ```rust
@@ -79,6 +126,114 @@ enum DeliveryHarnessPath {
     NonClaude,
 }
 ```
+
+## Coordinator Invariants
+
+- restart recovery:
+  - after daemon restart, the coordinator must rediscover in-flight work from
+    durable SQLite truth or explicit retained repair queues; it must not assume
+    in-memory delivery state survived process exit
+- duplicate delivery guard:
+  - every dispatchable delivery path must be keyed by durable message identity
+  - rediscovery or retry must not create duplicate outward delivery for the
+    same logical message without an explicit documented replay mode
+- deferred-machine dispatch:
+  - if a machine family is not yet landed, the coordinator must fail closed
+    with a typed deferred-machine error instead of silently routing into an ad
+    hoc compatibility path
+
+## Concurrency Model
+
+- the coordinator is constructed once at daemon init from shared read-only
+  resources and boundary handles
+- each delivery request constructs a short-lived per-request handle carrying
+  copied routing facts and the exact machine dispatch target
+- no coordinator-level lock may be held across:
+  - SQLite writes
+  - compatibility append/export I/O
+  - nudge or post-send-hook execution
+- implementers should prefer per-request state plus immutable shared config
+  over `Arc<Mutex<DeliveryPolicyCoordinator>>` style coordination
+
+## Typestate Design
+
+Phase `Y` should encode key capability-transfer moments with typestate tokens
+when `Y.4` implementation lands.
+
+Required design tokens:
+
+- `ValidatedDeliveryRequest`
+  - created after event-family validation succeeds
+  - proves the machine may advance into durable persistence
+- `PersistedDeliveryRecord`
+  - created after the SQLite durability step succeeds
+  - proves post-durability side effects may begin
+- `AckDeliveryToken`
+  - created after ack-state validation/persistence succeeds
+  - proves reply delegation into the new-message path is legal
+- `RestoreMarkerToken`
+  - created after restore-marker validation succeeds
+  - proves restore rebuild may publish staged output
+
+The design rule is:
+
+- validation-before-persist and persist-before-dispatch should be represented
+  by token handoff where feasible, not by prose-only sequencing
+
+## Error Types
+
+The implementation sprint must land typed error inventory that matches the
+observable transition contract.
+
+Preferred shape:
+
+```rust
+enum DeliveryError {
+    NewMessage(NewMessageError),
+    ThreadUpdate(ThreadUpdateError),
+    AckReply(AckReplyError),
+    InboxRepair(InboxRepairError),
+    RestoreInboxRebuild(RestoreInboxRebuildError),
+    DeferredMachine(DeferredMachineError),
+}
+```
+
+Required per-family error coverage:
+
+- `NewMessageError`
+  - `RosterLookupFailed`
+  - `SqlitePersistFailed`
+  - `CompatibilityAppendFailed`
+  - `CompanionErrorEmitFailed`
+  - `PrimaryNudgeFailed`
+  - `ErrorNudgeFailed`
+- `ThreadUpdateError`
+  - `ParentMissing`
+  - `RootMissing`
+  - `SenderMismatch`
+  - `LinearityRejected`
+  - `SqlitePersistFailed`
+- `AckReplyError`
+  - `AckTargetMissing`
+  - `ReplyTargetRejected`
+  - `AckStatePersistFailed`
+  - `ReplyDelegationFailed`
+- `InboxRepairError`
+  - `HarnessRejected`
+  - `ProjectionLoadFailed`
+  - `StageFailed`
+  - `PublishFailed`
+- `RestoreInboxRebuildError`
+  - `RestoreMarkerRejected`
+  - `HarnessRejected`
+  - `ProjectionLoadFailed`
+  - `StageFailed`
+  - `PublishFailed`
+
+Observable transition rule:
+
+- every failure or degradation transition must map to one named error variant
+- every such transition must emit a stable `error_code`
 
 ## Required Event-Family State Machines
 
@@ -148,6 +303,14 @@ Why it is separate:
 | `DispatchClaude` | `machine returned terminal` | none | `Completed` | `delivery_policy.new_message.completed` |
 | `DispatchNonClaude` | `machine returned terminal` | none | `Completed` | `delivery_policy.new_message.completed` |
 
+Coordinator execution contract:
+
+- `ResolveHarness` uses a canonical roster snapshot and must not hold that
+  snapshot read scope across later SQLite persistence or compatibility export
+  side effects
+- the coordinator may pass copied routing facts into the machine, but not live
+  lock guards or mutable roster handles
+
 #### Claude Harness Transition Table
 
 | From | Trigger | Preconditions | To | Side effects | Observable transition |
@@ -161,11 +324,21 @@ Why it is separate:
 | `AppendCompatibilityMessage` | `append_ok_after_sqlite_err` | original message append succeeded after sqlite failure | `AppendCompatibilityErrorMessage` | append original message | `new_message.claude.append_original_after_sqlite_failure_ok` |
 | `AppendCompatibilityMessage` | `append_err_after_sqlite_err` | original message append failed after sqlite failure | `Failed` | record blocking failure | `new_message.claude.append_original_after_sqlite_failure_failed` |
 | `AppendCompatibilityErrorMessage` | `append_ok` | sqlite error companion append succeeded | `RunPrimaryNudge` | append `atm-system@<team>` error message | `new_message.claude.append_error_ok` |
-| `AppendCompatibilityErrorMessage` | `append_err` | sqlite error companion append failed | `Failed` | record blocking failure | `new_message.claude.append_error_failed` |
+| `AppendCompatibilityErrorMessage` | `append_err` | sqlite error companion append failed | `Failed` | emit `ERR_COMPANION_EMIT_FAILED`; record blocking failure | `new_message.claude.append_error_failed` |
 | `RunPrimaryNudge` | `sqlite_ok_path` | no companion error required | `Delivered` | run original nudge | `new_message.claude.nudge_original_ok` |
 | `RunPrimaryNudge` | `sqlite_err_path` | companion error path active | `RunErrorNudge` | run original nudge | `new_message.claude.nudge_original_after_sqlite_failure_ok` |
+| `RunPrimaryNudge` | `nudge_err` | original nudge failed | `Failed` | emit `ERR_PRIMARY_NUDGE_FAILED`; record notification failure | `new_message.claude.nudge_original_failed` |
 | `RunErrorNudge` | `nudge_ok` | companion error path active | `Delivered` | run error nudge | `new_message.claude.nudge_error_ok` |
+| `RunErrorNudge` | `nudge_err` | companion error nudge failed | `Failed` | emit `ERR_ERROR_NUDGE_FAILED`; record notification failure | `new_message.claude.nudge_error_failed` |
 | `RunPostSendHookFallback` | `hook_ok_or_warn` | sqlite committed earlier | `Delivered` | execute post-send-hook fallback | `new_message.claude.hook_fallback_completed` |
+
+Lock-minimization notes:
+
+- `PersistSqlite` is the durable mutation boundary
+- `AppendCompatibilityMessage`, `AppendCompatibilityErrorMessage`, and nudge
+  states are post-durability side effects
+- these side effects must not rely on a long-lived roster lock or broaden
+  SQLite transaction scope just to keep compatibility output “in sync”
 
 #### Non-Claude Harness Transition Table
 
@@ -179,10 +352,19 @@ Why it is separate:
 | `DeliverOriginal` | `deliver_ok_after_sqlite_err` | original non-Claude delivery succeeded after sqlite failure | `DeliverErrorMessage` | deliver original through non-Claude path | `new_message.non_claude.deliver_original_after_sqlite_failure_ok` |
 | `DeliverOriginal` | `deliver_err` | original non-Claude delivery failed | `Failed` | record delivery failure | `new_message.non_claude.deliver_original_failed` |
 | `DeliverErrorMessage` | `deliver_ok` | companion error delivery succeeded | `RunPrimaryNudge` | deliver `atm-system@<team>` error through non-Claude path | `new_message.non_claude.deliver_error_ok` |
-| `DeliverErrorMessage` | `deliver_err` | companion error delivery failed | `Failed` | record blocking failure | `new_message.non_claude.deliver_error_failed` |
+| `DeliverErrorMessage` | `deliver_err` | companion error delivery failed | `Failed` | emit `ERR_COMPANION_EMIT_FAILED`; record blocking failure | `new_message.non_claude.deliver_error_failed` |
 | `RunPrimaryNudge` | `sqlite_ok_path` | no companion error required | `Delivered` | run original nudge | `new_message.non_claude.nudge_original_ok` |
 | `RunPrimaryNudge` | `sqlite_err_path` | companion error path active | `RunErrorNudge` | run original nudge | `new_message.non_claude.nudge_original_after_sqlite_failure_ok` |
+| `RunPrimaryNudge` | `nudge_err` | original nudge failed | `Failed` | emit `ERR_PRIMARY_NUDGE_FAILED`; record notification failure | `new_message.non_claude.nudge_original_failed` |
 | `RunErrorNudge` | `nudge_ok` | companion error path active | `Delivered` | run error nudge | `new_message.non_claude.nudge_error_ok` |
+| `RunErrorNudge` | `nudge_err` | companion error nudge failed | `Failed` | emit `ERR_ERROR_NUDGE_FAILED`; record notification failure | `new_message.non_claude.nudge_error_failed` |
+
+Lock-minimization notes:
+
+- non-Claude delivery follows the same snapshot -> SQLite -> outward-side-effect
+  model
+- non-Claude paths must not inherit Claude-compatibility mailbox locking
+  concerns at all
 
 ### 2. Thread Update
 
@@ -354,9 +536,9 @@ Why it is separate:
 | `LoadRepairProjection` | `projection_err` | none | `Failed` | record projection failure | `inbox_repair.projection_failed` |
 | `FilterDeletedMessages` | `filter_complete` | deleted messages excluded | `StageInboxRebuild` | produce non-deleted rebuild set | `inbox_repair.filter_complete` |
 | `StageInboxRebuild` | `stage_ok` | staged inbox image prepared | `PublishInboxRebuild` | create temp/staged inbox output | `inbox_repair.staged` |
-| `StageInboxRebuild` | `stage_err` | none | `Failed` | record staging failure | `inbox_repair.stage_failed` |
+| `StageInboxRebuild` | `stage_err` | none | `Failed` | delete staged temp file; record staging failure | `inbox_repair.stage_failed` |
 | `PublishInboxRebuild` | `publish_ok` | staged output atomically published | `Delivered` | create or replace the repaired Claude inbox | `inbox_repair.published` |
-| `PublishInboxRebuild` | `publish_err` | none | `Failed` | record publish failure | `inbox_repair.publish_failed` |
+| `PublishInboxRebuild` | `publish_err` | none | `Failed` | delete staged temp file; record publish failure | `inbox_repair.publish_failed` |
 
 ### 5. Restore Inbox Rebuild
 
@@ -409,9 +591,9 @@ Why it is separate:
 | `LoadRestoreProjection` | `projection_loaded` | restore source set available | `StageRestoreOutput` | load restore projection | `restore_inbox.projection_loaded` |
 | `LoadRestoreProjection` | `projection_err` | none | `Failed` | record projection failure | `restore_inbox.projection_failed` |
 | `StageRestoreOutput` | `stage_ok` | restore output staged successfully | `PublishRestoreOutput` | write staged rebuild output | `restore_inbox.staged` |
-| `StageRestoreOutput` | `stage_err` | none | `Failed` | record staging failure | `restore_inbox.stage_failed` |
+| `StageRestoreOutput` | `stage_err` | none | `Failed` | delete staged output; remove restore marker; record staging failure | `restore_inbox.stage_failed` |
 | `PublishRestoreOutput` | `publish_ok` | staged restore output atomically published | `Delivered` | publish rebuilt inbox and clear restore staging as documented | `restore_inbox.published` |
-| `PublishRestoreOutput` | `publish_err` | none | `Failed` | record publish failure | `restore_inbox.publish_failed` |
+| `PublishRestoreOutput` | `publish_err` | none | `Failed` | delete staged output; remove restore marker; record publish failure | `restore_inbox.publish_failed` |
 
 ### 6. Deferral Rule
 

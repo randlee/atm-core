@@ -59,6 +59,7 @@ before release smoke work begins.
 
 - `docs/atm-message-schema.md`
 - `docs/phase-Y/delivery-state-machines.md`
+- `docs/phase-Y/inbox-field-inventory.md`
 - the planning-branch field inventory and audit conclusions that identify the
   candidate compatibility fields
 

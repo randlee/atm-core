@@ -3488,6 +3488,8 @@ Immediate planning outputs:
 - `docs/plan-phase-Y.md`
 - `docs/plan-phase-Z.md`
 - `docs/phase-Y/inbox-write-path-audit.md`
+- `docs/phase-Y/inbox-field-inventory.md`
+- `docs/phase-Y/help.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
 - `docs/phase-Y/delivery-state-machines.md`
 - `docs/phase-Y/sprint-Y1.md`
