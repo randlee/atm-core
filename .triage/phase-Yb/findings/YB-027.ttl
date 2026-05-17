@@ -9,12 +9,14 @@
   triage:category "RSH" ;
   triage:phaseId "phase-Yb" ;
   triage:triageMode "initial_pass" ;
-  triage:severity "Important" ;
+  triage:severity "Minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
   triage:status "open" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:followupAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:followupNote "QA-2 re-run disputes Important severity: MAX_DAEMON_FRAME_BYTES (1 MiB) at protocol.rs:180 caps IPC frame upstream before deserialization, bounding NonClaudeOutboundDeliveryRequest before it reaches deliver_payloads. Resolution: add comment documenting upstream cap rather than adding new guard. Severity downgraded to Minor (no code gap; comment-only fix to address documentation of existing bounds)." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s7/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s8/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s9/1> ;
@@ -27,7 +29,7 @@
   triage:openOn <urn:atm:triage:worktree/s11> ;
   triage:promoteTo <urn:atm:triage:worktree/s11> ;
   triage:scopeExceedsPhaseDeliverables true ;
-  triage:notes "Hardening finding flagged by QA on s9 but scope exceeds Y.9 'boundary formalization' goals. Phase Yb hardening audit (3 iterations, 20 findings resolved) did not require input size validation as Y.7-Y.11 acceptance criterion. Input size validation is a separate security hardening task, not a boundary-formalization responsibility. This finding is valid but out-of-phase; dispatch to appropriate hardening sprint or post-phase-Yb hardening cycle." .
+  triage:notes "QA-2 re-run disputes original Important severity. MAX_DAEMON_FRAME_BYTES (1 MiB) in protocol.rs:180 already caps IPC frame size before deserialization; NonClaudeOutboundDeliveryRequest is bounded upstream before reaching deliver_payloads. No new size guard needed. Resolution: comment-only — document upstream cap reference and MAX_CONCURRENT_CONNECTIONS ceiling as accepted FS-stall defense. Severity downgraded to Minor." .
 
 <urn:atm:triage:occurrence/YB-027/s7/1>
   a triage:Occurrence ;
