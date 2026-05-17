@@ -26,6 +26,19 @@ Required proof:
 - named tests for each degraded-delivery branch
 - assertions over logical payload content and ordering
 - no reliance on hook invocation count as delivery proof
+- required named tests on the `Y.7` branch:
+  - `sqlite_failure_for_claude_preserves_original_and_companion_error_payloads`
+  - `sqlite_failure_for_non_claude_preserves_original_and_companion_payloads`
+  - `append_failure_after_sqlite_commit_is_execution_only`
+  - `named_plan_builder_proves_payload_equality_across_harnesses`
+  - `named_companion_error_failure_handling_adds_explicit_warning`
+  - `send_non_claude_sqlite_failure_delivers_original_and_error_via_hook_path`
+  - `send_append_failure_routes_to_post_send_hook_fallback`
+- the `Y.7` closeout branch must also prove:
+  - `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine` constructs
+    `ReplyDeliveryPlan` from the same typed persistence result surface as send
+  - `ReplyDeliveryPlan` executes through
+    `execute_reply_delivery_plan(...)`, not an ack-only notification shim
 
 ### Y.8
 

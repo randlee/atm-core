@@ -12,9 +12,7 @@ use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow;
 
-use super::{
-    CompanionNudgePlan, DeliveryPersistenceResult, WarningEntry, prepare_threaded_message,
-};
+use super::{DeliveryPersistenceResult, WarningEntry, prepare_threaded_message};
 
 pub(crate) fn persist_message_and_seed_workflow(
     runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
@@ -25,7 +23,7 @@ pub(crate) fn persist_message_and_seed_workflow(
     require_existing_inbox: bool,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
     if require_existing_inbox && !inbox_path.exists() {
-        return Ok(DeliveryPersistenceResult::persisted());
+        return Ok(DeliveryPersistenceResult::persisted(envelope.clone()));
     }
 
     let mut prepared = envelope.clone();
@@ -48,20 +46,7 @@ pub(crate) fn persist_message_and_seed_workflow(
         },
     );
     match commit_result {
-        Ok(()) => match runtime.append_compat_inbox_message(inbox_path, recipient, &prepared) {
-            Ok(()) => Ok(DeliveryPersistenceResult::persisted()),
-            Err(error) => Ok(DeliveryPersistenceResult::append_degraded(
-                WarningEntry::new(
-                    format!(
-                        "warning: compatibility append degraded for {}@{}: {error}",
-                        recipient.agent, recipient.team
-                    ),
-                    Some(
-                        "SQLite persistence succeeded. Post-send-hook fallback remains available for notification degradation.",
-                    ),
-                ),
-            )),
-        },
+        Ok(()) => Ok(DeliveryPersistenceResult::persisted(prepared)),
         Err(error) if error.is_mailbox_write() => {
             recover_after_sqlite_failure(runtime, recipient, inbox_path, &prepared, &error)
         }
@@ -70,9 +55,9 @@ pub(crate) fn persist_message_and_seed_workflow(
 }
 
 fn recover_after_sqlite_failure(
-    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
+    _runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
     recipient: &DeliveryRecipientSnapshot,
-    inbox_path: &Path,
+    _inbox_path: &Path,
     original_message: &MessageEnvelope,
     sqlite_error: &AtmError,
 ) -> Result<DeliveryPersistenceResult, AtmError> {
@@ -82,10 +67,6 @@ fn recover_after_sqlite_failure(
         original_message,
         sqlite_error,
     );
-    if recipient.allows_claude_jsonl_append() {
-        runtime.append_compat_inbox_message(inbox_path, recipient, original_message)?;
-        runtime.append_compat_inbox_message(inbox_path, recipient, &companion)?;
-    }
     let warning = WarningEntry::new(
         format!(
             "error: SQLite persistence failed for delivery to {}@{}: {}.",
@@ -96,17 +77,9 @@ fn recover_after_sqlite_failure(
         ),
     );
     Ok(DeliveryPersistenceResult::sqlite_failed_recovered(
+        original_message.clone(),
+        companion,
         warning,
-        CompanionNudgePlan {
-            sender: companion.from.clone(),
-            sender_team: companion.source_team.clone(),
-            message_id: companion
-                .message_id
-                .expect("sqlite failure companion messages always have a message id"),
-            requires_ack: false,
-            task_id: companion.task_id.clone(),
-            is_ack: false,
-        },
     ))
 }
 

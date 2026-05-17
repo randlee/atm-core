@@ -12,6 +12,10 @@ pub mod boundary_support;
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.
 pub(crate) mod config;
+/// Internal shared delivery-plan execution helpers for message-path unification.
+pub(crate) mod delivery_execution;
+/// Internal typed delivery-plan contracts owned by the message state machines.
+pub(crate) mod delivery_plan;
 /// Internal delivery-policy coordinator and event-family state machines.
 pub(crate) mod delivery_policy;
 /// Hidden daemon-facing wrapper surface over crate-private boundary helpers.

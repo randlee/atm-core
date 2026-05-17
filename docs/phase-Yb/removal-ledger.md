@@ -56,3 +56,41 @@ What must not survive:
 - metadata-only hook invocation used as proof of message delivery
 - direct persistence-to-outward-delivery coupling
 - implicit fallback from unknown/missing roster data to Claude append
+
+## Y.7 Closure Notes
+
+`feature/pYb-s7-degraded-delivery-contract-hardening` closes the required
+`Y.7` rows by replacing persistence-owned delivery with typed plan/executor
+seams.
+
+Closed rows:
+
+- `YB-RM-001`
+- `YB-RM-002`
+- `YB-RM-003`
+- `YB-RM-004`
+- `YB-RM-005`
+- `YB-RM-008`
+- `YB-RM-026`
+- `YB-RM-027`
+- `YB-RM-028`
+
+Implemented seam on this branch:
+
+- [crates/atm-core/src/send/persistence.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/persistence.rs:17)
+  now persists only and returns typed degraded payloads
+- [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:323)
+  builds `DeliveryPlan`
+- [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:97)
+  executes `DeliveryPlan`
+- [crates/atm-core/src/ack/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/ack/mod.rs:514)
+  routes reply delivery through
+  `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine -> ReplyDeliveryPlan`
+
+Rows that remain intentionally open after `Y.7`:
+
+- `YB-RM-006` through `YB-RM-016`
+- `YB-RM-017` through `YB-RM-025`
+
+Those remaining rows are deferred to `Y.8` through `Y.10` exactly as assigned
+above; they are not regressions in `Y.7`.

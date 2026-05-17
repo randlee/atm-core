@@ -5,42 +5,39 @@ Baseline:
 - planning branch: `message-path-consolidation-plan-Yb`
 - implementation baseline under review: `integrate/phase-Y` at `b8785617`
 
-This document traces the current production call stacks that Yb must simplify
-or replace.
+This document records the current `Y.7` implementation seam after degraded
+delivery contract hardening landed on
+`feature/pYb-s7-degraded-delivery-contract-hardening`.
 
-## 1. New Message Success, Claude Harness
+## 1. Current Y.7 Stack: New Message Success, `DeliveryHarnessPath::ClaudeCode`
 
 Current stack:
 
-1. `crates/atm-core/src/send/mod.rs:190`
+1. [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:190)
    - `send_mail_with_runtime_impl(...)`
-2. `crates/atm-core/src/send/mod.rs:369`
+2. [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:365)
    - `prepare_send_context(...)`
-3. `crates/atm-core/src/send/mod.rs:515`
+3. [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:511)
    - `persist_send_message(...)`
-4. `crates/atm-core/src/send/persistence.rs:19`
+4. [crates/atm-core/src/send/persistence.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/persistence.rs:17)
    - `persist_message_and_seed_workflow(...)`
-5. `crates/atm-core/src/send/persistence.rs:36`
-   - `runtime.commit_workflow_state(...)`
-6. `crates/atm-core/src/send/persistence.rs:51`
-   - `runtime.append_compat_inbox_message(...)`
-7. `crates/atm-core/src/service_runtime.rs:196`
-   - `append_compat_inbox_message(...)`
-8. `crates/atm-core/src/mailbox/store.rs:29`
-   - `append_compat_mailbox_message(...)`
-9. `crates/atm-core/src/send/mod.rs:238`
-   - `finalize_send_outcome(...)`
-10. `crates/atm-core/src/send/mod.rs:322`
-    - `run_send_post_send_hooks(...)`
-11. `crates/atm-core/src/send/hook.rs:57`
-    - `maybe_run_post_send_hook(...)`
+5. `runtime.commit_workflow_state(...)`
+6. [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:323)
+   - `build_send_delivery_plan(...)`
+7. [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:97)
+   - `execute_delivery_plan(...)`
+8. [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:188)
+   - `execute_claude_delivery(...)`
+9. `runtime.append_compat_inbox_message(...)`
+10. [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:175)
+    - shared notification execution
 
-Issue:
+Remaining issue:
 
-- the outer send flow still owns post-persist notification branching and
-  transition emission
+- payload construction and execution are now typed, but transition emission is
+  still translated in outer send code and remains a `Y.8` cleanup target
 
-## 2. New Message Success, Non-Claude Harness
+## 2. Current Y.7 Stack: New Message Success, `DeliveryHarnessPath::NonClaude`
 
 Current stack:
 
@@ -49,44 +46,42 @@ Current stack:
 3. `persist_send_message(...)`
 4. `persist_message_and_seed_workflow(...)`
 5. `runtime.commit_workflow_state(...)`
-6. `runtime.append_compat_inbox_message(...)`
-7. `crates/atm-core/src/service_runtime.rs:202`
-   - immediate non-Claude no-op return
-8. `finalize_send_outcome(...)`
-9. `run_send_post_send_hooks(...)`
-10. `maybe_run_post_send_hook(...)`
+6. `build_send_delivery_plan(...)`
+7. `execute_delivery_plan(...)`
+8. no Claude append is selected because the plan target is
+   `DeliveryTarget::NonClaude`
+9. shared notification execution
 
-Issue:
+Remaining issue:
 
-- the non-Claude path shares the outer send flow, but the low-level Claude
-  writer silently no-ops instead of never being selected in the first place
+- the outer call graph is now shared, but real non-Claude outbound transport
+  still defers to `Y.9`
 
-## 3. SQLite Failure, Claude Harness
+## 3. Current Y.7 Stack: SQLite Failure, `DeliveryHarnessPath::ClaudeCode`
 
 Current stack:
 
 1. `persist_send_message(...)`
 2. `persist_message_and_seed_workflow(...)`
 3. `runtime.commit_workflow_state(...)` returns mailbox-write error
-4. `crates/atm-core/src/send/persistence.rs:72`
+4. [crates/atm-core/src/send/persistence.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/persistence.rs:57)
    - `recover_after_sqlite_failure(...)`
-5. `crates/atm-core/src/send/persistence.rs:85`
-   - `recipient.allows_claude_jsonl_append()`
-6. `crates/atm-core/src/send/persistence.rs:86`
-   - append original message directly
-7. `crates/atm-core/src/send/persistence.rs:87`
-   - append companion error directly
-8. `finalize_send_outcome(...)`
-9. `run_send_post_send_hooks(...)`
-10. original hook + companion hook path
+5. `recover_after_sqlite_failure(...)` constructs original + companion typed
+   payloads
+6. `build_send_delivery_plan(...)`
+7. `execute_delivery_plan(...)`
+8. `execute_claude_delivery(...)`
+9. original notification + companion notification via shared notification
+   executor
 
-Issue:
+Remaining issue:
 
-- two outward deliveries happen inside persistence code
-- partial append is possible between steps 6 and 7
-- the contract is not atomic at the plan level
+- the degraded payload contract is now explicit and symmetric
+- partial Claude append is now an execution-level warning surface rather than a
+  persistence-owned side effect, but final transition ownership still moves in
+  `Y.8`
 
-## 4. SQLite Failure, Non-Claude Harness
+## 4. Current Y.7 Stack: SQLite Failure, `DeliveryHarnessPath::NonClaude`
 
 Current stack:
 
@@ -94,60 +89,86 @@ Current stack:
 2. `persist_message_and_seed_workflow(...)`
 3. `runtime.commit_workflow_state(...)` returns mailbox-write error
 4. `recover_after_sqlite_failure(...)`
-5. no outward payload delivery occurs in persistence
-6. `DeliveryPersistenceResult::sqlite_failed_recovered(...)`
-   returns `CompanionNudgePlan`
-7. `finalize_send_outcome(...)`
-8. `run_send_post_send_hooks(...)`
-9. original post-send hook + companion post-send hook
+5. persistence returns original + companion typed payloads in
+   `DeliveryPersistenceResult`
+6. `build_send_delivery_plan(...)`
+7. `execute_delivery_plan(...)`
+8. no Claude append is selected
+9. original notification + companion notification via shared notification
+   executor
 
-Issue:
+Remaining issue:
 
-- the plan produces two hook invocations, not two explicitly delivered logical
-  messages
-- hook payloads are metadata only and therefore cannot prove identical payload
-  semantics with the Claude path
+- `Y.7` proves identical logical payload sets at the typed-plan seam
+- real non-Claude outward payload delivery remains a `Y.9` boundary task
 
-## 5. Append Degraded After SQLite Success
+## 5. Current Y.7 Stack: Append Degraded After SQLite Success
 
 Current stack:
 
 1. `persist_message_and_seed_workflow(...)`
 2. SQLite workflow commit succeeds
-3. `runtime.append_compat_inbox_message(...)` fails
-4. `DeliveryPersistenceResult::append_degraded(...)`
-5. `finalize_send_outcome(...)`
-6. `run_send_post_send_hooks(...)`
-7. `emit_delivery_transitions(...)`
-8. `append_failure_transition_names(...)`
+3. `build_send_delivery_plan(...)`
+4. `execute_delivery_plan(...)`
+5. `DeliveryExecutionResult::AppendDegraded`
+6. shared notification execution
+7. [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:575)
+   - `emit_delivery_transitions(...)`
 
-Issue:
+Remaining issue:
 
-- append degradation is translated in outer send code instead of being emitted
-  by the machine/executor that owns the actual path
+- execution degradation is now executor-owned, but transition translation still
+  lives in outer send code and remains a `Y.8` cleanup target
 
-## 6. Ack Reply Delivery
+## 6. Current Y.7 Stack: Ack Reply Delivery
 
 Current stack:
 
-1. `crates/atm-core/src/ack/mod.rs:368`
+1. [crates/atm-core/src/ack/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/ack/mod.rs:368)
    - `persist_ack_reply(...)`
 2. ack state persisted in SQLite
-3. `crates/atm-core/src/ack/mod.rs:416`
+3. [crates/atm-core/src/ack/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/ack/mod.rs:417)
    - `persist_message_and_seed_workflow(...)`
-4. same new-message persistence and degraded-delivery logic as send
-5. `crates/atm-core/src/ack/mod.rs:442`
-   - `finalize_ack_outcome(...)`
-6. `crates/atm-core/src/ack/mod.rs:511`
-   - `collect_ack_hook_warnings(...)`
-7. original hook + optional companion hook
+4. shared persistence result seam returns typed payloads
+5. [crates/atm-core/src/ack/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/ack/mod.rs:514)
+   - `AckReplyStateMachine::from_persistence(...)`
+6. [crates/atm-core/src/ack/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/ack/mod.rs:545)
+   - `AckReplyStateMachine::into_reply_delivery_plan(...)`
+7. [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:119)
+   - `execute_reply_delivery_plan(...)`
+8. shared notification execution
 
-Issue:
+Remaining issue:
 
-- ack reply still depends on the same shared degraded-delivery helper and the
-  same hook semantics, but through a separate outer call graph
+- ack reply now shares the typed reply-plan seam
+- outer transition translation remains for `Y.8`
 
-## 7. Required End-State
+## 7. Y.7 Closure Summary
+
+`Y.7` replaced persistence-owned degraded outward delivery with:
+
+- typed payload construction in `DeliveryPersistenceResult`
+- `DeliveryPlan` / `ReplyDeliveryPlan`
+- shared execution in `delivery_execution.rs`
+- explicit `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine` ownership
+  for reply-plan construction
+
+Note:
+
+- `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine` is the typed
+  reply-plan constructor seam
+- `crates/atm-core/src/delivery_policy.rs::AckReplyStateMachine` remains the
+  documented transition inventory
+
+`Y.7` did not finish:
+
+- transition emission ownership cleanup
+- non-Claude real outbound transport
+- low-level repair/rebuild boundary cleanup
+
+Those remaining items are intentionally deferred to `Y.8` through `Y.10`.
+
+## 8. Required End-State
 
 After Yb:
 

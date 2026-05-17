@@ -61,8 +61,11 @@ Make the degraded-delivery contract exact and symmetric across
 3. Introduce in `crates/atm-core/src/delivery_execution.rs`:
    - `atm_core::delivery_execution::ClaudeInboxWriter`
    - `atm_core::delivery_execution::PostSendNotificationExecutor`
-4. Introduce `AckReplyStateMachine` for reply execution in the same Y.7
-   implementation seam as `ReplyDeliveryPlan`.
+4. Introduce `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine` for reply
+   execution in the same Y.7 implementation seam as `ReplyDeliveryPlan`.
+   This is distinct from the older
+   `crates/atm-core/src/delivery_policy.rs::AckReplyStateMachine` transition
+   inventory.
 5. Ensure both `DeliveryHarnessPath::ClaudeCode` and
    `DeliveryHarnessPath::NonClaude` produce the same logical payload set:
    - success -> original message only
@@ -162,7 +165,8 @@ implementation that preserves convenience helpers with hidden policy.
   `ReplyDeliveryPlan`
 - `crates/atm-core/src/delivery_execution.rs` defines `ClaudeInboxWriter` and
   `PostSendNotificationExecutor`
-- `AckReplyStateMachine` is introduced in Y.7 and wired to `ReplyDeliveryPlan`
+- `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine` is introduced in Y.7
+  and wired to `ReplyDeliveryPlan`
 - the sprint closes ledger rows:
   - `YB-RM-001` through `YB-RM-005`
   - `YB-RM-008`
