@@ -356,7 +356,7 @@ pub(crate) fn to_shared_inbox_value_with_policy(
     strip_metadata_atm_namespace(object);
     strip_removed_compatibility_fields(object);
     if should_export_retrieval_stub(message, policy)? {
-        let retrieval_stub = retrieval_stub_text(message)?;
+        let retrieval_stub = retrieval_stub_text(message);
         object.insert("text".to_string(), Value::String(retrieval_stub));
     }
     Ok(value)
@@ -383,17 +383,11 @@ fn should_export_retrieval_stub(
         && (policy.atm_authored_body_export_max_bytes.is_zero() || message.text.len() > export_cap))
 }
 
-fn retrieval_stub_text(message: &MessageEnvelope) -> Result<String, AtmError> {
-    let Some(message_id) = message.message_id else {
-        return Err(AtmError::mailbox_write(format!(
-            "failed to project shared inbox retrieval stub for {} at {:?}: ATM-authored message is missing message_id",
-            message.from, message.timestamp
-        ))
-        .with_recovery(
-            "Ensure ATM-authored messages retain message_id so the retrieval stub can reference the shared compatibility message id.",
-        ));
-    };
-    Ok(format!("atm read --message-id {message_id}"))
+fn retrieval_stub_text(message: &MessageEnvelope) -> String {
+    let message_id = message
+        .message_id
+        .expect("retrieval stubs are only emitted for ATM-authored messages with message_id");
+    format!("atm read --message-id {message_id}")
 }
 
 #[cfg(test)]

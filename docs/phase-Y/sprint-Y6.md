@@ -1,7 +1,7 @@
 ---
 id: Y.6
 title: Append-Only Compatibility Export Cutover
-status: planned
+status: complete
 branch: feature/pY-s6-append-only-compatibility-export
 worktree: ../atm-core-worktrees/feature/pY-s6-append-only-compatibility-export
 target: integrate/phase-Y
@@ -14,6 +14,22 @@ target: integrate/phase-Y
 If the approved wire contract allows it, replace array-style compatibility
 rewrites with append-only Claude-Code-compatible output and eliminate normal
 runtime lock dependence on inbox-file rewrites.
+
+## Current Status
+
+- complete on `feature/pY-s6-append-only-compatibility-export`
+- normal retained Claude Code compatibility writes now append one JSONL record
+  at a time after the durable SQLite/workflow step succeeds
+- non-Claude harnesses still never receive ATM-authored JSONL append output
+- legacy array inboxes are migrated through explicit rebuild/re-export the
+  first time the retained runtime encounters them
+- SQLite failure now follows the approved degraded outward-delivery contract:
+  - Claude Code harnesses append the original message plus an
+    `atm-system@<team>` companion error message
+  - non-Claude harnesses skip JSONL append but still emit the mirrored
+    companion nudge plan
+- append degradation after successful SQLite persistence stays on the
+  post-send-hook fallback path
 
 ## Scope Summary
 

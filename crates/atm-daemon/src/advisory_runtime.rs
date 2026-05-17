@@ -390,7 +390,7 @@ mod tests {
         AdvisoryStreamRequest, AdvisoryStreamResponse,
     };
     use atm_core::protocol::ResponseEnvelope;
-    use atm_core::send::{SendOutcome, WarningEntry};
+    use atm_core::send::{SendCommandOutcome, SendOutcome, WarningEntry};
     use atm_core::types::{CommandAction, IsoTimestamp};
 
     fn registration_request() -> AdvisorySessionRegistrationRequest {
@@ -409,7 +409,7 @@ mod tests {
             team: "test-team".parse().expect("team"),
             agent: "test-agent".parse().expect("agent"),
             sender: "sender".parse().expect("sender"),
-            outcome: "sent".to_string(),
+            outcome: SendCommandOutcome::Sent,
             message_id: atm_core::schema::AtmMessageId::new(),
             requires_ack: false,
             task_id: None,

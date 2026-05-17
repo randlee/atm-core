@@ -12,7 +12,8 @@ use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::send::{
-    PostSendHookContext, ResolvedRecipient, input, persist_message_and_seed_workflow, summary,
+    CompanionNudgePlan, PostSendHookContext, ResolvedRecipient, input,
+    maybe_run_companion_post_send_hook, persist_message_and_seed_workflow, summary,
 };
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -173,7 +174,6 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         &actor,
         request.message_id,
     )?;
-    let source_snapshot = delivery_policy.resolve_recipient_snapshot(runtime, &team, &actor)?;
     let reply_target = validate_reply_target(runtime, &request.home_dir, &source.record, &team)?;
     let reply_snapshot = delivery_policy.resolve_recipient_snapshot(
         runtime,
@@ -187,7 +187,6 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
             actor: &actor,
             team: &team,
             source: &source,
-            source_snapshot: &source_snapshot,
             reply_target: &reply_target,
         },
     )?;
@@ -217,6 +216,8 @@ struct PersistedAckReply {
     reply_message_id: AtmMessageId,
     reply_text: String,
     task_id: Option<TaskId>,
+    warnings: Vec<String>,
+    companion_nudge: Option<CompanionNudgePlan>,
 }
 
 struct FinalizeAckContext<'a> {
@@ -234,7 +235,6 @@ struct AckPersistenceContext<'a> {
     actor: &'a AgentName,
     team: &'a TeamName,
     source: &'a LoadedAckSource,
-    source_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
     reply_target: &'a ReplyTarget,
 }
 
@@ -402,18 +402,21 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         deleted_at: None,
         updated_at: Some(ack_timestamp),
     })?;
-    runtime.refresh_compat_inbox_projection(home_dir(context.request), context.source_snapshot)?;
 
     let reply_inbox_path = runtime.inbox_path(
         home_dir(context.request),
         &context.reply_target.team,
         &context.reply_target.agent,
     )?;
-    persist_message_and_seed_workflow(
+    let reply_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
         runtime,
-        home_dir(context.request),
         &context.reply_target.team,
         &context.reply_target.agent,
+    )?;
+    let persistence = persist_message_and_seed_workflow(
+        runtime,
+        home_dir(context.request),
+        &reply_snapshot,
         &reply_inbox_path,
         &reply_message,
         false,
@@ -423,6 +426,12 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         reply_message_id,
         reply_text,
         task_id: context.source.record.envelope.task_id.clone(),
+        warnings: persistence
+            .warnings
+            .into_iter()
+            .map(|warning| warning.render())
+            .collect(),
+        companion_nudge: persistence.companion_nudge,
     })
 }
 
@@ -447,7 +456,10 @@ fn finalize_ack_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         reply_text: context.persisted.reply_text.clone(),
         warnings: Vec::new(),
     };
-    outcome.warnings = collect_ack_hook_warnings(
+    outcome
+        .warnings
+        .extend(context.persisted.warnings.iter().cloned());
+    outcome.warnings.extend(collect_ack_hook_warnings(
         runtime,
         config,
         AckHookDispatch {
@@ -457,8 +469,9 @@ fn finalize_ack_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
             reply_snapshot: context.reply_snapshot,
             reply_message_id: context.persisted.reply_message_id,
             task_id: outcome.task_id.as_ref(),
+            companion_nudge: context.persisted.companion_nudge.as_ref(),
         },
-    );
+    ));
     emit_ack_delivery_transitions(observability, &context);
     record_ack_telemetry(
         observability,
@@ -519,6 +532,16 @@ fn collect_ack_hook_warnings<R: RetainedServiceRuntime + RetainedMailboxRuntime>
             task_id: context.task_id,
         },
     );
+    if let Some(companion_nudge) = context.companion_nudge {
+        maybe_run_companion_post_send_hook(
+            runtime,
+            &mut warnings,
+            config,
+            &reply_recipient,
+            context.reply_snapshot.recipient_pane_id.as_deref(),
+            companion_nudge,
+        );
+    }
     warnings
         .into_iter()
         .map(|warning| warning.render())
@@ -532,6 +555,7 @@ struct AckHookDispatch<'a> {
     reply_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
     reply_message_id: AtmMessageId,
     task_id: Option<&'a TaskId>,
+    companion_nudge: Option<&'a CompanionNudgePlan>,
 }
 
 fn record_ack_telemetry(

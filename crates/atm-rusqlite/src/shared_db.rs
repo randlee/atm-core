@@ -319,9 +319,9 @@ impl SharedDb {
             .writer
             .submit(WriteOp::UpsertMessageState(Box::new(request)))?;
         match result {
-            WriteOpResult::Unit => Ok(atm_core::boundary::UpsertMailMessageStateResponse {
-                state,
-            }),
+            WriteOpResult::MessageStateUpdated => {
+                Ok(atm_core::boundary::UpsertMailMessageStateResponse { state })
+            }
             other => Err(AtmError::daemon_unavailable(format!(
                 "sqlite writer returned unexpected result for upsert_message_state: {other:?}"
             ))

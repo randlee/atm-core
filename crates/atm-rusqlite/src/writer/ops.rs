@@ -18,7 +18,7 @@ pub(crate) enum WriteOp {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum WriteOpResult {
     UpsertMessage { inserted: bool },
-    Unit,
+    MessageStateUpdated,
 }
 
 pub(crate) fn execute(
@@ -33,7 +33,7 @@ pub(crate) fn execute(
         }
         WriteOp::UpsertMessageState(request) => {
             execute_upsert_message_state(request, connection, cache, target)
-                .map(|()| WriteOpResult::Unit)
+                .map(|()| WriteOpResult::MessageStateUpdated)
         }
     }
 }

@@ -16,6 +16,8 @@ use crate::types::{AgentName, TeamName};
 /// The mailbox layer owns writes to the Claude-owned inbox compatibility
 /// surface. Callers should express mailbox intent here instead of reaching
 /// down to low-level atomic replacement directly.
+///
+/// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 pub(crate) fn write_compat_mailbox_projection(
     path: &Path,
     messages: &[MessageEnvelope],
@@ -24,6 +26,15 @@ pub(crate) fn write_compat_mailbox_projection(
     write_compat_mailbox_projection_with_policy(path, messages, export_policy)
 }
 
+pub(crate) fn append_compat_mailbox_message(
+    path: &Path,
+    message: &MessageEnvelope,
+) -> Result<(), AtmError> {
+    let export_policy = load_export_policy(path)?;
+    atomic::append_message(path, message, export_policy)
+}
+
+/// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 fn write_compat_mailbox_projection_with_policy(
     path: &Path,
     messages: &[MessageEnvelope],
@@ -77,7 +88,10 @@ pub(crate) fn load_source_projections(
 mod tests {
     use tempfile::tempdir;
 
-    use super::{write_compat_mailbox_projection, write_compat_source_projections};
+    use super::{
+        append_compat_mailbox_message, write_compat_mailbox_projection,
+        write_compat_source_projections,
+    };
     use crate::mailbox::load_compat_mailbox_messages;
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -142,6 +156,52 @@ mod tests {
         );
         assert_eq!(
             encoded[0]["summary"],
+            serde_json::Value::String("stub summary".into())
+        );
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_writes_jsonl_records() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
+        let first = sample_message(ROLE_TEAM_LEAD, "first line");
+        let second = sample_message(TEST_QA, "second line");
+
+        append_compat_mailbox_message(&path, &first).expect("append first");
+        append_compat_mailbox_message(&path, &second).expect("append second");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        assert_eq!(raw.lines().count(), 2);
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), 2);
+        assert_eq!(read_back[0].text, first.text);
+        assert_eq!(read_back[1].text, second.text);
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_exports_retrieval_stub_when_config_cap_is_zero() {
+        let tempdir = tempdir().expect("tempdir");
+        std::fs::write(
+            tempdir.path().join(".atm.toml"),
+            "[atm]\nclaude_jsonl_body_export_max_bytes = 0\n",
+        )
+        .expect("config");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
+        let mut message = sample_message(ROLE_TEAM_LEAD, "full body retained elsewhere");
+        let message_id = message.message_id.expect("message id");
+        message.summary = Some("stub summary".to_string());
+
+        append_compat_mailbox_message(&path, &message).expect("append message");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        let first_line = raw.lines().next().expect("jsonl record");
+        let encoded: serde_json::Value = serde_json::from_str(first_line).expect("json object");
+        assert_eq!(
+            encoded["text"],
+            serde_json::Value::String(format!("atm read --message-id {message_id}"))
+        );
+        assert_eq!(
+            encoded["summary"],
             serde_json::Value::String("stub summary".into())
         );
     }

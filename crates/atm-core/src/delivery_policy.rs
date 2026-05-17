@@ -537,7 +537,6 @@ pub(crate) fn persisted_success_transition_names(
     }
 }
 
-#[cfg(test)]
 pub(crate) fn new_message_sqlite_failure_transitions(
     harness: DeliveryHarnessPath,
 ) -> &'static [&'static str] {
@@ -565,16 +564,38 @@ pub(crate) fn new_message_sqlite_failure_transitions(
     }
 }
 
+pub(crate) fn sqlite_failure_transition_names(
+    harness: DeliveryHarnessPath,
+) -> &'static [&'static str] {
+    new_message_sqlite_failure_transitions(harness)
+}
+
+pub(crate) fn append_failure_transition_names(
+    harness: DeliveryHarnessPath,
+) -> &'static [&'static str] {
+    match harness {
+        DeliveryHarnessPath::ClaudeCode => &[
+            "delivery_policy.new_message.received",
+            "delivery_policy.new_message.harness_claude",
+            "delivery_policy.new_message.sqlite_committed",
+            "delivery_policy.new_message.compat_append_original",
+            "delivery_policy.new_message.post_send_hook_fallback",
+            "delivery_policy.new_message.failed",
+        ],
+        DeliveryHarnessPath::NonClaude => &[
+            "delivery_policy.new_message.received",
+            "delivery_policy.new_message.harness_non_claude",
+            "delivery_policy.new_message.sqlite_committed",
+            "delivery_policy.new_message.non_claude_original",
+            "delivery_policy.new_message.post_send_hook_fallback",
+            "delivery_policy.new_message.failed",
+        ],
+    }
+}
+
 #[cfg(test)]
 pub(crate) fn append_failure_transitions() -> &'static [&'static str] {
-    &[
-        "delivery_policy.new_message.received",
-        "delivery_policy.new_message.harness_claude",
-        "delivery_policy.new_message.sqlite_committed",
-        "delivery_policy.new_message.compat_append_original",
-        "delivery_policy.new_message.post_send_hook_fallback",
-        "delivery_policy.new_message.failed",
-    ]
+    append_failure_transition_names(DeliveryHarnessPath::ClaudeCode)
 }
 
 pub(crate) fn thread_update_transitions() -> &'static [ThreadUpdateStateMachine] {
