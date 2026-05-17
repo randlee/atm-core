@@ -82,26 +82,32 @@ Make the degraded-delivery contract exact and symmetric across
     `send/mod.rs` and `ack/mod.rs`, but the degraded-delivery contract itself
     must already be owned by the typed plan seam before Y.8 starts.
 
-## Early Baseline Inconsistencies To Remove
+## Early Baseline Observations
 
 The `integrate/phase-Y @ b8785617` baseline already uses harness enums for
 routing, but these specific code surfaces still encode ambiguous or misplaced
-policy and must be addressed at the start of Y.7:
+policy. These are listed here as context for Y.7 developers. Only item 2 is a
+Y.7 removal obligation; items 1, 3, and 4 are addressed in later sprints as
+assigned in the removal ledger.
 
 1. [delivery_policy.rs](</Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y/crates/atm-core/src/delivery_policy.rs:61>)
    - `DeliveryRecipientSnapshot::fallback_claude`
+   - ledger: `YB-RM-014`, sprint: `Y.9`
    - inconsistency: the name and behavior silently default an unresolved route
      to `DeliveryHarnessPath::ClaudeCode`
 2. [send/persistence.rs](</Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y/crates/atm-core/src/send/persistence.rs:85>)
    - `recipient.allows_claude_jsonl_append()` branch inside
      `recover_after_sqlite_failure(...)`
+   - ledger: `YB-RM-002` / `YB-RM-003`, sprint: `Y.7`
    - inconsistency: persistence still decides a harness-specific outward path
 3. [service_runtime.rs](</Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y/crates/atm-core/src/service_runtime.rs:181>)
    - early return in `refresh_compat_inbox_projection(...)`
+   - ledger: `YB-RM-017`, sprint: `Y.10`
    - inconsistency: the Claude writer is still asked to inspect a non-Claude
      request and no-op
 4. [service_runtime.rs](</Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y/crates/atm-core/src/service_runtime.rs:202>)
    - early return in `append_compat_inbox_message(...)`
+   - ledger: `YB-RM-019`, sprint: `Y.9`
    - inconsistency: the low-level Claude append seam still receives
      `DeliveryHarnessPath::NonClaude` traffic instead of never being selected
 
@@ -162,9 +168,6 @@ implementation that preserves convenience helpers with hidden policy.
   - `YB-RM-008`
   - `YB-RM-026` through `YB-RM-028`
 - `rg -n "allows_claude_jsonl_append|append_compat_inbox_message"
-  crates/atm-core/src/send/persistence.rs` does not show direct outward
-  delivery branching in the persistence layer
-- `rg -n "allows_claude_jsonl_append"
   crates/atm-core/src/send/persistence.rs` does not show direct outward
   delivery branching in the persistence layer
 - `rg -n "DeliveryHarnessPath"
