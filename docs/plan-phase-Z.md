@@ -31,6 +31,34 @@ not be mixed into the architectural cleanup history:
 - `Y.0` trivial fixes and `Y.1` through `Y.6` implementation work are merged
   onto the authoritative integration line
 
+## Pre-Phase Audit
+
+Before `Z.1` begins, ATM must complete one agent-facing CLI JSON I/O audit so
+the smoke and dogfood phase knows exactly which structured interfaces are
+already stable, which are missing, and which must not be broadened casually.
+
+Required audit outputs:
+
+- `docs/phase-Z/cli-json-io-audit.md`
+- command-by-command inventory of current `--json` output support
+- exact inventory of commands that still lack stable JSON output
+- exact inventory of commands that currently accept only text/stdin/file input
+- recommendation for the first approved JSON-input DTOs, with `atm send` as
+  the leading candidate unless the audit disproves that priority
+- explicit distinction between:
+  - stable public CLI JSON contract
+  - internal daemon/protocol/storage JSON that must not be exposed as-is
+- recommendation on whether any JSON I/O work belongs in a `Phase Y` follow-up
+  implementation slice, a `Phase Z` pre-smoke fix, or a later phase entirely
+
+Audit rules:
+
+- use the code, requirements, and current docs as the source of truth
+- do not assume existing internal serde shapes are safe public CLI contracts
+- treat any stale documentation that claims missing JSON output where code
+  already supports it as an audit finding
+- feed the audit result back into planning before broad smoke/dogfood begins
+
 ## Sprint Sequence
 
 ### Z.1 Smoke Bring-Up
@@ -74,6 +102,7 @@ Purpose:
 ## Initial Planning Outputs
 
 - `docs/plan-phase-Z.md`
+- `docs/phase-Z/cli-json-io-audit.md`
 - `docs/phase-Z/sprint-Z1.md`
 - `docs/phase-Z/sprint-Z2.md`
 - `docs/phase-Z/sprint-Z3.md`

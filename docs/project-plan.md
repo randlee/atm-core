@@ -3475,6 +3475,8 @@ Execution shape:
   allows it
 
 Follow-on validation phase:
+- pre-phase CLI JSON I/O audit to lock the agent-facing structured I/O contract
+  before smoke execution planning
 - `Z.1` executable smoke bring-up
 - `Z.2` fix and revalidate
 - `Z.3` `atm-dev` canary / dogfood
@@ -3490,6 +3492,7 @@ Immediate planning outputs:
 - `docs/phase-Y/sprint-Y4.md`
 - `docs/phase-Y/sprint-Y5.md`
 - `docs/phase-Y/sprint-Y6.md`
+- `docs/phase-Z/cli-json-io-audit.md`
 - `docs/phase-Z/sprint-Z1.md`
 - `docs/phase-Z/sprint-Z2.md`
 - `docs/phase-Z/sprint-Z3.md`
