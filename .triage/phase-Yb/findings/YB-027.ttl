@@ -1,0 +1,113 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-027>
+  a triage:Finding ;
+  triage:findingId "YB-027" ;
+  triage:title "RSH-Y9-002: no max message size check on delivery path before write" ;
+  triage:description "crates/atm-daemon/src/non_claude_outbound_runtime.rs delivery_payloads() method does not enforce input size limits on the NonClaudeOutboundDeliveryRequest before performing FS write. The serialize-then-write sequence (serde_json::to_vec + file.write_all) has no maximum size validation, creating a potential DoS vector via unbounded message count or size." ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-Yb" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/s7> ;
+  triage:openOn <urn:atm:triage:worktree/s8> ;
+  triage:openOn <urn:atm:triage:worktree/s9> ;
+  triage:openOn <urn:atm:triage:worktree/s10> ;
+  triage:openOn <urn:atm:triage:worktree/s11> ;
+  triage:promoteTo <urn:atm:triage:worktree/s11> ;
+  triage:scopeExceedsPhaseDeliverables true ;
+  triage:notes "Hardening finding flagged by QA on s9 but scope exceeds Y.9 'boundary formalization' goals. Phase Yb hardening audit (3 iterations, 20 findings resolved) did not require input size validation as Y.7-Y.11 acceptance criterion. Input size validation is a separate security hardening task, not a boundary-formalization responsibility. This finding is valid but out-of-phase; dispatch to appropriate hardening sprint or post-phase-Yb hardening cycle." .
+
+<urn:atm:triage:occurrence/YB-027/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 69 ;
+  triage:snippet "let mut bytes = serde_json::to_vec(&request)?; ... file.write_all(&bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/s7> .
+
+<urn:atm:triage:occurrence/YB-027/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 69 ;
+  triage:snippet "let mut bytes = serde_json::to_vec(&request)?; ... file.write_all(&bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:occursIn <urn:atm:triage:worktree/s8> .
+
+<urn:atm:triage:occurrence/YB-027/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 69 ;
+  triage:snippet "let mut bytes = serde_json::to_vec(&request)?; ... file.write_all(&bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:occursIn <urn:atm:triage:worktree/s9> .
+
+<urn:atm:triage:occurrence/YB-027/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 69 ;
+  triage:snippet "let mut bytes = serde_json::to_vec(&request)?; ... file.write_all(&bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:occursIn <urn:atm:triage:worktree/s10> .
+
+<urn:atm:triage:occurrence/YB-027/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 69 ;
+  triage:snippet "let mut bytes = serde_json::to_vec(&request)?; ... file.write_all(&bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:occursIn <urn:atm:triage:worktree/s11> .
+
+<urn:atm:triage:worktree/s7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "b0370c86" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s10>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "ed00c79c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s11>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "d3497baf" ;
+  triage:orderIndex 5 .
