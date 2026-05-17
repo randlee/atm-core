@@ -91,7 +91,7 @@ Enforcement point:
    - `mailbox::store::write_compat_mailbox_projection(...)`
    - `direct_boundaries::reexport_messages(...)`
    - approved owners:
-     - `atm_core::service_runtime::RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
+     - `atm_core::service_runtime::RetainedServiceRuntime::rebuild_compat_inbox_projection(...)`
      - `atm_core::direct_boundaries::reexport_messages(...)`
      - `atm_daemon::boundary_adapters::DaemonInboxExport::reexport_message(...)`
 4. `send/persistence.rs` must not call:

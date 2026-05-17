@@ -65,10 +65,6 @@ impl DeliveryRecipientSnapshot {
             roster_backed: true,
         }
     }
-
-    pub(crate) fn allows_claude_jsonl_append(&self) -> bool {
-        self.harness == DeliveryHarnessPath::ClaudeCode
-    }
 }
 
 #[expect(

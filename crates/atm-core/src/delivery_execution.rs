@@ -62,10 +62,10 @@ where
     fn append_claude_inbox_message(
         &self,
         inbox_path: &Path,
-        recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+        _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
         message: &MessageEnvelope,
     ) -> Result<(), AtmError> {
-        self.append_compat_inbox_message(inbox_path, recipient, message)
+        self.append_compat_inbox_message(inbox_path, message)
     }
 }
 

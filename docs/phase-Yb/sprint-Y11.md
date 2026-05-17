@@ -52,7 +52,7 @@ message-path contract.
 1. Delete the retained non-Claude rejection branch from
    `RetainedServiceRuntime::append_compat_inbox_message(...)` so the low-level
    Claude append seam is never selected for `DeliveryHarnessPath::NonClaude`.
-2. Narrow or replace `RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
+2. Narrow or replace `RetainedServiceRuntime::rebuild_compat_inbox_projection(...)`
    so the repair/rebuild seam is explicit by construction and no longer accepts
    a general `DeliveryRecipientSnapshot` plus a non-Claude no-op branch.
 3. Keep the low-level Claude append primitive executor-only and the rewrite

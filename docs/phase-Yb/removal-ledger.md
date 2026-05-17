@@ -183,10 +183,11 @@ are not regressions in `Y.9`.
 
 ## Y.10 Closure Notes
 
-`feature/pYb-s10-boundary-enforcement-and-smoke-handoff` closes the remaining
+`feature/pYb-s10-boundary-enforcement-and-smoke-handoff` closes the original
 `Y.10` rows by isolating full mailbox rewrite behind the explicit
 repair/rebuild seam and removing the last silent runtime fallback from append
-delivery into full re-export.
+delivery into full re-export, but the post-sprint review reopened two
+mixed-seam runtime issues for follow-up in `Y.11`.
 
 Closed rows:
 
@@ -202,7 +203,7 @@ Closed rows:
 Implemented seam on this branch:
 
 - `crates/atm-core/src/service_runtime.rs`
-  - `refresh_compat_inbox_projection(...)` remains the explicit
+  - `refresh_compat_inbox_projection(...)` remained the explicit
     repair/rebuild-only rewrite seam
   - `append_compat_inbox_message(...)` now fails closed on legacy array
     inboxes instead of silently triggering full mailbox rewrite
@@ -227,3 +228,31 @@ Phase-end review after `Y.10` reopened two mixed-seam runtime issues:
 
 Those rows are assigned to `Y.11`. Yb is not fully closed until they are
 resolved.
+
+## Y.11 Closure Notes
+
+`feature/pYb-s11-y10-gap-closure` closes the reopened post-`Y.10` seam issues
+by tightening the retained runtime helper shapes to match the actual executor
+and repair/rebuild ownership model.
+
+Closed rows:
+
+- `YB-RM-029`
+- `YB-RM-030`
+
+Implemented seam on this branch:
+
+- `crates/atm-core/src/service_runtime.rs`
+  - `rebuild_compat_inbox_projection(...)` now requires explicit
+    `inbox_path` / `team` / `agent` inputs instead of a generic recipient
+    snapshot and no longer carries a non-Claude no-op branch
+  - `append_compat_inbox_message(...)` is now Claude-only by seam shape and no
+    longer contains a non-Claude rejection branch
+- `crates/atm-core/src/delivery_execution.rs`
+  - `ClaudeInboxWriter` now delegates to the narrowed Claude append seam
+    without route checking in the low-level runtime helper
+- `docs/phase-Yb/testing-and-validation.md`
+  - the shared validation matrix now names outbound-boundary proof instead of
+    the obsolete hook-path wording
+
+No Yb removal-ledger rows remain open after `Y.11`.

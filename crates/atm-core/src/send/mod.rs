@@ -1141,10 +1141,11 @@ mod tests {
                 });
         }
 
-        fn refresh_compat_inbox_projection(
+        fn rebuild_compat_inbox_projection(
             &self,
-            _home_dir: &Path,
-            _recipient: &DeliveryRecipientSnapshot,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
         ) -> Result<(), AtmError> {
             Ok(())
         }
@@ -1152,7 +1153,6 @@ mod tests {
         fn append_compat_inbox_message(
             &self,
             _inbox_path: &Path,
-            _recipient: &DeliveryRecipientSnapshot,
             message: &MessageEnvelope,
         ) -> Result<(), AtmError> {
             if let Some(message) = self.append_error_message {

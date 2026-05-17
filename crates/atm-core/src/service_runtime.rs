@@ -51,19 +51,16 @@ pub(crate) trait RetainedServiceRuntime {
         config: Option<&AtmConfig>,
         context: PostSendHookContext<'_>,
     );
-    #[expect(
-        dead_code,
-        reason = "Phase Y.6 leaves the full projection refresh owner in place for explicit rebuild and repair flows even after normal runtime send/ack move to append-only output."
-    )]
-    fn refresh_compat_inbox_projection(
+    #[allow(dead_code)]
+    fn rebuild_compat_inbox_projection(
         &self,
-        home_dir: &Path,
-        recipient: &DeliveryRecipientSnapshot,
+        inbox_path: &Path,
+        team: &TeamName,
+        agent: &AgentName,
     ) -> Result<(), AtmError>;
     fn append_compat_inbox_message(
         &self,
         inbox_path: &Path,
-        recipient: &DeliveryRecipientSnapshot,
         message: &MessageEnvelope,
     ) -> Result<(), AtmError>;
     fn deliver_non_claude_payloads(
@@ -230,21 +227,16 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         maybe_run_post_send_hook(warnings, config, context);
     }
 
-    fn refresh_compat_inbox_projection(
+    fn rebuild_compat_inbox_projection(
         &self,
-        home_dir: &Path,
-        recipient: &DeliveryRecipientSnapshot,
+        inbox_path: &Path,
+        team: &TeamName,
+        agent: &AgentName,
     ) -> Result<(), AtmError> {
-        if !recipient.allows_claude_jsonl_append() {
-            return Ok(());
-        }
-        let inbox_path =
-            crate::home::inbox_path_from_home(home_dir, &recipient.team, &recipient.agent)?;
-        let messages =
-            load_store_backed_mailbox_projection(self, &recipient.team, &recipient.agent)?;
+        let messages = load_store_backed_mailbox_projection(self, team, agent)?;
 
         crate::direct_boundaries::reexport_messages(InboxExportReexportMessageRequest {
-            path: inbox_path,
+            path: inbox_path.to_path_buf(),
             messages,
         })
         .map(|_| ())
@@ -253,18 +245,8 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn append_compat_inbox_message(
         &self,
         inbox_path: &Path,
-        recipient: &DeliveryRecipientSnapshot,
         message: &MessageEnvelope,
     ) -> Result<(), AtmError> {
-        if !recipient.allows_claude_jsonl_append() {
-            return Err(AtmError::validation(format!(
-                "append_compat_inbox_message is unsupported for non-Claude recipient {}@{}",
-                recipient.agent, recipient.team
-            ))
-            .with_recovery(
-                "Route non-Claude delivery through the NonClaudeOutbound boundary instead of the Claude compatibility append path.",
-            ));
-        }
         if compat_inbox_uses_legacy_array_format(inbox_path)? {
             return Err(AtmError::validation(format!(
                 "append-only compatibility delivery does not support legacy array inbox {}",
@@ -322,6 +304,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     }
 }
 
+#[allow(dead_code)]
 fn load_store_backed_mailbox_projection(
     runtime: &LocalServiceRuntime,
     team: &TeamName,
@@ -347,6 +330,7 @@ fn load_store_backed_mailbox_projection(
         .collect()
 }
 
+#[allow(dead_code)]
 fn load_projection_message(
     runtime: &LocalServiceRuntime,
     team: &TeamName,
@@ -407,11 +391,12 @@ fn compat_inbox_uses_legacy_array_format(path: &Path) -> Result<bool, AtmError> 
 mod tests {
     use super::{LocalServiceRuntime, RetainedServiceRuntime};
     use crate::boundary;
-    use crate::delivery_policy::{DeliveryHarnessPath, DeliveryRecipientSnapshot};
     use crate::error_codes::AtmErrorCode;
     use crate::schema::MessageEnvelope;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
+    use std::fs::File;
+    use std::io::Read;
     use std::sync::Arc;
     use tempfile::tempdir;
 
@@ -461,7 +446,7 @@ mod tests {
             _request: boundary::MailStoreQueryMailboxMetadataRequest,
         ) -> Result<boundary::MailStoreQueryMailboxMetadataResponse, crate::error::AtmError>
         {
-            unimplemented!("test stub")
+            Ok(boundary::MailStoreQueryMailboxMetadataResponse { rows: Vec::new() })
         }
 
         fn query_mailbox_metadata_counts(
@@ -609,16 +594,6 @@ mod tests {
         }
     }
 
-    fn claude_recipient() -> DeliveryRecipientSnapshot {
-        DeliveryRecipientSnapshot {
-            agent: "recipient".parse::<AgentName>().expect("agent"),
-            team: "test-team".parse::<TeamName>().expect("team"),
-            harness: DeliveryHarnessPath::ClaudeCode,
-            recipient_pane_id: None,
-            roster_backed: true,
-        }
-    }
-
     fn message() -> MessageEnvelope {
         MessageEnvelope {
             from: "sender".parse::<AgentName>().expect("sender"),
@@ -659,7 +634,7 @@ mod tests {
         );
 
         let error = runtime
-            .append_compat_inbox_message(&inbox_path, &claude_recipient(), &message())
+            .append_compat_inbox_message(&inbox_path, &message())
             .expect_err("legacy array path must fail closed");
         assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
         assert!(
@@ -670,5 +645,28 @@ mod tests {
                 .contains("explicit repair/rebuild inbox projection path"),
             "unexpected recovery: {error:?}"
         );
+    }
+
+    #[test]
+    fn rebuild_compat_inbox_projection_reexports_store_backed_mailbox() {
+        let tempdir = tempdir().expect("tempdir");
+        let inbox_path = tempdir.path().join("recipient.jsonl");
+        let runtime = LocalServiceRuntime::new(
+            Arc::new(NoopMailStore),
+            Arc::new(NoopTaskStore),
+            Arc::new(NoopRosterStore),
+        );
+        let team = "test-team".parse::<TeamName>().expect("team");
+        let agent = "recipient".parse::<AgentName>().expect("agent");
+
+        runtime
+            .rebuild_compat_inbox_projection(&inbox_path, &team, &agent)
+            .expect("rebuild must succeed");
+
+        let mut file = File::open(&inbox_path).expect("rebuild should create projection file");
+        let mut content = String::new();
+        file.read_to_string(&mut content)
+            .expect("read projection file");
+        assert_eq!(content, "[]\n");
     }
 }
