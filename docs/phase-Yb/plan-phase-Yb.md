@@ -1,0 +1,261 @@
+# Phase Yb Plan
+
+## Goal
+
+Plan the message-path consolidation follow-on needed after `integrate/phase-Y`
+so the delivery contract, state-machine ownership, removal targets, and
+boundary enforcement are fixed before any further implementation begins.
+
+This is a planning-only phase on a worktree off `develop`. It does not start
+implementation.
+
+## Baseline
+
+- planning branch: `message-path-consolidation-plan-Yb`
+- planning worktree:
+  `/Users/randlee/Documents/github/atm-core-worktrees/message-path-consolidation-plan-Yb`
+- branch base: `develop` at `292b8e38`
+- implementation baseline under review:
+  `integrate/phase-Y` at `b8785617`
+- future integration branch for approved implementation work:
+  `integrate/phase-Yb`
+
+## Planning Direction
+
+### 1. Planning is happening first, on a planning-only worktree off develop.
+
+- This is not an implementation sprint.
+- The purpose is to lock down architecture, removal targets, state-machine
+  contracts, and sprint sequencing before code work starts.
+
+### 2. The output of that worktree is a multi-sprint implementation plan for later execution.
+
+- Plan the next implementation line as `Y.7 / Y.8 / ...`
+- Do not start implementation from this planning worktree.
+- The implementation sprints begin only after the plan is reviewed and
+  approved.
+
+### 3. The fixes we discussed need to be encoded as explicit implementation instructions in that plan.
+
+## What The Plan Must Cover
+
+### A. Delivery Contract
+
+- Claude and non-Claude paths must produce the same logical payload set.
+- Success:
+  - `message[1] = original message`
+- SQLite failure:
+  - `message[1] = original message`
+  - `message[2] = atm-system@<team>` error message
+- The only difference between Claude and non-Claude is where the messages are
+  delivered.
+- Message count, ordering, and content must be identical across harness
+  families.
+
+Planning artifacts:
+
+- [removal-ledger.md](./removal-ledger.md)
+- [message-path-call-stacks.md](./message-path-call-stacks.md)
+- [ADR-013-unified-delivery-plan-and-state-machine-ownership.md](../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
+
+### B. State-Machine Boundary
+
+- Claude and non-Claude state machines must expose the same interface.
+- Outside the state machines, callers must not branch on harness.
+- The state machine decides the plan.
+- Shared executors then run that plan through the same outer call pattern.
+- No policy/decision logic is allowed outside the state machines.
+
+Required planning decision:
+
+- the shared interface is a uniform `DeliveryPlan` / `ReplyDeliveryPlan`
+  shaped output that carries:
+  - logical messages
+  - delivery targets
+  - notification targets
+  - degradation / failure disposition
+
+### C. Central Decision Layer
+
+- There should be a central delivery-policy layer for event routing.
+- It must not become a god object.
+- Use separate state machines per event family.
+- At minimum:
+  - `NewMessageStateMachine`
+  - `ThreadUpdateStateMachine`
+- Likely also:
+  - `AckReplyStateMachine`
+  - `InboxRepairStateMachine`
+  - `RestoreInboxRebuildStateMachine`
+
+Required planning decision:
+
+- the coordinator dispatches by:
+  - event family
+  - canonical roster `harness`
+- but the machines own legality, payload construction, and failure contracts
+
+### D. Shared Execution Model
+
+- State machine output should be a uniform delivery plan.
+- That plan should drive shared execution modules, not harness-specific outer
+  call graphs.
+- Example executors:
+  - Claude inbox writer
+  - non-Claude outbound delivery writer
+  - post-send notification executor
+
+Required planning decision:
+
+- persistence helpers may return persisted tokens and typed failures only
+- they may not directly emit Claude/non-Claude outward delivery
+- post-send-hook execution remains notification-only and must not stand in for
+  message delivery semantics
+
+### E. Boundary Tightening
+
+- Remove direct/historical logic where command or persistence code makes
+  harness-specific delivery decisions.
+- No `"if Claude do X, else do Y"` outside the state machines.
+- No `"two hook invocations imply two delivered messages"` behavior.
+- Non-Claude needs a real outbound payload boundary, not metadata-only
+  stand-ins.
+
+Required planning artifacts:
+
+- [removal-ledger.md](./removal-ledger.md)
+- [lintable-boundary-plan.md](./lintable-boundary-plan.md)
+
+### F. Locking / Concurrency
+
+- Minimize locks.
+- Do not introduce a broad lock hierarchy.
+- Preferred model:
+  - short-lived roster snapshot
+  - SQLite as durable mutation boundary
+  - compatibility / notification side effects afterward
+- Event timing around add/remove races is not a reason to widen locking.
+
+Required planning decision:
+
+- Yb implementation must not normalize:
+  - roster lock -> SQLite -> mailbox lock ordering
+  - mailbox/workflow lock as message-truth correctness
+- Yb implementation should converge on:
+  - roster snapshot
+  - state-machine decision
+  - SQLite durability
+  - shared executors
+
+### G. Planning Artifacts Required
+
+- Exact removal ledger:
+  - file
+  - line
+  - function/method
+  - keep / delete / move
+  - replacement path
+- Full call-stack tracing for current message delivery paths.
+- Any newly discovered path during planning is a planning miss and must be
+  recorded immediately.
+
+Required planning artifacts:
+
+- [removal-ledger.md](./removal-ledger.md)
+- [message-path-call-stacks.md](./message-path-call-stacks.md)
+- [lintable-boundary-plan.md](./lintable-boundary-plan.md)
+
+## Current Structural Issues
+
+The accepted `integrate/phase-Y` implementation is close but still leaves the
+message-path contract underspecified or implemented in the wrong layers:
+
+1. non-Claude SQLite-failure handling does not prove real original+error
+   payload delivery; it proves metadata-only hook activity instead
+2. Claude SQLite-failure handling can partially append the original message and
+   then fail before the companion error is delivered
+3. state-machine ownership is incomplete because outer layers still branch on
+   persistence disposition and compatibility append semantics
+4. notification hooks still act as an implied delivery mechanism for non-Claude
+   degraded paths
+5. repair/reexport write helpers are still close enough to runtime write
+   helpers that the final keep/delete/move contract must be restated before
+   more implementation begins
+
+## Recommended Sprint Shape
+
+- `Y.7`: planning-approved degraded-delivery contract hardening
+- `Y.8`: policy cleanup and impossible-path removal
+- `Y.9`: non-Claude outbound boundary formalization
+- `Y.10`: boundary enforcement, validation closure, and smoke-handoff
+  preparation
+- Later sprints as needed for migration, validation, and smoke/dogfood
+
+## Sprint Sequence
+
+### Y.7 Degraded Delivery Contract Hardening
+
+Purpose:
+
+- make the logical message contract exact for both harness families
+- eliminate partial Claude SQLite-failure delivery
+- force proof of payload equivalence for success and SQLite-failure branches
+
+Authoritative sprint doc:
+
+- [sprint-Y7.md](./sprint-Y7.md)
+
+### Y.8 Policy Cleanup And Impossible-Path Removal
+
+Purpose:
+
+- delete harness-policy leakage outside the machines
+- remove impossible transition surfaces
+- fail closed when unsupported routing or fallback requests are attempted
+
+Authoritative sprint doc:
+
+- [sprint-Y8.md](./sprint-Y8.md)
+
+### Y.9 Non-Claude Outbound Boundary Formalization
+
+Purpose:
+
+- introduce a dedicated non-Claude outbound payload boundary
+- stop treating metadata-only post-send-hook execution as message delivery
+- make Claude and non-Claude paths use the same outer executor contract
+
+Authoritative sprint doc:
+
+- [sprint-Y9.md](./sprint-Y9.md)
+
+### Y.10 Boundary Enforcement And Smoke Handoff
+
+Purpose:
+
+- land lintable / documented boundary enforcement
+- close the Yb implementation line with explicit validation evidence
+- hand the line back to smoke/dogfood planning only after Yb closes
+
+## Planning Outputs
+
+- [plan-phase-Yb.md](./plan-phase-Yb.md)
+- [sprint-Y7.md](./sprint-Y7.md)
+- [sprint-Y8.md](./sprint-Y8.md)
+- [sprint-Y9.md](./sprint-Y9.md)
+- [sprint-Y10.md](./sprint-Y10.md)
+- [removal-ledger.md](./removal-ledger.md)
+- [message-path-call-stacks.md](./message-path-call-stacks.md)
+- [lintable-boundary-plan.md](./lintable-boundary-plan.md)
+- [ADR-013-unified-delivery-plan-and-state-machine-ownership.md](../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
+
+## Phase Rules
+
+- this planning branch must not implement Rust changes
+- every Yb sprint must cite this plan as authoritative scope
+- every Yb sprint must cite the removal ledger and call-stack audit where
+  relevant
+- any newly discovered runtime path that violates the Yb contract is a
+  blocking planning miss until documented
+- smoke/dogfood work must not resume until the Yb implementation line closes
+

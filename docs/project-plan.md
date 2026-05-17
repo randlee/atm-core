@@ -3505,3 +3505,37 @@ Immediate planning outputs:
 - `docs/phase-Z/sprint-Z4.md`
 - approved implementation scopes for `Y.1` and `Y.2`, with `Y.1` kept
   strictly on `atm help` and adjacent UX wording
+
+## 32. Phase Yb Message-Path Consolidation Planning
+
+Status summary:
+- `integrate/phase-Y` is accepted enough to define the next path-consolidation
+  line, but the production-readiness review still found structural message-path
+  issues that must be planned and implemented before broad smoke/dogfood work
+  resumes.
+- Phase `Yb` is a planning-first correction line off `develop`.
+
+Goal:
+- lock down the exact message-path consolidation work needed after `Phase Y`
+- document the removal ledger, current call stacks, shared executor contract,
+  and lintable boundary rules before implementation restarts
+
+Execution shape:
+- planning-only branch: `message-path-consolidation-plan-Yb`
+- future implementation integration branch: `integrate/phase-Yb`
+- implementation sequence:
+  - `Y.7` degraded delivery contract hardening
+  - `Y.8` policy cleanup and impossible-path removal
+  - `Y.9` non-Claude outbound boundary formalization
+  - `Y.10` boundary enforcement and smoke handoff
+
+Immediate planning outputs:
+- `docs/phase-Yb/plan-phase-Yb.md`
+- `docs/phase-Yb/removal-ledger.md`
+- `docs/phase-Yb/message-path-call-stacks.md`
+- `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/phase-Yb/sprint-Y7.md`
+- `docs/phase-Yb/sprint-Y8.md`
+- `docs/phase-Yb/sprint-Y9.md`
+- `docs/phase-Yb/sprint-Y10.md`
+- `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`

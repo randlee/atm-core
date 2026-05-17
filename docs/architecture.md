@@ -2364,6 +2364,31 @@ Architectural rules:
   - on SQLite failure, the same original-plus-error-message rule applies
     through the non-Claude delivery path rather than JSONL append
 
+### 21.3.2 Phase Yb Corrective Rule
+
+The accepted `integrate/phase-Y` baseline is not yet sufficient to claim that
+the architectural rule above is implemented cleanly.
+
+Phase `Yb` therefore tightens the architecture further:
+
+- Claude and non-Claude new-message machines must expose the same interface
+- both harness families must produce the same logical payload set:
+  - success -> original message only
+  - SQLite failure -> original message + `atm-system@<team>` error message
+- the only harness-specific difference may be the selected delivery target and
+  transport executor
+- no command, ack, or persistence layer may branch on harness after the
+  machine has produced its delivery plan
+- post-send-hook execution remains notification-only and must not stand in for
+  real non-Claude outbound delivery
+
+Authoritative follow-on planning docs:
+
+- [phase-Yb/plan-phase-Yb.md](./phase-Yb/plan-phase-Yb.md)
+- [phase-Yb/removal-ledger.md](./phase-Yb/removal-ledger.md)
+- [phase-Yb/message-path-call-stacks.md](./phase-Yb/message-path-call-stacks.md)
+- [adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md](./adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
+
 ### 21.4 One Interface, Two Transport Implementations
 
 ATM uses one daemon API with two production transport adapters plus one

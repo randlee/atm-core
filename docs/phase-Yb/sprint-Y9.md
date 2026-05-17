@@ -1,0 +1,47 @@
+---
+id: Y.9
+title: Non-Claude Outbound Boundary Formalization
+status: planned
+branch: feature/pYb-s9-non-claude-outbound-boundary-formalization
+worktree: ../atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization
+target: integrate/phase-Yb
+---
+
+# Sprint Y.9 — Non-Claude Outbound Boundary Formalization
+
+## Goal
+
+Create a dedicated non-Claude outbound payload boundary so non-Claude delivery
+is no longer encoded as hook metadata plus implied behavior.
+
+## Governing Requirements
+
+- `docs/phase-Yb/plan-phase-Yb.md`
+- `docs/phase-Yb/message-path-call-stacks.md`
+- `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+
+## Required Work
+
+1. Define the dedicated non-Claude outbound payload boundary.
+2. Make the shared executor contract identical around Claude and non-Claude
+   plans.
+3. Ensure ack reply and thread update use the same outer executor shape where
+   applicable.
+4. Remove any remaining dependency on metadata-only post-send-hook payloads as
+   delivery proof.
+5. Add end-to-end tests for non-Claude outbound payload delivery.
+
+## Acceptance Criteria
+
+- non-Claude outbound delivery is a first-class payload boundary
+- state machines expose the same interface regardless of harness
+- the outer execution call graph is shared across harness families
+- post-send notification remains notification-only
+
+## Required Document Updates
+
+- `docs/architecture.md`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-daemon/boundaries.md`
+

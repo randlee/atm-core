@@ -201,6 +201,13 @@ Notes:
 - Harness-specific export policy belongs in one central delivery-policy
   coordinator and event-family state machines above this boundary, not in
   scattered command callers.
+- Phase `Yb` adds a stricter rule:
+  - only approved delivery executors may call the write-facing export/append
+    primitives behind this boundary
+  - send/ack/persistence modules must not call them directly
+  - see:
+    - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
+    - [../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md](../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
 
 ## NotificationSink
 
@@ -216,6 +223,10 @@ Notes:
 - Notification fallback policy for delivery state machines belongs here as a
   sink-side effect, but event legality still belongs to the event-family state
   machine rather than to the sink adapter.
+- Phase `Yb` clarifies that this boundary is notification-only:
+  - hook or notifier invocation is not proof of logical message delivery
+  - non-Claude outbound payload delivery must use a dedicated delivery
+    boundary, not NotificationSink as a stand-in
 
 ## StatusSource
 

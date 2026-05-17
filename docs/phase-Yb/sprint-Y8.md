@@ -1,0 +1,50 @@
+---
+id: Y.8
+title: Policy Cleanup And Impossible-Path Removal
+status: planned
+branch: feature/pYb-s8-policy-cleanup-and-impossible-path-removal
+worktree: ../atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal
+target: integrate/phase-Yb
+---
+
+# Sprint Y.8 — Policy Cleanup And Impossible-Path Removal
+
+## Goal
+
+Delete harness-policy leakage outside the machines and remove impossible
+transition surfaces from the runtime.
+
+## Governing Requirements
+
+- `docs/phase-Yb/plan-phase-Yb.md`
+- `docs/phase-Yb/removal-ledger.md`
+- `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+
+## Required Work
+
+1. Delete or move every removal target marked for `Y.8`.
+2. Remove fail-open or misleading routing helpers such as:
+   - default-Claude fallback behavior
+   - impossible non-Claude append-degradation surfaces
+3. Move transition emission and degradation translation into the
+   coordinator/machine execution layer.
+4. Introduce fail-closed behavior for unsupported routing or deferred-machine
+   requests.
+5. Land documented lintable boundaries for illegal direct callers.
+
+## Acceptance Criteria
+
+- no harness-policy branches remain in outer send/ack/persistence layers
+- impossible transition surfaces are deleted, not merely ignored
+- unsupported requests fail closed with typed errors
+- boundary/lint documentation identifies the only approved callers of low-level
+  delivery primitives
+
+## Required Document Updates
+
+- `docs/phase-Yb/removal-ledger.md`
+- `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-daemon/boundaries.md`
+
