@@ -1,3 +1,4 @@
+use crate::commands::help::{HelpResult, HelpResultKind};
 use anyhow::Result;
 use atm_core::ack::AckOutcome;
 use atm_core::clear::ClearOutcome;
@@ -29,6 +30,26 @@ pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
 
     for warning in &outcome.warnings {
         eprintln!("{}", warning.render());
+    }
+
+    Ok(())
+}
+
+/// Print one help result in human-readable or JSON form.
+pub fn print_help_result(result: &HelpResult, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(result)?);
+        return Ok(());
+    }
+
+    match result.kind {
+        HelpResultKind::CommandHelp => {
+            print!("{}", result.body);
+            if !result.body.ends_with('\n') {
+                println!();
+            }
+        }
+        _ => println!("{}", result.body),
     }
 
     Ok(())

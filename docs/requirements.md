@@ -1773,6 +1773,8 @@ syntax help without duplicating the flag/argument contract already exposed by
   documentation
 - keep concept topics in one typed topic registry rather than scattered prose
   fragments
+- keep this Phase `Y` slice narrowly on conceptual help plus wording cleanup
+  rather than broadening into general structured JSON-input work
 
 Tier-1 concept topics for the first delivery:
 - `config`
