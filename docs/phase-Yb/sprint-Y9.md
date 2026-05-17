@@ -106,3 +106,5 @@ git diff --check
   - `RSH-Y9-002` is closed with
     `MAX_NON_CLAUDE_PAYLOAD_BYTES = 1024 * 1024` in
     `crates/atm-daemon/src/non_claude_outbound_runtime.rs`
+  - `RSH-001` is closed with the in-code `MAX_CONCURRENT_CONNECTIONS`
+    comments beside the retained `write_all(...)` and `sync_data(...)` calls
