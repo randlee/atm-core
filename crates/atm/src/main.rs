@@ -3,6 +3,7 @@ mod composition;
 mod constants;
 mod observability;
 mod output;
+mod output_contract;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;

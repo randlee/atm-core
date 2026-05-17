@@ -13,6 +13,8 @@ Scope:
 - `atm help` is ATM-owned conceptual/product help
 - `atm help <subcommand>` must begin with the authoritative clap `--help`
   output for that subcommand
+- `atm help --list` and `atm help` overview output are part of the first
+  delivery, not follow-up scope
 - `atm help <topic> --json` is allowed because it extends the existing public
   JSON-output pattern to the new help command
 - structured JSON input is not part of `Y.1`, `Phase Y`, or `Phase Z`
@@ -43,3 +45,4 @@ References:
 - `GH #83`
 - `docs/phase-Y/sprint-Y1.md`
 - `docs/atm/commands/help.md`
+- `docs/phase-Z/cli-json-io-audit.md`
