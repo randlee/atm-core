@@ -480,6 +480,14 @@ Architectural rules:
   coordinator plus dedicated event-family state machines
 - `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate machines
   by design; shared helpers may share side effects but not event legality
+- Phase `Yb` adds the exact typed seam:
+  - `atm_core::delivery_plan::DeliveryPlan`
+  - `atm_core::delivery_plan::ReplyDeliveryPlan`
+  - `atm_core::delivery_execution::execute_delivery_plan(...)`
+  - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+- `atm-core` owns the plan types and machine outputs; it must not allow outer
+  send/ack/persistence modules to reintroduce harness policy after plan
+  creation
 
 Migration implication:
 - current mailbox/workflow-sidecar logic is transitional and must converge onto

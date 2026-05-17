@@ -128,6 +128,10 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - write-affecting daemon mail events must route through one central
   delivery-policy coordinator plus explicit event-family state machines rather
   than through transport- or command-specific conditional branches
+- Phase `Yb` adds one daemon-owned execution rule:
+  - Claude delivery uses the `InboxExport` adapter only
+  - non-Claude delivery uses the `NonClaudeOutbound` adapter only
+  - notification remains a separate `NotificationSink` side effect
 - daemon runtime-health/status assembly must discover teams and members only
   through the installed `RosterStore`; `ATM_HOME/.claude/teams` is a config
   ingress surface, not a runtime-truth discovery path

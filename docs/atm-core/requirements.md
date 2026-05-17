@@ -575,3 +575,23 @@ Required service rules:
   before partial restore is committed
 - `members` must remain useful as a local roster inspection command even when
   daemon or hook state is unavailable
+
+## 11. Phase Yb Delivery-Plan Ownership
+
+Requirement IDs:
+
+- `REQ-ATM-CORE-YB-001`
+- `REQ-ATM-CORE-YB-002`
+
+Required service rules:
+
+- `atm-core` must define `atm_core::delivery_plan::DeliveryPlan` and
+  `atm_core::delivery_plan::ReplyDeliveryPlan`
+- `atm-core` must define the shared execution entry points:
+  - `atm_core::delivery_execution::execute_delivery_plan(...)`
+  - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+- `atm-core` must define `atm_core::boundary::NonClaudeOutbound` as the
+  first-class non-Claude payload boundary
+- `NotificationSink` must remain notification-only
+- `send/mod.rs`, `send/persistence.rs`, and `ack/mod.rs` must not perform
+  harness policy after the machine output plan exists
