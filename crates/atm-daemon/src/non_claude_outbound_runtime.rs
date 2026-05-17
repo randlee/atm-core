@@ -16,13 +16,6 @@ use atm_core::error::AtmError;
     )
 )]
 type OutputPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
-#[cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "Retained for the sealed non-Claude boundary implementation and targeted tests while production wiring stays on the retained runtime seam."
-    )
-)]
 const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 #[cfg_attr(
     not(test),
