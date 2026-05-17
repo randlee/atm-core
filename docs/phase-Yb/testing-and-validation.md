@@ -32,7 +32,7 @@ Required proof:
   - `append_failure_after_sqlite_commit_is_execution_only`
   - `named_plan_builder_proves_payload_equality_across_harnesses`
   - `named_companion_error_failure_handling_adds_explicit_warning`
-  - `send_non_claude_sqlite_failure_delivers_original_and_error_via_hook_path`
+  - `send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary`
   - `send_append_failure_routes_to_post_send_hook_fallback`
 - the `Y.7` closeout branch must also prove:
   - `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine` constructs
@@ -66,6 +66,16 @@ Required proof:
   at the explicit repair/rebuild seam
 - full mailbox rewrite remains reachable only through the repair/rebuild path,
   not as a silent runtime append fallback
+
+### Y.11
+
+Required proof:
+
+- the low-level Claude append seam is never selected for
+  `DeliveryHarnessPath::NonClaude`
+- the repair/rebuild refresh seam is explicit and no longer encoded as a
+  generic recipient-routed helper with a non-Claude no-op branch
+- shared validation docs name the final outbound-boundary proof model
 
 ## Cross-Platform Note
 

@@ -110,6 +110,11 @@ Enforcement point:
    - direct callers to the explicit repair/rebuild projection seam
    - never trigger `direct_boundaries::reexport_messages(...)` from the normal
      append-only runtime path
+8. the retained repair/rebuild refresh seam must not:
+   - accept `DeliveryHarnessPath::NonClaude` and silently no-op
+   - rely on `allows_claude_jsonl_append()` as the seam selector
+   - present a generic recipient-routed runtime helper shape when the allowed
+     ownership is actually repair/rebuild-only
 
 ### 3. Runtime fail-closed checks
 
@@ -129,6 +134,9 @@ Rules:
    degradation is not a valid runtime concept
 5. legacy array inboxes fail closed from the normal Claude append path and can
    be rewritten only through the explicit repair/rebuild seam
+6. the retained Claude append seam fails closed before execution if a
+   `DeliveryHarnessPath::NonClaude` route is attempted; the low-level writer is
+   not itself the place where that route is supposed to be discovered
 
 ### Module-ownership documentation
 

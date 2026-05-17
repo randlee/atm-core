@@ -39,6 +39,8 @@ corresponding implementation sprint starts.
 | `YB-RM-026` | `Y.7` | `crates/atm-core/src/ack/mod.rs` | 416 | `persist_message_and_seed_workflow` in `persist_ack_reply` | `Move` through reply delivery plan | `AckReplyStateMachine -> ReplyDeliveryPlan` | Ack reply must use the same shared execution model as new-message. |
 | `YB-RM-027` | `Y.7` | `crates/atm-core/src/ack/mod.rs` | 442 | `finalize_ack_outcome` | `Move` / narrow | `delivery_execution::execute_reply_delivery_plan(...)` | Ack should not own a second outer disposition-to-notification translation path. |
 | `YB-RM-028` | `Y.7` | `crates/atm-core/src/ack/mod.rs` | 511 | `collect_ack_hook_warnings` | `Move` behind shared executor boundary | `PostSendNotificationExecutor` | Ack path should not own separate notification logic shape. |
+| `YB-RM-029` | `Y.11` | `crates/atm-core/src/service_runtime.rs` | 238 | non-Claude no-op branch in `refresh_compat_inbox_projection` | `Delete` from mixed runtime seam | explicit Claude repair/rebuild seam only | The refresh seam must be repair/rebuild-only by construction, not a generic recipient-routed helper that silently ignores non-Claude requests. |
+| `YB-RM-030` | `Y.11` | `crates/atm-core/src/service_runtime.rs` | 259 | non-Claude validation branch in `append_compat_inbox_message` | `Delete` from low-level Claude writer | no call at all for non-Claude plans | The Claude append primitive must never be selected for `DeliveryHarnessPath::NonClaude`; rejecting that route inside the low-level writer still leaves policy at the wrong seam. |
 
 ## Keep Rules
 
@@ -218,4 +220,10 @@ Implemented seam on this branch:
   - final daemon adapter allowlists and repair/rebuild-only rewrite contract
     are declared for the daemon `InboxExport` adapter
 
-No Yb removal-ledger rows remain open after `Y.10`.
+Phase-end review after `Y.10` reopened two mixed-seam runtime issues:
+
+- `YB-RM-029`
+- `YB-RM-030`
+
+Those rows are assigned to `Y.11`. Yb is not fully closed until they are
+resolved.

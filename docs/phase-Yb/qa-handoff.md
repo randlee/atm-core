@@ -70,7 +70,7 @@ For Y.7 and later, QA must verify named tests or test families for:
 
 ### 5. Phase-end closure
 
-Y.10 is not complete unless QA can prove:
+Final Yb closeout through Y.11 is not complete unless QA can prove:
 
 - all removal-ledger items are closed or explicitly tracked as blockers
 - only approved executor/coordinator modules can call the low-level delivery
@@ -81,3 +81,7 @@ Y.10 is not complete unless QA can prove:
   silently rewriting them through the rebuild seam
 - rebuild/reexport rewrite remains available only through the explicit
   repair/rebuild boundary path
+- the low-level Claude append seam is never selected for
+  `DeliveryHarnessPath::NonClaude`
+- the repair/rebuild refresh seam is explicit by construction and not a generic
+  recipient-routed helper that silently ignores non-Claude requests
