@@ -1030,6 +1030,7 @@ mod tests {
         task_id: Option<TaskId>,
     }
 
+    // Mutex required: TestRuntime is shared via Arc across threads in concurrent send tests.
     struct TestRuntime {
         commit_error_message: Option<&'static str>,
         append_error_message: Option<&'static str>,
