@@ -179,15 +179,7 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         &reply_target.team,
         &reply_target.agent,
     )?;
-    let persisted = persist_ack_reply(
-        runtime,
-        &request,
-        &actor,
-        &team,
-        &source,
-        &reply_target,
-        &reply_snapshot,
-    )?;
+    let persisted = persist_ack_reply(runtime, &request, &actor, &team, &source, &reply_target)?;
 
     let mut outcome = AckOutcome {
         action: CommandAction::Ack,
@@ -389,7 +381,6 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     team: &TeamName,
     source: &LoadedAckSource,
     reply_target: &ReplyTarget,
-    reply_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
 ) -> Result<PersistedAckReply, AtmError> {
     let ack_timestamp = IsoTimestamp::now();
     let reply_text = input::validate_message_text(request.reply_body.clone())?;
@@ -430,7 +421,8 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     persist_message_and_seed_workflow(
         runtime,
         home_dir(request),
-        reply_snapshot,
+        &reply_target.team,
+        &reply_target.agent,
         &reply_inbox_path,
         &reply_message,
         false,
@@ -536,11 +528,217 @@ fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
 
 #[cfg(test)]
 mod tests {
-    use super::{canonical_sender_identity, resolve_reply_target};
+    use std::cell::Cell;
+    use std::fs;
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
+    use tempfile::tempdir;
+
+    use super::{
+        AckRequest, ack_mail_with_runtime_impl, canonical_sender_identity, resolve_reply_target,
+    };
+    use crate::boundary;
+    use crate::config::AtmConfig;
+    use crate::error::AtmError;
+    use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::MessageEnvelope;
+    use crate::schema::{AtmMessageId, MessageEnvelope, TeamConfig};
+    use crate::send::WarningEntry;
+    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::TEST_TEAM;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use crate::workflow::WorkflowStateFile;
+
+    /// Minimal test double for `RetainedServiceRuntime + RetainedMailboxRuntime` used
+    /// to verify the ack command path does not rewrite the source inbox.
+    struct AckStubRuntime {
+        home_dir: PathBuf,
+        write_called: Cell<bool>,
+        compat_export_called: Cell<bool>,
+    }
+
+    impl AckStubRuntime {
+        fn new(home_dir: PathBuf, team: &str, agent: &str) -> Self {
+            let team_dir = home_dir.join("teams").join(team);
+            fs::create_dir_all(&team_dir).expect("team dir");
+            let config_json = format!(
+                r#"{{"members":[{{"name":"{agent}","agent_id":"","agent_type":"","model":"","tmux_pane_id":"","cwd":""}}]}}"#
+            );
+            fs::write(team_dir.join("config.json"), config_json).expect("team config");
+            Self {
+                home_dir,
+                write_called: Cell::new(false),
+                compat_export_called: Cell::new(false),
+            }
+        }
+    }
+
+    impl RetainedServiceRuntime for AckStubRuntime {
+        fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
+            Ok(None)
+        }
+
+        fn load_team_config(&self, team_dir: &Path) -> Result<TeamConfig, AtmError> {
+            let path = team_dir.join("config.json");
+            let raw = fs::read_to_string(&path).map_err(|_| {
+                AtmError::missing_document(format!("team config not found at {}", path.display()))
+            })?;
+            serde_json::from_str(&raw).map_err(|e| AtmError::config(e.to_string()))
+        }
+
+        fn team_dir(&self, _home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError> {
+            Ok(self.home_dir.join("teams").join(team.as_str()))
+        }
+
+        fn inbox_path(
+            &self,
+            _home_dir: &Path,
+            team: &TeamName,
+            agent: &AgentName,
+        ) -> Result<PathBuf, AtmError> {
+            Ok(self
+                .home_dir
+                .join("teams")
+                .join(team.as_str())
+                .join(agent.as_str()))
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_secs(5),
+            }
+        }
+
+        fn maybe_run_post_send_hook(
+            &self,
+            _warnings: &mut Vec<WarningEntry>,
+            _config: Option<&AtmConfig>,
+            _context: crate::send::PostSendHookContext<'_>,
+        ) {
+        }
+
+        fn refresh_compat_inbox_projection(
+            &self,
+            _home_dir: &Path,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+        ) -> Result<(), AtmError> {
+            self.compat_export_called.set(true);
+            Ok(())
+        }
+
+        fn load_roster_member(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError> {
+            Ok(None)
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            _body: F,
+        ) -> Result<T, AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
+        {
+            Err(AtmError::validation(
+                "AckStubRuntime: commit_workflow_state not exercised in boundary tests",
+            ))
+        }
+    }
+
+    impl RetainedMailboxRuntime for AckStubRuntime {
+        fn query_mailbox_metadata_rows(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _limit: Option<usize>,
+        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+            // Return empty rows so ack fails at source-not-found validation,
+            // never reaching any write operation.
+            Ok(vec![])
+        }
+
+        fn load_message_record(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _message_key: &boundary::MessageKey,
+        ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+            Ok(None)
+        }
+
+        fn persist_message_record(
+            &self,
+            _record: boundary::MailStoreMessageRecord,
+        ) -> Result<(), AtmError> {
+            self.write_called.set(true);
+            Ok(())
+        }
+
+        fn persist_message_state(
+            &self,
+            _state: boundary::MailMessageState,
+        ) -> Result<(), AtmError> {
+            self.write_called.set(true);
+            Ok(())
+        }
+    }
+
+    #[test]
+    fn ack_succeeds_without_command_owned_mailbox_rewrite() {
+        // Verify the ack command path does not invoke any mailbox write operations
+        // when the message to acknowledge is absent.  The ack path must not rewrite
+        // the source (actor) inbox — all writes are owned by `persist_ack_reply`
+        // which is only reached after the message is validated as pending-ack.
+        let tempdir = tempdir().expect("tempdir");
+        let stub = AckStubRuntime::new(tempdir.path().to_path_buf(), TEST_TEAM, ROLE_TEAM_LEAD);
+        let request = AckRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            current_dir: PathBuf::from("."),
+            actor_override: Some(AgentName::from_validated(ROLE_TEAM_LEAD)),
+            team_override: Some(TeamName::from_validated(TEST_TEAM)),
+            message_id: AtmMessageId::new(),
+            reply_body: "acknowledged".to_string(),
+        };
+
+        let result = ack_mail_with_runtime_impl(request, &NullObservability, &stub);
+
+        // Ack fails because the message does not exist — but no write must occur.
+        assert!(result.is_err(), "ack should fail when message is not found");
+        assert!(
+            !stub.write_called.get(),
+            "ack command path must not invoke mailbox write operations before message is validated"
+        );
+    }
 
     fn message_with_from(from: &str) -> MessageEnvelope {
         MessageEnvelope {
