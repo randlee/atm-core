@@ -6,7 +6,7 @@ use crate::delivery_plan::{
     ReplyDeliveryPlan,
 };
 use crate::delivery_policy::{
-    DeliveryEventFamily, DeliveryHarnessPath, append_failure_transition_names,
+    DeliveryEventFamily, DeliveryHarnessPath, claude_append_failure_transition_names,
     persisted_success_transition_names, sqlite_failure_transition_names,
 };
 use crate::error::AtmError;
@@ -109,13 +109,41 @@ where
     }
 }
 
+pub(crate) trait NonClaudeOutboundDeliveryWriter {
+    fn deliver_non_claude_payloads(
+        &self,
+        recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+        messages: &[LogicalMessage],
+    ) -> Result<(), AtmError>;
+}
+
+impl<T> NonClaudeOutboundDeliveryWriter for T
+where
+    T: RetainedServiceRuntime + ?Sized,
+{
+    fn deliver_non_claude_payloads(
+        &self,
+        recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+        messages: &[LogicalMessage],
+    ) -> Result<(), AtmError> {
+        RetainedServiceRuntime::deliver_non_claude_payloads(
+            self,
+            recipient,
+            &messages
+                .iter()
+                .map(|message| message.envelope.clone())
+                .collect::<Vec<_>>(),
+        )
+    }
+}
+
 pub(crate) fn execute_delivery_plan<R>(
     runtime: &R,
     config: Option<&AtmConfig>,
     plan: &DeliveryPlan,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ClaudeInboxWriter + PostSendNotificationExecutor,
+    R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + PostSendNotificationExecutor,
 {
     execute_messages(
         runtime,
@@ -137,7 +165,7 @@ pub(crate) fn execute_reply_delivery_plan<R>(
     plan: &ReplyDeliveryPlan,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ClaudeInboxWriter + PostSendNotificationExecutor,
+    R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + PostSendNotificationExecutor,
 {
     execute_messages(
         runtime,
@@ -168,7 +196,7 @@ fn execute_messages<R>(
     view: ExecutionView<'_>,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ClaudeInboxWriter + PostSendNotificationExecutor,
+    R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + PostSendNotificationExecutor,
 {
     validate_delivery_target(view.delivery_target)?;
     let mut result = DeliveryExecutionResult::delivered();
@@ -185,7 +213,9 @@ where
             view.messages,
             &mut result,
         ),
-        DeliveryTarget::NonClaude { .. } => {}
+        DeliveryTarget::NonClaude { recipient } => {
+            runtime.deliver_non_claude_payloads(recipient, view.messages)?;
+        }
     }
 
     for notification in view.notifications {
@@ -246,7 +276,7 @@ fn emit_plan_transitions(
             DeliveryPlanDisposition::Persisted,
             DeliveryExecutionDisposition::AppendDegraded,
             DeliveryHarnessPath::ClaudeCode,
-        ) => append_failure_transition_names(DeliveryHarnessPath::ClaudeCode).to_vec(),
+        ) => claude_append_failure_transition_names().to_vec(),
         (
             DeliveryPlanDisposition::Persisted,
             DeliveryExecutionDisposition::AppendDegraded,
@@ -369,7 +399,8 @@ mod tests {
 
     use super::{
         ClaudeInboxWriter, DeliveryExecutionDisposition, DeliveryTransitionContext,
-        PostSendNotificationExecutor, emit_delivery_plan_transitions, execute_delivery_plan,
+        NonClaudeOutboundDeliveryWriter, PostSendNotificationExecutor,
+        emit_delivery_plan_transitions, execute_delivery_plan,
     };
     use crate::config::AtmConfig;
     use crate::delivery_plan::{
@@ -410,6 +441,16 @@ mod tests {
             _recipient_pane_id: Option<&str>,
             _notification: &crate::delivery_plan::NotificationTarget,
         ) {
+        }
+    }
+
+    impl NonClaudeOutboundDeliveryWriter for NoopRuntime {
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _messages: &[LogicalMessage],
+        ) -> Result<(), AtmError> {
+            Ok(())
         }
     }
 

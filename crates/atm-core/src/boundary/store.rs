@@ -435,6 +435,21 @@ pub struct InboxExportRequest;
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InboxExportResponse;
 
+/// Canonical non-Claude outbound request payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NonClaudeOutboundDeliveryRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub recipient_pane_id: Option<String>,
+    pub messages: Vec<MessageEnvelope>,
+}
+
+/// Canonical non-Claude outbound response payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NonClaudeOutboundDeliveryResponse {
+    pub delivered_messages: usize,
+}
+
 /// BOUNDARY-TaskStore — see docs/atm-core/boundaries.md.
 pub trait TaskStore: sealed::Sealed {
     /// # Errors
@@ -588,4 +603,16 @@ pub trait InboxExport: sealed::Sealed {
         &self,
         request: InboxExportReexportMessageRequest,
     ) -> Result<InboxExportReexportMessageResponse, AtmError>;
+}
+
+/// BOUNDARY-NonClaudeOutbound — see docs/atm-core/boundaries.md.
+pub trait NonClaudeOutbound: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when non-Claude logical payload delivery cannot be
+    /// executed through the approved outbound boundary.
+    fn deliver_payloads(
+        &self,
+        request: NonClaudeOutboundDeliveryRequest,
+    ) -> Result<NonClaudeOutboundDeliveryResponse, AtmError>;
 }

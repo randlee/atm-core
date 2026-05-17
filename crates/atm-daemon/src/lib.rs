@@ -16,6 +16,7 @@ mod lifecycle_control;
 mod local_ipc_connection;
 mod local_ipc_transport;
 mod local_ipc_wake;
+mod non_claude_outbound_runtime;
 mod notification_runtime;
 mod peer_transport;
 mod reconcile_runtime;

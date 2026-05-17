@@ -486,7 +486,7 @@ mod tests {
     use atm_core::types::{AgentName, TeamName};
     use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
-    use serde_json::Value;
+    use serde_json::{Map, Value};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -560,6 +560,33 @@ mod tests {
                 serde_json::to_vec(&config).expect("team config"),
             )
             .expect("write team config");
+            self.seed_sqlite_roster(recipient);
+        }
+
+        fn seed_sqlite_roster(&self, recipient: &str) {
+            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+            let roster_store = assembly.roster_store();
+            let team = TEST_TEAM.parse::<TeamName>().expect("team");
+            let members = [TEST_SENDER, recipient, TEST_LEAD]
+                .into_iter()
+                .map(|agent| boundary::RosterMemberRecord {
+                    team_name: team.clone(),
+                    agent_name: agent.parse().expect("agent"),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: String::new(),
+                    model: String::new(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                })
+                .collect();
+            roster_store
+                .replace_roster(boundary::RosterStoreReplaceRosterRequest {
+                    team,
+                    members,
+                    source: Some(boundary::ReplaySource::new("config.json").expect("source")),
+                })
+                .expect("seed sqlite roster");
         }
 
         fn write_inbox_values(&self, agent: &str, values: &[Value]) {

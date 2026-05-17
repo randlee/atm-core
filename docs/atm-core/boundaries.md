@@ -249,6 +249,8 @@ Notes:
     boundary, not NotificationSink as a stand-in
   - impossible non-Claude append-degraded routing must fail closed before it
     reaches this sink
+  - the current proof surface for non-Claude delivery lives in
+    `NonClaudeOutboundDeliveryRequest`, not in `ATM_POST_SEND` metadata
 
 ## NonClaudeOutbound
 
@@ -265,6 +267,9 @@ Notes:
   Claude path receives; only transport target differs.
 - `NotificationSink` must not be used as a substitute for this boundary.
 - only approved delivery executors may call this boundary directly.
+- the active `atm-core` handoff seam is:
+  - `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
+  - `atm_core::service_runtime::RetainedServiceRuntime::deliver_non_claude_payloads(...)`
 
 ## StatusSource
 

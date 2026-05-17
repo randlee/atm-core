@@ -66,6 +66,11 @@ pub(crate) trait RetainedServiceRuntime {
         recipient: &DeliveryRecipientSnapshot,
         message: &MessageEnvelope,
     ) -> Result<(), AtmError>;
+    fn deliver_non_claude_payloads(
+        &self,
+        recipient: &DeliveryRecipientSnapshot,
+        messages: &[MessageEnvelope],
+    ) -> Result<(), AtmError>;
     fn load_roster_member(
         &self,
         team: &TeamName,
@@ -91,6 +96,8 @@ pub struct LocalServiceRuntime {
     pub(crate) mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
     pub(crate) task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
     pub(crate) roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
+    pub(crate) non_claude_outbound:
+        std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
 }
 
 impl LocalServiceRuntime {
@@ -99,10 +106,25 @@ impl LocalServiceRuntime {
         task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
         roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
     ) -> Self {
+        Self::new_with_non_claude_outbound(
+            mail_store,
+            task_store,
+            roster_store,
+            std::sync::Arc::new(LocalFileNonClaudeOutbound),
+        )
+    }
+
+    pub fn new_with_non_claude_outbound(
+        mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
+        task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
+        roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
+        non_claude_outbound: std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+    ) -> Self {
         Self {
             mail_store,
             task_store,
             roster_store,
+            non_claude_outbound,
         }
     }
 }
@@ -113,7 +135,42 @@ impl fmt::Debug for LocalServiceRuntime {
             .field("mail_store", &std::sync::Arc::as_ptr(&self.mail_store))
             .field("task_store", &std::sync::Arc::as_ptr(&self.task_store))
             .field("roster_store", &std::sync::Arc::as_ptr(&self.roster_store))
+            .field(
+                "non_claude_outbound",
+                &std::sync::Arc::as_ptr(&self.non_claude_outbound),
+            )
             .finish()
+    }
+}
+
+#[derive(Debug, Clone, Copy, Default)]
+struct LocalFileNonClaudeOutbound;
+
+impl crate::boundary::sealed::Sealed for LocalFileNonClaudeOutbound {}
+
+impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
+    fn deliver_payloads(
+        &self,
+        request: crate::boundary::NonClaudeOutboundDeliveryRequest,
+    ) -> Result<crate::boundary::NonClaudeOutboundDeliveryResponse, AtmError> {
+        let output_path = crate::home::host_runtime_dir()?.join("non_claude_outbound.jsonl");
+        let parent = output_path.parent().ok_or_else(|| {
+            AtmError::mailbox_write(format!(
+                "non-Claude outbound path {} has no parent directory",
+                output_path.display()
+            ))
+        })?;
+        std::fs::create_dir_all(parent).map_err(|error| {
+            AtmError::mailbox_write(format!(
+                "failed to create non-Claude outbound directory {}: {error}",
+                parent.display()
+            ))
+            .with_source(error)
+        })?;
+        crate::mailbox::atomic::append_jsonl_record(&output_path, &request)?;
+        Ok(crate::boundary::NonClaudeOutboundDeliveryResponse {
+            delivered_messages: request.messages.len(),
+        })
     }
 }
 
@@ -200,7 +257,13 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         message: &MessageEnvelope,
     ) -> Result<(), AtmError> {
         if !recipient.allows_claude_jsonl_append() {
-            return Ok(());
+            return Err(AtmError::validation(format!(
+                "append_compat_inbox_message is unsupported for non-Claude recipient {}@{}",
+                recipient.agent, recipient.team
+            ))
+            .with_recovery(
+                "Route non-Claude delivery through the NonClaudeOutbound boundary instead of the Claude compatibility append path.",
+            ));
         }
         if compat_inbox_uses_legacy_array_format(inbox_path)? {
             let messages =
@@ -227,6 +290,21 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
                 member: agent.clone(),
             })
             .map(|response| response.member)
+    }
+
+    fn deliver_non_claude_payloads(
+        &self,
+        recipient: &DeliveryRecipientSnapshot,
+        messages: &[MessageEnvelope],
+    ) -> Result<(), AtmError> {
+        self.non_claude_outbound
+            .deliver_payloads(crate::boundary::NonClaudeOutboundDeliveryRequest {
+                team: recipient.team.clone(),
+                agent: recipient.agent.clone(),
+                recipient_pane_id: recipient.recipient_pane_id.clone(),
+                messages: messages.to_vec(),
+            })
+            .map(|_| ())
     }
 
     fn commit_workflow_state<T, I, F>(

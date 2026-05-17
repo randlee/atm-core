@@ -893,6 +893,11 @@ impl Fixture {
         let sqlite_runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path);
         create_team_with_config(
             tempdir.path(),
+            tempdir
+                .path()
+                .join("runtime")
+                .join("mail.sqlite3")
+                .as_path(),
             PRIMARY_TEAM,
             &[TEAM_LEAD, PRIMARY_AGENT, SECONDARY_AGENT],
         );
@@ -1129,6 +1134,11 @@ impl Fixture {
 
     fn create_team_without_config(&self, team: &str) {
         fs::create_dir_all(self.team_dir_for(team).join("inboxes")).expect("team inboxes");
+        seed_sqlite_roster(
+            self.sqlite_db_path().as_path(),
+            team,
+            &[TEAM_LEAD, TEST_RECIPIENT],
+        );
     }
 
     fn sqlite_db_path(&self) -> std::path::PathBuf {
@@ -1182,7 +1192,12 @@ impl Fixture {
     }
 }
 
-fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&str]) {
+fn create_team_with_config(
+    home_dir: &std::path::Path,
+    sqlite_db_path: &std::path::Path,
+    team: &str,
+    members: &[&str],
+) {
     let team_dir = home_dir.join(".claude").join("teams").join(team);
     fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes");
     let config = TeamConfig {
@@ -1197,6 +1212,33 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
         serde_json::to_vec(&config).expect("team config"),
     )
     .expect("write team config");
+    seed_sqlite_roster(sqlite_db_path, team, members);
+}
+
+fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&str]) {
+    let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
+    let roster_store = assembly.roster_store();
+    let team = team.parse::<TeamName>().expect("team");
+    let members = members
+        .iter()
+        .map(|name| atm_core::boundary::RosterMemberRecord {
+            team_name: team.clone(),
+            agent_name: (*name).parse::<AgentName>().expect("agent"),
+            member_kind: atm_core::boundary::RosterMemberKind::Permanent,
+            harness: atm_core::boundary::RosterHarness::ClaudeCode,
+            agent_type: String::new(),
+            model: String::new(),
+            recipient_pane_id: None,
+            metadata_json: serde_json::Map::new(),
+        })
+        .collect();
+    roster_store
+        .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
+            team,
+            members,
+            source: Some(atm_core::boundary::ReplaySource::new("config.json").expect("source")),
+        })
+        .expect("seed sqlite roster");
 }
 
 fn message_workflow_key(message: &MessageEnvelope) -> String {

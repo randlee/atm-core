@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-NON-CLAUDE-OUTBOUND-REFERENCES"]
 review_gates = ["no_notification_sink_substitution", "no_direct_outer_caller_use"]
 
 [status]
-state = "planned"
-notes = ["Phase Yb planning boundary; implementation lands in Y.9"]
+state = "concrete_landed"
+notes = ["Implemented in Phase Yb Y.9 with shared delivery-plan execution and a dedicated non-Claude outbound payload boundary."]

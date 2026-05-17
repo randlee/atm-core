@@ -2383,6 +2383,8 @@ Phase `Yb` therefore tightens the architecture further:
   - `atm_core::delivery_plan::ReplyDeliveryPlan`
   - `atm_core::delivery_execution::execute_delivery_plan(...)`
   - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+  - `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
+  - `atm_core::boundary::NonClaudeOutbound`
 - no command, ack, or persistence layer may branch on harness after the
   machine has produced its delivery plan
 - post-send-hook execution remains notification-only and must not stand in for

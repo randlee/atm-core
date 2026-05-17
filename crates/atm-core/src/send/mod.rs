@@ -980,7 +980,7 @@ mod tests {
     };
     use crate::boundary::{
         MailMessageState, MailStoreMailboxMetadataRow, MailStoreMessageRecord, MessageKey,
-        RosterHarness, RosterMemberKind, RosterMemberRecord,
+        NonClaudeOutboundDeliveryRequest, RosterHarness, RosterMemberKind, RosterMemberRecord,
     };
     use crate::config::AtmConfig;
     use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -1045,6 +1045,7 @@ mod tests {
         append_error_message: Option<&'static str>,
         recipient_harness: DeliveryHarnessPath,
         appended_messages: Mutex<Vec<MessageEnvelope>>,
+        non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
         hook_captures: Mutex<Vec<HookCapture>>,
     }
 
@@ -1059,6 +1060,7 @@ mod tests {
                 append_error_message,
                 recipient_harness,
                 appended_messages: Mutex::new(Vec::new()),
+                non_claude_deliveries: Mutex::new(Vec::new()),
                 hook_captures: Mutex::new(Vec::new()),
             }
         }
@@ -1160,6 +1162,23 @@ mod tests {
                 .lock()
                 .expect("append captures lock")
                 .push(message.clone());
+            Ok(())
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            recipient: &DeliveryRecipientSnapshot,
+            messages: &[MessageEnvelope],
+        ) -> Result<(), AtmError> {
+            self.non_claude_deliveries
+                .lock()
+                .expect("non-claude deliveries lock")
+                .push(NonClaudeOutboundDeliveryRequest {
+                    team: recipient.team.clone(),
+                    agent: recipient.agent.clone(),
+                    recipient_pane_id: recipient.recipient_pane_id.clone(),
+                    messages: messages.to_vec(),
+                });
             Ok(())
         }
 
@@ -1515,7 +1534,7 @@ mod tests {
     }
 
     #[test]
-    fn send_non_claude_sqlite_failure_delivers_original_and_error_via_hook_path() {
+    fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary() {
         let runtime = TestRuntime::new(
             Some("sqlite write failed"),
             None,
@@ -1540,6 +1559,17 @@ mod tests {
                 .expect("append lock")
                 .is_empty()
         );
+        let deliveries = runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock");
+        assert_eq!(deliveries.len(), 1);
+        assert_eq!(deliveries[0].team.as_str(), TEST_TEAM);
+        assert_eq!(deliveries[0].agent.as_str(), "recipient");
+        assert_eq!(deliveries[0].messages.len(), 2);
+        assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
+        assert_eq!(deliveries[0].messages[1].from.as_str(), "atm-system");
+        drop(deliveries);
         let captures = runtime.hook_captures.lock().expect("hook capture lock");
         assert_eq!(captures.len(), 2);
         assert_eq!(captures[0].sender.as_str(), TEST_SENDER);
@@ -1569,6 +1599,37 @@ mod tests {
             event.command == "delivery_policy"
                 && event.outcome == "delivery_policy.new_message.non_claude_error"
         }));
+    }
+
+    #[test]
+    fn send_non_claude_success_delivers_original_via_outbound_boundary() {
+        let runtime = TestRuntime::new(None, None, DeliveryHarnessPath::NonClaude);
+        let observability = RecordingObservability::default();
+        let tempdir = tempdir().expect("tempdir");
+
+        let outcome = super::send_mail_with_runtime_impl(
+            send_request(tempdir.path()),
+            &observability,
+            &runtime,
+        )
+        .expect("send outcome");
+
+        assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
+        assert!(outcome.warnings.is_empty());
+        assert!(
+            runtime
+                .appended_messages
+                .lock()
+                .expect("append lock")
+                .is_empty()
+        );
+        let deliveries = runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock");
+        assert_eq!(deliveries.len(), 1);
+        assert_eq!(deliveries[0].messages.len(), 1);
+        assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     }
 
     #[test]

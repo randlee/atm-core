@@ -56,16 +56,6 @@ pub(crate) struct DeliveryRecipientSnapshot {
 }
 
 impl DeliveryRecipientSnapshot {
-    fn fallback_claude(agent: AgentName, team: TeamName) -> Self {
-        Self {
-            agent,
-            team,
-            harness: DeliveryHarnessPath::ClaudeCode,
-            recipient_pane_id: None,
-            roster_backed: false,
-        }
-    }
-
     fn from_roster(member: RosterMemberRecord) -> Self {
         Self {
             agent: member.agent_name,
@@ -313,12 +303,18 @@ impl DeliveryPolicyCoordinator {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<DeliveryRecipientSnapshot, AtmError> {
-        Ok(runtime
+        runtime
             .load_roster_member(team, agent)?
             .map(DeliveryRecipientSnapshot::from_roster)
-            .unwrap_or_else(|| {
-                DeliveryRecipientSnapshot::fallback_claude(agent.clone(), team.clone())
-            }))
+            .ok_or_else(|| {
+                AtmError::validation(format!(
+                    "failed to resolve roster-backed delivery harness for {}@{}",
+                    agent, team
+                ))
+                .with_recovery(
+                    "Repair or reload the team roster before retrying delivery; ATM does not fall back to Claude Code routing when roster harness data is missing.",
+                )
+            })
     }
 
     #[allow(
@@ -507,31 +503,20 @@ pub(crate) fn sqlite_failure_transition_names(
     new_message_sqlite_failure_transitions(harness)
 }
 
-pub(crate) fn append_failure_transition_names(
-    harness: DeliveryHarnessPath,
-) -> &'static [&'static str] {
-    match harness {
-        DeliveryHarnessPath::ClaudeCode => &[
-            "delivery_policy.new_message.received",
-            "delivery_policy.new_message.harness_claude",
-            "delivery_policy.new_message.sqlite_committed",
-            "delivery_policy.new_message.compat_append_original",
-            "delivery_policy.new_message.post_send_hook_fallback",
-            "delivery_policy.new_message.failed",
-        ],
-        DeliveryHarnessPath::NonClaude => &[
-            "delivery_policy.new_message.received",
-            "delivery_policy.new_message.harness_non_claude",
-            "delivery_policy.new_message.sqlite_committed",
-            "delivery_policy.new_message.non_claude_original",
-            "delivery_policy.new_message.failed",
-        ],
-    }
+pub(crate) fn claude_append_failure_transition_names() -> &'static [&'static str] {
+    &[
+        "delivery_policy.new_message.received",
+        "delivery_policy.new_message.harness_claude",
+        "delivery_policy.new_message.sqlite_committed",
+        "delivery_policy.new_message.compat_append_original",
+        "delivery_policy.new_message.post_send_hook_fallback",
+        "delivery_policy.new_message.failed",
+    ]
 }
 
 #[cfg(test)]
 pub(crate) fn append_failure_transitions() -> &'static [&'static str] {
-    append_failure_transition_names(DeliveryHarnessPath::ClaudeCode)
+    claude_append_failure_transition_names()
 }
 
 pub(crate) fn thread_update_transitions() -> &'static [ThreadUpdateStateMachine] {

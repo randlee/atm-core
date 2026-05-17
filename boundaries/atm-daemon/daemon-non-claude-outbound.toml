@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-NON-CLAUDE-OUTBOUND-DAEMON-REFERENCES"]
 review_gates = ["no_public_impl", "no_notification_only_fallback"]
 
 [status]
-state = "planned"
-notes = ["Phase Yb planning boundary; implementation lands in Y.9"]
+state = "concrete_landed"
+notes = ["Implemented in Phase Yb Y.9 as atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound."]

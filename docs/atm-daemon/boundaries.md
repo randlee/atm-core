@@ -387,6 +387,11 @@ Notes:
   Claude path receives.
 - It must not downgrade message delivery into notification-only metadata.
 - Its callers are limited to the approved delivery executor seam.
+- the current daemon-owned adapter is
+  `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
+- the current runtime-owned sink is `~/.atm/non_claude_outbound.jsonl`, which
+  records the typed non-Claude outbound payload requests for the daemon-owned
+  delivery lane
 
 ## DaemonStatusSourceAdapter
 

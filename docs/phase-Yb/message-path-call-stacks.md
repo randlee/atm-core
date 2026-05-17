@@ -40,7 +40,7 @@ Current ownership:
   transition emission now all happen inside the typed plan/execution seam
 - outer send code supplies only command-local context and telemetry emission
 
-## 2. Current Y.7 Stack: New Message Success, `DeliveryHarnessPath::NonClaude`
+## 2. Current Y.9 Stack: New Message Success, `DeliveryHarnessPath::NonClaude`
 
 Current stack:
 
@@ -51,14 +51,18 @@ Current stack:
 5. `runtime.commit_workflow_state(...)`
 6. `build_send_delivery_plan(...)`
 7. `execute_delivery_plan(...)`
-8. no Claude append is selected because the plan target is
-   `DeliveryTarget::NonClaude`
-9. shared notification execution
+8. `DeliveryTarget::NonClaude` selects
+   `NonClaudeOutboundDeliveryWriter::deliver_non_claude_payloads(...)`
+9. `RetainedServiceRuntime::deliver_non_claude_payloads(...)`
+10. `atm_core::boundary::NonClaudeOutbound::deliver_payloads(...)`
+11. shared notification execution
 
-Remaining issue:
+Current ownership:
 
-- the outer call graph is now shared, but real non-Claude outbound transport
-  still defers to `Y.9`
+- the outer call graph is shared with the Claude path
+- the non-Claude path now emits a first-class typed payload request rather than
+  relying on post-send-hook metadata
+- notification remains a separate side effect after payload delivery
 
 ## 3. Current Y.7 Stack: SQLite Failure, `DeliveryHarnessPath::ClaudeCode`
 
@@ -83,7 +87,7 @@ Current ownership:
 - partial Claude append is an execution-level warning surface
 - transition ownership now lives with the shared execution seam
 
-## 4. Current Y.7 Stack: SQLite Failure, `DeliveryHarnessPath::NonClaude`
+## 4. Current Y.9 Stack: SQLite Failure, `DeliveryHarnessPath::NonClaude`
 
 Current stack:
 
@@ -95,14 +99,21 @@ Current stack:
    `DeliveryPersistenceResult`
 6. `build_send_delivery_plan(...)`
 7. `execute_delivery_plan(...)`
-8. no Claude append is selected
-9. original notification + companion notification via shared notification
-   executor
+8. `DeliveryTarget::NonClaude` selects
+   `NonClaudeOutboundDeliveryWriter::deliver_non_claude_payloads(...)`
+9. `RetainedServiceRuntime::deliver_non_claude_payloads(...)`
+10. `atm_core::boundary::NonClaudeOutbound::deliver_payloads(...)` receives
+    the same logical `message[1]` / `message[2]` payload set as the Claude
+    path
+11. original notification + companion notification via shared notification
+    executor
 
-Remaining issue:
+Current ownership:
 
-- `Y.7` proves identical logical payload sets at the typed-plan seam
-- real non-Claude outward payload delivery remains a `Y.9` boundary task
+- the typed degraded payload contract is identical across harness families
+- only the delivery target differs
+- post-send-hook execution remains notification-only and is not used as
+  delivery proof
 
 ## 5. Current Y.7 Stack: Append Degraded After SQLite Success
 
@@ -162,9 +173,8 @@ Note:
 - `crates/atm-core/src/delivery_policy.rs::AckReplyStateMachine` remains the
   documented transition inventory
 
-`Y.8` still does not finish:
+`Y.9` finishes the non-Claude outbound payload boundary. `Y.10` still owns:
 
-- non-Claude real outbound transport
 - low-level repair/rebuild boundary cleanup
 
 Those remaining items are intentionally deferred to `Y.9` and `Y.10`.

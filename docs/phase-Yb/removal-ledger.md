@@ -131,3 +131,50 @@ Rows that remain intentionally open after `Y.8`:
 
 Those remaining rows are deferred to `Y.9` and `Y.10` exactly as assigned
 above; they are not regressions in `Y.8`.
+
+## Y.9 Closure Notes
+
+`feature/pYb-s9-non-claude-outbound-boundary-formalization` closes the
+required `Y.9` rows by making non-Claude delivery a first-class payload
+boundary and removing the remaining fallback surfaces.
+
+Closed rows:
+
+- `YB-RM-012`
+- `YB-RM-013`
+- `YB-RM-014`
+- `YB-RM-015`
+- `YB-RM-016`
+- `YB-RM-019`
+
+Implemented seam on this branch:
+
+- [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-core/src/delivery_execution.rs:112)
+  now owns `NonClaudeOutboundDeliveryWriter`
+- [crates/atm-core/src/service_runtime.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-core/src/service_runtime.rs:295)
+  now hands typed non-Claude payloads to
+  `atm_core::boundary::NonClaudeOutbound`
+- [crates/atm-daemon/src/non_claude_outbound_runtime.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-daemon/src/non_claude_outbound_runtime.rs:14)
+  now provides the daemon-owned
+  `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound` adapter
+- [crates/atm-core/src/delivery_policy.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-core/src/delivery_policy.rs:300)
+  now fails closed when roster-backed harness data is missing
+- [crates/atm-core/src/delivery_policy.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-core/src/delivery_policy.rs:506)
+  now keeps append-degraded transitions Claude-only
+- [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-core/src/send/mod.rs:1538)
+  now proves non-Claude delivery through the outbound payload boundary rather
+  than through hook metadata alone
+
+Rows that remain intentionally open after `Y.9`:
+
+- `YB-RM-017`
+- `YB-RM-018`
+- `YB-RM-020`
+- `YB-RM-021`
+- `YB-RM-022`
+- `YB-RM-023`
+- `YB-RM-024`
+- `YB-RM-025`
+
+Those remaining rows are deferred to `Y.10` exactly as assigned above; they
+are not regressions in `Y.9`.
