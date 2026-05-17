@@ -10,7 +10,7 @@ use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
 use crate::read::seen_state;
 use crate::schema::{MessageEnvelope, TeamConfig};
-use crate::send::{PostSendHookContext, maybe_run_post_send_hook};
+use crate::send::{PostSendHookContext, hook::maybe_run_post_send_hook};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
 
@@ -141,6 +141,8 @@ impl fmt::Debug for LocalServiceRuntime {
 }
 
 #[derive(Debug, Clone, Copy, Default)]
+/// Production fallback boundary used when the daemon runtime is not composing
+/// a dedicated non-Claude outbound adapter. This is not a test double.
 struct LocalFileNonClaudeOutbound;
 
 impl crate::boundary::sealed::Sealed for LocalFileNonClaudeOutbound {}
@@ -156,12 +158,14 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
                 "non-Claude outbound path {} has no parent directory",
                 output_path.display()
             ))
+            .with_recovery("Check that ATM_HOME directory is writable and the parent path exists.")
         })?;
         std::fs::create_dir_all(parent).map_err(|error| {
             AtmError::mailbox_write(format!(
                 "failed to create non-Claude outbound directory {}: {error}",
                 parent.display()
             ))
+            .with_recovery("Check that ATM_HOME directory is writable and the parent path exists.")
             .with_source(error)
         })?;
         crate::mailbox::atomic::append_jsonl_record(&output_path, &request)?;

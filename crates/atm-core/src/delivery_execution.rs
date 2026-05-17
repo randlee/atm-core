@@ -454,6 +454,8 @@ mod tests {
         }
     }
 
+    // Mutex required: observability captures may be mutated from multiple test
+    // threads when delivery execution is exercised under concurrent send flows.
     #[derive(Default)]
     struct RecordingObservability {
         events: std::sync::Mutex<Vec<CommandEvent>>,
@@ -541,7 +543,7 @@ mod tests {
         let plan = DeliveryPlan::new(
             DeliveryPlanDisposition::Persisted,
             DeliveryTarget::ClaudeCode {
-                inbox_path: PathBuf::from("/tmp/recipient.jsonl"),
+                inbox_path: PathBuf::from("recipient.jsonl"),
                 recipient: recipient_snapshot(DeliveryHarnessPath::NonClaude),
             },
             ResolvedRecipient {

@@ -15,23 +15,23 @@ delivery contract hardening and outer-policy cleanup landed on:
 
 Current stack:
 
-1. [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:190)
+1. `crates/atm-core/src/send/mod.rs:190`
    - `send_mail_with_runtime_impl(...)`
-2. [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:365)
+2. `crates/atm-core/src/send/mod.rs:365`
    - `prepare_send_context(...)`
-3. [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:511)
+3. `crates/atm-core/src/send/mod.rs:511`
    - `persist_send_message(...)`
-4. [crates/atm-core/src/send/persistence.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/persistence.rs:17)
+4. `crates/atm-core/src/send/persistence.rs:17`
    - `persist_message_and_seed_workflow(...)`
 5. `runtime.commit_workflow_state(...)`
-6. [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:323)
+6. `crates/atm-core/src/send/mod.rs:323`
    - `build_send_delivery_plan(...)`
-7. [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:97)
+7. `crates/atm-core/src/delivery_execution.rs:97`
    - `execute_delivery_plan(...)`
-8. [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:188)
+8. `crates/atm-core/src/delivery_execution.rs:188`
    - `execute_claude_delivery(...)`
 9. `runtime.append_compat_inbox_message(...)`
-10. [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:175)
+10. `crates/atm-core/src/delivery_execution.rs:175`
     - shared notification execution
 
 Current ownership:
@@ -71,7 +71,7 @@ Current stack:
 1. `persist_send_message(...)`
 2. `persist_message_and_seed_workflow(...)`
 3. `runtime.commit_workflow_state(...)` returns mailbox-write error
-4. [crates/atm-core/src/send/persistence.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/persistence.rs:57)
+4. `crates/atm-core/src/send/persistence.rs:57`
    - `recover_after_sqlite_failure(...)`
 5. `recover_after_sqlite_failure(...)` constructs original + companion typed
    payloads
@@ -137,17 +137,17 @@ Current ownership:
 
 Current stack:
 
-1. [crates/atm-core/src/ack/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/ack/mod.rs:368)
+1. `crates/atm-core/src/ack/mod.rs:368`
    - `persist_ack_reply(...)`
 2. ack state persisted in SQLite
-3. [crates/atm-core/src/ack/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/ack/mod.rs:417)
+3. `crates/atm-core/src/ack/mod.rs:417`
    - `persist_message_and_seed_workflow(...)`
 4. shared persistence result seam returns typed payloads
-5. [crates/atm-core/src/ack/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/ack/mod.rs:514)
+5. `crates/atm-core/src/ack/mod.rs:514`
    - `AckReplyStateMachine::from_persistence(...)`
-6. [crates/atm-core/src/ack/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/ack/mod.rs:545)
+6. `crates/atm-core/src/ack/mod.rs:545`
    - `AckReplyStateMachine::into_reply_delivery_plan(...)`
-7. [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:119)
+7. `crates/atm-core/src/delivery_execution.rs:119`
    - `execute_reply_delivery_plan(...)`
 8. shared notification execution
 

@@ -51,6 +51,9 @@ impl boundary::NonClaudeOutbound for DaemonNonClaudeOutbound {
                 "non-Claude outbound path {} has no parent directory",
                 output_path.display()
             ))
+            .with_recovery(
+                "Check that ATM_HOME is writable and that the host runtime directory has available disk space before retrying non-Claude delivery.",
+            )
         })?;
         std::fs::create_dir_all(parent).map_err(|error| {
             AtmError::mailbox_write(format!(

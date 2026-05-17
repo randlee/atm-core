@@ -6,7 +6,8 @@ use crate::delivery_execution::{
     DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
 };
 use crate::delivery_plan::{
-    DeliveryPlanDisposition, LogicalMessage, ReplyDeliveryPlan, delivery_target_for_snapshot,
+    LogicalMessage, ReplyDeliveryPlan, delivery_plan_disposition, delivery_target_for_snapshot,
+    logical_messages_from_persistence,
 };
 use crate::delivery_policy::{DeliveryEventFamily, DeliveryPolicyCoordinator};
 use crate::error::AtmError;
@@ -45,7 +46,7 @@ pub struct AckOutcome {
     pub reply_message_id: AtmMessageId,
     pub reply_text: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub warnings: Vec<String>,
+    pub warnings: Vec<crate::send::WarningEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -452,9 +453,7 @@ fn finalize_ack_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         reply_text: context.persisted.reply_text.clone(),
         warnings: Vec::new(),
     };
-    outcome
-        .warnings
-        .extend(plan.warnings.iter().map(|warning| warning.render()));
+    outcome.warnings.extend(plan.warnings.iter().cloned());
     emit_reply_delivery_plan_transitions(
         observability,
         DeliveryTransitionContext {
@@ -468,12 +467,7 @@ fn finalize_ack_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         &plan,
         &execution,
     )?;
-    outcome.warnings.extend(
-        execution
-            .warnings
-            .into_iter()
-            .map(|warning| warning.render()),
-    );
+    outcome.warnings.extend(execution.warnings);
     record_ack_telemetry(
         observability,
         context.actor,
@@ -502,16 +496,8 @@ impl AckReplyStateMachine {
     fn from_persistence(
         persistence: &crate::send::DeliveryPersistenceResult,
     ) -> Result<Self, AtmError> {
-        let mut messages = vec![
-            LogicalMessage::new(persistence.original_message.clone(), false, true)
-                .map_err(AtmError::mailbox_write)?,
-        ];
-        if let Some(companion_message) = persistence.companion_message.clone() {
-            messages.push(
-                LogicalMessage::new(companion_message, false, true)
-                    .map_err(AtmError::mailbox_write)?,
-            );
-        }
+        let messages = logical_messages_from_persistence(persistence, false, true)
+            .map_err(|error| AtmError::mailbox_write(error.to_string()))?;
         let warnings = persistence.warnings.clone();
         Ok(match persistence.disposition {
             crate::send::DeliveryPersistenceDisposition::Persisted => {
@@ -530,17 +516,19 @@ impl AckReplyStateMachine {
         reply_inbox_path: &std::path::Path,
     ) -> ReplyDeliveryPlan {
         let (disposition, messages, warnings) = match self {
-            Self::Persisted { messages, warnings } => {
-                (DeliveryPlanDisposition::Persisted, messages, warnings)
-            }
+            Self::Persisted { messages, warnings } => (
+                crate::send::DeliveryPersistenceDisposition::Persisted,
+                messages,
+                warnings,
+            ),
             Self::SqliteFailedRecovered { messages, warnings } => (
-                DeliveryPlanDisposition::SqliteFailedRecovered,
+                crate::send::DeliveryPersistenceDisposition::SqliteFailedRecovered,
                 messages,
                 warnings,
             ),
         };
         ReplyDeliveryPlan::new(
-            disposition,
+            delivery_plan_disposition(disposition),
             delivery_target_for_snapshot(reply_inbox_path, reply_snapshot),
             ResolvedRecipient {
                 agent: reply_target.agent.clone(),
@@ -691,7 +679,7 @@ mod tests {
         let plan = machine.into_reply_delivery_plan(
             &super::ReplyTarget::new(agent.clone(), team.clone()),
             &snapshot,
-            std::path::Path::new("/tmp/reply.jsonl"),
+            std::path::Path::new("reply.jsonl"),
         );
 
         assert_eq!(

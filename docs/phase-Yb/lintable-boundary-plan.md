@@ -78,6 +78,18 @@ Enforcement point:
 - boundary TOML allowlists plus `python3 .just/run_lint.py all`
 - rule families owned by `sc_lint_boundary`
 
+Primitive caller allowlist:
+
+| Primitive | Approved callers | Enforcement stance |
+| --- | --- | --- |
+| `RetainedServiceRuntime::append_compat_inbox_message(...)` | `atm_core::delivery_execution::ClaudeInboxWriter` | `LINT-BOUNDARY-INBOX-EXPORT-REFERENCES` plus runtime fail-closed checks |
+| `mailbox::store::append_compat_mailbox_message(...)` | `atm_core::service_runtime::RetainedServiceRuntime::append_compat_inbox_message(...)` | internal implementation detail below the Claude executor seam |
+| `RetainedServiceRuntime::deliver_non_claude_payloads(...)` | `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter` | `LINT-BOUNDARY-NON-CLAUDE-OUTBOUND-REFERENCES` |
+| `atm_core::boundary::NonClaudeOutbound::deliver_payloads(...)` | `atm_core::service_runtime::RetainedServiceRuntime::deliver_non_claude_payloads(...)` | daemon/runtime adapter seam only |
+| `RetainedServiceRuntime::maybe_run_post_send_hook(...)` | `atm_core::delivery_execution::PostSendNotificationExecutor` | notification-only seam; not accepted as delivery proof |
+| `mailbox::store::write_compat_mailbox_projection(...)` | explicit repair/rebuild-only seams | runtime delivery path forbidden |
+| `direct_boundaries::reexport_messages(...)` | explicit repair/rebuild-only seams | runtime delivery path forbidden |
+
 1. only the approved Claude executor module may call:
    - `RetainedServiceRuntime::append_compat_inbox_message(...)`
    - `mailbox::store::append_compat_mailbox_message(...)`
@@ -99,7 +111,6 @@ Enforcement point:
    - any post-send notification primitive
 5. `send/mod.rs` and `ack/mod.rs` must not:
    - branch on `DeliveryHarnessPath`
-   - branch on `allows_claude_jsonl_append()`
    - translate persistence dispositions into state-machine outcomes
    - translate execution dispositions into transition names
 6. `send/hook.rs` must not:
@@ -112,7 +123,6 @@ Enforcement point:
      append-only runtime path
 8. the retained repair/rebuild refresh seam must not:
    - accept `DeliveryHarnessPath::NonClaude` and silently no-op
-   - rely on `allows_claude_jsonl_append()` as the seam selector
    - present a generic recipient-routed runtime helper shape when the allowed
      ownership is actually repair/rebuild-only
 

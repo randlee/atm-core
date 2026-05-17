@@ -1,8 +1,11 @@
+use std::fmt;
 use std::path::{Path, PathBuf};
 
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::schema::{AtmMessageId, MessageEnvelope};
-use crate::send::{ResolvedRecipient, WarningEntry};
+use crate::send::{
+    DeliveryPersistenceDisposition, DeliveryPersistenceResult, ResolvedRecipient, WarningEntry,
+};
 use crate::types::{AgentName, TaskId, TeamName};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -18,14 +21,29 @@ pub(crate) struct LogicalMessage {
     pub(crate) is_ack: bool,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum LogicalMessageError {
+    MissingMessageId,
+}
+
+impl fmt::Display for LogicalMessageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::MissingMessageId => {
+                f.write_str("logical delivery messages must carry a message id")
+            }
+        }
+    }
+}
+
 impl LogicalMessage {
     pub(crate) fn new(
         envelope: MessageEnvelope,
         requires_ack: bool,
         is_ack: bool,
-    ) -> Result<Self, &'static str> {
+    ) -> Result<Self, LogicalMessageError> {
         if envelope.message_id.is_none() {
-            return Err("logical delivery messages must carry a message id");
+            return Err(LogicalMessageError::MissingMessageId);
         }
         Ok(Self {
             envelope,
@@ -38,6 +56,33 @@ impl LogicalMessage {
         self.envelope
             .message_id
             .expect("validated logical delivery messages always have a message id")
+    }
+}
+
+pub(crate) fn logical_messages_from_persistence(
+    persistence: &DeliveryPersistenceResult,
+    requires_ack: bool,
+    is_ack: bool,
+) -> Result<Vec<LogicalMessage>, LogicalMessageError> {
+    let mut messages = vec![LogicalMessage::new(
+        persistence.original_message.clone(),
+        requires_ack,
+        is_ack,
+    )?];
+    if let Some(companion_message) = persistence.companion_message.clone() {
+        messages.push(LogicalMessage::new(companion_message, false, is_ack)?);
+    }
+    Ok(messages)
+}
+
+pub(crate) fn delivery_plan_disposition(
+    disposition: DeliveryPersistenceDisposition,
+) -> DeliveryPlanDisposition {
+    match disposition {
+        DeliveryPersistenceDisposition::Persisted => DeliveryPlanDisposition::Persisted,
+        DeliveryPersistenceDisposition::SqliteFailedRecovered => {
+            DeliveryPlanDisposition::SqliteFailedRecovered
+        }
     }
 }
 
