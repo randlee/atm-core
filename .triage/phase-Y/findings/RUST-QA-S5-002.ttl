@@ -5,16 +5,19 @@
   a triage:Finding ;
   triage:findingId "RUST-QA-S5-002" ;
   triage:title "validate_message_record 88 lines — RULE-002 violation" ;
-  triage:description "crates/atm-rusqlite/src/writer/ops.rs:145 fn validate_message_record is 88 lines, exceeding the 80-line RULE-002 limit. This is production code (no cfg(test) gate). Pre-existing: ops.rs was not changed in sprint Y.5 (empty diff against 272a3c8e). Zero-tolerance policy requires reporting regardless of origin. Fix: extract the parent_message_id successor check and the message_id uniqueness check into separate named validation helpers." ;
+  triage:description "crates/atm-rusqlite/src/writer/ops.rs fn validate_message_record was 88 lines, exceeding the 80-line RULE-002 limit. Fix: extract successor check and uniqueness check into separate helpers." ;
   triage:phaseId "phase-Y" ;
   triage:triageMode "sprint_review" ;
   triage:category "RUST-QA" ;
   triage:severity "minor" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-rusqlite/src/writer/ops.rs" ;
-  triage:status "open" ;
+  triage:status "closed" ;
   triage:dispatchReady true ;
   triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed in Y.5 fix-r1 commit e55b0c89: validate_message_record now 31 lines (165-195); new helpers validate_single_successor_invariant (38 lines, 197-234) and validate_message_id_uniqueness (38 lines, 236-273). All helpers ≤80 lines. QA-2 rust-qa recheck PASS." ;
+  triage:closedOn <urn:atm:triage:worktree/pY-s5/e55b0c89> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-S5-002/pY-s5/1> ;
   triage:openOn <urn:atm:triage:worktree/pY-s5/1dd78933> ;
   triage:promoteTo <urn:atm:triage:worktree/pY-s5/1dd78933> .
@@ -24,11 +27,23 @@
   triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
   triage:line 145 ;
   triage:snippet "fn validate_message_record(...) { // 88 lines, RULE-002 violation" ;
-  triage:status "open" ;
-  triage:closed false ;
+  triage:status "closed" ;
+  triage:closed true ;
   triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
   triage:headSha "1dd78933" ;
   triage:occursIn <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/RUST-QA-S5-002/pY-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 165 ;
+  triage:snippet "fn validate_message_record(...) { // 31 lines (165-195), COMPLIANT. Helpers: validate_single_successor_invariant=38, validate_message_id_uniqueness=38" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "e55b0c89" ;
+  triage:closureNote "31 lines. Both extracted helpers also ≤80 lines." ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/e55b0c89> .
 
 <urn:atm:triage:worktree/pY-s5/1dd78933>
   a triage:WorktreeSnapshot ;
@@ -37,3 +52,11 @@
   triage:headSha "1dd78933" ;
   triage:orderIndex 1 ;
   triage:status "open" .
+
+<urn:atm:triage:worktree/pY-s5/e55b0c89>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "e55b0c89" ;
+  triage:orderIndex 2 ;
+  triage:status "closed" .
