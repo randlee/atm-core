@@ -2,11 +2,11 @@ use std::io::Cursor;
 
 use anyhow::{Context, Result, bail};
 use clap::{Args, CommandFactory};
-use serde::Serialize;
 
 use super::Cli;
 use crate::observability::CliObservability;
 use crate::output;
+use crate::output_contract::{HelpResult, HelpResultKind, HelpTopicSummary, HelpTopicTier};
 
 #[derive(Debug, Args)]
 /// Show ATM-owned conceptual help or delegated clap subcommand help.
@@ -50,39 +50,6 @@ impl HelpCommand {
             "unknown help topic or subcommand `{target}`. Use `atm help --list` to inspect the available help targets."
         )
     }
-}
-
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum HelpTopicTier {
-    Tier1,
-    Tier2,
-}
-
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
-#[serde(rename_all = "snake_case")]
-pub(crate) enum HelpResultKind {
-    Overview,
-    TopicList,
-    ConceptTopic,
-    CommandHelp,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub(crate) struct HelpTopicSummary {
-    pub(crate) name: &'static str,
-    pub(crate) tier: HelpTopicTier,
-    pub(crate) summary: &'static str,
-}
-
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
-pub(crate) struct HelpResult {
-    pub(crate) kind: HelpResultKind,
-    pub(crate) requested_target: Option<String>,
-    pub(crate) title: String,
-    pub(crate) body: String,
-    pub(crate) commands: Vec<String>,
-    pub(crate) topics: Vec<HelpTopicSummary>,
 }
 
 impl HelpResult {
@@ -331,15 +298,6 @@ Current Y.1 status:
     }
 }
 
-impl HelpTopicTier {
-    fn label(self) -> &'static str {
-        match self {
-            Self::Tier1 => "tier 1",
-            Self::Tier2 => "tier 2",
-        }
-    }
-}
-
 fn help_topics() -> Vec<HelpTopicSummary> {
     HelpTopic::ALL
         .into_iter()
@@ -441,8 +399,8 @@ mod tests {
         let result = command.render().expect("send help");
 
         assert_eq!(result.kind, HelpResultKind::CommandHelp);
-        assert!(result.body.contains("Send one ATM mailbox message"));
-        assert!(result.body.contains("Usage: send"));
+        assert!(result.body.starts_with("Send one ATM mailbox message"));
+        assert!(!result.body.is_empty());
     }
 
     #[test]

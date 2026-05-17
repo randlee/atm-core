@@ -1,4 +1,4 @@
-use crate::commands::help::{HelpResult, HelpResultKind};
+use crate::output_contract::{HelpResult, HelpResultKind};
 use anyhow::Result;
 use atm_core::ack::AckOutcome;
 use atm_core::clear::ClearOutcome;
@@ -8,9 +8,7 @@ use atm_core::doctor::{
 };
 use atm_core::list::ListOutcome;
 use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
-use atm_core::protocol::{
-    RuntimeLivenessState, RuntimeMemberState, RuntimeReadinessState, RuntimeStatusSnapshot,
-};
+use atm_core::protocol::{RuntimeLivenessState, RuntimeReadinessState, RuntimeStatusSnapshot};
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
@@ -558,17 +556,6 @@ fn render_bootstrap_auto_start(state: BootstrapAutoStartOutcome) -> &'static str
         BootstrapAutoStartOutcome::AutoStarted => "auto_started",
         BootstrapAutoStartOutcome::Failed => "failed",
         BootstrapAutoStartOutcome::Skipped => "skipped",
-    }
-}
-
-#[allow(dead_code)]
-fn render_runtime_member_state(state: RuntimeMemberState) -> &'static str {
-    match state {
-        RuntimeMemberState::Unknown => "unknown",
-        RuntimeMemberState::IdentityConflict => "identity-conflict",
-        RuntimeMemberState::Offline => "offline",
-        RuntimeMemberState::Idle => "idle",
-        RuntimeMemberState::Active => "active",
     }
 }
 
