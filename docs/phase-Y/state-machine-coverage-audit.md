@@ -162,3 +162,27 @@ Phase `Y` QA should not accept:
 The point of this inventory is to make deletion and simplification safe:
 undocumented implied behavior is exactly the behavior most likely to leak old
 compatibility assumptions back into the daemon line.
+
+## Backlog
+
+- `heartbeat` diagram
+  - origin: Section 2 current gap notes
+  - owning sprint: `Y.4`
+- `advisory_stream` diagram
+  - origin: Section 2 current gap notes
+  - owning sprint: `Y.4`
+- compatibility inbox export / rewrite owner diagram
+  - origin: Sections 1 and 2 current gap notes
+  - owning sprint: `Y.3`
+- `config.json` write owner and allowed admin/recovery flows diagram
+  - origin: Section 2 current gap notes
+  - owning sprint: `Y.3`
+- roster-store SQLite ops diagram set
+  - origin: Section 3 current gap notes
+  - owning sprint: `Y.3`
+- replay-state ops diagram set
+  - origin: Section 3 current gap notes
+  - owning sprint: `Y.4`
+- task-store ops diagram set
+  - origin: Section 3 current gap notes
+  - owning sprint: `TBD`

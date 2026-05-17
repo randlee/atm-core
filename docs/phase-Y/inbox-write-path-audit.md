@@ -390,7 +390,7 @@ Normal runtime completion rule for `Y.3`:
   - `clear_restore_marker(...)`
   - status: retain under restore boundary
 
-## 6. Write Paths To Eliminate
+## 7. Write Paths To Eliminate
 
 - direct command-path compatibility inbox rewrites from `send`
 - direct command-path compatibility inbox rewrites from `ack`
@@ -398,7 +398,7 @@ Normal runtime completion rule for `Y.3`:
 - any normal-runtime `config.json` write path outside an explicit admin /
   restore / repair boundary
 
-## 7. Open Phase Y Questions
+## 8. Open Phase Y Questions
 
 - whether `source_team` and the ack/thread/task fields are still justified on
   the shared inbox surface once SQLite is the sole mutable truth

@@ -9,16 +9,6 @@ target: integrate/phase-Y
 
 # Sprint Y.6 — Append-Only Compatibility Export Cutover
 
-```yaml
-plan_type: sprint_plan
-phase: Y
-sprint: Y.6
-worktree: ../atm-core-worktrees/feature/pY-s6-append-only-compatibility-export
-branch: feature/pY-s6-append-only-compatibility-export
-status: planned
-estimated_scope: large
-```
-
 ## Goal
 
 If the approved wire contract allows it, replace array-style compatibility

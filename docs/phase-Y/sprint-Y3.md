@@ -9,16 +9,6 @@ target: integrate/phase-Y
 
 # Sprint Y.3 — Hard Write-Boundary Consolidation
 
-```yaml
-plan_type: sprint_plan
-phase: Y
-sprint: Y.3
-worktree: ../atm-core-worktrees/feature/pY-s3-hard-write-boundary-consolidation
-branch: feature/pY-s3-hard-write-boundary-consolidation
-status: planned
-estimated_scope: large
-```
-
 ## Goal
 
 Remove direct command ownership of compatibility inbox writes and consolidate

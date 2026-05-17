@@ -9,16 +9,6 @@ target: integrate/phase-Y
 
 # Sprint Y.5 — Mutable Compatibility-Field Removal And Dependency Exposure
 
-```yaml
-plan_type: sprint_plan
-phase: Y
-sprint: Y.5
-worktree: ../atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal
-branch: feature/pY-s5-mutable-compatibility-field-removal
-status: planned
-estimated_scope: large
-```
-
 ## Goal
 
 Reduce the compatibility inbox payload to the minimum justified ATM-authored

@@ -9,16 +9,6 @@ target: integrate/phase-Y
 
 # Sprint Y.4 — Delivery Coordinator And Event-Family State Machines
 
-```yaml
-plan_type: sprint_plan
-phase: Y
-sprint: Y.4
-worktree: ../atm-core-worktrees/feature/pY-s4-delivery-coordinator-and-state-machines
-branch: feature/pY-s4-delivery-coordinator-and-state-machines
-status: planned
-estimated_scope: large
-```
-
 ## Goal
 
 Land the central delivery-policy coordinator and the required event-family
