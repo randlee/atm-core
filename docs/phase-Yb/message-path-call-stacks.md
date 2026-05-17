@@ -5,9 +5,11 @@ Baseline:
 - planning branch: `message-path-consolidation-plan-Yb`
 - implementation baseline under review: `integrate/phase-Y` at `b8785617`
 
-This document records the current `Y.7` implementation seam after degraded
-delivery contract hardening landed on
-`feature/pYb-s7-degraded-delivery-contract-hardening`.
+This document records the current `Y.8` implementation seam after degraded
+delivery contract hardening and outer-policy cleanup landed on:
+
+- `feature/pYb-s7-degraded-delivery-contract-hardening`
+- `feature/pYb-s8-policy-cleanup-and-impossible-path-removal`
 
 ## 1. Current Y.7 Stack: New Message Success, `DeliveryHarnessPath::ClaudeCode`
 
@@ -32,10 +34,11 @@ Current stack:
 10. [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:175)
     - shared notification execution
 
-Remaining issue:
+Current ownership:
 
-- payload construction and execution are now typed, but transition emission is
-  still translated in outer send code and remains a `Y.8` cleanup target
+- payload construction, delivery-target construction, execution, and
+  transition emission now all happen inside the typed plan/execution seam
+- outer send code supplies only command-local context and telemetry emission
 
 ## 2. Current Y.7 Stack: New Message Success, `DeliveryHarnessPath::NonClaude`
 
@@ -74,12 +77,11 @@ Current stack:
 9. original notification + companion notification via shared notification
    executor
 
-Remaining issue:
+Current ownership:
 
-- the degraded payload contract is now explicit and symmetric
-- partial Claude append is now an execution-level warning surface rather than a
-  persistence-owned side effect, but final transition ownership still moves in
-  `Y.8`
+- the degraded payload contract is explicit and symmetric
+- partial Claude append is an execution-level warning surface
+- transition ownership now lives with the shared execution seam
 
 ## 4. Current Y.7 Stack: SQLite Failure, `DeliveryHarnessPath::NonClaude`
 
@@ -112,13 +114,13 @@ Current stack:
 4. `execute_delivery_plan(...)`
 5. `DeliveryExecutionResult::AppendDegraded`
 6. shared notification execution
-7. [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:575)
-   - `emit_delivery_transitions(...)`
+7. `delivery_execution::emit_delivery_plan_transitions(...)`
 
-Remaining issue:
+Current ownership:
 
-- execution degradation is now executor-owned, but transition translation still
-  lives in outer send code and remains a `Y.8` cleanup target
+- execution degradation is executor-owned
+- impossible non-Claude append-degraded transition requests now fail closed in
+  `delivery_execution.rs`
 
 ## 6. Current Y.7 Stack: Ack Reply Delivery
 
@@ -138,10 +140,10 @@ Current stack:
    - `execute_reply_delivery_plan(...)`
 8. shared notification execution
 
-Remaining issue:
+Current ownership:
 
-- ack reply now shares the typed reply-plan seam
-- outer transition translation remains for `Y.8`
+- ack reply shares the typed reply-plan seam
+- shared execution owns transition translation and fail-closed checks
 
 ## 7. Y.7 Closure Summary
 
@@ -160,13 +162,12 @@ Note:
 - `crates/atm-core/src/delivery_policy.rs::AckReplyStateMachine` remains the
   documented transition inventory
 
-`Y.7` did not finish:
+`Y.8` still does not finish:
 
-- transition emission ownership cleanup
 - non-Claude real outbound transport
 - low-level repair/rebuild boundary cleanup
 
-Those remaining items are intentionally deferred to `Y.8` through `Y.10`.
+Those remaining items are intentionally deferred to `Y.9` and `Y.10`.
 
 ## 8. Required End-State
 
@@ -185,6 +186,8 @@ Approved executor ownership:
 
 - `atm_core::delivery_execution::execute_delivery_plan(...)`
 - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+- `atm_core::delivery_execution::emit_delivery_plan_transitions(...)`
+- `atm_core::delivery_execution::emit_reply_delivery_plan_transitions(...)`
 - `atm_core::delivery_execution::ClaudeInboxWriter`
   - introduced in `Y.7`
 - `atm_core::delivery_execution::PostSendNotificationExecutor`

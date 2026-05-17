@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::schema::{AtmMessageId, MessageEnvelope};
@@ -41,6 +41,21 @@ impl LogicalMessage {
     }
 }
 
+pub(crate) fn delivery_target_for_snapshot(
+    inbox_path: &Path,
+    delivery_snapshot: &DeliveryRecipientSnapshot,
+) -> DeliveryTarget {
+    match delivery_snapshot.harness {
+        crate::delivery_policy::DeliveryHarnessPath::ClaudeCode => DeliveryTarget::ClaudeCode {
+            inbox_path: inbox_path.to_path_buf(),
+            recipient: delivery_snapshot.clone(),
+        },
+        crate::delivery_policy::DeliveryHarnessPath::NonClaude => DeliveryTarget::NonClaude {
+            recipient: delivery_snapshot.clone(),
+        },
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) enum DeliveryTarget {
     ClaudeCode {
@@ -50,6 +65,20 @@ pub(crate) enum DeliveryTarget {
     NonClaude {
         recipient: DeliveryRecipientSnapshot,
     },
+}
+
+impl DeliveryTarget {
+    pub(crate) fn harness_path(&self) -> crate::delivery_policy::DeliveryHarnessPath {
+        match self {
+            Self::ClaudeCode { recipient, .. } | Self::NonClaude { recipient } => recipient.harness,
+        }
+    }
+
+    pub(crate) fn recipient_snapshot(&self) -> &DeliveryRecipientSnapshot {
+        match self {
+            Self::ClaudeCode { recipient, .. } | Self::NonClaude { recipient } => recipient,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

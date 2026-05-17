@@ -1,10 +1,8 @@
 use crate::boundary::{RosterHarness, RosterMemberRecord};
 use crate::error::AtmError;
-use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;
-use crate::types::{AgentName, TaskId, TeamName};
-use tracing::warn;
+use crate::types::{AgentName, TeamName};
 
 #[expect(
     dead_code,
@@ -301,22 +299,6 @@ pub(crate) enum RestoreInboxRebuildStateMachine {
     Failed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct PersistedDeliveryRoute {
-    pub(crate) family: DeliveryEventFamily,
-    pub(crate) harness: DeliveryHarnessPath,
-}
-
-pub(crate) struct DeliveryTransitionEvent<'a> {
-    pub(crate) family: DeliveryEventFamily,
-    pub(crate) outcome: &'static str,
-    pub(crate) team: &'a TeamName,
-    pub(crate) agent: &'a AgentName,
-    pub(crate) sender: &'a AgentName,
-    pub(crate) message_id: Option<AtmMessageId>,
-    pub(crate) task_id: Option<TaskId>,
-}
-
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct DeliveryPolicyCoordinator;
 
@@ -339,17 +321,6 @@ impl DeliveryPolicyCoordinator {
             }))
     }
 
-    pub(crate) fn route_persisted_delivery(
-        &self,
-        family: DeliveryEventFamily,
-        snapshot: &DeliveryRecipientSnapshot,
-    ) -> PersistedDeliveryRoute {
-        PersistedDeliveryRoute {
-            family,
-            harness: snapshot.harness,
-        }
-    }
-
     #[allow(
         dead_code,
         reason = "Phase Y.4 keeps the documented event-family resolver explicit even when later branches dispatch directly from pre-resolved caller context."
@@ -361,40 +332,6 @@ impl DeliveryPolicyCoordinator {
         match (parent_message_id, thread_mode) {
             (Some(_), Some(_)) => DeliveryEventFamily::ThreadUpdate,
             _ => DeliveryEventFamily::NewMessage,
-        }
-    }
-
-    pub(crate) fn emit_transition(
-        &self,
-        observability: &dyn ObservabilityPort,
-        event: DeliveryTransitionEvent<'_>,
-    ) {
-        self.emit_event_or_warn(
-            observability,
-            CommandEvent {
-                command: "delivery_policy",
-                action: event.family.action_name(),
-                outcome: event.outcome,
-                team: event.team.clone(),
-                agent: event.agent.clone(),
-                sender: event.sender.clone(),
-                message_id: event.message_id,
-                requires_ack: false,
-                dry_run: false,
-                task_id: event.task_id,
-                error_code: None,
-                error_message: None,
-            },
-        );
-    }
-
-    fn emit_event_or_warn(&self, observability: &dyn ObservabilityPort, event: CommandEvent) {
-        if let Err(error) = observability.emit(event) {
-            warn!(
-                %error,
-                command = "delivery_policy",
-                "failed to emit delivery-policy transition event"
-            );
         }
     }
 }

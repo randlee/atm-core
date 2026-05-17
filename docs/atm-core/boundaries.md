@@ -221,6 +221,10 @@ Notes:
   - only approved delivery executors may call the write-facing export/append
     primitives behind this boundary
   - send/ack/persistence modules must not call them directly
+  - delivery-target construction and transition translation must stay in the
+    shared plan/execution seam:
+    - `crates/atm-core/src/delivery_plan.rs`
+    - `crates/atm-core/src/delivery_execution.rs`
   - see:
     - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
     - [../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md](../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
@@ -243,6 +247,8 @@ Notes:
   - hook or notifier invocation is not proof of logical message delivery
   - non-Claude outbound payload delivery must use a dedicated delivery
     boundary, not NotificationSink as a stand-in
+  - impossible non-Claude append-degraded routing must fail closed before it
+    reaches this sink
 
 ## NonClaudeOutbound
 

@@ -94,3 +94,40 @@ Rows that remain intentionally open after `Y.7`:
 
 Those remaining rows are deferred to `Y.8` through `Y.10` exactly as assigned
 above; they are not regressions in `Y.7`.
+
+## Y.8 Closure Notes
+
+`feature/pYb-s8-policy-cleanup-and-impossible-path-removal` closes the
+required `Y.8` rows by moving target construction and transition translation
+out of outer send/ack callers and into `delivery_plan.rs` /
+`delivery_execution.rs`.
+
+Closed rows:
+
+- `YB-RM-006`
+- `YB-RM-007`
+- `YB-RM-009`
+- `YB-RM-010`
+- `YB-RM-011`
+
+Implemented seam on this branch:
+
+- `crates/atm-core/src/delivery_plan.rs`
+  - `delivery_target_for_snapshot(...)` now owns typed
+    `DeliveryTarget::{ClaudeCode,NonClaude}` construction
+- `crates/atm-core/src/delivery_execution.rs`
+  - `emit_delivery_plan_transitions(...)`
+  - `emit_reply_delivery_plan_transitions(...)`
+  - `validate_delivery_target(...)`
+- `crates/atm-core/src/send/mod.rs`
+  - no longer translates persistence/execution outcomes into transition names
+- `crates/atm-core/src/ack/mod.rs`
+  - no longer translates persistence/execution outcomes into transition names
+
+Rows that remain intentionally open after `Y.8`:
+
+- `YB-RM-012` through `YB-RM-016`
+- `YB-RM-017` through `YB-RM-025`
+
+Those remaining rows are deferred to `Y.9` and `Y.10` exactly as assigned
+above; they are not regressions in `Y.8`.

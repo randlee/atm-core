@@ -67,6 +67,9 @@ Rules:
 1. concrete daemon adapters remain `pub(crate)` only
 2. state-machine-owned output types live in `atm_core::delivery_plan`
 3. outer callers receive typed plans, not direct writer handles
+4. delivery-target construction and transition translation live only in:
+   - `atm_core::delivery_plan`
+   - `atm_core::delivery_execution`
 
 ### 2. `sc-lint` / boundary rules
 
@@ -90,6 +93,7 @@ Enforcement point:
    - branch on `DeliveryHarnessPath`
    - branch on `allows_claude_jsonl_append()`
    - translate persistence dispositions into state-machine outcomes
+   - translate execution dispositions into transition names
 5. `send/hook.rs` must not:
    - accept full `MessageEnvelope` delivery authority
    - become a second outbound payload boundary
@@ -107,6 +111,9 @@ Rules:
 2. a non-Claude-targeted plan fails closed if routed to `InboxExport`
 3. `NotificationSink` rejects any attempt to serve as the sole message-delivery
    proof surface
+4. append-degraded transition emission for `DeliveryHarnessPath::NonClaude`
+   fails closed inside `delivery_execution` because non-Claude append
+   degradation is not a valid runtime concept
 
 ### Module-ownership documentation
 
@@ -126,6 +133,8 @@ Required shape:
 - execution modules:
   - perform payload delivery
   - perform notification
+  - translate typed delivery outcomes into transition emissions
+  - reject impossible target/execution combinations
 - repair modules:
   - perform rebuild/reexport only
 

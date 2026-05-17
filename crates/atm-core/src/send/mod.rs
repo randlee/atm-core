@@ -8,11 +8,14 @@ use tracing::warn;
 
 use crate::address::AgentAddress;
 use crate::config;
-use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
-use crate::delivery_plan::{DeliveryPlan, DeliveryPlanDisposition, DeliveryTarget, LogicalMessage};
+use crate::delivery_execution::{
+    DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
+};
+use crate::delivery_plan::{
+    DeliveryPlan, DeliveryPlanDisposition, LogicalMessage, delivery_target_for_snapshot,
+};
 use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
-    DeliveryTransitionEvent, persisted_success_transition_names,
 };
 use crate::error::{AtmError, AtmErrorCode};
 use crate::identity;
@@ -265,15 +268,20 @@ fn finalize_send_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     if !request.dry_run {
         let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
         let execution = execute_delivery_plan(runtime, context.config.as_ref(), &plan)?;
-        outcome.warnings.extend(execution.warnings);
-        emit_delivery_transitions(
+        emit_delivery_plan_transitions(
             observability,
-            context,
-            message_id,
-            task_id.clone(),
+            DeliveryTransitionContext {
+                family: context.delivery_family,
+                team: &context.recipient.team,
+                agent: &context.recipient.agent,
+                sender: &context.canonical_sender,
+                message_id,
+                task_id: task_id.clone(),
+            },
             &plan,
-            execution.disposition,
-        );
+            &execution,
+        )?;
+        outcome.warnings.extend(execution.warnings);
     }
     emit_send_command_event(
         observability,
@@ -342,7 +350,7 @@ fn build_send_delivery_plan(
                 DeliveryPlanDisposition::SqliteFailedRecovered
             }
         },
-        build_delivery_target(&context.inbox_path, &context.delivery_snapshot),
+        delivery_target_for_snapshot(&context.inbox_path, &context.delivery_snapshot),
         context.recipient.clone(),
         context.delivery_snapshot.recipient_pane_id.clone(),
         messages,
@@ -572,44 +580,6 @@ fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     Ok(persistence)
 }
 
-fn emit_delivery_transitions(
-    observability: &dyn ObservabilityPort,
-    context: &SendExecutionContext,
-    message_id: AtmMessageId,
-    task_id: Option<TaskId>,
-    plan: &DeliveryPlan,
-    execution_disposition: DeliveryExecutionDisposition,
-) {
-    let delivery_policy = DeliveryPolicyCoordinator::new();
-    let route = delivery_policy
-        .route_persisted_delivery(context.delivery_family, &context.delivery_snapshot);
-    let transitions = match (plan.disposition, execution_disposition) {
-        (DeliveryPlanDisposition::SqliteFailedRecovered, _) => {
-            crate::delivery_policy::sqlite_failure_transition_names(route.harness).to_vec()
-        }
-        (_, DeliveryExecutionDisposition::AppendDegraded) => {
-            crate::delivery_policy::append_failure_transition_names(route.harness).to_vec()
-        }
-        (_, DeliveryExecutionDisposition::Delivered) => {
-            persisted_success_transition_names(context.delivery_family, route.harness)
-        }
-    };
-    for transition in transitions {
-        delivery_policy.emit_transition(
-            observability,
-            DeliveryTransitionEvent {
-                family: context.delivery_family,
-                outcome: transition,
-                team: &context.recipient.team,
-                agent: &context.recipient.agent,
-                sender: &context.canonical_sender,
-                message_id: Some(message_id),
-                task_id: task_id.clone(),
-            },
-        );
-    }
-}
-
 fn emit_send_command_event(
     observability: &dyn ObservabilityPort,
     outcome_name: &'static str,
@@ -632,21 +602,6 @@ fn emit_send_command_event(
         error_message: None,
     }) {
         warn!(%error, command = "send", action = "send", "failed to emit send command event");
-    }
-}
-
-pub(crate) fn build_delivery_target(
-    inbox_path: &Path,
-    delivery_snapshot: &DeliveryRecipientSnapshot,
-) -> DeliveryTarget {
-    match delivery_snapshot.harness {
-        crate::delivery_policy::DeliveryHarnessPath::ClaudeCode => DeliveryTarget::ClaudeCode {
-            inbox_path: inbox_path.to_path_buf(),
-            recipient: delivery_snapshot.clone(),
-        },
-        crate::delivery_policy::DeliveryHarnessPath::NonClaude => DeliveryTarget::NonClaude {
-            recipient: delivery_snapshot.clone(),
-        },
     }
 }
 
@@ -854,7 +809,7 @@ fn persist_missing_config_notice(
                 DeliveryPlanDisposition::SqliteFailedRecovered
             }
         },
-        build_delivery_target(team_lead_inbox, snapshot),
+        delivery_target_for_snapshot(team_lead_inbox, snapshot),
         ResolvedRecipient {
             agent: AgentName::from_validated(ROLE_TEAM_LEAD),
             team: snapshot.team.clone(),

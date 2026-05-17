@@ -2,20 +2,19 @@ use std::path::PathBuf;
 
 use crate::boundary;
 use crate::config;
-use crate::delivery_execution::{DeliveryExecutionDisposition, execute_reply_delivery_plan};
-use crate::delivery_plan::{DeliveryPlanDisposition, LogicalMessage, ReplyDeliveryPlan};
-use crate::delivery_policy::{
-    DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryTransitionEvent,
-    persisted_success_transition_names,
+use crate::delivery_execution::{
+    DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
 };
+use crate::delivery_plan::{
+    DeliveryPlanDisposition, LogicalMessage, ReplyDeliveryPlan, delivery_target_for_snapshot,
+};
+use crate::delivery_policy::{DeliveryEventFamily, DeliveryPolicyCoordinator};
 use crate::error::AtmError;
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{AtmMessageId, MessageEnvelope};
-use crate::send::{
-    ResolvedRecipient, build_delivery_target, input, persist_message_and_seed_workflow, summary,
-};
+use crate::send::{ResolvedRecipient, input, persist_message_and_seed_workflow, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
@@ -196,7 +195,6 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         observability,
         config,
         FinalizeAckContext {
-            delivery_policy: &delivery_policy,
             actor: &actor,
             team: &team,
             request_message_id: request.message_id,
@@ -222,7 +220,6 @@ struct PersistedAckReply {
 }
 
 struct FinalizeAckContext<'a> {
-    delivery_policy: &'a DeliveryPolicyCoordinator,
     actor: &'a AgentName,
     team: &'a TeamName,
     request_message_id: AtmMessageId,
@@ -458,13 +455,25 @@ fn finalize_ack_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     outcome
         .warnings
         .extend(plan.warnings.iter().map(|warning| warning.render()));
+    emit_reply_delivery_plan_transitions(
+        observability,
+        DeliveryTransitionContext {
+            family: DeliveryEventFamily::AckReply,
+            team: &context.reply_target.team,
+            agent: &context.reply_target.agent,
+            sender: context.actor,
+            message_id: context.persisted.reply_message_id,
+            task_id: context.persisted.task_id.clone(),
+        },
+        &plan,
+        &execution,
+    )?;
     outcome.warnings.extend(
         execution
             .warnings
             .into_iter()
             .map(|warning| warning.render()),
     );
-    emit_ack_delivery_transitions(observability, &context, &plan, execution.disposition);
     record_ack_telemetry(
         observability,
         context.actor,
@@ -473,42 +482,6 @@ fn finalize_ack_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         context.persisted.task_id.clone(),
     );
     Ok(outcome)
-}
-
-fn emit_ack_delivery_transitions(
-    observability: &dyn ObservabilityPort,
-    context: &FinalizeAckContext<'_>,
-    plan: &ReplyDeliveryPlan,
-    execution_disposition: DeliveryExecutionDisposition,
-) {
-    let route = context
-        .delivery_policy
-        .route_persisted_delivery(DeliveryEventFamily::AckReply, context.reply_snapshot);
-    let transitions = match (plan.disposition, execution_disposition) {
-        (DeliveryPlanDisposition::SqliteFailedRecovered, _) => {
-            crate::delivery_policy::sqlite_failure_transition_names(route.harness).to_vec()
-        }
-        (_, DeliveryExecutionDisposition::AppendDegraded) => {
-            crate::delivery_policy::append_failure_transition_names(route.harness).to_vec()
-        }
-        (_, DeliveryExecutionDisposition::Delivered) => {
-            persisted_success_transition_names(DeliveryEventFamily::AckReply, route.harness)
-        }
-    };
-    for transition in transitions {
-        context.delivery_policy.emit_transition(
-            observability,
-            DeliveryTransitionEvent {
-                family: DeliveryEventFamily::AckReply,
-                outcome: transition,
-                team: &context.reply_target.team,
-                agent: &context.reply_target.agent,
-                sender: context.actor,
-                message_id: Some(context.persisted.reply_message_id),
-                task_id: context.persisted.task_id.clone(),
-            },
-        );
-    }
 }
 
 // Distinct from `crate::delivery_policy::AckReplyStateMachine`, which
@@ -568,7 +541,7 @@ impl AckReplyStateMachine {
         };
         ReplyDeliveryPlan::new(
             disposition,
-            build_delivery_target(reply_inbox_path, reply_snapshot),
+            delivery_target_for_snapshot(reply_inbox_path, reply_snapshot),
             ResolvedRecipient {
                 agent: reply_target.agent.clone(),
                 team: reply_target.team.clone(),
