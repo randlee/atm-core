@@ -171,7 +171,7 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
     }
 
     for warning in &outcome.warnings {
-        eprintln!("{warning}");
+        eprintln!("{}", warning.render());
     }
 
     Ok(())

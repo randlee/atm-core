@@ -346,6 +346,9 @@ Compatibility and recovery policy placement for daemon-owned config/inbox adapte
   - the daemon must not branch on harness outside that plan-to-executor seam
   - notification fallback remains a side effect after the plan, not a second
     delivery policy surface
+  - plan-to-target translation and transition emission must remain in the
+    shared `atm_core` plan/execution seam rather than reappearing in daemon
+    adapters
 
 ## DaemonNotificationSinkAdapter
 
@@ -384,6 +387,11 @@ Notes:
   Claude path receives.
 - It must not downgrade message delivery into notification-only metadata.
 - Its callers are limited to the approved delivery executor seam.
+- the current daemon-owned adapter is
+  `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
+- the current runtime-owned sink is `~/.atm/non_claude_outbound.jsonl`, which
+  records the typed non-Claude outbound payload requests for the daemon-owned
+  delivery lane
 
 ## DaemonStatusSourceAdapter
 

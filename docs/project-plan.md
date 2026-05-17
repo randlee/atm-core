@@ -3548,7 +3548,18 @@ Status summary:
   line, but the production-readiness review still found structural message-path
   issues that must be planned and implemented before broad smoke/dogfood work
   resumes.
-- Phase `Yb` is a planning-first correction line off `develop`.
+- Phase `Yb` is now fully implemented through `Y.11`.
+- the line closes with:
+  - shared delivery plans across Claude/non-Claude harness paths
+  - a dedicated `NonClaudeOutbound` payload boundary
+  - fail-closed handling for missing roster harness data
+  - repair/rebuild-only mailbox rewrite seams
+- an explicit Claude-only append seam that is never selected for
+  `DeliveryHarnessPath::NonClaude`
+- an explicit repair/rebuild projection seam that no longer accepts a generic
+  recipient snapshot with a non-Claude no-op branch
+- smoke/dogfood work may now resume on the follow-on line without reopening the
+  same message-path consolidation issues.
 
 Goal:
 - lock down the exact message-path consolidation work needed after `Phase Y`
@@ -3563,6 +3574,7 @@ Execution shape:
   - `Y.8` policy cleanup and impossible-path removal
   - `Y.9` non-Claude outbound boundary formalization
   - `Y.10` boundary enforcement and smoke handoff
+  - `Y.11` post-`Y.10` boundary gap closure
 
 Immediate planning outputs:
 - `docs/phase-Yb/plan-phase-Yb.md`
@@ -3576,4 +3588,5 @@ Immediate planning outputs:
 - `docs/phase-Yb/sprint-Y8.md`
 - `docs/phase-Yb/sprint-Y9.md`
 - `docs/phase-Yb/sprint-Y10.md`
+- `docs/phase-Yb/sprint-Y11.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`

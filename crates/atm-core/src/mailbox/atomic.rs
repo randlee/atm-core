@@ -56,7 +56,11 @@ pub fn append_message(
     export_policy: SharedInboxExportPolicy,
 ) -> Result<(), AtmError> {
     let encoded = to_shared_inbox_value_with_policy(message, export_policy)?;
-    let mut bytes = serde_json::to_vec(&encoded)?;
+    append_jsonl_record(path, &encoded)
+}
+
+pub fn append_jsonl_record<T: serde::Serialize>(path: &Path, record: &T) -> Result<(), AtmError> {
+    let mut bytes = serde_json::to_vec(record)?;
     bytes.push(b'\n');
 
     let mut file = OpenOptions::new()

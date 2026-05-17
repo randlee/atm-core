@@ -1,10 +1,8 @@
 use crate::boundary::{RosterHarness, RosterMemberRecord};
 use crate::error::AtmError;
-use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;
-use crate::types::{AgentName, TaskId, TeamName};
-use tracing::warn;
+use crate::types::{AgentName, TeamName};
 
 #[expect(
     dead_code,
@@ -58,16 +56,6 @@ pub(crate) struct DeliveryRecipientSnapshot {
 }
 
 impl DeliveryRecipientSnapshot {
-    fn fallback_claude(agent: AgentName, team: TeamName) -> Self {
-        Self {
-            agent,
-            team,
-            harness: DeliveryHarnessPath::ClaudeCode,
-            recipient_pane_id: None,
-            roster_backed: false,
-        }
-    }
-
     fn from_roster(member: RosterMemberRecord) -> Self {
         Self {
             agent: member.agent_name,
@@ -76,10 +64,6 @@ impl DeliveryRecipientSnapshot {
             recipient_pane_id: member.recipient_pane_id,
             roster_backed: true,
         }
-    }
-
-    pub(crate) fn allows_claude_jsonl_append(&self) -> bool {
-        self.harness == DeliveryHarnessPath::ClaudeCode
     }
 }
 
@@ -301,22 +285,6 @@ pub(crate) enum RestoreInboxRebuildStateMachine {
     Failed,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub(crate) struct PersistedDeliveryRoute {
-    pub(crate) family: DeliveryEventFamily,
-    pub(crate) harness: DeliveryHarnessPath,
-}
-
-pub(crate) struct DeliveryTransitionEvent<'a> {
-    pub(crate) family: DeliveryEventFamily,
-    pub(crate) outcome: &'static str,
-    pub(crate) team: &'a TeamName,
-    pub(crate) agent: &'a AgentName,
-    pub(crate) sender: &'a AgentName,
-    pub(crate) message_id: Option<AtmMessageId>,
-    pub(crate) task_id: Option<TaskId>,
-}
-
 #[derive(Debug, Default, Clone, Copy)]
 pub(crate) struct DeliveryPolicyCoordinator;
 
@@ -331,23 +299,18 @@ impl DeliveryPolicyCoordinator {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<DeliveryRecipientSnapshot, AtmError> {
-        Ok(runtime
+        runtime
             .load_roster_member(team, agent)?
             .map(DeliveryRecipientSnapshot::from_roster)
-            .unwrap_or_else(|| {
-                DeliveryRecipientSnapshot::fallback_claude(agent.clone(), team.clone())
-            }))
-    }
-
-    pub(crate) fn route_persisted_delivery(
-        &self,
-        family: DeliveryEventFamily,
-        snapshot: &DeliveryRecipientSnapshot,
-    ) -> PersistedDeliveryRoute {
-        PersistedDeliveryRoute {
-            family,
-            harness: snapshot.harness,
-        }
+            .ok_or_else(|| {
+                AtmError::validation(format!(
+                    "failed to resolve roster-backed delivery harness for {}@{}",
+                    agent, team
+                ))
+                .with_recovery(
+                    "Repair or reload the team roster before retrying delivery; ATM does not fall back to Claude Code routing when roster harness data is missing.",
+                )
+            })
     }
 
     #[allow(
@@ -361,40 +324,6 @@ impl DeliveryPolicyCoordinator {
         match (parent_message_id, thread_mode) {
             (Some(_), Some(_)) => DeliveryEventFamily::ThreadUpdate,
             _ => DeliveryEventFamily::NewMessage,
-        }
-    }
-
-    pub(crate) fn emit_transition(
-        &self,
-        observability: &dyn ObservabilityPort,
-        event: DeliveryTransitionEvent<'_>,
-    ) {
-        self.emit_event_or_warn(
-            observability,
-            CommandEvent {
-                command: "delivery_policy",
-                action: event.family.action_name(),
-                outcome: event.outcome,
-                team: event.team.clone(),
-                agent: event.agent.clone(),
-                sender: event.sender.clone(),
-                message_id: event.message_id,
-                requires_ack: false,
-                dry_run: false,
-                task_id: event.task_id,
-                error_code: None,
-                error_message: None,
-            },
-        );
-    }
-
-    fn emit_event_or_warn(&self, observability: &dyn ObservabilityPort, event: CommandEvent) {
-        if let Err(error) = observability.emit(event) {
-            warn!(
-                %error,
-                command = "delivery_policy",
-                "failed to emit delivery-policy transition event"
-            );
         }
     }
 }
@@ -570,31 +499,20 @@ pub(crate) fn sqlite_failure_transition_names(
     new_message_sqlite_failure_transitions(harness)
 }
 
-pub(crate) fn append_failure_transition_names(
-    harness: DeliveryHarnessPath,
-) -> &'static [&'static str] {
-    match harness {
-        DeliveryHarnessPath::ClaudeCode => &[
-            "delivery_policy.new_message.received",
-            "delivery_policy.new_message.harness_claude",
-            "delivery_policy.new_message.sqlite_committed",
-            "delivery_policy.new_message.compat_append_original",
-            "delivery_policy.new_message.post_send_hook_fallback",
-            "delivery_policy.new_message.failed",
-        ],
-        DeliveryHarnessPath::NonClaude => &[
-            "delivery_policy.new_message.received",
-            "delivery_policy.new_message.harness_non_claude",
-            "delivery_policy.new_message.sqlite_committed",
-            "delivery_policy.new_message.non_claude_original",
-            "delivery_policy.new_message.failed",
-        ],
-    }
+pub(crate) fn claude_append_failure_transition_names() -> &'static [&'static str] {
+    &[
+        "delivery_policy.new_message.received",
+        "delivery_policy.new_message.harness_claude",
+        "delivery_policy.new_message.sqlite_committed",
+        "delivery_policy.new_message.compat_append_original",
+        "delivery_policy.new_message.post_send_hook_fallback",
+        "delivery_policy.new_message.failed",
+    ]
 }
 
 #[cfg(test)]
 pub(crate) fn append_failure_transitions() -> &'static [&'static str] {
-    append_failure_transition_names(DeliveryHarnessPath::ClaudeCode)
+    claude_append_failure_transition_names()
 }
 
 pub(crate) fn thread_update_transitions() -> &'static [ThreadUpdateStateMachine] {

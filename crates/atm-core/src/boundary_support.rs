@@ -169,6 +169,8 @@ pub(crate) fn export_source_files(
 pub(crate) fn reexport_messages(
     request: InboxExportReexportMessageRequest,
 ) -> Result<InboxExportReexportMessageResponse, AtmError> {
+    // This seam is rebuild-only after Yb Y.10. Runtime send/ack delivery must
+    // not route through full mailbox rewrite.
     let wrote_messages = request.messages.len();
     mailbox::export_compat_mailbox_projection(&request.path, &request.messages).map_err(
         |error| {

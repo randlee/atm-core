@@ -142,6 +142,7 @@ pub(crate) fn export_compat_mailbox_projection(
     path: &Path,
     messages: &[MessageEnvelope],
 ) -> Result<(), AtmError> {
+    // Repair/rebuild-only rewrite seam after Yb Y.10.
     store::write_compat_mailbox_projection(path, messages)
 }
 
