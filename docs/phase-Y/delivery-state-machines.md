@@ -41,31 +41,35 @@ But the write/nudge behavior is still spread across:
 
 That is the policy leakage Phase `Y` must remove.
 
-## Lock Ordering
+## Synchronization Minimization
 
-This is a transitional rule, not a permanent endorsement of broad locking.
+Phase `Y` must remove or isolate broad application-level locking rather than
+codify a new permanent lock hierarchy.
 
-- preferred design:
-  - roster snapshot read
-  - SQLite durability step
-  - compatibility export / nudge side effects afterward
-- if a legacy mailbox/workflow lock still exists during `Y.3` / `Y.4`
-  transition work, the only allowed ordering is:
-  - read canonical roster snapshot without carrying a live roster lock forward
-  - perform the SQLite write/transaction
-  - only then enter any compatibility mailbox/workflow lock scope that still
-    survives behind the transitional export owner
-- forbidden ordering:
-  - mailbox/workflow lock -> roster lookup
-  - mailbox/workflow lock -> SQLite write -> roster lookup
-  - holding a live roster lock across SQLite I/O or compatibility export
+Required direction:
 
-Why this exists:
+- roster resolution uses a short-lived snapshot read only
+- SQLite transaction scope is the durable mutation boundary
+- compatibility export / nudge side effects happen after the durable decision
+  point
+- no machine or coordinator design may require a new long-lived cross-domain
+  lock spanning roster state, SQLite durability, and compatibility mailbox
+  state
 
-- it prevents deadlock during the overlap where `workflow.rs:166` style
-  compatibility-side lock ownership may still exist
-- it preserves the stronger Phase `Y` goal of minimizing lock use instead of
-  normalizing a larger lock hierarchy
+Explicit prohibitions:
+
+- do not introduce a new coordinator-driven lock-ordering architecture
+- do not hold live roster locks across SQLite I/O
+- do not treat compatibility mailbox/workflow locking as a message-truth
+  correctness boundary for the new daemon line
+- do not widen synchronization just to smooth over edge cases around member
+  add/remove timing
+
+Transitional note:
+
+- if a legacy compatibility-side lock still exists during `Y.3` / `Y.4`, the
+  implementation must work to shrink or isolate that lock rather than make it a
+  first-class planning primitive
 
 ## Required Central Coordinator
 
@@ -91,19 +95,22 @@ Harness-resolution rule:
 
 Synchronization rule:
 
-- the coordinator should resolve roster state through a short-lived snapshot
+- the coordinator must resolve roster state through a short-lived snapshot
   read, copy out the routing decision it needs, and release that read scope
   immediately
 - the coordinator and machines must not introduce a broad application lock
   hierarchy spanning roster state, SQLite durability, and compatibility
   mailbox/workflow state
-- the preferred ordering is:
+- the only approved execution shape is:
   - read canonical roster snapshot
   - perform the SQLite durability step
   - perform compatibility export / outward nudge side effects afterward
-- if a legacy mailbox/workflow lock still exists during transition work, it is
-  a compatibility-side implementation detail to be minimized, not a new
-  correctness boundary for message truth
+- any legacy mailbox/workflow lock that still exists during transition work is
+  strictly a temporary compatibility-side implementation detail to be shrunk or
+  isolated, not a new correctness boundary for message truth
+- no implementation may hold a live roster lock across SQLite I/O
+- no implementation may widen synchronization merely to smooth over
+  add/remove-member race edges
 - race handling should stay pragmatic:
   - membership changes around the edge of one message delivery are acceptable
     eventual-consistency cases
