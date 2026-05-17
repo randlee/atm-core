@@ -214,7 +214,7 @@ write classes:
    - low-level serializer: `crates/atm-core/src/mailbox/atomic.rs:28`
      - `write_messages(...)`
      - status: retained only behind the surviving owner boundary or deleted in
-       `Y.5` if append-only cutover replaces array rewrite
+       `Y.6` if append-only cutover replaces array rewrite
 
 2. Ack reply compatibility rewrite stack
    - caller: `crates/atm-core/src/ack/mod.rs:391`
@@ -242,7 +242,7 @@ write classes:
    - low-level serializer: `crates/atm-core/src/mailbox/atomic.rs:28`
      - `write_messages(...)`
      - status: retained only behind surviving owner boundary or deleted in
-       `Y.5`
+       `Y.6`
 
 ### Retain Behind One Owned Boundary
 
@@ -258,10 +258,10 @@ write classes:
      - status: retain as owned export helper or fold into new owner
    - source projection writer: `crates/atm-core/src/mailbox/store.rs:36`
      - `write_compat_source_projections(...)`
-     - status: retain behind one owner in `Y.3`; reevaluate in `Y.5`
+     - status: retain behind one owner in `Y.3`; reevaluate in `Y.6`
    - mailbox projection policy helper: `crates/atm-core/src/mailbox/store.rs:27`
      - `write_compat_mailbox_projection_with_policy(...)`
-     - status: retain only behind the sole runtime owner until `Y.5`
+     - status: retain only behind the sole runtime owner until `Y.6`
    - low-level serializer: `crates/atm-core/src/mailbox/atomic.rs:28`
      - `write_messages(...)`
      - status: retained only until append-only cutover lands

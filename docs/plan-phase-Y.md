@@ -2,11 +2,11 @@
 
 ## Goal
 
-Prepare the first daemon + SQLite mail-SSOT release for real operator use
- without carrying forward the compatibility-inbox write hazards that still
- exist on the current implementation line.
+Prepare the daemon + SQLite mail-SSOT implementation line for release
+validation without carrying forward the compatibility-inbox write hazards
+that still exist on the current implementation line.
 
-Phase `Y` therefore starts with architectural cleanup before broad smoke and
+Phase `Y` therefore focuses on architectural cleanup before broad smoke and
 dogfood work:
 
 - minimize ATM-authored metadata on the Claude compatibility inbox surface
@@ -20,6 +20,9 @@ dogfood work:
   contract allows it
 - make all CLI/client-socket write paths and SQLite query state machines
   explicit and QA-auditable
+
+Executable smoke, canary dogfood, and release sign-off move to `Phase Z`
+after the `Phase Y` implementation line closes.
 
 ## Baseline
 
@@ -116,7 +119,8 @@ Phase `Y` line is complete.
 The following must be completed on the planning branch before numbered Phase
 `Y` execution begins:
 
-- minimum-field decision for ATM-authored shared-inbox metadata
+- shared-inbox field inventory plus the decision framework that `Y.5` will use
+  to justify each surviving field
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
 - `docs/phase-Y/delivery-state-machines.md`
@@ -162,10 +166,19 @@ Purpose:
 - add machine-checkable enforcement so command code cannot bypass that owner
 - execute the line-numbered removal ledger from
   `docs/phase-Y/inbox-write-path-audit.md`
-- land the central delivery-policy coordinator and the first required
-  event-family state machines
 
-### Y.4 Mutable Compatibility-Field Removal And Dependency Exposure
+### Y.4 Delivery Coordinator And Event-Family State Machines
+
+Purpose:
+
+- land the central delivery-policy coordinator after the write owner boundary is
+  reduced to the approved shape
+- replace scattered command/daemon delivery branches with explicit
+  event-family state machines
+- make harness routing, failure behavior, and transition observability auditable
+  in one place
+
+### Y.5 Mutable Compatibility-Field Removal And Dependency Exposure
 
 Purpose:
 
@@ -176,7 +189,7 @@ Purpose:
 - keep field-removal logic inside the event-family state machines rather than
   in generic export conditionals
 
-### Y.5 Append-Only Compatibility Export Cutover
+### Y.6 Append-Only Compatibility Export Cutover
 
 Purpose:
 
@@ -187,34 +200,18 @@ Purpose:
 - keep the append/no-append decision inside the harness-specific new-message
   state machines rather than in scattered writer call sites
 
-### Y.6 Smoke Bring-Up
+## Phase Boundary
 
-Purpose:
+`Phase Y` closes when:
 
-- developer-coordinated daemon bring-up
-- feature-by-feature executable smoke pass
-- corner-case and recovery verification on the real binaries
+- the hard-owned write boundary is enforced
+- the delivery-policy coordinator and event-family state machines are landed
+- mutable compatibility fields are reduced to the approved set
+- append-only compatibility export is either implemented or explicitly rejected
+  by the approved wire-contract decision
 
-### Y.7 Fix And Revalidate
-
-Purpose:
-
-- close smoke findings from `Y.6`
-- re-run full executable validation on the fixed branch
-
-### Y.8 `atm-dev` Canary / Dogfood
-
-Purpose:
-
-- move from single-operator smoke to `atm-dev` team use on the new binaries
-- verify UX, recovery text, and operational behavior under real use
-
-### Y.9 Final Fixes And Release Sign-Off
-
-Purpose:
-
-- close `Y.8` findings
-- produce the final release-readiness verdict
+The progressive executable smoke, `atm-dev` canary, and release sign-off work
+then moves to `docs/plan-phase-Z.md`.
 
 ## Phase Rules
 

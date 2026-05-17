@@ -1,117 +1,163 @@
 ---
 id: Y.4
-title: Mutable Compatibility-Field Removal And Dependency Exposure
+title: Delivery Coordinator And Event-Family State Machines
 status: planned
-branch: feature/pY-s4-mutable-compatibility-field-removal
-worktree: ../atm-core-worktrees/feature/pY-s4-mutable-compatibility-field-removal
+branch: feature/pY-s4-delivery-coordinator-and-state-machines
+worktree: ../atm-core-worktrees/feature/pY-s4-delivery-coordinator-and-state-machines
 target: integrate/phase-Y
 ---
 
-# Sprint Y.4 — Mutable Compatibility-Field Removal And Dependency Exposure
+# Sprint Y.4 — Delivery Coordinator And Event-Family State Machines
 
 ```yaml
 plan_type: sprint_plan
 phase: Y
 sprint: Y.4
-worktree: ../atm-core-worktrees/feature/pY-s4-mutable-compatibility-field-removal
-branch: feature/pY-s4-mutable-compatibility-field-removal
+worktree: ../atm-core-worktrees/feature/pY-s4-delivery-coordinator-and-state-machines
+branch: feature/pY-s4-delivery-coordinator-and-state-machines
 status: planned
 estimated_scope: large
 ```
 
 ## Goal
 
-Reduce the compatibility inbox payload to the minimum justified ATM-authored
-field set and let hidden consumers fail early so obsolete logic can be removed
-before release smoke work begins.
+Land the central delivery-policy coordinator and the required event-family
+state machines so harness routing, write ownership, failure behavior, and
+observability are encoded once and audited once rather than scattered across
+command and daemon code.
 
 ## Scope Summary
 
-- justify every surviving ATM-authored shared-inbox field
-- remove mutable workflow-state fields from compatibility output
-- expose and delete hidden consumers that still depend on those fields
-- keep field-removal behavior explicit inside the event-family state machines
+- introduce one central delivery-policy coordinator that dispatches by event
+  family and `RosterHarness`
+- land separate event-family state machines instead of generic send branches
+- encode the harness gate and the SQL-failure/original+error companion-message
+  rule before append-only or field-removal work begins
+- land explicit enums and transition tables for every required write-affecting
+  event family before any implementation-specific simplification is considered
+- make state transitions observable and QA-auditable
 
 ## Governing Requirements
 
-- `docs/atm-message-schema.md`
-- `docs/phase-Y/inbox-write-path-audit.md`
-- only immutable correlation/context fields may survive on the shared inbox
-  surface
-- mutable workflow truth belongs in SQLite, not compatibility JSONL
+- `docs/plan-phase-Y.md`
+- `docs/phase-Y/delivery-state-machines.md`
+- `docs/phase-Y/state-machine-coverage-audit.md`
+- event-family routing must occur through one central coordinator rather than
+  through scattered `if` branches in command code
+- `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate machines
+  with separate QA transition tables
+- JSONL append is allowed only for `Claude Code` harnesses
+- harness selection is based on harness type, not model
+- non-Claude harnesses must never receive ATM-authored JSONL append output
+- SQLite failure must still emit:
+  - the original outward message
+  - an additional `atm-system@<team>` error message
+  - mirrored nudge behavior for both messages
 
 ## Governing ADRs
 
+- `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
 - `docs/adr/ADR-010-claude-jsonl-compatibility-envelope.md`
-- `docs/adr/ADR-012-one-message-identity.md`
 
 ## Governing Boundaries
 
 - `docs/atm-core/boundaries.md`
+- `docs/atm-daemon/boundaries.md`
 - `docs/atm-rusqlite/boundaries.md`
 
 ## Prerequisites
 
 - `Y.3` complete
-- surviving runtime writer owner is established
+- the surviving runtime writer owner has been reduced to the approved boundary
 
 ## Hard Dependencies
 
-- `docs/atm-message-schema.md`
 - `docs/phase-Y/delivery-state-machines.md`
-- any field-by-field justification table produced during planning review
+- `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/phase-Y/state-diagrams.md`
 
 ## Non-Goals
 
+- do not remove mutable compatibility fields here
 - do not start append-only cutover here
-- do not preserve mutable fields just because one consumer still exists
+- do not push policy back into generic writer helpers or command code
 
 ## Sub-Tasks
 
-### 1. Produce the field-justification ledger
+### 1. Land the central delivery-policy coordinator
 
 Development work:
-- document every ATM-authored compatibility field as:
-  - keep
-  - remove
-  - undecided and blocked
-- for each kept field, record why SQLite alone is insufficient
+- introduce one central delivery-policy coordinator that:
+  - dispatches by event family
+  - branches by `RosterHarness`
+  - emits observable transition events
+- ensure downstream command or daemon callers invoke the coordinator rather
+  than carrying harness-specific delivery rules themselves
 
 Required tests:
-- schema/export tests cover every surviving field intentionally
+- coordinator routing tests cover each supported event family
+- coordinator routing tests cover both `Claude Code` and non-Claude harnesses
+- observability confirms each routed transition explicitly
 
 Required doc or boundary updates:
-- update `docs/atm-message-schema.md`
-- update `docs/phase-Y/sprint-Y4.md`
-- update `docs/phase-Y/delivery-state-machines.md` if field removal changes any
-  transition contracts
+- update `docs/phase-Y/delivery-state-machines.md`
+- update `docs/phase-Y/state-machine-coverage-audit.md`
 
-### 2. Remove mutable workflow-state fields
+### 2. Land the required event-family machines
 
 Development work:
-- remove mutable fields such as read/ack/workflow projections that are not
-  justified as immutable compatibility context
-- delete any now-obsolete projection/join logic that only existed to support
-  those fields
+- land:
+  - `NewMessageStateMachine`
+  - `ThreadUpdateStateMachine`
+  - `AckReplyStateMachine`
+  - `InboxRepairStateMachine`
+  - `RestoreInboxRebuildStateMachine`
+- ensure the Claude/non-Claude split for new-message handling is encoded in the
+  machine definitions, not in scattered call-site conditionals
 
 Required tests:
-- reads still resolve from SQLite truth
-- compatibility export still loads in Claude-compatible flows
+- one transition test matrix for `ClaudeHarnessNewMessage`
+- one transition test matrix for `NonClaudeHarnessNewMessage`
+- one transition test matrix for `ThreadUpdateStateMachine`
+- one transition test matrix for `AckReplyStateMachine`
+- one transition test matrix for `InboxRepairStateMachine`
+- one transition test matrix for `RestoreInboxRebuildStateMachine`
+- observability confirms each state transition explicitly
 
 Required doc or boundary updates:
-- update state-machine diagrams if any state transitions simplify
+- update `docs/phase-Y/delivery-state-machines.md`
+- update `docs/phase-Y/state-diagrams.md`
 
-## Split Recommendation
+### 3. Encode the exact failure and nudge contract
 
-Do not split field justification and field removal into separate sprints. The
-whole point of `Y.4` is to expose hidden dependencies immediately.
+Development work:
+- encode only the approved cases:
+  - SQLite success -> original outward delivery path
+  - SQLite failure on `Claude Code` harness -> original message output plus
+    `atm-system@<team>` error message output
+  - SQLite failure on non-Claude harness -> original message delivery plus
+    `atm-system@<team>` error-message delivery through the non-Claude path
+  - append/nudge failure -> post-send-hook fallback for notification
+    degradation only
+- do not add alternate fallback branches
+
+Required tests:
+- explicit acceptance tests for each approved branch
+- no hidden alternate path exists
+
+Required doc or boundary updates:
+- update `docs/phase-Y/delivery-state-machines.md`
+- update `docs/phase-Y/state-diagrams.md`
 
 ## Acceptance Criteria
 
-- every surviving ATM-authored compatibility field has written justification
-- no mutable workflow-state field survives without explicit approval
-- any hidden dependency exposed by field removal is either deleted or tracked as
-  a blocking finding before `Y.5`
+- one central delivery-policy coordinator owns harness-specific routing
+- each required event family has an explicit enum, transition table, and
+  observable transition names
+- the exact approved SQLite-failure/original+error rule is covered by tests
+  and docs
+- no command path retains local harness/delivery policy branches that should
+  belong to the coordinator or state machines
 
 ## Required Validation
 
@@ -122,11 +168,14 @@ whole point of `Y.4` is to expose hidden dependencies immediately.
 
 ## Required Document Updates
 
-- `docs/atm-message-schema.md`
-- `docs/phase-Y/sprint-Y4.md`
+- `docs/phase-Y/delivery-state-machines.md`
+- `docs/phase-Y/state-diagrams.md`
+- `docs/phase-Y/state-machine-coverage-audit.md`
 - `docs/project-plan.md`
 
 ## Risks And Watchouts
 
-- “temporarily keep it” is usually how obsolete logic survives release prep
-- remove the data first; let the failures show you what still needs deletion
+- do not let the coordinator become a god object; it routes to machines, it
+  does not absorb all event logic
+- share side-effect executors where appropriate, but do not collapse separate
+  event-legality rules into one generic machine

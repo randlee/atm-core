@@ -31,30 +31,17 @@ before append-only work or smoke testing begins.
 - retain exactly one normal runtime Claude-Code-only compatibility write owner
 - retain explicit admin/repair exceptions only where they are justified and
   documented
-- introduce one central delivery-policy coordinator
-- land separate event-family state machines instead of generic send branches
-- encode the harness gate and the SQL-failure/original+error companion-message
-  rule before implementation begins
-- land explicit enums and transition tables for every required write-affecting
-  event family before any implementation-specific simplification is considered
+- prepare the surviving runtime owner shape that `Y.4` will route through
+- leave delivery-policy coordination and state-machine implementation to `Y.4`
 
 ## Governing Requirements
 
 - `docs/plan-phase-Y.md`
 - `docs/phase-Y/inbox-write-path-audit.md`
-- `docs/phase-Y/state-machine-coverage-audit.md`
 - normal runtime JSONL append is allowed only for `Claude Code` harnesses
 - harness selection is based on harness type, not model
 - non-Claude harnesses must never receive ATM-authored JSONL append output
 - the final runtime append path must be a single owned path
-- event-family routing must occur through one central coordinator rather than
-  through scattered `if` branches in command code
-- `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate machines
-  with separate QA transition tables
-- SQLite failure must still emit:
-  - the original outward message
-  - an additional `atm-system@<team>` error message
-  - mirrored nudge behavior for both messages
 
 ## Governing ADRs
 
@@ -76,8 +63,6 @@ before append-only work or smoke testing begins.
 ## Hard Dependencies
 
 - `docs/phase-Y/inbox-write-path-audit.md`
-- `docs/phase-Y/state-machine-coverage-audit.md`
-- `docs/phase-Y/delivery-state-machines.md`
 - the current `feature/pY-trivial-fixes` call stacks sampled in that audit
 
 ## Non-Goals
@@ -131,36 +116,7 @@ Required doc or boundary updates:
 - update `docs/atm-core/boundaries.md`
 - update `docs/atm-daemon/boundaries.md`
 
-### 3. Land the central delivery-policy coordinator and state machines
-
-Development work:
-- introduce one central delivery-policy coordinator that:
-  - dispatches by event family
-  - branches by `RosterHarness`
-  - emits observable transition events
-- land:
-  - `NewMessageStateMachine`
-  - `ThreadUpdateStateMachine`
-  - `AckReplyStateMachine`
-  - `InboxRepairStateMachine`
-  - `RestoreInboxRebuildStateMachine`
-- ensure the Claude/non-Claude split for new-message handling is encoded in the
-  machine definitions, not in scattered call-site conditionals
-
-Required tests:
-- one transition test matrix for `ClaudeHarnessNewMessage`
-- one transition test matrix for `NonClaudeHarnessNewMessage`
-- one transition test matrix for `ThreadUpdateStateMachine`
-- one transition test matrix for `AckReplyStateMachine`
-- one transition test matrix for `InboxRepairStateMachine`
-- one transition test matrix for `RestoreInboxRebuildStateMachine`
-- observability confirms each state transition explicitly
-
-Required doc or boundary updates:
-- update `docs/phase-Y/delivery-state-machines.md`
-- update `docs/phase-Y/state-machine-coverage-audit.md`
-
-### 4. Preserve only approved exceptional write paths
+### 3. Preserve only approved exceptional write paths
 
 Development work:
 - retain admin/repair inbox creation only at:
@@ -213,13 +169,13 @@ function, and line number.
   - decision: retain for repair/rebuild only after Y.3
 - `crates/atm-core/src/mailbox/store.rs:27`
   - `write_compat_mailbox_projection_with_policy(...)`
-  - decision: keep reachable only behind the retained owner or delete in Y.5
+  - decision: keep reachable only behind the retained owner or delete in Y.6
 - `crates/atm-core/src/mailbox/store.rs:36`
   - `write_compat_source_projections(...)`
   - decision: retain behind the sole runtime owner
 - `crates/atm-core/src/mailbox/atomic.rs:28`
   - `write_messages(...)`
-  - decision: retain temporarily behind the sole owner until Y.5
+  - decision: retain temporarily behind the sole owner until Y.6
 - `crates/atm-core/src/direct_boundaries.rs:38`
   - `export_source_files(...)`
   - decision: move/retain as sole runtime owner entrypoint
@@ -271,10 +227,8 @@ second, but do not leave the repo in a mixed command-owned state between them.
 - exactly one runtime writer owner remains for Claude-Code harness export
 - non-Claude harnesses still have no JSONL append path
 - only the documented admin/repair exceptions remain outside the runtime owner
-- every required write-affecting event family has:
-  - an explicit enum
-  - an explicit transition table
-  - a QA transition matrix
+- no delivery-policy implementation is added here that should instead land in
+  `Y.4`
 
 ## Required Validation
 
@@ -288,14 +242,11 @@ second, but do not leave the repo in a mixed command-owned state between them.
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/plan-phase-Y.md`
 - `docs/project-plan.md`
-- `docs/phase-Y/delivery-state-machines.md`
 - any boundary docs touched by the retained owner shape
 
 ## Risks And Watchouts
 
 - this sprint must not invent a second runtime writer under a different name
-- do not let the central coordinator become a “god object”; event-family
-  legality stays in dedicated state machines
 - keep harness gating explicit; model-based branching is incorrect
 - if an old dependency appears, remove or document it now rather than preserving
   it silently for later

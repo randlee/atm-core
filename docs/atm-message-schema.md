@@ -43,7 +43,7 @@ Phase `Y` rule:
   machine plus the central delivery-policy coordinator
 - fields must not persist merely because scattered command code still reads
   them
-- `Y.4` is the sprint that decides which of these fields actually survive
+- `Y.5` is the sprint that decides which of these fields actually survive
 
 ## 3. One Message Identity
 

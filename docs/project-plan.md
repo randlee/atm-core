@@ -3445,8 +3445,9 @@ Target:
 Status:
 - planning
 
-Authoritative plan:
+Authoritative plans:
 - `docs/plan-phase-Y.md`
+- `docs/plan-phase-Z.md`
 
 Goal:
 - make the first daemon + SQLite mail-SSOT release safe for real operator use
@@ -3458,30 +3459,39 @@ Goal:
 - remove mutable workflow-state projection from compatibility output
 - document every CLI/client-socket write path and every SQLite query state
   machine so QA can verify simplification directly
-- run progressive smoke and dogfood validation only after the write-boundary
-  cleanup line is in place
+- close implementation cleanup before progressive smoke and dogfood validation
+  begin on the next phase line
 
 Execution shape:
 - `Y.0` pre-smoke trivial fixes on `feature/pY-trivial-fixes`
-- planning-branch audits and field-minimum decisions complete before numbered
-  sprint execution begins
+- planning-branch audits and the shared-inbox field decision framework
+  complete before numbered sprint execution begins
 - `Y.1` `atm help` and UX improvements
 - `Y.2` pre-smoke easy fixes and validation
 - `Y.3` hard write-boundary consolidation
-- `Y.4` mutable compatibility-field removal and hidden-dependency exposure
-- `Y.5` append-only compatibility export cutover if the approved wire contract
+- `Y.4` delivery coordinator and event-family state machines
+- `Y.5` mutable compatibility-field removal and hidden-dependency exposure
+- `Y.6` append-only compatibility export cutover if the approved wire contract
   allows it
-- `Y.6` executable smoke bring-up
-- `Y.7` fix and revalidate
-- `Y.8` `atm-dev` canary / dogfood
-- `Y.9` final fixes and release sign-off
+
+Follow-on validation phase:
+- `Z.1` executable smoke bring-up
+- `Z.2` fix and revalidate
+- `Z.3` `atm-dev` canary / dogfood
+- `Z.4` final fixes and release sign-off
 
 Immediate planning outputs:
 - `docs/plan-phase-Y.md`
+- `docs/plan-phase-Z.md`
 - `docs/phase-Y/inbox-write-path-audit.md`
 - `docs/phase-Y/state-machine-coverage-audit.md`
 - `docs/phase-Y/delivery-state-machines.md`
 - `docs/phase-Y/sprint-Y3.md`
 - `docs/phase-Y/sprint-Y4.md`
 - `docs/phase-Y/sprint-Y5.md`
+- `docs/phase-Y/sprint-Y6.md`
+- `docs/phase-Z/sprint-Z1.md`
+- `docs/phase-Z/sprint-Z2.md`
+- `docs/phase-Z/sprint-Z3.md`
+- `docs/phase-Z/sprint-Z4.md`
 - approved implementation scopes for `Y.1` and `Y.2`
