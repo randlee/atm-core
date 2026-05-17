@@ -13,7 +13,7 @@ implementation.
 
 - planning branch: `message-path-consolidation-plan-Yb`
 - planning worktree:
-  `/Users/randlee/Documents/github/atm-core-worktrees/message-path-consolidation-plan-Yb`
+  `../atm-core-worktrees/message-path-consolidation-plan-Yb`
 - branch base: `develop` at `292b8e38`
 - implementation baseline under review:
   `integrate/phase-Y` at `b8785617`

@@ -79,13 +79,13 @@ Closed rows:
 
 Implemented seam on this branch:
 
-- [crates/atm-core/src/send/persistence.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/persistence.rs:17)
+- `crates/atm-core/src/send/persistence.rs:17`
   now persists only and returns typed degraded payloads
-- [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/send/mod.rs:323)
+- `crates/atm-core/src/send/mod.rs:323`
   builds `DeliveryPlan`
-- [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/delivery_execution.rs:97)
+- `crates/atm-core/src/delivery_execution.rs:97`
   executes `DeliveryPlan`
-- [crates/atm-core/src/ack/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening/crates/atm-core/src/ack/mod.rs:514)
+- `crates/atm-core/src/ack/mod.rs:514`
   routes reply delivery through
   `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine -> ReplyDeliveryPlan`
 
@@ -151,19 +151,19 @@ Closed rows:
 
 Implemented seam on this branch:
 
-- [crates/atm-core/src/delivery_execution.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-core/src/delivery_execution.rs:112)
+- `crates/atm-core/src/delivery_execution.rs:112`
   now owns `NonClaudeOutboundDeliveryWriter`
-- [crates/atm-core/src/service_runtime.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-core/src/service_runtime.rs:295)
+- `crates/atm-core/src/service_runtime.rs:295`
   now hands typed non-Claude payloads to
   `atm_core::boundary::NonClaudeOutbound`
-- [crates/atm-daemon/src/non_claude_outbound_runtime.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-daemon/src/non_claude_outbound_runtime.rs:14)
+- `crates/atm-daemon/src/non_claude_outbound_runtime.rs:14`
   now provides the daemon-owned
   `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound` adapter
-- [crates/atm-core/src/delivery_policy.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-core/src/delivery_policy.rs:300)
+- `crates/atm-core/src/delivery_policy.rs:300`
   now fails closed when roster-backed harness data is missing
-- [crates/atm-core/src/delivery_policy.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-core/src/delivery_policy.rs:506)
+- `crates/atm-core/src/delivery_policy.rs:506`
   now keeps append-degraded transitions Claude-only
-- [crates/atm-core/src/send/mod.rs](/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization/crates/atm-core/src/send/mod.rs:1538)
+- `crates/atm-core/src/send/mod.rs:1538`
   now proves non-Claude delivery through the outbound payload boundary rather
   than through hook metadata alone
 
