@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-QA-S5-001>
+  a triage:Finding ;
+  triage:findingId "RBP-QA-S5-001" ;
+  triage:title "MailStoreIngestReplayState.last_fingerprint bare Option<String> — RBP-001 newtype discipline" ;
+  triage:description "crates/atm-core/src/boundary/mail.rs:86 field last_fingerprint: Option<String> is a bare String. Adjacent field replay_source uses the ReplaySource newtype. RBP-001 requires struct fields exposed at the crate boundary to use domain newtypes rather than bare primitives. Fix: introduce a MessageFingerprint newtype wrapping String and update last_fingerprint to Option<MessageFingerprint>. Pre-existing: last_fingerprint was not added in Y.5 diff, but zero-tolerance policy requires reporting regardless of origin." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/boundary/mail.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-QA-S5-001/pY-s5/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/1dd78933> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/RBP-QA-S5-001/pY-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 86 ;
+  triage:snippet "last_fingerprint: Option<String>," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:worktree/pY-s5/1dd78933>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

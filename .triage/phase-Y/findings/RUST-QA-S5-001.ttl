@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RUST-QA-S5-001>
+  a triage:Finding ;
+  triage:findingId "RUST-QA-S5-001" ;
+  triage:title "execute_upsert_message 86 lines — RULE-002 violation" ;
+  triage:description "crates/atm-rusqlite/src/writer/ops.rs:58 fn execute_upsert_message is 86 lines, exceeding the 80-line RULE-002 limit. This is production code (no cfg(test) gate). Pre-existing: ops.rs was not changed in sprint Y.5 (empty diff against 272a3c8e). Zero-tolerance policy requires reporting regardless of origin. Fix: extract the SQL params block and the state upsert branch into named helper functions to bring the body under 80 lines." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RUST-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-S5-001/pY-s5/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/1dd78933> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/RUST-QA-S5-001/pY-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 58 ;
+  triage:snippet "fn execute_upsert_message(...) { // 86 lines, RULE-002 violation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:worktree/pY-s5/1dd78933>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

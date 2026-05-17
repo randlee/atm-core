@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S5-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S5-002" ;
+  triage:title "expiresAt removal lacks explicit absence assertion in export tests" ;
+  triage:description "expiresAt is a removed field per inbox-field-inventory.md and is stripped by strip_removed_compatibility_fields() (inbox_message.rs:328). The stripping code is correct. However, no export test constructs an envelope with expires_at: Some(...) and asserts !object.contains_key('expiresAt') in the exported result. Tests shared_inbox_write_keeps_only_approved_immutable_fields and shared_inbox_write_strips_ack_workflow_fields_from_export both leave expires_at: None and do not assert the key is absent. Fix: extend one existing export test to set expires_at: Some(IsoTimestamp::...), call to_shared_inbox_value(), and assert !object.contains_key('expiresAt'), mirroring the existing assertions for pendingAckAt, acknowledgedAt, and acknowledgesMessageId." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S5-002/pY-s5/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/1dd78933> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/ATM-QA-S5-002/pY-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 328 ;
+  triage:snippet "strip_removed_compatibility_fields strips expiresAt but no test asserts !object.contains_key('expiresAt') with expires_at: Some(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:worktree/pY-s5/1dd78933>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

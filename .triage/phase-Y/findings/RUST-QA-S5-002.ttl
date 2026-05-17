@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RUST-QA-S5-002>
+  a triage:Finding ;
+  triage:findingId "RUST-QA-S5-002" ;
+  triage:title "validate_message_record 88 lines — RULE-002 violation" ;
+  triage:description "crates/atm-rusqlite/src/writer/ops.rs:145 fn validate_message_record is 88 lines, exceeding the 80-line RULE-002 limit. This is production code (no cfg(test) gate). Pre-existing: ops.rs was not changed in sprint Y.5 (empty diff against 272a3c8e). Zero-tolerance policy requires reporting regardless of origin. Fix: extract the parent_message_id successor check and the message_id uniqueness check into separate named validation helpers." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RUST-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-S5-002/pY-s5/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/1dd78933> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/RUST-QA-S5-002/pY-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 145 ;
+  triage:snippet "fn validate_message_record(...) { // 88 lines, RULE-002 violation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:worktree/pY-s5/1dd78933>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

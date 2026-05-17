@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S5-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S5-001" ;
+  triage:title "Kept fields parentMessageId and threadMode lack positive compat-export test assertions" ;
+  triage:description "Sprint Y.5 sub-task 1 requires 'schema/export tests cover every surviving field intentionally.' The test shared_inbox_write_keeps_only_approved_immutable_fields (inbox_message.rs:572) asserts message_id (line 601) and taskId (line 604) are present in the compat export. However, the fixture sets parent_message_id: None and thread_mode: None. No test constructs an envelope with parent_message_id: Some(...) or thread_mode: Some(...) and positively asserts that parentMessageId and threadMode survive to_shared_inbox_value(). Two of the four approved kept fields are not covered by intentional positive export assertions. Fix: add test cases setting parent_message_id: Some(AtmMessageId::new()) and thread_mode: Some(ThreadMode::AddDetails), call to_shared_inbox_value(), assert object.contains_key('parentMessageId') and object.contains_key('threadMode')." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S5-001/pY-s5/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/1dd78933> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/ATM-QA-S5-001/pY-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 572 ;
+  triage:snippet "shared_inbox_write_keeps_only_approved_immutable_fields — fixture sets parent_message_id: None, thread_mode: None; parentMessageId and threadMode not positively asserted present" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:worktree/pY-s5/1dd78933>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
