@@ -1,0 +1,193 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/PY-S2-RUST-QA-001>
+  a triage:Finding ;
+  triage:findingId "PY-S2-RUST-QA-001" ;
+  triage:title "14x #[allow(dead_code)] suppressing unused items across workspace" ;
+  triage:description "Workspace-wide scan detected 14 occurrences of #[allow(dead_code)] in feature/pY-s2-pre-smoke-easy-fixes. Includes 6 in atm/src/composition.rs (lines 60,70,160,175,180,185) plus 8 additional in atm-daemon and atm-core. Team-lead ruling: fix in Y.2 — branch is active, removal is trivial." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/**/*.rs" ;
+  triage:severity "IMPORTANT" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-16T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/10> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/11> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/12> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/13> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/PY-S2-RUST-QA-001/14> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s2/63f9c1a8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 52 ;
+  triage:snippet "#[allow(dead_code)] pub(crate) fn new() -> Self" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 130 ;
+  triage:snippet "#[allow(dead_code)] ownership adapter field in RuntimeComposition" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 60 ;
+  triage:snippet "#[allow(dead_code)] struct SendCommandEntryPoint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 70 ;
+  triage:snippet "#[allow(dead_code)] struct ReceiveCommandEntryPoint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 160 ;
+  triage:snippet "#[allow(dead_code)] pub(crate) fn transport(&self)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 175 ;
+  triage:snippet "#[allow(dead_code)] pub(crate) fn observability_port(&self)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 180 ;
+  triage:snippet "#[allow(dead_code)] pub(crate) fn send_command(&self)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 185 ;
+  triage:snippet "#[allow(dead_code)] pub(crate) fn receive_command(&self)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/hash.rs" ;
+  triage:line 3 ;
+  triage:snippet "#[allow(dead_code)] struct DeferredMailboxHashScope (reserved for future)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/model_registry.rs" ;
+  triage:line 7 ;
+  triage:snippet "#[allow(dead_code)] struct DeferredModelRegistryScope (deferred)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/11>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/settings.rs" ;
+  triage:line 7 ;
+  triage:snippet "#[allow(dead_code)] struct DeferredSettingsSchemaScope (deferred)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/12>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/permissions.rs" ;
+  triage:line 6 ;
+  triage:snippet "#[allow(dead_code)] struct DeferredPermissionsSchemaScope (deferred)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/13>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/bridge.rs" ;
+  triage:line 6 ;
+  triage:snippet "#[allow(dead_code)] struct DeferredBridgeConfigScope (deferred)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/PY-S2-RUST-QA-001/14>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/log/filters.rs" ;
+  triage:line 7 ;
+  triage:snippet "#[allow(dead_code)] struct DeferredLogFilterScope (deferred)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:worktree/pY-s2/63f9c1a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:orderIndex 1 .
