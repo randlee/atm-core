@@ -10,8 +10,7 @@ use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::sqlite_observability::DaemonSqliteObservability;
 use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    non_claude_outbound_runtime::DaemonNonClaudeOutbound, peer_transport::PeerTransportConfig,
-    sqlite_remote_replay_store_from_path_with_observability,
+    peer_transport::PeerTransportConfig, sqlite_remote_replay_store_from_path_with_observability,
 };
 use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RequestDispatcher};
 use atm_core::error::AtmError;
@@ -144,10 +143,6 @@ pub(crate) struct RuntimeComposition {
     _config_ingress: DaemonConfigIngress,
     _inbox_ingress: DaemonInboxIngress,
     _inbox_export: DaemonInboxExport,
-    // Keep the daemon-owned non-Claude outbound adapter attached to the composed runtime so the
-    // boundary remains an explicit part of daemon ownership even though delivery happens through
-    // retained-runtime executor seams rather than direct composition calls.
-    _non_claude_outbound: DaemonNonClaudeOutbound,
     peer_transport_runtime: PeerTransportRuntime,
 }
 
@@ -229,7 +224,6 @@ impl RuntimeComposition {
             _config_ingress: config_ingress,
             _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
-            _non_claude_outbound: DaemonNonClaudeOutbound::new(),
             peer_transport_runtime: PeerTransportRuntime::new_with_observability(
                 Some(replay_store),
                 peer_transport_config,
