@@ -282,6 +282,7 @@ fn mailbox_record_parse_error(
         ),
     )
     .with_source(error)
+    .with_recovery("Inspect the mailbox file for malformed JSON records or partial writes, then retry atm read. If corruption persists, archive or remove the malformed mailbox file.")
 }
 
 #[cfg(test)]
@@ -360,17 +361,18 @@ mod tests {
     }
 
     #[test]
-    fn append_message_removes_lock_sentinel_after_write() {
+    fn append_message_does_not_create_lock_sentinel() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("append-removes-lock.json");
 
+        assert!(!lock::sentinel_path(&path).exists());
         append_message(&path, &sample_message(Uuid::new_v4(), "first")).expect("append");
 
         assert!(!lock::sentinel_path(&path).exists());
     }
 
     #[test]
-    fn append_message_cleans_preexisting_stale_lock_sentinel() {
+    fn append_message_does_not_remove_preexisting_lock_sentinel() {
         let tempdir = TempDir::new().expect("tempdir");
         let path = tempdir.path().join("append-cleans-stale-lock.json");
         fs::write(lock::sentinel_path(&path), u32::MAX.to_string()).expect("stale lock");
