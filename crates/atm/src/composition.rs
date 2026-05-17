@@ -13,7 +13,7 @@ use atm_core::graft::{
     AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse, AtmGraftClient,
 };
 use atm_core::list::{ListOutcome, ListQuery};
-use atm_core::observability::{CommandEvent, ObservabilityPort};
+use atm_core::observability::CommandEvent;
 use atm_core::protocol::{
     RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
@@ -57,7 +57,8 @@ fn install_retained_runtime_factory() {
     });
 }
 
-#[allow(dead_code)]
+// ARCH: reserved for future command-routing phase — entry-point types hold
+// per-command policy once send/receive gain context-sensitive dispatch logic.
 #[derive(Debug, Default)]
 pub(crate) struct SendCommandEntryPoint;
 
@@ -67,7 +68,8 @@ impl SendCommandEntryPoint {
     }
 }
 
-#[allow(dead_code)]
+// ARCH: reserved for future command-routing phase — symmetric pair with
+// SendCommandEntryPoint for receive-side dispatch policy.
 #[derive(Debug, Default)]
 pub(crate) struct ReceiveCommandEntryPoint;
 
@@ -157,11 +159,6 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    #[allow(dead_code)]
-    pub(crate) fn transport(&self) -> &(dyn ClientTransport + Send + Sync + 'a) {
-        self.transport.as_ref()
-    }
-
     pub(crate) fn send_request(
         &self,
         request: RequestEnvelope,
@@ -170,21 +167,6 @@ impl<'a> CliComposition<'a> {
             ResponseEnvelope::Error(error) => Err(error.into_atm_error()),
             response => Ok(response),
         }
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
-        self.observability_port
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn send_command(&self) -> &SendCommandEntryPoint {
-        &self.send_command
-    }
-
-    #[allow(dead_code)]
-    pub(crate) fn receive_command(&self) -> &ReceiveCommandEntryPoint {
-        &self.receive_command
     }
 
     pub(crate) fn send(&self, request: SendRequest) -> Result<SendOutcome, AtmError> {

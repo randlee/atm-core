@@ -29,6 +29,13 @@ First-delivery topic scope:
   - `identity`
   - `skills`
 
+Y.2 follow-up scope:
+
+- replace the tier-2 placeholder text with concrete operator examples and
+  troubleshooting guidance
+- keep the command surface unchanged: no new flags, no JSON-input mode, and no
+  compatibility-writer behavior changes
+
 Output contract:
 
 - human output distinguishes command-help vs concept-topic results clearly

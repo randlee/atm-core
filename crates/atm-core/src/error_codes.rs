@@ -121,6 +121,8 @@ pub enum AtmErrorCode {
     WarningHookExecutionFailed,
     /// A test requested an invalid fake transport seam.
     TestFakeTransportInjectionFailed,
+    /// The requested help topic does not exist.
+    HelpTopicNotFound,
 }
 
 impl AtmErrorCode {
@@ -185,6 +187,7 @@ impl AtmErrorCode {
             Self::WarningHookSkipped => "ATM_WARNING_HOOK_SKIPPED",
             Self::WarningHookExecutionFailed => "ATM_WARNING_HOOK_EXECUTION_FAILED",
             Self::TestFakeTransportInjectionFailed => "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED",
+            Self::HelpTopicNotFound => "ATM_HELP_TOPIC_NOT_FOUND",
         }
     }
 }
@@ -259,6 +262,7 @@ impl FromStr for AtmErrorCode {
             "ATM_TEST_FAKE_TRANSPORT_INJECTION_FAILED" => {
                 Ok(Self::TestFakeTransportInjectionFailed)
             }
+            "ATM_HELP_TOPIC_NOT_FOUND" => Ok(Self::HelpTopicNotFound),
             _ => Err("unknown ATM error code"),
         }
     }
