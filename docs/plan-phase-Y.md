@@ -217,6 +217,21 @@ Purpose:
 - keep field-removal logic inside the event-family state machines rather than
   in generic export conditionals
 
+Current status:
+
+- complete on `feature/pY-s5-mutable-compatibility-field-removal`
+- retained compatibility export now keeps only immutable correlation/context
+  fields: `message_id`, `parentMessageId`, `threadMode`, and `taskId`
+- retained compatibility export now strips:
+  - `source_team`
+  - `pendingAckAt`
+  - `acknowledgedAt`
+  - `acknowledgesMessageId`
+  - `expiresAt`
+  - `metadata.atm.*`
+- retained compatibility export now reloads stored message records instead of
+  workflow-joined projected envelopes before writing compatibility output
+
 ### Y.6 Append-Only Compatibility Export Cutover
 
 Purpose:
