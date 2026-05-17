@@ -99,3 +99,10 @@ git diff --check
   - `cargo build --workspace`
   - `cargo test --workspace`
   - `git diff --check`
+- follow-up hardening notes:
+  - `RSH-Y9-001` is waived because `NonClaudeOutbound::deliver_payloads(...)`
+    is a synchronous trait seam; blocking filesystem I/O is the intended
+    execution model and `spawn_blocking` is not applicable there
+  - `RSH-Y9-002` is closed with
+    `MAX_NON_CLAUDE_PAYLOAD_BYTES = 1024 * 1024` in
+    `crates/atm-daemon/src/non_claude_outbound_runtime.rs`

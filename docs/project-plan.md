@@ -3571,10 +3571,15 @@ Execution shape:
 - future implementation integration branch: `integrate/phase-Yb`
 - implementation sequence:
   - `Y.7` degraded delivery contract hardening
+    - branch: `feature/pYb-s7-degraded-delivery-contract-hardening`
   - `Y.8` policy cleanup and impossible-path removal
+    - branch: `feature/pYb-s8-policy-cleanup-and-impossible-path-removal`
   - `Y.9` non-Claude outbound boundary formalization
+    - branch: `feature/pYb-s9-non-claude-outbound-boundary-formalization`
   - `Y.10` boundary enforcement and smoke handoff
+    - branch: `feature/pYb-s10-boundary-enforcement-and-smoke-handoff`
   - `Y.11` post-`Y.10` boundary gap closure
+    - branch: `feature/pYb-s11-y10-gap-closure`
 
 Immediate planning outputs:
 - `docs/phase-Yb/plan-phase-Yb.md`
