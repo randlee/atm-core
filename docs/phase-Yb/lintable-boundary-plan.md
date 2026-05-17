@@ -46,11 +46,33 @@ Forbidden direct callers:
 
 ## Proposed Mechanical Enforcement
 
-### sc-lint / boundary rules
+### 1. Compile-time ownership rules
+
+Enforcement point:
+
+- Rust module privacy and constructor visibility in:
+  - `atm_core::delivery_execution`
+  - `atm_daemon::non_claude_outbound_runtime`
+  - `atm_daemon::notification_runtime`
+
+Rules:
+
+1. concrete daemon adapters remain `pub(crate)` only
+2. state-machine-owned output types live in `atm_core::delivery_plan`
+3. outer callers receive typed plans, not direct writer handles
+
+### 2. `sc-lint` / boundary rules
+
+Enforcement point:
+
+- boundary TOML allowlists plus `python3 .just/run_lint.py all`
+- rule families owned by `sc_lint_boundary`
 
 1. only the approved Claude executor module may call:
    - `RetainedServiceRuntime::append_compat_inbox_message(...)`
    - `mailbox::store::append_compat_mailbox_message(...)`
+2. only the approved non-Claude executor module may call:
+   - `atm_core::boundary::NonClaudeOutbound`
 2. only approved repair/rebuild modules may call:
    - `mailbox::store::write_compat_mailbox_projection(...)`
    - `direct_boundaries::reexport_messages(...)`
@@ -65,6 +87,20 @@ Forbidden direct callers:
    - accept full `MessageEnvelope` delivery authority
    - become a second outbound payload boundary
 
+### 3. Runtime fail-closed checks
+
+Enforcement point:
+
+- `atm_core::delivery_execution::execute_delivery_plan(...)`
+- `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+
+Rules:
+
+1. a Claude-targeted plan fails closed if routed to `NonClaudeOutbound`
+2. a non-Claude-targeted plan fails closed if routed to `InboxExport`
+3. `NotificationSink` rejects any attempt to serve as the sole message-delivery
+   proof surface
+
 ### Module-ownership documentation
 
 - one module family for state-machine planning/output
@@ -76,6 +112,10 @@ Required shape:
 - `delivery_policy` / machine modules:
   - decide
   - emit typed plan
+- `delivery_plan` module:
+  - defines `DeliveryPlan`
+  - defines `ReplyDeliveryPlan`
+  - defines logical message and delivery-target DTOs
 - execution modules:
   - perform payload delivery
   - perform notification
@@ -91,4 +131,3 @@ Required shape:
   - same payload ordering across harness families
   - same payload content across harness families
   - different delivery target only
-

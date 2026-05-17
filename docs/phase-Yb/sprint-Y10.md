@@ -15,11 +15,25 @@ Close the Yb implementation line with mechanical boundary enforcement and hand
 the line back to executable smoke planning only after the message-path rules
 are verified.
 
+## Hard Dependencies
+
+- `docs/phase-Yb/sprint-Y9.md` must be complete first
+
 ## Governing Requirements
 
 - `docs/phase-Yb/plan-phase-Yb.md`
 - `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/phase-Yb/qa-handoff.md`
+- `docs/phase-Yb/testing-and-validation.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+
+## Exact Code And Document Targets
+
+- `boundaries/atm-core/non-claude-outbound.toml`
+- `boundaries/atm-daemon/daemon-non-claude-outbound.toml`
+- `docs/phase-Yb/removal-ledger.md`
+- `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/project-plan.md`
 
 ## Required Work
 
@@ -27,11 +41,30 @@ are verified.
 2. Verify the removal ledger is fully closed.
 3. Confirm no policy remains outside the machines and shared executors.
 4. Prepare the handoff back to smoke/dogfood planning.
+5. Produce the final Yb closure note for smoke-planning handoff.
 
 ## Acceptance Criteria
 
 - only approved coordinator/executor modules can call delivery/write primitives
 - removal-ledger targets are either closed or explicitly tracked as blockers
+- `python3 .just/run_lint.py all` enforces the final boundary allowlists
+- final smoke handoff docs name no open Yb path-consolidation blocker that is
+  not explicitly tracked
 - Yb can hand control back to the smoke/dogfood line without re-opening the
   same path-consolidation issues
 
+## Required Document Updates
+
+- `docs/phase-Yb/removal-ledger.md`
+- `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/project-plan.md`
+
+## Required Validation
+
+```bash
+cargo fmt --all --check
+python3 .just/run_lint.py all
+cargo build --workspace
+cargo test --workspace
+git diff --check
+```

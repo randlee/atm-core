@@ -3534,6 +3534,9 @@ Immediate planning outputs:
 - `docs/phase-Yb/removal-ledger.md`
 - `docs/phase-Yb/message-path-call-stacks.md`
 - `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/phase-Yb/hardening-audit.md`
+- `docs/phase-Yb/qa-handoff.md`
+- `docs/phase-Yb/testing-and-validation.md`
 - `docs/phase-Yb/sprint-Y7.md`
 - `docs/phase-Yb/sprint-Y8.md`
 - `docs/phase-Yb/sprint-Y9.md`

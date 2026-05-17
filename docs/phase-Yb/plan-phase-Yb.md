@@ -74,6 +74,21 @@ Required planning decision:
   - delivery targets
   - notification targets
   - degradation / failure disposition
+- the authoritative Rust ownership is:
+  - `crates/atm-core/src/delivery_plan.rs`
+    - `atm_core::delivery_plan::LogicalMessage`
+    - `atm_core::delivery_plan::DeliveryTarget`
+    - `atm_core::delivery_plan::NotificationTarget`
+    - `atm_core::delivery_plan::DeliveryPlanDisposition`
+    - `atm_core::delivery_plan::DeliveryPlan`
+    - `atm_core::delivery_plan::ReplyDeliveryPlan`
+  - `crates/atm-core/src/delivery_execution.rs`
+    - `atm_core::delivery_execution::execute_delivery_plan(...)`
+    - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+- `DeliveryPlan` is the only approved new-message output shape from the
+  coordinator/machine seam
+- `ReplyDeliveryPlan` is the only approved ack-reply output shape from the
+  coordinator/machine seam
 
 ### C. Central Decision Layer
 
@@ -111,6 +126,19 @@ Required planning decision:
 - they may not directly emit Claude/non-Claude outward delivery
 - post-send-hook execution remains notification-only and must not stand in for
   message delivery semantics
+- the shared executors and their owning seams are:
+  - Claude payload delivery:
+    - `atm_core::boundary::InboxExport`
+    - executor module:
+      `atm_core::delivery_execution::execute_delivery_plan(...)`
+  - non-Claude payload delivery:
+    - `atm_core::boundary::NonClaudeOutbound`
+    - daemon adapter:
+      `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
+  - notification side effects:
+    - `atm_core::boundary::NotificationSink`
+    - daemon adapter:
+      `atm_daemon::notification_runtime::DaemonNotificationSink`
 
 ### E. Boundary Tightening
 
@@ -125,6 +153,8 @@ Required planning artifacts:
 
 - [removal-ledger.md](./removal-ledger.md)
 - [lintable-boundary-plan.md](./lintable-boundary-plan.md)
+- [qa-handoff.md](./qa-handoff.md)
+- [testing-and-validation.md](./testing-and-validation.md)
 
 ### F. Locking / Concurrency
 
@@ -164,6 +194,7 @@ Required planning artifacts:
 - [removal-ledger.md](./removal-ledger.md)
 - [message-path-call-stacks.md](./message-path-call-stacks.md)
 - [lintable-boundary-plan.md](./lintable-boundary-plan.md)
+- [hardening-audit.md](./hardening-audit.md)
 
 ## Current Structural Issues
 
@@ -205,6 +236,10 @@ Authoritative sprint doc:
 
 - [sprint-Y7.md](./sprint-Y7.md)
 
+Hard dependency:
+
+- none; this is the first implementation sprint on `integrate/phase-Yb`
+
 ### Y.8 Policy Cleanup And Impossible-Path Removal
 
 Purpose:
@@ -216,6 +251,11 @@ Purpose:
 Authoritative sprint doc:
 
 - [sprint-Y8.md](./sprint-Y8.md)
+
+Hard dependency:
+
+- [sprint-Y7.md](./sprint-Y7.md) must close first because Y.8 deletes or moves
+  paths that Y.7 replaces with the uniform delivery-plan seam
 
 ### Y.9 Non-Claude Outbound Boundary Formalization
 
@@ -229,6 +269,11 @@ Authoritative sprint doc:
 
 - [sprint-Y9.md](./sprint-Y9.md)
 
+Hard dependency:
+
+- [sprint-Y8.md](./sprint-Y8.md) must close first because Y.9 formalizes the
+  retained non-Claude boundary only after the outer policy leakage is removed
+
 ### Y.10 Boundary Enforcement And Smoke Handoff
 
 Purpose:
@@ -236,6 +281,15 @@ Purpose:
 - land lintable / documented boundary enforcement
 - close the Yb implementation line with explicit validation evidence
 - hand the line back to smoke/dogfood planning only after Yb closes
+
+Authoritative sprint doc:
+
+- [sprint-Y10.md](./sprint-Y10.md)
+
+Hard dependency:
+
+- [sprint-Y9.md](./sprint-Y9.md) must close first because Y.10 enforces the
+  final caller allowlists only after the non-Claude boundary exists
 
 ## Planning Outputs
 
@@ -247,6 +301,9 @@ Purpose:
 - [removal-ledger.md](./removal-ledger.md)
 - [message-path-call-stacks.md](./message-path-call-stacks.md)
 - [lintable-boundary-plan.md](./lintable-boundary-plan.md)
+- [hardening-audit.md](./hardening-audit.md)
+- [qa-handoff.md](./qa-handoff.md)
+- [testing-and-validation.md](./testing-and-validation.md)
 - [ADR-013-unified-delivery-plan-and-state-machine-ownership.md](../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
 
 ## Phase Rules
@@ -258,4 +315,3 @@ Purpose:
 - any newly discovered runtime path that violates the Yb contract is a
   blocking planning miss until documented
 - smoke/dogfood work must not resume until the Yb implementation line closes
-

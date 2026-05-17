@@ -2377,6 +2377,11 @@ Phase `Yb` therefore tightens the architecture further:
   - SQLite failure -> original message + `atm-system@<team>` error message
 - the only harness-specific difference may be the selected delivery target and
   transport executor
+- the authoritative typed seam is:
+  - `atm_core::delivery_plan::DeliveryPlan`
+  - `atm_core::delivery_plan::ReplyDeliveryPlan`
+  - `atm_core::delivery_execution::execute_delivery_plan(...)`
+  - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
 - no command, ack, or persistence layer may branch on harness after the
   machine has produced its delivery plan
 - post-send-hook execution remains notification-only and must not stand in for

@@ -14,12 +14,28 @@ target: integrate/phase-Yb
 Delete harness-policy leakage outside the machines and remove impossible
 transition surfaces from the runtime.
 
+## Hard Dependencies
+
+- `docs/phase-Yb/sprint-Y7.md` must be complete first
+
 ## Governing Requirements
 
 - `docs/phase-Yb/plan-phase-Yb.md`
 - `docs/phase-Yb/removal-ledger.md`
 - `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/phase-Yb/qa-handoff.md`
+- `docs/phase-Yb/testing-and-validation.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+
+## Exact Code And Document Targets
+
+- `crates/atm-core/src/delivery_policy.rs`
+- `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/send/persistence.rs`
+- `crates/atm-core/src/ack/mod.rs`
+- `crates/atm-core/src/service_runtime.rs`
+- `docs/phase-Yb/removal-ledger.md`
+- `docs/phase-Yb/lintable-boundary-plan.md`
 
 ## Required Work
 
@@ -32,14 +48,21 @@ transition surfaces from the runtime.
 4. Introduce fail-closed behavior for unsupported routing or deferred-machine
    requests.
 5. Land documented lintable boundaries for illegal direct callers.
+6. Remove or move every removal-ledger target assigned to Y.8 before closing
+   the sprint.
 
 ## Acceptance Criteria
 
-- no harness-policy branches remain in outer send/ack/persistence layers
+- `rg -n "DeliveryHarnessPath|allows_claude_jsonl_append"
+  crates/atm-core/src/send/mod.rs crates/atm-core/src/send/persistence.rs
+  crates/atm-core/src/ack/mod.rs` returns no harness-policy branches outside
+  approved machine/executor modules
 - impossible transition surfaces are deleted, not merely ignored
-- unsupported requests fail closed with typed errors
-- boundary/lint documentation identifies the only approved callers of low-level
-  delivery primitives
+- unsupported requests fail closed with typed errors and named tests
+- `docs/phase-Yb/removal-ledger.md` marks all Y.8 targets closed, moved, or
+  blocked explicitly
+- lint/boundary documentation identifies the only approved callers of
+  low-level delivery primitives and the enforcement point for each rule
 
 ## Required Document Updates
 
@@ -48,3 +71,12 @@ transition surfaces from the runtime.
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
 
+## Required Validation
+
+```bash
+cargo fmt --all --check
+python3 .just/run_lint.py all
+cargo build --workspace
+cargo test --workspace
+git diff --check
+```

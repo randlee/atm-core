@@ -160,6 +160,13 @@ After Yb:
    - post-send notification executor for the same logical plan
 5. transition emission occurs from the same machine/executor result surface
 
+Approved executor ownership:
+
+- `atm_core::delivery_execution::execute_delivery_plan(...)`
+- `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+- `atm_core::boundary::InboxExport` handles Claude delivery only
+- `atm_core::boundary::NonClaudeOutbound` handles non-Claude delivery only
+- `atm_core::boundary::NotificationSink` handles notification side effects only
+
 Outside the state machines and shared executors, there should be no harness
 branching and no payload-shape branching.
-

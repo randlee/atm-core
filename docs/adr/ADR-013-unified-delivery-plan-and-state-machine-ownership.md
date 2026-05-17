@@ -46,7 +46,20 @@ policy outside the state machines.
 
 The state machine boundary emits a uniform plan shape.
 
-Expected plan contents:
+Exact module and type ownership:
+
+- `crates/atm-core/src/delivery_plan.rs`
+  - `atm_core::delivery_plan::LogicalMessage`
+  - `atm_core::delivery_plan::DeliveryTarget`
+  - `atm_core::delivery_plan::NotificationTarget`
+  - `atm_core::delivery_plan::DeliveryPlanDisposition`
+  - `atm_core::delivery_plan::DeliveryPlan`
+  - `atm_core::delivery_plan::ReplyDeliveryPlan`
+- `crates/atm-core/src/delivery_execution.rs`
+  - `atm_core::delivery_execution::execute_delivery_plan(...)`
+  - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+
+Required plan contents:
 
 - logical messages
 - delivery targets
@@ -58,6 +71,12 @@ Shared executors consume that plan:
 - Claude inbox writer
 - non-Claude outbound delivery writer
 - post-send notification executor
+
+Required boundary ownership:
+
+- Claude delivery uses `atm_core::boundary::InboxExport`
+- non-Claude delivery uses `atm_core::boundary::NonClaudeOutbound`
+- notification side effects use `atm_core::boundary::NotificationSink`
 
 ### 4. Notification is not delivery
 
@@ -100,4 +119,3 @@ The documented lintable boundary plan must forbid direct calls from:
 - `docs/phase-Yb/sprint-Y7.md`
 - `docs/phase-Yb/sprint-Y8.md`
 - `docs/phase-Yb/sprint-Y9.md`
-

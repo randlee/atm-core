@@ -228,6 +228,22 @@ Notes:
   - non-Claude outbound payload delivery must use a dedicated delivery
     boundary, not NotificationSink as a stand-in
 
+## NonClaudeOutbound
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/non-claude-outbound.toml](../../boundaries/atm-core/non-claude-outbound.toml)
+
+
+Purpose:
+- Owns first-class non-Claude logical message delivery after the
+  state-machine/coordinator seam has produced a typed delivery plan.
+
+Notes:
+- This boundary must receive the same `LogicalMessage` payload set that the
+  Claude path receives; only transport target differs.
+- `NotificationSink` must not be used as a substitute for this boundary.
+- only approved delivery executors may call this boundary directly.
+
 ## StatusSource
 
 Canonical machine-readable boundary source:

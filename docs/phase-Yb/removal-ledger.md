@@ -18,8 +18,10 @@ corresponding implementation sprint starts.
 | `crates/atm-core/src/send/persistence.rs` | 98 | `DeliveryPersistenceResult::sqlite_failed_recovered(...)` carrying `CompanionNudgePlan` only | `Move` / redesign | typed degraded `DeliveryPlan` + error disposition | Companion nudge alone is not a complete non-Claude delivery contract. |
 | `crates/atm-core/src/send/mod.rs` | 322 | `run_send_post_send_hooks` | `Move` behind shared executor boundary | `PostSendNotificationExecutor` | Outer send path must not own harness/degradation notification branching. |
 | `crates/atm-core/src/send/mod.rs` | 345 | `if let Some(companion_nudge)` branch | `Delete` from outer send flow | machine-owned notification plan | Companion notification decisions belong to the machine plan. |
+| `crates/atm-core/src/send/mod.rs` | 238 | `finalize_send_outcome` | `Move` / narrow | `delivery_execution::execute_delivery_plan(...)` | Final outcome translation must follow the typed delivery plan rather than re-deriving harness semantics in `send/mod.rs`. |
 | `crates/atm-core/src/send/mod.rs` | 571 | `emit_delivery_transitions` | `Move` into coordinator/machine execution layer | coordinator emits transitions from machine result | Outer send path should not translate dispositions into transition tables. |
 | `crates/atm-core/src/send/mod.rs` | 586 | `append_failure_transition_names(route.harness)` | `Delete` outer use | machine-owned transition sequence | Append failure is not a generic outer routing concern. |
+| `crates/atm-core/src/send/hook.rs` | 57 | `maybe_run_post_send_hook` as a direct outer send caller seam | `Move` behind shared executor boundary | `PostSendNotificationExecutor` | Outer send/ack code should call one executor, not the hook helper directly. |
 | `crates/atm-core/src/send/hook.rs` | 90 | `execute_post_send_hook` as current degraded non-Claude stand-in | `Keep`, but notification-only | `PostSendNotificationExecutor` | Must remain notification-only and must not imply message delivery. |
 | `crates/atm-core/src/send/hook.rs` | 104 | JSON payload construction in `execute_post_send_hook` | `Keep`, but narrow | notification metadata only | This payload does not carry message bodies and therefore cannot satisfy delivery semantics. |
 | `crates/atm-core/src/delivery_policy.rs` | 61 | `DeliveryRecipientSnapshot::fallback_claude` | `Delete` or replace with fail-closed deferred error | typed unsupported / roster-missing error | Silent fallback to Claude path is incompatible with strict harness-based routing. |
@@ -35,6 +37,7 @@ corresponding implementation sprint starts.
 | `crates/atm-core/src/mailbox/store.rs` | 21 | `write_compat_mailbox_projection` | `Keep`, but repair/rebuild-only | admin / repair executor | Array rewrite must not remain on normal runtime message path. |
 | `crates/atm-core/src/mailbox/store.rs` | 29 | `append_compat_mailbox_message` | `Keep`, but executor-only | `ClaudeInboxWriter` | Survives as Claude-only low-level append primitive. |
 | `crates/atm-core/src/ack/mod.rs` | 416 | `persist_message_and_seed_workflow` in `persist_ack_reply` | `Move` through reply delivery plan | `AckReplyStateMachine -> ReplyDeliveryPlan` | Ack reply must use the same shared execution model as new-message. |
+| `crates/atm-core/src/ack/mod.rs` | 442 | `finalize_ack_outcome` | `Move` / narrow | `delivery_execution::execute_reply_delivery_plan(...)` | Ack should not own a second outer disposition-to-notification translation path. |
 | `crates/atm-core/src/ack/mod.rs` | 511 | `collect_ack_hook_warnings` | `Move` behind shared executor boundary | `PostSendNotificationExecutor` | Ack path should not own separate notification logic shape. |
 
 ## Keep Rules
@@ -53,4 +56,3 @@ What must not survive:
 - metadata-only hook invocation used as proof of message delivery
 - direct persistence-to-outward-delivery coupling
 - implicit fallback from unknown/missing roster data to Claude append
-

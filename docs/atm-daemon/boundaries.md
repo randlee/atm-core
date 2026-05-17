@@ -363,6 +363,21 @@ Notes:
     `NotificationSink::deliver(...)` only and must not open plugin/agent
     delivery paths directly
 
+## DaemonNonClaudeOutboundAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-daemon/daemon-non-claude-outbound.toml](../../boundaries/atm-daemon/daemon-non-claude-outbound.toml)
+
+
+Purpose:
+- Owns the daemon runtime adapter behind the `NonClaudeOutbound` boundary.
+
+Notes:
+- This adapter must deliver the same logical `message[]` payload set that the
+  Claude path receives.
+- It must not downgrade message delivery into notification-only metadata.
+- Its callers are limited to the approved delivery executor seam.
+
 ## DaemonStatusSourceAdapter
 
 Canonical machine-readable boundary source:
