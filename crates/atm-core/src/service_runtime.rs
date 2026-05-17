@@ -4,6 +4,7 @@ use std::time::Duration;
 
 use crate::boundary::{InboxExportReexportMessageRequest, MessageKey};
 use crate::config::{self, AtmConfig};
+use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
 use crate::read::seen_state;
 use crate::schema::{MessageEnvelope, TeamConfig};
@@ -51,9 +52,13 @@ pub(crate) trait RetainedServiceRuntime {
     fn refresh_compat_inbox_projection(
         &self,
         home_dir: &Path,
+        recipient: &DeliveryRecipientSnapshot,
+    ) -> Result<(), AtmError>;
+    fn load_roster_member(
+        &self,
         team: &TeamName,
         agent: &AgentName,
-    ) -> Result<(), AtmError>;
+    ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError>;
 
     fn commit_workflow_state<T, I, F>(
         &self,
@@ -159,17 +164,34 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
     fn refresh_compat_inbox_projection(
         &self,
         home_dir: &Path,
-        team: &TeamName,
-        agent: &AgentName,
+        recipient: &DeliveryRecipientSnapshot,
     ) -> Result<(), AtmError> {
-        let inbox_path = crate::home::inbox_path_from_home(home_dir, team, agent)?;
-        let messages = load_store_backed_mailbox_projection(self, team, agent)?;
+        if !recipient.allows_claude_jsonl_append() {
+            return Ok(());
+        }
+        let inbox_path =
+            crate::home::inbox_path_from_home(home_dir, &recipient.team, &recipient.agent)?;
+        let messages =
+            load_store_backed_mailbox_projection(self, &recipient.team, &recipient.agent)?;
 
         crate::direct_boundaries::reexport_messages(InboxExportReexportMessageRequest {
             path: inbox_path,
             messages,
         })
         .map(|_| ())
+    }
+
+    fn load_roster_member(
+        &self,
+        team: &TeamName,
+        agent: &AgentName,
+    ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError> {
+        self.roster_store
+            .query_membership(crate::boundary::RosterStoreQueryMembershipRequest {
+                team: team.clone(),
+                member: agent.clone(),
+            })
+            .map(|response| response.member)
     }
 
     fn commit_workflow_state<T, I, F>(

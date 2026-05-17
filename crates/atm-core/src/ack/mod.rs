@@ -2,6 +2,10 @@ use std::path::PathBuf;
 
 use crate::boundary;
 use crate::config;
+use crate::delivery_policy::{
+    DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryTransitionEvent,
+    persisted_success_transition_names,
+};
 use crate::error::AtmError;
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort};
@@ -161,6 +165,7 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
     actor: AgentName,
     team: TeamName,
 ) -> Result<AckOutcome, AtmError> {
+    let delivery_policy = DeliveryPolicyCoordinator::new();
     let source = load_ack_source(
         runtime,
         &request.home_dir,
@@ -169,7 +174,20 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         request.message_id,
     )?;
     let reply_target = validate_reply_target(runtime, &request.home_dir, &source.record, &team)?;
-    let persisted = persist_ack_reply(runtime, &request, &actor, &team, &source, &reply_target)?;
+    let reply_snapshot = delivery_policy.resolve_recipient_snapshot(
+        runtime,
+        &reply_target.team,
+        &reply_target.agent,
+    )?;
+    let persisted = persist_ack_reply(
+        runtime,
+        &request,
+        &actor,
+        &team,
+        &source,
+        &reply_target,
+        &reply_snapshot,
+    )?;
 
     let mut outcome = AckOutcome {
         action: CommandAction::Ack,
@@ -186,12 +204,33 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
     outcome.warnings = collect_ack_hook_warnings(
         runtime,
         config,
-        &actor,
-        &team,
-        &reply_target,
-        persisted.reply_message_id,
-        outcome.task_id.as_ref(),
+        AckHookDispatch {
+            actor: &actor,
+            team: &team,
+            reply_target: &reply_target,
+            reply_snapshot: &reply_snapshot,
+            reply_message_id: persisted.reply_message_id,
+            task_id: outcome.task_id.as_ref(),
+        },
     );
+    let route =
+        delivery_policy.route_persisted_delivery(DeliveryEventFamily::AckReply, &reply_snapshot);
+    for transition in
+        persisted_success_transition_names(DeliveryEventFamily::AckReply, route.harness)
+    {
+        delivery_policy.emit_transition(
+            observability,
+            DeliveryTransitionEvent {
+                family: DeliveryEventFamily::AckReply,
+                outcome: transition,
+                team: &reply_target.team,
+                agent: &reply_target.agent,
+                sender: &actor,
+                message_id: Some(persisted.reply_message_id),
+                task_id: persisted.task_id.clone(),
+            },
+        );
+    }
 
     record_ack_telemetry(
         observability,
@@ -350,6 +389,7 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     team: &TeamName,
     source: &LoadedAckSource,
     reply_target: &ReplyTarget,
+    reply_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
 ) -> Result<PersistedAckReply, AtmError> {
     let ack_timestamp = IsoTimestamp::now();
     let reply_text = input::validate_message_text(request.reply_body.clone())?;
@@ -390,8 +430,7 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     persist_message_and_seed_workflow(
         runtime,
         home_dir(request),
-        &reply_target.team,
-        &reply_target.agent,
+        reply_snapshot,
         &reply_inbox_path,
         &reply_message,
         false,
@@ -411,35 +450,40 @@ fn home_dir(request: &AckRequest) -> &std::path::Path {
 fn collect_ack_hook_warnings<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
     config: Option<&crate::config::AtmConfig>,
-    actor: &AgentName,
-    team: &TeamName,
-    reply_target: &ReplyTarget,
-    reply_message_id: AtmMessageId,
-    task_id: Option<&TaskId>,
+    context: AckHookDispatch<'_>,
 ) -> Vec<String> {
     let reply_recipient = ResolvedRecipient {
-        agent: reply_target.agent.clone(),
-        team: reply_target.team.clone(),
+        agent: context.reply_target.agent.clone(),
+        team: context.reply_target.team.clone(),
     };
     let mut warnings = Vec::new();
     runtime.maybe_run_post_send_hook(
         &mut warnings,
         config,
         PostSendHookContext {
-            sender: actor,
-            sender_team: Some(team),
+            sender: context.actor,
+            sender_team: Some(context.team),
             recipient: &reply_recipient,
-            recipient_pane_id: None,
-            message_id: reply_message_id,
+            recipient_pane_id: context.reply_snapshot.recipient_pane_id.as_deref(),
+            message_id: context.reply_message_id,
             requires_ack: false,
             is_ack: true,
-            task_id,
+            task_id: context.task_id,
         },
     );
     warnings
         .into_iter()
         .map(|warning| warning.render())
         .collect()
+}
+
+struct AckHookDispatch<'a> {
+    actor: &'a AgentName,
+    team: &'a TeamName,
+    reply_target: &'a ReplyTarget,
+    reply_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
+    reply_message_id: AtmMessageId,
+    task_id: Option<&'a TaskId>,
 }
 
 fn record_ack_telemetry(

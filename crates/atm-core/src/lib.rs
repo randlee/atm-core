@@ -12,6 +12,8 @@ pub mod boundary_support;
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.
 pub(crate) mod config;
+/// Internal delivery-policy coordinator and event-family state machines.
+pub(crate) mod delivery_policy;
 /// Hidden daemon-facing wrapper surface over crate-private boundary helpers.
 #[doc(hidden)]
 pub mod direct_boundaries;

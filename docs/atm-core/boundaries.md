@@ -204,6 +204,10 @@ Notes:
 - Harness-specific export policy belongs in one central delivery-policy
   coordinator and event-family state machines above this boundary, not in
   scattered command callers.
+- `Y.4` lands that retained-command coordinator seam in
+  `crates/atm-core/src/delivery_policy.rs`; retained `send` and `ack` now
+  resolve roster snapshots through `RosterStore` before choosing whether
+  compatibility export is allowed for the recipient harness.
 
 ## NotificationSink
 

@@ -95,6 +95,12 @@ Current gap notes:
   - ack-reply legality and delegated reply-delivery flow
   - inbox-repair staged rebuild flow
   - restore-inbox-rebuild staged publish flow
+- `Y.4` code now lands the matching retained-command coordinator/state-machine
+  seam in:
+  - `crates/atm-core/src/delivery_policy.rs`
+  - `crates/atm-core/src/service_runtime.rs`
+  - `crates/atm-core/src/send/mod.rs`
+  - `crates/atm-core/src/ack/mod.rs`
 
 ## 3. SQLite Query Diagrams Already Documented
 

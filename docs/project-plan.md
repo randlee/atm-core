@@ -3483,6 +3483,11 @@ Execution shape:
   - normal retained compatibility rewrite now routes only through
     `RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
 - `Y.4` delivery coordinator and event-family state machines
+  - complete on `feature/pY-s4-delivery-coordinator-and-state-machines`
+  - retained send/ack harness routing now resolves a copied roster snapshot in
+    `crates/atm-core/src/delivery_policy.rs`
+  - retained compatibility export now stays on the `Claude Code` harness path
+    only; non-Claude harnesses skip ATM-authored JSONL export
 - `Y.5` mutable compatibility-field removal and hidden-dependency exposure
 - `Y.6` append-only compatibility export cutover if the approved wire contract
   allows it
