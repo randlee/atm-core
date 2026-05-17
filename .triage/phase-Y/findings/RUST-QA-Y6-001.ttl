@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RUST-QA-Y6-001>
+  a triage:Finding ;
+  triage:findingId "RUST-QA-Y6-001" ;
+  triage:title "append_message_removes_lock_sentinel test vacuously passes — sentinel never created" ;
+  triage:description "Test append_message_removes_lock_sentinel_after_write at mailbox/mod.rs:363 asserts !lock::sentinel_path(&path).exists() after calling append_message. The assertion passes vacuously because append_message never creates a lock sentinel. The test name implies a behavioral guarantee (append cleans up after itself) that the implementation does not provide and the test does not actually verify. Fix: rename to append_message_does_not_create_lock_sentinel and assert sentinel absent both before and after; or add setup to create sentinel first if cleanup behavior is intended." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RUST-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-Y6-001/pY-s6/1> .
+
+<urn:atm:triage:occurrence/RUST-QA-Y6-001/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/mod.rs" ;
+  triage:line 363 ;
+  triage:snippet "fn append_message_removes_lock_sentinel_after_write — assert!(!lock::sentinel_path(&path).exists()) vacuously passes; sentinel was never created" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/2b808428> .
+
+<urn:atm:triage:worktree/pY-s6/2b808428>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

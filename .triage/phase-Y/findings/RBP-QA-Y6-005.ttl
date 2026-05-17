@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-QA-Y6-005>
+  a triage:Finding ;
+  triage:findingId "RBP-QA-Y6-005" ;
+  triage:title "TestRuntime Mutex fields lack rationale comment — RBP-006" ;
+  triage:description "TestRuntime at send/mod.rs:1033 holds appended_messages: Mutex<Vec<MessageEnvelope>> and hook_captures: Mutex<Vec<HookCapture>> without a code comment explaining the cross-thread sharing requirement. The use of Mutex is correct (test double shared via Arc in concurrent send tests) but RBP-006 requires interior mutability to be accompanied by a rationale comment. Fix: add a brief comment on TestRuntime: '// Mutex required: TestRuntime is shared across threads in concurrent send tests'." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/send/mod.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-QA-Y6-005/pY-s6/1> .
+
+<urn:atm:triage:occurrence/RBP-QA-Y6-005/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1033 ;
+  triage:snippet "struct TestRuntime { appended_messages: Mutex<Vec<MessageEnvelope>>, hook_captures: Mutex<Vec<HookCapture>> } — no rationale comment for interior mutability" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/2b808428> .
+
+<urn:atm:triage:worktree/pY-s6/2b808428>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
