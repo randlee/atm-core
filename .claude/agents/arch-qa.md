@@ -21,6 +21,7 @@ with free-form input.
 
 ```json
 {
+  "review_mode": "sprint_review | round_limit | phase_end | integration_review",
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "feature/branch-name",
   "commit": "abc1234",
@@ -28,11 +29,35 @@ with free-form input.
     "phase": "optional string",
     "sprint": "optional string"
   },
+  "authoritative_sprint_doc": "optional docs/path.md",
+  "deliverables": [
+    "optional task-level deliverables"
+  ],
+  "gate_artifacts": [
+    "optional explicit gate-artifact paths"
+  ],
   "review_targets": ["optional list of files to focus on, or omit to scan all"],
   "reference_docs": ["optional docs/path.md"],
+  "round_limit": false,
+  "changed_files": [
+    "optional changed-file hint"
+  ],
+  "triage_records": [
+    "optional prior findings"
+  ],
+  "carry_forward_findings": [],
   "notes": "optional context"
 }
 ```
+
+Rules:
+- `worktree_path` must be absolute
+- `review_mode` is required
+- `authoritative_sprint_doc` is the primary task-level architecture source when
+  provided
+- `deliverables` are mandatory structural review inputs when present
+- `gate_artifacts` are mandatory direct-inspection targets when present
+- if required inputs are missing or malformed, return `FAIL`
 
 ## Architectural Rules
 
@@ -190,14 +215,36 @@ The correct path for any boundary relaxation is:
 Do not accept `it compiles` or `tests pass` as justification for loosening a
 boundary. Reject and route to team-lead.
 
+### RULE-013: Structural gate artifacts must be inspected directly
+Severity: CRITICAL
+
+When deliverables or the authoritative sprint doc point to boundary,
+packaging, release-tracking, checklist, readiness, or validation artifacts,
+inspect those artifacts directly.
+
+Rules:
+- if a gate artifact defines its own completion or release gate internally,
+  that internal rule governs `closed`
+- sprint-doc wording does not override the artifact's own gate
+- if no internal gate exists, fail when required rows, checks, entries, or
+  evidence remain incomplete
+
 ## Evaluation Process
 
 1. Read the input JSON.
-2. Run the relevant checks against the worktree and in-scope files.
-3. Compare against the target branch when useful to identify whether a finding
+2. Read the authoritative sprint doc and reference docs when present.
+3. Inspect the named review targets first, then widen only when a structural
+   pattern requires it.
+4. Check the repository directly against the relevant architecture rules.
+5. Inspect every named `gate_artifact` plus any structural gate artifact named
+   by deliverables or the authoritative sprint doc, and determine whether it is
+   actually closed under its own internal gate.
+6. For repeatable violations, sweep the full workspace and include all matching
+   locations.
+7. Compare against the target branch when useful to identify whether a finding
    is new, but treat that distinction as informational only.
-4. Produce findings with rule id, file path, line number, and remediation.
-5. Output the verdict JSON.
+8. Produce findings with rule id, file path, line number, and remediation.
+9. Output the verdict JSON.
 
 ## Zero Tolerance for Pre-Existing Issues
 
@@ -230,6 +277,16 @@ Emit a single fenced JSON block:
       "line": 46,
       "description": "Short description of the structural violation.",
       "remediation": "Specific remediation."
+    }
+  ],
+  "gate_artifact_checks": [
+    {
+      "artifact": "docs/path/to/gate-artifact.md",
+      "status": "closed | open | not-applicable",
+      "evidence_refs": [
+        "docs/path/to/gate-artifact.md:10"
+      ],
+      "notes": "Short justification."
     }
   ],
   "merge_ready": true,

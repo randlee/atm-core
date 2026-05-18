@@ -39,6 +39,11 @@ with free-form input.
     "docs/path/to/design-or-plan-doc-1.md",
     "docs/path/to/design-or-plan-doc-2.md"
   ],
+  "authoritative_sprint_doc": "docs/path/to/authoritative-sprint-doc.md",
+  "deliverable_enumeration_source": "authoritative_sprint_doc",
+  "deliverable_coverage_required": true,
+  "assignment_has_deliverables": true,
+  "coverage_rule": "string",
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "optional branch name",
   "commit": "optional commit sha",
@@ -61,6 +66,7 @@ with free-form input.
   "changed_files": [
     "optional changed-file hint for limited recheck rounds"
   ],
+  "carry_forward_findings": [],
   "notes": "optional context"
 }
 ```
@@ -70,9 +76,16 @@ Rules:
   paths.
 - `phase_sprint_documents` is a supported alias; if both are provided, merge
   and de-duplicate.
+- `authoritative_sprint_doc` is the primary task-level sprint source when
+  provided.
 - `deliverables`, `acceptance_criteria`, and `expected_artifacts` are optional
   assignment overlays. When present, treat them as mandatory verification
   items, not as hints.
+- if `assignment_has_deliverables` is `false`, return `FAIL`, emit a Blocking
+  finding for assignment incompleteness, and continue by enumerating
+  deliverables from `authoritative_sprint_doc`
+- `carry_forward_findings` and `triage_records` are prior-review context, not a
+  substitute for re-verification
 - Treat provided phase or sprint docs as in-scope constraints that must align
   with baseline sources.
 - If required inputs are missing or malformed, return `FAIL` with an
@@ -128,6 +141,7 @@ For every req-qa review, explicitly perform these checks:
 
 1. Build an in-memory checklist from:
    - sprint or phase docs
+   - `authoritative_sprint_doc` when provided
    - explicit `deliverables`
    - explicit `acceptance_criteria`
    - explicit `expected_artifacts`
@@ -136,13 +150,27 @@ For every req-qa review, explicitly perform these checks:
    - `partially-present`
    - `absent`
    - `not-verifiable`
+   - and, when the item is itself a gate artifact, also classify closure as
+     `closed`, `open`, or `not-applicable`
 3. For every `partially-present`, `absent`, or `not-verifiable` item, emit a
    finding.
-4. When a sprint doc names specific files, modules, tests, commands, or
+4. For every gate artifact that is `open`, emit a finding even if the artifact
+   file exists.
+5. When a sprint doc names specific files, modules, tests, commands, or
    artifacts, verify those concrete things exist and are wired into the actual
    implementation path where required.
-5. When a sprint doc promises a behavior change, verify the behavior path in
+6. When a sprint doc promises a behavior change, verify the behavior path in
    code rather than only the surrounding documentation.
+
+Gate-artifact rule:
+- read the artifact directly
+- if the artifact defines its own completion or release gate internally, that
+  internal rule governs `closed`
+- sprint-doc language may require the artifact, but it does not override the
+  artifact's own closure rule
+- if no internal closure rule exists, treat the artifact as `closed` only when
+  its required rows, checks, entries, or evidence are complete from repository
+  evidence
 
 Presence-check examples that must be treated as req-qa work:
 - "single-writer lane exists" means the named writer modules are present and
@@ -190,6 +218,7 @@ Return fenced JSON only.
     {
       "item": "named deliverable or acceptance criterion",
       "status": "present | partially-present | absent | not-verifiable",
+      "closure_state": "closed | open | not-applicable",
       "evidence_refs": [
         "docs/phase-X/sprint-X.md:10",
         "crates/example/src/lib.rs:42"
@@ -217,7 +246,11 @@ Return fenced JSON only.
   "summary": {
     "total_findings": 0,
     "blocking_findings": 0,
-    "overall_compliance": "compliant | non-compliant"
+    "overall_compliance": "compliant | non-compliant",
+    "deliverables_total": 0,
+    "deliverables_complete": 0,
+    "deliverables_incomplete": 0,
+    "deliverable_completion_percent": 0.0
   },
   "gate_reason": "why PASS or FAIL"
 }
@@ -227,7 +260,10 @@ Gate policy:
 - `FAIL` if any Blocking finding exists.
 - `FAIL` if required inputs are missing or invalid.
 - `FAIL` if baseline docs cannot be read.
+- `FAIL` if assignment deliverables are missing from the QA payload, even when
+  sprint-doc fallback enumeration is possible.
 - `FAIL` if any named deliverable, required artifact, or acceptance criterion
   is absent or not verifiable.
+- `FAIL` if any required gate artifact is still open.
 - `PASS` only when no Blocking findings exist and no unresolved cross-document
-  conflicts remain.
+  conflicts remain and deliverable completion is `100%`.
