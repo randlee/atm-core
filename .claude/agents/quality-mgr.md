@@ -20,7 +20,6 @@ Always read before starting a QA assignment:
 - `docs/team-protocol.md`
 - `.claude/agents/req-qa.md`
 - `.claude/agents/arch-qa.md`
-- `.claude/agents/plan-review-qa.md`
 - `.claude/agents/flaky-test-qa.md`
 - `.claude/skills/quality-management-gh/SKILL.md`
 - `.claude/skills/todo-triage/SKILL.md`
@@ -102,7 +101,6 @@ TODO-specific rule:
 6. Render structured JSON assignments:
    - `req-qa` from `.claude/skills/codex-orchestration/req-qa-assignment.json.j2`
    - `arch-qa` from `.claude/skills/codex-orchestration/arch-qa-assignment.json.j2`
-   - `plan-review-qa` from `.claude/skills/codex-orchestration/plan-review-qa-assignment.json.j2` when reviewing hardened phase or sprint planning docs
    - `flaky-test-qa` from `.claude/skills/codex-orchestration/flaky-test-qa-assignment.json.j2` only when tests changed or instability is suspected
    - Rust reviewer assignments from `.claude/assets/sc-rust/quality-mgr/templates/` exactly as directed by `.claude/assets/sc-rust/quality-mgr/quality-mgr.rust.md`
    - when rechecking prior findings, pass `triage_records`, `round_limit`,
@@ -143,7 +141,6 @@ For implementation work in this Rust repo:
 For docs-only plan review:
 - run `req-qa`
 - run `arch-qa`
-- run `plan-review-qa`
 - use the Rust supplement to decide whether `rust-best-practices-agent` or
   `rust-service-hardening-agent` should be added
 - do not run `rust-qa-agent` for docs-only review

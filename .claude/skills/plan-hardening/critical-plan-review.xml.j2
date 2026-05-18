@@ -1,0 +1,43 @@
+---
+name: critical-plan-review-task
+version: 1.0.0
+description: team-lead assignment template for late hostile review of a hardened plan before QA.
+format: xml
+required_variables:
+  - task_id
+  - phase
+  - description
+  - worktree_path
+  - branch
+  - references
+  - sprint_doc
+---
+<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="critical-plan-reviewer" mode="critical-plan-review">
+  <description>{{ description }}</description>
+
+  <worktree>{{ worktree_path }}</worktree>
+  <branch>{{ branch }}</branch>
+  <authoritative-sprint-doc>{{ sprint_doc }}</authoritative-sprint-doc>
+
+  <references>
+{{ references }}
+  </references>
+
+  <review-focus>
+    Perform a hostile late-stage review of the hardened plan.
+    Focus on:
+    - bad architecture decisions
+    - weak or missing boundaries
+    - false closure
+    - contradictory ownership
+    - missing ADR coverage
+    - unresolved ambiguity that could discard implementation work later
+  </review-focus>
+
+  <workflow>
+    <step id="a">ACK this message immediately.</step>
+    <step id="b">Read the sprint doc, related planning docs, and the sprint-planning guidelines.</step>
+    <step id="c">Do not edit files.</step>
+    <step id="d">Return fenced JSON findings only.</step>
+  </workflow>
+</atm-task>

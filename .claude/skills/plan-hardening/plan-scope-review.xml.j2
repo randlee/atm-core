@@ -1,0 +1,43 @@
+---
+name: plan-scope-review-task
+version: 1.0.0
+description: team-lead assignment template for early sprint-scope and split review before plan hardening.
+format: xml
+required_variables:
+  - task_id
+  - phase
+  - description
+  - worktree_path
+  - branch
+  - references
+  - sprint_doc
+---
+<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="plan-scope-reviewer" mode="plan-scope-review">
+  <description>{{ description }}</description>
+
+  <worktree>{{ worktree_path }}</worktree>
+  <branch>{{ branch }}</branch>
+  <authoritative-sprint-doc>{{ sprint_doc }}</authoritative-sprint-doc>
+
+  <references>
+{{ references }}
+  </references>
+
+  <review-focus>
+    Review the sprint and phase planning docs against
+    `.claude/skills/plan-hardening/sprint-planning-guidelines.md`.
+    Attack sprint shape early:
+    - split decisions
+    - deliverable ownership
+    - production-ready scope
+    - checklist authority
+    - direct dev/QA consumability
+  </review-focus>
+
+  <workflow>
+    <step id="a">ACK this message immediately.</step>
+    <step id="b">Read the sprint doc, related planning docs, and the sprint-planning guidelines.</step>
+    <step id="c">Do not edit files.</step>
+    <step id="d">Return fenced JSON findings only.</step>
+  </workflow>
+</atm-task>
