@@ -57,6 +57,10 @@ silently dropped or partially deferred.
   contract instead of hiding the behavior in `execute_claude_delivery(...)`
 - named tests prove that `message[1]` and `message[2]` are treated as one
   behavioral unit on the recovered Claude path
+- the plan names the translation seam from
+  `DeliveryPlanDisposition::SqliteFailedRecovered` into the recovered Claude
+  compatibility export mode explicitly, rather than leaving that mapping
+  implicit in executor control flow
 
 ## Required Work
 
@@ -65,6 +69,9 @@ silently dropped or partially deferred.
 - add the necessary `InboxExport`/runtime helper surface so the Claude
   compatibility path can materialize the recovered logical message set through
   one owned contract
+- narrow the `service_runtime.rs` role to the runtime-facing helper seam that
+  forwards the recovered message-set request into `InboxExport`; it must not
+  retain per-message recovered-path policy
 - keep normal persisted Claude append delivery explicit and separate from the
   recovered message-set path; do not reopen silent full-mailbox rewrite on the
   normal path
@@ -87,6 +94,9 @@ silently dropped or partially deferred.
     exposes one-message append semantics through
     `self.append_compat_inbox_message(inbox_path, message)`
     when the active disposition is `SqliteFailedRecovered`
+  - replace the recovered-path branch rather than extending it in parallel;
+    the persisted one-message append path survives, but the recovered one
+    message-at-a-time implementation must be removed
 
 ## Approved Surviving Paths
 
@@ -108,7 +118,6 @@ explicit code samples or signatures showing the intended end state.
 
 ```rust
 pub enum ClaudeCompatibilityDeliveryMode {
-    PersistedAppend,
     RecoveredLogicalMessageSet,
 }
 
@@ -123,11 +132,27 @@ pub struct InboxExportAppendMessageSetResponse {
 }
 
 pub trait InboxExport: sealed::Sealed {
+    fn export_record(
+        &self,
+        request: InboxExportRecordRequest,
+    ) -> Result<InboxExportRecordResponse, AtmError>;
+
+    fn reexport_message(
+        &self,
+        request: InboxExportReexportMessageRequest,
+    ) -> Result<InboxExportReexportMessageResponse, AtmError>;
+
     fn append_message_set(
         &self,
         request: InboxExportAppendMessageSetRequest,
     ) -> Result<InboxExportAppendMessageSetResponse, AtmError>;
 }
+```
+
+```rust
+fn claude_compatibility_delivery_mode_for_disposition(
+    disposition: DeliveryPlanDisposition,
+) -> Result<ClaudeCompatibilityDeliveryMode, AtmError>;
 ```
 
 ```rust
@@ -153,6 +178,22 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
 ) -> Result<(), AtmError>;
 ```
 
+## Error Inventory
+
+- `InboxExport::append_message_set(...)` returns `AtmError` when:
+  - the recovered logical message set cannot be projected to the compatibility
+    inbox/export surface at all
+  - the target inbox/export path is unavailable or invalid for recovered
+    export
+  - the export fails before the full logical message set is materialized
+- recovered Claude export must not degrade a partial `message[1]` write into an
+  `AppendDegraded` warning and continue
+- persisted append degradation remains separate:
+  - it may still surface the existing typed append warning on the persisted
+    append path
+  - it must not be reused as proof that recovered logical-message-set export is
+    allowed to partially succeed
+
 ## This Sprint Does Not Close
 
 - the `NotificationSink` boundary bypass in the post-send notification path
@@ -177,11 +218,16 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
   - `sqlite_failure_for_claude_requires_full_logical_message_set_delivery`
   - `sqlite_failure_for_claude_does_not_emit_message1_without_message2`
   - `persisted_claude_append_degradation_remains_explicit_and_warning_typed`
+    must prove that the persisted append-only path still emits the existing
+    typed warning entry on append degradation and never silently drops the
+    failure
 - no acceptance criterion relies on “shared shape” alone; the runtime behavior
   must be proven by the tests above
 
 ## Required Validation
 
+- `rg -n "if disposition == DeliveryPlanDisposition::SqliteFailedRecovered \\{[[:space:]]*break;" crates/atm-core/src/delivery_execution.rs`
+- `rg -n "append_claude_inbox_message\\(inbox_path, recipient, &message\\.envelope\\)" crates/atm-core/src/delivery_execution.rs`
 - `cargo build --workspace`
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`

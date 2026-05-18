@@ -41,7 +41,8 @@ target: integrate/phase-Y
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
-- `docs/project-plan.md`
+- `docs/project-plan.md` (Section 33, `Phase Yc Final Production-Readiness Closure`)
+- `docs/phase-Yc/readiness.md`
 
 ## Deliverables
 
@@ -60,6 +61,9 @@ silently dropped or partially deferred.
 - the integrated `Phase Y` line gets a focused production-readiness gate that
   specifically rechecks the two `Yc` closure invariants before `Phase Z`
   resumes
+- the sprint leaves one explicit readiness record artifact,
+  `docs/phase-Yc/readiness.md`, naming both `Yc` closure invariants and the
+  `Phase Z` smoke gate
 
 ## Required Work
 
@@ -77,6 +81,7 @@ silently dropped or partially deferred.
   retained runtime
 - update every cross-crate runtime assembly site to use that one constructor:
   - `atm-daemon` production retained runtime
+  - `atm-daemon/src/runtime_health.rs` runtime-health retained runtime wiring
   - `atm-rusqlite` default retained runtime
   - `atm-runtime-test-support` cached test runtimes
   - daemon/unit integration tests that build `LocalServiceRuntime` directly
@@ -111,8 +116,9 @@ silently dropped or partially deferred.
   - delete constructor callsites that still assemble `LocalServiceRuntime`
     through the legacy constructor surface
 - `crates/atm-rusqlite/src/lib.rs`
-  - delete retained test/runtime constructor callsites that still depend on the
-    legacy constructor surface
+  - delete retained test/runtime callsites that still construct
+    `LocalServiceRuntime` through `new(...)` or
+    `new_with_non_claude_outbound(...)`
 
 ## Approved Surviving Paths
 
@@ -152,6 +158,10 @@ pub(crate) trait PostSendNotificationExecutor {
         &self,
         warnings: &mut Vec<WarningEntry>,
         recipient: &ResolvedRecipient,
+        // `recipient_pane_id` stays as `Option<&str>` for Y.13 because the
+        // canonical pane identifier type-normalization line is separate work;
+        // this sprint closes notification-boundary ownership, not pane-id
+        // type redesign.
         recipient_pane_id: Option<&str>,
         notifications: &[NotificationTarget],
     );
@@ -186,6 +196,11 @@ pub fn new_with_delivery_boundaries(
 
 ```rust
 pub struct LocalFileNotificationSink;
+// Owned by `atm_core::direct_boundaries`.
+// Role: fallback non-daemon `NotificationSink` adapter for local/test runtime
+// assembly. It appends newline-delimited serialized `NotificationEvent`
+// payloads to a caller-supplied file path and returns typed `AtmError` on file
+// open/write failure rather than swallowing the event.
 ```
 
 ```rust
@@ -195,6 +210,29 @@ fn notification_event_from_target(
     target: &NotificationTarget,
 ) -> NotificationEvent;
 ```
+
+## Error Inventory
+
+- `NotificationSink::deliver(...)` returns `AtmError` when:
+  - the daemon-backed notification queue is unavailable
+  - the daemon-backed notification queue is full and delivery is
+    backpressured
+  - the fallback local file sink cannot persist the notification event
+- ack-path notification failure policy:
+  - notification failure on the ack path degrades to a typed warning entry and
+    does not silently drop the event
+  - it must not revert the already-valid ack outcome solely because the
+    side-effect sink is unavailable
+- backpressure handling must log a structured warning/observability event in
+  addition to surfacing the typed warning result
+- shutdown/drain policy remains bounded:
+  - already-accepted queued notification events are drained during normal
+    shutdown up to the runtime-owned bounded join/drain behavior
+  - Y.13 must not introduce an unbounded flush loop
+- startup/liveness check:
+  - the readiness record must state that the production retained runtime can
+    construct a live `NotificationSink` and accept at least one notification
+    request on the send/ack path
 
 ## This Sprint Does Not Close
 
@@ -225,6 +263,8 @@ fn notification_event_from_target(
 - named tests prove notification translation and degradation behavior:
   - `delivery_notifications_use_notification_sink_boundary`
   - `notification_sink_failure_is_explicit_in_delivery_warnings`
+    must prove that a warning entry is populated and the failure is not
+    swallowed by direct helper-owned behavior
   - `notification_sink_backpressure_does_not_reopen_hook_helper_bypass`
 - the sprint leaves one explicit readiness record in the docs that says:
   - `Y.12` closed the Claude recovered-message-set contract
@@ -233,6 +273,11 @@ fn notification_event_from_target(
 
 ## Required Validation
 
+- `rg -n "maybe_run_post_send_hook" crates/atm-core/src/delivery_execution.rs`
+- `rg -n "fn maybe_run_post_send_hook" crates/atm-core/src/service_runtime.rs`
+- `rg -n "pub fn new\\(" crates/atm-core/src/service_runtime.rs`
+- `rg -n "new_with_non_claude_outbound" crates/atm-daemon/src/runtime_health.rs`
+- `rg -n "new_with_non_claude_outbound" crates`
 - `cargo build --workspace`
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`

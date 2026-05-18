@@ -3629,5 +3629,18 @@ Execution shape:
 Immediate planning outputs:
 - `docs/phase-Yc/plan-phase-Yc.md`
 - `docs/phase-Yc/issues.md`
+- `docs/phase-Yc/readiness.md`
 - `docs/phase-Yc/sprint-Y12.md`
 - `docs/phase-Yc/sprint-Y13.md`
+
+Acceptance / Phase Z Smoke Gate:
+- `Phase Z` smoke and dogfood work remain blocked while either `Y.12` or
+  `Y.13` is still open.
+- `Phase Z` smoke may resume only after the `Yc` readiness record explicitly
+  states that:
+  - the recovered Claude SQLite-failure path cannot partially emit a logical
+    message set while still claiming success
+  - the production notification path executes through
+    `NotificationSink::deliver(...)` rather than direct hook helpers
+  - the focused `Yc` readiness validation has passed on the merged
+    `integrate/phase-Y` line

@@ -228,6 +228,13 @@ Notes:
   - see:
     - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
     - [../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md](../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
+- `Phase Yc` adds one final recovered-Claude seam requirement:
+  - `Y.12` introduces one explicit recovered logical-message-set export seam
+    for `DeliveryPlanDisposition::SqliteFailedRecovered`
+  - the recovered Claude path must not loop one message at a time through the
+    normal append helper while degrading to warnings after partial success
+  - persisted single-message Claude append remains on the existing append-only
+    path and is not reopened onto this boundary
 
 ## NotificationSink
 

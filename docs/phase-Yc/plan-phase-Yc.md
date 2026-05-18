@@ -105,6 +105,9 @@ Authoritative sprint doc:
 Supporting issues inventory for the whole `Yc` line:
 - [issues.md](./issues.md)
 
+Named readiness record produced by `Y.13`:
+- [readiness.md](./readiness.md)
+
 ## Exit Condition
 
 Phase `Yc` closes only when:
@@ -113,5 +116,7 @@ Phase `Yc` closes only when:
   logical message set while still claiming success
 - `Y.13` proves the production notification path executes through
   `NotificationSink`, not direct hook helpers
+- `Y.13` leaves the named readiness record artifact that records both closure
+  invariants and the `Phase Z` smoke gate
 - the integrated line can pass a focused production-readiness review without
   reopening the same two issues
