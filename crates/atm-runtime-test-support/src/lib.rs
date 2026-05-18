@@ -4,12 +4,18 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Mutex, MutexGuard, Once, OnceLock};
 
-use atm_core::LocalServiceRuntime;
 use atm_core::error::AtmError;
 use atm_core::test_support::{remove_env_var, set_env_var};
+use atm_core::{
+    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
+    home::host_runtime_dir,
+};
 use atm_rusqlite::{SqliteBoundaryAssembly, SqliteWriterLockGuard};
 
 static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
+// Mutex required because sqlite retained runtimes are cached across concurrent
+// tests; bulk clear() is safe because entries are deterministic per path and
+// are rebuilt lazily on the next access.
 static SQLITE_RUNTIME_CACHE: OnceLock<Mutex<HashMap<PathBuf, LocalServiceRuntime>>> =
     OnceLock::new();
 const MAX_SQLITE_RUNTIME_CACHE_ENTRIES: usize = 16;
@@ -80,10 +86,14 @@ fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
     }
 
     let assembly = SqliteBoundaryAssembly::new(&path)?;
-    let runtime = LocalServiceRuntime::new(
+    let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.mail_store_arc(),
         assembly.task_store_arc(),
         assembly.roster_store_arc(),
+        std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
+        std::sync::Arc::new(LocalFileNotificationSink::at_path(
+            host_runtime_dir()?.join("notifications.jsonl"),
+        )),
     );
     if runtime_cache.len() >= MAX_SQLITE_RUNTIME_CACHE_ENTRIES {
         runtime_cache.clear();

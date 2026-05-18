@@ -861,10 +861,14 @@ mod tests {
     }
 
     fn sqlite_runtime(assembly: &SqliteBoundaryAssembly) -> LocalServiceRuntime {
-        LocalServiceRuntime::new(
+        LocalServiceRuntime::new_with_delivery_boundaries(
             assembly.mail_store_arc(),
             assembly.task_store_arc(),
             assembly.roster_store_arc(),
+            Arc::new(atm_core::LocalFileNonClaudeOutbound::new()),
+            Arc::new(atm_core::LocalFileNotificationSink::at_path(
+                std::env::temp_dir().join("atm-rusqlite-notifications.jsonl"),
+            )),
         )
     }
 

@@ -131,6 +131,8 @@ pub use graft::{
     AtmGraftClient,
 };
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
-pub use service_runtime::LocalServiceRuntime;
+pub use service_runtime::{
+    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
+};
 #[doc(hidden)]
 pub use service_runtime_store::install_default_runtime_factory;

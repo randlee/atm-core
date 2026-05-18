@@ -1,7 +1,7 @@
 ---
 id: Y.13
 title: Notification Boundary Closure And Final Readiness Gate
-status: planned
+status: complete
 branch: feature/pYc-s13-notification-boundary-and-readiness-gate
 worktree: ../atm-core-worktrees/feature/pYc-s13-notification-boundary-and-readiness-gate
 target: integrate/phase-Y
@@ -200,14 +200,14 @@ pub struct LocalFileNotificationSink {
 }
 
 impl LocalFileNotificationSink {
-    pub fn new(path: PathBuf) -> Self {
+    pub fn at_path(path: PathBuf) -> Self {
         Self { path }
     }
 }
-// Owned by `atm_core::direct_boundaries`.
+// Owned by `atm_core::service_runtime`.
 // Role: fallback non-daemon `NotificationSink` adapter for local/test runtime
 // assembly. Non-daemon callers construct it explicitly with
-// `LocalFileNotificationSink::new(path)` and it appends newline-delimited
+// `LocalFileNotificationSink::at_path(path)` and it appends newline-delimited
 // serialized `NotificationEvent` payloads to that path, returning typed
 // `AtmError` on file open/write failure rather than swallowing the event.
 ```
@@ -258,6 +258,10 @@ fn notification_event_from_target(
 - any unrelated daemon transport or roster-store redesign
 - post-mortem lint recommendations or rule additions from
   `integrate/phase-Y/.triage/phase-Yb/post-mortem.md`
+- eliminating the remaining accepted limitation that synchronous file append
+  cannot be interrupted once a notification write has started; Y.13 bounds the
+  shutdown drain before each persistence step and leaves a direct stalled-write
+  harness as `Y.14` follow-on work
 
 ## Acceptance Criteria
 
@@ -296,3 +300,14 @@ fn notification_event_from_target(
 - `cargo test --workspace`
 - `cargo clippy --workspace -- -D warnings`
 - `git diff --check`
+
+## Completion Record
+
+- `Y.13` is complete on
+  `feature/pYc-s13-notification-boundary-and-readiness-gate`
+- the retained send/ack notification path now translates
+  `NotificationTarget -> NotificationEvent` in the shared executor and delivers
+  through `NotificationSink::deliver(...)`
+- `LocalServiceRuntime` now exposes one approved public constructor,
+  `new_with_delivery_boundaries(...)`, and all retained-runtime assembly sites
+  were updated to use it

@@ -3602,11 +3602,12 @@ Immediate planning outputs:
 ## 33. Phase Yc Final Production-Readiness Closure
 
 Status summary:
-- `integrate/phase-Y` is close enough to resume smoke only after two final
-  production-readiness blockers are explicitly closed.
-- `Phase Yc` is the dedicated follow-on for those blockers.
-- `Phase Yc` is intentionally split into two sprints so each deliverable lands
-  at a production-ready level without mixing behavioral and boundary closure.
+- `Phase Yc` is the dedicated follow-on that closed the last two
+  production-readiness blockers on the `Phase Y` line.
+- `Y.12` closed the recovered Claude logical-message-set contract.
+- `Y.13` closed the production `NotificationSink` boundary bypass and left the
+  readiness record needed before `Phase Z` smoke resumes on merged
+  `integrate/phase-Y`.
 
 Goal:
 - close the final Claude recovered degraded-delivery contract gap
@@ -3634,13 +3635,12 @@ Immediate planning outputs:
 - `docs/phase-Yc/sprint-Y13.md`
 
 Acceptance / Phase Z Smoke Gate:
-- `Phase Z` smoke and dogfood work remain blocked while either `Y.12` or
-  `Y.13` is still open.
-- `Phase Z` smoke may resume only after the `Yc` readiness record explicitly
-  states that:
+- `Phase Z` smoke and dogfood work remained blocked while either `Y.12` or
+  `Y.13` was still open.
+- `Phase Z` smoke may resume once the `Yc` readiness record lands on merged
+  `integrate/phase-Y`, stating that:
   - the recovered Claude SQLite-failure path cannot partially emit a logical
     message set while still claiming success
   - the production notification path executes through
     `NotificationSink::deliver(...)` rather than direct hook helpers
-  - the focused `Yc` readiness validation has passed on the merged
-    `integrate/phase-Y` line
+  - the focused `Yc` readiness validation has passed

@@ -3,12 +3,12 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use serde_json::Map;
+use serde_json::{Map, Value};
 use tempfile::tempdir;
 
 use super::{
-    DeliveryPersistenceDisposition, PostSendHookContext, ResolvedRecipient, SendExecutionContext,
-    WarningEntry, alert_state, build_send_delivery_plan, persist_message_and_seed_workflow,
+    DeliveryPersistenceDisposition, ResolvedRecipient, SendExecutionContext, WarningEntry,
+    alert_state, build_send_delivery_plan, persist_message_and_seed_workflow,
     prepare_threaded_message,
 };
 use crate::boundary::{
@@ -25,6 +25,7 @@ use crate::observability::{
     LogTailSession, ObservabilityPort,
 };
 use crate::process::process_is_alive;
+use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AgentMember, TeamConfig};
 use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
@@ -32,7 +33,7 @@ use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
 use crate::service_runtime_store::RetainedMailboxRuntime;
 use crate::test_support::{TEST_SENDER, TEST_TEAM};
-use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::WorkflowStateFile;
 
 fn message(
@@ -60,25 +61,20 @@ fn message(
     }
 }
 
-#[derive(Debug)]
-struct HookCapture {
-    sender: AgentName,
-    sender_team: Option<TeamName>,
-    recipient: ResolvedRecipient,
-    message_id: AtmMessageId,
-    requires_ack: bool,
-    is_ack: bool,
-    task_id: Option<TaskId>,
+fn notification_detail(event: &NotificationEvent) -> Value {
+    serde_json::from_str(&event.detail).expect("structured notification detail")
 }
 
-// Mutex required: TestRuntime is shared via Arc across threads in concurrent send tests.
 struct TestRuntime {
     commit_error_message: Option<&'static str>,
     append_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
+    // Mutex required because concurrent send-path tests share the same runtime.
     appended_messages: Mutex<Vec<MessageEnvelope>>,
+    // Mutex required because concurrent send-path tests share the same runtime.
     non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
-    hook_captures: Mutex<Vec<HookCapture>>,
+    // Mutex required because concurrent send-path tests share the same runtime.
+    notification_events: Mutex<Vec<NotificationEvent>>,
 }
 
 impl TestRuntime {
@@ -93,7 +89,7 @@ impl TestRuntime {
             recipient_harness,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
-            hook_captures: Mutex::new(Vec::new()),
+            notification_events: Mutex::new(Vec::new()),
         }
     }
 }
@@ -150,29 +146,6 @@ impl RetainedServiceRuntime for TestRuntime {
         }
     }
 
-    fn maybe_run_post_send_hook(
-        &self,
-        _warnings: &mut Vec<super::WarningEntry>,
-        _config: Option<&AtmConfig>,
-        context: PostSendHookContext<'_>,
-    ) {
-        self.hook_captures
-            .lock()
-            .expect("hook captures lock")
-            .push(HookCapture {
-                sender: context.sender.clone(),
-                sender_team: context.sender_team.cloned(),
-                recipient: ResolvedRecipient {
-                    agent: context.recipient.agent.clone(),
-                    team: context.recipient.team.clone(),
-                },
-                message_id: context.message_id,
-                requires_ack: context.requires_ack,
-                is_ack: context.is_ack,
-                task_id: context.task_id.cloned(),
-            });
-    }
-
     fn rebuild_compat_inbox_projection(
         &self,
         _inbox_path: &Path,
@@ -227,6 +200,14 @@ impl RetainedServiceRuntime for TestRuntime {
                 recipient_pane_id: recipient.recipient_pane_id.clone(),
                 messages: messages.to_vec(),
             });
+        Ok(())
+    }
+
+    fn deliver_notification_event(&self, event: NotificationEvent) -> Result<(), AtmError> {
+        self.notification_events
+            .lock()
+            .expect("notification events lock")
+            .push(event);
         Ok(())
     }
 
@@ -608,46 +589,64 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
     assert_eq!(deliveries[0].messages[1].from.as_str(), "atm-system");
     drop(deliveries);
-    let captures = runtime.hook_captures.lock().expect("hook capture lock");
+    let events = runtime
+        .notification_events
+        .lock()
+        .expect("notification events lock");
+    assert_eq!(events.len(), 2);
     assert!(
-        captures
+        events
             .iter()
-            .any(|capture| capture.sender.as_str() == TEST_SENDER)
+            .all(|event| event.kind == NotificationKind::Delivery)
     );
-    assert!(
-        captures
-            .iter()
-            .any(|capture| capture.sender.as_str() == "atm-system")
-    );
-    assert!(captures.iter().any(|capture| {
-        capture.sender.as_str() == TEST_SENDER
-            && capture.sender_team.is_some()
-            && capture.recipient.agent.as_str() == "recipient"
-            && capture.recipient.team.as_str() == TEST_TEAM
-            && capture.message_id.to_string().len() > 10
+    assert!(events.iter().any(|event| {
+        notification_detail(event)
+            .get("sender")
+            .and_then(Value::as_str)
+            == Some(TEST_SENDER)
     }));
-    let original_capture = captures
+    assert!(events.iter().any(|event| {
+        notification_detail(event)
+            .get("sender")
+            .and_then(Value::as_str)
+            == Some("atm-system")
+    }));
+    let original_event = events
         .iter()
-        .find(|capture| capture.sender.as_str() == TEST_SENDER)
+        .find(|event| {
+            notification_detail(event)
+                .get("sender")
+                .and_then(Value::as_str)
+                == Some(TEST_SENDER)
+        })
         .expect("original notification");
-    let _requires_ack = original_capture.requires_ack;
-    let _is_ack = original_capture.is_ack;
+    let original_detail = notification_detail(original_event);
     assert_eq!(
-        original_capture
-            .task_id
-            .as_ref()
-            .map(ToString::to_string)
-            .as_deref(),
+        original_event.team.as_ref().map(TeamName::as_str),
+        Some(TEST_TEAM)
+    );
+    assert_eq!(
+        original_event.agent.as_ref().map(AgentName::as_str),
+        Some("recipient")
+    );
+    assert!(
+        original_detail
+            .get("message_id")
+            .and_then(Value::as_str)
+            .is_some()
+    );
+    assert_eq!(
+        original_detail.get("task_id").and_then(Value::as_str),
         Some("task-123")
     );
-    drop(captures);
+    drop(events);
 
-    let events = observability.events.lock().expect("events lock");
-    assert!(events.iter().any(|event| {
+    let observability_events = observability.events.lock().expect("events lock");
+    assert!(observability_events.iter().any(|event| {
         event.command == "delivery_policy"
             && event.outcome == "delivery_policy.new_message.non_claude_original"
     }));
-    assert!(events.iter().any(|event| {
+    assert!(observability_events.iter().any(|event| {
         event.command == "delivery_policy"
             && event.outcome == "delivery_policy.new_message.non_claude_error"
     }));
@@ -679,6 +678,19 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
     assert_eq!(deliveries.len(), 1);
     assert_eq!(deliveries[0].messages.len(), 1);
     assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
+    drop(deliveries);
+    let events = runtime
+        .notification_events
+        .lock()
+        .expect("notification events lock");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].kind, NotificationKind::Delivery);
+    assert_eq!(
+        notification_detail(&events[0])
+            .get("sender")
+            .and_then(Value::as_str),
+        Some(TEST_SENDER)
+    );
 }
 
 #[test]
@@ -704,14 +716,19 @@ fn send_claude_success_appends_original_via_compat_inbox_writer() {
             .expect("non-claude deliveries lock")
             .is_empty()
     );
+    let events = runtime
+        .notification_events
+        .lock()
+        .expect("notification events lock");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].kind, NotificationKind::Delivery);
     assert_eq!(
-        runtime
-            .hook_captures
-            .lock()
-            .expect("hook capture lock")
-            .len(),
-        1
+        notification_detail(&events[0])
+            .get("sender")
+            .and_then(Value::as_str),
+        Some(TEST_SENDER)
     );
+    drop(events);
 
     let events = observability.events.lock().expect("events lock");
     assert!(events.iter().any(|event| {
@@ -732,10 +749,19 @@ fn send_append_failure_routes_to_post_send_hook_fallback() {
 
     assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
     assert_eq!(outcome.warnings.len(), 1);
-    let captures = runtime.hook_captures.lock().expect("hook capture lock");
-    assert_eq!(captures.len(), 1);
-    assert_eq!(captures[0].sender.as_str(), TEST_SENDER);
-    drop(captures);
+    let events = runtime
+        .notification_events
+        .lock()
+        .expect("notification events lock");
+    assert_eq!(events.len(), 1);
+    assert_eq!(events[0].kind, NotificationKind::Delivery);
+    assert_eq!(
+        notification_detail(&events[0])
+            .get("sender")
+            .and_then(Value::as_str),
+        Some(TEST_SENDER)
+    );
+    drop(events);
 
     let events = observability.events.lock().expect("events lock");
     assert!(events.iter().any(|event| {
