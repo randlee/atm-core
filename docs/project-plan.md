@@ -3558,8 +3558,11 @@ Status summary:
   `DeliveryHarnessPath::NonClaude`
 - an explicit repair/rebuild projection seam that no longer accepts a generic
   recipient snapshot with a non-Claude no-op branch
-- smoke/dogfood work may now resume on the follow-on line without reopening the
-  same message-path consolidation issues.
+- a later focused production-readiness review still reopened two final blockers:
+  - partial Claude recovered degraded delivery remained possible
+  - production notification execution still bypassed `NotificationSink`
+- those blockers are tracked in `Phase Yc`; smoke/dogfood work must not resume
+  until `Phase Yc` closes.
 
 Goal:
 - lock down the exact message-path consolidation work needed after `Phase Y`
@@ -3595,3 +3598,49 @@ Immediate planning outputs:
 - `docs/phase-Yb/sprint-Y10.md`
 - `docs/phase-Yb/sprint-Y11.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+
+## 33. Phase Yc Final Production-Readiness Closure
+
+Status summary:
+- `integrate/phase-Y` is close enough to resume smoke only after two final
+  production-readiness blockers are explicitly closed.
+- `Phase Yc` is the dedicated follow-on for those blockers.
+- `Phase Yc` is intentionally split into two sprints so each deliverable lands
+  at a production-ready level without mixing behavioral and boundary closure.
+
+Goal:
+- close the final Claude recovered degraded-delivery contract gap
+- close the final `NotificationSink` boundary bypass
+- hand the merged `Phase Y` line back to `Phase Z` only after a focused
+  readiness gate passes
+- keep `Y.12` and `Y.13` on their user-discussed runtime/code scope; later
+  post-mortem lint recommendations are separate follow-up work, not substitute
+  deliverables for these two sprints
+
+Execution shape:
+- planning-only branch: `plan/phase-Yc-y12-y13`
+- implementation target branch: `integrate/phase-Y`
+- implementation sequence:
+  - `Y.12` Claude degraded delivery set closure
+    - branch: `feature/pYc-s12-claude-degraded-delivery-set-closure`
+  - `Y.13` notification boundary closure and readiness gate
+    - branch: `feature/pYc-s13-notification-boundary-and-readiness-gate`
+
+Immediate planning outputs:
+- `docs/phase-Yc/plan-phase-Yc.md`
+- `docs/phase-Yc/issues.md`
+- `docs/phase-Yc/readiness.md`
+- `docs/phase-Yc/sprint-Y12.md`
+- `docs/phase-Yc/sprint-Y13.md`
+
+Acceptance / Phase Z Smoke Gate:
+- `Phase Z` smoke and dogfood work remain blocked while either `Y.12` or
+  `Y.13` is still open.
+- `Phase Z` smoke may resume only after the `Yc` readiness record explicitly
+  states that:
+  - the recovered Claude SQLite-failure path cannot partially emit a logical
+    message set while still claiming success
+  - the production notification path executes through
+    `NotificationSink::deliver(...)` rather than direct hook helpers
+  - the focused `Yc` readiness validation has passed on the merged
+    `integrate/phase-Y` line
