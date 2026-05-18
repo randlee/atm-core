@@ -50,17 +50,12 @@ Treat the assignment as the source of truth for:
 - worktree path
 - authoritative sprint doc
 - review targets
-- deliverables
-- acceptance criteria
-- expected artifacts
 - changed files
 - triage records
 - reference docs
 
-If `deliverables` are missing, immediately inform team-lead that the assignment
-is incomplete, continue the review using the authoritative sprint doc, and
-force the final QA verdict to FAIL. For any other missing field, make the
-narrowest safe assumption and say so in the status message to team-lead.
+If a required context field is missing, make the narrowest safe assumption and
+say so in the status message to team-lead.
 
 ## Review Scope Expansion (Rounds 1–2)
 
@@ -99,14 +94,11 @@ TODO-specific rule:
 2. Validate that the task is XML rendered from the QA template. Reject any
    non-XML assignment from team-lead immediately.
 3. Read the task payload and determine the reviewer set.
-4. If the task does not list deliverables, report assignment incompleteness to
-   team-lead immediately, continue the review against the authoritative sprint
-   doc, and force the final verdict to FAIL.
-5. If NOT `round_limit`, expand `review_targets` to the full sprint diff.
-6. During implementation sprint-end QA or integration-branch review, run the
+4. If NOT `round_limit`, expand `review_targets` to the full sprint diff.
+5. During implementation sprint-end QA or integration-branch review, run the
    TODO scan from `.claude/skills/todo-triage/SKILL.md` and treat discovered
    TODOs as QA findings rather than backlog markers.
-7. Render structured JSON assignments:
+6. Render structured JSON assignments:
    - `req-qa` from `.claude/skills/codex-orchestration/req-qa-assignment.json.j2`
    - `arch-qa` from `.claude/skills/codex-orchestration/arch-qa-assignment.json.j2`
    - `flaky-test-qa` from `.claude/skills/codex-orchestration/flaky-test-qa-assignment.json.j2` only when tests changed or instability is suspected
@@ -114,28 +106,23 @@ TODO-specific rule:
    - when rechecking prior findings, pass `triage_records`, `round_limit`,
      `changed_files`, and `carry_forward_findings_json` through the rendered
      reviewer templates instead of wrapper prose
-   - for `req-qa`, also pass any explicit sprint `deliverables`,
-     `acceptance_criteria`, and named `expected_artifacts` when the task
-     assignment provides them; req-qa is responsible for deliverable presence
-     checks, closure-artifact inspection, and completion metrics
-    - pass task-listed `deliverables` and the authoritative sprint doc to
-      `arch-qa` as structural review inputs
-8. Launch all selected reviewers as background Task agents. Never run cargo,
+   - pass context only; reviewer scope comes from `authoritative_sprint_doc`
+7. Launch all selected reviewers as background Task agents. Never run cargo,
    clippy, or broad QA analysis yourself in the foreground.
-9. Collect the reviewer results and classify them as:
+8. Collect the reviewer results and classify them as:
    - blocking
    - non-blocking
    - skipped
-10. Check PR CI state when a PR number is present:
+9. Check PR CI state when a PR number is present:
    - prefer `atm gh monitor status`
    - prefer `atm gh monitor pr <PR> --start-timeout 120`
    - prefer `atm gh pr report <PR> --json`
    - fall back to `gh pr checks <PR> --watch` and
      `gh pr view <PR> --json mergeStateStatus,reviewDecision` if the repo-level
      `atm gh` flow is unavailable
-11. Publish the PR update using the templates from
+10. Publish the PR update using the templates from
    `.claude/skills/quality-management-gh/`.
-12. Report a final PASS, FAIL, or IN-FLIGHT gate to team-lead, including
+11. Report a final PASS, FAIL, or IN-FLIGHT gate to team-lead, including
     deliverable completion as `X/Y (Z%)`.
 
 ## Default Reviewer Set

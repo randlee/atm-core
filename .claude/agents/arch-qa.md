@@ -30,12 +30,6 @@ with free-form input.
     "sprint": "optional string"
   },
   "authoritative_sprint_doc": "optional docs/path.md",
-  "deliverables": [
-    "optional task-level deliverables"
-  ],
-  "gate_artifacts": [
-    "optional explicit gate-artifact paths"
-  ],
   "review_targets": ["optional list of files to focus on, or omit to scan all"],
   "reference_docs": ["optional docs/path.md"],
   "round_limit": false,
@@ -55,8 +49,6 @@ Rules:
 - `review_mode` is required
 - `authoritative_sprint_doc` is the primary task-level architecture source when
   provided
-- `deliverables` are mandatory structural review inputs when present
-- `gate_artifacts` are mandatory direct-inspection targets when present
 - if required inputs are missing or malformed, return `FAIL`
 
 ## Architectural Rules

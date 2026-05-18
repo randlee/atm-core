@@ -40,24 +40,11 @@ with free-form input.
     "docs/path/to/design-or-plan-doc-2.md"
   ],
   "authoritative_sprint_doc": "docs/path/to/authoritative-sprint-doc.md",
-  "deliverable_enumeration_source": "authoritative_sprint_doc",
-  "deliverable_coverage_required": true,
-  "assignment_has_deliverables": true,
-  "coverage_rule": "string",
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "optional branch name",
   "commit": "optional commit sha",
   "review_targets": [
     "optional file/dir paths to inspect for implementation compliance"
-  ],
-  "deliverables": [
-    "optional explicit deliverable statements from the assignment"
-  ],
-  "acceptance_criteria": [
-    "optional explicit acceptance criteria from the assignment"
-  ],
-  "expected_artifacts": [
-    "optional files, modules, tests, or docs that must exist when the sprint lands"
   ],
   "triage_records": [
     "optional prior finding records to recheck"
@@ -78,12 +65,6 @@ Rules:
   and de-duplicate.
 - `authoritative_sprint_doc` is the primary task-level sprint source when
   provided.
-- `deliverables`, `acceptance_criteria`, and `expected_artifacts` are optional
-  assignment overlays. When present, treat them as mandatory verification
-  items, not as hints.
-- if `assignment_has_deliverables` is `false`, return `FAIL`, emit a Blocking
-  finding for assignment incompleteness, and continue by enumerating
-  deliverables from `authoritative_sprint_doc`
 - `carry_forward_findings` and `triage_records` are prior-review context, not a
   substitute for re-verification
 - Treat provided phase or sprint docs as in-scope constraints that must align
@@ -142,9 +123,6 @@ For every req-qa review, explicitly perform these checks:
 1. Build an in-memory checklist from:
    - sprint or phase docs
    - `authoritative_sprint_doc` when provided
-   - explicit `deliverables`
-   - explicit `acceptance_criteria`
-   - explicit `expected_artifacts`
 2. For each checklist item, classify it as:
    - `present`
    - `partially-present`
@@ -260,8 +238,6 @@ Gate policy:
 - `FAIL` if any Blocking finding exists.
 - `FAIL` if required inputs are missing or invalid.
 - `FAIL` if baseline docs cannot be read.
-- `FAIL` if assignment deliverables are missing from the QA payload, even when
-  sprint-doc fallback enumeration is possible.
 - `FAIL` if any named deliverable, required artifact, or acceptance criterion
   is absent or not verifiable.
 - `FAIL` if any required gate artifact is still open.
