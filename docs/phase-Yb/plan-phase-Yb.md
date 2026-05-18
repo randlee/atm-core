@@ -9,6 +9,16 @@ boundary enforcement are fixed before any further implementation begins.
 This is a planning-only phase on a worktree off `develop`. It does not start
 implementation.
 
+Historical follow-on note:
+
+- `Yb` closed the planned path-consolidation line, but a later
+  `integrate/phase-Y` production-readiness review reopened two final blockers:
+  - Claude recovered degraded delivery still allowed partial logical-message-set
+    success
+  - production notification execution still bypassed `NotificationSink`
+- those blockers now live in the dedicated `Phase Yc` follow-on plan:
+  [../phase-Yc/plan-phase-Yc.md](../phase-Yc/plan-phase-Yc.md)
+
 ## Baseline
 
 - planning branch: `message-path-consolidation-plan-Yb`
