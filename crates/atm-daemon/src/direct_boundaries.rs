@@ -1,6 +1,7 @@
 use atm_core::{
     boundary::{
         ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse,
+        InboxExportAppendMessageSetRequest, InboxExportAppendMessageSetResponse,
         InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
         InboxExportReexportMessageResponse, InboxIngressDiagnosticsRequest,
         InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
@@ -30,18 +31,14 @@ pub(crate) fn import_inbox_source(
 
 pub(crate) fn compute_identity_fingerprint(
     request: InboxIngressIdentityFingerprintRequest,
-) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
-    Ok(atm_core::direct_boundaries::compute_identity_fingerprint(
-        request,
-    ))
+) -> InboxIngressIdentityFingerprintResponse {
+    atm_core::direct_boundaries::compute_identity_fingerprint(request)
 }
 
 pub(crate) fn report_inbox_diagnostics(
     request: InboxIngressDiagnosticsRequest,
-) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
-    Ok(atm_core::direct_boundaries::report_inbox_diagnostics(
-        request,
-    ))
+) -> InboxIngressDiagnosticsResponse {
+    atm_core::direct_boundaries::report_inbox_diagnostics(request)
 }
 
 pub(crate) fn export_source_files(
@@ -54,4 +51,10 @@ pub(crate) fn reexport_messages(
     request: InboxExportReexportMessageRequest,
 ) -> Result<InboxExportReexportMessageResponse, AtmError> {
     atm_core::direct_boundaries::reexport_messages(request)
+}
+
+pub(crate) fn append_message_set(
+    request: InboxExportAppendMessageSetRequest,
+) -> Result<InboxExportAppendMessageSetResponse, AtmError> {
+    atm_core::direct_boundaries::append_message_set(request)
 }

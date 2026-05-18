@@ -427,6 +427,26 @@ pub struct InboxExportReexportMessageResponse {
     pub wrote_messages: usize,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ClaudeCompatibilityDeliveryMode {
+    RecoveredLogicalMessageSet,
+}
+
+/// Explicit inbox-export append-message-set request for recovered Claude delivery.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InboxExportAppendMessageSetRequest {
+    pub path: PathBuf,
+    pub messages: Vec<MessageEnvelope>,
+    pub mode: ClaudeCompatibilityDeliveryMode,
+}
+
+/// Explicit inbox-export append-message-set response for recovered Claude delivery.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InboxExportAppendMessageSetResponse {
+    pub wrote_messages: usize,
+}
+
 /// Canonical Phase R inbox-export request entrypoint payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InboxExportRequest;
@@ -572,20 +592,14 @@ pub trait InboxIngress: sealed::Sealed {
         &self,
         request: InboxIngressImportRequest,
     ) -> Result<InboxIngressImportResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when identity fingerprinting cannot be computed.
     fn compute_identity_fingerprint(
         &self,
         request: InboxIngressIdentityFingerprintRequest,
-    ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when inbox diagnostics cannot be generated.
+    ) -> InboxIngressIdentityFingerprintResponse;
     fn report_diagnostics(
         &self,
         request: InboxIngressDiagnosticsRequest,
-    ) -> Result<InboxIngressDiagnosticsResponse, AtmError>;
+    ) -> InboxIngressDiagnosticsResponse;
 }
 
 /// BOUNDARY-InboxExport — see docs/atm-core/boundaries.md.
@@ -605,6 +619,14 @@ pub trait InboxExport: sealed::Sealed {
         &self,
         request: InboxExportReexportMessageRequest,
     ) -> Result<InboxExportReexportMessageResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a recovered Claude logical message set cannot
+    /// be materialized through one owned export operation.
+    fn append_message_set(
+        &self,
+        request: InboxExportAppendMessageSetRequest,
+    ) -> Result<InboxExportAppendMessageSetResponse, AtmError>;
 }
 
 /// BOUNDARY-NonClaudeOutbound — see docs/atm-core/boundaries.md.
