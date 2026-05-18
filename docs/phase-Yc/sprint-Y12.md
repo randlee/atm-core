@@ -193,6 +193,11 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
     append path
   - it must not be reused as proof that recovered logical-message-set export is
     allowed to partially succeed
+- `claude_compatibility_delivery_mode_for_disposition(...)` returns
+  `AtmError::validation(...)` with `AtmErrorCode::MessageValidationFailed`
+  when called with any `DeliveryPlanDisposition` other than
+  `DeliveryPlanDisposition::SqliteFailedRecovered`; non-recovered dispositions
+  are invalid inputs for the recovered Claude message-set mapping seam
 
 ## This Sprint Does Not Close
 

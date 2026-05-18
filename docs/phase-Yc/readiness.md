@@ -23,6 +23,15 @@ This artifact is the named readiness record that `Y.13` must complete before
 - the focused `Yc` readiness validation passed
 - smoke may resume
 
+## Startup Liveness Requirement
+
+The `Y.13` readiness closeout must state that:
+- the production retained runtime can construct a live `NotificationSink`
+- the send/ack execution path can submit at least one notification request
+  through `NotificationSink::deliver(...)`
+- this liveness proof satisfies the explicit startup/liveness acceptance
+  requirement in `docs/phase-Yc/sprint-Y13.md`
+
 ## Planned Ownership
 
 - planned by: `plan/phase-Yc-y12-y13`

@@ -195,12 +195,21 @@ pub fn new_with_delivery_boundaries(
 ```
 
 ```rust
-pub struct LocalFileNotificationSink;
+pub struct LocalFileNotificationSink {
+    path: PathBuf,
+}
+
+impl LocalFileNotificationSink {
+    pub fn new(path: PathBuf) -> Self {
+        Self { path }
+    }
+}
 // Owned by `atm_core::direct_boundaries`.
 // Role: fallback non-daemon `NotificationSink` adapter for local/test runtime
-// assembly. It appends newline-delimited serialized `NotificationEvent`
-// payloads to a caller-supplied file path and returns typed `AtmError` on file
-// open/write failure rather than swallowing the event.
+// assembly. Non-daemon callers construct it explicitly with
+// `LocalFileNotificationSink::new(path)` and it appends newline-delimited
+// serialized `NotificationEvent` payloads to that path, returning typed
+// `AtmError` on file open/write failure rather than swallowing the event.
 ```
 
 ```rust
@@ -216,7 +225,8 @@ fn notification_event_from_target(
 - `NotificationSink::deliver(...)` returns `AtmError` when:
   - the daemon-backed notification queue is unavailable
   - the daemon-backed notification queue is full and delivery is
-    backpressured
+    backpressured; this path currently returns
+    `AtmErrorCode::DaemonUnavailable` (`ATM_DAEMON_UNAVAILABLE`)
   - the fallback local file sink cannot persist the notification event
 - ack-path notification failure policy:
   - notification failure on the ack path degrades to a typed warning entry and
@@ -227,7 +237,11 @@ fn notification_event_from_target(
   addition to surfacing the typed warning result
 - shutdown/drain policy remains bounded:
   - already-accepted queued notification events are drained during normal
-    shutdown up to the runtime-owned bounded join/drain behavior
+    shutdown up to the existing `3s` runtime shutdown deadline
+  - if that `3s` deadline is exceeded, the runtime emits a structured warning,
+    returns `AtmErrorCode::DaemonUnavailable`
+    (`ATM_DAEMON_UNAVAILABLE`), detaches the join helper, and any still-pending
+    queued notification events are treated as dropped
   - Y.13 must not introduce an unbounded flush loop
 - startup/liveness check:
   - the readiness record must state that the production retained runtime can

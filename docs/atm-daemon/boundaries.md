@@ -328,8 +328,9 @@ Notes:
     - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
 - `Phase Yc` adds one final recovered-Claude seam requirement:
   - `Y.12` must document the daemon-side adapter behavior for the recovered
-    logical-message-set seam rather than treating `DaemonInboxExportAdapter`
-    as append-only by implication
+    logical-message-set seam through
+    `InboxExport::append_message_set(...)` rather than treating
+    `DaemonInboxExportAdapter` as append-only by implication
   - the daemon adapter must expose the recovered Claude message-set export as
     one owned `InboxExport` operation, not as repeated single-message appends
 
@@ -382,6 +383,11 @@ Notes:
   - `Y.13` must ensure the retained runtime factory installs the daemon-owned
     `NotificationSink` adapter on the live send/ack executor path rather than
     allowing direct helper-owned notification execution to survive
+  - shutdown remains bounded by the current `3s`
+    `NotificationRuntime::shutdown()` deadline; if exceeded, the adapter emits
+    a structured warning, returns `AtmErrorCode::DaemonUnavailable`
+    (`ATM_DAEMON_UNAVAILABLE`), detaches the join helper, and any still-pending
+    queued notification events are treated as dropped
 
 ## DaemonNonClaudeOutboundAdapter
 
