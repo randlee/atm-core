@@ -11,7 +11,14 @@ use crate::constants::ATM_SERVICE_NAME;
 /// L.5 intentionally keeps the release surface narrow: one explicit
 /// construction entry point without introducing a broader builder or unified
 /// observer abstraction.
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(
+    unfulfilled_lint_expectations,
+    reason = "This release-surface options type is live in normal builds even though the dead-code expectation remains documented for narrower test configurations."
+)]
+#[expect(
+    dead_code,
+    reason = "CliObservabilityOptions is a release-surface construction option even when some binaries do not exercise every field."
+)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct CliObservabilityOptions {
     pub stderr_logs: bool,
@@ -106,7 +113,14 @@ impl CliObservability {
         }
     }
 
-    #[cfg_attr(not(test), allow(dead_code))]
+    #[allow(
+        unfulfilled_lint_expectations,
+        reason = "The explicit constructor remains part of the production surface even when the dead-code expectation is not triggered in this build graph."
+    )]
+    #[expect(
+        dead_code,
+        reason = "CliObservability::new is retained as the explicit production constructor even when some tests bootstrap through alternate seams."
+    )]
     pub fn new(
         home_dir: &std::path::Path,
         options: CliObservabilityOptions,

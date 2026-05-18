@@ -264,60 +264,75 @@ impl WatchRuntime {
                     )
                     .with_source(source)
                 })?;
-            match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
-                Ok(Ok(())) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "ok",
-                        "watch runtime worker shut down cleanly",
-                    );
-                }
-                Ok(Err(_)) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "failed",
-                        "watch runtime worker panicked during shutdown",
-                    );
-                    return Err(AtmError::daemon_unavailable(
-                        "watch runtime worker panicked during shutdown",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon; the watch background lane crashed while shutting down.",
-                    ));
-                }
-                Err(mpsc::RecvTimeoutError::Timeout) => {
-                    // Intentional detach: the timeout path must fail fast instead of blocking
-                    // indefinitely on a stalled join helper during daemon shutdown.
-                    drop(join_helper);
-                    tracing::warn!(
-                        timeout_ms = WATCH_SHUTDOWN_DEADLINE.as_millis(),
-                        "watch runtime worker exceeded shutdown deadline; detaching join helper"
-                    );
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "degraded",
-                        "watch runtime worker exceeded its shutdown deadline",
-                    );
-                    return Err(AtmError::daemon_unavailable(
-                        "watch runtime worker exceeded the bounded shutdown deadline",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon after the watch background lane becomes responsive again.",
-                    ));
-                }
-                Err(mpsc::RecvTimeoutError::Disconnected) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "failed",
-                        "watch runtime join helper disconnected during shutdown",
-                    );
-                    tracing::warn!(
-                        "watch runtime worker join helper exited before reporting shutdown status"
-                    );
-                }
+            self.complete_watch_shutdown(result_rx, join_helper)?;
+        }
+        Ok(())
+    }
+
+    fn complete_watch_shutdown(
+        &self,
+        result_rx: mpsc::Receiver<thread::Result<()>>,
+        join_helper: thread::JoinHandle<()>,
+    ) -> Result<(), AtmError> {
+        match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
+            Ok(Ok(())) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "ok",
+                    "watch runtime worker shut down cleanly",
+                );
+            }
+            Ok(Err(_)) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "failed",
+                    "watch runtime worker panicked during shutdown",
+                );
+                return Err(AtmError::daemon_unavailable(
+                    "watch runtime worker panicked during shutdown",
+                )
+                .with_recovery(
+                    "Restart atm-daemon; the watch background lane crashed while shutting down.",
+                ));
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // Intentional detach: the timeout path must fail fast instead of blocking
+                // indefinitely on a stalled join helper during daemon shutdown.
+                drop(join_helper);
+                tracing::warn!(
+                    subsystem = "watch",
+                    action = "shutdown_detach",
+                    outcome = "deadline_exceeded",
+                    timeout_ms = WATCH_SHUTDOWN_DEADLINE.as_millis(),
+                    "watch runtime worker exceeded shutdown deadline; detaching join helper"
+                );
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "degraded",
+                    "watch runtime worker exceeded its shutdown deadline",
+                );
+                return Err(AtmError::daemon_unavailable(
+                    "watch runtime worker exceeded the bounded shutdown deadline",
+                )
+                .with_recovery(
+                    "Restart atm-daemon after the watch background lane becomes responsive again.",
+                ));
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "failed",
+                    "watch runtime join helper disconnected during shutdown",
+                );
+                tracing::warn!(
+                    subsystem = "watch",
+                    action = "shutdown_join_helper",
+                    outcome = "disconnected",
+                    "watch runtime worker join helper exited before reporting shutdown status"
+                );
             }
         }
         Ok(())

@@ -250,6 +250,12 @@ impl NotificationRuntime {
                     "notification runtime worker exceeded shutdown deadline; detaching join helper"
                 );
                 drop(join_helper);
+                tracing::warn!(
+                    subsystem = "notification",
+                    action = "shutdown_drain",
+                    outcome = "deadline_exceeded",
+                    "notification drain deadline exceeded; detaching worker"
+                );
                 Err(AtmError::daemon_unavailable(format!(
                     "notification runtime shutdown exceeded the {:?} deadline",
                     self.inner.shutdown_deadline

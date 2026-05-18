@@ -677,7 +677,14 @@ fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary)
     }
 }
 
-#[cfg_attr(not(test), allow(dead_code))]
+#[allow(
+    unfulfilled_lint_expectations,
+    reason = "The adapter-port constructor is exercised in normal builds even though the dead-code expectation remains documented for narrower configurations."
+)]
+#[expect(
+    dead_code,
+    reason = "The adapter-port constructor remains part of the CLI observability surface even when specific test configurations do not call it directly."
+)]
 pub(crate) fn new_adapter_port(
     home_dir: &std::path::Path,
     stderr_logs: bool,

@@ -47,6 +47,8 @@ struct ReconcileRuntimeInner {
     // fingerprint registry, it must drop `state` before locking this mutex.
     // The registry is ancillary reconcile-emission state and must never nest
     // inside the primary runtime lifecycle lock.
+    // Mutex required: reconcile worker and callers both mutate fingerprint
+    // dedupe state across requests and shutdown.
     #[cfg_attr(not(test), allow(dead_code))]
     notification_fingerprints: Arc<Mutex<NotificationFingerprintRegistry>>,
 }
@@ -308,66 +310,82 @@ impl ReconcileRuntime {
         if let Some(handle) = handle {
             let worker_thread_id = handle.thread().id();
             let (result_rx, join_helper) = spawn_reconcile_join_helper(handle)?;
-            match wait_for_reconcile_join(result_rx) {
-                Ok(Ok(())) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "ok",
-                        "reconcile runtime worker shut down cleanly",
-                    );
-                }
-                Ok(Err(_)) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "failed",
-                        "reconcile runtime worker panicked during shutdown",
-                    );
-                    return Err(AtmError::daemon_unavailable(
-                        "reconcile runtime worker panicked during shutdown",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon; the reconcile background lane crashed while shutting down.",
-                    ));
-                }
-                Err(ReconcileJoinStatus::Timeout) => {
-                    drop(join_helper);
-                    tracing::warn!(
-                        thread_id = ?worker_thread_id,
-                        timeout_ms = RECONCILE_SHUTDOWN_DEADLINE.as_millis(),
-                        "reconcile runtime worker exceeded shutdown deadline; detaching join helper"
-                    );
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "degraded",
-                        "reconcile runtime worker exceeded its shutdown deadline",
-                    );
-                    return Err(AtmError::daemon_unavailable(
-                        "reconcile runtime worker exceeded the bounded shutdown deadline",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon after the reconcile background lane becomes responsive again.",
-                    ));
-                }
-                Err(ReconcileJoinStatus::Disconnected) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "failed",
-                        "reconcile runtime join helper disconnected during shutdown",
-                    );
-                    tracing::warn!(
-                        thread_id = ?worker_thread_id,
-                        "reconcile runtime worker join helper exited before reporting shutdown status"
-                    );
-                    return Err(AtmError::daemon_unavailable(
-                        "reconcile runtime join helper disconnected during shutdown",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon; the reconcile background lane did not report bounded shutdown status cleanly.",
-                    ));
-                }
+            self.complete_reconcile_shutdown(result_rx, join_helper, worker_thread_id)?;
+        }
+        Ok(())
+    }
+
+    fn complete_reconcile_shutdown(
+        &self,
+        result_rx: mpsc::Receiver<thread::Result<()>>,
+        join_helper: JoinHandle<()>,
+        worker_thread_id: thread::ThreadId,
+    ) -> Result<(), AtmError> {
+        match wait_for_reconcile_join(result_rx) {
+            Ok(Ok(())) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "ok",
+                    "reconcile runtime worker shut down cleanly",
+                );
+            }
+            Ok(Err(_)) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "failed",
+                    "reconcile runtime worker panicked during shutdown",
+                );
+                return Err(AtmError::daemon_unavailable(
+                    "reconcile runtime worker panicked during shutdown",
+                )
+                .with_recovery(
+                    "Restart atm-daemon; the reconcile background lane crashed while shutting down.",
+                ));
+            }
+            Err(ReconcileJoinStatus::Timeout) => {
+                drop(join_helper);
+                tracing::warn!(
+                    subsystem = "reconcile",
+                    action = "shutdown_detach",
+                    outcome = "deadline_exceeded",
+                    thread_id = ?worker_thread_id,
+                    timeout_ms = RECONCILE_SHUTDOWN_DEADLINE.as_millis(),
+                    "reconcile runtime worker exceeded shutdown deadline; detaching join helper"
+                );
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "degraded",
+                    "reconcile runtime worker exceeded its shutdown deadline",
+                );
+                return Err(AtmError::daemon_unavailable(
+                    "reconcile runtime worker exceeded the bounded shutdown deadline",
+                )
+                .with_recovery(
+                    "Restart atm-daemon after the reconcile background lane becomes responsive again.",
+                ));
+            }
+            Err(ReconcileJoinStatus::Disconnected) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "failed",
+                    "reconcile runtime join helper disconnected during shutdown",
+                );
+                tracing::warn!(
+                    subsystem = "reconcile",
+                    action = "shutdown_join_helper",
+                    outcome = "disconnected",
+                    thread_id = ?worker_thread_id,
+                    "reconcile runtime worker join helper exited before reporting shutdown status"
+                );
+                return Err(AtmError::daemon_unavailable(
+                    "reconcile runtime join helper disconnected during shutdown",
+                )
+                .with_recovery(
+                    "Restart atm-daemon; the reconcile background lane did not report bounded shutdown status cleanly.",
+                ));
             }
         }
         Ok(())
