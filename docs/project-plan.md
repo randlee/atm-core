@@ -3443,7 +3443,13 @@ Target:
 - `integrate/phase-Y` for the execution line
 
 Status:
-- planning
+- complete
+
+Status note:
+- `Y.1` merged to `integrate/phase-Y`
+  - branch: `feature/pY-s1-pre-smoke-scaffolding`
+  - PR: `#296`
+  - merge commit: `c63574cb`
 
 Authoritative plans:
 - `docs/plan-phase-Y.md`
@@ -3467,12 +3473,41 @@ Execution shape:
 - planning-branch audits and the shared-inbox field decision framework
   complete before numbered sprint execution begins
 - `Y.1` `atm help` and UX improvements
+  - deliver `atm help`, `atm help --list`, typed concept-topic help, and
+    delegated clap subcommand help without broadening into general JSON-input work
 - `Y.2` pre-smoke easy fixes and validation
+  - close the deferred `Y.1` tier-2 help follow-ups for `hooks`, `identity`,
+    and `skills` without changing the compatibility inbox wire contract
 - `Y.3` hard write-boundary consolidation
+  - complete on `feature/pY-s3-hard-write-boundary-consolidation`
+  - normal retained compatibility rewrite now routes only through
+    `RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
 - `Y.4` delivery coordinator and event-family state machines
+  - complete on `feature/pY-s4-delivery-coordinator-and-state-machines`
+  - retained send/ack harness routing now resolves a copied roster snapshot in
+    `crates/atm-core/src/delivery_policy.rs`
+  - retained compatibility export now stays on the `Claude Code` harness path
+    only; non-Claude harnesses skip ATM-authored JSONL export
 - `Y.5` mutable compatibility-field removal and hidden-dependency exposure
+  - complete on `feature/pY-s5-mutable-compatibility-field-removal`
+  - retained compatibility export now keeps only immutable correlation/context
+    fields: `message_id`, `parentMessageId`, `threadMode`, and `taskId`
+  - retained compatibility export now strips mutable/shared-projection fields:
+    `source_team`, `pendingAckAt`, `acknowledgedAt`,
+    `acknowledgesMessageId`, `expiresAt`, and `metadata.atm.*`
+  - retained compatibility export now reloads stored message records instead of
+    workflow-joined projected envelopes before writing Claude Code projection
+    files
 - `Y.6` append-only compatibility export cutover if the approved wire contract
   allows it
+  - complete on `feature/pY-s6-append-only-compatibility-export`
+  - retained normal-runtime Claude Code compatibility writes now append one
+    JSONL record at a time after the durable SQLite/workflow step
+  - retained non-Claude harnesses still never receive ATM-authored JSONL
+    append output
+  - retained SQLite-failure recovery now emits the documented
+    original-plus-`atm-system@<team>` companion contract instead of silently
+    downgrading to a warning-only path
 
 Follow-on validation phase:
 - completed CLI JSON I/O audit recorded in
@@ -3513,7 +3548,18 @@ Status summary:
   line, but the production-readiness review still found structural message-path
   issues that must be planned and implemented before broad smoke/dogfood work
   resumes.
-- Phase `Yb` is a planning-first correction line off `develop`.
+- Phase `Yb` is now fully implemented through `Y.11`.
+- the line closes with:
+  - shared delivery plans across Claude/non-Claude harness paths
+  - a dedicated `NonClaudeOutbound` payload boundary
+  - fail-closed handling for missing roster harness data
+  - repair/rebuild-only mailbox rewrite seams
+- an explicit Claude-only append seam that is never selected for
+  `DeliveryHarnessPath::NonClaude`
+- an explicit repair/rebuild projection seam that no longer accepts a generic
+  recipient snapshot with a non-Claude no-op branch
+- smoke/dogfood work may now resume on the follow-on line without reopening the
+  same message-path consolidation issues.
 
 Goal:
 - lock down the exact message-path consolidation work needed after `Phase Y`
@@ -3525,9 +3571,15 @@ Execution shape:
 - future implementation integration branch: `integrate/phase-Yb`
 - implementation sequence:
   - `Y.7` degraded delivery contract hardening
+    - branch: `feature/pYb-s7-degraded-delivery-contract-hardening`
   - `Y.8` policy cleanup and impossible-path removal
+    - branch: `feature/pYb-s8-policy-cleanup-and-impossible-path-removal`
   - `Y.9` non-Claude outbound boundary formalization
+    - branch: `feature/pYb-s9-non-claude-outbound-boundary-formalization`
   - `Y.10` boundary enforcement and smoke handoff
+    - branch: `feature/pYb-s10-boundary-enforcement-and-smoke-handoff`
+  - `Y.11` post-`Y.10` boundary gap closure
+    - branch: `feature/pYb-s11-y10-gap-closure`
 
 Immediate planning outputs:
 - `docs/phase-Yb/plan-phase-Yb.md`
@@ -3541,4 +3593,5 @@ Immediate planning outputs:
 - `docs/phase-Yb/sprint-Y8.md`
 - `docs/phase-Yb/sprint-Y9.md`
 - `docs/phase-Yb/sprint-Y10.md`
+- `docs/phase-Yb/sprint-Y11.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`

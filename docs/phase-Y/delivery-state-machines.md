@@ -41,6 +41,34 @@ But the write/nudge behavior is still spread across:
 
 That is the policy leakage Phase `Y` must remove.
 
+Current `Y.4` landing points:
+
+- coordinator + state inventory:
+  - `crates/atm-core/src/delivery_policy.rs`
+- retained runtime roster snapshot + compatibility export gate:
+  - `crates/atm-core/src/service_runtime.rs`
+- retained send integration:
+  - `crates/atm-core/src/send/mod.rs`
+- retained ack integration:
+  - `crates/atm-core/src/ack/mod.rs`
+
+Current `Y.5` export contract:
+
+- ATM-authored shared inbox export keeps only immutable correlation/context
+  fields:
+  - `message_id`
+  - `parentMessageId`
+  - `threadMode`
+  - `taskId`
+- mutable workflow and lifecycle fields are stripped from compatibility export:
+  - `source_team`
+  - `pendingAckAt`
+  - `acknowledgedAt`
+  - `acknowledgesMessageId`
+  - `expiresAt`
+- compatibility export loads the stored message record, not the workflow-joined
+  projected envelope, so export no longer depends on read/ack projection state
+
 ## Synchronization Minimization
 
 Phase `Y` must remove or isolate broad application-level locking rather than
@@ -92,6 +120,15 @@ Harness-resolution rule:
   - model strings
   - ad hoc command flags
   - stale config-side compatibility fields
+
+Current transitional compatibility note:
+
+- the landed `Y.4` implementation still falls back to `ClaudeCode` behavior
+  when no canonical roster row exists for the recipient
+- this is a compatibility-preserving interim rule for retained CLI paths, not
+  the long-term architectural target
+- later phases must remove that fallback once roster hydration is guaranteed on
+  every active delivery path
 
 Synchronization rule:
 

@@ -10,6 +10,13 @@ Current design assumption:
 - Runtime test doubles now exist for the watch/reconcile/notifier lanes so
   boundary tests can exercise the daemon-owned runtimes without bypassing the
   declared contracts.
+- Phase `Y.3` tightened the retained runtime shape so normal compatibility
+  rewrites now hang off one post-durability runtime refresh owner; `ack` and
+  `clear` state transitions must not reintroduce daemon-bypassing source-inbox
+  rewrite paths.
+- Phase `Y.4` adds the retained delivery-policy coordinator/state-machine seam
+  above that owner boundary; harness-specific compatibility-export policy must
+  now stay centralized there rather than leaking back into command callers.
 
 Important daemon-private control-plane structs that must stay visible in review,
 even though they are not public cross-crate traits:
@@ -339,6 +346,9 @@ Compatibility and recovery policy placement for daemon-owned config/inbox adapte
   - the daemon must not branch on harness outside that plan-to-executor seam
   - notification fallback remains a side effect after the plan, not a second
     delivery policy surface
+  - plan-to-target translation and transition emission must remain in the
+    shared `atm_core` plan/execution seam rather than reappearing in daemon
+    adapters
 
 ## DaemonNotificationSinkAdapter
 
@@ -377,6 +387,11 @@ Notes:
   Claude path receives.
 - It must not downgrade message delivery into notification-only metadata.
 - Its callers are limited to the approved delivery executor seam.
+- the current daemon-owned adapter is
+  `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
+- the current runtime-owned sink is `~/.atm/non_claude_outbound.jsonl`, which
+  records the typed non-Claude outbound payload requests for the daemon-owned
+  delivery lane
 
 ## DaemonStatusSourceAdapter
 

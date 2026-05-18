@@ -132,6 +132,8 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   - Claude delivery uses the `InboxExport` adapter only
   - non-Claude delivery uses the `NonClaudeOutbound` adapter only
   - notification remains a separate `NotificationSink` side effect
+  - the daemon-owned non-Claude adapter is
+    `atm_daemon::non_claude_outbound_runtime::DaemonNonClaudeOutbound`
 - daemon runtime-health/status assembly must discover teams and members only
   through the installed `RosterStore`; `ATM_HOME/.claude/teams` is a config
   ingress surface, not a runtime-truth discovery path

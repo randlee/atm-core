@@ -1,7 +1,7 @@
 ---
 id: Y.9
 title: Non-Claude Outbound Boundary Formalization
-status: planned
+status: complete
 branch: feature/pYb-s9-non-claude-outbound-boundary-formalization
 worktree: ../atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization
 target: integrate/phase-Yb
@@ -90,3 +90,21 @@ cargo build --workspace
 cargo test --workspace
 git diff --check
 ```
+
+## Validation Record
+
+- branch closeout validated with:
+  - `cargo fmt --all --check`
+  - `python3 .just/run_lint.py all`
+  - `cargo build --workspace`
+  - `cargo test --workspace`
+  - `git diff --check`
+- follow-up hardening notes:
+  - `RSH-Y9-001` is waived because `NonClaudeOutbound::deliver_payloads(...)`
+    is a synchronous trait seam; blocking filesystem I/O is the intended
+    execution model and `spawn_blocking` is not applicable there
+  - `RSH-Y9-002` is closed with
+    `MAX_NON_CLAUDE_PAYLOAD_BYTES = 1024 * 1024` in
+    `crates/atm-daemon/src/non_claude_outbound_runtime.rs`
+  - `RSH-001` is closed with the in-code `MAX_CONCURRENT_CONNECTIONS`
+    comments beside the retained `write_all(...)` and `sync_data(...)` calls

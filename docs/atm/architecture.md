@@ -112,6 +112,9 @@ Follow-up work:
 - `atm` owns retained-log bootstrap against the host-scoped ATM log directory
   contract (`~/.atm/logs/` by default, `ATM_LOG_DIR` when overridden) rather
   than `.local/share/logs` or any `ATM_HOME`-derived path.
+- `atm help` is CLI-owned conceptual help layered over clap command help and
+  must delegate command flag truth to clap output instead of maintaining a
+  parallel flag-documentation source.
 - `atm` owns the structured construction contract for the concrete adapter:
   `CliObservability::new(home_dir, CliObservabilityOptions)`.
 - `atm` may retain `init(...)` only as a delegating helper.

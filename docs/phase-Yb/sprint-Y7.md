@@ -1,7 +1,7 @@
 ---
 id: Y.7
 title: Degraded Delivery Contract Hardening
-status: planned
+status: complete
 branch: feature/pYb-s7-degraded-delivery-contract-hardening
 worktree: ../atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening
 target: integrate/phase-Yb
@@ -61,8 +61,11 @@ Make the degraded-delivery contract exact and symmetric across
 3. Introduce in `crates/atm-core/src/delivery_execution.rs`:
    - `atm_core::delivery_execution::ClaudeInboxWriter`
    - `atm_core::delivery_execution::PostSendNotificationExecutor`
-4. Introduce `AckReplyStateMachine` for reply execution in the same Y.7
-   implementation seam as `ReplyDeliveryPlan`.
+4. Introduce `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine` for reply
+   execution in the same Y.7 implementation seam as `ReplyDeliveryPlan`.
+   This is distinct from the older
+   `crates/atm-core/src/delivery_policy.rs::AckReplyStateMachine` transition
+   inventory.
 5. Ensure both `DeliveryHarnessPath::ClaudeCode` and
    `DeliveryHarnessPath::NonClaude` produce the same logical payload set:
    - success -> original message only
@@ -90,22 +93,22 @@ policy. These are listed here as context for Y.7 developers. Only item 2 is a
 Y.7 removal obligation; items 1, 3, and 4 are addressed in later sprints as
 assigned in the removal ledger.
 
-1. [delivery_policy.rs](</Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y/crates/atm-core/src/delivery_policy.rs:61>)
+1. `crates/atm-core/src/delivery_policy.rs:61`
    - `DeliveryRecipientSnapshot::fallback_claude`
    - ledger: `YB-RM-014`, sprint: `Y.9`
    - inconsistency: the name and behavior silently default an unresolved route
      to `DeliveryHarnessPath::ClaudeCode`
-2. [send/persistence.rs](</Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y/crates/atm-core/src/send/persistence.rs:85>)
+2. `crates/atm-core/src/send/persistence.rs:85`
    - `recipient.allows_claude_jsonl_append()` branch inside
      `recover_after_sqlite_failure(...)`
    - ledger: `YB-RM-002` / `YB-RM-003`, sprint: `Y.7`
    - inconsistency: persistence still decides a harness-specific outward path
-3. [service_runtime.rs](</Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y/crates/atm-core/src/service_runtime.rs:181>)
+3. `crates/atm-core/src/service_runtime.rs:181`
    - early return in `refresh_compat_inbox_projection(...)`
    - ledger: `YB-RM-017`, sprint: `Y.10`
    - inconsistency: the Claude writer is still asked to inspect a non-Claude
      request and no-op
-4. [service_runtime.rs](</Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y/crates/atm-core/src/service_runtime.rs:202>)
+4. `crates/atm-core/src/service_runtime.rs:202`
    - early return in `append_compat_inbox_message(...)`
    - ledger: `YB-RM-019`, sprint: `Y.9`
    - inconsistency: the low-level Claude append seam still receives
@@ -162,7 +165,8 @@ implementation that preserves convenience helpers with hidden policy.
   `ReplyDeliveryPlan`
 - `crates/atm-core/src/delivery_execution.rs` defines `ClaudeInboxWriter` and
   `PostSendNotificationExecutor`
-- `AckReplyStateMachine` is introduced in Y.7 and wired to `ReplyDeliveryPlan`
+- `crates/atm-core/src/ack/mod.rs::AckReplyStateMachine` is introduced in Y.7
+  and wired to `ReplyDeliveryPlan`
 - the sprint closes ledger rows:
   - `YB-RM-001` through `YB-RM-005`
   - `YB-RM-008`
@@ -219,3 +223,12 @@ cargo build --workspace
 cargo test --workspace
 git diff --check
 ```
+
+## Validation Record
+
+- branch closeout validated with:
+  - `cargo fmt --all --check`
+  - `python3 .just/run_lint.py all`
+  - `cargo build --workspace`
+  - `cargo test --workspace`
+  - `git diff --check`

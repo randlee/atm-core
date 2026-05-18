@@ -13,7 +13,7 @@ implementation.
 
 - planning branch: `message-path-consolidation-plan-Yb`
 - planning worktree:
-  `/Users/randlee/Documents/github/atm-core-worktrees/message-path-consolidation-plan-Yb`
+  `../atm-core-worktrees/message-path-consolidation-plan-Yb`
 - branch base: `develop` at `292b8e38`
 - implementation baseline under review:
   `integrate/phase-Y` at `b8785617`
@@ -242,6 +242,8 @@ message-path contract underspecified or implemented in the wrong layers:
 - `Y.9`: `DeliveryHarnessPath::NonClaude` outbound boundary formalization
 - `Y.10`: boundary enforcement, validation closure, and smoke-handoff
   preparation
+- `Y.11`: post-`Y.10` boundary gap closure for the two remaining mixed-seam
+  runtime entrypoints and the shared validation-doc drift
 - Later sprints as needed for migration, validation, and smoke/dogfood
 
 ## Sprint Sequence
@@ -320,6 +322,28 @@ Hard dependency:
 - [sprint-Y9.md](./sprint-Y9.md) must close first because Y.10 enforces the
   final caller allowlists only after the non-Claude boundary exists
 
+### Y.11 Post-Y.10 Boundary Gap Closure
+
+Purpose:
+
+- remove the last two mixed-seam runtime entrypoints discovered by the
+  sprint-plan-to-implementation review
+- make the repair/rebuild rewrite seam explicit by construction rather than by
+  internal harness guards
+- sync the shared validation docs to the actual outbound-boundary proof model
+- re-close the Yb implementation line only after those review findings are
+  resolved
+
+Authoritative sprint doc:
+
+- [sprint-Y11.md](./sprint-Y11.md)
+
+Hard dependency:
+
+- [sprint-Y10.md](./sprint-Y10.md) must close first because Y.11 is a focused
+  follow-up on the remaining Y.10/Y.9 seam mismatches rather than a new
+  independent implementation line
+
 ## Planning Outputs
 
 - [plan-phase-Yb.md](./plan-phase-Yb.md)
@@ -327,6 +351,7 @@ Hard dependency:
 - [sprint-Y8.md](./sprint-Y8.md)
 - [sprint-Y9.md](./sprint-Y9.md)
 - [sprint-Y10.md](./sprint-Y10.md)
+- [sprint-Y11.md](./sprint-Y11.md)
 - [removal-ledger.md](./removal-ledger.md)
 - [message-path-call-stacks.md](./message-path-call-stacks.md)
 - [lintable-boundary-plan.md](./lintable-boundary-plan.md)
@@ -343,4 +368,6 @@ Hard dependency:
   relevant
 - any newly discovered runtime path that violates the Yb contract is a
   blocking planning miss until documented
-- smoke/dogfood work must not resume until the Yb implementation line closes
+- smoke/dogfood work must not resume until the Yb implementation line closes,
+  including any post-review closure sprint required to remove reopened seam
+  issues

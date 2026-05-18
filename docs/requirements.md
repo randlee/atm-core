@@ -1744,7 +1744,7 @@ Each member object must expose at least:
 - `name`
 - persisted local member metadata when present
 
-## 13.5 `atm help` (Phase Y additive CLI feature)
+## 14. `atm help` (Phase Y additive CLI feature)
 
 Product requirement ID:
 - `REQ-P-HELP-001` `atm help` must satisfy the documented conceptual-help
@@ -1754,13 +1754,13 @@ Satisfied by:
 - `REQ-ATM-CMD-001` for CLI entry, parsing, and dispatch aspects
 - `REQ-ATM-OUT-001` for human-readable and JSON output aspects
 
-### 13.5.1 Purpose
+### 14.1 Purpose
 
 Provide one ATM-owned conceptual help surface that complements clap-generated
 syntax help without duplicating the flag/argument contract already exposed by
 `--help`.
 
-### 13.5.2 Required Behavior
+### 14.2 Required Behavior
 
 `atm help` must:
 - remain a separate subcommand from clap-generated `atm --help`
@@ -1773,6 +1773,8 @@ syntax help without duplicating the flag/argument contract already exposed by
   documentation
 - keep concept topics in one typed topic registry rather than scattered prose
   fragments
+- keep this Phase `Y` slice narrowly on conceptual help plus wording cleanup
+  rather than broadening into general structured JSON-input work
 
 Tier-1 concept topics for the first delivery:
 - `config`
@@ -1783,7 +1785,7 @@ Tier-2 concept topics for the first delivery:
 - `identity`
 - `skills`
 
-### 13.5.3 Output Contract
+### 14.3 Output Contract
 
 Human output must:
 - clearly distinguish concept topics from command syntax help
@@ -1792,11 +1794,13 @@ Human output must:
 JSON output must:
 - expose the requested topic or command target
 - identify whether the result is:
+  - `overview`
+  - `topic_list`
   - `concept_topic`
   - `command_help`
 - include the rendered help body in a structured field suitable for agent use
 
-## 14. Message And Workflow Model
+## 15. Message And Workflow Model
 
 Product requirement ID:
 - `REQ-P-WORKFLOW-001` The message/workflow model must satisfy the documented
@@ -1806,7 +1810,7 @@ Satisfied by:
 - `REQ-CORE-WORKFLOW-001` for the canonical two-axis model and legal
   transitions
 
-### 14.1 Persisted Message Fields
+### 15.1 Persisted Message Fields
 
 Required fields:
 - `from`
@@ -1841,7 +1845,7 @@ For ATM-authored messages:
 Legacy or externally imported records may still omit `message_id`; the rewrite
 must preserve such records without inventing synthetic ids during read.
 
-### 14.2 Two-Axis Canonical Model
+### 15.2 Two-Axis Canonical Model
 
 The canonical model has two independent axes.
 
@@ -1871,7 +1875,7 @@ Derived message class for queue logic:
 
 The canonical two-axis model is distinct from the read command’s display buckets.
 
-### 14.3 Required State Transitions
+### 15.3 Required State Transitions
 
 ```text
 Send normal message
@@ -1918,7 +1922,7 @@ Disallowed transitions:
 
 The implementation must encode legal transitions in code structure, not only in comments or tests.
 
-### 14.4 Task Metadata Rule
+### 15.4 Task Metadata Rule
 
 Messages with `taskId` are task-linked messages.
 
@@ -1928,7 +1932,7 @@ Required rules:
 - a task-linked message must continue to appear in `atm read` until acknowledged
 - a task-linked message must never be removed by `atm clear` before acknowledgement
 
-## 15. Observability Requirements
+## 16. Observability Requirements
 
 Product requirement ID:
 - `REQ-P-OBS-001` ATM observability must satisfy the documented best-effort
@@ -2025,7 +2029,7 @@ Diagnostic logging rules:
 - they are explicit observability consumers
 - if shared query/health APIs are unavailable, they must fail with clear structured errors
 
-## 16. Error Requirements
+## 17. Error Requirements
 
 Product requirement ID:
 - `REQ-P-ERROR-001` Public command failures must satisfy the documented
@@ -2102,7 +2106,7 @@ Mutation failures must be fail-safe:
 - no partial read-mark updates
 - no illegal state transitions after failed persistence
 
-## 17. Reliability Requirements
+## 18. Reliability Requirements
 
 Product requirement ID:
 - `REQ-P-RELIABILITY-001` The retained command surface must satisfy the
@@ -2127,7 +2131,7 @@ Satisfied by:
 - seen-state races must not corrupt mailbox data
 - observability emission failures must not corrupt command behavior
 
-## 18. Testing Requirements
+## 19. Testing Requirements
 
 Product requirement ID:
 - `REQ-P-TEST-001` The rewrite must satisfy the documented testing obligations.
@@ -2202,7 +2206,7 @@ Required testing architecture:
   suite and must never become the default validation path for CLI or core
   business correctness
 
-## 19. Acceptance Criteria
+## 20. Acceptance Criteria
 
 Product requirement ID:
 - `REQ-P-ACCEPTANCE-001` The rewrite is complete only when the documented
@@ -2247,13 +2251,13 @@ Cross-document invariants that must remain true:
 - `atm read --timeout` returns immediately when the requested selection is already non-empty
 
 
-## 20. Phase M: Mailbox Concurrency And Restore Atomicity
+## 21. Phase M: Mailbox Concurrency And Restore Atomicity
 
 Phase M addresses blocking and important findings from the Phase L code review
 (ARCH-CR-001 through ARCH-CR-004 and associated QA findings) that must be
 closed before the 1.0 release.
 
-### 20.1 Mailbox Concurrency Safety
+### 21.1 Mailbox Concurrency Safety
 
 - `REQ-CORE-MAILBOX-LOCK-001` All mailbox read-modify-write operations must
   hold an exclusive advisory file lock for the duration of the operation.
@@ -2470,7 +2474,7 @@ closed before the 1.0 release.
     `MailboxLockReadOnlyFilesystem`
     / `ATM_MAILBOX_LOCK_READ_ONLY_FILESYSTEM`, never as `MailboxLockTimeout`
 
-### 20.2 Shared Mutable File Atomicity
+### 21.2 Shared Mutable File Atomicity
 
 - `REQ-CORE-PERSIST-ATOMIC-001` Every shared mutable ATM-owned structured state
   file must be persisted atomically.
@@ -2602,7 +2606,7 @@ closed before the 1.0 release.
     equivalent in-place rewrites of live shared mutable structured files and
     either remove them or document why the path is not in scope
 
-### 20.2.1 Shared Commit And Freshness Validation
+### 21.2.1 Shared Commit And Freshness Validation
 
 The required shared commit protocol is:
 
@@ -2622,7 +2626,7 @@ The intentionally forbidden shape is:
 - acquire late lock
 - rename blindly over a newer live file
 
-### 20.2.2 Locking Failure-Path Test Contract
+### 21.2.2 Locking Failure-Path Test Contract
 
 - `REQ-CORE-MAILBOX-TEST-001` Phase M follow-up coverage must include
   deterministic failure-path locking tests in addition to success-path
@@ -2661,7 +2665,7 @@ The intentionally forbidden shape is:
     - sleeps used as the primary correctness mechanism
     - race-dependent stress loops expected to pass only "most of the time"
 
-### 20.3 Restore Transaction Atomicity
+### 21.3 Restore Transaction Atomicity
 
 - `REQ-CORE-RESTORE-ATOMIC-001` `teams restore` must write `config.json` as
   the last mutation step, only after all other restore mutations succeed.
@@ -2706,7 +2710,7 @@ The intentionally forbidden shape is:
   - the finding must include recovery guidance telling the operator to rerun
     `atm teams restore` or remove the marker after manual verification
 
-### 20.4 Error Display And Diagnostics
+### 21.4 Error Display And Diagnostics
 
 - `REQ-CORE-ERROR-DISPLAY-001` `AtmError::Display` must remain concise and
   must not emit multi-KB backtrace output.
@@ -2773,7 +2777,7 @@ The intentionally forbidden shape is:
   - sites already covered by L.7/L.8 recovery work do not need duplicate edits
   - internal invariant violations do not require recovery guidance
 
-### 20.5 Code Consolidation And Documentation
+### 21.5 Code Consolidation And Documentation
 
 - `REQ-CORE-IDENTITY-CONSOLIDATE-001` The duplicated `resolve_actor_identity`
   function must be consolidated into a single shared implementation.
@@ -2797,7 +2801,7 @@ The intentionally forbidden shape is:
     parse failure or unsupported exponent range instead of panicking
   - a library function must not panic on potentially untrusted input
 
-## 21. Current SQLite Mail SSOT, Runtime Boundaries, And Lock Elimination
+## 22. Current SQLite Mail SSOT, Runtime Boundaries, And Lock Elimination
 
 The current SQLite/daemon architecture supersedes the mailbox-lock line as the target architecture for ATM
 mail correctness. The `REQ-CORE-MAILBOX-LOCK-*` requirements remain
@@ -2805,7 +2809,7 @@ transitional compatibility constraints only for the interim file-based line.
 The release-complete target is elimination of mailbox-lock dependence from ATM
 mail correctness.
 
-### 21.1 SQLite Mail And Roster Ownership
+### 22.1 SQLite Mail And Roster Ownership
 
 - `REQ-CORE-RUNTIME-001` ATM mail and team roster state must move to SQLite as
   the authoritative source of truth.
@@ -2895,7 +2899,7 @@ mail correctness.
 - `pid` is transient daemon-owned runtime state rather than durable roster
   truth and must not be persisted in SQLite
 
-### 21.2 Singleton Daemon Runtime
+### 22.2 Singleton Daemon Runtime
 
 - `REQ-CORE-DAEMON-001` ATM must run exactly one daemon per host in the current architecture
   runtime.
@@ -2954,7 +2958,7 @@ mail correctness.
     documented `32` per-connection inflight ceiling is satisfied by structure
     until framed multiplexing is introduced
 
-### 21.2.1 Phase S Daemon Parity Traceability
+### 22.2.1 Phase S Daemon Parity Traceability
 
 - `REQ-DAEMON-PLATFORM-001` is the `atm-daemon` crate traceability record for
   the same-host daemon parity requirement carried by:
@@ -2968,7 +2972,7 @@ mail correctness.
   - `REQ-P-PLATFORM-002`
   - `REQ-CORE-BOUNDARY-001`
 
-### 21.3 Strict I/O Ownership Boundaries
+### 22.3 Strict I/O Ownership Boundaries
 
 - `REQ-CORE-BOUNDARY-001` Every subsystem must be behind a strict trait
   boundary for all external I/O.
@@ -2991,7 +2995,7 @@ mail correctness.
   - violation of any ownership rule above is a direct QA failure for the Phase
     Q implementation line
 
-### 21.3.1 Structured Error Boundaries
+### 22.3.1 Structured Error Boundaries
 
 - `REQ-CORE-BOUNDARY-002` Production runtime code must model fallible runtime
   behavior with discriminated error unions and explicit `Result` propagation.
@@ -3014,7 +3018,7 @@ mail correctness.
   - violation of these structured-error rules is a direct QA failure for the
     current SQLite/daemon implementation line
 
-### 21.4 Transport And Routing Model
+### 22.4 Transport And Routing Model
 
 - `REQ-CORE-TRANSPORT-001` ATM must use one logical daemon API with two
   production transport implementations and one test transport.
@@ -3164,7 +3168,7 @@ mail correctness.
     daemon must require bounded reload/rebind through the documented reload
     path and must surface degraded status until rebind succeeds
 
-### 21.5 Claude Compatibility And Native Agent Path
+### 22.5 Claude Compatibility And Native Agent Path
 
 - `REQ-CORE-COMPAT-001` Claude inbox JSONL remains the required compatibility
   path for Claude context injection.
@@ -3283,7 +3287,7 @@ mail correctness.
   - `NotificationSink` remains notification-only and must not stand in for
     non-Claude message delivery
 
-### 21.6 Lock Elimination Target
+### 22.6 Lock Elimination Target
 
 - `REQ-CORE-LOCK-RETIRE-001` ATM mail correctness must stop depending on
   mailbox lock artifacts.
@@ -3296,7 +3300,7 @@ mail correctness.
   - completion of the current architecture requires that stale lock artifacts can no longer wedge
     normal ATM mail flows
 
-### 21.7 Test Strategy Constraints
+### 22.7 Test Strategy Constraints
 
 - `REQ-CORE-TEST-RUNTIME-001` Core target daemon-runtime behavior must be
   testable without daemon process spawning.
@@ -3313,7 +3317,7 @@ mail correctness.
   - ordinary tests must not depend on socket publication timing, retry sleeps,
     parent-process environment mutation, or auto-start side effects
 
-### 21.8 Observability Requirements
+### 22.8 Observability Requirements
 
 - `REQ-CORE-OBS-002` The target daemon-runtime architecture must keep
   structured observability first-class at both CLI and daemon boundaries.
@@ -3332,7 +3336,7 @@ mail correctness.
   - observability must not be implemented as ad hoc println/debug output in
     production paths
 
-### 21.8.1 Doctor Health Interface
+### 22.8.1 Doctor Health Interface
 
 - `REQ-CORE-DOCTOR-002` The target daemon runtime must expose a daemon health
   query interface consumable by `atm doctor`.
@@ -3350,7 +3354,7 @@ mail correctness.
     - ingest backlog / degraded-ingest state when present
     - SQLite open/readiness state
 
-### 21.9 QA Invariants
+### 22.9 QA Invariants
 
 - `REQ-CORE-QA-RUNTIME-001` Every QA pass for the current runtime must verify the daemon
   and boundary invariants.
@@ -3375,7 +3379,7 @@ mail correctness.
   - Claude compatibility export remains a compatibility projection only and is
     never the ATM-owned runtime truth
 
-### 21.10 Postmortem Lint Backfill
+### 22.10 Postmortem Lint Backfill
 
 - `REQ-P-LINT-POSTMORTEM-001` Mechanically-detectable postmortem finding
   families must become repository lint or CI gates rather than recurring QA
