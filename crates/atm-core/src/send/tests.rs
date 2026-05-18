@@ -332,6 +332,8 @@ fn send_request(home_dir: &Path) -> SendRequest {
 
 #[derive(Default)]
 struct RecordingObservability {
+    // Mutex required: tests may emit delivery-policy events from multiple
+    // runtime calls before assertions snapshot the collected sequence.
     events: Mutex<Vec<CommandEvent>>,
 }
 

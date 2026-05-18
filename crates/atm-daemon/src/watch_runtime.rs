@@ -292,6 +292,9 @@ impl WatchRuntime {
                     // indefinitely on a stalled join helper during daemon shutdown.
                     drop(join_helper);
                     tracing::warn!(
+                        subsystem = "watch",
+                        action = "shutdown_detach",
+                        outcome = "deadline_exceeded",
                         timeout_ms = WATCH_SHUTDOWN_DEADLINE.as_millis(),
                         "watch runtime worker exceeded shutdown deadline; detaching join helper"
                     );
@@ -315,6 +318,9 @@ impl WatchRuntime {
                         "watch runtime join helper disconnected during shutdown",
                     );
                     tracing::warn!(
+                        subsystem = "watch",
+                        action = "shutdown_join_helper",
+                        outcome = "disconnected",
                         "watch runtime worker join helper exited before reporting shutdown status"
                     );
                 }

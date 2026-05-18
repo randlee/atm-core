@@ -56,7 +56,13 @@ impl DaemonNotificationSink {
 impl Drop for DaemonNotificationSink {
     fn drop(&mut self) {
         if let Err(error) = self.shutdown() {
-            tracing::warn!(%error, "DaemonNotificationSink drop could not shut down runtime cleanly");
+            tracing::warn!(
+                subsystem = "notification",
+                action = "drop_shutdown",
+                outcome = "failed",
+                %error,
+                "DaemonNotificationSink drop could not shut down runtime cleanly"
+            );
         }
     }
 }

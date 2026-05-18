@@ -149,6 +149,9 @@ impl DaemonRequestDispatcher {
     fn complete_shutdown_step(label: &'static str, shutdown_handle: std::thread::JoinHandle<()>) {
         if shutdown_handle.join().is_err() {
             tracing::warn!(
+                subsystem = "runtime_health",
+                action = "shutdown_finalize",
+                outcome = "panic",
                 step = label,
                 "daemon shutdown finalizer step panicked before reporting completion; restart atm-daemon and inspect the retained observability log for the failing shutdown step"
             );
@@ -170,12 +173,18 @@ impl DaemonRequestDispatcher {
         });
         if !retained {
             tracing::warn!(
+                subsystem = "runtime_health",
+                action = "shutdown_retain",
+                outcome = "capacity_exceeded",
                 step = label,
                 cap = MAX_SHUTDOWN_FINALIZER_THREADS,
                 "shutdown finalizer thread cap reached; dropping retained worker handle"
             );
         }
         tracing::warn!(
+            subsystem = "runtime_health",
+            action = "shutdown_retain",
+            outcome = "deadline_exceeded",
             step = label,
             timeout_ms = deadline.as_millis(),
             "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
@@ -191,6 +200,9 @@ impl DaemonRequestDispatcher {
             Ok(handle) => handle,
             Err(error) => {
                 tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "shutdown_spawn",
+                    outcome = "failed",
                     %error,
                     step = label,
                     "daemon shutdown finalizer step could not start; restart atm-daemon because shutdown cleanup could not be scheduled"
@@ -232,34 +244,46 @@ impl DaemonRequestDispatcher {
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
-        let sqlite_boundary = match assemble_default_boundary_with_observability(
-            sqlite_observability,
-        ) {
-            Ok(boundary) => {
-                if let Err(error) = build_runtime_status_cache_state(None, boundary.roster_store())
-                    .and_then(|state| status_cache.replace_state(state))
-                {
-                    tracing::warn!(%error, "failed to hydrate runtime status cache from sqlite roster state");
+        let sqlite_boundary =
+            match assemble_default_boundary_with_observability(sqlite_observability) {
+                Ok(boundary) => {
+                    if let Err(error) =
+                        build_runtime_status_cache_state(None, boundary.roster_store())
+                            .and_then(|state| status_cache.replace_state(state))
+                    {
+                        tracing::warn!(
+                            subsystem = "runtime_health",
+                            action = "sqlite_cache_hydration",
+                            outcome = "degraded",
+                            %error,
+                            "failed to hydrate runtime status cache from sqlite roster state"
+                        );
+                        runtime_health_observability.emit_or_warn(
+                            "sqlite_cache_hydration",
+                            "degraded",
+                            "failed to hydrate runtime status cache from sqlite roster state",
+                        );
+                        status_cache.mark_sqlite_unavailable();
+                    }
+                    Some(boundary)
+                }
+                Err(error) => {
+                    tracing::warn!(
+                        subsystem = "runtime_health",
+                        action = "sqlite_boundary_assembly",
+                        outcome = "failed",
+                        %error,
+                        "failed to assemble default sqlite boundary for daemon runtime health"
+                    );
                     runtime_health_observability.emit_or_warn(
-                        "sqlite_cache_hydration",
-                        "degraded",
-                        "failed to hydrate runtime status cache from sqlite roster state",
+                        "sqlite_boundary_assembly",
+                        "failed",
+                        "failed to assemble sqlite boundary for daemon runtime health",
                     );
                     status_cache.mark_sqlite_unavailable();
+                    None
                 }
-                Some(boundary)
-            }
-            Err(error) => {
-                tracing::warn!(%error, "failed to assemble default sqlite boundary for daemon runtime health");
-                runtime_health_observability.emit_or_warn(
-                    "sqlite_boundary_assembly",
-                    "failed",
-                    "failed to assemble sqlite boundary for daemon runtime health",
-                );
-                status_cache.mark_sqlite_unavailable();
-                None
-            }
-        };
+            };
         Self {
             home_dir: home_dir.clone(),
             observability: Arc::clone(&observability),
@@ -316,6 +340,9 @@ fn with_shutdown_finalizer_registry<R>(
         Ok(mut handles) => f(&mut handles),
         Err(poisoned) => {
             tracing::warn!(
+                subsystem = "runtime_health",
+                action = "shutdown_registry_lock",
+                outcome = "poison_recovered",
                 "shutdown finalizer thread registry lock poisoned; recovering retained worker handles"
             );
             // The registry only owns JoinHandles for timed-out shutdown helpers; recovering the

@@ -201,6 +201,9 @@ fn join_dispatch_handle_with_timeout(
         }
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
             tracing::warn!(
+                subsystem = "active_connection_registry",
+                action = "shutdown_join",
+                outcome = "deadline_exceeded",
                 timeout_ms = timeout.as_millis() as u64,
                 "tracked daemon dispatch worker exceeded the shutdown join deadline; detaching"
             );

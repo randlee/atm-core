@@ -47,6 +47,8 @@ struct ReconcileRuntimeInner {
     // fingerprint registry, it must drop `state` before locking this mutex.
     // The registry is ancillary reconcile-emission state and must never nest
     // inside the primary runtime lifecycle lock.
+    // Mutex required: reconcile worker and callers both mutate fingerprint
+    // dedupe state across requests and shutdown.
     #[cfg_attr(not(test), allow(dead_code))]
     notification_fingerprints: Arc<Mutex<NotificationFingerprintRegistry>>,
 }
@@ -334,6 +336,9 @@ impl ReconcileRuntime {
                 Err(ReconcileJoinStatus::Timeout) => {
                     drop(join_helper);
                     tracing::warn!(
+                        subsystem = "reconcile",
+                        action = "shutdown_detach",
+                        outcome = "deadline_exceeded",
                         thread_id = ?worker_thread_id,
                         timeout_ms = RECONCILE_SHUTDOWN_DEADLINE.as_millis(),
                         "reconcile runtime worker exceeded shutdown deadline; detaching join helper"
@@ -358,6 +363,9 @@ impl ReconcileRuntime {
                         "reconcile runtime join helper disconnected during shutdown",
                     );
                     tracing::warn!(
+                        subsystem = "reconcile",
+                        action = "shutdown_join_helper",
+                        outcome = "disconnected",
                         thread_id = ?worker_thread_id,
                         "reconcile runtime worker join helper exited before reporting shutdown status"
                     );

@@ -539,7 +539,14 @@ impl RuntimeComposition {
             ),
         ] {
             if let Err(error) = shutdown {
-                tracing::warn!(%error, lane = lane_name, "daemon background lane shutdown was incomplete");
+                tracing::warn!(
+                    subsystem = "composition",
+                    action = "shutdown_lane",
+                    outcome = "incomplete",
+                    %error,
+                    lane = lane_name,
+                    "daemon background lane shutdown was incomplete"
+                );
                 if first_error.is_none() {
                     first_error = Some(error);
                 }
@@ -683,7 +690,10 @@ where
             result
         }
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-            tracing::debug!(
+            tracing::warn!(
+                subsystem = "composition",
+                action = "shutdown_lane_deadline",
+                outcome = "deadline_exceeded",
                 lane = lane_name,
                 timeout_ms = deadline.as_millis(),
                 thread_id = ?shutdown_thread_id,

@@ -527,7 +527,7 @@ fn reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_stat
         .join("teams")
         .join(TEST_TEAM)
         .join("config.json");
-    std::fs::write(&config_path, br#"{"members":["team-lead",}"#).expect("invalid config");
+    std::fs::write(&config_path, br#"{"members":["some-member",}"#).expect("invalid config");
 
     dispatcher
         .reload_runtime_view()
