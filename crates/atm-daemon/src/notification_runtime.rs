@@ -120,102 +120,10 @@ impl NotificationRuntime {
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
-        let handle = {
-            let mut state = self.inner.state.lock().map_err(|_| {
-                AtmError::daemon_unavailable("notification runtime state lock poisoned")
-                    .with_recovery(
-                        "Restart the daemon; notification lifecycle state can no longer be trusted.",
-                    )
-            })?;
-            state.shutdown = true;
-            state.shutdown_started_at.get_or_insert_with(Instant::now);
-            self.inner.wake.notify_all();
-            state.worker.take()
+        let Some(handle) = self.take_worker_for_shutdown()? else {
+            return Ok(());
         };
-        if let Some(handle) = handle {
-            let worker_thread_id = handle.thread().id();
-            let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
-            let join_helper = std::thread::Builder::new()
-                .name("atm-daemon-notifier-join".to_string())
-                .spawn(move || {
-                    let _ = result_tx.send(handle.join());
-                })
-                .map_err(|source| {
-                    AtmError::daemon_unavailable(
-                        "failed to spawn notification runtime join helper during shutdown",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon; notification shutdown could not create its bounded join helper.",
-                    )
-                    .with_source(source)
-                })?;
-            match result_rx.recv_timeout(self.inner.shutdown_deadline) {
-                Ok(Ok(())) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "ok",
-                        "notification runtime worker shut down cleanly",
-                    );
-                }
-                Ok(Err(_)) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "failed",
-                        "notification runtime worker panicked during shutdown",
-                    );
-                    return Err(AtmError::daemon_unavailable(
-                        "notification runtime worker panicked during shutdown",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon; the notification background lane crashed while shutting down.",
-                    ));
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "degraded",
-                        "notification runtime worker exceeded its shutdown deadline",
-                    );
-                    tracing::warn!(
-                        subsystem = "notification",
-                        action = "shutdown_detach",
-                        outcome = "deadline_exceeded",
-                        thread_id = ?worker_thread_id,
-                        timeout_ms = self.inner.shutdown_deadline.as_millis(),
-                        "notification runtime worker exceeded shutdown deadline; detaching join helper"
-                    );
-                    drop(join_helper);
-                    return Err(AtmError::daemon_unavailable(format!(
-                        "notification runtime shutdown exceeded the {:?} deadline",
-                        self.inner.shutdown_deadline
-                    ))
-                    .with_recovery(
-                        "Restart atm-daemon after the notification background lane becomes responsive again.",
-                    ));
-                }
-                Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "failed",
-                        "notification runtime join helper disconnected during shutdown",
-                    );
-                    tracing::warn!(
-                        thread_id = ?worker_thread_id,
-                        "notification runtime join helper exited before reporting shutdown status"
-                    );
-                    return Err(AtmError::daemon_unavailable(
-                        "notification runtime join helper disconnected during shutdown",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon; the notification background lane did not report bounded shutdown status cleanly.",
-                    ));
-                }
-            }
-        }
-        Ok(())
+        self.await_worker_shutdown(handle)
     }
 
     pub(crate) fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
@@ -285,6 +193,121 @@ impl NotificationRuntime {
             }),
         }
     }
+}
+
+impl NotificationRuntime {
+    fn take_worker_for_shutdown(&self) -> Result<Option<JoinHandle<()>>, AtmError> {
+        let mut state = self.inner.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("notification runtime state lock poisoned").with_recovery(
+                "Restart the daemon; notification lifecycle state can no longer be trusted.",
+            )
+        })?;
+        state.shutdown = true;
+        state.shutdown_started_at.get_or_insert_with(Instant::now);
+        self.inner.wake.notify_all();
+        Ok(state.worker.take())
+    }
+
+    fn await_worker_shutdown(&self, handle: JoinHandle<()>) -> Result<(), AtmError> {
+        let worker_thread_id = handle.thread().id();
+        let (join_helper, result_rx) = spawn_shutdown_join_helper(handle)?;
+        match result_rx.recv_timeout(self.inner.shutdown_deadline) {
+            Ok(Ok(())) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "ok",
+                    "notification runtime worker shut down cleanly",
+                );
+                Ok(())
+            }
+            Ok(Err(_)) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "failed",
+                    "notification runtime worker panicked during shutdown",
+                );
+                Err(AtmError::daemon_unavailable(
+                    "notification runtime worker panicked during shutdown",
+                )
+                .with_recovery(
+                    "Restart atm-daemon; the notification background lane crashed while shutting down.",
+                ))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "degraded",
+                    "notification runtime worker exceeded its shutdown deadline",
+                );
+                tracing::warn!(
+                    subsystem = "notification",
+                    action = "shutdown_detach",
+                    outcome = "deadline_exceeded",
+                    thread_id = ?worker_thread_id,
+                    timeout_ms = self.inner.shutdown_deadline.as_millis(),
+                    "notification runtime worker exceeded shutdown deadline; detaching join helper"
+                );
+                drop(join_helper);
+                Err(AtmError::daemon_unavailable(format!(
+                    "notification runtime shutdown exceeded the {:?} deadline",
+                    self.inner.shutdown_deadline
+                ))
+                .with_recovery(
+                    "Restart atm-daemon after the notification background lane becomes responsive again.",
+                ))
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "failed",
+                    "notification runtime join helper disconnected during shutdown",
+                );
+                tracing::warn!(
+                    subsystem = "notification",
+                    action = "shutdown_join_helper",
+                    outcome = "disconnected",
+                    thread_id = ?worker_thread_id,
+                    "notification runtime join helper exited before reporting shutdown status"
+                );
+                Err(AtmError::daemon_unavailable(
+                    "notification runtime join helper disconnected during shutdown",
+                )
+                .with_recovery(
+                    "Restart atm-daemon; the notification background lane did not report bounded shutdown status cleanly.",
+                ))
+            }
+        }
+    }
+}
+
+fn spawn_shutdown_join_helper(
+    handle: JoinHandle<()>,
+) -> Result<
+    (
+        JoinHandle<()>,
+        std::sync::mpsc::Receiver<std::thread::Result<()>>,
+    ),
+    AtmError,
+> {
+    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    let join_helper = std::thread::Builder::new()
+        .name("atm-daemon-notifier-join".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(handle.join());
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable(
+                "failed to spawn notification runtime join helper during shutdown",
+            )
+            .with_recovery(
+                "Restart atm-daemon; notification shutdown could not create its bounded join helper.",
+            )
+            .with_source(source)
+        })?;
+    Ok((join_helper, result_rx))
 }
 
 fn notification_worker_loop(inner: Arc<NotificationRuntimeInner>) {
@@ -433,8 +456,8 @@ fn ensure_shutdown_budget_remaining(
 mod tests {
     use super::NotificationRuntime;
     use atm_core::protocol::{NotificationEvent, NotificationKind};
-    use std::sync::Arc;
-    use std::time::{Duration, Instant};
+    use std::sync::{Arc, Condvar, Mutex};
+    use std::time::Duration;
     use tempfile::TempDir;
 
     #[test]
@@ -499,10 +522,28 @@ mod tests {
     fn notification_runtime_shutdown_times_out_when_persistence_stalls() {
         let tempdir = TempDir::new().expect("tempdir");
         let output_path = tempdir.path().join("notifications.jsonl");
+        let entered_gate = Arc::new((Mutex::new(false), Condvar::new()));
+        let release_gate = Arc::new((Mutex::new(false), Condvar::new()));
         let runtime = NotificationRuntime::new_for_test_with_path_factory_and_deadline(
-            Arc::new(move || {
-                std::thread::sleep(Duration::from_millis(80));
-                Ok(output_path.clone())
+            Arc::new({
+                let entered_gate = Arc::clone(&entered_gate);
+                let release_gate = Arc::clone(&release_gate);
+                move || {
+                    let (entered_lock, entered_wake) = &*entered_gate;
+                    let mut entered = entered_lock.lock().expect("entered gate lock");
+                    *entered = true;
+                    entered_wake.notify_all();
+                    drop(entered);
+
+                    let (release_lock, release_wake) = &*release_gate;
+                    let mut released = release_lock.lock().expect("release gate lock");
+                    while !*released {
+                        released = release_wake.wait(released).expect("release gate wait");
+                    }
+                    drop(released);
+
+                    Ok(output_path.clone())
+                }
             }),
             8,
             Duration::from_millis(25),
@@ -517,9 +558,25 @@ mod tests {
             })
             .expect("deliver");
 
-        let started_at = Instant::now();
+        {
+            let (entered_lock, entered_wake) = &*entered_gate;
+            let entered = entered_lock.lock().expect("entered gate lock");
+            let (_entered_guard, wait_result) = entered_wake
+                .wait_timeout_while(entered, Duration::from_secs(1), |entered| !*entered)
+                .expect("entered gate wait");
+            assert!(
+                !wait_result.timed_out(),
+                "worker never entered path factory"
+            );
+        }
+
         let error = runtime.shutdown().expect_err("shutdown should time out");
-        assert!(started_at.elapsed() < Duration::from_millis(75));
+        {
+            let (release_lock, release_wake) = &*release_gate;
+            let mut released = release_lock.lock().expect("release gate lock");
+            *released = true;
+            release_wake.notify_all();
+        }
         assert!(
             error
                 .message

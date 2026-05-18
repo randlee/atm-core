@@ -54,7 +54,7 @@ impl HookCancellationToken {
     }
 }
 
-pub(crate) fn maybe_run_post_send_hook(
+fn run_post_send_hooks_for_cli(
     warnings: &mut Vec<WarningEntry>,
     config: Option<&config::AtmConfig>,
     context: PostSendHookContext<'_>,
