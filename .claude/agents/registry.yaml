@@ -11,6 +11,9 @@ agents:
   arch-qa:
     version: 0.1.0
     path: .claude/agents/arch-qa.md
+  plan-review-qa:
+    version: 0.1.0
+    path: .claude/agents/plan-review-qa.md
   flaky-test-qa:
     version: 0.1.0
     path: .claude/agents/flaky-test-qa.md
@@ -46,6 +49,7 @@ skills:
       quality-mgr: 0.x
       req-qa: 0.x
       arch-qa: 0.x
+      plan-review-qa: 0.x
       flaky-test-qa: 0.x
       rust-qa-agent: 0.x
       rust-best-practices-agent: 0.x

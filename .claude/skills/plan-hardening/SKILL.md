@@ -34,6 +34,11 @@ scope changes that are at odds with that user discussion.
 - `sc-compose` is available
 - the plan has already been discussed with `arch-ctm`
 
+## Required Reference
+
+Always use:
+- `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
+
 ## Expected Result
 
 The task must end with two required hardening passes:
@@ -105,7 +110,7 @@ sprints are needed, hardening must create them.
    - request another hardening pass from `arch-ctm` if the plan is still
      ambiguous
 9. Only after the critical review passes, route the plan to `quality-mgr` for a
-   focused plan QA review.
+   focused plan QA review. That review should include `plan-review-qa`.
 
 `source_of_truth` should point at the already-approved planning sources:
 - reviewed planning docs in the repo
@@ -148,6 +153,7 @@ Do not treat the hardening pass itself as the final review. The handoff is:
 Render:
 - `.claude/skills/plan-hardening/plan-hardening.xml.j2`
 - `.claude/skills/plan-hardening/plan-hardening-consistency.xml.j2`
+- `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
 
 Example:
 
