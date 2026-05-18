@@ -42,11 +42,12 @@ Always use:
 ## Expected Result
 
 The task must end with this required sequence:
-- step 1: `plan-scope-reviewer`
-- step 2: sprint-scope hardening
-- step 3: `critical-plan-reviewer`
-- step 4: document-consistency hardening
-- step 5: focused plan QA
+- step 1: `plan-develop`
+- step 2: `plan-scope-reviewer`
+- step 3: sprint-scope hardening
+- step 4: `critical-plan-reviewer`
+- step 5: document-consistency hardening
+- step 6: focused plan QA
 
 Together they must produce:
 - complete/consistent planning docs
@@ -76,22 +77,34 @@ sprints are needed, hardening must create them.
    - `description`
    - `worktree_path`
    - `branch`
+   - `sprint_doc`
    - `pr_target`
    - `source_of_truth`
+   - `rough_plan_json`
    - optional `questions_or_concerns`
    - `references`
-2. Render `.claude/skills/plan-hardening/plan-scope-review.xml.j2` with
-   `sc-compose` for the sprint-scope review pre-pass.
-3. Send the rendered `plan-scope-review.xml.j2` ATM task to
+2. Render `.claude/skills/plan-hardening/plan-develop.xml.j2` with
+   `sc-compose` for formal plan creation from the rough plan.
+3. Send the rendered `plan-develop.xml.j2` ATM task to `plan-develop`.
+4. Review the `plan-develop` result:
+   - the result includes fenced JSON
+   - `ready_for_next_step` is `true`, or the planner reported a concrete blocker
+   - the docs are ready for sprint-scope review
+5. Render `.claude/skills/plan-hardening/plan-scope-review.xml.j2` with
+   `sc-compose` for the sprint-scope review pre-pass. Pass the fenced JSON
+   output from `plan-develop` as required input.
+6. Send the rendered `plan-scope-review.xml.j2` ATM task to
    `plan-scope-reviewer`.
-4. Review the sprint-scope review result:
+7. Review the sprint-scope review result:
    - final finding count is `0`, or findings are routed into the next
      hardening pass for correction
    - split risk, drop risk, and checklist-shape risk are explicit
-5. Render `.claude/skills/plan-hardening/plan-hardening.xml.j2` with
-   `sc-compose` for sprint-scope hardening.
-6. Send the rendered sprint-scope hardening ATM task to `arch-ctm`.
-7. Review the sprint-scope hardening result:
+   - the result includes fenced JSON
+8. Render `.claude/skills/plan-hardening/plan-hardening.xml.j2` with
+   `sc-compose` for sprint-scope hardening. Pass the fenced JSON output from
+   `plan-scope-reviewer` as required input.
+9. Send the rendered sprint-scope hardening ATM task to `arch-ctm`.
+10. Review the sprint-scope hardening result:
    - final finding count is `0`
    - every remaining work item is assigned to a sprint
    - missing sprint docs were created if needed
@@ -99,24 +112,29 @@ sprints are needed, hardening must create them.
    - if any sprint was overloaded or had production-ready risk, it was split
    - important traits/features/enums/boundaries have explicit code samples
    - branch was pushed and validation reported
-8. Render `.claude/skills/plan-hardening/critical-plan-review.xml.j2` with
-   `sc-compose` for the late hostile plan review.
-9. Send the rendered critical-plan-review ATM task to
+   - the result includes fenced JSON
+11. Render `.claude/skills/plan-hardening/critical-plan-review.xml.j2` with
+   `sc-compose` for the late hostile plan review. Pass the fenced JSON output
+   from sprint-scope hardening as required input.
+12. Send the rendered critical-plan-review ATM task to
    `critical-plan-reviewer`.
-10. Review the critical-plan-review result:
+13. Review the critical-plan-review result:
    - final finding count is `0`, or findings are routed into the next
      hardening pass for correction
    - architecture risk, boundary risk, and false-closure risk are explicit
-11. Render `.claude/skills/plan-hardening/plan-hardening-consistency.xml.j2`
-   with `sc-compose` for document-consistency hardening.
-12. Send the rendered consistency hardening ATM task to `arch-ctm`.
-13. Review the consistency hardening result:
+   - the result includes fenced JSON
+14. Render `.claude/skills/plan-hardening/plan-hardening-consistency.xml.j2`
+   with `sc-compose` for document-consistency hardening. Pass the fenced JSON
+   output from `critical-plan-reviewer` as required input.
+15. Send the rendered consistency hardening ATM task to `arch-ctm`.
+16. Review the consistency hardening result:
    - final finding count is `0`
    - cross-document contradictions are resolved
    - boundary ownership and ADR coverage are explicit
    - ambiguous wording is removed
    - branch was pushed and validation reported
-14. Critically review the hardened plan before QA:
+   - the result includes fenced JSON
+17. Critically review the hardened plan before QA:
    - read the updated phase plan and every new or changed sprint doc
    - review sprint deliverables for concrete ownership, production-ready scope,
      and execution clarity
@@ -128,7 +146,7 @@ sprints are needed, hardening must create them.
      acceptance criteria
    - request another hardening pass from `arch-ctm` if the plan is still
      ambiguous
-15. Only after the critical review passes, route the plan to `quality-mgr` for a
+18. Only after the critical review passes, route the plan to `quality-mgr` for a
    focused plan QA review.
 
 `source_of_truth` should point at the already-approved planning sources:
@@ -163,14 +181,20 @@ critical review focused on whether:
   without explicit user discussion
 
 Do not treat the hardening pass itself as the final review. The handoff is:
-1. `team-lead` routes `plan-scope-reviewer`
-2. `arch-ctm` completes sprint-scope hardening to zero findings
-3. `team-lead` routes `critical-plan-reviewer`
-4. `arch-ctm` completes consistency hardening to zero findings
-5. `team-lead` critically reviews and pushes back if needed
-6. `quality-mgr` performs focused plan QA after that review
+1. `team-lead` routes `plan-develop`
+2. `team-lead` routes `plan-scope-reviewer`
+3. `arch-ctm` completes sprint-scope hardening to zero findings
+4. `team-lead` routes `critical-plan-reviewer`
+5. `arch-ctm` completes consistency hardening to zero findings
+6. `team-lead` critically reviews and pushes back if needed
+7. `quality-mgr` performs focused plan QA after that review
+
+Every step after `plan-develop` must receive the previous step's fenced JSON
+output as a required input artifact. Missing or malformed prior-step JSON is a
+hard stop.
 
 Render:
+- `.claude/skills/plan-hardening/plan-develop.xml.j2`
 - `.claude/skills/plan-hardening/plan-scope-review.xml.j2`
 - `.claude/skills/plan-hardening/plan-hardening.xml.j2`
 - `.claude/skills/plan-hardening/critical-plan-review.xml.j2`
@@ -180,6 +204,11 @@ Render:
 Example:
 
 ```bash
+sc-compose render \
+  --root .claude/skills/plan-hardening \
+  --file plan-develop.xml.j2 \
+  --var-file /tmp/plan-hardening-vars.json
+
 sc-compose render \
   --root .claude/skills/plan-hardening \
   --file plan-scope-review.xml.j2 \
@@ -212,6 +241,7 @@ Suggested vars file shape:
   "branch": "feature/pS-plan-hardening",
   "sprint_doc": "docs/phase-S/sprint-S1.md",
   "pr_target": "integrate/phase-S",
+  "rough_plan_json": "```json\n{\n  \"status\": \"PASS\",\n  \"docs_created\": [],\n  \"docs_modified\": [\"docs/plan-phase-S.md\"],\n  \"sprints_in_scope\": [\"S.1\", \"S.2\"],\n  \"ready_for_next_step\": true,\n  \"notes\": [],\n  \"errors\": []\n}\n```",
   "source_of_truth": "- User-approved planning discussion already completed with arch-ctm\n- docs/project-plan.md\n- docs/plan-phase-S.md\n- docs/requirements.md\n- docs/architecture.md",
   "questions_or_concerns": "- Confirm whether missing follow-on sprints must be created on this branch if the current phase plan stops too early.",
   "references": "- docs/project-plan.md\n- docs/plan-phase-S.md\n- docs/requirements.md\n- docs/architecture.md"

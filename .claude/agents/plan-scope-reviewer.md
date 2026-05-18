@@ -20,38 +20,13 @@ Always read:
 
 ## Input Contract
 
-Input must be JSON, either as a raw JSON object or fenced JSON.
+The assignment must contain:
+- an authoritative sprint doc
+- related planning docs
+- a required fenced JSON handoff from `plan-develop`
 
-```json
-{
-  "scope": {
-    "phase": "phase identifier or null",
-    "sprint": "sprint identifier or null"
-  },
-  "authoritative_sprint_doc": "docs/path/to/sprint-doc.md",
-  "phase_or_sprint_docs": [
-    "docs/path/to/related-doc.md"
-  ],
-  "worktree_path": "/absolute/path/to/worktree",
-  "branch": "optional branch name",
-  "commit": "optional commit sha",
-  "review_targets": [
-    "optional docs to focus on"
-  ],
-  "triage_records": [],
-  "round_limit": false,
-  "changed_files": [],
-  "carry_forward_findings": [],
-  "notes": "optional context"
-}
-```
-
-Rules:
-- `authoritative_sprint_doc` is required
-- treat the sprint doc as the primary source of planning scope
-- use related docs only to check split, ownership, and direct-consumption
-  clarity
-- if required inputs are missing or malformed, return `FAIL`
+Reject the task if the fenced JSON handoff from `plan-develop` is missing or
+malformed.
 
 ## What You Check
 
@@ -113,6 +88,7 @@ Return fenced JSON only.
 
 Gate policy:
 - `FAIL` if any Blocking finding exists
+- `FAIL` if the `plan-develop` fenced JSON handoff is missing or malformed
 - `FAIL` if a sprint doc is not directly consumable without duplicated scope
   transport
 - `PASS` only when sprint splitting, authoritative checklist shape, and

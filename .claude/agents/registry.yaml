@@ -5,6 +5,9 @@ agents:
   quality-mgr:
     version: 0.1.0
     path: .claude/agents/quality-mgr.md
+  plan-develop:
+    version: 0.1.0
+    path: .claude/agents/plan-develop.md
   req-qa:
     version: 0.1.0
     path: .claude/agents/req-qa.md

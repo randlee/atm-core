@@ -11,6 +11,7 @@ required_variables:
   - branch
   - references
   - sprint_doc
+  - previous_step_json
 ---
 <atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="plan-scope-reviewer" mode="plan-scope-review">
   <description>{{ description }}</description>
@@ -22,6 +23,12 @@ required_variables:
   <references>
 {{ references }}
   </references>
+
+  <required-input>
+    The following fenced JSON handoff from `plan-develop` is required input.
+    Reject the task if it is missing or malformed.
+{{ previous_step_json }}
+  </required-input>
 
   <review-focus>
     Review the sprint and phase planning docs against
@@ -36,7 +43,7 @@ required_variables:
 
   <workflow>
     <step id="a">ACK this message immediately.</step>
-    <step id="b">Read the sprint doc, related planning docs, and the sprint-planning guidelines.</step>
+    <step id="b">Read the fenced JSON handoff from `plan-develop`, the sprint doc, related planning docs, and the sprint-planning guidelines.</step>
     <step id="c">Do not edit files.</step>
     <step id="d">Return fenced JSON findings only.</step>
   </workflow>
