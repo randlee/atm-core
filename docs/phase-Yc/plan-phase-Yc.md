@@ -43,11 +43,25 @@ implementation.
    - `message[2]` can fail
    - the runtime warns and continues
    - this violates the ADR-013 identical logical payload contract
+   - concrete path to delete:
+     - the recovered-path per-message append loop in
+       `execute_claude_delivery(...)`
 2. `crates/atm-core/src/delivery_execution.rs` still routes notification side
    effects through `maybe_run_post_send_hook(...)` directly instead of the
    `NotificationSink` boundary.
    - the architecture already says notification is a boundary-owned side effect
    - the live executor path still bypasses that boundary
+   - concrete paths to delete:
+     - the direct `maybe_run_post_send_hook(...)` call inside
+       `PostSendNotificationExecutor`
+     - the retained-runtime-only constructor shape that injects
+       `NonClaudeOutbound` but not `NotificationSink`
+   - scope-tightening rule:
+     - `Y.13` must not promise a crate-visibility reduction that current
+       cross-crate runtime assembly cannot support
+     - instead, it must delete the current multiple-constructor surface and
+       replace it with one approved public composition constructor that
+       requires the full delivery-boundary set
 
 ## Sprint Sequence
 

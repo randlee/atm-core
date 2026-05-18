@@ -36,6 +36,7 @@ target: integrate/phase-Y
 - `crates/atm-core/src/mailbox/atomic.rs`
 - `crates/atm-core/src/mailbox/store.rs`
 - `crates/atm-daemon/src/boundary_adapters.rs`
+- `crates/atm-daemon/src/direct_boundaries.rs`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
@@ -71,6 +72,33 @@ silently dropped or partially deferred.
   to support the owned recovered message-set seam
 - update ADR/boundary docs so the recovered Claude message-set rule is
   documented as an explicit contract, not an inferred behavior
+
+## Paths To Delete
+
+- `crates/atm-core/src/delivery_execution.rs`
+  - delete the recovered-path behavior that loops over `messages` and mutates
+    `AppendDegraded` warning state one message at a time inside
+    `execute_claude_delivery(...)`
+  - delete the recovered-path `break` behavior that allows `message[1]` to
+    append, `message[2]` to fail, and the executor to return without a hard
+    delivery failure
+- `crates/atm-core/src/delivery_execution.rs`
+  - delete the blanket `ClaudeInboxWriter` implementation detail that only
+    exposes one-message append semantics through
+    `self.append_compat_inbox_message(inbox_path, message)`
+    when the active disposition is `SqliteFailedRecovered`
+
+## Approved Surviving Paths
+
+- persisted Claude append delivery may continue to use:
+  - `RetainedServiceRuntime::append_compat_inbox_message(...)`
+  - `crate::mailbox::store::append_compat_mailbox_message(...)`
+- explicit repair/rebuild projection may continue to use:
+  - `RetainedServiceRuntime::rebuild_compat_inbox_projection(...)`
+  - `crate::direct_boundaries::reexport_messages(...)`
+- the new recovered Claude path must survive only as one explicit owned
+  message-set seam documented in `InboxExport` and consumed by the shared
+  delivery executor
 
 ## Explicit Code Samples
 
@@ -135,6 +163,8 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
 
 - `rg -n "if disposition == DeliveryPlanDisposition::SqliteFailedRecovered \\{[[:space:]]*break;" crates/atm-core/src/delivery_execution.rs`
   returns no matches
+- `rg -n "append_claude_inbox_message\\(inbox_path, recipient, &message\\.envelope\\)" crates/atm-core/src/delivery_execution.rs`
+  no longer shows the recovered Claude path implemented as a one-message loop
 - the recovered Claude path no longer reports success after a partial outward
   logical-message-set append
 - the sprint introduces exactly one approved message-set compatibility export
