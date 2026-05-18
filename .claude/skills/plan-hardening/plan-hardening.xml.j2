@@ -1,7 +1,7 @@
 ---
-name: plan-hardening-task
-version: 1.1.0
-description: team-lead assignment template for full phase-plan hardening before implementation.
+name: plan-hardening-sprint-scope-task
+version: 2.0.0
+description: team-lead assignment template for sprint-scope and deliverable hardening before implementation.
 format: xml
 required_variables:
   - task_id
@@ -13,7 +13,7 @@ required_variables:
   - source_of_truth
   - references
 ---
-<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening">
+<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening-sprint-scope">
   <description>{{ description }}</description>
 
   <worktree>{{ worktree_path }}</worktree>
@@ -35,39 +35,72 @@ required_variables:
   </references>
 
   <plan-hardening>
-    You have the full plan in context. Your job is to ensure everything
-    you know is captured in the required documents, then harden those
-    documents until they are complete, consistent, and unambiguous.
-    Do not re-read documents to discover the plan — the plan is already
-    in context. Use the required-documents list as the target: every
-    decision, definition, and constraint in context must land in the
-    correct document before hardening begins.
+    This is the first required hardening pass. Your job is to attack the plan
+    from the sprint-shape and deliverable side before any broader consistency
+    pass. The central question is: are the deliverables split across sprints
+    adequately so that every committed item can land at a production-ready
+    level with no silent drops, no shape-only completion, and no ambiguous
+    ownership?
+
+    Do not re-read documents to discover the plan — the plan is already in
+    context. Use the required-documents list as the target: every committed
+    feature, trait, enum, boundary, rule, and validation promise in context
+    must be assigned to the correct sprint doc at a production-ready level
+    before this pass can close.
 
     The source-of-truth plan content comes from the user-approved material
     already communicated to you plus the explicit source-of-truth references in
     this task. `team-lead` is routing this task and may append questions or
     concerns, but must not be treated as the authority for rewriting the plan.
 
+    You should welcome improvements that clarify, tighten, split, or otherwise
+    make the plan more executable when those improvements are consistent with
+    what the user already discussed with you. You must resist and push back on
+    substantial scope changes that are at odds with that user discussion.
+
+    If `team-lead` routing, repo drift, or source references imply a
+    substantial deliverable-scope change from what the user already discussed
+    with you, do not normalize that new scope into the sprint docs. That is a
+    hard stop. Push back, describe the scope conflict explicitly, and require
+    the conflict to be resolved with the user before hardening continues.
+
+    Substantial scope changes include:
+    - dropping, replacing, or weakening a user-discussed deliverable
+    - converting a runtime/code sprint into a docs/lint-only sprint
+    - retargeting work to a different phase or integration branch
+    - adding a new deliverable that materially changes the implementation
+      outcome promised to the user
+
     Any remaining in-scope implementation work not assigned to a specific
-    sprint doc is a GAP finding. If the known remaining work extends beyond the
-    currently documented sprint set, create the additional sprint docs required
-    to finish the phase.
+    sprint doc is a GAP finding. If a sprint is carrying too many deliverables,
+    too many closure types, or too much residual risk for the committed work to
+    land production-ready, that is a SPLIT-RISK finding and the sprint must be
+    split now. Planning the same deliverable multiple times is a failure.
 
     Sprint docs are not considered hardened unless they provide execution-ready
     guidance:
     - goal
     - hard dependencies
     - exact code or document targets when applicable
+    - deliverables
     - required work
+    - explicit statement that every listed deliverable is expected to land at a production-ready level for the scope this sprint claims
+    - explicit code samples or signatures for important traits, features, enums, protocol types, or boundary contracts
+    - explicit non-closure items when a sprint intentionally does not close something
     - acceptance criteria
     - required validation
 
     <audit-phase>
-      Verify that every document in the required-documents list exists,
-      is complete, and is consistent with all other documents and with
-      everything currently in context. Then create a structured task list
-      of all findings. Do not begin the fix phase until the task list
-      is complete.
+      Verify that every document in the required-documents list exists and that
+      the sprint set is split correctly for production-ready delivery. Then
+      create a structured task list of all findings. Do not begin the fix phase
+      until the task list is complete.
+
+      Before normal audit work, compare the current docs and task framing
+      against the user-approved scope already in context. If you detect a
+      substantial scope rewrite, emit a `SCOPE-CONFLICT` finding, push back to
+      `team-lead`, and stop. Do not "fix" a scope conflict by rewriting the
+      plan around it.
 
       <required-documents>
         <doc id="project-plan">
@@ -113,6 +146,19 @@ required_variables:
         </doc>
       </required-documents>
 
+      For every sprint doc, verify that:
+        - every committed deliverable is assigned to exactly one sprint
+        - no deliverable is described in a way that allows partial completion
+          while still claiming success
+        - every deliverable is expected to land at a production-ready level for
+          the scope that sprint claims
+        - if there is credible risk that the sprint has too many deliverables,
+          the sprint is split before implementation
+        - important traits, features, enums, protocol types, and boundary
+          contracts have explicit code samples or signatures in the sprint doc
+        - acceptance criteria can prove the presence of every listed
+          deliverable
+
       Each entry in the task list must include:
         - Finding number
         - Document name and section (or "missing" if the document does not exist)
@@ -122,12 +168,12 @@ required_variables:
       <finding-types>
         <type id="GAP">Required detail is absent entirely, or a required document does not exist.</type>
         <type id="VAGUE">Language is ambiguous or leaves an implementation choice to the developer that the plan should resolve explicitly.</type>
-        <type id="CONTRA">Two or more documents contradict each other.</type>
-        <type id="MISSING-ADR">A significant architectural decision is made inline without a corresponding ADR.</type>
-        <type id="BOUNDARY">An architectural boundary, module ownership rule, or interface contract is undefined or incompletely specified.</type>
-        <type id="UNDEF">An important type, trait, struct, enum, or protocol is referenced but not explicitly defined in any document.</type>
-        <type id="CROSS-DOC">A definition or decision in one document is not reflected consistently in documents that depend on it.</type>
+        <type id="SPLIT-RISK">A sprint is carrying too many deliverables, too much mixed closure work, or too much residual risk to credibly land every committed deliverable at a production-ready level.</type>
+        <type id="DROP-RISK">A deliverable can be partially implemented, silently deferred, or lost without failing the sprint acceptance criteria.</type>
+        <type id="NON-PROD">A sprint deliverable is described in a way that would allow shape-only, test-only, or non-production-ready completion.</type>
+        <type id="MISSING-CODE-SAMPLE">An important trait, feature, enum, protocol type, or boundary contract is committed by the plan but not illustrated with an explicit code sample or signature.</type>
         <type id="ORDERING">Task dependencies are missing or incorrectly ordered such that a dev agent could begin work out of sequence.</type>
+        <type id="SCOPE-CONFLICT">The task framing, repo docs, or team-lead concerns materially change the user-discussed deliverable scope; hardening must stop and push back instead of adopting the new scope.</type>
       </finding-types>
     </audit-phase>
 
@@ -140,6 +186,12 @@ required_variables:
            architecture definition). Both are valid and expected fix actions.
         4. Confirm the fix did not introduce a new finding.
         5. Mark the finding as resolved in the task list.
+
+      If a sprint cannot carry all of its committed work cleanly, split it now.
+      Do not preserve an overloaded sprint just to keep the sprint count low.
+      `SCOPE-CONFLICT` is not resolved by rewriting the plan. It is resolved
+      only by stopping, pushing back to team-lead, and requiring user
+      discussion before scope changes proceed.
     </fix-phase>
 
     <repeat>
@@ -150,25 +202,25 @@ required_variables:
     <exit-criterion>
       Output this report when audit-phase produces zero findings:
 
-        HARDENING COMPLETE
+        SPRINT-SCOPE HARDENING COMPLETE
         Iterations:                           N
         Total findings resolved:              N
         Final finding count:                  0
-        Dev-agent decision points eliminated: N
+        Sprint splits added:                  N
         Documents modified:                   [list]
         Documents created:                    [list]
     </exit-criterion>
   </plan-hardening>
 
   <workflow>
-    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. Team-lead should review that ACK and outline first, then discuss any scope concerns with the user after the ACK is received. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that hardening is blocked pending user discussion. Team-lead should review that ACK and outline first, then discuss any scope concerns with the user after the ACK is received. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
     <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead critical review can begin in parallel.</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Send the git commit hash to team-lead and explicitly request a critical review of the hardened plan, with special focus on sprint deliverables and acceptance criteria. Team-lead should push back or request another hardening pass if those are still unclear.</step>
-    <step id="h">Only after team-lead critical review passes should team-lead route the hardened plan to quality-mgr for focused plan QA.</step>
+    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Send the git commit hash to team-lead and explicitly request a critical review of sprint splitting, deliverables, production-ready scope, and code-sample completeness.</step>
+    <step id="h">Team-lead must not route the plan to QA or implementation from this pass alone. The second required consistency hardening pass must run after this sprint-scope pass.</step>
     <step id="i">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>
