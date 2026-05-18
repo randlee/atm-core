@@ -1,7 +1,7 @@
 ---
 id: Y.12
 title: Claude Degraded Delivery Set Closure
-status: planned
+status: complete
 branch: feature/pYc-s12-claude-degraded-delivery-set-closure
 worktree: ../atm-core-worktrees/feature/pYc-s12-claude-degraded-delivery-set-closure
 target: integrate/phase-Y

@@ -34,6 +34,22 @@ pub(crate) fn append_compat_mailbox_message(
     atomic::append_message(path, message, export_policy)
 }
 
+/// Recovered-delivery only — atomically materializes one logical message set
+/// after loading the existing compatibility inbox projection.
+pub(crate) fn append_compat_mailbox_message_set(
+    path: &Path,
+    messages: &[MessageEnvelope],
+) -> Result<(), AtmError> {
+    let export_policy = load_export_policy(path)?;
+    let mut existing_messages = if path.exists() {
+        crate::mailbox::load_compat_mailbox_messages(path)?
+    } else {
+        Vec::new()
+    };
+    existing_messages.extend(messages.iter().cloned());
+    write_compat_mailbox_projection_with_policy(path, &existing_messages, export_policy)
+}
+
 /// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 fn write_compat_mailbox_projection_with_policy(
     path: &Path,
@@ -89,7 +105,8 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        append_compat_mailbox_message, write_compat_mailbox_projection,
+        append_compat_mailbox_message, append_compat_mailbox_message_set,
+        write_compat_mailbox_projection,
         write_compat_source_projections,
     };
     use crate::mailbox::load_compat_mailbox_messages;
@@ -204,6 +221,26 @@ mod tests {
             encoded["summary"],
             serde_json::Value::String("stub summary".into())
         );
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_set_appends_existing_messages_atomically() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
+        let existing = sample_message(ROLE_TEAM_LEAD, "existing");
+        let appended = [
+            sample_message(TEST_QA, "new first"),
+            sample_message(TEST_SENDER, "new second"),
+        ];
+
+        append_compat_mailbox_message(&path, &existing).expect("seed existing");
+        append_compat_mailbox_message_set(&path, &appended).expect("append set");
+
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), 3);
+        assert_eq!(read_back[0].text, existing.text);
+        assert_eq!(read_back[1].text, appended[0].text);
+        assert_eq!(read_back[2].text, appended[1].text);
     }
 
     #[test]

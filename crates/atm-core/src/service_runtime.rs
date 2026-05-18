@@ -4,7 +4,10 @@ use std::io::Read;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 
-use crate::boundary::{InboxExportReexportMessageRequest, MessageKey};
+use crate::boundary::{
+    ClaudeCompatibilityDeliveryMode, InboxExportAppendMessageSetRequest,
+    InboxExportReexportMessageRequest, MessageKey,
+};
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
@@ -65,6 +68,12 @@ pub(crate) trait RetainedServiceRuntime {
         &self,
         inbox_path: &Path,
         message: &MessageEnvelope,
+    ) -> Result<(), AtmError>;
+    fn append_compat_inbox_message_set(
+        &self,
+        inbox_path: &Path,
+        mode: ClaudeCompatibilityDeliveryMode,
+        messages: &[MessageEnvelope],
     ) -> Result<(), AtmError>;
     fn deliver_non_claude_payloads(
         &self,
@@ -270,6 +279,20 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
             ));
         }
         crate::mailbox::store::append_compat_mailbox_message(inbox_path, message)
+    }
+
+    fn append_compat_inbox_message_set(
+        &self,
+        inbox_path: &Path,
+        mode: ClaudeCompatibilityDeliveryMode,
+        messages: &[MessageEnvelope],
+    ) -> Result<(), AtmError> {
+        crate::direct_boundaries::append_message_set(InboxExportAppendMessageSetRequest {
+            path: inbox_path.to_path_buf(),
+            messages: messages.to_vec(),
+            mode,
+        })
+        .map(|_| ())
     }
 
     fn load_roster_member(

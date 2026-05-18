@@ -4,7 +4,9 @@
 use std::collections::HashSet;
 
 use crate::boundary::{
+    ClaudeCompatibilityDeliveryMode,
     ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse,
+    InboxExportAppendMessageSetRequest, InboxExportAppendMessageSetResponse,
     InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
     InboxExportReexportMessageResponse, InboxIngressDiagnosticsRequest,
     InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
@@ -185,4 +187,26 @@ pub(crate) fn reexport_messages(
         },
     )?;
     Ok(InboxExportReexportMessageResponse { wrote_messages })
+}
+
+pub(crate) fn append_message_set(
+    request: InboxExportAppendMessageSetRequest,
+) -> Result<InboxExportAppendMessageSetResponse, AtmError> {
+    let wrote_messages = request.messages.len();
+    match request.mode {
+        ClaudeCompatibilityDeliveryMode::RecoveredLogicalMessageSet => {
+            mailbox::store::append_compat_mailbox_message_set(&request.path, &request.messages)
+                .map_err(|error| {
+                    AtmError::daemon_unavailable(format!(
+                        "daemon inbox export could not materialize recovered logical message set for {}",
+                        request.path.display()
+                    ))
+                    .with_recovery(
+                        "Fix the destination mailbox projection path or file permissions before retrying recovered Claude compatibility delivery.",
+                    )
+                    .with_source(error)
+                })?;
+        }
+    }
+    Ok(InboxExportAppendMessageSetResponse { wrote_messages })
 }

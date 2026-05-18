@@ -12,8 +12,9 @@ use super::{
     prepare_threaded_message,
 };
 use crate::boundary::{
-    MailMessageState, MailStoreMailboxMetadataRow, MailStoreMessageRecord, MessageKey,
-    NonClaudeOutboundDeliveryRequest, RosterHarness, RosterMemberKind, RosterMemberRecord,
+    ClaudeCompatibilityDeliveryMode, MailMessageState, MailStoreMailboxMetadataRow,
+    MailStoreMessageRecord, MessageKey, NonClaudeOutboundDeliveryRequest, RosterHarness,
+    RosterMemberKind, RosterMemberRecord,
 };
 use crate::config::AtmConfig;
 use crate::delivery_execution::{DeliveryExecutionDisposition, execute_delivery_plan};
@@ -193,6 +194,22 @@ impl RetainedServiceRuntime for TestRuntime {
             .lock()
             .expect("append captures lock")
             .push(message.clone());
+        Ok(())
+    }
+
+    fn append_compat_inbox_message_set(
+        &self,
+        _inbox_path: &Path,
+        _mode: ClaudeCompatibilityDeliveryMode,
+        messages: &[MessageEnvelope],
+    ) -> Result<(), AtmError> {
+        if let Some(message) = self.append_error_message {
+            return Err(AtmError::mailbox_write(message));
+        }
+        self.appended_messages
+            .lock()
+            .expect("append captures lock")
+            .extend(messages.iter().cloned());
         Ok(())
     }
 
@@ -540,7 +557,7 @@ fn named_plan_builder_proves_payload_equality_across_harnesses() {
 }
 
 #[test]
-fn named_companion_error_failure_handling_adds_explicit_warning() {
+fn recovered_claude_append_failure_after_sqlite_failure_returns_hard_error() {
     let runtime = TestRuntime::new(
         Some("sqlite write failed"),
         Some("append failed"),
@@ -549,15 +566,12 @@ fn named_companion_error_failure_handling_adds_explicit_warning() {
     let observability = RecordingObservability::default();
     let tempdir = tempdir().expect("tempdir");
 
-    let outcome =
+    let error =
         super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
+            .expect_err("recovered Claude append failure must fail hard");
 
-    assert!(outcome.warnings.iter().any(|warning| {
-        warning
-            .message
-            .contains("degraded Claude Code delivery append failed")
-    }));
+    assert!(error.is_mailbox_write());
+    assert!(error.message.contains("append failed"));
 }
 
 #[test]

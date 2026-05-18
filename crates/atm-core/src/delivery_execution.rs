@@ -1,5 +1,6 @@
 use std::path::Path;
 
+use crate::boundary::ClaudeCompatibilityDeliveryMode;
 use crate::config::AtmConfig;
 use crate::delivery_plan::{
     DeliveryPlan, DeliveryPlanDisposition, DeliveryTarget, LogicalMessage, NotificationTarget,
@@ -53,6 +54,13 @@ pub(crate) trait ClaudeInboxWriter {
         recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
         message: &MessageEnvelope,
     ) -> Result<(), AtmError>;
+    fn append_claude_message_set(
+        &self,
+        inbox_path: &Path,
+        recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+        disposition: DeliveryPlanDisposition,
+        messages: &[LogicalMessage],
+    ) -> Result<(), AtmError>;
 }
 
 impl<T> ClaudeInboxWriter for T
@@ -66,6 +74,24 @@ where
         message: &MessageEnvelope,
     ) -> Result<(), AtmError> {
         self.append_compat_inbox_message(inbox_path, message)
+    }
+
+    fn append_claude_message_set(
+        &self,
+        inbox_path: &Path,
+        _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+        disposition: DeliveryPlanDisposition,
+        messages: &[LogicalMessage],
+    ) -> Result<(), AtmError> {
+        let mode = claude_compatibility_delivery_mode_for_disposition(disposition)?;
+        self.append_compat_inbox_message_set(
+            inbox_path,
+            mode,
+            &messages
+                .iter()
+                .map(|message| message.envelope.clone())
+                .collect::<Vec<_>>(),
+        )
     }
 }
 
@@ -212,7 +238,7 @@ where
             snapshot,
             view.messages,
             &mut result,
-        ),
+        )?,
         DeliveryTarget::NonClaude { recipient } => {
             runtime.deliver_non_claude_payloads(recipient, view.messages)?;
         }
@@ -344,7 +370,12 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
     recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
     messages: &[LogicalMessage],
     result: &mut DeliveryExecutionResult,
-) {
+) -> Result<(), AtmError> {
+    if disposition == DeliveryPlanDisposition::SqliteFailedRecovered {
+        runtime.append_claude_message_set(inbox_path, recipient, disposition, messages)?;
+        return Ok(());
+    }
+
     for (index, message) in messages.iter().enumerate() {
         if let Err(error) =
             runtime.append_claude_inbox_message(inbox_path, recipient, &message.envelope)
@@ -353,10 +384,24 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
             result
                 .warnings
                 .push(build_append_warning(disposition, recipient, index, error));
-            if disposition == DeliveryPlanDisposition::SqliteFailedRecovered {
-                break;
-            }
         }
+    }
+    Ok(())
+}
+
+fn claude_compatibility_delivery_mode_for_disposition(
+    disposition: DeliveryPlanDisposition,
+) -> Result<ClaudeCompatibilityDeliveryMode, AtmError> {
+    match disposition {
+        DeliveryPlanDisposition::SqliteFailedRecovered => {
+            Ok(ClaudeCompatibilityDeliveryMode::RecoveredLogicalMessageSet)
+        }
+        _ => Err(AtmError::validation(
+            "claude_compatibility_delivery_mode_for_disposition only accepts DeliveryPlanDisposition::SqliteFailedRecovered",
+        )
+        .with_recovery(
+            "Call the recovered Claude message-set seam only for SqliteFailedRecovered delivery plans; persisted Claude delivery stays on the single-message append path.",
+        )),
     }
 }
 
@@ -430,6 +475,16 @@ mod tests {
         ) -> Result<(), AtmError> {
             Ok(())
         }
+
+        fn append_claude_message_set(
+            &self,
+            _inbox_path: &Path,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _disposition: DeliveryPlanDisposition,
+            _messages: &[LogicalMessage],
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
     }
 
     impl PostSendNotificationExecutor for NoopRuntime {
@@ -488,14 +543,18 @@ mod tests {
     }
 
     fn logical_message() -> LogicalMessage {
+        logical_message_with_text("hello")
+    }
+
+    fn logical_message_with_text(text: &str) -> LogicalMessage {
         LogicalMessage::new(
             MessageEnvelope {
                 from: AgentName::from_validated(TEST_SENDER),
-                text: "hello".to_string(),
+                text: text.to_string(),
                 timestamp: IsoTimestamp::now(),
                 read: false,
                 source_team: Some(TeamName::from_validated(TEST_TEAM)),
-                summary: Some("hello".to_string()),
+                summary: Some(text.to_string()),
                 message_id: Some(AtmMessageId::new()),
                 pending_ack_at: None,
                 acknowledged_at: None,
@@ -510,6 +569,105 @@ mod tests {
             false,
         )
         .expect("logical message")
+    }
+
+    #[derive(Default)]
+    struct RecordingRuntime {
+        single_append_texts: std::sync::Mutex<Vec<String>>,
+        message_set_texts: std::sync::Mutex<Vec<Vec<String>>>,
+        fail_message_set: bool,
+        fail_single_append_indexes: std::sync::Mutex<Vec<usize>>,
+        single_append_calls: std::sync::Mutex<usize>,
+    }
+
+    impl RecordingRuntime {
+        fn with_message_set_failure() -> Self {
+            Self {
+                fail_message_set: true,
+                ..Self::default()
+            }
+        }
+
+        fn with_single_append_failures(indexes: &[usize]) -> Self {
+            Self {
+                fail_single_append_indexes: std::sync::Mutex::new(indexes.to_vec()),
+                ..Self::default()
+            }
+        }
+    }
+
+    impl ClaudeInboxWriter for RecordingRuntime {
+        fn append_claude_inbox_message(
+            &self,
+            _inbox_path: &Path,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            message: &MessageEnvelope,
+        ) -> Result<(), AtmError> {
+            let mut call_count = self.single_append_calls.lock().expect("call count");
+            let current_index = *call_count;
+            *call_count += 1;
+
+            if self
+                .fail_single_append_indexes
+                .lock()
+                .expect("fail indexes")
+                .contains(&current_index)
+            {
+                return Err(AtmError::mailbox_write(format!(
+                    "single append failure for message[{}]",
+                    current_index + 1
+                )));
+            }
+
+            self.single_append_texts
+                .lock()
+                .expect("single appends")
+                .push(message.text.clone());
+            Ok(())
+        }
+
+        fn append_claude_message_set(
+            &self,
+            _inbox_path: &Path,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _disposition: DeliveryPlanDisposition,
+            messages: &[LogicalMessage],
+        ) -> Result<(), AtmError> {
+            self.message_set_texts.lock().expect("message sets").push(
+                messages
+                    .iter()
+                    .map(|message| message.envelope.text.clone())
+                    .collect(),
+            );
+            if self.fail_message_set {
+                return Err(AtmError::mailbox_write(
+                    "recovered Claude logical message set export failed",
+                ));
+            }
+            Ok(())
+        }
+    }
+
+    impl PostSendNotificationExecutor for RecordingRuntime {
+        fn execute_post_send_notification(
+            &self,
+            _warnings: &mut Vec<WarningEntry>,
+            _config: Option<&AtmConfig>,
+            _recipient: &ResolvedRecipient,
+            _recipient_pane_id: Option<&str>,
+            _notification: &crate::delivery_plan::NotificationTarget,
+        ) {
+        }
+    }
+
+    impl NonClaudeOutboundDeliveryWriter for RecordingRuntime {
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _messages: &[LogicalMessage],
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
     }
 
     fn recipient_snapshot(harness: DeliveryHarnessPath) -> DeliveryRecipientSnapshot {
@@ -598,6 +756,124 @@ mod tests {
             error
                 .message
                 .contains("unsupported for DeliveryHarnessPath::NonClaude")
+        );
+    }
+
+    #[test]
+    fn sqlite_failure_for_claude_requires_full_logical_message_set_delivery() {
+        let runtime = RecordingRuntime::with_message_set_failure();
+        let plan = DeliveryPlan::new(
+            DeliveryPlanDisposition::SqliteFailedRecovered,
+            DeliveryTarget::ClaudeCode {
+                inbox_path: PathBuf::from("recipient.jsonl"),
+                recipient: recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
+            },
+            ResolvedRecipient {
+                agent: AgentName::from_validated("recipient"),
+                team: TeamName::from_validated(TEST_TEAM),
+            },
+            None,
+            vec![
+                logical_message_with_text("message[1]"),
+                logical_message_with_text("message[2]"),
+            ],
+            Vec::new(),
+        );
+
+        let error = execute_delivery_plan(&runtime, None, &plan).expect_err("hard failure");
+        assert!(error.message.contains("logical message set export failed"));
+        assert_eq!(
+            runtime.message_set_texts.lock().expect("message sets").len(),
+            1
+        );
+        assert!(
+            runtime
+                .single_append_texts
+                .lock()
+                .expect("single appends")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn sqlite_failure_for_claude_does_not_emit_message1_without_message2() {
+        let runtime = RecordingRuntime::with_message_set_failure();
+        let plan = DeliveryPlan::new(
+            DeliveryPlanDisposition::SqliteFailedRecovered,
+            DeliveryTarget::ClaudeCode {
+                inbox_path: PathBuf::from("recipient.jsonl"),
+                recipient: recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
+            },
+            ResolvedRecipient {
+                agent: AgentName::from_validated("recipient"),
+                team: TeamName::from_validated(TEST_TEAM),
+            },
+            None,
+            vec![
+                logical_message_with_text("original message"),
+                logical_message_with_text("companion error"),
+            ],
+            Vec::new(),
+        );
+
+        let _ = execute_delivery_plan(&runtime, None, &plan).expect_err("hard failure");
+        assert_eq!(
+            *runtime.message_set_texts.lock().expect("message sets"),
+            vec![vec![
+                "original message".to_string(),
+                "companion error".to_string()
+            ]]
+        );
+        assert!(
+            runtime
+                .single_append_texts
+                .lock()
+                .expect("single appends")
+                .is_empty()
+        );
+    }
+
+    #[test]
+    fn persisted_claude_append_degradation_remains_explicit_and_warning_typed() {
+        let runtime = RecordingRuntime::with_single_append_failures(&[0]);
+        let plan = DeliveryPlan::new(
+            DeliveryPlanDisposition::Persisted,
+            DeliveryTarget::ClaudeCode {
+                inbox_path: PathBuf::from("recipient.jsonl"),
+                recipient: recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
+            },
+            ResolvedRecipient {
+                agent: AgentName::from_validated("recipient"),
+                team: TeamName::from_validated(TEST_TEAM),
+            },
+            None,
+            vec![
+                logical_message_with_text("persisted first"),
+                logical_message_with_text("persisted second"),
+            ],
+            Vec::new(),
+        );
+
+        let result = execute_delivery_plan(&runtime, None, &plan).expect("append degraded");
+        assert_eq!(
+            result.disposition,
+            DeliveryExecutionDisposition::AppendDegraded
+        );
+        assert_eq!(result.warnings.len(), 1);
+        assert!(
+            result.warnings[0]
+                .message
+                .contains("warning: compatibility append degraded")
+        );
+        assert_eq!(
+            result.warnings[0].recovery.as_deref(),
+            Some(
+                "SQLite persistence succeeded. Post-send-hook fallback remains available for notification degradation."
+            )
+        );
+        assert_eq!(
+            *runtime.single_append_texts.lock().expect("single appends"),
+            vec!["persisted second".to_string()]
         );
     }
 }

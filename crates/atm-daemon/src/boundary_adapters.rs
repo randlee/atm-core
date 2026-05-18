@@ -1,12 +1,14 @@
 use atm_core::{
     boundary::{
         self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
-        ConfigTeamLoadResponse, InboxExport, InboxExportRecordRequest, InboxExportRecordResponse,
-        InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxIngress,
-        InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
-        InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-        InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, ReconcileRequest,
-        ReconcileResult, WatchEventBatch, WatchSubscriptionRequest,
+        ConfigTeamLoadResponse, InboxExport, InboxExportAppendMessageSetRequest,
+        InboxExportAppendMessageSetResponse, InboxExportRecordRequest,
+        InboxExportRecordResponse, InboxExportReexportMessageRequest,
+        InboxExportReexportMessageResponse, InboxIngress, InboxIngressDiagnosticsRequest,
+        InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
+        InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest,
+        InboxIngressImportResponse, NotificationEvent, ReconcileRequest, ReconcileResult,
+        WatchEventBatch, WatchSubscriptionRequest,
     },
     error::AtmError,
 };
@@ -222,6 +224,13 @@ impl InboxExport for DaemonInboxExport {
         request: InboxExportReexportMessageRequest,
     ) -> Result<InboxExportReexportMessageResponse, AtmError> {
         direct_boundaries::reexport_messages(request)
+    }
+
+    fn append_message_set(
+        &self,
+        request: InboxExportAppendMessageSetRequest,
+    ) -> Result<InboxExportAppendMessageSetResponse, AtmError> {
+        direct_boundaries::append_message_set(request)
     }
 }
 

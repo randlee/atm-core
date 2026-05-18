@@ -1,6 +1,7 @@
 use atm_core::{
     boundary::{
         ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse,
+        InboxExportAppendMessageSetRequest, InboxExportAppendMessageSetResponse,
         InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
         InboxExportReexportMessageResponse, InboxIngressDiagnosticsRequest,
         InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
@@ -54,4 +55,10 @@ pub(crate) fn reexport_messages(
     request: InboxExportReexportMessageRequest,
 ) -> Result<InboxExportReexportMessageResponse, AtmError> {
     atm_core::direct_boundaries::reexport_messages(request)
+}
+
+pub(crate) fn append_message_set(
+    request: InboxExportAppendMessageSetRequest,
+) -> Result<InboxExportAppendMessageSetResponse, AtmError> {
+    atm_core::direct_boundaries::append_message_set(request)
 }
