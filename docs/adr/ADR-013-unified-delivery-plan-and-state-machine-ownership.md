@@ -7,6 +7,17 @@ Accepted
 Accepted note: Implementation complete through `Phase Yb Y.8`
 (`feature/pYb-s8-policy-cleanup-and-impossible-path-removal`).
 
+Follow-on note:
+- the architectural direction in this ADR remains authoritative
+- later `integrate/phase-Y` production-readiness review reopened two remaining
+  runtime gaps:
+  - recovered Claude SQLite-failure delivery still allows partial logical
+    message-set success
+  - production notification execution still bypasses `NotificationSink`
+- those final closeout items are owned by `Phase Yc`:
+  - `Y.12` closes the recovered Claude logical-message-set contract
+  - `Y.13` closes the production `NotificationSink` boundary bypass
+
 ## Context
 
 The accepted `integrate/phase-Y` implementation still leaves message-path
@@ -123,3 +134,7 @@ The documented lintable boundary plan must forbid direct calls from:
 - `docs/phase-Yb/sprint-Y8.md`
 - `docs/phase-Yb/sprint-Y9.md`
 - `docs/phase-Yb/sprint-Y10.md`
+- `docs/phase-Yc/plan-phase-Yc.md`
+- `docs/phase-Yc/issues.md`
+- `docs/phase-Yc/sprint-Y12.md`
+- `docs/phase-Yc/sprint-Y13.md`

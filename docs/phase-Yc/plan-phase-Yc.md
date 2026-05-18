@@ -102,7 +102,7 @@ Purpose:
 Authoritative sprint doc:
 - [sprint-Y13.md](./sprint-Y13.md)
 
-Supporting issues inventory:
+Supporting issues inventory for the whole `Yc` line:
 - [issues.md](./issues.md)
 
 ## Exit Condition

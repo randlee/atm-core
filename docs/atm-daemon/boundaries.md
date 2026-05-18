@@ -372,6 +372,10 @@ Notes:
   - callers outside `RuntimeComposition` must use
     `NotificationSink::deliver(...)` only and must not open plugin/agent
     delivery paths directly
+- `Phase Yc` closes the last daemon/runtime consistency gap for this boundary:
+  - `Y.13` must ensure the retained runtime factory installs the daemon-owned
+    `NotificationSink` adapter on the live send/ack executor path rather than
+    allowing direct helper-owned notification execution to survive
 
 ## DaemonNonClaudeOutboundAdapter
 
