@@ -1,7 +1,7 @@
 ---
 id: Y.4
 title: Delivery Coordinator And Event-Family State Machines
-status: planned
+status: complete
 branch: feature/pY-s4-delivery-coordinator-and-state-machines
 worktree: ../atm-core-worktrees/feature/pY-s4-delivery-coordinator-and-state-machines
 target: integrate/phase-Y
@@ -26,6 +26,25 @@ command and daemon code.
 - land explicit enums and transition tables for every required write-affecting
   event family before any implementation-specific simplification is considered
 - make state transitions observable and QA-auditable
+
+## Completion Notes
+
+- complete on `feature/pY-s4-delivery-coordinator-and-state-machines`
+- retained send/ack delivery routing now resolves a copied roster snapshot
+  through `crates/atm-core/src/delivery_policy.rs`
+- retained send/ack compatibility rewrites now route through one coordinator
+  decision:
+  - `Claude Code` harness keeps compatibility export
+  - non-Claude harness skips ATM-authored JSONL export
+- post-send hook dispatch now receives `recipient_pane_id` from the roster
+  snapshot when present
+- the explicit event-family/state-machine inventory now exists in code and
+  targeted tests under `crates/atm-core/src/delivery_policy.rs`
+- one transitional compatibility rule remains explicit in code and docs:
+  - when no canonical roster row exists yet for the recipient, the
+    coordinator falls back to `Claude Code` compatibility behavior to preserve
+    retained CLI compatibility until roster hydration is guaranteed on every
+    active path
 
 ## Governing Requirements
 

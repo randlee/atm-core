@@ -30,6 +30,8 @@ The retained command surface is:
 
 Approved additive CLI feature for the Phase `Y` line:
 - `help`
+- the `help` addition stays on the CLI conceptual-help surface only; it does
+  not reopen mailbox-truth or boundary-ownership work inside `Y.1`
 
 ## 1.1 Documentation Structure
 
@@ -692,10 +694,6 @@ Current persisted inbox superset may contain:
   - optional producer field `color`
 - ATM additive compatibility fields:
   - `message_id`
-  - `source_team`
-  - `pendingAckAt`
-  - `acknowledgedAt`
-  - `acknowledgesMessageId`
   - `parentMessageId`
   - `threadMode`
   - `taskId`
@@ -725,6 +723,9 @@ Architectural rules:
   compatibility wire form rather than as a second ATM-owned id.
 - Compatibility writes may preserve established top-level additive fields, but
   they must not become the place where new ATM-owned machine state accumulates.
+- removed compatibility fields such as `source_team`, `pendingAckAt`,
+  `acknowledgedAt`, `acknowledgesMessageId`, and `expiresAt` must stay
+  SQLite-only or workflow-only even if older inbox files still contain them.
 
 File-ownership rule:
 - the private watcher/import/export boundary is the only approved place that
@@ -2382,6 +2383,8 @@ Phase `Yb` therefore tightens the architecture further:
   - `atm_core::delivery_plan::ReplyDeliveryPlan`
   - `atm_core::delivery_execution::execute_delivery_plan(...)`
   - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+  - `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
+  - `atm_core::boundary::NonClaudeOutbound`
 - no command, ack, or persistence layer may branch on harness after the
   machine has produced its delivery plan
 - post-send-hook execution remains notification-only and must not stand in for

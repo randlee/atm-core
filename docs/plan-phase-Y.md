@@ -48,14 +48,14 @@ The current code does **not** satisfy the desired end-state yet.
 Observed production ATM-authored inbox write entrypoints:
 
 1. `send` command path
-   - `crates/atm-core/src/send/mod.rs::append_mailbox_message_and_seed_workflow(...)`
-   - rebuilds the mailbox projection from SQLite metadata/records
-   - rewrites the full compatibility inbox file
+   - `crates/atm-core/src/send/mod.rs::persist_message_and_seed_workflow(...)`
+   - persists SQLite/workflow state first
+   - reaches compatibility rewrite only through the retained runtime refresh owner
 
 2. `ack` reply path
    - `crates/atm-core/src/ack/mod.rs`
-   - emits the reply through the same helper
-   - therefore still rewrites the compatibility inbox file
+   - emits the reply through the same narrowed helper
+   - does not rewrite the original source inbox merely because ack state changed
 
 3. compatibility export/source-projection path
    - `crates/atm-core/src/mailbox/store.rs::write_compat_source_projections(...)`
@@ -177,6 +177,14 @@ Purpose:
 - execute the line-numbered removal ledger from
   `docs/phase-Y/inbox-write-path-audit.md`
 
+Current status:
+
+- complete on `feature/pY-s3-hard-write-boundary-consolidation`
+- normal retained `send` now persists SQLite/workflow state first and reaches
+  compatibility rewrite only through
+  `RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
+- `ack` and `clear` no longer own source-inbox compatibility rewrites
+
 ### Y.4 Delivery Coordinator And Event-Family State Machines
 
 Purpose:
@@ -187,6 +195,16 @@ Purpose:
   event-family state machines
 - make harness routing, failure behavior, and transition observability auditable
   in one place
+
+Current status:
+
+- complete on `feature/pY-s4-delivery-coordinator-and-state-machines`
+- the retained coordinator/state-machine seam now lives in
+  `crates/atm-core/src/delivery_policy.rs`
+- retained `send` and `ack` now resolve copied roster snapshots through
+  `RetainedServiceRuntime::load_roster_member(...)`
+- retained compatibility export now remains enabled only for `Claude Code`
+  harnesses; non-Claude harnesses skip ATM-authored JSONL export
 
 ### Y.5 Mutable Compatibility-Field Removal And Dependency Exposure
 
@@ -199,6 +217,21 @@ Purpose:
 - keep field-removal logic inside the event-family state machines rather than
   in generic export conditionals
 
+Current status:
+
+- complete on `feature/pY-s5-mutable-compatibility-field-removal`
+- retained compatibility export now keeps only immutable correlation/context
+  fields: `message_id`, `parentMessageId`, `threadMode`, and `taskId`
+- retained compatibility export now strips:
+  - `source_team`
+  - `pendingAckAt`
+  - `acknowledgedAt`
+  - `acknowledgesMessageId`
+  - `expiresAt`
+  - `metadata.atm.*`
+- retained compatibility export now reloads stored message records instead of
+  workflow-joined projected envelopes before writing compatibility output
+
 ### Y.6 Append-Only Compatibility Export Cutover
 
 Purpose:
@@ -209,6 +242,18 @@ Purpose:
 - keep restore/repair flows separate if they still require staged rewrites
 - keep the append/no-append decision inside the harness-specific new-message
   state machines rather than in scattered writer call sites
+
+Current status:
+
+- complete on `feature/pY-s6-append-only-compatibility-export`
+- retained normal-runtime Claude Code compatibility writes now append one JSONL
+  record at a time after the durable SQLite/workflow step
+- retained non-Claude harnesses still never receive ATM-authored JSONL append
+  output
+- retained runtime legacy array inboxes now rebuild/re-export once before they
+  join the append-only path
+- retained SQLite-failure recovery now emits the documented original-plus-error
+  outward delivery contract instead of silently downgrading to a warning only
 
 ## Phase Boundary
 

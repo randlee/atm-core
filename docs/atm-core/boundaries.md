@@ -129,6 +129,9 @@ Notes:
   errors instead of selecting a second mailbox backend.
 - Compatibility inbox files remain ingress/export surfaces, not a parallel
   durable mailbox implementation behind retained command logic.
+- After `Y.3`, retained `send` reaches compatibility rewrite only through the
+  post-commit runtime refresh owner; retained `ack` and `clear` no longer own
+  source-inbox compatibility rewrites.
 
 ## TaskStore
 
@@ -201,10 +204,27 @@ Notes:
 - Harness-specific export policy belongs in one central delivery-policy
   coordinator and event-family state machines above this boundary, not in
   scattered command callers.
+- `Y.4` lands that retained-command coordinator seam in
+  `crates/atm-core/src/delivery_policy.rs`; retained `send` and `ack` now
+  resolve roster snapshots through `RosterStore` before choosing whether
+  compatibility export is allowed for the recipient harness.
+- `Y.5` removes mutable compatibility fields from the shared inbox export path
+  via two helper functions in
+  `crates/atm-core/src/schema/inbox_message.rs`:
+  - `strip_removed_compatibility_fields` — removes: `source_team`,
+    `pendingAckAt`, `acknowledgedAt`, `acknowledgesMessageId`, `expiresAt`
+  - `strip_metadata_atm_namespace` — removes the `atm` key from the
+    `metadata` object
+- See [docs/phase-Y/inbox-field-inventory.md](../phase-Y/inbox-field-inventory.md)
+  for the full field inventory.
 - Phase `Yb` adds a stricter rule:
   - only approved delivery executors may call the write-facing export/append
     primitives behind this boundary
   - send/ack/persistence modules must not call them directly
+  - delivery-target construction and transition translation must stay in the
+    shared plan/execution seam:
+    - `crates/atm-core/src/delivery_plan.rs`
+    - `crates/atm-core/src/delivery_execution.rs`
   - see:
     - [../phase-Yb/lintable-boundary-plan.md](../phase-Yb/lintable-boundary-plan.md)
     - [../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md](../adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
@@ -227,6 +247,10 @@ Notes:
   - hook or notifier invocation is not proof of logical message delivery
   - non-Claude outbound payload delivery must use a dedicated delivery
     boundary, not NotificationSink as a stand-in
+  - impossible non-Claude append-degraded routing must fail closed before it
+    reaches this sink
+  - the current proof surface for non-Claude delivery lives in
+    `NonClaudeOutboundDeliveryRequest`, not in `ATM_POST_SEND` metadata
 
 ## NonClaudeOutbound
 
@@ -243,6 +267,9 @@ Notes:
   Claude path receives; only transport target differs.
 - `NotificationSink` must not be used as a substitute for this boundary.
 - only approved delivery executors may call this boundary directly.
+- the active `atm-core` handoff seam is:
+  - `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
+  - `atm_core::service_runtime::RetainedServiceRuntime::deliver_non_claude_payloads(...)`
 
 ## StatusSource
 

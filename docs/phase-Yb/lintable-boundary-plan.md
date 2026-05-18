@@ -67,6 +67,9 @@ Rules:
 1. concrete daemon adapters remain `pub(crate)` only
 2. state-machine-owned output types live in `atm_core::delivery_plan`
 3. outer callers receive typed plans, not direct writer handles
+4. delivery-target construction and transition translation live only in:
+   - `atm_core::delivery_plan`
+   - `atm_core::delivery_execution`
 
 ### 2. `sc-lint` / boundary rules
 
@@ -75,24 +78,54 @@ Enforcement point:
 - boundary TOML allowlists plus `python3 .just/run_lint.py all`
 - rule families owned by `sc_lint_boundary`
 
+Primitive caller allowlist:
+
+| Primitive | Approved callers | Enforcement stance |
+| --- | --- | --- |
+| `RetainedServiceRuntime::append_compat_inbox_message(...)` | `atm_core::delivery_execution::ClaudeInboxWriter` | `LINT-BOUNDARY-INBOX-EXPORT-REFERENCES` plus runtime fail-closed checks |
+| `mailbox::store::append_compat_mailbox_message(...)` | `atm_core::service_runtime::RetainedServiceRuntime::append_compat_inbox_message(...)` | internal implementation detail below the Claude executor seam |
+| `RetainedServiceRuntime::deliver_non_claude_payloads(...)` | `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter` | `LINT-BOUNDARY-NON-CLAUDE-OUTBOUND-REFERENCES` |
+| `atm_core::boundary::NonClaudeOutbound::deliver_payloads(...)` | `atm_core::service_runtime::RetainedServiceRuntime::deliver_non_claude_payloads(...)` | daemon/runtime adapter seam only |
+| `RetainedServiceRuntime::maybe_run_post_send_hook(...)` | `atm_core::delivery_execution::PostSendNotificationExecutor` | notification-only seam; not accepted as delivery proof |
+| `send::hook::maybe_run_post_send_hook(...)` | `atm_core::service_runtime::LocalServiceRuntime` | pub(crate) required — caller is outside the send/ module; pub(super) would break the cross-module RetainedServiceRuntime trait-impl call pattern (introduced Y.8, documented Y.12) |
+| `mailbox::store::write_compat_mailbox_projection(...)` | explicit repair/rebuild-only seams | runtime delivery path forbidden |
+| `direct_boundaries::reexport_messages(...)` | explicit repair/rebuild-only seams | runtime delivery path forbidden |
+
 1. only the approved Claude executor module may call:
    - `RetainedServiceRuntime::append_compat_inbox_message(...)`
    - `mailbox::store::append_compat_mailbox_message(...)`
+   - approved owner:
+     `atm_core::delivery_execution::ClaudeInboxWriter`
 2. only the approved non-Claude executor module may call:
    - `atm_core::boundary::NonClaudeOutbound`
-2. only approved repair/rebuild modules may call:
+   - approved owner:
+     `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
+3. only approved repair/rebuild modules may call:
    - `mailbox::store::write_compat_mailbox_projection(...)`
    - `direct_boundaries::reexport_messages(...)`
-3. `send/persistence.rs` must not call:
+   - approved owners:
+     - `atm_core::service_runtime::RetainedServiceRuntime::rebuild_compat_inbox_projection(...)`
+     - `atm_core::direct_boundaries::reexport_messages(...)`
+     - `atm_daemon::boundary_adapters::DaemonInboxExport::reexport_message(...)`
+4. `send/persistence.rs` must not call:
    - any compatibility append/write primitive
    - any post-send notification primitive
-4. `send/mod.rs` and `ack/mod.rs` must not:
+5. `send/mod.rs` and `ack/mod.rs` must not:
    - branch on `DeliveryHarnessPath`
-   - branch on `allows_claude_jsonl_append()`
    - translate persistence dispositions into state-machine outcomes
-5. `send/hook.rs` must not:
+   - translate execution dispositions into transition names
+6. `send/hook.rs` must not:
    - accept full `MessageEnvelope` delivery authority
    - become a second outbound payload boundary
+7. `service_runtime::append_compat_inbox_message(...)` must:
+   - fail closed on legacy array mailboxes
+   - direct callers to the explicit repair/rebuild projection seam
+   - never trigger `direct_boundaries::reexport_messages(...)` from the normal
+     append-only runtime path
+8. the retained repair/rebuild refresh seam must not:
+   - accept `DeliveryHarnessPath::NonClaude` and silently no-op
+   - present a generic recipient-routed runtime helper shape when the allowed
+     ownership is actually repair/rebuild-only
 
 ### 3. Runtime fail-closed checks
 
@@ -107,6 +140,14 @@ Rules:
 2. a non-Claude-targeted plan fails closed if routed to `InboxExport`
 3. `NotificationSink` rejects any attempt to serve as the sole message-delivery
    proof surface
+4. append-degraded transition emission for `DeliveryHarnessPath::NonClaude`
+   fails closed inside `delivery_execution` because non-Claude append
+   degradation is not a valid runtime concept
+5. legacy array inboxes fail closed from the normal Claude append path and can
+   be rewritten only through the explicit repair/rebuild seam
+6. the retained Claude append seam fails closed before execution if a
+   `DeliveryHarnessPath::NonClaude` route is attempted; the low-level writer is
+   not itself the place where that route is supposed to be discovered
 
 ### Module-ownership documentation
 
@@ -126,6 +167,8 @@ Required shape:
 - execution modules:
   - perform payload delivery
   - perform notification
+  - translate typed delivery outcomes into transition emissions
+  - reject impossible target/execution combinations
 - repair modules:
   - perform rebuild/reexport only
 

@@ -485,6 +485,10 @@ Architectural rules:
   - `atm_core::delivery_plan::ReplyDeliveryPlan`
   - `atm_core::delivery_execution::execute_delivery_plan(...)`
   - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+- Phase `Yb` also adds the shared non-Claude execution handoff:
+  - `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
+  - `atm_core::service_runtime::RetainedServiceRuntime::deliver_non_claude_payloads(...)`
+  - `atm_core::boundary::NonClaudeOutbound`
 - `atm-core` owns the plan types and machine outputs; it must not allow outer
   send/ack/persistence modules to reintroduce harness policy after plan
   creation

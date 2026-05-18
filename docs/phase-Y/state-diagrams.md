@@ -11,6 +11,9 @@ Source of truth:
 Generation:
 - `python3 docs/reports/generate_diagram_pages.py`
 
+Current implementation seam:
+- `crates/atm-core/src/delivery_policy.rs`
+
 Diagrams:
 - coordinator:
   [delivery-policy-coordinator.mmd](./delivery-policy-coordinator.mmd)

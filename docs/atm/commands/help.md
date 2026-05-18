@@ -3,6 +3,7 @@
 CLI ownership for `atm help`:
 
 - conceptual-help topic parsing
+- overview and `--list` rendering
 - `--list` parsing
 - mapping subcommand targets into clap-generated `--help` rendering
 - typed topic-registry dispatch for ATM-owned concept topics
@@ -28,6 +29,13 @@ First-delivery topic scope:
   - `identity`
   - `skills`
 
+Y.2 follow-up scope:
+
+- replace the tier-2 placeholder text with concrete operator examples and
+  troubleshooting guidance
+- keep the command surface unchanged: no new flags, no JSON-input mode, and no
+  compatibility-writer behavior changes
+
 Output contract:
 
 - human output distinguishes command-help vs concept-topic results clearly
@@ -38,6 +46,8 @@ JSON contract notes:
 
 - `atm help <topic> --json` extends the existing CLI JSON-output pattern to
   the new help command
+- retained commands already expose JSON output; `atm help` extends that
+  established surface rather than introducing CLI JSON output for the first time
 - general structured JSON input remains out of scope for `Phase Y` and
   `Phase Z`
 

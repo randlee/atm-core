@@ -70,10 +70,30 @@ For Y.7 and later, QA must verify named tests or test families for:
 
 ### 5. Phase-end closure
 
-Y.10 is not complete unless QA can prove:
+Final Yb closeout through Y.11 is not complete unless QA can prove:
 
 - all removal-ledger items are closed or explicitly tracked as blockers
 - only approved executor/coordinator modules can call the low-level delivery
   primitives
 - smoke/dogfood planning can resume without reopening Yb path-consolidation
   work
+- normal Claude append delivery fails closed on legacy array inboxes instead of
+  silently rewriting them through the rebuild seam
+- rebuild/reexport rewrite remains available only through the explicit
+  repair/rebuild boundary path
+- the low-level Claude append seam is never selected for
+  `DeliveryHarnessPath::NonClaude`
+- the repair/rebuild refresh seam is explicit by construction and not a generic
+  recipient-routed helper that silently ignores non-Claude requests
+
+#### Evidence mapping
+
+| Closure condition | Satisfying artifact |
+| --- | --- |
+| All removal-ledger items closed or tracked | `docs/phase-Yb/removal-ledger.md` — every row has a `closed-by` sprint entry or an explicit `BLOCKER` annotation |
+| Only approved executors call low-level delivery primitives | `docs/phase-Yb/lintable-boundary-plan.md` caller allowlist table; `python3 .just/run_lint.py all` passes |
+| Smoke/dogfood planning can resume | Sprint Y.11 closeout sign-off in `docs/phase-Yb/sprint-Y11.md` §Completion |
+| Claude append fails closed on legacy array inboxes | `service_runtime::tests::append_compat_inbox_message_rejects_legacy_array_mailbox_from_runtime_path` |
+| Rebuild/reexport only through explicit repair/rebuild path | `service_runtime::tests::rebuild_compat_inbox_projection_reexports_store_backed_mailbox`; lintable-boundary-plan allowlist row for `mailbox::store::write_compat_mailbox_projection` |
+| Claude append seam not selected for `DeliveryHarnessPath::NonClaude` | `delivery_execution` runtime fail-closed checks; lintable-boundary-plan §3 rule 6 |
+| Repair/rebuild seam is explicit, not a generic helper | `RetainedServiceRuntime::rebuild_compat_inbox_projection` scoped as repair-only seam; lintable-boundary-plan §2 rule 3 |
