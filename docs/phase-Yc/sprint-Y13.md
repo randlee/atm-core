@@ -204,6 +204,8 @@ fn notification_event_from_target(
   and `Phase Yb` delivery-plan seam
 - any new smoke/dogfood execution work inside `Phase Z` itself
 - any unrelated daemon transport or roster-store redesign
+- post-mortem lint recommendations or rule additions from
+  `integrate/phase-Y/.triage/phase-Yb/post-mortem.md`
 
 ## Acceptance Criteria
 

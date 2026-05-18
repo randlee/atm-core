@@ -3613,6 +3613,9 @@ Goal:
 - close the final `NotificationSink` boundary bypass
 - hand the merged `Phase Y` line back to `Phase Z` only after a focused
   readiness gate passes
+- keep `Y.12` and `Y.13` on their user-discussed runtime/code scope; later
+  post-mortem lint recommendations are separate follow-up work, not substitute
+  deliverables for these two sprints
 
 Execution shape:
 - planning-only branch: `plan/phase-Yc-y12-y13`
@@ -3625,5 +3628,6 @@ Execution shape:
 
 Immediate planning outputs:
 - `docs/phase-Yc/plan-phase-Yc.md`
+- `docs/phase-Yc/issues.md`
 - `docs/phase-Yc/sprint-Y12.md`
 - `docs/phase-Yc/sprint-Y13.md`

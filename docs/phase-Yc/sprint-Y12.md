@@ -158,6 +158,8 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
 - the `NotificationSink` boundary bypass in the post-send notification path
 - final integrated production-readiness sign-off for the whole `Phase Y` line
 - any new smoke/dogfood execution work in `Phase Z`
+- post-mortem lint recommendations or rule additions from
+  `integrate/phase-Y/.triage/phase-Yb/post-mortem.md`
 
 ## Acceptance Criteria
 

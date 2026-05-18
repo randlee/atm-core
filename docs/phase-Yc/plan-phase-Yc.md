@@ -35,6 +35,20 @@ implementation.
 - important traits, features, enums, protocol types, and boundary contracts
   must be shown with explicit code samples in the sprint docs
 
+## Scope Guard
+
+- `Y.12` and `Y.13` are runtime/code sprints against `integrate/phase-Y`
+- `Y.12` owns the recovered Claude SQLite-failure delivery contract gap in
+  `delivery_execution.rs`
+- `Y.13` owns the production `NotificationSink` boundary wiring and readiness
+  gate
+- post-mortem lint recommendations, rule additions, and docs-only cleanup from
+  `integrate/phase-Y/.triage/phase-Yb/post-mortem.md` are not `Y.12` or
+  `Y.13` deliverables and must not be imported into these sprint scopes
+- if a later review or task tries to convert either sprint into lint-only or
+  docs-only work, that is a scope conflict and requires user discussion before
+  the plan changes
+
 ## Remaining Production-Readiness Blockers
 
 1. `crates/atm-core/src/delivery_execution.rs` still allows partial Claude
@@ -87,6 +101,9 @@ Purpose:
 
 Authoritative sprint doc:
 - [sprint-Y13.md](./sprint-Y13.md)
+
+Supporting issues inventory:
+- [issues.md](./issues.md)
 
 ## Exit Condition
 
