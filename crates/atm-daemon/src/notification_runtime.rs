@@ -7,7 +7,7 @@ use std::path::PathBuf;
 use std::sync::{Arc, Condvar, Mutex};
 use std::thread;
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 #[cfg(test)]
 use crate::DaemonSubsystem;
@@ -16,6 +16,7 @@ use crate::SubsystemObservability;
 const DEFAULT_NOTIFICATION_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 const NOTIFICATION_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
+const MAX_NOTIFICATION_EVENT_BYTES: usize = 64 * 1024;
 
 #[derive(Clone)]
 pub(crate) struct NotificationRuntime {
@@ -32,6 +33,7 @@ struct NotificationRuntimeInner {
     wake: Condvar,
     path_factory: NotificationPathFactory,
     queue_capacity: usize,
+    shutdown_deadline: Duration,
     observability: SubsystemObservability,
 }
 
@@ -39,6 +41,7 @@ struct NotificationRuntimeInner {
 struct NotificationState {
     started: bool,
     shutdown: bool,
+    shutdown_started_at: Option<Instant>,
     degraded_message: Option<String>,
     queue: VecDeque<NotificationEvent>,
     worker: Option<JoinHandle<()>>,
@@ -64,6 +67,7 @@ impl NotificationRuntime {
                 wake: Condvar::new(),
                 path_factory,
                 queue_capacity,
+                shutdown_deadline: NOTIFICATION_SHUTDOWN_DEADLINE,
                 observability,
             }),
         }
@@ -80,6 +84,7 @@ impl NotificationRuntime {
         }
         state.started = true;
         state.shutdown = false;
+        state.shutdown_started_at = None;
         drop(state);
 
         let inner = Arc::clone(&self.inner);
@@ -123,6 +128,7 @@ impl NotificationRuntime {
                     )
             })?;
             state.shutdown = true;
+            state.shutdown_started_at.get_or_insert_with(Instant::now);
             self.inner.wake.notify_all();
             state.worker.take()
         };
@@ -143,7 +149,7 @@ impl NotificationRuntime {
                     )
                     .with_source(source)
                 })?;
-            match result_rx.recv_timeout(NOTIFICATION_SHUTDOWN_DEADLINE) {
+            match result_rx.recv_timeout(self.inner.shutdown_deadline) {
                 Ok(Ok(())) => {
                     let _ = join_helper.join();
                     self.inner.observability.emit_or_warn(
@@ -167,20 +173,23 @@ impl NotificationRuntime {
                     ));
                 }
                 Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                    drop(join_helper);
                     self.inner.observability.emit_or_warn(
                         "shutdown",
                         "degraded",
                         "notification runtime worker exceeded its shutdown deadline",
                     );
                     tracing::warn!(
+                        subsystem = "notification",
+                        action = "shutdown_detach",
+                        outcome = "deadline_exceeded",
                         thread_id = ?worker_thread_id,
-                        timeout_ms = NOTIFICATION_SHUTDOWN_DEADLINE.as_millis(),
+                        timeout_ms = self.inner.shutdown_deadline.as_millis(),
                         "notification runtime worker exceeded shutdown deadline; detaching join helper"
                     );
+                    drop(join_helper);
                     return Err(AtmError::daemon_unavailable(format!(
                         "notification runtime shutdown exceeded the {:?} deadline",
-                        NOTIFICATION_SHUTDOWN_DEADLINE
+                        self.inner.shutdown_deadline
                     ))
                     .with_recovery(
                         "Restart atm-daemon after the notification background lane becomes responsive again.",
@@ -256,11 +265,31 @@ impl NotificationRuntime {
             SubsystemObservability::disabled(DaemonSubsystem::NotificationRuntime),
         )
     }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test_with_path_factory_and_deadline(
+        path_factory: NotificationPathFactory,
+        queue_capacity: usize,
+        shutdown_deadline: Duration,
+    ) -> Self {
+        Self {
+            inner: Arc::new(NotificationRuntimeInner {
+                state: Mutex::new(NotificationState::default()),
+                wake: Condvar::new(),
+                path_factory,
+                queue_capacity,
+                shutdown_deadline,
+                observability: SubsystemObservability::disabled(
+                    DaemonSubsystem::NotificationRuntime,
+                ),
+            }),
+        }
+    }
 }
 
 fn notification_worker_loop(inner: Arc<NotificationRuntimeInner>) {
     loop {
-        let event = {
+        let (event, shutdown_started_at) = {
             let mut state = match inner.state.lock() {
                 Ok(state) => state,
                 Err(_) => return,
@@ -278,13 +307,33 @@ fn notification_worker_loop(inner: Arc<NotificationRuntimeInner>) {
             if state.shutdown && state.queue.is_empty() {
                 return;
             }
-            state.queue.pop_front()
+            if let Some(shutdown_started_at) = state.shutdown_started_at
+                && shutdown_started_at.elapsed() >= inner.shutdown_deadline
+            {
+                let dropped_events = state.queue.len();
+                state.queue.clear();
+                inner.observability.emit_or_warn(
+                    "shutdown",
+                    "degraded",
+                    "notification runtime dropped queued events after drain deadline",
+                );
+                tracing::warn!(
+                    subsystem = "notification",
+                    action = "drain_shutdown",
+                    outcome = "deadline_exceeded",
+                    dropped_events,
+                    timeout_ms = inner.shutdown_deadline.as_millis(),
+                    "notification runtime exceeded its bounded drain deadline during shutdown"
+                );
+                return;
+            }
+            (state.queue.pop_front(), state.shutdown_started_at)
         };
 
         let Some(event) = event else {
             continue;
         };
-        if let Err(error) = persist_notification(&inner, &event) {
+        if let Err(error) = persist_notification(&inner, &event, shutdown_started_at) {
             if let Ok(mut state) = inner.state.lock() {
                 state.degraded_message = Some(error.message);
                 state.queue.clear();
@@ -302,8 +351,11 @@ fn notification_worker_loop(inner: Arc<NotificationRuntimeInner>) {
 fn persist_notification(
     inner: &NotificationRuntimeInner,
     event: &NotificationEvent,
+    shutdown_started_at: Option<Instant>,
 ) -> Result<(), AtmError> {
+    ensure_shutdown_budget_remaining(inner, shutdown_started_at)?;
     let path = (inner.path_factory)()?;
+    ensure_shutdown_budget_remaining(inner, shutdown_started_at)?;
     if let Some(parent) = path.parent() {
         std::fs::create_dir_all(parent).map_err(|source| {
             AtmError::daemon_unavailable(format!(
@@ -316,6 +368,16 @@ fn persist_notification(
     let encoded = serde_json::to_vec(event).map_err(|source| {
         AtmError::daemon_unavailable("failed to encode notification event").with_source(source)
     })?;
+    if encoded.len() > MAX_NOTIFICATION_EVENT_BYTES {
+        return Err(AtmError::daemon_unavailable(format!(
+            "notification event payload exceeded {} bytes",
+            MAX_NOTIFICATION_EVENT_BYTES
+        ))
+        .with_recovery(
+            "Reduce notification payload size before retrying retained-runtime delivery.",
+        ));
+    }
+    ensure_shutdown_budget_remaining(inner, shutdown_started_at)?;
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -327,6 +389,9 @@ fn persist_notification(
             ))
             .with_source(source)
         })?;
+    // TODO(Y.14): std::fs append writes are still synchronous once they start.
+    // Y.13 bounds queue drain before each persistence step, but it cannot
+    // preempt a single blocked write_all/flush call mid-flight.
     file.write_all(&encoded)
         .and_then(|_| file.write_all(b"\n"))
         .map_err(|source| {
@@ -346,10 +411,30 @@ fn persist_notification(
     Ok(())
 }
 
+fn ensure_shutdown_budget_remaining(
+    inner: &NotificationRuntimeInner,
+    shutdown_started_at: Option<Instant>,
+) -> Result<(), AtmError> {
+    if let Some(shutdown_started_at) = shutdown_started_at
+        && shutdown_started_at.elapsed() >= inner.shutdown_deadline
+    {
+        return Err(AtmError::daemon_unavailable(format!(
+            "notification runtime shutdown exceeded the {:?} drain deadline",
+            inner.shutdown_deadline
+        ))
+        .with_recovery(
+            "Restart atm-daemon after the notification background lane becomes responsive again.",
+        ));
+    }
+    Ok(())
+}
+
 #[cfg(test)]
 mod tests {
     use super::NotificationRuntime;
     use atm_core::protocol::{NotificationEvent, NotificationKind};
+    use std::sync::Arc;
+    use std::time::{Duration, Instant};
     use tempfile::TempDir;
 
     #[test]
@@ -407,6 +492,38 @@ mod tests {
             error
                 .message
                 .contains("notification runtime is unavailable")
+        );
+    }
+
+    #[test]
+    fn notification_runtime_shutdown_times_out_when_persistence_stalls() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let output_path = tempdir.path().join("notifications.jsonl");
+        let runtime = NotificationRuntime::new_for_test_with_path_factory_and_deadline(
+            Arc::new(move || {
+                std::thread::sleep(Duration::from_millis(80));
+                Ok(output_path.clone())
+            }),
+            8,
+            Duration::from_millis(25),
+        );
+        runtime.start().expect("start");
+        runtime
+            .deliver(NotificationEvent {
+                kind: NotificationKind::Delivery,
+                detail: "message delivered".to_string(),
+                team: None,
+                agent: None,
+            })
+            .expect("deliver");
+
+        let started_at = Instant::now();
+        let error = runtime.shutdown().expect_err("shutdown should time out");
+        assert!(started_at.elapsed() < Duration::from_millis(75));
+        assert!(
+            error
+                .message
+                .contains("notification runtime shutdown exceeded")
         );
     }
 }

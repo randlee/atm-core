@@ -197,6 +197,10 @@ pub struct LocalFileNotificationSink {
 }
 
 impl LocalFileNotificationSink {
+    /// Path validation stays lazy because this constructor is used from
+    /// cross-crate runtime assembly callsites that only have a PathBuf. The
+    /// actual boundary contract is enforced on first deliver() with typed I/O
+    /// errors instead of panicking during assembly.
     pub fn at_path(path: PathBuf) -> Self {
         Self { path }
     }
@@ -465,10 +469,13 @@ mod tests {
         RetainedServiceRuntime,
     };
     use crate::boundary;
+    use crate::delivery_execution::PostSendNotificationExecutor;
     use crate::error_codes::AtmErrorCode;
+    use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::MessageEnvelope;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
+    use serde_json::Value;
     use std::fs::File;
     use std::io::Read;
     use std::sync::Arc;
@@ -688,6 +695,14 @@ mod tests {
         }
     }
 
+    fn read_notification_events(path: &std::path::Path) -> Vec<NotificationEvent> {
+        std::fs::read_to_string(path)
+            .expect("notifications")
+            .lines()
+            .map(|line| serde_json::from_str(line).expect("notification event"))
+            .collect()
+    }
+
     #[test]
     fn append_compat_inbox_message_rejects_legacy_array_mailbox_from_runtime_path() {
         let tempdir = tempdir().expect("tempdir");
@@ -750,5 +765,63 @@ mod tests {
         file.read_to_string(&mut content)
             .expect("read projection file");
         assert_eq!(content, "[]\n");
+    }
+
+    #[test]
+    fn local_service_runtime_delivers_notifications_through_sink_boundary() {
+        let tempdir = tempdir().expect("tempdir");
+        let notification_path = tempdir.path().join("notifications.jsonl");
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(NoopMailStore),
+            Arc::new(NoopTaskStore),
+            Arc::new(NoopRosterStore),
+            Arc::new(LocalFileNonClaudeOutbound::new()),
+            Arc::new(LocalFileNotificationSink::at_path(
+                notification_path.clone(),
+            )),
+        );
+        let event = NotificationEvent {
+            kind: NotificationKind::Delivery,
+            detail: "runtime-direct".to_string(),
+            team: Some("test-team".parse::<TeamName>().expect("team")),
+            agent: Some("recipient".parse::<AgentName>().expect("agent")),
+        };
+
+        runtime
+            .deliver_notification_event(event.clone())
+            .expect("direct sink delivery");
+
+        let direct_events = read_notification_events(&notification_path);
+        assert_eq!(direct_events.len(), 1);
+        assert_eq!(direct_events[0].detail, "runtime-direct");
+
+        let mut warnings = Vec::new();
+        PostSendNotificationExecutor::deliver_notifications(
+            &runtime,
+            &mut warnings,
+            &crate::send::ResolvedRecipient {
+                agent: "recipient".parse::<AgentName>().expect("agent"),
+                team: "test-team".parse::<TeamName>().expect("team"),
+            },
+            Some("pane-1"),
+            &[crate::delivery_plan::NotificationTarget {
+                sender: "sender".parse::<AgentName>().expect("sender"),
+                sender_team: Some("test-team".parse::<TeamName>().expect("team")),
+                message_id: crate::schema::AtmMessageId::new(),
+                requires_ack: true,
+                is_ack: false,
+                task_id: None,
+            }],
+        );
+        assert!(warnings.is_empty());
+
+        let events = read_notification_events(&notification_path);
+        assert_eq!(events.len(), 2);
+        let detail: Value =
+            serde_json::from_str(&events[1].detail).expect("structured notification detail");
+        assert_eq!(
+            detail.get("recipient_pane_id").and_then(Value::as_str),
+            Some("pane-1")
+        );
     }
 }

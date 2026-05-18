@@ -3,7 +3,7 @@ use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::time::Duration;
 
-use serde_json::Map;
+use serde_json::{Map, Value};
 use tempfile::tempdir;
 
 use super::{
@@ -24,8 +24,8 @@ use crate::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
     LogTailSession, ObservabilityPort,
 };
-use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::process::process_is_alive;
+use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AgentMember, TeamConfig};
 use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
@@ -61,13 +61,19 @@ fn message(
     }
 }
 
-// Mutex required: TestRuntime is shared via Arc across threads in concurrent send tests.
+fn notification_detail(event: &NotificationEvent) -> Value {
+    serde_json::from_str(&event.detail).expect("structured notification detail")
+}
+
 struct TestRuntime {
     commit_error_message: Option<&'static str>,
     append_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
+    // Mutex required because concurrent send-path tests share the same runtime.
     appended_messages: Mutex<Vec<MessageEnvelope>>,
+    // Mutex required because concurrent send-path tests share the same runtime.
     non_claude_deliveries: Mutex<Vec<NonClaudeOutboundDeliveryRequest>>,
+    // Mutex required because concurrent send-path tests share the same runtime.
     notification_events: Mutex<Vec<NotificationEvent>>,
 }
 
@@ -588,25 +594,51 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
         .lock()
         .expect("notification events lock");
     assert_eq!(events.len(), 2);
-    assert!(events.iter().all(|event| event.kind == NotificationKind::Delivery));
     assert!(
         events
             .iter()
-            .any(|event| event.detail.contains(&format!("from={TEST_SENDER}")))
+            .all(|event| event.kind == NotificationKind::Delivery)
     );
-    assert!(
-        events
-            .iter()
-            .any(|event| event.detail.contains("from=atm-system"))
-    );
+    assert!(events.iter().any(|event| {
+        notification_detail(event)
+            .get("sender")
+            .and_then(Value::as_str)
+            == Some(TEST_SENDER)
+    }));
+    assert!(events.iter().any(|event| {
+        notification_detail(event)
+            .get("sender")
+            .and_then(Value::as_str)
+            == Some("atm-system")
+    }));
     let original_event = events
         .iter()
-        .find(|event| event.detail.contains(&format!("from={TEST_SENDER}")))
+        .find(|event| {
+            notification_detail(event)
+                .get("sender")
+                .and_then(Value::as_str)
+                == Some(TEST_SENDER)
+        })
         .expect("original notification");
-    assert_eq!(original_event.team.as_ref().map(TeamName::as_str), Some(TEST_TEAM));
-    assert_eq!(original_event.agent.as_ref().map(AgentName::as_str), Some("recipient"));
-    assert!(original_event.detail.contains("message_id="));
-    assert!(original_event.detail.contains("task_id=task-123"));
+    let original_detail = notification_detail(original_event);
+    assert_eq!(
+        original_event.team.as_ref().map(TeamName::as_str),
+        Some(TEST_TEAM)
+    );
+    assert_eq!(
+        original_event.agent.as_ref().map(AgentName::as_str),
+        Some("recipient")
+    );
+    assert!(
+        original_detail
+            .get("message_id")
+            .and_then(Value::as_str)
+            .is_some()
+    );
+    assert_eq!(
+        original_detail.get("task_id").and_then(Value::as_str),
+        Some("task-123")
+    );
     drop(events);
 
     let observability_events = observability.events.lock().expect("events lock");
@@ -653,7 +685,12 @@ fn send_non_claude_success_delivers_original_via_outbound_boundary() {
         .expect("notification events lock");
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, NotificationKind::Delivery);
-    assert!(events[0].detail.contains(&format!("from={TEST_SENDER}")));
+    assert_eq!(
+        notification_detail(&events[0])
+            .get("sender")
+            .and_then(Value::as_str),
+        Some(TEST_SENDER)
+    );
 }
 
 #[test]
@@ -685,7 +722,12 @@ fn send_claude_success_appends_original_via_compat_inbox_writer() {
         .expect("notification events lock");
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, NotificationKind::Delivery);
-    assert!(events[0].detail.contains(&format!("from={TEST_SENDER}")));
+    assert_eq!(
+        notification_detail(&events[0])
+            .get("sender")
+            .and_then(Value::as_str),
+        Some(TEST_SENDER)
+    );
     drop(events);
 
     let events = observability.events.lock().expect("events lock");
@@ -713,7 +755,12 @@ fn send_append_failure_routes_to_post_send_hook_fallback() {
         .expect("notification events lock");
     assert_eq!(events.len(), 1);
     assert_eq!(events[0].kind, NotificationKind::Delivery);
-    assert!(events[0].detail.contains(&format!("from={TEST_SENDER}")));
+    assert_eq!(
+        notification_detail(&events[0])
+            .get("sender")
+            .and_then(Value::as_str),
+        Some(TEST_SENDER)
+    );
     drop(events);
 
     let events = observability.events.lock().expect("events lock");

@@ -1,11 +1,11 @@
-use atm_core::{
-    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-    home::host_runtime_dir,
-};
 use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::protocol::RequestEnvelope;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_core::{
+    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
+    home::host_runtime_dir,
+};
 use rusqlite::params;
 use std::net::SocketAddr;
 use std::path::Path;
@@ -303,13 +303,24 @@ pub fn assemble_default_boundary_with_observability(
 
 pub fn default_local_runtime() -> Result<LocalServiceRuntime, AtmError> {
     let assembly = assemble_default_boundary()?;
+    let notification_path = host_runtime_dir()?.join("notifications.jsonl");
+    if let Some(parent) = notification_path.parent() {
+        std::fs::create_dir_all(parent).map_err(|source| {
+            AtmError::daemon_unavailable(format!(
+                "failed to create notification sink directory {}",
+                parent.display()
+            ))
+            .with_recovery(
+                "Create a writable ATM runtime directory before constructing the default local retained runtime.",
+            )
+            .with_source(source)
+        })?;
+    }
     Ok(LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.mail_store_arc(),
         assembly.task_store_arc(),
         assembly.roster_store_arc(),
         Arc::new(LocalFileNonClaudeOutbound::new()),
-        Arc::new(LocalFileNotificationSink::at_path(
-            host_runtime_dir()?.join("notifications.jsonl"),
-        )),
+        Arc::new(LocalFileNotificationSink::at_path(notification_path)),
     ))
 }

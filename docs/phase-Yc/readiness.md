@@ -47,3 +47,5 @@ The `Y.13` readiness closeout states that:
   bypass
 - the retained runtime factory now installs a live `DaemonNotificationSink`
   on the production send/ack path
+- `cargo test --workspace` passed on the `Y.12 -> Y.13` closeout line,
+  including the notification boundary and recovered-delivery regression tests

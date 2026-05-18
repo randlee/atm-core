@@ -11,6 +11,7 @@ use crate::delivery_policy::{
     persisted_success_transition_names, sqlite_failure_transition_names,
 };
 use crate::error::AtmError;
+use crate::error::AtmErrorKind;
 use crate::observability::ObservabilityPort;
 use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::schema::{AtmMessageId, MessageEnvelope};
@@ -97,6 +98,9 @@ where
 }
 
 pub(crate) trait PostSendNotificationExecutor {
+    /// Notification delivery is a best-effort side effect: failures must be
+    /// surfaced as typed warnings, not as silent drops or primary delivery
+    /// failures.
     fn deliver_notifications(
         &self,
         warnings: &mut Vec<WarningEntry>,
@@ -262,24 +266,18 @@ fn notification_event_from_target(
     recipient_pane_id: Option<&str>,
     notification: &NotificationTarget,
 ) -> NotificationEvent {
-    let from = match notification.sender_team.as_ref() {
-        Some(team) => format!("{}@{}", notification.sender, team),
-        None => notification.sender.to_string(),
-    };
-    let mut detail = format!(
-        "from={from} message_id={} requires_ack={} is_ack={}",
-        notification.message_id, notification.requires_ack, notification.is_ack
-    );
-    if let Some(task_id) = notification.task_id.as_ref() {
-        detail.push_str(&format!(" task_id={task_id}"));
-    }
-    if let Some(pane_id) = recipient_pane_id {
-        detail.push_str(&format!(" recipient_pane_id={pane_id}"));
-    }
-
     NotificationEvent {
         kind: NotificationKind::Delivery,
-        detail,
+        detail: serde_json::json!({
+            "sender": notification.sender.to_string(),
+            "sender_team": notification.sender_team.as_ref().map(ToString::to_string),
+            "message_id": notification.message_id.to_string(),
+            "requires_ack": notification.requires_ack,
+            "is_ack": notification.is_ack,
+            "task_id": notification.task_id.as_ref().map(ToString::to_string),
+            "recipient_pane_id": recipient_pane_id,
+        })
+        .to_string(),
         team: Some(recipient.team.clone()),
         agent: Some(recipient.agent.clone()),
     }
@@ -424,7 +422,8 @@ fn claude_compatibility_delivery_mode_for_disposition(
         DeliveryPlanDisposition::SqliteFailedRecovered => {
             Ok(ClaudeCompatibilityDeliveryMode::RecoveredLogicalMessageSet)
         }
-        _ => Err(AtmError::validation(
+        _ => Err(AtmError::new(
+            AtmErrorKind::Internal,
             "claude_compatibility_delivery_mode_for_disposition only accepts DeliveryPlanDisposition::SqliteFailedRecovered",
         )
         .with_recovery(
@@ -468,7 +467,7 @@ fn build_append_warning(
 mod tests {
     use std::path::{Path, PathBuf};
 
-    use serde_json::Map;
+    use serde_json::{Map, Value};
 
     use super::{
         ClaudeInboxWriter, DeliveryExecutionDisposition, DeliveryTransitionContext,
@@ -486,8 +485,8 @@ mod tests {
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
         CommandEvent, LogTailSession, ObservabilityPort,
     };
-    use crate::schema::{AtmMessageId, MessageEnvelope};
     use crate::protocol::{NotificationEvent, NotificationKind};
+    use crate::schema::{AtmMessageId, MessageEnvelope};
     use crate::send::{ResolvedRecipient, WarningEntry};
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -598,6 +597,10 @@ mod tests {
         .expect("logical message")
     }
 
+    fn notification_detail(event: &NotificationEvent) -> Value {
+        serde_json::from_str(&event.detail).expect("structured notification detail")
+    }
+
     #[derive(Default)]
     struct RecordingRuntime {
         // The execution-path tests mutate these fields from trait-method calls
@@ -696,8 +699,11 @@ mod tests {
             notifications: &[NotificationTarget],
         ) {
             for notification in notifications {
-                let event =
-                    super::notification_event_from_target(recipient, recipient_pane_id, notification);
+                let event = super::notification_event_from_target(
+                    recipient,
+                    recipient_pane_id,
+                    notification,
+                );
                 if let Some(message) = self.notification_error_message {
                     let error = AtmError::daemon_unavailable(message).with_recovery(
                         "Restore the notification boundary before retrying retained-runtime delivery.",
@@ -959,25 +965,51 @@ mod tests {
             Vec::new(),
         );
         plan.notifications = vec![NotificationTarget {
-                sender: AgentName::from_validated(TEST_SENDER),
-                sender_team: Some(TeamName::from_validated(TEST_TEAM)),
-                message_id,
-                requires_ack: true,
-                is_ack: false,
-                task_id: Some("task-123".parse().expect("task id")),
+            sender: AgentName::from_validated(TEST_SENDER),
+            sender_team: Some(TeamName::from_validated(TEST_TEAM)),
+            message_id,
+            requires_ack: true,
+            is_ack: false,
+            task_id: Some("task-123".parse().expect("task id")),
         }];
 
         let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
         assert!(result.warnings.is_empty());
-        let events = runtime.notification_events.lock().expect("notification events");
+        let events = runtime
+            .notification_events
+            .lock()
+            .expect("notification events");
         assert_eq!(events.len(), 1);
         assert_eq!(events[0].kind, NotificationKind::Delivery);
-        assert_eq!(events[0].team.as_ref().map(TeamName::as_str), Some(TEST_TEAM));
-        assert_eq!(events[0].agent.as_ref().map(AgentName::as_str), Some("recipient"));
-        assert!(events[0].detail.contains(&format!("from={TEST_SENDER}")));
-        assert!(events[0].detail.contains("requires_ack=true"));
-        assert!(events[0].detail.contains("task_id=task-123"));
-        assert!(events[0].detail.contains("recipient_pane_id=pane-1"));
+        assert_eq!(
+            events[0].team.as_ref().map(TeamName::as_str),
+            Some(TEST_TEAM)
+        );
+        assert_eq!(
+            events[0].agent.as_ref().map(AgentName::as_str),
+            Some("recipient")
+        );
+        let detail = notification_detail(&events[0]);
+        assert_eq!(
+            detail.get("sender").and_then(Value::as_str),
+            Some(TEST_SENDER)
+        );
+        assert_eq!(
+            detail.get("sender_team").and_then(Value::as_str),
+            Some(TEST_TEAM)
+        );
+        assert_eq!(
+            detail.get("requires_ack").and_then(Value::as_bool),
+            Some(true)
+        );
+        assert_eq!(
+            detail.get("task_id").and_then(Value::as_str),
+            Some("task-123")
+        );
+        assert_eq!(
+            detail.get("recipient_pane_id").and_then(Value::as_str),
+            Some("pane-1")
+        );
     }
 
     #[test]
@@ -997,12 +1029,12 @@ mod tests {
             Vec::new(),
         );
         plan.notifications = vec![NotificationTarget {
-                sender: AgentName::from_validated(TEST_SENDER),
-                sender_team: Some(TeamName::from_validated(TEST_TEAM)),
-                message_id: AtmMessageId::new(),
-                requires_ack: false,
-                is_ack: false,
-                task_id: None,
+            sender: AgentName::from_validated(TEST_SENDER),
+            sender_team: Some(TeamName::from_validated(TEST_TEAM)),
+            message_id: AtmMessageId::new(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: None,
         }];
 
         let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
@@ -1044,12 +1076,12 @@ mod tests {
             Vec::new(),
         );
         plan.notifications = vec![NotificationTarget {
-                sender: AgentName::from_validated(TEST_SENDER),
-                sender_team: Some(TeamName::from_validated(TEST_TEAM)),
-                message_id: AtmMessageId::new(),
-                requires_ack: false,
-                is_ack: false,
-                task_id: None,
+            sender: AgentName::from_validated(TEST_SENDER),
+            sender_team: Some(TeamName::from_validated(TEST_TEAM)),
+            message_id: AtmMessageId::new(),
+            requires_ack: false,
+            is_ack: false,
+            task_id: None,
         }];
 
         let result = execute_delivery_plan(&runtime, None, &plan).expect("delivery");
@@ -1059,7 +1091,11 @@ mod tests {
             vec!["hello".to_string()]
         );
         assert_eq!(result.warnings.len(), 1);
-        assert!(result.warnings[0].message.contains("notification delivery failed"));
+        assert!(
+            result.warnings[0]
+                .message
+                .contains("notification delivery failed")
+        );
         assert!(
             runtime
                 .notification_events

@@ -204,7 +204,7 @@ impl LocalFileNotificationSink {
         Self { path }
     }
 }
-// Owned by `atm_core::direct_boundaries`.
+// Owned by `atm_core::service_runtime`.
 // Role: fallback non-daemon `NotificationSink` adapter for local/test runtime
 // assembly. Non-daemon callers construct it explicitly with
 // `LocalFileNotificationSink::at_path(path)` and it appends newline-delimited
@@ -258,6 +258,10 @@ fn notification_event_from_target(
 - any unrelated daemon transport or roster-store redesign
 - post-mortem lint recommendations or rule additions from
   `integrate/phase-Y/.triage/phase-Yb/post-mortem.md`
+- eliminating the remaining accepted limitation that synchronous file append
+  cannot be interrupted once a notification write has started; Y.13 bounds the
+  shutdown drain before each persistence step and leaves a direct stalled-write
+  harness as `Y.14` follow-on work
 
 ## Acceptance Criteria
 

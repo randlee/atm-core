@@ -33,10 +33,10 @@ use atm_rusqlite::{
 
 use crate::AtmHomeDir;
 use crate::advisory_runtime::AdvisoryRuntime;
+use crate::boundary_adapters::DaemonNotificationSink;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::boundary_adapters::DaemonNotificationSink;
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;

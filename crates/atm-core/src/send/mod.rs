@@ -31,7 +31,7 @@ mod delivery_persistence;
 pub(crate) mod file_policy;
 #[allow(
     dead_code,
-    reason = "Y.13 removes the retained-runtime bypass path, but the direct CLI post-send hook helper remains intentionally dormant until its follow-on integration seam is reinstated."
+    reason = "The direct CLI post-send hook helper is intentionally dormant while retained-runtime notification delivery is boundary-owned."
 )]
 pub(crate) mod hook;
 pub(crate) mod input;
@@ -558,7 +558,7 @@ pub(crate) struct ResolvedRecipient {
 
 #[allow(
     dead_code,
-    reason = "The direct post-send hook payload contract remains documented for follow-on CLI-only integration work even after Y.13 removes the retained-runtime bypass path."
+    reason = "The direct post-send hook payload contract remains documented while the CLI-only helper stays dormant."
 )]
 #[derive(Clone, Copy)]
 pub(crate) struct PostSendHookContext<'a> {
@@ -738,7 +738,7 @@ fn display_sender_identity(
 
 #[allow(
     dead_code,
-    reason = "Retained for the dormant direct post-send hook helper; Y.13 removes only the retained-runtime notification bypass."
+    reason = "Retained for the dormant direct post-send hook helper."
 )]
 pub(super) fn qualified_sender_identity(
     sender: &AgentName,
