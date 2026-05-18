@@ -1,4 +1,7 @@
-use atm_core::LocalServiceRuntime;
+use atm_core::{
+    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
+    home::host_runtime_dir,
+};
 use atm_core::boundary;
 use atm_core::error::AtmError;
 use atm_core::protocol::RequestEnvelope;
@@ -300,9 +303,13 @@ pub fn assemble_default_boundary_with_observability(
 
 pub fn default_local_runtime() -> Result<LocalServiceRuntime, AtmError> {
     let assembly = assemble_default_boundary()?;
-    Ok(LocalServiceRuntime::new(
+    Ok(LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.mail_store_arc(),
         assembly.task_store_arc(),
         assembly.roster_store_arc(),
+        Arc::new(LocalFileNonClaudeOutbound::new()),
+        Arc::new(LocalFileNotificationSink::at_path(
+            host_runtime_dir()?.join("notifications.jsonl"),
+        )),
     ))
 }

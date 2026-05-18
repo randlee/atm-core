@@ -36,6 +36,7 @@ use crate::advisory_runtime::AdvisoryRuntime;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use crate::boundary_adapters::DaemonNotificationSink;
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
@@ -295,11 +296,16 @@ fn install_daemon_runtime_factory() {
 )]
 fn daemon_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
     let assembly = assemble_default_boundary()?;
-    Ok(atm_core::LocalServiceRuntime::new_with_non_claude_outbound(
+    let notification_sink = DaemonNotificationSink::new_with_observability(
+        SubsystemObservability::disabled(DaemonSubsystem::NotificationRuntime),
+    );
+    notification_sink.start()?;
+    Ok(atm_core::LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.mail_store_arc(),
         assembly.task_store_arc(),
         assembly.roster_store_arc(),
         Arc::new(DaemonNonClaudeOutbound::new()),
+        Arc::new(notification_sink),
     ))
 }
 

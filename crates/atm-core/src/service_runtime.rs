@@ -11,9 +11,9 @@ use crate::boundary::{
 use crate::config::{self, AtmConfig};
 use crate::delivery_policy::DeliveryRecipientSnapshot;
 use crate::error::AtmError;
+use crate::protocol::NotificationEvent;
 use crate::read::seen_state;
 use crate::schema::{MessageEnvelope, TeamConfig};
-use crate::send::{PostSendHookContext, hook::maybe_run_post_send_hook};
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
 
@@ -48,12 +48,6 @@ pub(crate) trait RetainedServiceRuntime {
         timestamp: IsoTimestamp,
     ) -> Result<(), AtmError>;
     fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy;
-    fn maybe_run_post_send_hook(
-        &self,
-        warnings: &mut Vec<crate::send::WarningEntry>,
-        config: Option<&AtmConfig>,
-        context: PostSendHookContext<'_>,
-    );
     #[allow(
         dead_code,
         reason = "Repair/rebuild-only seam; called from tests and explicit repair paths, not from the normal runtime delivery pipeline."
@@ -80,6 +74,7 @@ pub(crate) trait RetainedServiceRuntime {
         recipient: &DeliveryRecipientSnapshot,
         messages: &[MessageEnvelope],
     ) -> Result<(), AtmError>;
+    fn deliver_notification_event(&self, event: NotificationEvent) -> Result<(), AtmError>;
     fn load_roster_member(
         &self,
         team: &TeamName,
@@ -107,33 +102,24 @@ pub struct LocalServiceRuntime {
     pub(crate) roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
     pub(crate) non_claude_outbound:
         std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+    pub(crate) notification_sink:
+        std::sync::Arc<dyn crate::boundary::NotificationSink + Send + Sync>,
 }
 
 impl LocalServiceRuntime {
-    pub fn new(
-        mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
-        task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
-        roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
-    ) -> Self {
-        Self::new_with_non_claude_outbound(
-            mail_store,
-            task_store,
-            roster_store,
-            std::sync::Arc::new(LocalFileNonClaudeOutbound),
-        )
-    }
-
-    pub fn new_with_non_claude_outbound(
+    pub fn new_with_delivery_boundaries(
         mail_store: std::sync::Arc<dyn crate::boundary::MailStore + Send + Sync>,
         task_store: std::sync::Arc<dyn crate::boundary::TaskStore + Send + Sync>,
         roster_store: std::sync::Arc<dyn crate::boundary::RosterStore + Send + Sync>,
         non_claude_outbound: std::sync::Arc<dyn crate::boundary::NonClaudeOutbound + Send + Sync>,
+        notification_sink: std::sync::Arc<dyn crate::boundary::NotificationSink + Send + Sync>,
     ) -> Self {
         Self {
             mail_store,
             task_store,
             roster_store,
             non_claude_outbound,
+            notification_sink,
         }
     }
 }
@@ -148,6 +134,10 @@ impl fmt::Debug for LocalServiceRuntime {
                 "non_claude_outbound",
                 &std::sync::Arc::as_ptr(&self.non_claude_outbound),
             )
+            .field(
+                "notification_sink",
+                &std::sync::Arc::as_ptr(&self.notification_sink),
+            )
             .finish()
     }
 }
@@ -155,7 +145,13 @@ impl fmt::Debug for LocalServiceRuntime {
 #[derive(Debug, Clone, Copy, Default)]
 /// Production fallback boundary used when the daemon runtime is not composing
 /// a dedicated non-Claude outbound adapter. This is not a test double.
-struct LocalFileNonClaudeOutbound;
+pub struct LocalFileNonClaudeOutbound;
+
+impl LocalFileNonClaudeOutbound {
+    pub const fn new() -> Self {
+        Self
+    }
+}
 
 impl crate::boundary::sealed::Sealed for LocalFileNonClaudeOutbound {}
 
@@ -190,6 +186,44 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
         Ok(crate::boundary::NonClaudeOutboundDeliveryResponse {
             delivered_messages: request.messages.len(),
         })
+    }
+}
+
+#[derive(Debug, Clone)]
+/// Production fallback boundary used when the daemon runtime is not composing
+/// a dedicated notification sink. This is not a test double.
+pub struct LocalFileNotificationSink {
+    path: PathBuf,
+}
+
+impl LocalFileNotificationSink {
+    pub fn at_path(path: PathBuf) -> Self {
+        Self { path }
+    }
+}
+
+impl crate::boundary::sealed::Sealed for LocalFileNotificationSink {}
+
+impl crate::boundary::NotificationSink for LocalFileNotificationSink {
+    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
+        let parent = self.path.parent().ok_or_else(|| {
+            AtmError::mailbox_write(format!(
+                "notification sink path {} has no parent directory",
+                self.path.display()
+            ))
+            .with_recovery("Choose a notification output path with an existing parent directory.")
+        })?;
+        std::fs::create_dir_all(parent).map_err(|error| {
+            AtmError::mailbox_write(format!(
+                "failed to create notification sink directory {}: {error}",
+                parent.display()
+            ))
+            .with_recovery(
+                "Check that the notification output directory is writable before retrying notification delivery.",
+            )
+            .with_source(error)
+        })?;
+        crate::mailbox::atomic::append_jsonl_record(&self.path, &event)
     }
 }
 
@@ -238,15 +272,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         RetainedMailboxTimeoutPolicy {
             workflow_lock_timeout: WORKFLOW_LOCK_TIMEOUT,
         }
-    }
-
-    fn maybe_run_post_send_hook(
-        &self,
-        warnings: &mut Vec<crate::send::WarningEntry>,
-        config: Option<&AtmConfig>,
-        context: PostSendHookContext<'_>,
-    ) {
-        maybe_run_post_send_hook(warnings, config, context);
     }
 
     fn rebuild_compat_inbox_projection(
@@ -321,6 +346,10 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
                 messages: messages.to_vec(),
             })
             .map(|_| ())
+    }
+
+    fn deliver_notification_event(&self, event: NotificationEvent) -> Result<(), AtmError> {
+        self.notification_sink.deliver(event)
     }
 
     fn commit_workflow_state<T, I, F>(
@@ -431,7 +460,10 @@ fn compat_inbox_uses_legacy_array_format(path: &Path) -> Result<bool, AtmError> 
 
 #[cfg(test)]
 mod tests {
-    use super::{LocalServiceRuntime, RetainedServiceRuntime};
+    use super::{
+        LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
+        RetainedServiceRuntime,
+    };
     use crate::boundary;
     use crate::error_codes::AtmErrorCode;
     use crate::schema::MessageEnvelope;
@@ -669,10 +701,14 @@ mod tests {
         )
         .expect("write mailbox");
 
-        let runtime = LocalServiceRuntime::new(
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMailStore),
             Arc::new(NoopTaskStore),
             Arc::new(NoopRosterStore),
+            Arc::new(LocalFileNonClaudeOutbound::new()),
+            Arc::new(LocalFileNotificationSink::at_path(
+                tempdir.path().join("notifications.jsonl"),
+            )),
         );
 
         let error = runtime
@@ -693,10 +729,14 @@ mod tests {
     fn rebuild_compat_inbox_projection_reexports_store_backed_mailbox() {
         let tempdir = tempdir().expect("tempdir");
         let inbox_path = tempdir.path().join("recipient.jsonl");
-        let runtime = LocalServiceRuntime::new(
+        let runtime = LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(NoopMailStore),
             Arc::new(NoopTaskStore),
             Arc::new(NoopRosterStore),
+            Arc::new(LocalFileNonClaudeOutbound::new()),
+            Arc::new(LocalFileNotificationSink::at_path(
+                tempdir.path().join("notifications.jsonl"),
+            )),
         );
         let team = "test-team".parse::<TeamName>().expect("team");
         let agent = "recipient".parse::<AgentName>().expect("agent");

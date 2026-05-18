@@ -4,19 +4,13 @@
 
 Accepted
 
-Accepted note: Implementation complete through `Phase Yb Y.8`
-(`feature/pYb-s8-policy-cleanup-and-impossible-path-removal`).
+Accepted note: Implementation is complete through `Phase Yc Y.13`
+(`feature/pYc-s13-notification-boundary-and-readiness-gate`).
 
-Follow-on note:
-- the architectural direction in this ADR remains authoritative
-- later `integrate/phase-Y` production-readiness review reopened two remaining
-  runtime gaps:
-  - recovered Claude SQLite-failure delivery still allows partial logical
-    message-set success
-  - production notification execution still bypasses `NotificationSink`
-- those final closeout items are owned by `Phase Yc`:
-  - `Y.12` closes the recovered Claude logical-message-set contract
-  - `Y.13` closes the production `NotificationSink` boundary bypass
+Closeout note:
+- `Y.12` closed the recovered Claude logical-message-set contract
+- `Y.13` closed the production `NotificationSink` boundary bypass and narrowed
+  retained-runtime assembly to one approved delivery-boundary constructor
 
 ## Context
 

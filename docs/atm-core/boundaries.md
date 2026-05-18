@@ -259,10 +259,10 @@ Notes:
     reaches this sink
   - the current proof surface for non-Claude delivery lives in
     `NonClaudeOutboundDeliveryRequest`, not in `ATM_POST_SEND` metadata
-- `Phase Yc` finalizes the production-path ownership rule:
-  - `Y.13` must remove the direct
+- `Phase Yc` finalized the production-path ownership rule:
+  - `Y.13` removed the direct
     `PostSendNotificationExecutor -> maybe_run_post_send_hook(...)` bypass
-  - the surviving production notification path must execute through
+  - the surviving production notification path now executes through
     `NotificationSink::deliver(...)`
 
 ## NonClaudeOutbound

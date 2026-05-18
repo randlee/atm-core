@@ -29,6 +29,10 @@ use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 mod alert_state;
 mod delivery_persistence;
 pub(crate) mod file_policy;
+#[allow(
+    dead_code,
+    reason = "Y.13 removes the retained-runtime bypass path, but the direct CLI post-send hook helper remains intentionally dormant until its follow-on integration seam is reinstated."
+)]
 pub(crate) mod hook;
 pub(crate) mod input;
 mod missing_config_notice;
@@ -552,6 +556,10 @@ pub(crate) struct ResolvedRecipient {
     pub(crate) team: TeamName,
 }
 
+#[allow(
+    dead_code,
+    reason = "The direct post-send hook payload contract remains documented for follow-on CLI-only integration work even after Y.13 removes the retained-runtime bypass path."
+)]
 #[derive(Clone, Copy)]
 pub(crate) struct PostSendHookContext<'a> {
     pub(crate) sender: &'a AgentName,
@@ -728,6 +736,10 @@ fn display_sender_identity(
         .unwrap_or_else(|| canonical_sender.clone())
 }
 
+#[allow(
+    dead_code,
+    reason = "Retained for the dormant direct post-send hook helper; Y.13 removes only the retained-runtime notification bypass."
+)]
 pub(super) fn qualified_sender_identity(
     sender: &AgentName,
     sender_team: Option<&TeamName>,

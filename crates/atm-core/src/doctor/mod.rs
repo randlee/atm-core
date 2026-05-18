@@ -632,10 +632,14 @@ mod tests {
     }
 
     fn test_runtime() -> LocalServiceRuntime {
-        LocalServiceRuntime::new(
+        LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
             Arc::new(UnusedTaskStore),
             Arc::new(UnusedRosterStore),
+            Arc::new(crate::LocalFileNonClaudeOutbound::new()),
+            Arc::new(crate::LocalFileNotificationSink::at_path(
+                std::env::temp_dir().join("atm-core-doctor-notifications.jsonl"),
+            )),
         )
     }
 

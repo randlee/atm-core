@@ -58,10 +58,14 @@ fn test_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
         .with_recovery("Set ATM_TEST_SQLITE_DB_PATH before running daemon doctor/runtime tests.")
     })?;
     let assembly = atm_rusqlite::SqliteBoundaryAssembly::new(std::path::PathBuf::from(path))?;
-    Ok(atm_core::LocalServiceRuntime::new(
+    Ok(atm_core::LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.mail_store_arc(),
         assembly.task_store_arc(),
         assembly.roster_store_arc(),
+        Arc::new(atm_core::LocalFileNonClaudeOutbound::new()),
+        Arc::new(atm_core::LocalFileNotificationSink::at_path(
+            atm_core::home::host_runtime_dir()?.join("notifications.jsonl"),
+        )),
     ))
 }
 
