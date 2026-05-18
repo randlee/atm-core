@@ -129,6 +129,9 @@ impl DaemonRequestDispatcher {
             .spawn(move || {
                 step().unwrap_or_else(|error| {
                     tracing::warn!(
+                        subsystem = "runtime_health",
+                        action = "shutdown_finalizer_step",
+                        outcome = "failed",
                         %error,
                         step = label,
                         "daemon shutdown finalizer step failed; restart atm-daemon and inspect the retained observability log before retrying shutdown-sensitive work"
