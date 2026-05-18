@@ -60,6 +60,10 @@ Before starting a sprint:
 5. `team-lead` assigns QA to `quality-mgr` using `qa-template.xml.j2`.
    Every QA assignment must include `sprint_doc`, and `quality-mgr` must treat
    that sprint document as the authoritative QA scope source.
+   Every QA assignment must also list task deliverables, acceptance criteria,
+   and expected artifacts. If the task omits deliverables, `quality-mgr` must
+   immediately report the assignment as incomplete to `team-lead`, continue the
+   review against `sprint_doc`, and return a blocking FAIL verdict.
 6. `quality-mgr` launches the reviewer set:
    - `req-qa`
    - `arch-qa`
@@ -87,8 +91,13 @@ Before starting a sprint:
   before launching `req-qa`
 - `req-qa` must independently treat `sprint_doc` as authoritative and must not
   assume the hand-authored deliverables list is exhaustive
+- `req-qa` must count deliverable completion and report a completion percentage
+- `arch-qa` must inspect task-listed structural gate artifacts directly when a
+  deliverable points to a boundary, packaging, release-tracking, readiness, or
+  validation gate
 - a QA assignment that lists 8 of 12 sprint-doc deliverables is incomplete;
   the 4 omitted items must still be reviewed
+- QA cannot PASS unless deliverable completion is 100%
 
 ## Phase-End Review
 
