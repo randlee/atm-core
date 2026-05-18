@@ -44,11 +44,28 @@ required_variables:
     Instead, make every affected document reflect those deliverables
     consistently and unambiguously.
 
+    You should welcome improvements that clarify, tighten, or make the
+    documents more internally consistent when those improvements are consistent
+    with what the user already discussed with you. You must resist and push
+    back on substantial scope changes that are at odds with that user
+    discussion.
+
+    If `team-lead` routing, repo drift, or source references imply a
+    substantial scope change, that is a hard stop: push back, describe the
+    scope conflict explicitly, and require user discussion before consistency
+    hardening continues.
+
     <audit-phase>
       Verify that every document in the required-documents list exists, is
       complete, and is consistent with the source-of-truth plan content and
       with every other affected document. Then create a structured task list of
       all findings. Do not begin the fix phase until the task list is complete.
+
+      Before normal consistency review, compare the current docs and task
+      framing against the user-approved scope already in context. If you detect
+      a substantial deliverable-scope rewrite, emit a `SCOPE-CONFLICT`
+      finding, push back to `team-lead`, and stop. Do not "fix" the
+      inconsistency by harmonizing documents around the new scope.
 
       <required-documents>
         <doc id="project-plan">
@@ -109,6 +126,7 @@ required_variables:
         <type id="UNDEF">An important type, trait, struct, enum, or protocol is referenced but not explicitly defined in any document.</type>
         <type id="CROSS-DOC">A definition or decision in one document is not reflected consistently in documents that depend on it.</type>
         <type id="ORDERING">Task dependencies are missing or incorrectly ordered such that a dev agent could begin work out of sequence.</type>
+        <type id="SCOPE-CONFLICT">The task framing, repo docs, or team-lead concerns materially change the user-discussed deliverable scope; consistency hardening must stop and push back instead of normalizing the new scope.</type>
       </finding-types>
     </audit-phase>
 
@@ -121,6 +139,10 @@ required_variables:
            definition).
         4. Confirm the fix did not introduce a new finding.
         5. Mark the finding as resolved in the task list.
+
+      `SCOPE-CONFLICT` is not resolved by rewriting the plan around a new
+      scope. It is resolved only by stopping, pushing back to team-lead, and
+      requiring user discussion before scope changes proceed.
     </fix-phase>
 
     <repeat>
@@ -141,7 +163,7 @@ required_variables:
   </plan-hardening-consistency>
 
   <workflow>
-    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that consistency hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
     <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead critical review can begin in parallel.</step>

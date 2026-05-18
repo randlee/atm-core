@@ -53,6 +53,24 @@ required_variables:
     this task. `team-lead` is routing this task and may append questions or
     concerns, but must not be treated as the authority for rewriting the plan.
 
+    You should welcome improvements that clarify, tighten, split, or otherwise
+    make the plan more executable when those improvements are consistent with
+    what the user already discussed with you. You must resist and push back on
+    substantial scope changes that are at odds with that user discussion.
+
+    If `team-lead` routing, repo drift, or source references imply a
+    substantial deliverable-scope change from what the user already discussed
+    with you, do not normalize that new scope into the sprint docs. That is a
+    hard stop. Push back, describe the scope conflict explicitly, and require
+    the conflict to be resolved with the user before hardening continues.
+
+    Substantial scope changes include:
+    - dropping, replacing, or weakening a user-discussed deliverable
+    - converting a runtime/code sprint into a docs/lint-only sprint
+    - retargeting work to a different phase or integration branch
+    - adding a new deliverable that materially changes the implementation
+      outcome promised to the user
+
     Any remaining in-scope implementation work not assigned to a specific
     sprint doc is a GAP finding. If a sprint is carrying too many deliverables,
     too many closure types, or too much residual risk for the committed work to
@@ -77,6 +95,12 @@ required_variables:
       the sprint set is split correctly for production-ready delivery. Then
       create a structured task list of all findings. Do not begin the fix phase
       until the task list is complete.
+
+      Before normal audit work, compare the current docs and task framing
+      against the user-approved scope already in context. If you detect a
+      substantial scope rewrite, emit a `SCOPE-CONFLICT` finding, push back to
+      `team-lead`, and stop. Do not "fix" a scope conflict by rewriting the
+      plan around it.
 
       <required-documents>
         <doc id="project-plan">
@@ -149,6 +173,7 @@ required_variables:
         <type id="NON-PROD">A sprint deliverable is described in a way that would allow shape-only, test-only, or non-production-ready completion.</type>
         <type id="MISSING-CODE-SAMPLE">An important trait, feature, enum, protocol type, or boundary contract is committed by the plan but not illustrated with an explicit code sample or signature.</type>
         <type id="ORDERING">Task dependencies are missing or incorrectly ordered such that a dev agent could begin work out of sequence.</type>
+        <type id="SCOPE-CONFLICT">The task framing, repo docs, or team-lead concerns materially change the user-discussed deliverable scope; hardening must stop and push back instead of adopting the new scope.</type>
       </finding-types>
     </audit-phase>
 
@@ -164,6 +189,9 @@ required_variables:
 
       If a sprint cannot carry all of its committed work cleanly, split it now.
       Do not preserve an overloaded sprint just to keep the sprint count low.
+      `SCOPE-CONFLICT` is not resolved by rewriting the plan. It is resolved
+      only by stopping, pushing back to team-lead, and requiring user
+      discussion before scope changes proceed.
     </fix-phase>
 
     <repeat>
@@ -185,7 +213,7 @@ required_variables:
   </plan-hardening>
 
   <workflow>
-    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. Team-lead should review that ACK and outline first, then discuss any scope concerns with the user after the ACK is received. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that hardening is blocked pending user discussion. Team-lead should review that ACK and outline first, then discuss any scope concerns with the user after the ACK is received. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
     <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead critical review can begin in parallel.</step>

@@ -21,6 +21,12 @@ the user, the details will surface when the plan is delivered.
 `team-lead` is responsible for routing, worktree creation, and assignment
 metadata. `team-lead` is not the authority for rewriting the plan.
 
+The user-discussed deliverable scope is authoritative. Hardening should welcome
+improvements that clarify, tighten, split, or otherwise make the plan more
+executable when those improvements are consistent with what the user already
+discussed with `arch-ctm`. Hardening must resist and push back on substantial
+scope changes that are at odds with that user discussion.
+
 ## Preconditions
 
 - the target phase worktree already exists
@@ -43,6 +49,13 @@ Together they must produce:
   protocol types, and boundary contracts
 - branch pushed, validation reported, team-lead critical review completed or
   explicitly requested, and QA requested only after both passes and that review
+
+Substantial scope changes are not valid hardening output. Examples:
+- dropping, replacing, or weakening a user-discussed deliverable
+- converting a runtime/code sprint into a docs/lint-only sprint
+- retargeting work to a different phase or integration branch
+- adding a new deliverable that materially changes the implementation outcome
+  promised to the user
 
 Any remaining in-scope work without sprint ownership is a `GAP`. If more
 sprints are needed, hardening must create them.
@@ -100,6 +113,12 @@ sprints are needed, hardening must create them.
 - explicit references to prior planning discussion already completed with
   `arch-ctm`
 
+If `source_of_truth`, `questions_or_concerns`, or repo documents imply a
+substantial scope change from what the user already discussed with `arch-ctm`,
+that is a stop condition. The hardening pass must not rewrite the sprint scope
+to match it. Push back to `team-lead`, describe the scope conflict explicitly,
+and require user discussion before proceeding.
+
 If `questions_or_concerns` is present, `arch-ctm` should answer it in the ACK.
 
 The ACK should also include a brief outline of the plan/work that `arch-ctm`
@@ -116,6 +135,8 @@ critical review focused on whether:
 - important traits/features/enums/boundaries have explicit code samples or
   signatures
 - any remaining residual work still lacks sprint ownership
+- any hardening change materially altered the user-discussed deliverable scope
+  without explicit user discussion
 
 Do not treat the hardening pass itself as the final review. The handoff is:
 1. `team-lead` routes plan hardening to `arch-ctm`
@@ -170,6 +191,12 @@ Suggested vars file shape:
   deferred
 - do not allow important traits/features/enums/boundary contracts to stay
   prose-only when an explicit code sample or signature is needed
+- do welcome improvements that make the plan more explicit, production-ready,
+  or better split as long as they stay consistent with the user-discussed scope
+- do not let hardening silently rewrite the deliverable scope discussed with
+  the user
+- if `team-lead` input conflicts materially with that scope, stop and push
+  back instead of normalizing the new scope into the docs
 - do not send the hardened plan to QA before `team-lead` has critically
   reviewed deliverables, sprint splitting, code-sample completeness, and
   acceptance criteria
