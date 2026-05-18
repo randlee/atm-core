@@ -592,20 +592,14 @@ pub trait InboxIngress: sealed::Sealed {
         &self,
         request: InboxIngressImportRequest,
     ) -> Result<InboxIngressImportResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when identity fingerprinting cannot be computed.
     fn compute_identity_fingerprint(
         &self,
         request: InboxIngressIdentityFingerprintRequest,
-    ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when inbox diagnostics cannot be generated.
+    ) -> InboxIngressIdentityFingerprintResponse;
     fn report_diagnostics(
         &self,
         request: InboxIngressDiagnosticsRequest,
-    ) -> Result<InboxIngressDiagnosticsResponse, AtmError>;
+    ) -> InboxIngressDiagnosticsResponse;
 }
 
 /// BOUNDARY-InboxExport — see docs/atm-core/boundaries.md.

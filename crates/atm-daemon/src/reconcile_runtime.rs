@@ -629,7 +629,7 @@ fn should_emit_reconcile_notification(
                     atm_core::boundary::InboxIngressIdentityFingerprintRequest {
                         message: message.clone(),
                     },
-                )?
+                )
                 .fingerprint;
             let Some(fingerprint) = fingerprint else {
                 return Ok(true);
@@ -1064,23 +1064,23 @@ mod tests {
         fn compute_identity_fingerprint(
             &self,
             request: InboxIngressIdentityFingerprintRequest,
-        ) -> Result<InboxIngressIdentityFingerprintResponse, atm_core::error::AtmError> {
-            Ok(InboxIngressIdentityFingerprintResponse {
+        ) -> InboxIngressIdentityFingerprintResponse {
+            InboxIngressIdentityFingerprintResponse {
                 fingerprint: request
                     .message
                     .message_id
                     .map(|message_id| message_id.to_string()),
-            })
+            }
         }
 
         fn report_diagnostics(
             &self,
             _request: InboxIngressDiagnosticsRequest,
-        ) -> Result<InboxIngressDiagnosticsResponse, atm_core::error::AtmError> {
-            Ok(InboxIngressDiagnosticsResponse {
+        ) -> InboxIngressDiagnosticsResponse {
+            InboxIngressDiagnosticsResponse {
                 duplicate_message_ids: 0,
                 messages_without_ids: 0,
-            })
+            }
         }
     }
 

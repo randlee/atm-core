@@ -573,6 +573,9 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingRuntime {
+        // The execution-path tests mutate these fields from trait-method calls
+        // on `&self`, so the test double needs interior mutability to record
+        // side effects without changing the production executor signatures.
         single_append_texts: std::sync::Mutex<Vec<String>>,
         message_set_texts: std::sync::Mutex<Vec<Vec<String>>>,
         fail_message_set: bool,
@@ -783,7 +786,11 @@ mod tests {
         let error = execute_delivery_plan(&runtime, None, &plan).expect_err("hard failure");
         assert!(error.message.contains("logical message set export failed"));
         assert_eq!(
-            runtime.message_set_texts.lock().expect("message sets").len(),
+            runtime
+                .message_set_texts
+                .lock()
+                .expect("message sets")
+                .len(),
             1
         );
         assert!(

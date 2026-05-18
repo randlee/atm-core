@@ -157,6 +157,13 @@ fn claude_compatibility_delivery_mode_for_disposition(
 
 ```rust
 pub(crate) trait ClaudeInboxWriter {
+    fn append_claude_inbox_message(
+        &self,
+        inbox_path: &Path,
+        recipient: &DeliveryRecipientSnapshot,
+        message: &MessageEnvelope,
+    ) -> Result<(), AtmError>;
+
     fn append_claude_message_set(
         &self,
         inbox_path: &Path,
