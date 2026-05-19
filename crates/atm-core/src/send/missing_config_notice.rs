@@ -21,7 +21,9 @@ use super::{
     persist_message_and_seed_workflow,
 };
 
-pub(super) fn warn_missing_team_config<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+pub(super) fn warn_missing_team_config<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     runtime: &R,
     request: &SendRequest,
     recipient: &ResolvedRecipient,
@@ -76,7 +78,7 @@ fn missing_config_warning(recipient: &ResolvedRecipient, team_dir: &Path) -> War
 }
 
 fn notify_team_lead_missing_config(
-    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed),
     home_dir: &Path,
     team_dir: &Path,
     team: &TeamName,
@@ -174,7 +176,7 @@ fn resolve_team_lead_snapshot(
 }
 
 fn persist_missing_config_notice(
-    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
+    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed),
     home_dir: &Path,
     snapshot: &DeliveryRecipientSnapshot,
     team_lead_inbox: &Path,
@@ -205,6 +207,7 @@ fn build_missing_config_delivery_plan(
     persistence: &DeliveryPersistenceResult,
 ) -> Result<DeliveryPlan, AtmError> {
     Ok(DeliveryPlan::new(
+        crate::delivery_plan::DeliveryPlanKind::Send,
         delivery_plan_disposition(persistence.disposition),
         delivery_target_for_snapshot(team_lead_inbox, snapshot),
         ResolvedRecipient {

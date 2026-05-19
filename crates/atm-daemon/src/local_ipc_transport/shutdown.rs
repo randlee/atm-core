@@ -58,12 +58,18 @@ pub(super) fn finish_serve_shutdown(
     if let Some(serve_error) = serve_error {
         if let Some(shutdown_error) = shutdown_error {
             tracing::warn!(
+                subsystem = "ipc_shutdown",
+                action = "finish_serve_shutdown",
+                outcome = "serve_and_shutdown_error",
                 %shutdown_error,
                 %serve_error,
                 "daemon shutdown encountered an additional error after a serve error"
             );
         } else {
             tracing::warn!(
+                subsystem = "ipc_shutdown",
+                action = "finish_serve_shutdown",
+                outcome = "serve_error",
                 %serve_error,
                 "daemon serve loop exited with an error after shutdown finalization"
             );
@@ -76,6 +82,9 @@ pub(super) fn finish_serve_shutdown(
 fn append_shutdown_error(shutdown_error: &mut Option<AtmError>, field_name: &str, error: AtmError) {
     if let Some(existing) = shutdown_error.as_ref() {
         tracing::warn!(
+            subsystem = "ipc_shutdown",
+            action = "append_shutdown_error",
+            outcome = "additional_error",
             begin_shutdown_error = %existing,
             error_field = field_name,
             additional_error = %error,

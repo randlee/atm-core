@@ -29,7 +29,7 @@ is no longer encoded as hook metadata plus implied behavior.
 
 ## Exact Code And Document Targets
 
-- `crates/atm-core/src/boundary.rs`
+- `crates/atm-core/src/boundary/mod.rs`
 - `crates/atm-core/src/delivery_execution.rs`
 - `crates/atm-daemon/src/non_claude_outbound_runtime.rs`
 - `boundaries/atm-core/non-claude-outbound.toml`

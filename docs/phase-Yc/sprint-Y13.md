@@ -32,7 +32,6 @@ target: integrate/phase-Y
 - `crates/atm-core/src/delivery_plan.rs`
 - `crates/atm-core/src/protocol.rs`
 - `crates/atm-daemon/src/boundary_adapters.rs`
-- `crates/atm-daemon/src/notification_runtime.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-rusqlite/src/boundary_assembly.rs`
 - `crates/atm-rusqlite/src/lib.rs`

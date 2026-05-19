@@ -71,6 +71,11 @@ impl DeliveryRecipientSnapshot {
     dead_code,
     reason = "Phase Y.4 keeps the full documented coordinator-state inventory explicit even before every branch is exercised by runtime callers."
 )]
+// Harness-target compatibility is still validated at runtime by
+// `validate_delivery_target(...)`; this state enum documents the coordinator
+// flow, but it does not yet encode harness pairing as a typestate invariant.
+// A future typestate pass can tighten that contract without widening the live
+// delivery surface during Phase Y closeout.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum NewMessageCoordinatorState {
     Received,

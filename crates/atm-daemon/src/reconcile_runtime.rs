@@ -666,6 +666,9 @@ fn should_emit_reconcile_notification(
         ordered.truncate(MAX_RECONCILE_FINGERPRINTS_PER_KEY);
         current_fingerprints.extend(ordered);
         tracing::warn!(
+            subsystem = "reconcile",
+            action = "fingerprint_truncate",
+            outcome = "cap_exceeded",
             team = %key.team,
             agent = %key.agent,
             retained = MAX_RECONCILE_FINGERPRINTS_PER_KEY,
@@ -686,6 +689,9 @@ fn should_emit_reconcile_notification(
         while let Some(evicted_key) = fingerprints.order.pop_front() {
             if fingerprints.entries.remove(&evicted_key).is_some() {
                 tracing::warn!(
+                    subsystem = "reconcile",
+                    action = "fingerprint_evict",
+                    outcome = "cap_exceeded",
                     team = %evicted_key.team,
                     agent = %evicted_key.agent,
                     cap = MAX_RECONCILE_FINGERPRINT_KEYS,
@@ -714,6 +720,9 @@ fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
                 Ok(result) => ReconcileOutcome::Success(result),
                 Err(error) => {
                     tracing::warn!(
+                        subsystem = "reconcile",
+                        action = "executor",
+                        outcome = "failed",
                         team = %pending_request.request.team,
                         agent = %pending_request.request.agent,
                         %error,

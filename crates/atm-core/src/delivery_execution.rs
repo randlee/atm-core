@@ -4,7 +4,6 @@ use crate::boundary::ClaudeCompatibilityDeliveryMode;
 use crate::config::AtmConfig;
 use crate::delivery_plan::{
     DeliveryPlan, DeliveryPlanDisposition, DeliveryTarget, LogicalMessage, NotificationTarget,
-    ReplyDeliveryPlan,
 };
 use crate::delivery_policy::{
     DeliveryEventFamily, DeliveryHarnessPath, claude_append_failure_transition_names,
@@ -49,7 +48,7 @@ pub(crate) struct DeliveryTransitionContext<'a> {
     pub(crate) task_id: Option<TaskId>,
 }
 
-pub(crate) trait ClaudeInboxWriter {
+pub(crate) trait ClaudeInboxWriter: crate::boundary::sealed::Sealed {
     fn append_claude_inbox_message(
         &self,
         inbox_path: &Path,
@@ -67,7 +66,7 @@ pub(crate) trait ClaudeInboxWriter {
 
 impl<T> ClaudeInboxWriter for T
 where
-    T: RetainedServiceRuntime + ?Sized,
+    T: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
 {
     fn append_claude_inbox_message(
         &self,
@@ -86,6 +85,8 @@ where
         messages: &[LogicalMessage],
     ) -> Result<(), AtmError> {
         let mode = claude_compatibility_delivery_mode_for_disposition(disposition)?;
+        // The retained runtime boundary still accepts owned envelopes, so this
+        // delivery seam must clone until the boundary contract is widened.
         self.append_compat_inbox_message_set(
             inbox_path,
             mode,
@@ -97,7 +98,7 @@ where
     }
 }
 
-pub(crate) trait PostSendNotificationExecutor {
+pub(crate) trait PostSendNotificationExecutor: crate::boundary::sealed::Sealed {
     /// Notification delivery is a best-effort side effect: failures must be
     /// surfaced as typed warnings, not as silent drops or primary delivery
     /// failures.
@@ -112,7 +113,7 @@ pub(crate) trait PostSendNotificationExecutor {
 
 impl<T> PostSendNotificationExecutor for T
 where
-    T: RetainedServiceRuntime + ?Sized,
+    T: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
 {
     fn deliver_notifications(
         &self,
@@ -125,6 +126,9 @@ where
             let event = notification_event_from_target(recipient, recipient_pane_id, notification);
             if let Err(error) = self.deliver_notification_event(event) {
                 tracing::warn!(
+                    subsystem = "delivery_execution",
+                    action = "deliver_notifications",
+                    outcome = "failed",
                     recipient = %recipient.agent,
                     team = %recipient.team,
                     %error,
@@ -142,7 +146,7 @@ where
     }
 }
 
-pub(crate) trait NonClaudeOutboundDeliveryWriter {
+pub(crate) trait NonClaudeOutboundDeliveryWriter: crate::boundary::sealed::Sealed {
     fn deliver_non_claude_payloads(
         &self,
         recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
@@ -152,13 +156,16 @@ pub(crate) trait NonClaudeOutboundDeliveryWriter {
 
 impl<T> NonClaudeOutboundDeliveryWriter for T
 where
-    T: RetainedServiceRuntime + ?Sized,
+    T: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
 {
     fn deliver_non_claude_payloads(
         &self,
         recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
         messages: &[LogicalMessage],
     ) -> Result<(), AtmError> {
+        // NonClaudeOutbound is still defined in terms of owned envelopes at
+        // the retained runtime boundary, so this path clones until that
+        // boundary contract changes.
         RetainedServiceRuntime::deliver_non_claude_payloads(
             self,
             recipient,
@@ -195,7 +202,7 @@ where
 pub(crate) fn execute_reply_delivery_plan<R>(
     runtime: &R,
     config: Option<&AtmConfig>,
-    plan: &ReplyDeliveryPlan,
+    plan: &DeliveryPlan,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
     R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + PostSendNotificationExecutor,
@@ -301,7 +308,7 @@ pub(crate) fn emit_delivery_plan_transitions(
 pub(crate) fn emit_reply_delivery_plan_transitions(
     observability: &dyn ObservabilityPort,
     context: DeliveryTransitionContext<'_>,
-    plan: &ReplyDeliveryPlan,
+    plan: &DeliveryPlan,
     execution: &DeliveryExecutionResult,
 ) -> Result<(), AtmError> {
     emit_plan_transitions(
@@ -475,7 +482,8 @@ mod tests {
         emit_delivery_plan_transitions, execute_delivery_plan,
     };
     use crate::delivery_plan::{
-        DeliveryPlan, DeliveryPlanDisposition, DeliveryTarget, LogicalMessage, NotificationTarget,
+        DeliveryPlan, DeliveryPlanDisposition, DeliveryPlanKind, DeliveryTarget, LogicalMessage,
+        NotificationTarget,
     };
     use crate::delivery_policy::{
         DeliveryEventFamily, DeliveryHarnessPath, DeliveryRecipientSnapshot,
@@ -492,6 +500,8 @@ mod tests {
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
     struct NoopRuntime;
+
+    impl crate::boundary::sealed::Sealed for NoopRuntime {}
 
     impl ClaudeInboxWriter for NoopRuntime {
         fn append_claude_inbox_message(
@@ -609,7 +619,7 @@ mod tests {
         single_append_texts: std::sync::Mutex<Vec<String>>,
         message_set_texts: std::sync::Mutex<Vec<Vec<String>>>,
         fail_message_set: bool,
-        fail_single_append_indexes: std::sync::Mutex<Vec<usize>>,
+        fail_single_append_indexes: Vec<usize>,
         single_append_calls: std::sync::Mutex<usize>,
         notification_events: std::sync::Mutex<Vec<NotificationEvent>>,
         notification_error_message: Option<&'static str>,
@@ -625,7 +635,7 @@ mod tests {
 
         fn with_single_append_failures(indexes: &[usize]) -> Self {
             Self {
-                fail_single_append_indexes: std::sync::Mutex::new(indexes.to_vec()),
+                fail_single_append_indexes: indexes.to_vec(),
                 ..Self::default()
             }
         }
@@ -638,6 +648,8 @@ mod tests {
         }
     }
 
+    impl crate::boundary::sealed::Sealed for RecordingRuntime {}
+
     impl ClaudeInboxWriter for RecordingRuntime {
         fn append_claude_inbox_message(
             &self,
@@ -649,12 +661,7 @@ mod tests {
             let current_index = *call_count;
             *call_count += 1;
 
-            if self
-                .fail_single_append_indexes
-                .lock()
-                .expect("fail indexes")
-                .contains(&current_index)
-            {
+            if self.fail_single_append_indexes.contains(&current_index) {
                 return Err(AtmError::mailbox_write(format!(
                     "single append failure for message[{}]",
                     current_index + 1
@@ -764,6 +771,7 @@ mod tests {
         let runtime = NoopRuntime;
         let message = logical_message();
         let plan = DeliveryPlan::new(
+            DeliveryPlanKind::Send,
             DeliveryPlanDisposition::Persisted,
             DeliveryTarget::ClaudeCode {
                 inbox_path: PathBuf::from("recipient.jsonl"),
@@ -788,11 +796,40 @@ mod tests {
     }
 
     #[test]
+    fn execute_delivery_plan_rejects_non_claude_target_for_claude_harness() {
+        let runtime = NoopRuntime;
+        let message = logical_message();
+        let plan = DeliveryPlan::new(
+            DeliveryPlanKind::Send,
+            DeliveryPlanDisposition::Persisted,
+            DeliveryTarget::NonClaude {
+                recipient: recipient_snapshot(DeliveryHarnessPath::ClaudeCode),
+            },
+            ResolvedRecipient {
+                agent: AgentName::from_validated("recipient"),
+                team: TeamName::from_validated(TEST_TEAM),
+            },
+            None,
+            vec![message],
+            Vec::new(),
+        );
+
+        let error = execute_delivery_plan(&runtime, None, &plan).expect_err("fail closed");
+        assert!(error.is_validation());
+        assert!(
+            error
+                .message
+                .contains("NonClaude target for Claude Code harness")
+        );
+    }
+
+    #[test]
     fn emit_delivery_plan_transitions_rejects_non_claude_append_degraded_state() {
         let observability = RecordingObservability::default();
         let message = logical_message();
         let message_id = message.message_id();
         let plan = DeliveryPlan::new(
+            DeliveryPlanKind::Send,
             DeliveryPlanDisposition::Persisted,
             DeliveryTarget::NonClaude {
                 recipient: recipient_snapshot(DeliveryHarnessPath::NonClaude),
@@ -825,9 +862,48 @@ mod tests {
     }
 
     #[test]
+    fn emit_reply_delivery_plan_transitions_rejects_non_claude_append_degraded_state() {
+        let observability = RecordingObservability::default();
+        let message = logical_message();
+        let message_id = message.message_id();
+        let plan = DeliveryPlan::new(
+            DeliveryPlanKind::Reply,
+            DeliveryPlanDisposition::Persisted,
+            DeliveryTarget::NonClaude {
+                recipient: recipient_snapshot(DeliveryHarnessPath::NonClaude),
+            },
+            ResolvedRecipient {
+                agent: AgentName::from_validated("recipient"),
+                team: TeamName::from_validated(TEST_TEAM),
+            },
+            None,
+            vec![message],
+            Vec::new(),
+        );
+
+        let error = super::emit_reply_delivery_plan_transitions(
+            &observability,
+            transition_context(message_id),
+            &plan,
+            &super::DeliveryExecutionResult {
+                disposition: DeliveryExecutionDisposition::AppendDegraded,
+                warnings: Vec::new(),
+            },
+        )
+        .expect_err("reject impossible append-degraded non-claude reply transition");
+        assert!(error.is_validation());
+        assert!(
+            error
+                .message
+                .contains("unsupported for DeliveryHarnessPath::NonClaude")
+        );
+    }
+
+    #[test]
     fn sqlite_failure_for_claude_requires_full_logical_message_set_delivery() {
         let runtime = RecordingRuntime::with_message_set_failure();
         let plan = DeliveryPlan::new(
+            DeliveryPlanKind::Send,
             DeliveryPlanDisposition::SqliteFailedRecovered,
             DeliveryTarget::ClaudeCode {
                 inbox_path: PathBuf::from("recipient.jsonl"),
@@ -868,6 +944,7 @@ mod tests {
     fn sqlite_failure_for_claude_does_not_emit_message1_without_message2() {
         let runtime = RecordingRuntime::with_message_set_failure();
         let plan = DeliveryPlan::new(
+            DeliveryPlanKind::Send,
             DeliveryPlanDisposition::SqliteFailedRecovered,
             DeliveryTarget::ClaudeCode {
                 inbox_path: PathBuf::from("recipient.jsonl"),
@@ -906,6 +983,7 @@ mod tests {
     fn persisted_claude_append_degradation_remains_explicit_and_warning_typed() {
         let runtime = RecordingRuntime::with_single_append_failures(&[0]);
         let plan = DeliveryPlan::new(
+            DeliveryPlanKind::Send,
             DeliveryPlanDisposition::Persisted,
             DeliveryTarget::ClaudeCode {
                 inbox_path: PathBuf::from("recipient.jsonl"),
@@ -951,6 +1029,7 @@ mod tests {
         let runtime = RecordingRuntime::default();
         let message_id = AtmMessageId::new();
         let mut plan = DeliveryPlan::new(
+            DeliveryPlanKind::Send,
             DeliveryPlanDisposition::Persisted,
             DeliveryTarget::ClaudeCode {
                 inbox_path: PathBuf::from("recipient.jsonl"),
@@ -1016,6 +1095,7 @@ mod tests {
     fn notification_sink_failure_is_explicit_in_delivery_warnings() {
         let runtime = RecordingRuntime::with_notification_failure("notification sink unavailable");
         let mut plan = DeliveryPlan::new(
+            DeliveryPlanKind::Send,
             DeliveryPlanDisposition::Persisted,
             DeliveryTarget::NonClaude {
                 recipient: recipient_snapshot(DeliveryHarnessPath::NonClaude),
@@ -1062,6 +1142,7 @@ mod tests {
         let runtime =
             RecordingRuntime::with_notification_failure("notification sink queue is saturated");
         let mut plan = DeliveryPlan::new(
+            DeliveryPlanKind::Send,
             DeliveryPlanDisposition::Persisted,
             DeliveryTarget::ClaudeCode {
                 inbox_path: PathBuf::from("recipient.jsonl"),

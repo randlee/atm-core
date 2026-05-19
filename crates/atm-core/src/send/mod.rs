@@ -194,7 +194,9 @@ pub fn send_mail_with_runtime(
     send_mail_with_runtime_impl(request, observability, runtime)
 }
 
-fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn send_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -241,7 +243,9 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     clippy::too_many_arguments,
     reason = "Y.6 closeout keeps the explicit send outcome pieces visible at the sprint seam."
 )]
-fn finalize_send_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn finalize_send_outcome<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     runtime: &R,
     observability: &dyn ObservabilityPort,
     request: &SendRequest,
@@ -338,6 +342,7 @@ fn build_send_delivery_plan(
     persistence: &DeliveryPersistenceResult,
 ) -> Result<DeliveryPlan, AtmError> {
     Ok(DeliveryPlan::new(
+        crate::delivery_plan::DeliveryPlanKind::Send,
         delivery_plan_disposition(persistence.disposition),
         crate::delivery_plan::delivery_target_for_snapshot(
             &context.inbox_path,
@@ -367,7 +372,9 @@ struct SendExecutionContext {
     warnings: Vec<WarningEntry>,
 }
 
-fn prepare_send_context<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn prepare_send_context<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     runtime: &R,
     request: &SendRequest,
 ) -> Result<SendExecutionContext, AtmError> {
@@ -421,7 +428,9 @@ fn prepare_send_context<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     })
 }
 
-fn validate_send_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn validate_send_target<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     runtime: &R,
     request: &SendRequest,
     recipient: &ResolvedRecipient,
