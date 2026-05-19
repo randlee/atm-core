@@ -1,5 +1,5 @@
 ---
-name: 03-critical-plan-review-task
+name: 04-critical-plan-review-task
 version: 1.0.0
 description: team-lead assignment template for late hostile review of a hardened plan before QA.
 format: xml
@@ -64,6 +64,6 @@ required_variables:
     <step id="a">ACK this message immediately.</step>
     <step id="b">Read the fenced JSON handoff from sprint-scope hardening, the source-of-truth material, the related planning docs, and the sprint-planning guidelines.</step>
     <step id="c">Do not edit files.</step>
-    <step id="d">Return fenced JSON findings only, matching the `critical-plan-reviewer` output contract. That fenced JSON becomes the required input to consistency hardening.</step>
+    <step id="d">Return fenced JSON findings only, matching the `critical-plan-reviewer` output contract. That fenced JSON becomes the required input to `05-consistency-hardening.xml.j2`.</step>
   </workflow>
 </atm-task>

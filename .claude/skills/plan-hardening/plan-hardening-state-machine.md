@@ -1,36 +1,9 @@
 # Plan-Hardening State Machine
 
-This flow must be simple enough for a low-context `team-lead` to execute by
-following the numbered templates in order. `team-lead` is a router, not the
-planning authority. Plan details must come from the docs and references, not
-from `team-lead` paraphrase.
-
-## Routing Table
-
-1. `team-lead -> plan-scope-reviewer`
-   - render: `01-plan-scope-review.xml.j2`
-   - input authority: current planning docs and references
-   - output: fenced JSON findings
-
-2. `team-lead -> arch-ctm`
-   - render: `02-sprint-scope-hardening.xml.j2`
-   - required input: fenced JSON from step 1
-   - output: fenced JSON resolution report
-
-3. `team-lead -> critical-plan-reviewer`
-   - render: `03-critical-plan-review.xml.j2`
-   - required input: fenced JSON from step 2
-   - output: fenced JSON findings
-
-4. `team-lead -> arch-ctm`
-   - render: `04-consistency-hardening.xml.j2`
-   - required input: fenced JSON from step 3
-   - output: fenced JSON resolution report
-
-5. `team-lead -> quality-mgr`
-   - render: existing focused plan-QA template
-   - required input: fenced JSON from step 4
-   - output: QA verdict
+`team-lead` should be able to execute this flow by following the numbered
+templates and passing the fenced JSON from one step to the next. The plan
+details stay in the docs. `team-lead` routes steps and waits for the required
+handoff artifact.
 
 ## Sequence
 
@@ -38,30 +11,32 @@ from `team-lead` paraphrase.
 sequenceDiagram
     participant U as User
     participant TL as team-lead
-    participant PSR as plan-scope-reviewer
     participant A as arch-ctm
+    participant PSR as plan-scope-reviewer
     participant CPR as critical-plan-reviewer
     participant QM as quality-mgr
 
     U->>TL: Run /plan-hardening on current plan state
-    TL->>PSR: 01-plan-scope-review.xml.j2
-    Note over PSR: Read plan docs directly
-    PSR-->>TL: Fenced JSON findings
 
-    TL->>A: 02-sprint-scope-hardening.xml.j2 + step 1 JSON
-    Note over A: Create missing sprint docs, split sprints, tighten scope
-    A-->>TL: Fenced JSON resolution report
+    TL->>A: 01-plan-scope-review.xml.j2
+    A-->>TL: step-1 fenced JSON
 
-    TL->>CPR: 03-critical-plan-review.xml.j2 + step 2 JSON
-    Note over CPR: Review architecture, boundaries, false closure
-    CPR-->>TL: Fenced JSON findings
+    TL->>PSR: 02-plan-scope-review.xml.j2 + step-1 JSON
+    Note over TL,PSR: run_in_background: true
+    PSR-->>TL: step-2 fenced JSON findings
 
-    TL->>A: 04-consistency-hardening.xml.j2 + step 3 JSON
-    Note over A: Fix contradictions, ambiguity, ADR/boundary drift
-    A-->>TL: Fenced JSON resolution report
+    TL->>A: 03-sprint-scope-hardening.xml.j2 + step-2 JSON
+    A-->>TL: step-3 fenced JSON
 
-    TL->>TL: Human critical review against discussed scope
-    TL->>QM: Focused plan QA + step 4 JSON
+    TL->>CPR: 04-critical-plan-review.xml.j2 + step-3 JSON
+    Note over TL,CPR: run_in_background: true
+    CPR-->>TL: step-4 fenced JSON findings
+
+    TL->>A: 05-consistency-hardening.xml.j2 + step-4 JSON
+    A-->>TL: step-5 fenced JSON
+
+    TL->>TL: human critical review
+    TL->>QM: focused plan QA + step-5 JSON
     QM-->>TL: QA verdict
 ```
 
@@ -70,27 +45,53 @@ sequenceDiagram
 ```mermaid
 stateDiagram-v2
     [*] --> CurrentPlanState
-    CurrentPlanState --> ScopeReview: Step 1\n01-plan-scope-review.xml.j2
-    ScopeReview --> ScopeHardening: Step 2\nstep 1 fenced JSON present
-    ScopeReview --> HardStop: Step 1 output missing or malformed
-    ScopeHardening --> CriticalReview: Step 2 fenced JSON present
-    ScopeHardening --> HardStop: unresolved scope/split issues\nor malformed output
-    CriticalReview --> ConsistencyHardening: Step 3 fenced JSON present
-    CriticalReview --> HardStop: Step 3 output missing or malformed
-    ConsistencyHardening --> HumanReview: Step 4 fenced JSON present
-    ConsistencyHardening --> HardStop: contradictions remain\nor malformed output
-    HumanReview --> FocusedPlanQA: scope still matches user discussion
+    CurrentPlanState --> Step1GuidelinesPass: 01 -> arch-ctm
+    Step1GuidelinesPass --> Step2ScopeReview: step-1 JSON present
+    Step1GuidelinesPass --> HardStop: step-1 JSON missing or malformed
+    Step2ScopeReview --> Step3ScopeHardening: step-2 JSON present
+    Step2ScopeReview --> HardStop: step-2 JSON missing or malformed
+    Step3ScopeHardening --> Step4CriticalReview: step-3 JSON present
+    Step3ScopeHardening --> HardStop: step-3 JSON missing or malformed
+    Step4CriticalReview --> Step5ConsistencyHardening: step-4 JSON present
+    Step4CriticalReview --> HardStop: step-4 JSON missing or malformed
+    Step5ConsistencyHardening --> HumanReview: step-5 JSON present
+    Step5ConsistencyHardening --> HardStop: step-5 JSON missing or malformed
+    HumanReview --> FocusedPlanQA: plan still matches user-discussed scope
     HumanReview --> HardStop: material scope drift
     FocusedPlanQA --> ReadyForImplementation: QA pass
     FocusedPlanQA --> HardStop: QA fail
 ```
 
-## Invariants
+## Step Contract
 
-- Every step is routed by `team-lead`.
-- Every step after step 1 requires the fenced JSON output from the previous
-  step.
-- Missing or malformed fenced JSON is a hard stop.
-- Material scope drift from what the user discussed is a hard stop.
-- If `team-lead` must explain the plan for a step to succeed, the docs or
-  prompts are not hardened enough.
+1. `01-plan-scope-review.xml.j2`
+   - send to `arch-ctm`
+   - purpose: read the guidelines and make sure the plan follows them
+   - output: `step-1` fenced JSON
+
+2. `02-plan-scope-review.xml.j2`
+   - launch `plan-scope-reviewer`
+   - required input: `step-1` fenced JSON
+   - execution: `run_in_background: true`
+   - output: `step-2` fenced JSON findings
+
+3. `03-sprint-scope-hardening.xml.j2`
+   - send to `arch-ctm`
+   - required input: `step-2` fenced JSON
+   - output: `step-3` fenced JSON
+
+4. `04-critical-plan-review.xml.j2`
+   - launch `critical-plan-reviewer`
+   - required input: `step-3` fenced JSON
+   - execution: `run_in_background: true`
+   - output: `step-4` fenced JSON findings
+
+5. `05-consistency-hardening.xml.j2`
+   - send to `arch-ctm`
+   - required input: `step-4` fenced JSON
+   - output: `step-5` fenced JSON
+
+6. focused plan QA
+   - send to `quality-mgr`
+   - required input: `step-5` fenced JSON
+   - output: QA verdict

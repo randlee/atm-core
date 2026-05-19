@@ -1,7 +1,7 @@
 ---
-name: 01-plan-scope-review-task
-version: 1.0.0
-description: team-lead assignment template for early sprint-scope and split review before plan hardening.
+name: 01-initial-guidelines-pass-task
+version: 2.0.0
+description: team-lead assignment template for the initial arch-ctm guidelines pass before background scope review.
 format: xml
 required_variables:
   - task_id
@@ -9,38 +9,75 @@ required_variables:
   - description
   - worktree_path
   - branch
+  - pr_target
   - source_of_truth
   - references
 ---
-<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="plan-scope-reviewer" mode="plan-scope-review">
+<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening-guidelines-pass">
   <description>{{ description }}</description>
 
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
+  <pr-target>{{ pr_target }}</pr-target>
 
   <source-of-truth>
 {{ source_of_truth }}
   </source-of-truth>
 
+{% if questions_or_concerns is defined and questions_or_concerns | trim %}
+  <questions-or-concerns>
+{{ questions_or_concerns }}
+  </questions-or-concerns>
+{% endif %}
+
   <references>
 {{ references }}
   </references>
 
-  <review-focus>
-    Review the current plan state in the planning docs against
-    `.claude/skills/plan-hardening/sprint-planning-guidelines.md`.
-    Attack sprint shape early:
-    - split decisions
-    - deliverable ownership
-    - production-ready scope
-    - checklist authority
-    - direct dev/QA consumability
-  </review-focus>
+  <plan-hardening>
+    This is the required first pass for `/plan-hardening`.
+
+    Read `.claude/skills/plan-hardening/sprint-planning-guidelines.md` and
+    make sure the current plan state follows it before any reviewer is
+    launched. The current phase plan already exists in repo docs, but sprint
+    docs may still be partial or missing.
+
+    In this pass:
+    - tighten the current plan docs to match the sprint-planning guidelines
+    - create missing sprint docs when the plan already implies they are needed
+    - make the sprint set reviewable by `plan-scope-reviewer`
+    - do not rely on `team-lead` to restate plan details
+    - do not materially change user-discussed scope
+
+    If task framing, repo drift, or references imply a substantial deliverable
+    scope change from what the user already discussed with you, stop and push
+    back instead of normalizing the new scope into the plan.
+
+    Output fenced JSON only when this pass is complete. That JSON becomes the
+    required input to the background `plan-scope-reviewer` launch.
+
+    Expected output shape:
+    ```json
+    {
+      "status": "PASS",
+      "mode": "plan-hardening-guidelines-pass",
+      "iterations": 0,
+      "docs_modified": [],
+      "docs_created": [],
+      "ready_for_next_step": true,
+      "errors": []
+    }
+    ```
+  </plan-hardening>
 
   <workflow>
-    <step id="a">ACK this message immediately.</step>
-    <step id="b">Read the source-of-truth material, the related planning docs, and the sprint-planning guidelines. Sprint docs may be partial or missing; report that as findings.</step>
-    <step id="c">Do not edit files.</step>
-    <step id="d">Return fenced JSON findings only, matching the `plan-scope-reviewer` output contract. That fenced JSON becomes the required input to sprint-scope hardening.</step>
+    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
+    <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
+    <step id="d">As soon as the guidelines pass is complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so scope review can begin in parallel.</step>
+    <step id="e">After the push report, run the required validation.</step>
+    <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
+    <step id="g">Return fenced JSON only after the guidelines pass converges. That fenced JSON becomes the required input to `02-plan-scope-review.xml.j2`.</step>
+    <step id="h">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>

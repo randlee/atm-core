@@ -1,5 +1,5 @@
 ---
-name: 02-sprint-scope-hardening-task
+name: 03-sprint-scope-hardening-task
 version: 2.0.0
 description: team-lead assignment template for sprint-scope and deliverable hardening before implementation.
 format: xml
@@ -252,8 +252,8 @@ required_variables:
     <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead critical review can begin in parallel.</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only. Send the git commit hash to team-lead and explicitly request a critical review of sprint splitting, deliverables, production-ready scope, and code-sample completeness.</step>
-    <step id="h">Team-lead must not route the plan to QA or implementation from this pass alone. The second required consistency hardening pass must run after this sprint-scope pass.</step>
+    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only. Send the git commit hash to team-lead and explicitly request launch of `04-critical-plan-review.xml.j2` in background mode.</step>
+    <step id="h">Team-lead must not route the plan to QA or implementation from this pass alone. `04-critical-plan-review.xml.j2` must run after this pass, and `05-consistency-hardening.xml.j2` must run after that.</step>
     <step id="i">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>

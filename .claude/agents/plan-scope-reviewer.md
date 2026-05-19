@@ -20,9 +20,26 @@ Always read:
 
 ## Input Contract
 
-The assignment must contain related planning docs that describe the current
-plan state. Sprint docs may be partial or missing; missing sprint docs are
-findings, not input errors.
+The assignment must contain:
+- related planning docs that describe the current plan state
+- a required fenced JSON handoff from the initial arch-ctm guidelines pass
+
+Reject the task if the fenced JSON handoff from the initial arch-ctm
+guidelines pass is missing or malformed.
+
+Expected previous-step fenced JSON:
+
+```json
+{
+  "status": "PASS",
+  "mode": "plan-hardening-guidelines-pass",
+  "iterations": 0,
+  "docs_modified": [],
+  "docs_created": [],
+  "ready_for_next_step": true,
+  "errors": []
+}
+```
 
 Expected assignment context:
 
@@ -99,6 +116,8 @@ Return fenced JSON only.
 
 Gate policy:
 - `FAIL` if any Blocking finding exists
+- `FAIL` if the fenced JSON handoff from the initial arch-ctm guidelines pass
+  is missing or malformed
 - `FAIL` if a sprint doc is not directly consumable without duplicated scope
   transport
 - `PASS` only when sprint splitting, authoritative checklist shape, and
