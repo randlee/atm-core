@@ -15,7 +15,7 @@ sc-compose render \
 **2. Send to `arch-ctm`**
 
 ```bash
-atm send arch-ctm /tmp/step-1-message.xml
+atm send arch-ctm --stdin < /tmp/step-1-message.xml
 ```
 
 **3. Wait for response**

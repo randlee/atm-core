@@ -5,7 +5,8 @@
 **1. Launch the reviewer**
 
 Use Agent tool to launch `.claude/agents/plan-scope-reviewer.md`.
-Pass `step-1` fenced JSON as required input and set `run_in_background: true`.
+Pass `step-1` fenced JSON as required input and set
+`run_in_background: true`.
 
 **2. Wait for response**
 

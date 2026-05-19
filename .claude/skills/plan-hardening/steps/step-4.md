@@ -5,7 +5,8 @@
 **1. Launch the reviewer**
 
 Use Agent tool to launch `.claude/agents/critical-plan-reviewer.md`.
-Pass `step-3` fenced JSON as required input and set `run_in_background: true`.
+Pass `step-3` fenced JSON as required input and set
+`run_in_background: true`.
 
 **2. Wait for response**
 

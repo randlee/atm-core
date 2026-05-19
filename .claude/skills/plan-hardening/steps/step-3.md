@@ -18,7 +18,7 @@ required input payload.
 **2. Send to `arch-ctm`**
 
 ```bash
-atm send arch-ctm /tmp/step-3-message.xml
+atm send arch-ctm --stdin < /tmp/step-3-message.xml
 ```
 
 **3. Wait for response**

@@ -4,7 +4,7 @@
 
 **1. Launch QA**
 
-Use Agent tool to launch `quality-mgr`.
+Use Agent tool to launch `.claude/agents/quality-mgr.md`.
 Pass `step-5` fenced JSON as required input.
 
 **2. Wait for response**
