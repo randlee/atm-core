@@ -142,6 +142,8 @@ impl fmt::Debug for LocalServiceRuntime {
     }
 }
 
+impl crate::boundary::sealed::Sealed for LocalServiceRuntime {}
+
 #[derive(Debug, Clone, Copy, Default)]
 /// Production fallback boundary used when the daemon runtime is not composing
 /// a dedicated non-Claude outbound adapter. This is not a test double.

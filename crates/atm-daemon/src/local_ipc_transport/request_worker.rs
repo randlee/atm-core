@@ -51,7 +51,7 @@ pub(super) fn handle_connection(
         );
     }
 
-    let response = dispatch_request(request, dispatcher, &registry)?;
+    let response = dispatch_request(request_id, request, dispatcher, &registry)?;
     write_response(&mut stream, &codec, request_id, response)?;
     registry.reap_finished_dispatches()?;
     Ok(())
@@ -113,6 +113,7 @@ fn dispatch_advisory_stream(
 }
 
 fn dispatch_request(
+    request_id: RequestId,
     request: RequestEnvelope,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     registry: &Arc<ActiveConnectionRegistry>,
@@ -126,7 +127,7 @@ fn dispatch_request(
         },
         MAX_CONCURRENT_CONNECTIONS,
     )?;
-    Ok(await_dispatch_response(result_rx))
+    Ok(await_dispatch_response(request_id, result_rx))
 }
 
 fn spawn_dispatch_worker(
@@ -154,6 +155,7 @@ fn spawn_dispatch_worker(
 }
 
 fn await_dispatch_response(
+    request_id: RequestId,
     result_rx: std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>,
 ) -> ResponseEnvelope {
     match result_rx.recv_timeout(REQUEST_DEADLINE) {
@@ -163,6 +165,8 @@ fn await_dispatch_response(
             tracing::warn!(
                 subsystem = "local_ipc",
                 action = "dispatch",
+                outcome = "deadline_exceeded",
+                request_id = %request_id,
                 deadline_ms = REQUEST_DEADLINE.as_millis(),
                 "daemon request dispatcher exceeded the runtime deadline"
             );

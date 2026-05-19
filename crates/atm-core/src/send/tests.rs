@@ -65,6 +65,22 @@ fn notification_detail(event: &NotificationEvent) -> Value {
     serde_json::from_str(&event.detail).expect("structured notification detail")
 }
 
+fn assert_recovered_payload_texts(
+    original: &MessageEnvelope,
+    companion: &MessageEnvelope,
+    expected_original: &str,
+) {
+    assert_eq!(original.text, expected_original);
+    assert_eq!(companion.from.as_str(), "atm-system");
+    assert!(
+        companion
+            .text
+            .contains("ATM error: SQLite persistence failed"),
+        "expected sqlite failure companion message, got: {}",
+        companion.text
+    );
+}
+
 struct TestRuntime {
     commit_error_message: Option<&'static str>,
     append_error_message: Option<&'static str>,
@@ -93,6 +109,8 @@ impl TestRuntime {
         }
     }
 }
+
+impl crate::boundary::sealed::Sealed for TestRuntime {}
 
 impl RetainedServiceRuntime for TestRuntime {
     fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
@@ -378,6 +396,7 @@ fn load_send_alert_state_parse_errors_are_config_errors() {
 
 #[test]
 fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
+    let outbound = outbound_message();
     let runtime = TestRuntime::new(
         Some("sqlite write failed"),
         None,
@@ -391,7 +410,7 @@ fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
         tempdir.path(),
         &delivery_snapshot(DeliveryHarnessPath::ClaudeCode),
         &inbox_path,
-        &outbound_message(),
+        &outbound,
         false,
     )
     .expect("sqlite fallback recovery");
@@ -402,19 +421,16 @@ fn sqlite_failure_for_claude_preserves_original_and_companion_error_payloads() {
     );
     assert_eq!(result.warnings.len(), 1);
     assert_eq!(result.original_message.from.as_str(), TEST_SENDER);
-    assert_eq!(
-        result
-            .companion_message
-            .as_ref()
-            .expect("companion")
-            .from
-            .as_str(),
-        "atm-system"
+    assert_recovered_payload_texts(
+        &result.original_message,
+        result.companion_message.as_ref().expect("companion"),
+        &outbound.text,
     );
 }
 
 #[test]
 fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
+    let outbound = outbound_message();
     let runtime = TestRuntime::new(
         Some("sqlite write failed"),
         None,
@@ -428,7 +444,7 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
         tempdir.path(),
         &delivery_snapshot(DeliveryHarnessPath::NonClaude),
         &inbox_path,
-        &outbound_message(),
+        &outbound,
         false,
     )
     .expect("sqlite fallback recovery");
@@ -438,14 +454,10 @@ fn sqlite_failure_for_non_claude_preserves_original_and_companion_payloads() {
         DeliveryPersistenceDisposition::SqliteFailedRecovered
     );
     assert_eq!(result.original_message.from.as_str(), TEST_SENDER);
-    assert_eq!(
-        result
-            .companion_message
-            .as_ref()
-            .expect("companion")
-            .from
-            .as_str(),
-        "atm-system"
+    assert_recovered_payload_texts(
+        &result.original_message,
+        result.companion_message.as_ref().expect("companion"),
+        &outbound.text,
     );
 }
 
@@ -557,22 +569,7 @@ fn recovered_claude_append_failure_after_sqlite_failure_returns_hard_error() {
     assert!(error.message.contains("append failed"));
 }
 
-#[test]
-fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary() {
-    let runtime = TestRuntime::new(
-        Some("sqlite write failed"),
-        None,
-        DeliveryHarnessPath::NonClaude,
-    );
-    let observability = RecordingObservability::default();
-    let tempdir = tempdir().expect("tempdir");
-
-    let outcome =
-        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
-            .expect("send outcome");
-
-    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
-    assert_eq!(outcome.warnings.len(), 1);
+fn assert_non_claude_sqlite_failure_delivery(runtime: &TestRuntime) {
     assert!(
         runtime
             .appended_messages
@@ -588,9 +585,14 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
     assert_eq!(deliveries[0].team.as_str(), TEST_TEAM);
     assert_eq!(deliveries[0].agent.as_str(), "recipient");
     assert_eq!(deliveries[0].messages.len(), 2);
-    assert_eq!(deliveries[0].messages[0].from.as_str(), TEST_SENDER);
-    assert_eq!(deliveries[0].messages[1].from.as_str(), "atm-system");
-    drop(deliveries);
+    assert_recovered_payload_texts(
+        &deliveries[0].messages[0],
+        &deliveries[0].messages[1],
+        "hello",
+    );
+}
+
+fn assert_non_claude_sqlite_failure_notifications(runtime: &TestRuntime) {
     let events = runtime
         .notification_events
         .lock()
@@ -641,8 +643,9 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
         original_detail.get("task_id").and_then(Value::as_str),
         Some("task-123")
     );
-    drop(events);
+}
 
+fn assert_non_claude_sqlite_failure_observability(observability: &RecordingObservability) {
     let observability_events = observability.events.lock().expect("events lock");
     assert!(observability_events.iter().any(|event| {
         event.command == "delivery_policy"
@@ -652,6 +655,27 @@ fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_bound
         event.command == "delivery_policy"
             && event.outcome == "delivery_policy.new_message.non_claude_error"
     }));
+}
+
+#[test]
+fn send_non_claude_sqlite_failure_delivers_original_and_error_via_outbound_boundary() {
+    let runtime = TestRuntime::new(
+        Some("sqlite write failed"),
+        None,
+        DeliveryHarnessPath::NonClaude,
+    );
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+
+    let outcome =
+        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
+            .expect("send outcome");
+
+    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
+    assert_eq!(outcome.warnings.len(), 1);
+    assert_non_claude_sqlite_failure_delivery(&runtime);
+    assert_non_claude_sqlite_failure_notifications(&runtime);
+    assert_non_claude_sqlite_failure_observability(&observability);
 }
 
 #[test]

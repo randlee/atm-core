@@ -14,6 +14,12 @@ pub(crate) enum DeliveryPlanDisposition {
     SqliteFailedRecovered,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum DeliveryPlanKind {
+    Send,
+    Reply,
+}
+
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LogicalMessage {
     pub(crate) envelope: MessageEnvelope,
@@ -53,6 +59,9 @@ impl LogicalMessage {
     }
 
     pub(crate) fn message_id(&self) -> AtmMessageId {
+        // Invariant: `LogicalMessage::new` rejects envelopes without a message
+        // id, and every constructor path in this module goes through that
+        // validation before a message ever reaches a delivery plan.
         self.envelope
             .message_id
             .expect("validated logical delivery messages always have a message id")
@@ -151,6 +160,7 @@ impl NotificationTarget {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct DeliveryPlan {
+    pub(crate) kind: DeliveryPlanKind,
     pub(crate) disposition: DeliveryPlanDisposition,
     pub(crate) delivery_target: DeliveryTarget,
     pub(crate) recipient: ResolvedRecipient,
@@ -162,6 +172,7 @@ pub(crate) struct DeliveryPlan {
 
 impl DeliveryPlan {
     pub(crate) fn new(
+        kind: DeliveryPlanKind,
         disposition: DeliveryPlanDisposition,
         delivery_target: DeliveryTarget,
         recipient: ResolvedRecipient,
@@ -174,42 +185,7 @@ impl DeliveryPlan {
             .map(NotificationTarget::from_logical_message)
             .collect();
         Self {
-            disposition,
-            delivery_target,
-            recipient,
-            recipient_pane_id,
-            messages,
-            notifications,
-            warnings,
-        }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub(crate) struct ReplyDeliveryPlan {
-    pub(crate) disposition: DeliveryPlanDisposition,
-    pub(crate) delivery_target: DeliveryTarget,
-    pub(crate) recipient: ResolvedRecipient,
-    pub(crate) recipient_pane_id: Option<String>,
-    pub(crate) messages: Vec<LogicalMessage>,
-    pub(crate) notifications: Vec<NotificationTarget>,
-    pub(crate) warnings: Vec<WarningEntry>,
-}
-
-impl ReplyDeliveryPlan {
-    pub(crate) fn new(
-        disposition: DeliveryPlanDisposition,
-        delivery_target: DeliveryTarget,
-        recipient: ResolvedRecipient,
-        recipient_pane_id: Option<String>,
-        messages: Vec<LogicalMessage>,
-        warnings: Vec<WarningEntry>,
-    ) -> Self {
-        let notifications = messages
-            .iter()
-            .map(NotificationTarget::from_logical_message)
-            .collect();
-        Self {
+            kind,
             disposition,
             delivery_target,
             recipient,

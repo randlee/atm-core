@@ -21,6 +21,9 @@ use crate::{DaemonSubsystem, SubsystemObservability};
 
 // Architecture authority: docs/architecture.md §21.6.4 daemon operational
 // defaults and remote peer transport rules.
+// These deadlines are intentionally fixed operational constants. Phase Y keeps
+// connect and I/O timeouts non-configurable so remote peer delivery behavior
+// stays bounded and auditable across every host.
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
@@ -510,6 +513,9 @@ impl PeerClientTransport {
         let now = Instant::now();
         if now >= retry_state.deadline {
             tracing::error!(
+                subsystem = "peer_transport",
+                action = "send_to_endpoint",
+                outcome = "retry_exhausted",
                 peer_addr = %endpoint,
                 attempt,
                 error_code = %error.code,

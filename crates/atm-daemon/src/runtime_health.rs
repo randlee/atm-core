@@ -149,18 +149,6 @@ impl DaemonRequestDispatcher {
             })
     }
 
-    fn complete_shutdown_step(label: &'static str, shutdown_handle: std::thread::JoinHandle<()>) {
-        if shutdown_handle.join().is_err() {
-            tracing::warn!(
-                subsystem = "runtime_health",
-                action = "shutdown_finalize",
-                outcome = "panic",
-                step = label,
-                "daemon shutdown finalizer step panicked before reporting completion; restart atm-daemon and inspect the retained observability log for the failing shutdown step"
-            );
-        }
-    }
-
     fn retain_shutdown_step(
         label: &'static str,
         shutdown_handle: std::thread::JoinHandle<()>,
@@ -194,6 +182,34 @@ impl DaemonRequestDispatcher {
         );
     }
 
+    fn spawn_shutdown_join_helper(
+        label: &'static str,
+        shutdown_handle: std::thread::JoinHandle<()>,
+    ) -> Result<
+        (
+            std::sync::mpsc::Receiver<std::thread::Result<()>>,
+            std::thread::JoinHandle<()>,
+        ),
+        AtmError,
+    > {
+        let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+        let join_helper = std::thread::Builder::new()
+            .name(format!("shutdown-finalizer-join-{label}"))
+            .spawn(move || {
+                let _ = result_tx.send(shutdown_handle.join());
+            })
+            .map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to spawn daemon shutdown finalizer join helper `{label}`"
+                ))
+                .with_recovery(
+                    "Restart atm-daemon; the bounded shutdown finalizer join helper could not be created.",
+                )
+                .with_source(source)
+            })?;
+        Ok((result_rx, join_helper))
+    }
+
     fn run_bounded_shutdown_step(
         label: &'static str,
         deadline: Duration,
@@ -213,21 +229,70 @@ impl DaemonRequestDispatcher {
                 return;
             }
         };
-        let started = std::time::Instant::now();
-        loop {
-            if shutdown_handle.is_finished() {
-                Self::complete_shutdown_step(label, shutdown_handle);
+        let (result_rx, join_helper) = match Self::spawn_shutdown_join_helper(
+            label,
+            shutdown_handle,
+        ) {
+            Ok(helper) => helper,
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "shutdown_join_helper_spawn",
+                    outcome = "failed",
+                    %error,
+                    step = label,
+                    "daemon shutdown finalizer step could not start its bounded join helper; restart atm-daemon because shutdown cleanup could not be monitored"
+                );
                 return;
             }
-            if started.elapsed() >= deadline {
+        };
+        match result_rx.recv_timeout(deadline) {
+            Ok(join_result) => {
+                if join_helper.join().is_err() {
+                    tracing::warn!(
+                        subsystem = "runtime_health",
+                        action = "shutdown_join_helper",
+                        outcome = "panic",
+                        step = label,
+                        "daemon shutdown finalizer join helper panicked before reporting completion"
+                    );
+                }
+                if join_result.is_err() {
+                    tracing::warn!(
+                        subsystem = "runtime_health",
+                        action = "shutdown_finalize",
+                        outcome = "panic",
+                        step = label,
+                        "daemon shutdown finalizer step panicked before reporting completion; restart atm-daemon and inspect the retained observability log for the failing shutdown step"
+                    );
+                }
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
-                // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
-                // than dropping it orphaned because tests and orderly process teardown can join it
-                // later once the blocking storage step finishes.
-                Self::retain_shutdown_step(label, shutdown_handle, deadline);
-                return;
+                // outlive the bounded shutdown window, but retaining the worker JoinHandle is still
+                // safer than dropping it orphaned because tests and orderly process teardown can
+                // join it later once the blocking storage step finishes.
+                Self::retain_shutdown_step(label, join_helper, deadline);
             }
-            std::thread::sleep(Duration::from_millis(10));
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                if join_helper.join().is_err() {
+                    tracing::warn!(
+                        subsystem = "runtime_health",
+                        action = "shutdown_join_helper",
+                        outcome = "panic",
+                        step = label,
+                        "daemon shutdown finalizer join helper panicked before reporting completion"
+                    );
+                } else {
+                    tracing::warn!(
+                        subsystem = "runtime_health",
+                        action = "shutdown_join_helper",
+                        outcome = "disconnected",
+                        step = label,
+                        "daemon shutdown finalizer join helper disconnected before reporting completion"
+                    );
+                }
+            }
         }
     }
 

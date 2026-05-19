@@ -6,8 +6,8 @@ use crate::delivery_execution::{
     DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
 };
 use crate::delivery_plan::{
-    LogicalMessage, ReplyDeliveryPlan, delivery_plan_disposition, delivery_target_for_snapshot,
-    logical_messages_from_persistence,
+    DeliveryPlan, DeliveryPlanKind, LogicalMessage, delivery_plan_disposition,
+    delivery_target_for_snapshot, logical_messages_from_persistence,
 };
 use crate::delivery_policy::{DeliveryEventFamily, DeliveryPolicyCoordinator};
 use crate::error::AtmError;
@@ -126,7 +126,9 @@ pub fn ack_mail_with_runtime(
     ack_mail_with_runtime_impl(request, observability, runtime)
 }
 
-fn ack_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn ack_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -159,7 +161,9 @@ fn ack_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime
     )
 }
 
-fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn ack_mail_with_runtime_sqlite<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -434,7 +438,9 @@ fn home_dir(request: &AckRequest) -> &std::path::Path {
     request.home_dir.as_path()
 }
 
-fn finalize_ack_outcome<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn finalize_ack_outcome<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     runtime: &R,
     observability: &dyn ObservabilityPort,
     config: Option<&crate::config::AtmConfig>,
@@ -518,7 +524,7 @@ impl AckReplyStateMachine {
         reply_target: &ReplyTarget,
         reply_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
         reply_inbox_path: &std::path::Path,
-    ) -> ReplyDeliveryPlan {
+    ) -> DeliveryPlan {
         let (disposition, messages, warnings) = match self {
             Self::Persisted { messages, warnings } => (
                 crate::send::DeliveryPersistenceDisposition::Persisted,
@@ -531,7 +537,8 @@ impl AckReplyStateMachine {
                 warnings,
             ),
         };
-        ReplyDeliveryPlan::new(
+        DeliveryPlan::new(
+            DeliveryPlanKind::Reply,
             delivery_plan_disposition(disposition),
             delivery_target_for_snapshot(reply_inbox_path, reply_snapshot),
             ResolvedRecipient {
@@ -545,9 +552,7 @@ impl AckReplyStateMachine {
     }
 }
 
-fn build_reply_delivery_plan(
-    context: &FinalizeAckContext<'_>,
-) -> Result<ReplyDeliveryPlan, AtmError> {
+fn build_reply_delivery_plan(context: &FinalizeAckContext<'_>) -> Result<DeliveryPlan, AtmError> {
     Ok(
         AckReplyStateMachine::from_persistence(&context.persisted.persistence)?
             .into_reply_delivery_plan(

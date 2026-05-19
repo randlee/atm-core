@@ -327,7 +327,13 @@ impl RuntimeComposition {
     {
         prepare_runtime(&self.server_transport).inspect_err(|_| {
             if let Err(shutdown_error) = self.shutdown_background_lanes() {
-                tracing::warn!(%shutdown_error, "{rollback_message}");
+                tracing::warn!(
+                    subsystem = "composition",
+                    action = "rollback_startup",
+                    outcome = "lane_shutdown_failed",
+                    %shutdown_error,
+                    "{rollback_message}"
+                );
             }
         })
     }
@@ -486,6 +492,9 @@ impl RuntimeComposition {
             )
         {
             tracing::warn!(
+                subsystem = "composition",
+                action = "rollback_lane",
+                outcome = "incomplete",
                 %error,
                 lane = "watch event source",
                 "daemon background lane rollback shutdown was incomplete"
@@ -500,6 +509,9 @@ impl RuntimeComposition {
             )
         {
             tracing::warn!(
+                subsystem = "composition",
+                action = "rollback_lane",
+                outcome = "incomplete",
                 %error,
                 lane = "notification sink",
                 "daemon background lane rollback shutdown was incomplete"
@@ -564,6 +576,9 @@ fn replay_store_assembly_failed(
     observability: &SubsystemObservability,
 ) -> AtmError {
     tracing::error!(
+        subsystem = "composition",
+        action = "replay_store_assembly",
+        outcome = "failed",
         %error,
         "remote replay store assembly failed; daemon startup is fail-closed"
     );
@@ -756,6 +771,9 @@ fn validate_runtime_home_dir(home_dir: &std::path::Path) -> Result<(), AtmError>
         })?;
     if let Err(error) = std::fs::remove_file(&probe_path) {
         tracing::warn!(
+            subsystem = "composition",
+            action = "home_probe_cleanup",
+            outcome = "failed",
             path = %probe_path.display(),
             %error,
             "failed to remove atm-daemon home write probe file"

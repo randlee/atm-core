@@ -205,6 +205,9 @@ impl RuntimeStatusCache {
             Err(_) => {
                 // Cannot propagate: fn returns (), tracing::error! is max-severity available at this boundary.
                 tracing::error!(
+                    subsystem = "runtime_status_cache",
+                    action = "mark_sqlite_unavailable",
+                    outcome = "lock_poisoned",
                     "runtime status cache lock poisoned while marking sqlite unavailable"
                 );
             }
@@ -223,6 +226,9 @@ impl RuntimeStatusCache {
             }
             Err(_) => {
                 tracing::error!(
+                    subsystem = "runtime_status_cache",
+                    action = "mark_sqlite_unavailable_with_detail",
+                    outcome = "lock_poisoned",
                     "runtime status cache lock poisoned while recording sqlite degradation detail"
                 );
             }
@@ -289,6 +295,9 @@ fn evict_status_cache_entry_if_needed(
             .with_agent(evicted_key.member.clone());
         observability.emit_event_or_warn(event);
         tracing::warn!(
+            subsystem = "runtime_status_cache",
+            action = "evict_entry",
+            outcome = "cap_exceeded",
             team = %evicted_key.team,
             member = %evicted_key.member,
             pid = evicted_record.pid,
