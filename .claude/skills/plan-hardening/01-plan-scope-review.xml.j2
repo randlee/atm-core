@@ -1,5 +1,5 @@
 ---
-name: 01-initial-guidelines-pass-task
+name: 01-plan-scope-review-task
 version: 2.0.0
 description: team-lead assignment template for the initial arch-ctm guidelines pass before background scope review.
 format: xml
@@ -77,7 +77,7 @@ required_variables:
     <step id="d">As soon as the guidelines pass is complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so scope review can begin in parallel.</step>
     <step id="e">After the push report, run the required validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">Return fenced JSON only after the guidelines pass converges. That fenced JSON becomes the required input to `02-plan-scope-review.xml.j2`.</step>
+    <step id="g">Return fenced JSON only after the guidelines pass converges. That fenced JSON becomes the required input to `plan-scope-reviewer`.</step>
     <step id="h">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>

@@ -17,8 +17,8 @@ Use this only for phase-plan hardening before implementation starts or resumes.
 If the user invokes this skill, that means that the plan details have already
 been discussed and are fresh in arch-ctm context. The current plan state
 already exists in repo docs, though sprint docs may still be partial or
-missing. Do not expect `team-lead` to explain detailed plan content; read the
-planning docs and references directly.
+missing. Do not ask the user to explain detailed plan content; read the
+planning docs and references directly after they are created.
 
 `team-lead` is responsible for routing, worktree creation, and assignment
 metadata. `team-lead` is not the authority for rewriting the plan.
@@ -31,7 +31,8 @@ scope changes that are at odds with that user discussion.
 
 ## Preconditions
 
-- the target phase worktree already exists
+- the target phase worktree already exists; if no worktree exists, create a
+  worktree off `develop` before starting
 - `worktree_path` and `branch` are known
 - `sc-compose` is available
 - the plan has already been discussed with `arch-ctm`
@@ -49,23 +50,10 @@ Execution standard:
 
 ## Expected Result
 
-The task must end with this required sequence:
-- step 1: initial guidelines pass by `arch-ctm`
-- step 2: background `plan-scope-reviewer`
-- step 3: sprint-scope hardening by `arch-ctm`
-- step 4: background `critical-plan-reviewer`
-- step 5: document-consistency hardening by `arch-ctm`
-- step 6: focused plan QA
-
-Together they must produce:
-- complete/consistent planning docs
-- a hardened sprint doc for every sprint still required to finish the phase
-- no unassigned in-scope implementation work
-- no overloaded sprint whose deliverables cannot all land at a production-ready level
-- explicit code samples or signatures for important traits, features, enums,
-  protocol types, and boundary contracts
-- branch pushed, validation reported, team-lead critical review completed or
-  explicitly requested, and QA requested only after both passes and that review
+Sprint plan approved by:
+- `plan-scope-reviewer`
+- `critical-plan-reviewer`
+- `quality-mgr`
 
 Substantial scope changes are not valid hardening output. Examples:
 - dropping, replacing, or weakening a user-discussed deliverable
@@ -81,10 +69,10 @@ sprints are needed, hardening must create them.
 
 Routing summary:
 - `team-lead -> arch-ctm` with `01-plan-scope-review.xml.j2`
-- `team-lead -> plan-scope-reviewer` with `02-plan-scope-review.xml.j2` and `run_in_background: true`
-- `team-lead -> arch-ctm` with `03-sprint-scope-hardening.xml.j2`
-- `team-lead -> critical-plan-reviewer` with `04-critical-plan-review.xml.j2` and `run_in_background: true`
-- `team-lead -> arch-ctm` with `05-consistency-hardening.xml.j2`
+- `team-lead -> plan-scope-reviewer` using Agent tool with `.claude/agents/plan-scope-reviewer.md`, fenced JSON from step 1, and `run_in_background: true`
+- `team-lead -> arch-ctm` with `02-sprint-scope-hardening.xml.j2`
+- `team-lead -> critical-plan-reviewer` using Agent tool with `.claude/agents/critical-plan-reviewer.md`, fenced JSON from step 2, and `run_in_background: true`
+- `team-lead -> arch-ctm` with `03-consistency-hardening.xml.j2`
 - `team-lead -> quality-mgr` for final focused plan QA
 
 1. Prepare:
@@ -102,17 +90,15 @@ Routing summary:
 3. Send the rendered `01-plan-scope-review.xml.j2` ATM task to `arch-ctm`.
 4. Wait for the fenced JSON output from step 1. Do not launch the reviewer
    until step 1 JSON exists and is well formed.
-5. Render `.claude/skills/plan-hardening/02-plan-scope-review.xml.j2` with
-   `sc-compose`. Pass the fenced JSON output from step 1 as required input.
-6. Launch `plan-scope-reviewer` with the rendered
-   `02-plan-scope-review.xml.j2` in background mode.
+5. Use Agent tool to launch `.claude/agents/plan-scope-reviewer.md` with the
+   fenced JSON output from step 1 and `run_in_background: true`.
 7. Wait for the fenced JSON findings from `plan-scope-reviewer`.
 8. Review the scope-review result:
    - final finding count is `0`, or findings are routed into the next
      hardening pass for correction
    - split risk, drop risk, and checklist-shape risk are explicit
    - the result includes fenced JSON
-9. Render `.claude/skills/plan-hardening/03-sprint-scope-hardening.xml.j2`
+9. Render `.claude/skills/plan-hardening/02-sprint-scope-hardening.xml.j2`
    with `sc-compose` for sprint-scope hardening. Pass the fenced JSON output
    from step 2 as required input.
 10. Send the rendered sprint-scope hardening ATM task to `arch-ctm`.
@@ -125,18 +111,15 @@ Routing summary:
    - important traits/features/enums/boundaries have explicit code samples
    - branch was pushed and validation reported
    - the result includes fenced JSON
-12. Render `.claude/skills/plan-hardening/04-critical-plan-review.xml.j2`
-   with `sc-compose` for the late hostile plan review. Pass the fenced JSON
-   output from step 3 as required input.
-13. Launch `critical-plan-reviewer` with the rendered
-   `04-critical-plan-review.xml.j2` in background mode.
+12. Use Agent tool to launch `.claude/agents/critical-plan-reviewer.md` with
+   the fenced JSON output from step 3 and `run_in_background: true`.
 14. Wait for the fenced JSON findings from `critical-plan-reviewer`.
 15. Review the critical-plan-review result:
    - final finding count is `0`, or findings are routed into the next
      hardening pass for correction
    - architecture risk, boundary risk, and false-closure risk are explicit
    - the result includes fenced JSON
-16. Render `.claude/skills/plan-hardening/05-consistency-hardening.xml.j2`
+16. Render `.claude/skills/plan-hardening/03-consistency-hardening.xml.j2`
    with `sc-compose` for document-consistency hardening. Pass the fenced JSON
    output from step 4 as required input.
 17. Send the rendered consistency hardening ATM task to `arch-ctm`.
@@ -198,14 +181,14 @@ Do not treat the hardening pass itself as the final review. The handoff is:
 1. `team-lead` routes `01-plan-scope-review.xml.j2` to `arch-ctm`
 2. `arch-ctm` returns fenced JSON from the guidelines pass
 3. `team-lead` launches `plan-scope-reviewer` in background mode with
-   `02-plan-scope-review.xml.j2`
+   `.claude/agents/plan-scope-reviewer.md`
 4. `plan-scope-reviewer` returns fenced JSON findings
-5. `team-lead` routes `03-sprint-scope-hardening.xml.j2` to `arch-ctm`
+5. `team-lead` routes `02-sprint-scope-hardening.xml.j2` to `arch-ctm`
 6. `arch-ctm` returns fenced JSON from sprint-scope hardening
 7. `team-lead` launches `critical-plan-reviewer` in background mode with
-   `04-critical-plan-review.xml.j2`
+   `.claude/agents/critical-plan-reviewer.md`
 8. `critical-plan-reviewer` returns fenced JSON findings
-9. `team-lead` routes `05-consistency-hardening.xml.j2` to `arch-ctm`
+9. `team-lead` routes `03-consistency-hardening.xml.j2` to `arch-ctm`
 10. `arch-ctm` returns fenced JSON from consistency hardening
 11. `team-lead` critically reviews and pushes back if needed
 12. `quality-mgr` performs focused plan QA after that review
@@ -216,10 +199,8 @@ stop.
 
 Render:
 - `.claude/skills/plan-hardening/01-plan-scope-review.xml.j2`
-- `.claude/skills/plan-hardening/02-plan-scope-review.xml.j2`
-- `.claude/skills/plan-hardening/03-sprint-scope-hardening.xml.j2`
-- `.claude/skills/plan-hardening/04-critical-plan-review.xml.j2`
-- `.claude/skills/plan-hardening/05-consistency-hardening.xml.j2`
+- `.claude/skills/plan-hardening/02-sprint-scope-hardening.xml.j2`
+- `.claude/skills/plan-hardening/03-consistency-hardening.xml.j2`
 - `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
 - `.claude/skills/plan-hardening/plan-hardening-state-machine.md`
 
@@ -233,22 +214,12 @@ sc-compose render \
 
 sc-compose render \
   --root .claude/skills/plan-hardening \
-  --file 02-plan-scope-review.xml.j2 \
+  --file 02-sprint-scope-hardening.xml.j2 \
   --var-file /tmp/plan-hardening-vars.json
 
 sc-compose render \
   --root .claude/skills/plan-hardening \
-  --file 03-sprint-scope-hardening.xml.j2 \
-  --var-file /tmp/plan-hardening-vars.json
-
-sc-compose render \
-  --root .claude/skills/plan-hardening \
-  --file 04-critical-plan-review.xml.j2 \
-  --var-file /tmp/plan-hardening-vars.json
-
-sc-compose render \
-  --root .claude/skills/plan-hardening \
-  --file 05-consistency-hardening.xml.j2 \
+  --file 03-consistency-hardening.xml.j2 \
   --var-file /tmp/plan-hardening-vars.json
 ```
 

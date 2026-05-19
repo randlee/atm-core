@@ -21,18 +21,18 @@ sequenceDiagram
     TL->>A: 01-plan-scope-review.xml.j2
     A-->>TL: step-1 fenced JSON
 
-    TL->>PSR: 02-plan-scope-review.xml.j2 + step-1 JSON
+    TL->>PSR: plan-scope-reviewer.md + step-1 JSON
     Note over TL,PSR: run_in_background: true
     PSR-->>TL: step-2 fenced JSON findings
 
-    TL->>A: 03-sprint-scope-hardening.xml.j2 + step-2 JSON
+    TL->>A: 02-sprint-scope-hardening.xml.j2 + step-2 JSON
     A-->>TL: step-3 fenced JSON
 
-    TL->>CPR: 04-critical-plan-review.xml.j2 + step-3 JSON
+    TL->>CPR: critical-plan-reviewer.md + step-3 JSON
     Note over TL,CPR: run_in_background: true
     CPR-->>TL: step-4 fenced JSON findings
 
-    TL->>A: 05-consistency-hardening.xml.j2 + step-4 JSON
+    TL->>A: 03-consistency-hardening.xml.j2 + step-4 JSON
     A-->>TL: step-5 fenced JSON
 
     TL->>TL: human critical review
@@ -69,24 +69,24 @@ stateDiagram-v2
    - purpose: read the guidelines and make sure the plan follows them
    - output: `step-1` fenced JSON
 
-2. `02-plan-scope-review.xml.j2`
-   - launch `plan-scope-reviewer`
+2. `.claude/agents/plan-scope-reviewer.md`
+   - launch `plan-scope-reviewer` with Agent tool
    - required input: `step-1` fenced JSON
    - execution: `run_in_background: true`
    - output: `step-2` fenced JSON findings
 
-3. `03-sprint-scope-hardening.xml.j2`
+3. `02-sprint-scope-hardening.xml.j2`
    - send to `arch-ctm`
    - required input: `step-2` fenced JSON
    - output: `step-3` fenced JSON
 
-4. `04-critical-plan-review.xml.j2`
-   - launch `critical-plan-reviewer`
+4. `.claude/agents/critical-plan-reviewer.md`
+   - launch `critical-plan-reviewer` with Agent tool
    - required input: `step-3` fenced JSON
    - execution: `run_in_background: true`
    - output: `step-4` fenced JSON findings
 
-5. `05-consistency-hardening.xml.j2`
+5. `03-consistency-hardening.xml.j2`
    - send to `arch-ctm`
    - required input: `step-4` fenced JSON
    - output: `step-5` fenced JSON
