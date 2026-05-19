@@ -1,25 +1,32 @@
-# Step 1
+# Step 1 — Plan Scope Review (`arch-ctm`)
 
-Route to: `arch-ctm`
+## Execute
 
-Purpose:
-- read the sprint-planning guidelines
-- make sure the current plan state follows them before reviewer launch
+**1. Render the message**
 
-Action:
-- render `01-plan-scope-review.xml.j2` with `sc-compose`
-- send it to `arch-ctm`
-- wait for `step-1` fenced JSON
+```bash
+sc-compose render \
+  --root .claude/skills/plan-hardening \
+  --file 01-plan-scope-review.xml.j2 \
+  --var-file /tmp/plan-hardening-vars.json \
+  --output /tmp/step-1-message.xml
+```
 
-Required input:
-- vars file
-- current planning docs
-- `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
+**2. Send to `arch-ctm`**
 
-Expected output:
-- `step-1` fenced JSON from the initial guidelines pass
+```bash
+atm send arch-ctm /tmp/step-1-message.xml
+```
 
-Hard stops:
-- missing worktree
-- scope conflict with the user-discussed plan
-- missing or malformed `step-1` JSON
+**3. Wait for response**
+
+Wait for `arch-ctm` to return a message containing fenced JSON.
+The expected output shape is specified inside `01-plan-scope-review.xml.j2`.
+Do not proceed to Step 2 until that fenced JSON is present and well formed.
+
+## Hard stops
+
+- worktree does not exist: create it before running this step
+- `arch-ctm` ACK describes a material scope change from the user-discussed
+  plan: stop, report conflict to the user, do not proceed
+- fenced JSON is missing or malformed: stop, report which field is missing

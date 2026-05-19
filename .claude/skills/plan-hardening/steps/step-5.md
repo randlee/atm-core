@@ -1,23 +1,37 @@
-# Step 5
+# Step 5 — Consistency Hardening (`arch-ctm`)
 
-Route to: `arch-ctm`
+## Execute
 
-Purpose:
-- resolve the `critical-plan-reviewer` findings
-- eliminate contradiction, ambiguity, and missing ADR/boundary coverage
+**1. Render the message**
 
-Action:
-- render `03-consistency-hardening.xml.j2` with `sc-compose`
-- pass `step-4` fenced JSON as required input
-- send to `arch-ctm`
-- wait for `step-5` fenced JSON
+```bash
+sc-compose render \
+  --root .claude/skills/plan-hardening \
+  --file 03-consistency-hardening.xml.j2 \
+  --var-file /tmp/plan-hardening-vars.json \
+  --output /tmp/step-5-message.xml
+```
 
-Required input:
-- `step-4` fenced JSON
+The vars file or rendered task must include `step-4` fenced JSON as the
+required input payload.
 
-Expected output:
-- `step-5` fenced JSON from consistency hardening
+**2. Send to `arch-ctm`**
 
-Hard stops:
-- missing or malformed `step-4` JSON
-- unresolved architecture, boundary, or false-closure findings
+```bash
+atm send arch-ctm /tmp/step-5-message.xml
+```
+
+**3. Wait for response**
+
+Wait for `arch-ctm` to return a message containing fenced JSON.
+The expected output shape is specified inside
+`03-consistency-hardening.xml.j2`.
+Do not proceed to Step 6 until that fenced JSON is present and well formed.
+
+## Hard stops
+
+- `step-4` fenced JSON is missing or malformed: stop, report which field is
+  missing
+- `arch-ctm` reports unresolved architecture, boundary, or false-closure
+  findings: stop, do not proceed
+- fenced JSON is missing or malformed: stop, report which field is missing

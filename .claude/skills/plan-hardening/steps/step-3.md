@@ -1,24 +1,37 @@
-# Step 3
+# Step 3 — Sprint Scope Hardening (`arch-ctm`)
 
-Route to: `arch-ctm`
+## Execute
 
-Purpose:
-- harden sprint shape from the `plan-scope-reviewer` findings
-- create missing sprint docs
-- split overloaded sprints
+**1. Render the message**
 
-Action:
-- render `02-sprint-scope-hardening.xml.j2` with `sc-compose`
-- pass `step-2` fenced JSON as required input
-- send to `arch-ctm`
-- wait for `step-3` fenced JSON
+```bash
+sc-compose render \
+  --root .claude/skills/plan-hardening \
+  --file 02-sprint-scope-hardening.xml.j2 \
+  --var-file /tmp/plan-hardening-vars.json \
+  --output /tmp/step-3-message.xml
+```
 
-Required input:
-- `step-2` fenced JSON
+The vars file or rendered task must include `step-2` fenced JSON as the
+required input payload.
 
-Expected output:
-- `step-3` fenced JSON from sprint-scope hardening
+**2. Send to `arch-ctm`**
 
-Hard stops:
-- missing or malformed `step-2` JSON
-- unresolved split-risk, drop-risk, or ownership gaps
+```bash
+atm send arch-ctm /tmp/step-3-message.xml
+```
+
+**3. Wait for response**
+
+Wait for `arch-ctm` to return a message containing fenced JSON.
+The expected output shape is specified inside
+`02-sprint-scope-hardening.xml.j2`.
+Do not proceed to Step 4 until that fenced JSON is present and well formed.
+
+## Hard stops
+
+- `step-2` fenced JSON is missing or malformed: stop, report which field is
+  missing
+- `arch-ctm` reports unresolved split-risk, drop-risk, or sprint-ownership
+  gaps: stop, do not proceed
+- fenced JSON is missing or malformed: stop, report which field is missing

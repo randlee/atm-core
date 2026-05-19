@@ -1,21 +1,19 @@
-# Step 6
+# Step 6 — Focused Plan QA (`quality-mgr`)
 
-Route to: `quality-mgr`
+## Execute
 
-Purpose:
-- final focused plan QA after both reviewer passes and both hardening passes
+**1. Launch QA**
 
-Action:
-- route the hardened plan to `quality-mgr`
-- pass `step-5` fenced JSON as required input
-- wait for QA verdict
+Use Agent tool to launch `quality-mgr`.
+Pass `step-5` fenced JSON as required input.
 
-Required input:
-- `step-5` fenced JSON
+**2. Wait for response**
 
-Expected output:
-- QA verdict
+Wait for `quality-mgr` to return the QA verdict.
+Do not treat the plan as implementation-ready until the verdict is a pass.
 
-Hard stops:
-- missing or malformed `step-5` JSON
-- QA fail
+## Hard stops
+
+- `step-5` fenced JSON is missing or malformed: stop, report which field is
+  missing
+- QA verdict is fail: stop and route the findings back through hardening

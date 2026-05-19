@@ -1,25 +1,21 @@
-# Step 4
+# Step 4 — Critical Plan Review (`critical-plan-reviewer`, background)
 
-Route to: `critical-plan-reviewer`
+## Execute
 
-Purpose:
-- attack architecture risk, boundary risk, and false closure after
-  sprint-scope hardening
+**1. Launch the reviewer**
 
-Action:
-- use Agent tool to launch `.claude/agents/critical-plan-reviewer.md`
-- pass `step-3` fenced JSON as required input
-- set `run_in_background: true`
-- wait for `step-4` fenced JSON
+Use Agent tool to launch `.claude/agents/critical-plan-reviewer.md`.
+Pass `step-3` fenced JSON as required input and set `run_in_background: true`.
 
-Required input:
-- `step-3` fenced JSON
-- current planning docs
-- `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
+**2. Wait for response**
 
-Expected output:
-- `step-4` fenced JSON findings
+Wait for `critical-plan-reviewer` to return fenced JSON findings.
+The expected output shape is specified inside
+`.claude/agents/critical-plan-reviewer.md`.
+Do not proceed to Step 5 until that fenced JSON is present and well formed.
 
-Hard stops:
-- missing or malformed `step-3` JSON
-- reviewer output missing or malformed
+## Hard stops
+
+- `step-3` fenced JSON is missing or malformed: stop, report which field is
+  missing
+- reviewer output is missing or malformed: stop, report which field is missing
