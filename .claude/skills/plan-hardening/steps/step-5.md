@@ -35,6 +35,8 @@ Save the extracted fenced JSON to `/tmp/step-5.json`.
 
 - `PASS` -> proceed to Step 6
 - `FAIL` -> re-render and re-send Step 5 to `arch-ctm`
+- if Step 5 returns `FAIL` three times without converging, escalate to the
+  user before continuing
 
 ## Hard stops
 
@@ -43,3 +45,5 @@ Save the extracted fenced JSON to `/tmp/step-5.json`.
   or malformed fields explicitly
 - fenced JSON is missing or malformed: do not advance; send a correction
   request immediately and identify the missing or malformed fields explicitly
+- Step 5 has returned `FAIL` three times without converging: do not advance;
+  escalate to the user before continuing

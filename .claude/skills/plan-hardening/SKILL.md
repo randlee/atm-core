@@ -43,9 +43,9 @@ Always use:
 | # | Route to | Input required | Output expected | Read before executing |
 |---|----------|----------------|-----------------|-----------------------|
 | 1 | `arch-ctm` | vars file | `step-1` fenced JSON | `steps/step-1.md` |
-| 2 | `plan-scope-reviewer` (background, reusable within loop) | context + `step-1` JSON | `step-2` fenced JSON | `steps/step-2.md` |
+| 2 | `plan-scope-reviewer` (background) | context + `step-1` JSON | `step-2` fenced JSON | `steps/step-2.md` |
 | 3 | `arch-ctm` | `step-2` JSON | `step-3` fenced JSON | `steps/step-3.md` |
-| 4 | `critical-plan-reviewer` (background, reusable within loop) | context + `step-3` JSON | `step-4` fenced JSON | `steps/step-4.md` |
+| 4 | `critical-plan-reviewer` (background) | context + `step-3` JSON | `step-4` fenced JSON | `steps/step-4.md` |
 | 5 | `arch-ctm` | `step-4` JSON | `step-5` fenced JSON | `steps/step-5.md` |
 | 6 | `quality-mgr` | `step-5` JSON + QA vars file | codex-orchestration plan-QA handoff | `steps/step-6.md` |
 
