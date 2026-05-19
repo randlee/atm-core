@@ -9,8 +9,8 @@ required_variables:
   - description
   - worktree_path
   - branch
+  - source_of_truth
   - references
-  - sprint_doc
   - previous_step_json
 ---
 <atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="critical-plan-reviewer" mode="critical-plan-review">
@@ -18,7 +18,10 @@ required_variables:
 
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
-  <authoritative-sprint-doc>{{ sprint_doc }}</authoritative-sprint-doc>
+
+  <source-of-truth>
+{{ source_of_truth }}
+  </source-of-truth>
 
   <references>
 {{ references }}
@@ -27,6 +30,22 @@ required_variables:
   <required-input>
     The following fenced JSON handoff from sprint-scope hardening is required
     input. Reject the task if it is missing or malformed.
+
+    Expected shape:
+    ```json
+    {
+      "status": "PASS",
+      "mode": "plan-hardening-sprint-scope",
+      "iterations": 0,
+      "findings_resolved": 0,
+      "final_finding_count": 0,
+      "sprint_splits_added": 0,
+      "docs_modified": [],
+      "docs_created": [],
+      "ready_for_next_step": true,
+      "errors": []
+    }
+    ```
 {{ previous_step_json }}
   </required-input>
 
@@ -43,8 +62,8 @@ required_variables:
 
   <workflow>
     <step id="a">ACK this message immediately.</step>
-    <step id="b">Read the fenced JSON handoff from sprint-scope hardening, the sprint doc, related planning docs, and the sprint-planning guidelines.</step>
+    <step id="b">Read the fenced JSON handoff from sprint-scope hardening, the source-of-truth material, the related planning docs, and the sprint-planning guidelines.</step>
     <step id="c">Do not edit files.</step>
-    <step id="d">Return fenced JSON findings only.</step>
+    <step id="d">Return fenced JSON findings only, matching the `critical-plan-reviewer` output contract. That fenced JSON becomes the required input to consistency hardening.</step>
   </workflow>
 </atm-task>

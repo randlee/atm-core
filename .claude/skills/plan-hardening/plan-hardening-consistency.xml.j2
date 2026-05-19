@@ -38,6 +38,21 @@ required_variables:
   <required-input>
     The following fenced JSON handoff from `critical-plan-reviewer` is
     required input. Reject the task if it is missing or malformed.
+
+    Expected shape:
+    ```json
+    {
+      "status": "PASS | FAIL",
+      "scope": {
+        "phase": "string or null",
+        "sprint": "string or null"
+      },
+      "docs_read": [],
+      "findings": [],
+      "ready_for_next_step": true,
+      "errors": []
+    }
+    ```
 {{ previous_step_json }}
   </required-input>
 

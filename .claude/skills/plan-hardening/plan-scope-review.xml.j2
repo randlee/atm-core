@@ -9,29 +9,25 @@ required_variables:
   - description
   - worktree_path
   - branch
+  - source_of_truth
   - references
-  - sprint_doc
-  - previous_step_json
 ---
 <atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="plan-scope-reviewer" mode="plan-scope-review">
   <description>{{ description }}</description>
 
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
-  <authoritative-sprint-doc>{{ sprint_doc }}</authoritative-sprint-doc>
+
+  <source-of-truth>
+{{ source_of_truth }}
+  </source-of-truth>
 
   <references>
 {{ references }}
   </references>
 
-  <required-input>
-    The following fenced JSON handoff from `plan-develop` is required input.
-    Reject the task if it is missing or malformed.
-{{ previous_step_json }}
-  </required-input>
-
   <review-focus>
-    Review the sprint and phase planning docs against
+    Review the current plan state in the planning docs against
     `.claude/skills/plan-hardening/sprint-planning-guidelines.md`.
     Attack sprint shape early:
     - split decisions
@@ -43,8 +39,8 @@ required_variables:
 
   <workflow>
     <step id="a">ACK this message immediately.</step>
-    <step id="b">Read the fenced JSON handoff from `plan-develop`, the sprint doc, related planning docs, and the sprint-planning guidelines.</step>
+    <step id="b">Read the source-of-truth material, the related planning docs, and the sprint-planning guidelines. Sprint docs may be partial or missing; report that as findings.</step>
     <step id="c">Do not edit files.</step>
-    <step id="d">Return fenced JSON findings only.</step>
+    <step id="d">Return fenced JSON findings only, matching the `plan-scope-reviewer` output contract. That fenced JSON becomes the required input to sprint-scope hardening.</step>
   </workflow>
 </atm-task>

@@ -21,12 +21,28 @@ Always read:
 ## Input Contract
 
 The assignment must contain:
-- an authoritative sprint doc
-- related planning docs
+- related planning docs describing the hardened plan state
 - a required fenced JSON handoff from sprint-scope hardening
 
 Reject the task if the fenced JSON handoff from sprint-scope hardening is
 missing or malformed.
+
+Expected previous-step fenced JSON:
+
+```json
+{
+  "status": "PASS",
+  "mode": "plan-hardening-sprint-scope",
+  "iterations": 0,
+  "findings_resolved": 0,
+  "final_finding_count": 0,
+  "sprint_splits_added": 0,
+  "docs_modified": [],
+  "docs_created": [],
+  "ready_for_next_step": true,
+  "errors": []
+}
+```
 
 ## What You Check
 
@@ -78,7 +94,9 @@ Return fenced JSON only.
       "issue": "clear statement of the planning problem",
       "required_correction": "specific corrective action"
     }
-  ]
+  ],
+  "ready_for_next_step": true,
+  "errors": []
 }
 ```
 
