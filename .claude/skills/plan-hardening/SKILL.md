@@ -17,8 +17,8 @@ Use this only for phase-plan hardening before implementation starts or resumes.
 If the user invokes this skill, that means that the plan details have already
 been discussed and are fresh in arch-ctm context. The current plan state
 already exists in repo docs, though sprint docs may still be partial or
-missing. Do not request plan details from `team-lead`; the details must come
-from the planning docs and references.
+missing. Do not rely on `team-lead` to restate detailed plan content; the
+details must come from the planning docs and references.
 
 `team-lead` is responsible for routing, worktree creation, and assignment
 metadata. `team-lead` is not the authority for rewriting the plan.
@@ -82,16 +82,16 @@ sprints are needed, hardening must create them.
    - `source_of_truth`
    - optional `questions_or_concerns`
    - `references`
-2. Render `.claude/skills/plan-hardening/plan-scope-review.xml.j2` with
+2. Render `.claude/skills/plan-hardening/01-plan-scope-review.xml.j2` with
    `sc-compose` for the sprint-scope review pre-pass.
-3. Send the rendered `plan-scope-review.xml.j2` ATM task to
+3. Send the rendered `01-plan-scope-review.xml.j2` ATM task to
    `plan-scope-reviewer`.
 4. Review the sprint-scope review result:
    - final finding count is `0`, or findings are routed into the next
      hardening pass for correction
    - split risk, drop risk, and checklist-shape risk are explicit
    - the result includes fenced JSON
-5. Render `.claude/skills/plan-hardening/plan-hardening.xml.j2` with
+5. Render `.claude/skills/plan-hardening/02-sprint-scope-hardening.xml.j2` with
    `sc-compose` for sprint-scope hardening. Pass the fenced JSON output from
    `plan-scope-reviewer` as required input.
 6. Send the rendered sprint-scope hardening ATM task to `arch-ctm`.
@@ -104,7 +104,7 @@ sprints are needed, hardening must create them.
    - important traits/features/enums/boundaries have explicit code samples
    - branch was pushed and validation reported
    - the result includes fenced JSON
-8. Render `.claude/skills/plan-hardening/critical-plan-review.xml.j2` with
+8. Render `.claude/skills/plan-hardening/03-critical-plan-review.xml.j2` with
    `sc-compose` for the late hostile plan review. Pass the fenced JSON output
    from sprint-scope hardening as required input.
 9. Send the rendered critical-plan-review ATM task to
@@ -114,7 +114,7 @@ sprints are needed, hardening must create them.
      hardening pass for correction
    - architecture risk, boundary risk, and false-closure risk are explicit
    - the result includes fenced JSON
-11. Render `.claude/skills/plan-hardening/plan-hardening-consistency.xml.j2`
+11. Render `.claude/skills/plan-hardening/04-consistency-hardening.xml.j2`
    with `sc-compose` for document-consistency hardening. Pass the fenced JSON
    output from `critical-plan-reviewer` as required input.
 12. Send the rendered consistency hardening ATM task to `arch-ctm`.
@@ -185,10 +185,10 @@ JSON output as a required input artifact. Missing or malformed prior-step JSON
 is a hard stop.
 
 Render:
-- `.claude/skills/plan-hardening/plan-scope-review.xml.j2`
-- `.claude/skills/plan-hardening/plan-hardening.xml.j2`
-- `.claude/skills/plan-hardening/critical-plan-review.xml.j2`
-- `.claude/skills/plan-hardening/plan-hardening-consistency.xml.j2`
+- `.claude/skills/plan-hardening/01-plan-scope-review.xml.j2`
+- `.claude/skills/plan-hardening/02-sprint-scope-hardening.xml.j2`
+- `.claude/skills/plan-hardening/03-critical-plan-review.xml.j2`
+- `.claude/skills/plan-hardening/04-consistency-hardening.xml.j2`
 - `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
 
 Example:
@@ -196,22 +196,22 @@ Example:
 ```bash
 sc-compose render \
   --root .claude/skills/plan-hardening \
-  --file plan-scope-review.xml.j2 \
+  --file 01-plan-scope-review.xml.j2 \
   --var-file /tmp/plan-hardening-vars.json
 
 sc-compose render \
   --root .claude/skills/plan-hardening \
-  --file plan-hardening.xml.j2 \
+  --file 02-sprint-scope-hardening.xml.j2 \
   --var-file /tmp/plan-hardening-vars.json
 
 sc-compose render \
   --root .claude/skills/plan-hardening \
-  --file critical-plan-review.xml.j2 \
+  --file 03-critical-plan-review.xml.j2 \
   --var-file /tmp/plan-hardening-vars.json
 
 sc-compose render \
   --root .claude/skills/plan-hardening \
-  --file plan-hardening-consistency.xml.j2 \
+  --file 04-consistency-hardening.xml.j2 \
   --var-file /tmp/plan-hardening-vars.json
 ```
 
