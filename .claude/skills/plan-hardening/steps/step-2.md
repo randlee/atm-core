@@ -4,10 +4,10 @@
 
 **1. Launch the reviewer**
 
-Use Agent tool to launch `.claude/agents/plan-scope-reviewer.md` on the first
-loop round and save the reviewer agent id. On later loop rounds, send the
-updated fenced JSON back to the same `plan-scope-reviewer` agent so it keeps
-the original review context.
+Use Agent tool to launch `.claude/agents/plan-scope-reviewer.md`.
+On each subsequent loop round, launch a fresh unnamed background agent with
+the updated vars file after `reviewer_findings_json` has been populated from
+the previous round output.
 Pass a fenced JSON input that includes:
 - `source_of_truth`
 - `references`
@@ -50,8 +50,8 @@ Save the extracted fenced JSON to `/tmp/step-2.json`.
 - `PASS` -> proceed to Step 3
 - `FAIL` -> update `/tmp/plan-hardening-vars.json` so
   `reviewer_findings_json` contains the Step 2 fenced JSON, then re-run Step 1
-- after Step 1 returns updated fenced JSON, send that updated JSON back to the
-  same `plan-scope-reviewer` agent instead of launching a new reviewer
+- after Step 1 returns updated fenced JSON, launch a fresh unnamed background
+  `plan-scope-reviewer` agent with the updated vars file
 
 Example reinjection command:
 
