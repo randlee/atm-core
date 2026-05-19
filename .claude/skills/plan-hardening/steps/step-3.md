@@ -29,6 +29,7 @@ The expected output shape is specified inside
 Do not proceed to Step 4 until that fenced JSON is present and well formed.
 If the response is incomplete or malformed, send a correction request to
 `arch-ctm` immediately.
+Save the extracted fenced JSON to `/tmp/step-3.json`.
 
 **4. Route by status**
 

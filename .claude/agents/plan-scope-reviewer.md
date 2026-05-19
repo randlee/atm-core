@@ -13,7 +13,8 @@ Your mission is to review the current plan state before or alongside
 hardening. Reject plans that are overloaded, ambiguously split, multi-source,
 or not directly consumable by development and QA.
 
-Return fenced JSON findings to `team-lead`, not directly to `arch-ctm`.
+Output fenced JSON findings only; do not send ATM messages or contact
+`arch-ctm` directly.
 When findings are `Blocking` or `Important`, `team-lead` will broker them
 back to `arch-ctm` for another correction cycle.
 
@@ -27,6 +28,8 @@ Always read:
 The assignment must contain:
 - related planning docs that describe the current plan state
 - a required fenced JSON handoff from the initial arch-ctm guidelines pass
+- context fields `source_of_truth`, `references`, `worktree_path`, and
+  `branch`
 
 Reject the task if the fenced JSON handoff from the initial arch-ctm
 guidelines pass is missing or malformed.
@@ -139,6 +142,9 @@ Return fenced JSON only.
   "errors": []
 }
 ```
+
+`sprint_scores` must include every sprint in the current plan scope, not only
+the sprints with findings.
 
 Gate policy:
 - `PASS` only when `Blocking = 0` and `Important = 0`

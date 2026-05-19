@@ -43,22 +43,24 @@ Always use:
 | # | Route to | Input required | Output expected | Read before executing |
 |---|----------|----------------|-----------------|-----------------------|
 | 1 | `arch-ctm` | vars file | `step-1` fenced JSON | `steps/step-1.md` |
-| 2 | `plan-scope-reviewer` (background) | `step-1` JSON | `step-2` fenced JSON | `steps/step-2.md` |
+| 2 | `plan-scope-reviewer` (background, reusable within loop) | context + `step-1` JSON | `step-2` fenced JSON | `steps/step-2.md` |
 | 3 | `arch-ctm` | `step-2` JSON | `step-3` fenced JSON | `steps/step-3.md` |
-| 4 | `critical-plan-reviewer` (background) | `step-3` JSON | `step-4` fenced JSON | `steps/step-4.md` |
+| 4 | `critical-plan-reviewer` (background, reusable within loop) | context + `step-3` JSON | `step-4` fenced JSON | `steps/step-4.md` |
 | 5 | `arch-ctm` | `step-4` JSON | `step-5` fenced JSON | `steps/step-5.md` |
-| 6 | `quality-mgr` | `step-5` JSON + QA vars file | `step-6` fenced JSON | `steps/step-6.md` |
+| 6 | `quality-mgr` | `step-5` JSON + QA vars file | codex-orchestration plan-QA handoff | `steps/step-6.md` |
 
 ## Hard Stops
 
-- `team-lead` only checks the top-level `status` field on each fenced JSON
-  response
+- `team-lead` only checks the top-level `status` and expected `mode` fields on
+  each fenced JSON response before advancing
 - every step after step 1 must receive the previous step's fenced JSON
 - missing or malformed fenced JSON is a hard stop
 - substantial scope drift from the user-discussed plan is a hard stop
 - remaining in-scope work without sprint ownership is a hard stop
 - if a sprint cannot credibly land its committed deliverables at a
   production-ready level, split it before implementation
+- if a reviewer loop returns `FAIL` three times without converging, escalate to
+  the user before continuing
 
 ## Render
 
@@ -71,4 +73,6 @@ Always use:
 - `.claude/skills/plan-hardening/steps/step-4.md`
 - `.claude/skills/plan-hardening/steps/step-5.md`
 - `.claude/skills/plan-hardening/steps/step-6.md`
+- `.claude/skills/plan-hardening/examples/plan-hardening-vars.example.json`
+- `.claude/skills/plan-hardening/examples/plan-hardening-qa-vars.example.json`
 - `.claude/skills/plan-hardening/sprint-planning-guidelines.md`

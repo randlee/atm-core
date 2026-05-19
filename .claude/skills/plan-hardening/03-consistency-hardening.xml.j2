@@ -37,7 +37,9 @@ required_variables:
 
 {% if reviewer_findings_json is defined and reviewer_findings_json | trim %}
   <reviewer-findings-json>
+<![CDATA[
 {{ reviewer_findings_json }}
+]]>
   </reviewer-findings-json>
 {% endif %}
 
@@ -68,7 +70,9 @@ required_variables:
       "errors": []
     }
     ```
+<![CDATA[
 {{ previous_step_json }}
+]]>
   </required-input>
 
   <plan-hardening-consistency>
@@ -191,11 +195,8 @@ required_variables:
     </repeat>
 
     Return fenced JSON to `team-lead` when this pass completes. `team-lead`
-    will pass that JSON to `quality-mgr`.
-
-    If `team-lead` later sends back fenced JSON findings from `quality-mgr`,
-    fix those findings and return updated fenced JSON. Continue until
-    `team-lead` reports that `quality-mgr` returned `PASS`.
+    will hand the plan off to the codex-orchestration plan-QA flow via
+    `quality-mgr`.
 
     <exit-criterion>
       Output fenced JSON only when audit-phase produces zero findings:
@@ -223,7 +224,7 @@ required_variables:
     <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead critical review can begin in parallel.</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only. If `reviewer-findings-json` is present, treat it as the current correction target from `quality-mgr` and return updated fenced JSON to `team-lead`.</step>
+    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only. The next step after this pass is codex-orchestration plan QA through `quality-mgr`, not another local plan-hardening review loop.</step>
     <step id="h">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>

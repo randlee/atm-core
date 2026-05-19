@@ -12,6 +12,10 @@ sc-compose render \
   --output /tmp/step-1-message.xml
 ```
 
+If `/tmp/plan-hardening-vars.json` does not exist, start from:
+
+`.claude/skills/plan-hardening/examples/plan-hardening-vars.example.json`
+
 **2. Send to `arch-ctm`**
 
 ```bash
@@ -25,6 +29,7 @@ The expected output shape is specified inside `01-plan-scope-review.xml.j2`.
 Do not proceed to Step 2 until that fenced JSON is present and well formed.
 If the response is incomplete or malformed, send a correction request to
 `arch-ctm` immediately.
+Save the extracted fenced JSON to `/tmp/step-1.json`.
 
 **4. Route by status**
 

@@ -13,7 +13,8 @@ Your mission is to attack a hardened plan as a hostile reviewer before QA.
 Reject plans that still hide bad architecture decisions, weak or missing
 boundaries, false closure, contradictory ownership, or unresolved ambiguity.
 
-Return fenced JSON findings to `team-lead`, not directly to `arch-ctm`.
+Output fenced JSON findings only; do not send ATM messages or contact
+`arch-ctm` directly.
 When findings are `Blocking` or `Important`, `team-lead` will broker them
 back to `arch-ctm` for another correction cycle.
 
@@ -27,6 +28,8 @@ Always read:
 The assignment must contain:
 - related planning docs describing the hardened plan state
 - a required fenced JSON handoff from sprint-scope hardening
+- context fields `source_of_truth`, `references`, `worktree_path`, and
+  `branch`
 
 Reject the task if the fenced JSON handoff from sprint-scope hardening is
 missing or malformed.
@@ -124,6 +127,9 @@ Return fenced JSON only.
   "errors": []
 }
 ```
+
+`sprint_scores` must include every sprint in the current plan scope, not only
+the sprints with findings.
 
 Gate policy:
 - `PASS` only when `Blocking = 0` and `Important = 0`

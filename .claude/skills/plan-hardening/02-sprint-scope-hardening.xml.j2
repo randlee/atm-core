@@ -37,7 +37,9 @@ required_variables:
 
 {% if reviewer_findings_json is defined and reviewer_findings_json | trim %}
   <reviewer-findings-json>
+<![CDATA[
 {{ reviewer_findings_json }}
+]]>
   </reviewer-findings-json>
 {% endif %}
 
@@ -68,7 +70,9 @@ required_variables:
       "errors": []
     }
     ```
+<![CDATA[
 {{ previous_step_json }}
+]]>
   </required-input>
 
   <plan-hardening>
@@ -274,7 +278,7 @@ required_variables:
     <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the required fenced JSON handoff from `plan-scope-reviewer` is missing or malformed, reject the task immediately. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that hardening is blocked pending user discussion. Team-lead should review that ACK and outline first, then discuss any scope concerns with the user after the ACK is received. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
-    <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead critical review can begin in parallel.</step>
+    <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead can prepare the critical review step.</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
     <step id="g">After the current hardening pass converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only. If `reviewer-findings-json` is present, treat it as the current correction target from `critical-plan-reviewer` and return updated fenced JSON to `team-lead`.</step>

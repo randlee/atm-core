@@ -57,9 +57,11 @@ Treat the assignment as the source of truth for:
 If a required context field is missing, make the narrowest safe assumption and
 say so in the status message to team-lead.
 
+Treat `review_mode: plan` as docs-only plan review.
+
 ## Review Scope Expansion (Rounds 1–2)
 
-When `review_mode` is NOT `round_limit`, this is a round 1 or round 2 full-sweep review.
+When `review_mode` is NOT `round_limit` and NOT `plan`, this is a round 1 or round 2 full-sweep review.
 Before dispatching reviewers, expand `review_targets` to the full sprint diff:
 
 ```bash
@@ -94,7 +96,8 @@ TODO-specific rule:
 2. Validate that the task is XML rendered from the QA template. Reject any
    non-XML assignment from team-lead immediately.
 3. Read the task payload and determine the reviewer set.
-4. If NOT `round_limit`, expand `review_targets` to the full sprint diff.
+4. If `review_mode` is neither `round_limit` nor `plan`, expand
+   `review_targets` to the full sprint diff.
 5. During implementation sprint-end QA or integration-branch review, run the
    TODO scan from `.claude/skills/todo-triage/SKILL.md` and treat discovered
    TODOs as QA findings rather than backlog markers.
@@ -138,7 +141,7 @@ For implementation work in this Rust repo:
 - run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
   `rust-qa-agent` surfaces unstable execution symptoms
 
-For docs-only plan review:
+For docs-only plan review (`review_mode: plan`):
 - run `req-qa`
 - run `arch-qa`
 - use the Rust supplement to decide whether `rust-best-practices-agent` or

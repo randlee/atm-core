@@ -80,6 +80,21 @@ Before starting a sprint:
    `sprint_doc`, and the sprint document remains authoritative if the task
    summary omits or compresses details.
 
+## Plan Review Flow
+
+1. `team-lead` completes `/plan-hardening` steps 1 through 5.
+2. `team-lead` assigns plan QA to `quality-mgr` using `qa-template.xml.j2`
+   with `review_mode: plan`.
+3. The QA assignment must include the phase-plan document as `sprint_doc`, and
+   that plan document is the authoritative scope source for plan QA.
+4. `quality-mgr` treats `review_mode: plan` as docs-only review and launches:
+   - `req-qa`
+   - `arch-qa`
+   - optional Rust doc reviewers only if the Rust supplement requires them
+5. If plan QA passes, the hardened plan is ready for implementation dispatch.
+6. If plan QA fails, `team-lead` uses the normal codex-orchestration
+   triage-and-fix loop to route concrete fixes back to `arch-ctm`.
+
 ## QA Coverage Rule
 
 - `quality-mgr` must extract every deliverable, acceptance criterion, deletion

@@ -36,7 +36,9 @@ required_variables:
 
 {% if reviewer_findings_json is defined and reviewer_findings_json | trim %}
   <reviewer-findings-json>
+<![CDATA[
 {{ reviewer_findings_json }}
+]]>
   </reviewer-findings-json>
 {% endif %}
 
