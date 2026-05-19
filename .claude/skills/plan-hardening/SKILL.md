@@ -40,6 +40,12 @@ scope changes that are at odds with that user discussion.
 
 Always use:
 - `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
+- `.claude/skills/plan-hardening/plan-hardening-state-machine.md`
+
+Execution standard:
+- the `/plan-hardening` flow must be simple enough for a low-context `team-lead` to execute by following the numbered templates in order
+- `team-lead` should not need to understand, restate, or reinterpret the plan details
+- if a step requires `team-lead` to improvise or explain the plan, the docs or prompt chain are not hardened enough
 
 ## Expected Result
 
@@ -71,6 +77,13 @@ Any remaining in-scope work without sprint ownership is a `GAP`. If more
 sprints are needed, hardening must create them.
 
 ## Team-Lead Steps
+
+Routing summary:
+- `team-lead -> plan-scope-reviewer` with `01-plan-scope-review.xml.j2`
+- `team-lead -> arch-ctm` with `02-sprint-scope-hardening.xml.j2`
+- `team-lead -> critical-plan-reviewer` with `03-critical-plan-review.xml.j2`
+- `team-lead -> arch-ctm` with `04-consistency-hardening.xml.j2`
+- `team-lead -> quality-mgr` for final focused plan QA
 
 1. Prepare:
    - `phase_id`
@@ -190,6 +203,7 @@ Render:
 - `.claude/skills/plan-hardening/03-critical-plan-review.xml.j2`
 - `.claude/skills/plan-hardening/04-consistency-hardening.xml.j2`
 - `.claude/skills/plan-hardening/sprint-planning-guidelines.md`
+- `.claude/skills/plan-hardening/plan-hardening-state-machine.md`
 
 Example:
 
