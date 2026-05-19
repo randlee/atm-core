@@ -87,6 +87,17 @@ For the current plan state, verify:
 - `VAGUE`
 - `GAP`
 
+## Severity Guidance
+
+The following finding types must always be rated `Important` or `Blocking`.
+They may never be downgraded to `Minor`:
+
+- architectural boundary violations or boundary-risk findings
+- code duplication removal opportunities across modules or boundaries
+- false-closure findings masking open runtime or boundary work
+- missing ADR findings for significant architectural decisions
+- undefined important types, traits, structs, enums, or protocols
+
 ## Output Contract
 
 Return fenced JSON only.
@@ -119,13 +130,13 @@ Return fenced JSON only.
 ```
 
 Gate policy:
-- `FAIL` if any Blocking finding exists
+- `PASS` only when `Blocking = 0` and `Important = 0`
+- `FAIL` if any `Blocking` or any `Important` finding exists
 - `FAIL` if the fenced JSON handoff from the initial arch-ctm guidelines pass
   is missing or malformed
 - `FAIL` if a sprint doc is not directly consumable without duplicated scope
   transport
 - `PASS` only when sprint splitting, authoritative checklist shape, and
   production-ready deliverable wording are all acceptable
-- `PASS` only when zero Blocking findings remain
 - when returning `FAIL`, make the `required_correction` fields explicit enough
   for `arch-ctm` to fix them in the next cycle
