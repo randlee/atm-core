@@ -93,14 +93,12 @@ For the current plan state, verify:
 The following finding types must always be rated `Important` or `Blocking`.
 They may never be downgraded to `Minor`:
 
-- architectural boundary violations or boundary-risk findings
-- code duplication removal opportunities across modules or boundaries
-- false-closure findings masking open runtime or boundary work
-- missing ADR findings for significant architectural decisions
-- undefined important types, traits, structs, enums, or protocols
 - `SPLIT-RISK`
 - `DROP-RISK`
 - `NON-PROD`
+- `MULTI-SOURCE`
+- `QA-UNFRIENDLY`
+- `MISSING-CODE-SAMPLE`
 
 ## Output Contract
 

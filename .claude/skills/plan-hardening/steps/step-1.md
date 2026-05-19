@@ -34,9 +34,5 @@ If the response is incomplete or malformed, send a correction request to
 ## Hard stops
 
 - worktree does not exist: create it before running this step
-- `arch-ctm` ACK or first substantive response indicates a material scope
-  change from the user-discussed plan: do not advance; send a clarification
-  request to `arch-ctm` first, and escalate to the user only if this is a real
-  scope dispute
 - fenced JSON is missing or malformed: do not advance; send a correction
   request immediately and identify the missing or malformed fields explicitly
