@@ -7,13 +7,17 @@
 Use Agent tool to launch `.claude/agents/quality-mgr.md`.
 Pass `step-5` fenced JSON as required input.
 
-**2. Wait for response**
+**2. Check the response**
 
-Wait for `quality-mgr` to return the QA verdict.
+Read the `quality-mgr` response and confirm it returns the QA verdict.
 Do not treat the plan as implementation-ready until the verdict is a pass.
+If the response is incomplete or malformed, send a correction request to
+`quality-mgr` immediately.
 
 ## Hard stops
 
-- `step-5` fenced JSON is missing or malformed: stop, report which field is
-  missing
-- QA verdict is fail: stop and route the findings back through hardening
+- `step-5` fenced JSON from the Step 5 response is missing or malformed: do
+  not advance; send a correction request immediately and identify the missing
+  or malformed fields explicitly
+- QA verdict is fail: do not advance; route the findings back through
+  hardening

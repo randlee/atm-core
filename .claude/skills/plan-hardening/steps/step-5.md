@@ -21,17 +21,21 @@ required input payload.
 atm send arch-ctm --stdin < /tmp/step-5-message.xml
 ```
 
-**3. Wait for response**
+**3. Check the response**
 
-Wait for `arch-ctm` to return a message containing fenced JSON.
+Read the `arch-ctm` response and confirm it contains fenced JSON.
 The expected output shape is specified inside
 `03-consistency-hardening.xml.j2`.
 Do not proceed to Step 6 until that fenced JSON is present and well formed.
+If the response is incomplete or malformed, send a correction request to
+`arch-ctm` immediately.
 
 ## Hard stops
 
-- `step-4` fenced JSON is missing or malformed: stop, report which field is
-  missing
+- `step-4` fenced JSON from the Step 4 response is missing or malformed: do
+  not advance; send a correction request immediately and identify the missing
+  or malformed fields explicitly
 - `arch-ctm` reports unresolved architecture, boundary, or false-closure
-  findings: stop, do not proceed
-- fenced JSON is missing or malformed: stop, report which field is missing
+  findings: do not advance; route corrective action back through `arch-ctm`
+- fenced JSON is missing or malformed: do not advance; send a correction
+  request immediately and identify the missing or malformed fields explicitly

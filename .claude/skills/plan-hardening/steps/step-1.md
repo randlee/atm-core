@@ -18,15 +18,20 @@ sc-compose render \
 atm send arch-ctm --stdin < /tmp/step-1-message.xml
 ```
 
-**3. Wait for response**
+**3. Check the response**
 
-Wait for `arch-ctm` to return a message containing fenced JSON.
+Read the `arch-ctm` response and confirm it contains fenced JSON.
 The expected output shape is specified inside `01-plan-scope-review.xml.j2`.
 Do not proceed to Step 2 until that fenced JSON is present and well formed.
+If the response is incomplete or malformed, send a correction request to
+`arch-ctm` immediately.
 
 ## Hard stops
 
 - worktree does not exist: create it before running this step
-- `arch-ctm` ACK describes a material scope change from the user-discussed
-  plan: stop, report conflict to the user, do not proceed
-- fenced JSON is missing or malformed: stop, report which field is missing
+- `arch-ctm` ACK or first substantive response indicates a material scope
+  change from the user-discussed plan: do not advance; send a clarification
+  request to `arch-ctm` first, and escalate to the user only if this is a real
+  scope dispute
+- fenced JSON is missing or malformed: do not advance; send a correction
+  request immediately and identify the missing or malformed fields explicitly

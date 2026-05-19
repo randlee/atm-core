@@ -8,15 +8,20 @@ Use Agent tool to launch `.claude/agents/plan-scope-reviewer.md`.
 Pass `step-1` fenced JSON as required input and set
 `run_in_background: true`.
 
-**2. Wait for response**
+**2. Check the response**
 
-Wait for `plan-scope-reviewer` to return fenced JSON findings.
+Read the `plan-scope-reviewer` response and confirm it returns fenced JSON
+findings.
 The expected output shape is specified inside
 `.claude/agents/plan-scope-reviewer.md`.
 Do not proceed to Step 3 until that fenced JSON is present and well formed.
+If the response is incomplete or malformed, send a correction request to
+`plan-scope-reviewer` immediately.
 
 ## Hard stops
 
-- `step-1` fenced JSON is missing or malformed: stop, report which field is
-  missing
-- reviewer output is missing or malformed: stop, report which field is missing
+- `step-1` fenced JSON from the Step 1 response is missing or malformed: do
+  not advance; send a correction request immediately and identify the missing
+  or malformed fields explicitly
+- reviewer output is missing or malformed: do not advance; send a correction
+  request immediately and identify the missing or malformed fields explicitly
