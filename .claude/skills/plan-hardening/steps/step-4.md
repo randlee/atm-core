@@ -5,8 +5,14 @@
 **1. Launch the reviewer**
 
 Use Agent tool to launch `.claude/agents/critical-plan-reviewer.md`.
-Pass `step-3` fenced JSON as required input and set
-`run_in_background: true`.
+Pass a fenced JSON input that includes:
+- `source_of_truth`
+- `references`
+- `worktree_path`
+- `branch`
+- `step-3` fenced JSON
+
+Set `run_in_background: true`.
 
 **2. Check the response**
 
@@ -21,13 +27,16 @@ If the response is incomplete or malformed, send a correction request to
 **3. Route by status**
 
 - `PASS` -> proceed to Step 5
-- `FAIL` -> re-run Step 3 and include the Step 4 fenced JSON as reviewer
-  findings for `arch-ctm`
+- `FAIL` -> update `/tmp/plan-hardening-vars.json` so
+  `reviewer_findings_json` contains the Step 4 fenced JSON, then re-run Step 3
 
 ## Hard stops
 
 - `step-3` fenced JSON from the Step 3 response is missing or malformed: do
   not advance; send a correction request immediately and identify the missing
   or malformed fields explicitly
+- reviewer launch input is missing `source_of_truth`, `references`,
+  `worktree_path`, `branch`, or `step-3` fenced JSON: do not advance; correct
+  the launch payload immediately
 - reviewer output is missing or malformed: do not advance; send a correction
   request immediately and identify the missing or malformed fields explicitly

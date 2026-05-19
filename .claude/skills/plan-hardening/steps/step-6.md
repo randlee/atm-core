@@ -18,8 +18,8 @@ to `quality-mgr` immediately.
 **3. Route by status**
 
 - `PASS` -> plan hardening is complete
-- `FAIL` -> re-run Step 5 and include the QA findings in the next
-  `arch-ctm` consistency pass
+- `FAIL` -> update `/tmp/plan-hardening-vars.json` so
+  `reviewer_findings_json` contains the QA findings JSON, then re-run Step 5
 
 ## Hard stops
 
