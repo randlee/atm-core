@@ -57,6 +57,9 @@ required_variables:
   </required-input>
 
   <plan-hardening-consistency>
+    Read the current plan docs from disk first, using `<source-of-truth>` and
+    `<references>`, before doing anything else.
+
     This is the second required hardening pass. The sprint-shape and
     production-ready deliverable split should already be hardened. Your job in
     this pass is to eliminate document inconsistency, contradiction, ambiguity,
@@ -172,12 +175,15 @@ required_variables:
       Continue until audit-phase produces zero findings.
     </repeat>
 
+    Return fenced JSON to `team-lead` when this pass completes. `team-lead`
+    will pass that JSON to `quality-mgr`.
+
     <exit-criterion>
       Output fenced JSON only when audit-phase produces zero findings:
 
       ```json
       {
-        "status": "PASS",
+        "status": "PASS | FAIL",
         "mode": "plan-hardening-consistency",
         "iterations": 0,
         "findings_resolved": 0,

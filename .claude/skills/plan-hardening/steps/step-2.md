@@ -18,6 +18,12 @@ Do not proceed to Step 3 until that fenced JSON is present and well formed.
 If the response is incomplete or malformed, send a correction request to
 `plan-scope-reviewer` immediately.
 
+**3. Route by status**
+
+- `PASS` -> proceed to Step 3
+- `FAIL` -> re-run Step 1 and include the Step 2 fenced JSON as reviewer
+  findings for `arch-ctm`
+
 ## Hard stops
 
 - `step-1` fenced JSON from the Step 1 response is missing or malformed: do

@@ -13,6 +13,10 @@ Your mission is to review the current plan state before or alongside
 hardening. Reject plans that are overloaded, ambiguously split, multi-source,
 or not directly consumable by development and QA.
 
+Return fenced JSON findings to `team-lead`, not directly to `arch-ctm`.
+When findings are Blocking, `team-lead` will broker them back to `arch-ctm`
+for another correction cycle.
+
 ## Required Reference
 
 Always read:
@@ -122,3 +126,6 @@ Gate policy:
   transport
 - `PASS` only when sprint splitting, authoritative checklist shape, and
   production-ready deliverable wording are all acceptable
+- `PASS` only when zero Blocking findings remain
+- when returning `FAIL`, make the `required_correction` fields explicit enough
+  for `arch-ctm` to fix them in the next cycle

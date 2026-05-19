@@ -30,6 +30,11 @@ Do not proceed to Step 6 until that fenced JSON is present and well formed.
 If the response is incomplete or malformed, send a correction request to
 `arch-ctm` immediately.
 
+**4. Route by status**
+
+- `PASS` -> proceed to Step 6
+- `FAIL` -> re-render and re-send Step 5 to `arch-ctm`
+
 ## Hard stops
 
 - `step-4` fenced JSON from the Step 4 response is missing or malformed: do

@@ -34,13 +34,21 @@ required_variables:
 {{ references }}
   </references>
 
+{% if reviewer_findings_json is defined and reviewer_findings_json | trim %}
+  <reviewer-findings-json>
+{{ reviewer_findings_json }}
+  </reviewer-findings-json>
+{% endif %}
+
   <plan-hardening>
     This is the required first pass for `/plan-hardening`.
 
-    Read `.claude/skills/plan-hardening/sprint-planning-guidelines.md` and
-    make sure the current plan state follows it before any reviewer is
-    launched. The current phase plan already exists in repo docs, but sprint
-    docs may still be partial or missing.
+    Read the current plan docs from disk first, using `<source-of-truth>` and
+    `<references>`, before doing anything else. Then read
+    `.claude/skills/plan-hardening/sprint-planning-guidelines.md` and make
+    sure the current plan state follows it before any reviewer is launched.
+    The current phase plan already exists in repo docs, but sprint docs may
+    still be partial or missing.
 
     In this pass:
     - tighten the current plan docs to match the sprint-planning guidelines
@@ -53,13 +61,18 @@ required_variables:
     scope change from what the user already discussed with you, stop and push
     back instead of normalizing the new scope into the plan.
 
-    Output fenced JSON only when this pass is complete. That JSON becomes the
-    required input to the background `plan-scope-reviewer` launch.
+    Return fenced JSON to `team-lead` when this pass is complete. `team-lead`
+    will launch `plan-scope-reviewer` with that JSON.
+
+    If `team-lead` later sends back fenced JSON findings from
+    `plan-scope-reviewer`, fix those findings and return updated fenced JSON.
+    Continue until `team-lead` reports that `plan-scope-reviewer` returned
+    `PASS`.
 
     Expected output shape:
     ```json
     {
-      "status": "PASS",
+      "status": "PASS | FAIL",
       "mode": "plan-hardening-guidelines-pass",
       "iterations": 0,
       "docs_modified": [],
@@ -77,7 +90,7 @@ required_variables:
     <step id="d">As soon as the guidelines pass is complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so scope review can begin in parallel.</step>
     <step id="e">After the push report, run the required validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">Return fenced JSON only after the guidelines pass converges. That fenced JSON becomes the required input to `plan-scope-reviewer`.</step>
+    <step id="g">Return fenced JSON only after the current pass converges. If `reviewer-findings-json` is present, treat it as the current correction target from `plan-scope-reviewer` and return updated fenced JSON to `team-lead`.</step>
     <step id="h">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>

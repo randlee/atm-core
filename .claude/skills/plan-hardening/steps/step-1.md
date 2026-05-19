@@ -26,6 +26,11 @@ Do not proceed to Step 2 until that fenced JSON is present and well formed.
 If the response is incomplete or malformed, send a correction request to
 `arch-ctm` immediately.
 
+**4. Route by status**
+
+- `PASS` -> proceed to Step 2
+- `FAIL` -> re-render and re-send Step 1 to `arch-ctm`
+
 ## Hard stops
 
 - worktree does not exist: create it before running this step

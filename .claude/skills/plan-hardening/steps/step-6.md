@@ -14,6 +14,12 @@ Do not treat the plan as implementation-ready until the verdict is a pass.
 If the response is incomplete or malformed, send a correction request to
 `quality-mgr` immediately.
 
+**3. Route by status**
+
+- `PASS` -> plan hardening is complete
+- `FAIL` -> re-run Step 5 and include the QA findings in the next
+  `arch-ctm` consistency pass
+
 ## Hard stops
 
 - `step-5` fenced JSON from the Step 5 response is missing or malformed: do
