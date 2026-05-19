@@ -16,6 +16,35 @@ The vars file or rendered task must include the QA assignment fields required
 by `qa-template.xml.j2`, and it must use `step-5` fenced JSON to populate the
 QA scope.
 
+Expected `/tmp/plan-hardening-qa-vars.json` shape:
+
+```json
+{
+  "task_id": "phase-x-plan-qa",
+  "sprint": "phase-X",
+  "sprint_doc": "docs/phase-X/plan-phase-X.md",
+  "review_mode": "plan_hardening",
+  "description": "Focused plan QA for phase-X after consistency hardening",
+  "pr_number": "",
+  "branch": "feature/branch-name",
+  "worktree_path": "/absolute/path/to/worktree",
+  "commits": "HEAD",
+  "review_targets": [
+    "docs/phase-X/plan-phase-X.md",
+    "docs/phase-X/sprint-X1.md",
+    "docs/phase-X/sprint-X2.md"
+  ],
+  "references": [
+    "docs/project-plan.md"
+  ],
+  "changed_files": "",
+  "triage_records": ""
+}
+```
+
+Populate `sprint_doc`, `review_targets`, and `references` from the current
+plan state and `step-5` fenced JSON. Do not invent QA scope from memory.
+
 **2. Send to `quality-mgr`**
 
 ```bash
@@ -43,5 +72,5 @@ to `quality-mgr` immediately.
 - `step-5` fenced JSON from the Step 5 response is missing or malformed: do
   not advance; send a correction request immediately and identify the missing
   or malformed fields explicitly
-- QA verdict is fail: do not advance; route the findings back through
-  hardening
+- top-level QA `status` is `FAIL`: do not advance; route the findings back
+  through hardening

@@ -14,6 +14,23 @@ Pass a fenced JSON input that includes:
 
 Set `run_in_background: true`.
 
+Expected reviewer launch input shape:
+
+```json
+{
+  "source_of_truth": "docs/phase-X/plan-phase-X.md",
+  "references": [
+    "docs/project-plan.md"
+  ],
+  "worktree_path": "/absolute/path/to/worktree",
+  "branch": "feature/branch-name",
+  "previous_step_json": {
+    "status": "PASS",
+    "mode": "plan-hardening-guidelines-pass"
+  }
+}
+```
+
 **2. Check the response**
 
 Read the `plan-scope-reviewer` response and confirm it returns fenced JSON

@@ -47,7 +47,7 @@ Always use:
 | 3 | `arch-ctm` | `step-2` JSON | `step-3` fenced JSON | `steps/step-3.md` |
 | 4 | `critical-plan-reviewer` (background) | `step-3` JSON | `step-4` fenced JSON | `steps/step-4.md` |
 | 5 | `arch-ctm` | `step-4` JSON | `step-5` fenced JSON | `steps/step-5.md` |
-| 6 | `quality-mgr` | `step-5` JSON | QA verdict | `steps/step-6.md` |
+| 6 | `quality-mgr` | `step-5` JSON + QA vars file | `step-6` fenced JSON | `steps/step-6.md` |
 
 ## Hard Stops
 

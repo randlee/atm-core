@@ -40,7 +40,5 @@ If the response is incomplete or malformed, send a correction request to
 - `step-4` fenced JSON from the Step 4 response is missing or malformed: do
   not advance; send a correction request immediately and identify the missing
   or malformed fields explicitly
-- `arch-ctm` reports unresolved architecture, boundary, or false-closure
-  findings: do not advance; route corrective action back through `arch-ctm`
 - fenced JSON is missing or malformed: do not advance; send a correction
   request immediately and identify the missing or malformed fields explicitly
