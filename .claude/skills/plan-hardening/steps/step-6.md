@@ -9,10 +9,11 @@ Pass `step-5` fenced JSON as required input.
 
 **2. Check the response**
 
-Read the `quality-mgr` response and confirm it returns the QA verdict.
-Do not treat the plan as implementation-ready until the verdict is a pass.
-If the response is incomplete or malformed, send a correction request to
-`quality-mgr` immediately.
+Read the `quality-mgr` response and confirm it returns a fenced JSON
+machine-status block with a top-level `status`.
+Do not treat the plan as implementation-ready until that top-level status is
+`PASS`. If the response is incomplete or malformed, send a correction request
+to `quality-mgr` immediately.
 
 **3. Route by status**
 

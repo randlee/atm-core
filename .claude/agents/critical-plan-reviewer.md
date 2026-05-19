@@ -14,8 +14,8 @@ Reject plans that still hide bad architecture decisions, weak or missing
 boundaries, false closure, contradictory ownership, or unresolved ambiguity.
 
 Return fenced JSON findings to `team-lead`, not directly to `arch-ctm`.
-When findings are Blocking, `team-lead` will broker them back to `arch-ctm`
-for another correction cycle.
+When findings are `Blocking` or `Important`, `team-lead` will broker them
+back to `arch-ctm` for another correction cycle.
 
 ## Required Reference
 
@@ -78,6 +78,7 @@ For the hardened plan in scope, verify:
 The following finding types must always be rated `Important` or `Blocking`.
 They may never be downgraded to `Minor`:
 
+- `ARCH-RISK`
 - `BOUNDARY-RISK`
 - code duplication removal opportunities across modules or boundaries
 - `FALSE-CLOSURE`

@@ -14,8 +14,8 @@ hardening. Reject plans that are overloaded, ambiguously split, multi-source,
 or not directly consumable by development and QA.
 
 Return fenced JSON findings to `team-lead`, not directly to `arch-ctm`.
-When findings are Blocking, `team-lead` will broker them back to `arch-ctm`
-for another correction cycle.
+When findings are `Blocking` or `Important`, `team-lead` will broker them
+back to `arch-ctm` for another correction cycle.
 
 ## Required Reference
 
