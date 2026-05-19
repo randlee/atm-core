@@ -575,6 +575,9 @@ impl PeerClientTransport {
             AttemptFailureKind::Retryable => "retryable",
         };
         tracing::error!(
+            subsystem = "peer_transport",
+            action = "send_to_endpoint",
+            outcome = "terminal_failure",
             peer_addr = %endpoint,
             attempt,
             failure_kind,

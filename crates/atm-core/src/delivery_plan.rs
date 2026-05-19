@@ -22,6 +22,7 @@ pub(crate) enum DeliveryPlanKind {
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct LogicalMessage {
+    pub(crate) message_id: AtmMessageId,
     pub(crate) envelope: MessageEnvelope,
     pub(crate) requires_ack: bool,
     pub(crate) is_ack: bool,
@@ -48,10 +49,11 @@ impl LogicalMessage {
         requires_ack: bool,
         is_ack: bool,
     ) -> Result<Self, LogicalMessageError> {
-        if envelope.message_id.is_none() {
-            return Err(LogicalMessageError::MissingMessageId);
-        }
+        let message_id = envelope
+            .message_id
+            .ok_or(LogicalMessageError::MissingMessageId)?;
         Ok(Self {
+            message_id,
             envelope,
             requires_ack,
             is_ack,
@@ -59,12 +61,7 @@ impl LogicalMessage {
     }
 
     pub(crate) fn message_id(&self) -> AtmMessageId {
-        // Invariant: `LogicalMessage::new` rejects envelopes without a message
-        // id, and every constructor path in this module goes through that
-        // validation before a message ever reaches a delivery plan.
-        self.envelope
-            .message_id
-            .expect("validated logical delivery messages always have a message id")
+        self.message_id
     }
 }
 

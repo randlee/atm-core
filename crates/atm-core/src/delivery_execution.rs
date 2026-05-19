@@ -126,6 +126,9 @@ where
             let event = notification_event_from_target(recipient, recipient_pane_id, notification);
             if let Err(error) = self.deliver_notification_event(event) {
                 tracing::warn!(
+                    subsystem = "delivery_execution",
+                    action = "deliver_notifications",
+                    outcome = "failed",
                     recipient = %recipient.agent,
                     team = %recipient.team,
                     %error,

@@ -1,5 +1,6 @@
 use std::path::PathBuf;
 use std::sync::Arc;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::{
@@ -246,26 +247,18 @@ impl DaemonRequestDispatcher {
                 return;
             }
         };
+        Self::handle_bounded_shutdown_result(label, deadline, result_rx, join_helper);
+    }
+
+    fn handle_bounded_shutdown_result(
+        label: &'static str,
+        deadline: Duration,
+        result_rx: std::sync::mpsc::Receiver<std::thread::Result<()>>,
+        join_helper: JoinHandle<()>,
+    ) {
         match result_rx.recv_timeout(deadline) {
             Ok(join_result) => {
-                if join_helper.join().is_err() {
-                    tracing::warn!(
-                        subsystem = "runtime_health",
-                        action = "shutdown_join_helper",
-                        outcome = "panic",
-                        step = label,
-                        "daemon shutdown finalizer join helper panicked before reporting completion"
-                    );
-                }
-                if join_result.is_err() {
-                    tracing::warn!(
-                        subsystem = "runtime_health",
-                        action = "shutdown_finalize",
-                        outcome = "panic",
-                        step = label,
-                        "daemon shutdown finalizer step panicked before reporting completion; restart atm-daemon and inspect the retained observability log for the failing shutdown step"
-                    );
-                }
+                Self::finalize_bounded_shutdown_result(label, join_result, join_helper)
             }
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
@@ -275,25 +268,46 @@ impl DaemonRequestDispatcher {
                 Self::retain_shutdown_step(label, join_helper, deadline);
             }
             Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                if join_helper.join().is_err() {
-                    tracing::warn!(
-                        subsystem = "runtime_health",
-                        action = "shutdown_join_helper",
-                        outcome = "panic",
-                        step = label,
-                        "daemon shutdown finalizer join helper panicked before reporting completion"
-                    );
-                } else {
-                    tracing::warn!(
-                        subsystem = "runtime_health",
-                        action = "shutdown_join_helper",
-                        outcome = "disconnected",
-                        step = label,
-                        "daemon shutdown finalizer join helper disconnected before reporting completion"
-                    );
-                }
+                Self::report_bounded_shutdown_disconnect(label, join_helper);
             }
         }
+    }
+
+    fn finalize_bounded_shutdown_result(
+        label: &'static str,
+        join_result: std::thread::Result<()>,
+        join_helper: JoinHandle<()>,
+    ) {
+        if join_helper.join().is_err() {
+            Self::warn_shutdown_join_helper(label, "panic");
+        }
+        if join_result.is_err() {
+            tracing::warn!(
+                subsystem = "runtime_health",
+                action = "shutdown_finalize",
+                outcome = "panic",
+                step = label,
+                "daemon shutdown finalizer step panicked before reporting completion; restart atm-daemon and inspect the retained observability log for the failing shutdown step"
+            );
+        }
+    }
+
+    fn report_bounded_shutdown_disconnect(label: &'static str, join_helper: JoinHandle<()>) {
+        if join_helper.join().is_err() {
+            Self::warn_shutdown_join_helper(label, "panic");
+        } else {
+            Self::warn_shutdown_join_helper(label, "disconnected");
+        }
+    }
+
+    fn warn_shutdown_join_helper(label: &'static str, outcome: &'static str) {
+        tracing::warn!(
+            subsystem = "runtime_health",
+            action = "shutdown_join_helper",
+            outcome,
+            step = label,
+            "daemon shutdown finalizer join helper failed before reporting completion"
+        );
     }
 
     pub(crate) fn new(

@@ -434,6 +434,9 @@ impl RuntimeComposition {
             && let Err(force_error) = self.lifecycle.force_stopped()
         {
             tracing::error!(
+                subsystem = "composition",
+                action = "force_lifecycle_stop",
+                outcome = "failed",
                 state_error = %state_error,
                 force_error = %force_error,
                 serve_error = result.as_ref().err().map(|error| error.to_string()),
