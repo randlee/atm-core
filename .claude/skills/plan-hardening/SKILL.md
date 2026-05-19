@@ -51,6 +51,8 @@ Always use:
 
 ## Hard Stops
 
+- `team-lead` only checks the top-level `status` field on each fenced JSON
+  response
 - every step after step 1 must receive the previous step's fenced JSON
 - missing or malformed fenced JSON is a hard stop
 - substantial scope drift from the user-discussed plan is a hard stop

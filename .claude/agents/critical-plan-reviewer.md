@@ -95,6 +95,15 @@ Return fenced JSON only.
     "phase": "string or null",
     "sprint": "string or null"
   },
+  "sprint_scores": [
+    {
+      "sprint": "X.12",
+      "status": "PASS | FAIL",
+      "blocking_count": 0,
+      "important_count": 0,
+      "minor_count": 0
+    }
+  ],
   "docs_read": [
     "docs/phase-X/sprint-X.md"
   ],
@@ -118,6 +127,8 @@ Return fenced JSON only.
 Gate policy:
 - `PASS` only when `Blocking = 0` and `Important = 0`
 - `FAIL` if any `Blocking` or any `Important` finding exists
+- `PASS` only when `100%` of entries in `sprint_scores` have
+  `blocking_count = 0` and `important_count = 0`
 - `FAIL` if the sprint-scope-hardening fenced JSON handoff is missing or
   malformed
 - `FAIL` if architecture or boundary commitments are not explicit enough to

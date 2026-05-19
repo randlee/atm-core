@@ -79,6 +79,7 @@ For the current plan state, verify:
 
 - `SPLIT-RISK`
 - `DROP-RISK`
+- `NON-PROD`
 - `MULTI-SOURCE`
 - `REDUNDANT`
 - `OVERLONG`
@@ -97,6 +98,9 @@ They may never be downgraded to `Minor`:
 - false-closure findings masking open runtime or boundary work
 - missing ADR findings for significant architectural decisions
 - undefined important types, traits, structs, enums, or protocols
+- `SPLIT-RISK`
+- `DROP-RISK`
+- `NON-PROD`
 
 ## Output Contract
 
@@ -109,6 +113,15 @@ Return fenced JSON only.
     "phase": "string or null",
     "sprint": "string or null"
   },
+  "sprint_scores": [
+    {
+      "sprint": "X.12",
+      "status": "PASS | FAIL",
+      "blocking_count": 0,
+      "important_count": 0,
+      "minor_count": 0
+    }
+  ],
   "docs_read": [
     "docs/phase-X/sprint-X.md"
   ],
@@ -116,7 +129,7 @@ Return fenced JSON only.
     {
       "id": "PLAN-SCOPE-001",
       "severity": "Blocking | Important | Minor",
-      "category": "SPLIT-RISK | DROP-RISK | MULTI-SOURCE | REDUNDANT | OVERLONG | QA-UNFRIENDLY | MISSING-CODE-SAMPLE | VAGUE | GAP",
+      "category": "SPLIT-RISK | DROP-RISK | NON-PROD | MULTI-SOURCE | REDUNDANT | OVERLONG | QA-UNFRIENDLY | MISSING-CODE-SAMPLE | VAGUE | GAP",
       "target_refs": [
         "docs/phase-X/sprint-X.md:10"
       ],
@@ -132,6 +145,8 @@ Return fenced JSON only.
 Gate policy:
 - `PASS` only when `Blocking = 0` and `Important = 0`
 - `FAIL` if any `Blocking` or any `Important` finding exists
+- `PASS` only when `100%` of entries in `sprint_scores` have
+  `blocking_count = 0` and `important_count = 0`
 - `FAIL` if the fenced JSON handoff from the initial arch-ctm guidelines pass
   is missing or malformed
 - `FAIL` if a sprint doc is not directly consumable without duplicated scope

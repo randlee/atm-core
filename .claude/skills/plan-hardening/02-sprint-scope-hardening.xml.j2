@@ -53,6 +53,15 @@ required_variables:
         "phase": "string or null",
         "sprint": "string or null"
       },
+      "sprint_scores": [
+        {
+          "sprint": "X.12",
+          "status": "PASS | FAIL",
+          "blocking_count": 0,
+          "important_count": 0,
+          "minor_count": 0
+        }
+      ],
       "docs_read": [],
       "findings": [],
       "ready_for_next_step": true,
@@ -236,7 +245,7 @@ required_variables:
 
     Return fenced JSON to `team-lead` when this pass completes.
 
-    If `team-lead` later sends back fenced JSON findings from
+    If `team-lead` later sends back fenced JSON findings and `sprint_scores` from
     `critical-plan-reviewer`, fix those findings and return updated fenced
     JSON. Continue until `team-lead` reports that
     `critical-plan-reviewer` returned `PASS`.
