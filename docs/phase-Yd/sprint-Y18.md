@@ -1,7 +1,7 @@
 ---
 id: Y.18
 title: Thin Liveness Closure And Final Develop Gate
-status: planned
+status: complete
 branch: feature/pYd-s18-thin-liveness-closure-and-final-develop-gate
 worktree: ../atm-core-worktrees/feature/pYd-s18-thin-liveness-closure-and-final-develop-gate
 target: integrate/phase-Y

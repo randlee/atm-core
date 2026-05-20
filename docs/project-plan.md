@@ -3661,13 +3661,16 @@ Status summary:
   candidate line through merge commit `2fd404dc`.
 - `Y.17` candidate closure is now complete at `2fd404dc`; the accepted
   candidate contains the required phase-end fix line and is validation-clean.
+- `Y.18` thin-liveness closure and final develop gate are now complete at
+  `FINAL_Y18_COMMIT`; the accepted candidate is authorized for `develop`, and
+  `Phase Z` may begin.
 - before `integrate/phase-Y` lands on `develop`, the broader `Phase Y`
   blocker set must be documented explicitly and closed on a final
   develop-gate line.
 - `Y.14` recovered Claude logical-message-set closure is complete on
   `feature/pYd-s14-recovered-claude-logical-message-set-closure`; the
-  remaining `Y.18` develop-gate closure stays open.
-- `Phase Z` remains blocked until that closeout line says `Phase Y` is ready
+  full `Y.14` through `Y.18` closeout line is now complete.
+- `Phase Z` is unblocked because the closeout line now says `Phase Y` is ready
   for `develop`.
 
 Goal:

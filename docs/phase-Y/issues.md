@@ -125,10 +125,20 @@ These items block `Phase Y` from landing on `develop`.
    `runtime_health`.
    - issue class:
      - operational readiness
+   - closure status:
+     - `CLOSED by Y.18` on accepted candidate `FINAL_Y18_COMMIT`
    - closure rule:
      - if this remains a `develop` blocker, it must close with a simple
        runtime-owned liveness signal that `runtime_health` projects directly
      - do not grow `runtime_health` into a logic-heavy recovery layer
+   - closure evidence:
+     - `NotificationRuntime::worker_liveness()` is the single owner-provided
+       liveness seam
+     - `RuntimeHealthSnapshot.notification_worker_liveness` projects that seam
+       directly
+     - named proof tests:
+       - `runtime_health_projects_worker_liveness_from_notification_runtime`
+       - `runtime_health_projection_does_not_inspect_queue_internals`
 
 ## Non-Blocking Follow-Up
 
