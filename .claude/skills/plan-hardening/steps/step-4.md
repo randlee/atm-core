@@ -90,6 +90,37 @@ The reviewer output schema includes:
 - `minor_wording` for wording-only cleanup
 - `findings_hash` as the stable round fingerprint
 
+The fenced JSON output **must** include these fields:
+
+```json
+{
+  "status": "PASS | FAIL",
+  "mode": "sprint-scope-hardening",
+  "findings": [
+    {
+      "id": "ARCH-001",
+      "severity": "Blocking | Important | Minor",
+      "file": "path/to/file.md",
+      "line": 42,
+      "description": "...",
+      "fix": "...",
+      "affects_ac": true
+    }
+  ],
+  "minor_wording": [
+    {
+      "id": "ARCH-MW-001",
+      "severity": "Minor",
+      "file": "path/to/file.md",
+      "line": 10,
+      "description": "...",
+      "fix": "...",
+      "affects_ac": false
+    }
+  ]
+}
+```
+
 Update the round table after every Step 4 response:
 
 | Round | Step | Reviewer | reviewed_commit | status | blocking | important | minor | findings_hash | supersedes | Note |

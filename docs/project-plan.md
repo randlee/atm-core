@@ -3700,3 +3700,11 @@ Acceptance / Develop And Phase Z Gate:
   - the `Phase Y` blocker set is closed
   - `Phase Y` may land on `develop`
   - `Phase Z` may begin
+
+## Phase PHI — Plan Infrastructure Hardening
+
+### PHI-PLAN-HARDENING-LOOP-CLEANUP-1 — Plan-Hardening Loop Cleanup
+
+- **Branch**: plan/plan-hardening-improvements
+- **Status**: complete
+- **Deliverables**: Round-tracking fields, stale replay detection, reviewer prompt tightening, convergence tracking, finding classification separation

@@ -1,5 +1,16 @@
 # Step 3 — Sprint Scope Hardening (`arch-ctm`)
 
+## Stale Replay Detection
+
+A new step-3 task is valid only when **at least one** of the following is true:
+
+- `reviewed_commit` differs from `previous_reviewed_commit`, OR
+- `findings_hash` of the new step-4 JSON differs from the prior round's `findings_hash`
+
+If neither condition is met, do not dispatch. Update `round_id` (increment suffix) and set `replay_nonce` to the current UTC timestamp before re-rendering.
+
+**replay_nonce enforcement**: `replay_nonce` MUST be set to the current UTC timestamp (e.g., `2026-05-20T06:19:00Z`) before every render. A stale or repeated `replay_nonce` value silently defeats the anti-replay guarantee. Never reuse a `replay_nonce` between rounds.
+
 ## Execute
 
 **1. Render the message**
@@ -51,6 +62,8 @@ Maintain the round table after every Step 3 / Step 4 loop:
 
 | Round | Step | Reviewer | reviewed_commit | status | blocking | important | minor | findings_hash | supersedes | Note |
 |-------|------|----------|-----------------|--------|----------|-----------|-------|---------------|------------|------|
+
+**Non-convergence escalation**: If round N has `Total >= round N-2` (i.e., total finding count has not decreased over two rounds), team-lead **must escalate to the user** before dispatching round N+1.
 
 ## Hard stops
 

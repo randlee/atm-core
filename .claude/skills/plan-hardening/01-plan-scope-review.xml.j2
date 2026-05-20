@@ -22,7 +22,7 @@ required_variables:
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
   <pr-target>{{ pr_target }}</pr-target>
-  <round id="{{ round_id }}" index="{{ round_index }}" reviewer="plan-scope-reviewer" supersedes="{{ supersedes_task_id | default('') }}"/>
+  <round id="{{ round_id }}" index="{{ round_index }}" reviewed-commit="{{ reviewed_commit | default('') }}" reviewer="plan-scope-reviewer" supersedes="{{ supersedes_task_id | default('') }}"/>
   <replay-nonce>{{ replay_nonce }}</replay-nonce>
 
   <source-of-truth>
