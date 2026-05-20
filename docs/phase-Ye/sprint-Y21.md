@@ -34,6 +34,14 @@ without first freezing the actor contract.
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 
+ADR-015 ownership in this sprint:
+
+- update the `Decision` section so `ReconcileRuntime` explicitly owns the
+  command-in / reply-out actor contract and worker-owned debounce/coalescing
+  semantics
+- update the `Implementation Plan` section so `Y.21` closes the reconcile
+  actor contract only, while `Y.22` closes the production cutover
+
 ## Governing Requirements And ADRs
 
 - `REQ-DAEMON-RUNTIME-009`
@@ -110,7 +118,6 @@ impl ReconcileRuntime {
   types
 - debounce, coalescing, and reply fanout are modeled as worker-owned state
   rather than daemon-shared lock state
-- the fingerprint registry is planned as worker-owned actor state
 - daemon requirements and architecture docs explicitly state that reconcile is
   a worker-owned actor boundary
 - `ADR-015` is updated to name reconcile as an actor/channel lane
@@ -132,6 +139,8 @@ impl ReconcileRuntime {
 ## Explicit Non-Closure
 
 - no deletion of the production shared-state reconcile path yet
+- no production fingerprint-registry cutover yet; the final worker-owned
+  registry implementation closes in `Y.22`
 - no phase-end closure proof
 - no daemon transport or notification-boundary redesign
 
@@ -148,6 +157,7 @@ again before implementation.
 
 - `cargo test --workspace reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_fans_one_result_to_all_waiters_for_a_key -- --nocapture`
+- `cargo test --workspace reconcile_runtime_actor_preserves_bounded_debounce_extensions -- --nocapture`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo clippy --workspace -- -D warnings`

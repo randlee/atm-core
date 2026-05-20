@@ -31,6 +31,13 @@ publication is the real ownership model.
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 
+ADR-015 ownership in this sprint:
+
+- update the `Decision` section so `RuntimeStatusCache` explicitly owns
+  immutable snapshot publication through `ArcSwap`
+- update the `Implementation Plan` section so `Y.19` is the only sprint that
+  closes the runtime-status snapshot cutover
+
 ## Governing Requirements And ADRs
 
 - `REQ-DAEMON-STATUS-001`

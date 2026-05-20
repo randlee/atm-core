@@ -31,6 +31,13 @@ That design blurs the real ownership model:
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 
+ADR-015 ownership in this sprint:
+
+- update the `Decision` section so `NotificationRuntime` explicitly uses
+  bounded command-channel handoff with worker-owned drain/persistence state
+- update the `Implementation Plan` section so `Y.20` is the only sprint that
+  closes the notification-runtime ownership cutover
+
 ## Governing Requirements And ADRs
 
 - `REQ-DAEMON-RUNTIME-004`
@@ -154,6 +161,7 @@ or plugin contracts, the sprint must split before implementation.
 - `rg -n "Mutex<NotificationState>|Condvar|VecDeque" crates/atm-daemon/src/notification_runtime.rs`
 - `cargo test --workspace notification_runtime_deliver_uses_bounded_command_channel -- --nocapture`
 - `cargo test --workspace notification_runtime_persistence_failure_publishes_degraded_status -- --nocapture`
+- `cargo test --workspace notification_runtime_shutdown_stays_bounded_after_worker_backpressure -- --nocapture`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo clippy --workspace -- -D warnings`

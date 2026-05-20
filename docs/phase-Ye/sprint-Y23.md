@@ -47,6 +47,13 @@ That phase-end proof should not be mixed into the reconcile cutover itself.
 - `docs/project-plan.md`
 - any final acceptance-proof references added by `Y.19` through `Y.22`
 
+ADR-015 ownership in this sprint:
+
+- change ADR-015 status from `proposed` to `accepted` if the final accepted
+  `Phase Ye` line matches the decision
+- update the `Implementation Plan` section so `Y.23` records phase-end proof
+  only and does not claim another runtime redesign
+
 ## Proposed Design
 
 ### Proof Shape
@@ -90,9 +97,11 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
 
 ## Named Acceptance Tests
 
-- `runtime_status_cache_heartbeat_publish_is_atomically_visible`
-- `notification_runtime_deliver_uses_bounded_command_channel`
-- `reconcile_runtime_actor_cutover_removes_shared_state_runtime_path`
+- `phase_ye_issues_ledger_closed_for_y19_y23`
+- `phase_ye_readiness_record_names_final_accepted_commits_and_verdicts`
+- `adr_015_status_is_accepted_and_matches_final_runtime_ownership`
+- `phase_ye_daemon_docs_align_with_snapshot_and_actor_ownership`
+- `project_plan_marks_phase_ye_closed`
 
 ## Closure Invariants
 
@@ -120,6 +129,11 @@ not claim completion.
 - `cargo test --workspace runtime_status_cache_heartbeat_publish_is_atomically_visible -- --nocapture`
 - `cargo test --workspace notification_runtime_deliver_uses_bounded_command_channel -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_cutover_removes_shared_state_runtime_path -- --nocapture`
+- `rg -n "closed on accepted line|Y\\.19 closes|Y\\.20 closes|Y\\.21 closes|Y\\.22 closes|Y\\.23 closes" docs/phase-Ye/issues.md`
+- `rg -n "accepted commit:|verdict:" docs/phase-Ye/readiness.md`
+- `rg -n "status: accepted|Y\\.23.*phase-end proof" docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
+- `rg -n "immutable snapshot|bounded command-channel handoff|actor-owned request" docs/atm-daemon/requirements.md docs/atm-daemon/architecture.md docs/atm-daemon/boundaries.md`
+- `rg -n "Phase Ye.*closed|Y\\.23.*phase-end architecture proof" docs/project-plan.md`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo clippy --workspace -- -D warnings`

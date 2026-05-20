@@ -28,6 +28,14 @@ implementation in parallel.
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 
+ADR-015 ownership in this sprint:
+
+- update the `Decision` section so `ReconcileRuntime` explicitly owns the
+  production worker state, including fingerprint-registry ownership and bounded
+  shutdown on the final actor runtime
+- update the `Implementation Plan` section so `Y.22` is the only sprint that
+  deletes the shared-state reconcile runtime path
+
 ## Governing Requirements And ADRs
 
 - `REQ-DAEMON-RUNTIME-009`
