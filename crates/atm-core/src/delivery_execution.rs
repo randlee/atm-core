@@ -404,19 +404,34 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
     messages: &[LogicalMessage],
     result: &mut DeliveryExecutionResult,
 ) -> Result<(), AtmError> {
-    if disposition == DeliveryPlanDisposition::SqliteFailedRecovered {
-        runtime.append_claude_message_set(inbox_path, recipient, disposition, messages)?;
-        return Ok(());
+    match disposition {
+        DeliveryPlanDisposition::SqliteFailedRecovered => {
+            runtime.append_claude_message_set(inbox_path, recipient, disposition, messages)?;
+            Ok(())
+        }
+        DeliveryPlanDisposition::Persisted => {
+            execute_persisted_claude_delivery(runtime, inbox_path, recipient, messages, result)
+        }
     }
+}
 
+fn execute_persisted_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
+    runtime: &R,
+    inbox_path: &Path,
+    recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+    messages: &[LogicalMessage],
+    result: &mut DeliveryExecutionResult,
+) -> Result<(), AtmError> {
     for (index, message) in messages.iter().enumerate() {
-        if let Err(error) =
-            runtime.append_claude_inbox_message(inbox_path, recipient, &message.envelope)
-        {
+        let envelope = &message.envelope;
+        if let Err(error) = runtime.append_claude_inbox_message(inbox_path, recipient, envelope) {
             result.disposition = DeliveryExecutionDisposition::AppendDegraded;
-            result
-                .warnings
-                .push(build_append_warning(disposition, recipient, index, error));
+            result.warnings.push(build_append_warning(
+                DeliveryPlanDisposition::Persisted,
+                recipient,
+                index,
+                error,
+            ));
         }
     }
     Ok(())
