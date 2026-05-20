@@ -1,18 +1,18 @@
 ---
 id: Y.14
-title: Develop-Gate Runtime And Boundary Closure
+title: Recovered Claude Logical-Message-Set Closure
 status: planned
-branch: feature/pYd-s14-develop-gate-runtime-and-boundary-closure
-worktree: ../atm-core-worktrees/feature/pYd-s14-develop-gate-runtime-and-boundary-closure
+branch: feature/pYd-s14-recovered-claude-logical-message-set-closure
+worktree: ../atm-core-worktrees/feature/pYd-s14-recovered-claude-logical-message-set-closure
 target: integrate/phase-Y
 ---
 
-# Sprint Y.14 — Develop-Gate Runtime And Boundary Closure
+# Sprint Y.14 — Recovered Claude Logical-Message-Set Closure
 
 ## Goal
 
-- close the remaining runtime, boundary, composition, and accepted phase-end
-  fix blockers on the `Phase Y` line before it is proposed for `develop`
+- close the remaining recovered Claude behavioral correctness blocker before
+  the `Phase Y` line is proposed for `develop`
 
 ## Hard Dependencies
 
@@ -24,51 +24,45 @@ target: integrate/phase-Y
 ## Exact Targets
 
 - `crates/atm-core/src/delivery_execution.rs`
-- `crates/atm-core/src/service_runtime.rs`
-- `crates/atm-daemon/src/runtime_health.rs`
-- `crates/atm-daemon/src/boundary_adapters.rs`
-- any files required to absorb the accepted phase-end fix line on the final
-  merge candidate
+- any directly supporting `atm-core` files required to close the recovered
+  Claude message-set contract cleanly
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/readiness.md`
 - `docs/project-plan.md`
-- `docs/plan-phase-Z.md`
 
 ## Deliverables
 
 - recovered Claude SQLite-failure delivery either emits the full logical
   message set or fails hard
-- production send/ack notification execution uses `NotificationSink` with no
-  direct helper bypass
-- daemon retained-runtime composition installs the live production
-  `NotificationSink`
-- the final accepted merge candidate includes the required phase-end fix line
-  and passes the required validation stack
+- no partial outward success may survive on the recovered Claude path
+- the blocker inventory and readiness record explicitly record the `Y.14`
+  closure result
 
 ## Required Work
 
-- close the runtime, boundary, and composition blockers recorded in
+- close the recovered Claude logical-message-set blocker recorded in
   `docs/phase-Y/issues.md`
-- verify the accepted merge candidate includes the end-of-phase fix line, not
-  just the original `Phase Y` integration baseline
 - update the blocker inventory and readiness record to reflect the closure
   state
-- keep `Phase Z` blocked while any `Y.14` blocker remains open
+- keep `Phase Z` blocked while the later `Y.15` through `Y.17` closures remain
+  open
 
 ## This Sprint Does Not Close
 
+- production `NotificationSink` boundary closure
+- daemon retained-runtime `NotificationSink` installation
+- accepted phase-end fix candidate absorption
 - final `develop`-gate authorization
-- any broad `Phase Z` rollout or dogfood execution work
 - notification shutdown determinism hardening beyond the bounded accepted
   production contract
 
 ## Acceptance Criteria
 
-- the blockers assigned to `Y.14` in `docs/phase-Y/issues.md` are closed or
-  explicitly reclassified with documented rationale
-- the final accepted `Phase Y` merge candidate is runtime-clean, boundary-clean,
-  composition-clean, and validation-clean for the `Y.14` scope
-- `docs/phase-Yd/readiness.md` is updated with the `Y.14` closure results
+- the recovered Claude blocker assigned to `Y.14` in `docs/phase-Y/issues.md`
+  is closed or explicitly reclassified with documented rationale
+- the final accepted `Phase Y` merge candidate is behavioral-clean for the
+  recovered Claude scope
+- `docs/phase-Yd/readiness.md` is updated with the `Y.14` closure result
 
 ## Required Validation
 

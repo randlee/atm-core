@@ -110,10 +110,13 @@ These items are explicitly not reasons to delay `Phase Y` landing on
 
 ## Sprint Mapping
 
-- `Y.14` must close the runtime, boundary, composition, and accepted
-  phase-end-fix merge-candidate blockers.
-- `Y.15` must close the thin liveness/readiness proof, leave the named
-  `develop`-gate record, and explicitly authorize `Phase Z` to begin.
+- `Y.14` closes the recovered Claude logical-message-set blocker.
+- `Y.15` closes the production notification boundary bypass blocker.
+- `Y.16` closes the retained-runtime composition blocker and validates the
+  accepted merge candidate with the required phase-end fix line present.
+- `Y.17` closes or explicitly reclassifies the final liveness/readiness
+  blocker, leaves the named `develop`-gate record, and explicitly authorizes
+  `Phase Z` to begin only if the line is actually ready.
 
 ## Phase Z Rule
 

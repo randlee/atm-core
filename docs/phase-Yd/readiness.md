@@ -13,14 +13,20 @@ record explicitly says the line is ready.
 
 - the recovered Claude SQLite-failure path cannot partially emit a logical
   message set while still claiming success
+
+`Y.15` must prove that:
+
 - the production send/ack notification path executes through
   `NotificationSink::deliver(...)`
+
+`Y.16` must prove that:
+
 - the daemon retained-runtime factory installs the live `NotificationSink` on
   the production path
 - the accepted merge candidate includes the required end-of-phase fix line and
   passes the required validation stack
 
-`Y.15` must prove that:
+`Y.17` must prove that:
 
 - any remaining notification-worker liveness requirement is either:
   - closed by a thin runtime-owned signal projected by `runtime_health`
@@ -34,7 +40,7 @@ record explicitly says the line is ready.
 `Phase Y` may land on `develop` only after this record is updated to state
 that:
 
-- all required `Y.14` and `Y.15` closure invariants above passed
+- all required `Y.14` through `Y.17` closure invariants above passed
 - the final accepted `Phase Y` candidate is ready for merge to `develop`
 
 ## Phase Z Gate

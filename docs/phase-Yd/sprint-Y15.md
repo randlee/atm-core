@@ -1,70 +1,71 @@
 ---
 id: Y.15
-title: Thin Liveness Proof And Final Develop Gate
+title: Production Notification Boundary Closure
 status: planned
-branch: feature/pYd-s15-thin-liveness-proof-and-final-develop-gate
-worktree: ../atm-core-worktrees/feature/pYd-s15-thin-liveness-proof-and-final-develop-gate
+branch: feature/pYd-s15-production-notification-boundary-closure
+worktree: ../atm-core-worktrees/feature/pYd-s15-production-notification-boundary-closure
 target: integrate/phase-Y
 ---
 
-# Sprint Y.15 — Thin Liveness Proof And Final Develop Gate
+# Sprint Y.15 — Production Notification Boundary Closure
 
 ## Goal
 
-- close the remaining minimal operational/liveness gate for `Phase Y`
-- leave the final `develop`-gate record
-- explicitly unblock `Phase Z` only after the line is ready
+- close the production notification boundary bypass on the `Phase Y` line
 
 ## Hard Dependencies
 
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/plan-phase-Yd.md`
-- `docs/phase-Yd/readiness.md`
+- `docs/phase-Yc/plan-phase-Yc.md`
 - `Y.14` must close first
 
 ## Exact Targets
 
-- `crates/atm-daemon/src/runtime_health.rs`
-- any runtime-owned liveness signal source required by the accepted design
+- `crates/atm-core/src/delivery_execution.rs`
+- `crates/atm-core/src/service_runtime.rs`
+- any directly supporting `atm-core` files required to route notifications
+  through the approved boundary cleanly
+- `docs/phase-Y/issues.md`
 - `docs/phase-Yd/readiness.md`
 - `docs/project-plan.md`
-- `docs/plan-phase-Z.md`
 
 ## Deliverables
 
-- the notification-worker liveness blocker is resolved either by:
-  - a thin runtime-owned signal that `runtime_health` projects directly
-  - or an explicit documented reclassification to non-blocking in
-    `docs/phase-Y/issues.md`
-- `runtime_health` remains a projection layer, not a compensating recovery
-  engine
-- one explicit readiness record states whether `Phase Y` may land on `develop`
-  and whether `Phase Z` may begin
+- production send/ack notification execution uses `NotificationSink` with no
+  direct helper bypass
+- the blocker inventory and readiness record explicitly record the `Y.15`
+  closure result
 
 ## Required Work
 
-- close or explicitly reclassify the final liveness/readiness blocker from
-  `docs/phase-Y/issues.md` without growing logic-heavy inference inside
-  `runtime_health`
-- update the readiness record with the final `develop`-gate verdict
-- update `Phase Z` docs so they remain blocked until that verdict is positive
+- close the production notification execution blocker recorded in
+  `docs/phase-Y/issues.md`
+- update the blocker inventory and readiness record to reflect the closure
+  state
+- keep `Phase Z` blocked while the later `Y.16` and `Y.17` closures remain
+  open
 
 ## This Sprint Does Not Close
 
-- new `Phase Z` rollout execution
-- unrelated daemon hardening or broad observability redesign
+- daemon retained-runtime `NotificationSink` installation
+- accepted phase-end fix candidate absorption
+- final `develop`-gate authorization
+- unrelated daemon transport or roster-store redesign
 
 ## Acceptance Criteria
 
-- the final `Phase Y` blocker set is closed or explicitly reclassified with
+- the production notification boundary blocker assigned to `Y.15` in
+  `docs/phase-Y/issues.md` is closed or explicitly reclassified with
   documented rationale
-- any liveness closure uses a thin runtime-owned signal rather than
-  compensating logic inside `runtime_health`
-- `docs/phase-Yd/readiness.md` says whether `Phase Y` may land on `develop`
-- `docs/plan-phase-Z.md` reflects the final `Phase Z` gate state accurately
+- the final accepted `Phase Y` merge candidate is boundary-clean for the
+  `Y.15` scope
+- `docs/phase-Yd/readiness.md` is updated with the `Y.15` closure result
 
 ## Required Validation
 
-- focused readiness validation for the accepted liveness signal
+- `cargo fmt --all`
+- `python3 .just/run_lint.py all`
 - `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
 - `git diff --check`

@@ -42,31 +42,54 @@ It does not exist to:
 
 ## Sprint Sequence
 
-### Y.14 Develop-Gate Runtime And Boundary Closure
+### Y.14 Recovered Claude Logical-Message-Set Closure
 
 Purpose:
 
-- close the remaining runtime, boundary, composition, and accepted phase-end
-  fix blockers on the `Phase Y` line
+- close the recovered Claude behavioral correctness blocker on the final
+  `Phase Y` line
 
 Authoritative sprint doc:
 
 - [sprint-Y14.md](./sprint-Y14.md)
 
-### Y.15 Thin Liveness Proof And Final Develop Gate
+### Y.15 Production Notification Boundary Closure
 
 Purpose:
 
-- leave the final `Phase Y` develop-gate readiness record
-- prove the minimal operational/liveness requirements without adding logic
-  bloat to `runtime_health`
-- explicitly unblock `Phase Z` only if the line is actually ready
+- close the production `NotificationSink` boundary bypass on the final
+  `Phase Y` line
 
 Authoritative sprint doc:
 
 - [sprint-Y15.md](./sprint-Y15.md)
 
-Named readiness record produced by `Y.15`:
+### Y.16 Retained-Runtime Composition And Candidate Closure
+
+Purpose:
+
+- close the retained-runtime composition blocker
+- verify the accepted `Phase Y` merge candidate includes the required
+  end-of-phase fix line and is validation-clean
+
+Authoritative sprint doc:
+
+- [sprint-Y16.md](./sprint-Y16.md)
+
+### Y.17 Thin Liveness Closure And Final Develop Gate
+
+Purpose:
+
+- leave the final `Phase Y` develop-gate readiness record
+- prove or explicitly reclassify the minimal operational/liveness requirement
+  without adding logic bloat to `runtime_health`
+- explicitly unblock `Phase Z` only if the line is actually ready
+
+Authoritative sprint doc:
+
+- [sprint-Y17.md](./sprint-Y17.md)
+
+Named readiness record produced by `Y.17`:
 
 - [readiness.md](./readiness.md)
 

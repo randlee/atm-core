@@ -3671,10 +3671,14 @@ Execution shape:
 - planning-only branch: `plan/phase-Yd-z-gate`
 - implementation target branch: `integrate/phase-Y`
 - implementation sequence:
-  - `Y.14` develop-gate runtime and boundary closure
-    - branch: `feature/pYd-s14-develop-gate-runtime-and-boundary-closure`
-  - `Y.15` thin liveness proof and final develop gate
-    - branch: `feature/pYd-s15-thin-liveness-proof-and-final-develop-gate`
+  - `Y.14` recovered Claude logical-message-set closure
+    - branch: `feature/pYd-s14-recovered-claude-logical-message-set-closure`
+  - `Y.15` production notification boundary closure
+    - branch: `feature/pYd-s15-production-notification-boundary-closure`
+  - `Y.16` retained-runtime composition and candidate closure
+    - branch: `feature/pYd-s16-retained-runtime-composition-and-candidate-closure`
+  - `Y.17` thin liveness closure and final develop gate
+    - branch: `feature/pYd-s17-thin-liveness-closure-and-final-develop-gate`
 
 Immediate planning outputs:
 - `docs/phase-Y/issues.md`
@@ -3682,6 +3686,8 @@ Immediate planning outputs:
 - `docs/phase-Yd/readiness.md`
 - `docs/phase-Yd/sprint-Y14.md`
 - `docs/phase-Yd/sprint-Y15.md`
+- `docs/phase-Yd/sprint-Y16.md`
+- `docs/phase-Yd/sprint-Y17.md`
 
 Acceptance / Develop And Phase Z Gate:
 - `Phase Y` does not land on `develop` while any blocking item in
