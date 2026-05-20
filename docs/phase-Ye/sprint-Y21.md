@@ -33,7 +33,8 @@ without first freezing the actor contract.
 
 ## Hard Dependencies
 
-- `Y.20` should land first so both worker lanes use the same ownership pattern
+- `Y.20` must close first; this sprint reuses `JoinHandleOwner` from
+  `crates/atm-daemon/src/worker_support.rs` introduced by `Y.20`.
 - `docs/phase-Ye/plan-phase-Ye.md`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
@@ -69,24 +70,10 @@ ADR-015 ownership in this sprint:
 
 ### Types
 
-```rust
-use std::thread::JoinHandle;
-
-#[derive(Debug)]
-pub(crate) struct JoinHandleOwner {
-    join_handle: Mutex<Option<JoinHandle<()>>>,
-}
-
-impl JoinHandleOwner {
-    pub(crate) fn join_with_deadline(
-        &self,
-        deadline: Duration,
-    ) -> Result<(), AtmError>;
-}
-```
-
-`JoinHandleOwner` is not duplicated in this sprint. `Y.21` reuses the shared
-helper introduced in `crates/atm-daemon/src/worker_support.rs` by `Y.20`.
+`JoinHandleOwner` is defined in
+`crates/atm-daemon/src/worker_support.rs` (introduced in `Y.20`).
+`Y.21` reuses it; it must not be redefined in
+`reconcile_runtime.rs`.
 
 ```rust
 use std::sync::mpsc::{Receiver, SyncSender};

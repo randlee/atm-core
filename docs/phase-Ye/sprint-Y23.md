@@ -166,6 +166,7 @@ not claim completion.
 - `rg -n "Mutex<RuntimeStatusCacheState>|Mutex<NotificationState>|Mutex<ReconcileState>|Condvar" crates/atm-daemon/src`
 - `cargo test --workspace runtime_status_cache_heartbeat_publish_is_atomically_visible -- --nocapture`
 - `cargo test --workspace notification_runtime_deliver_uses_bounded_command_channel -- --nocapture`
+- `cargo test --workspace reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_cutover_removes_shared_state_runtime_path -- --nocapture`
 - `rg -n "closed on accepted line|Y\\.19 closes|Y\\.20 closes|Y\\.21 closes|Y\\.22 closes|Y\\.23 closes" docs/phase-Ye/issues.md`
 - `rg -n "accepted commit:|verdict:" docs/phase-Ye/readiness.md`

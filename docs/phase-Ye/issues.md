@@ -98,6 +98,8 @@ These items are explicitly out of scope for `Phase Ye`:
 - `Y.21` closes the `ReconcileRuntime` actor foundation and public contract
   shift.
 - `Y.22` closes the `ReconcileRuntime` actor cutover.
+- `Y.19` through `Y.22` incrementally close issue `4` for each respective
+  runtime; `Y.23` completes final ADR acceptance and daemon-doc alignment.
 - `Y.23` closes the phase-end proof, ADR acceptance, and architecture
   validation for the full lock-removal line.
 

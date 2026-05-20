@@ -64,6 +64,8 @@ The phase-end status block uses:
 - targeted ownership tests:
   - `runtime_status_cache_heartbeat_publish_is_atomically_visible`
   - `notification_runtime_deliver_uses_bounded_command_channel`
+  - `reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run`
+    - `Y.21` actor-contract proof
   - `reconcile_runtime_actor_cutover_removes_shared_state_runtime_path`
 - full validation stack:
   - `cargo fmt --all`

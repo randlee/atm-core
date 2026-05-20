@@ -30,7 +30,8 @@ That design blurs the real ownership model:
 
 ## Hard Dependencies
 
-- `Y.19` should land first so the phase uses one ownership direction
+- `Y.19` must close first; this sprint reuses the `arc_swap` dependency
+  introduced in `Y.19`.
 - `docs/phase-Ye/plan-phase-Ye.md`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
