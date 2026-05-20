@@ -19,12 +19,16 @@ target: integrate/phase-Y
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/plan-phase-Yd.md`
 - `docs/phase-Yd/readiness.md`
+- accepted phase-end fix evidence from:
+  - `PY-EOP-FIX-1`
+  - `PY-EOP-FIX-R2`
 - `Y.16` must close first
 
 ## Exact Targets
 
 - any files required to absorb the accepted phase-end fix line on the final
   merge candidate
+- the accepted merge candidate branch state itself
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/readiness.md`
 - `docs/project-plan.md`
@@ -41,6 +45,9 @@ target: integrate/phase-Y
 - verify the accepted merge candidate includes the end-of-phase fix line, not
   just the original `Phase Y` integration baseline
 - validate the accepted candidate line cleanly
+- record the accepted candidate commit identity in the readiness record or
+  adjacent project-plan status update so QA does not have to infer which line
+  satisfied the candidate gate
 - update the blocker inventory and readiness record to reflect the closure
   state
 - keep `Phase Z` blocked while the final `Y.18` gate remains open
@@ -55,6 +62,8 @@ target: integrate/phase-Y
 
 - the accepted merge candidate includes the required phase-end fix line and is
   validation-clean for the `Y.17` scope
+- the accepted candidate commit used for the `Y.17` gate is named explicitly in
+  the updated readiness/project-plan docs
 - `docs/phase-Yd/readiness.md` is updated with the `Y.17` closure result
 
 ## Required Validation

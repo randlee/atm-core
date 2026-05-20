@@ -66,6 +66,8 @@ target: integrate/phase-Y
 - any liveness closure uses a thin runtime-owned signal rather than
   compensating logic inside `runtime_health`
 - `docs/phase-Yd/readiness.md` says whether `Phase Y` may land on `develop`
+- `docs/phase-Yd/readiness.md` names the final accepted candidate line that is
+  authorized for merge to `develop`
 - `docs/plan-phase-Z.md` reflects the final `Phase Z` gate state accurately
 
 ## Required Validation
