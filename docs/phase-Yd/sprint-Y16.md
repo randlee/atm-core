@@ -125,23 +125,11 @@ pub fn compose_runtime(/* ... */) -> RuntimeComposition {
 }
 ```
 
-```rust
-let notification_sink: Arc<dyn NotificationSink + Send + Sync> =
-    Arc::new(DaemonNotificationSink::new(notification_runtime.clone()));
-
-let runtime = atm_daemon::composition::build_production_runtime(
-    mail_store,
-    task_store,
-    roster_store,
-    non_claude_outbound,
-    notification_sink,
-);
-```
-
 ## Required Validation
 
 - `rg -n "DaemonNotificationSink::new" crates/atm-daemon/src/composition.rs`
 - `rg -n "compose_runtime|build_production_runtime" crates/atm-daemon/src/composition.rs`
+- `cargo test --workspace production_runtime_installs_daemon_notification_sink`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`

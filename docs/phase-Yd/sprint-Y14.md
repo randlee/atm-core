@@ -129,6 +129,8 @@ match disposition {
 
 - `rg -n "if disposition == DeliveryPlanDisposition::SqliteFailedRecovered \\{[[:space:]]*break;" crates/atm-core/src/delivery_execution.rs`
 - `rg -n "append_claude_inbox_message\\(inbox_path, recipient, &message\\.envelope\\)" crates/atm-core/src/delivery_execution.rs`
+- `cargo test --workspace sqlite_failure_for_claude_requires_full_logical_message_set_delivery`
+- `cargo test --workspace sqlite_failure_for_claude_does_not_emit_message1_without_message2`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`

@@ -112,22 +112,26 @@ fn project_runtime_health(
 
 ## Acceptance Criteria
 
-- the final `Phase Y` blocker set is closed or explicitly reclassified with
-  documented rationale
-- any explicit reclassification path must be recorded in `docs/phase-Y/issues.md`
-  under the blocker entry with rationale stating why it no longer blocks
-  landing on `develop`
-- if the explicit reclassification path is taken, `arch-qa` must verify
-  `docs/phase-Y/issues.md` contains the reclassification entry and rationale
-- any liveness closure uses a thin runtime-owned signal rather than
-  compensating logic inside `runtime_health`
 - `rg -n "queue\\.len|retry_count|pending_events" crates/atm-daemon/src/runtime_health.rs`
   returns no matches
-- named test proves the projection sources worker liveness from the runtime
-  seam rather than a default or inferred unit value:
-  - `runtime_health_projects_worker_liveness_from_notification_runtime`
-- named test proves the health projection does not inspect queue internals:
-  - `runtime_health_projection_does_not_inspect_queue_internals`
+- the final `Phase Y` blocker set is closed or explicitly reclassified with
+  documented rationale
+- exactly one of the following closure paths is taken:
+  - thin-signal path
+  - reclassification path
+- thin-signal path:
+  - any liveness closure uses a thin runtime-owned signal rather than
+    compensating logic inside `runtime_health`
+  - named test proves the projection sources worker liveness from the runtime
+    seam rather than a default or inferred unit value:
+    - `runtime_health_projects_worker_liveness_from_notification_runtime`
+  - named test proves the health projection does not inspect queue internals:
+    - `runtime_health_projection_does_not_inspect_queue_internals`
+- reclassification path:
+  - `docs/phase-Y/issues.md` contains the reclassification entry and rationale
+    stating why the issue no longer blocks landing on `develop`
+  - `arch-qa` verifies that reclassification entry and rationale
+  - named runtime-health liveness tests are not required for this path
 - `docs/phase-Yd/readiness.md` says whether `Phase Y` may land on `develop`
 - `docs/phase-Yd/readiness.md` names the final accepted candidate line that is
   authorized for merge to `develop`
@@ -136,7 +140,9 @@ fn project_runtime_health(
 ## Required Validation
 
 - `rg -n "queue\\.len|retry_count|pending_events" crates/atm-daemon/src/runtime_health.rs`
-- `cargo test --workspace runtime_health_projects_worker_liveness_from_notification_runtime runtime_health_projection_does_not_inspect_queue_internals`
+- thin-signal path only:
+  - `cargo test --workspace runtime_health_projects_worker_liveness_from_notification_runtime`
+  - `cargo test --workspace runtime_health_projection_does_not_inspect_queue_internals`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`

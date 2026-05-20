@@ -124,6 +124,9 @@ notification_sink.deliver(notification_event)?;
 
 - `rg -n "maybe_run_post_send_hook" crates/atm-core/src/delivery_execution.rs`
 - `rg -n "fn maybe_run_post_send_hook" crates/atm-core/src/service_runtime.rs`
+- `cargo test --workspace delivery_notifications_use_notification_sink_boundary`
+- `cargo test --workspace notification_sink_failure_is_explicit_in_delivery_warnings`
+- `cargo test --workspace notification_sink_backpressure_does_not_reopen_hook_helper_bypass`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`
