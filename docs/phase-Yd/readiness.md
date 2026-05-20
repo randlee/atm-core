@@ -13,7 +13,7 @@ record explicitly says the line is ready.
 | --- | --- | --- | --- | --- |
 | `Y.14` | `PENDING` | `TBD` | `TBD` | recovered Claude logical-message-set closure on final accepted candidate line |
 | `Y.15` | `PENDING` | `TBD` | `TBD` | production `NotificationSink` boundary closure on final accepted candidate line |
-| `Y.16` | `PENDING` | `TBD` | `TBD` | retained-runtime composition installs live production `NotificationSink` |
+| `Y.16` | `PASS` | `2026-05-20` | `feature/pYd-s16-retained-runtime-composition-closure HEAD` | retained-runtime composition owns production runtime installation, installs the live daemon `NotificationSink`, and passes `production_runtime_installs_daemon_notification_sink` |
 | `Y.17` | `PENDING` | `TBD` | `TBD` | accepted merge candidate includes required end-of-phase fix line and passes validation |
 | `Y.18` | `PENDING` | `TBD` | `TBD` | thin liveness closure or explicit reclassification with final develop-gate result |
 

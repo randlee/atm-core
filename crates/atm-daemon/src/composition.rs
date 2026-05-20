@@ -5,6 +5,7 @@ use crate::boundary_adapters::{
 use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemObservability};
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
+use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::sqlite_observability::DaemonSqliteObservability;
@@ -14,6 +15,7 @@ use crate::{
 };
 use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RequestDispatcher};
 use atm_core::error::AtmError;
+use atm_rusqlite::SqliteBoundaryAssembly;
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -136,6 +138,7 @@ pub(crate) struct RuntimeComposition {
     server_transport: LocalIpcServerTransportAdapter,
     request_dispatcher: Arc<DaemonRequestDispatcher>,
     composition_observability: SubsystemObservability,
+    _production_runtime: atm_core::LocalServiceRuntime,
     _notification_sink: DaemonNotificationSink,
     _status_source: DaemonStatusSource,
     _watch_event_source: FileWatchEventSource,
@@ -165,6 +168,8 @@ impl RuntimeComposition {
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
         let config_ingress = DaemonConfigIngress::new();
+        let composition_observability =
+            SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
         let status_cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
@@ -181,22 +186,24 @@ impl RuntimeComposition {
             SubsystemObservability::new(DaemonSubsystem::WatchRuntime, Arc::clone(&observability)),
         );
         let inbox_ingress = DaemonInboxIngress::new();
-        let composition_observability =
-            SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
         let peer_transport_config =
             load_peer_transport_config(&config_ingress, &composition_observability)?;
-        let server_transport = build_server_transport(&observability);
-        let request_dispatcher = build_request_dispatcher(
-            home_dir,
-            &status_cache,
-            &observability,
-            Arc::clone(&sqlite_observability),
-        );
         let replay_store = sqlite_remote_replay_store_from_path_with_observability(
-            replay_store_path,
+            replay_store_path.clone(),
             Arc::clone(&sqlite_observability),
         )
         .map_err(|error| replay_store_assembly_failed(error, &composition_observability))?;
+        let production_boundary = SqliteBoundaryAssembly::new_with_observability(
+            replay_store_path.clone(),
+            Arc::clone(&sqlite_observability),
+        )
+        .map_err(|error| replay_store_assembly_failed(error, &composition_observability))?;
+        let production_runtime =
+            build_production_runtime(&production_boundary, Arc::new(notification_sink.clone()));
+        atm_core::install_default_runtime_instance(production_runtime.clone());
+        let server_transport = build_server_transport(&observability);
+        let request_dispatcher =
+            build_request_dispatcher(home_dir, &status_cache, &observability, production_boundary);
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             _host_ownership_adapter: HostOwnershipAdapter::new_with_observability(
@@ -209,6 +216,7 @@ impl RuntimeComposition {
             server_transport,
             request_dispatcher,
             composition_observability,
+            _production_runtime: production_runtime,
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
             _watch_event_source: watch_event_source.clone(),
@@ -574,6 +582,19 @@ impl RuntimeComposition {
     }
 }
 
+pub(crate) fn build_production_runtime(
+    sqlite_boundary: &SqliteBoundaryAssembly,
+    notification_sink: Arc<dyn atm_core::boundary::NotificationSink + Send + Sync>,
+) -> atm_core::LocalServiceRuntime {
+    atm_core::LocalServiceRuntime::new_with_delivery_boundaries(
+        sqlite_boundary.mail_store_arc(),
+        sqlite_boundary.task_store_arc(),
+        sqlite_boundary.roster_store_arc(),
+        Arc::new(DaemonNonClaudeOutbound::new()),
+        notification_sink,
+    )
+}
+
 fn replay_store_assembly_failed(
     error: AtmError,
     observability: &SubsystemObservability,
@@ -640,13 +661,13 @@ fn build_request_dispatcher(
     home_dir: AtmHomeDir,
     status_cache: &RuntimeStatusCache,
     observability: &Arc<dyn DaemonRuntimeObservability>,
-    sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability>,
+    sqlite_boundary: SqliteBoundaryAssembly,
 ) -> Arc<DaemonRequestDispatcher> {
     Arc::new(DaemonRequestDispatcher::new(
         home_dir,
         status_cache.clone(),
         Arc::clone(observability),
-        sqlite_observability,
+        sqlite_boundary,
     ))
 }
 
@@ -790,11 +811,16 @@ pub(crate) fn compose_runtime(
 ) -> Result<RuntimeComposition, AtmError> {
     let home_dir = AtmHomeDir::resolve()?;
     validate_runtime_home_dir(home_dir.as_path())?;
-    RuntimeComposition::new_with_replay_store_path(
+    let runtime = RuntimeComposition::new_with_replay_store_path(
         home_dir,
         atm_core::home::host_mail_db_path()?,
         observability,
-    )
+    )?;
+    // The composition root owns retained-runtime installation for the live
+    // daemon path; keeping the assembled production runtime here prevents
+    // runtime-health from silently becoming the de facto owner again.
+    let _retained_runtime = &runtime._production_runtime;
+    Ok(runtime)
 }
 
 #[cfg(test)]

@@ -70,6 +70,13 @@ These items block `Phase Y` from landing on `develop`.
    - closure requirement:
      - the live retained runtime used by the daemon must construct and install
        the daemon-owned `NotificationSink`
+   - closure evidence:
+     - `Y.16` moves retained-runtime installation ownership into
+       `atm_daemon::composition::compose_runtime`
+     - the production retained runtime is built through
+       `build_production_runtime(...)`
+     - named proof test:
+       - `production_runtime_installs_daemon_notification_sink`
 
 4. The final accepted `Phase Y` line must be lint-clean, test-clean, and
    phase-end-review clean on the candidate merge line.
