@@ -56,6 +56,7 @@ ADR-015 ownership in this sprint:
 
 ## Exact Targets
 
+- `crates/atm-daemon/src/worker_support.rs`
 - `crates/atm-daemon/src/reconcile_runtime.rs`
 - `crates/atm-daemon/src/composition.rs`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
@@ -83,6 +84,9 @@ impl JoinHandleOwner {
     ) -> Result<(), AtmError>;
 }
 ```
+
+`JoinHandleOwner` is not duplicated in this sprint. `Y.21` reuses the shared
+helper introduced in `crates/atm-daemon/src/worker_support.rs` by `Y.20`.
 
 ```rust
 use std::sync::mpsc::{Receiver, SyncSender};
@@ -153,6 +157,8 @@ impl ReconcileRuntime {
 
 - define explicit reconcile command and reply types for the final worker-owned
   actor contract
+- reuse `crates/atm-daemon/src/worker_support.rs` for `JoinHandleOwner`
+  instead of introducing a second lane-local copy in `reconcile_runtime.rs`
 - model debounce, coalescing, pending order, and completion fanout as
   authoritative worker-owned state in the contract docs and implementation seam
 - land reply-path expectations so callers own one request plus one reply
@@ -208,8 +214,9 @@ again before implementation.
 ## Required Validation
 
 - `rg -n 'struct ReconcileWorkerState' crates/atm-daemon/src/reconcile_runtime.rs`
-- `rg -n 'struct JoinHandleOwner' crates/atm-daemon/src/reconcile_runtime.rs`
-- `rg -n 'struct JoinHandleOwner' docs/phase-Ye/sprint-Y20.md docs/phase-Ye/sprint-Y21.md`
+- `rg -n 'struct JoinHandleOwner' crates/atm-daemon/src/worker_support.rs`
+- `rg -n 'worker_support.rs|struct JoinHandleOwner' docs/phase-Ye/sprint-Y20.md docs/phase-Ye/sprint-Y21.md docs/phase-Ye/sprint-Y22.md`
+- `rg -n 'struct JoinHandleOwner' crates/atm-daemon/src/reconcile_runtime.rs` # expected: zero matches
 - `cargo test --workspace reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_fans_one_result_to_all_waiters_for_a_key -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_preserves_bounded_debounce_extensions -- --nocapture`

@@ -52,6 +52,7 @@ ADR-015 ownership in this sprint:
 
 - `Cargo.toml`
 - `crates/atm-daemon/Cargo.toml`
+- `crates/atm-daemon/src/worker_support.rs`
 - `crates/atm-daemon/src/reconcile_runtime.rs`
 - `crates/atm-daemon/src/composition.rs`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
@@ -87,6 +88,10 @@ pub(crate) struct ReconcileRuntimeStatus {
 
 There is no surviving production `Mutex<ReconcileState>` or `Condvar` queue
 coordination after this sprint closes.
+
+`JoinHandleOwner` continues to live in
+`crates/atm-daemon/src/worker_support.rs`; `Y.22` reuses that shared helper
+and does not reintroduce a lane-local duplicate.
 
 ### Ownership
 
@@ -179,10 +184,12 @@ implementation.
 ## Required Validation
 
 - `rg -n 'arc_swap' Cargo.toml crates/atm-daemon/Cargo.toml`
-- `rg -n "Mutex<ReconcileState>|Condvar" crates/atm-daemon/src/reconcile_runtime.rs`
+- `rg -n 'struct JoinHandleOwner' crates/atm-daemon/src/worker_support.rs`
+- `rg -n 'struct JoinHandleOwner' crates/atm-daemon/src/reconcile_runtime.rs` # expected: zero matches
+- `rg -n "Mutex<ReconcileState>|Condvar" crates/atm-daemon/src/reconcile_runtime.rs` # expected: zero matches
 - `rg -n 'NotificationFingerprintRegistry' crates/atm-daemon/src/reconcile_runtime.rs`
 - `rg -n 'notification_fingerprints: NotificationFingerprintRegistry' crates/atm-daemon/src/reconcile_runtime.rs`
-- `rg -n 'Arc<Mutex<NotificationFingerprintRegistry>>' crates/atm-daemon/src/reconcile_runtime.rs`
+- `rg -n 'Arc<Mutex<NotificationFingerprintRegistry>>' crates/atm-daemon/src/reconcile_runtime.rs` # expected: zero matches
 - `cargo test --workspace reconcile_runtime_actor_cutover_removes_shared_state_runtime_path -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_shutdown_stays_bounded -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned -- --nocapture`

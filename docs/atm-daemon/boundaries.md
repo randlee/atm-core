@@ -431,3 +431,6 @@ Notes:
   dispatcher and projected into `atm doctor`.
 - The cache-cap rule must bound actual retained entries, not only member-state
   labels.
+- Phase `Ye` target design is immutable snapshot publication through `ArcSwap`
+  for readers; there must be no daemon-shared mutable cache lock on the
+  accepted `Phase Ye` line.
