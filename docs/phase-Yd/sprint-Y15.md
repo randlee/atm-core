@@ -83,9 +83,7 @@ new notification ownership redesign.
 - the production notification path executes only through
   `NotificationSink::deliver(...)` and no direct helper bypass remains on the
   accepted line
-- `rg -n "maybe_run_post_send_hook" crates/atm-core/src/delivery_execution.rs`
-  returns no matches
-- `rg -n "fn maybe_run_post_send_hook" crates/atm-core/src/service_runtime.rs`
+- `rg -rn "maybe_run_post_send_hook" crates/atm-core/src/`
   returns no matches
 - named tests from `Y.13` survive and pass on the final accepted candidate
   line:
@@ -122,8 +120,7 @@ notification_sink.deliver(notification_event)?;
 
 ## Required Validation
 
-- `rg -n "maybe_run_post_send_hook" crates/atm-core/src/delivery_execution.rs`
-- `rg -n "fn maybe_run_post_send_hook" crates/atm-core/src/service_runtime.rs`
+- `rg -rn "maybe_run_post_send_hook" crates/atm-core/src/`
 - `cargo test --workspace delivery_notifications_use_notification_sink_boundary`
 - `cargo test --workspace notification_sink_failure_is_explicit_in_delivery_warnings`
 - `cargo test --workspace notification_sink_backpressure_does_not_reopen_hook_helper_bypass`

@@ -20,6 +20,7 @@ target: integrate/phase-Y
 - `docs/phase-Yd/plan-phase-Yd.md`
 - `docs/phase-Yd/readiness.md`
 - `docs/adr/INDEX.md`
+- `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 - `docs/testing-guidelines.md`
 - accepted phase-end fix evidence from:
   - `feature/pY-eop-fix-1` through tip commit `243e473a` (`PY-EOP-FIX-R2`)

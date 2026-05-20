@@ -19,6 +19,8 @@ This record does **not** by itself authorize `Phase Z` to begin.
 
 ## Handoff To Phase Yd
 
+This record is a valid focused close on the `Yc` line.
+
 This record must be updated to state that:
 - both `Yc` closure invariants above are proven on the merged
   `integrate/phase-Y` line
@@ -29,6 +31,10 @@ The later `Phase Yd` line is required to re-prove those same two invariants on
 the final accepted merge-candidate line after subsequent accepted line-state
 changes. That re-proof does not mean `Yc` failed; it means `Yc` is the focused
 closure line and `Yd` is the final develop-gate line.
+
+This record is not the final `develop`-gate authorization. The same closure
+invariants proved here are required to be re-proved by `Phase Yd` on the final
+accepted `Phase Y` merge-candidate line before landing on `develop`.
 
 ## Phase Z Gate
 
