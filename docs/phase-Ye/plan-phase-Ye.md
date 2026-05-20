@@ -55,7 +55,7 @@ runtime ownership, not to reopen `Phase Y` delivery closure or to absorb
 - read-mostly runtime-health/status projection must publish immutable snapshots
   instead of sharing one mutable cache lock
 - worker-owned daemon lanes must receive commands through bounded channels and
-  own their mutable queue/debounce/completion state inside the worker lane
+  own their mutable drain/debounce/completion state inside the worker lane
 
 If a sprint cannot justify its design against that rule, the sprint is not
 hardened yet.
@@ -67,7 +67,7 @@ hardened yet.
 - replace `RuntimeStatusCache` lock-based reader/writer coordination with
   immutable snapshot publication
 - replace `NotificationRuntime` lock-based queue/lifecycle coordination with a
-  bounded worker-owned channel model
+  bounded command-channel handoff plus worker-owned drain/persistence model
 - replace `ReconcileRuntime` lock-based pending/completion/debounce
   coordination with a worker-owned actor model
 - update daemon ADR and requirement docs so the new ownership rules are

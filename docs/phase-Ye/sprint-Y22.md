@@ -23,14 +23,22 @@ implementation in parallel.
 
 - `Y.21` must close first
 - `docs/phase-Ye/plan-phase-Ye.md`
+- `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
+
+## Governing Requirements And ADRs
+
+- `REQ-DAEMON-RUNTIME-009`
+- `REQ-DAEMON-TEST-004`
+- `ADR-015`
 
 ## Exact Targets
 
 - `crates/atm-daemon/src/reconcile_runtime.rs`
 - `crates/atm-daemon/src/composition.rs`
+- `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
@@ -48,6 +56,15 @@ pub(crate) struct ReconcileRuntime {
     status: Arc<ArcSwap<ReconcileRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
     observability: SubsystemObservability,
+}
+```
+
+```rust
+#[derive(Debug, Clone, Default)]
+pub(crate) struct ReconcileRuntimeStatus {
+    started: bool,
+    shutdown_requested: bool,
+    degraded_message: Option<Arc<str>>,
 }
 ```
 
@@ -74,6 +91,8 @@ coordination after this sprint closes.
 
 - production `Mutex<ReconcileState>` and `Condvar` coordination are removed
 - pending/completed/waiter tracking is worker-owned actor state only
+- the notification fingerprint registry is moved into worker-owned reconcile
+  actor state; there is no surviving side mutex for fingerprint ownership
 - reconcile coalescing, completion fanout, and bounded shutdown are proven on
   the final actor design
 - daemon requirements, architecture, and boundary docs reflect the cutover
@@ -92,6 +111,11 @@ coordination after this sprint closes.
 - reconcile coalescing, completion fanout, and notification dedupe are owned
   by one worker lane
 - this sprint closes the reconcile runtime cutover itself, not the whole phase
+
+## Explicit Non-Closure
+
+- no phase-end ADR acceptance or readiness closeout in this sprint
+- no additional daemon-lane redesign outside reconcile cutover
 
 ## Scope Estimate
 

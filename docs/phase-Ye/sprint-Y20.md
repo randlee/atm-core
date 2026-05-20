@@ -18,7 +18,8 @@ queue, lifecycle, and degradation state through
 That design blurs the real ownership model:
 
 - producers should submit work
-- the worker should own the queue and persistence state
+- the worker should own drain sequencing, persistence state, and degraded-state
+  transitions
 - callers should not coordinate through one shared mutable queue lock
 
 ## Hard Dependencies
@@ -29,6 +30,13 @@ That design blurs the real ownership model:
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
+
+## Governing Requirements And ADRs
+
+- `REQ-DAEMON-RUNTIME-004`
+- `REQ-DAEMON-RUNTIME-009`
+- `REQ-DAEMON-TEST-004`
+- `ADR-015`
 
 ## Exact Targets
 
@@ -48,7 +56,7 @@ That design blurs the real ownership model:
 use std::sync::mpsc::{Receiver, SyncSender};
 
 pub(crate) enum NotificationCommand {
-    Deliver(NotificationEvent),
+    Deliver { event: NotificationEvent },
     Shutdown,
 }
 
@@ -64,6 +72,16 @@ pub(crate) struct NotificationRuntime {
     status: Arc<ArcSwap<NotificationRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
     observability: SubsystemObservability,
+}
+```
+
+```rust
+impl NotificationRuntime {
+    pub(crate) fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
+        self.tx
+            .try_send(NotificationCommand::Deliver { event })
+            .map_err(map_notification_backpressure)
+    }
 }
 ```
 
@@ -89,11 +107,14 @@ pub(crate) struct NotificationRuntime {
 
 - `NotificationRuntime` no longer uses `Mutex<NotificationState>` or `Condvar`
   for queue ownership
-- the queue is owned by the bounded command channel rather than a shared
-  mutable `VecDeque`
+- the bounded command channel replaces the shared mutable `VecDeque` queue and
+  preserves explicit backpressure
 - degraded notification state is published explicitly and observed by callers
   without queue locking
 - shutdown remains bounded and documented on the worker-owned lane
+- the production bounded-cap contract remains explicit; if the current `64`
+  event capacity changes, the sprint must update daemon boundary docs in the
+  same change
 - daemon requirements and architecture docs explicitly state that notification
   runtime ownership is channel/worker-based
 - `ADR-015` names the bounded notification command channel as the accepted
@@ -108,9 +129,16 @@ pub(crate) struct NotificationRuntime {
 ## Closure Invariants
 
 - producer paths never mutate the notification queue directly
-- queue ownership belongs to the worker lane, not to a daemon-shared lock
+- bounded backpressure is enforced at the command-channel seam rather than
+  through a caller-visible mutable queue lock
 - the production notification path preserves bounded backpressure and bounded
   shutdown behavior
+
+## Explicit Non-Closure
+
+- no notification event schema redesign
+- no plugin-boundary redesign
+- no reconcile actor work in this sprint
 
 ## Scope Estimate
 

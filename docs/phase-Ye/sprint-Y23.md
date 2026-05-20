@@ -29,6 +29,12 @@ That phase-end proof should not be mixed into the reconcile cutover itself.
 - `docs/atm-daemon/boundaries.md`
 - `docs/project-plan.md`
 
+## Governing Requirements And ADRs
+
+- `REQ-DAEMON-STATUS-004`
+- `REQ-DAEMON-RUNTIME-009`
+- `ADR-015`
+
 ## Exact Targets
 
 - `docs/phase-Ye/issues.md`
@@ -49,7 +55,8 @@ That phase-end proof should not be mixed into the reconcile cutover itself.
 accepted `Phase Ye` line satisfies the already-planned ownership model:
 
 - `RuntimeStatusCache` uses immutable snapshot publication
-- `NotificationRuntime` uses bounded channel / worker-owned queue ownership
+- `NotificationRuntime` uses bounded command-channel handoff and worker-owned
+  drain/persistence ownership
 - `ReconcileRuntime` uses actor-owned request, debounce, and completion
   routing
 
@@ -72,7 +79,8 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
 - `docs/phase-Ye/issues.md` marks the ownership redesign items closed on the
   accepted line
 - `docs/phase-Ye/readiness.md` records the final closure verdict, accepted
-  implementation commit(s), and validation stack for the phase
+  implementation commit(s), per-sprint closure record, and validation stack
+  for the phase
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md` is
   accepted and matches the final implementation line
 - daemon requirements, architecture, and boundary docs are aligned with the
@@ -93,6 +101,12 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
 - the issue ledger and ADR state match the accepted implementation
 - the readiness/proof record matches the accepted implementation
 - no new runtime redesign work is smuggled into the closure sprint
+
+## Explicit Non-Closure
+
+- no new runtime redesign
+- no reopening of Phase Y delivery correctness work
+- no Phase Z rollout or canary work
 
 ## Scope Estimate
 

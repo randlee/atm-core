@@ -31,6 +31,14 @@ publication is the real ownership model.
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 
+## Governing Requirements And ADRs
+
+- `REQ-DAEMON-STATUS-001`
+- `REQ-DAEMON-STATUS-003`
+- `REQ-DAEMON-STATUS-004`
+- `REQ-DAEMON-HEALTH-001`
+- `ADR-015`
+
 ## Exact Targets
 
 - `crates/atm-daemon/src/runtime_status_cache.rs`
@@ -78,6 +86,14 @@ impl RuntimeStatusCache {
 }
 ```
 
+```rust
+impl RuntimeStatusCache {
+    pub(crate) fn publish_state(&self, next: RuntimeStatusCacheState) {
+        self.state.store(Arc::new(next));
+    }
+}
+```
+
 ### Ownership
 
 - writers own state transitions by cloning the current snapshot, mutating the
@@ -120,6 +136,12 @@ impl RuntimeStatusCache {
 - all doctor/status snapshots come from one immutable published state value
 - writer paths publish complete next snapshots instead of mutating state in
   place behind a daemon-shared lock
+
+## Explicit Non-Closure
+
+- no daemon-health redesign beyond replacing the cache ownership model
+- no change to roster-store truth ownership
+- no notification or reconcile runtime redesign in this sprint
 
 ## Scope Estimate
 

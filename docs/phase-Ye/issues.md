@@ -46,8 +46,9 @@ implementation on this branch.
        lock-heavy mutable state surface
    - required end state:
      - bounded channel input
-     - worker-owned queue and persistence state
-     - only minimal lifecycle/degraded publication outside the worker
+     - worker-owned drain sequencing, persistence state, and degraded-state
+       transitions
+     - only minimal lifecycle/degraded publication outside the worker lane
 
 3. `ReconcileRuntime` is functionally an actor, but it still uses
    `Mutex<ReconcileState> + Condvar` for debounce, pending work, completions,

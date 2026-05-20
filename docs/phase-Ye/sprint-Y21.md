@@ -34,6 +34,12 @@ without first freezing the actor contract.
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
 
+## Governing Requirements And ADRs
+
+- `REQ-DAEMON-RUNTIME-009`
+- `REQ-DAEMON-TEST-004`
+- `ADR-015`
+
 ## Exact Targets
 
 - `crates/atm-daemon/src/reconcile_runtime.rs`
@@ -70,6 +76,15 @@ struct ReconcileWorkerState {
 struct PendingReconcile {
     request: ReconcileRequest,
     replies: Vec<SyncSender<Result<ReconcileResult, AtmError>>>,
+}
+```
+
+```rust
+impl ReconcileRuntime {
+    pub(crate) fn reconcile(
+        &self,
+        request: ReconcileRequest,
+    ) -> Result<ReconcileResult, AtmError>;
 }
 ```
 
@@ -113,6 +128,12 @@ struct PendingReconcile {
   request coordination
 - this sprint closes the actor contract, not yet the full shared-state
   implementation deletion
+
+## Explicit Non-Closure
+
+- no deletion of the production shared-state reconcile path yet
+- no phase-end closure proof
+- no daemon transport or notification-boundary redesign
 
 ## Scope Estimate
 

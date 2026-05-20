@@ -377,7 +377,7 @@ Notes:
 - It returns typed unavailable/backpressure failures at the boundary and
   persists delivered events through the runtime-owned notifier path instead of
   degrading to tracing-only behavior.
-- The queue is intentionally bounded at `256` events; overflow fails closed with
+- The queue is intentionally bounded at `64` events; overflow fails closed with
   typed backpressure instead of silently buffering unbounded plugin traffic.
 - Phase `Ye` target design is one worker-owned bounded command channel rather
   than a caller-visible shared mutable queue/lifecycle lock.

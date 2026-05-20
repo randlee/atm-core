@@ -10,7 +10,8 @@ line. `Y.23` owns the final update.
 ## Final Closure Checklist
 
 - `RuntimeStatusCache` uses immutable snapshot publication
-- `NotificationRuntime` uses bounded channel / worker-owned queue ownership
+- `NotificationRuntime` uses bounded command-channel handoff and worker-owned
+  drain/persistence ownership
 - `ReconcileRuntime` uses actor-owned request, debounce, and completion
   routing
 - `docs/phase-Ye/issues.md` marks the tracked ownership redesign items closed
@@ -26,6 +27,24 @@ line. `Y.23` owns the final update.
   - `TBD-Y23`
 - accepted closure sprint:
   - `Y.23`
+
+## Per-Sprint Closure Record
+
+- `Y.19`
+  - accepted commit: `TBD-Y19`
+  - verdict: `TBD`
+- `Y.20`
+  - accepted commit: `TBD-Y20`
+  - verdict: `TBD`
+- `Y.21`
+  - accepted commit: `TBD-Y21`
+  - verdict: `TBD`
+- `Y.22`
+  - accepted commit: `TBD-Y22`
+  - verdict: `TBD`
+- `Y.23`
+  - accepted commit: `TBD-Y23`
+  - verdict: `TBD`
 
 ## Validation Record
 
