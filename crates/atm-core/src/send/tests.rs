@@ -112,6 +112,16 @@ impl TestRuntime {
 
 impl crate::boundary::sealed::Sealed for TestRuntime {}
 
+impl crate::boundary::NotificationSink for TestRuntime {
+    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
+        self.notification_events
+            .lock()
+            .expect("notification events lock")
+            .push(event);
+        Ok(())
+    }
+}
+
 impl RetainedServiceRuntime for TestRuntime {
     fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         Ok(None)
@@ -218,14 +228,6 @@ impl RetainedServiceRuntime for TestRuntime {
                 recipient_pane_id: recipient.recipient_pane_id.clone(),
                 messages: messages.to_vec(),
             });
-        Ok(())
-    }
-
-    fn deliver_notification_event(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        self.notification_events
-            .lock()
-            .expect("notification events lock")
-            .push(event);
         Ok(())
     }
 

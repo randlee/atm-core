@@ -3653,6 +3653,10 @@ Acceptance / Phase Z Smoke Gate:
 Status summary:
 - `Phase Yc` captured the two original runtime blockers reopened by the focused
   production-readiness review.
+- `Y.15` is now closed on
+  `feature/pYd-s15-production-notification-boundary-closure`; the surviving
+  notification boundary proof now lives on the final accepted `Phase Y`
+  candidate line instead of only on the focused `Yc` line.
 - before `integrate/phase-Y` lands on `develop`, the broader `Phase Y`
   blocker set must be documented explicitly and closed on a final
   develop-gate line.

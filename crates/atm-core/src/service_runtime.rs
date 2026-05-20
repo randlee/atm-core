@@ -24,7 +24,7 @@ pub(crate) struct RetainedMailboxTimeoutPolicy {
     pub(crate) workflow_lock_timeout: Duration,
 }
 
-pub(crate) trait RetainedServiceRuntime {
+pub(crate) trait RetainedServiceRuntime: crate::boundary::NotificationSink {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
     fn load_team_config(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
     fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError>;
@@ -74,7 +74,6 @@ pub(crate) trait RetainedServiceRuntime {
         recipient: &DeliveryRecipientSnapshot,
         messages: &[MessageEnvelope],
     ) -> Result<(), AtmError>;
-    fn deliver_notification_event(&self, event: NotificationEvent) -> Result<(), AtmError>;
     fn load_roster_member(
         &self,
         team: &TeamName,
@@ -143,6 +142,12 @@ impl fmt::Debug for LocalServiceRuntime {
 }
 
 impl crate::boundary::sealed::Sealed for LocalServiceRuntime {}
+
+impl crate::boundary::NotificationSink for LocalServiceRuntime {
+    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
+        self.notification_sink.deliver(event)
+    }
+}
 
 #[derive(Debug, Clone, Copy, Default)]
 /// Production fallback boundary used when the daemon runtime is not composing
@@ -354,10 +359,6 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
             .map(|_| ())
     }
 
-    fn deliver_notification_event(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        self.notification_sink.deliver(event)
-    }
-
     fn commit_workflow_state<T, I, F>(
         &self,
         home_dir: &Path,
@@ -471,7 +472,6 @@ mod tests {
         RetainedServiceRuntime,
     };
     use crate::boundary;
-    use crate::delivery_execution::PostSendNotificationExecutor;
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::MessageEnvelope;
@@ -789,8 +789,7 @@ mod tests {
             agent: Some("recipient".parse::<AgentName>().expect("agent")),
         };
 
-        runtime
-            .deliver_notification_event(event.clone())
+        crate::boundary::NotificationSink::deliver(&runtime, event.clone())
             .expect("direct sink delivery");
 
         let direct_events = read_notification_events(&notification_path);
@@ -798,7 +797,7 @@ mod tests {
         assert_eq!(direct_events[0].detail, "runtime-direct");
 
         let mut warnings = Vec::new();
-        PostSendNotificationExecutor::deliver_notifications(
+        crate::delivery_execution::deliver_notifications(
             &runtime,
             &mut warnings,
             &crate::send::ResolvedRecipient {
