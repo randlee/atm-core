@@ -648,6 +648,15 @@ mod tests {
 
     impl crate::boundary::sealed::Sealed for AckRuntime {}
 
+    impl crate::boundary::NotificationSink for AckRuntime {
+        fn deliver(
+            &self,
+            _event: crate::protocol::NotificationEvent,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
+        }
+    }
+
     impl RetainedServiceRuntime for AckRuntime {
         fn load_config(
             &self,
@@ -738,13 +747,6 @@ mod tests {
             _messages: &[MessageEnvelope],
         ) -> Result<(), crate::error::AtmError> {
             panic!("ack writer-path test should not route through non-Claude delivery")
-        }
-
-        fn deliver_notification_event(
-            &self,
-            _event: crate::protocol::NotificationEvent,
-        ) -> Result<(), crate::error::AtmError> {
-            Ok(())
         }
 
         fn load_roster_member(

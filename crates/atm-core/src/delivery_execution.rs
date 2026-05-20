@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use serde::Serialize;
+
 use crate::boundary::ClaudeCompatibilityDeliveryMode;
 use crate::config::AtmConfig;
 use crate::delivery_plan::{
@@ -46,6 +48,17 @@ pub(crate) struct DeliveryTransitionContext<'a> {
     pub(crate) sender: &'a AgentName,
     pub(crate) message_id: AtmMessageId,
     pub(crate) task_id: Option<TaskId>,
+}
+
+#[derive(Debug, Serialize)]
+struct DeliveryNotificationDetail<'a> {
+    sender: String,
+    sender_team: Option<String>,
+    message_id: String,
+    requires_ack: bool,
+    is_ack: bool,
+    task_id: Option<String>,
+    recipient_pane_id: Option<&'a str>,
 }
 
 pub(crate) trait ClaudeInboxWriter: crate::boundary::sealed::Sealed {
@@ -98,50 +111,32 @@ where
     }
 }
 
-pub(crate) trait PostSendNotificationExecutor: crate::boundary::sealed::Sealed {
-    /// Notification delivery is a best-effort side effect: failures must be
-    /// surfaced as typed warnings, not as silent drops or primary delivery
-    /// failures.
-    fn deliver_notifications(
-        &self,
-        warnings: &mut Vec<WarningEntry>,
-        recipient: &crate::send::ResolvedRecipient,
-        recipient_pane_id: Option<&str>,
-        notifications: &[NotificationTarget],
-    );
-}
-
-impl<T> PostSendNotificationExecutor for T
-where
-    T: RetainedServiceRuntime + crate::boundary::sealed::Sealed + ?Sized,
-{
-    fn deliver_notifications(
-        &self,
-        warnings: &mut Vec<WarningEntry>,
-        recipient: &crate::send::ResolvedRecipient,
-        recipient_pane_id: Option<&str>,
-        notifications: &[NotificationTarget],
-    ) {
-        for notification in notifications {
-            let event = notification_event_from_target(recipient, recipient_pane_id, notification);
-            if let Err(error) = self.deliver_notification_event(event) {
-                tracing::warn!(
-                    subsystem = "delivery_execution",
-                    action = "deliver_notifications",
-                    outcome = "failed",
-                    recipient = %recipient.agent,
-                    team = %recipient.team,
-                    %error,
-                    "notification delivery failed"
-                );
-                warnings.push(WarningEntry::new(
-                    format!(
-                        "warning: notification delivery failed for {}@{}: {error}",
-                        recipient.agent, recipient.team
-                    ),
-                    error.recovery.clone(),
-                ));
-            }
+pub(crate) fn deliver_notifications(
+    notification_sink: &dyn crate::boundary::NotificationSink,
+    warnings: &mut Vec<WarningEntry>,
+    recipient: &crate::send::ResolvedRecipient,
+    recipient_pane_id: Option<&str>,
+    notifications: &[NotificationTarget],
+) {
+    for notification in notifications {
+        let event = notification_event_from_target(recipient, recipient_pane_id, notification);
+        if let Err(error) = notification_sink.deliver(event) {
+            tracing::warn!(
+                subsystem = "delivery_execution",
+                action = "deliver_notifications",
+                outcome = "failed",
+                recipient = %recipient.agent,
+                team = %recipient.team,
+                %error,
+                "notification delivery failed"
+            );
+            warnings.push(WarningEntry::new(
+                format!(
+                    "warning: notification delivery failed for {}@{}: {error}",
+                    recipient.agent, recipient.team
+                ),
+                error.recovery.clone(),
+            ));
         }
     }
 }
@@ -183,7 +178,7 @@ pub(crate) fn execute_delivery_plan<R>(
     plan: &DeliveryPlan,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + PostSendNotificationExecutor,
+    R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + crate::boundary::NotificationSink,
 {
     execute_messages(
         runtime,
@@ -216,7 +211,7 @@ fn execute_messages<R>(
     view: ExecutionView<'_>,
 ) -> Result<DeliveryExecutionResult, AtmError>
 where
-    R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + PostSendNotificationExecutor,
+    R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + crate::boundary::NotificationSink,
 {
     validate_delivery_target(view.delivery_target)?;
     let mut result = DeliveryExecutionResult::delivered();
@@ -238,7 +233,8 @@ where
         }
     }
 
-    runtime.deliver_notifications(
+    deliver_notifications(
+        runtime,
         &mut result.warnings,
         view.recipient,
         view.recipient_pane_id,
@@ -253,18 +249,19 @@ fn notification_event_from_target(
     recipient_pane_id: Option<&str>,
     notification: &NotificationTarget,
 ) -> NotificationEvent {
+    let detail = DeliveryNotificationDetail {
+        sender: notification.sender.to_string(),
+        sender_team: notification.sender_team.as_ref().map(ToString::to_string),
+        message_id: notification.message_id.to_string(),
+        requires_ack: notification.requires_ack,
+        is_ack: notification.is_ack,
+        task_id: notification.task_id.as_ref().map(ToString::to_string),
+        recipient_pane_id,
+    };
     NotificationEvent {
         kind: NotificationKind::Delivery,
-        detail: serde_json::json!({
-            "sender": notification.sender.to_string(),
-            "sender_team": notification.sender_team.as_ref().map(ToString::to_string),
-            "message_id": notification.message_id.to_string(),
-            "requires_ack": notification.requires_ack,
-            "is_ack": notification.is_ack,
-            "task_id": notification.task_id.as_ref().map(ToString::to_string),
-            "recipient_pane_id": recipient_pane_id,
-        })
-        .to_string(),
+        detail: serde_json::to_string(&detail)
+            .expect("delivery notification detail must serialize to valid JSON"),
         team: Some(recipient.team.clone()),
         agent: Some(recipient.agent.clone()),
     }
@@ -460,8 +457,7 @@ mod tests {
 
     use super::{
         ClaudeInboxWriter, DeliveryExecutionDisposition, DeliveryTransitionContext,
-        NonClaudeOutboundDeliveryWriter, PostSendNotificationExecutor,
-        emit_delivery_plan_transitions, execute_delivery_plan,
+        NonClaudeOutboundDeliveryWriter, emit_delivery_plan_transitions, execute_delivery_plan,
     };
     use crate::delivery_plan::{
         DeliveryPlan, DeliveryPlanDisposition, DeliveryPlanKind, DeliveryTarget, LogicalMessage,
@@ -477,7 +473,7 @@ mod tests {
     };
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::{AtmMessageId, MessageEnvelope};
-    use crate::send::{ResolvedRecipient, WarningEntry};
+    use crate::send::ResolvedRecipient;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
 
@@ -506,14 +502,9 @@ mod tests {
         }
     }
 
-    impl PostSendNotificationExecutor for NoopRuntime {
-        fn deliver_notifications(
-            &self,
-            _warnings: &mut Vec<WarningEntry>,
-            _recipient: &ResolvedRecipient,
-            _recipient_pane_id: Option<&str>,
-            _notifications: &[NotificationTarget],
-        ) {
+    impl crate::boundary::NotificationSink for NoopRuntime {
+        fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
+            Ok(())
         }
     }
 
@@ -679,38 +670,18 @@ mod tests {
         }
     }
 
-    impl PostSendNotificationExecutor for RecordingRuntime {
-        fn deliver_notifications(
-            &self,
-            warnings: &mut Vec<WarningEntry>,
-            recipient: &ResolvedRecipient,
-            recipient_pane_id: Option<&str>,
-            notifications: &[NotificationTarget],
-        ) {
-            for notification in notifications {
-                let event = super::notification_event_from_target(
-                    recipient,
-                    recipient_pane_id,
-                    notification,
-                );
-                if let Some(message) = self.notification_error_message {
-                    let error = AtmError::daemon_unavailable(message).with_recovery(
-                        "Restore the notification boundary before retrying retained-runtime delivery.",
-                    );
-                    warnings.push(WarningEntry::new(
-                        format!(
-                            "warning: notification delivery failed for {}@{}: {error}",
-                            recipient.agent, recipient.team
-                        ),
-                        error.recovery.clone(),
-                    ));
-                    continue;
-                }
-                self.notification_events
-                    .lock()
-                    .expect("notification events")
-                    .push(event);
+    impl crate::boundary::NotificationSink for RecordingRuntime {
+        fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
+            if let Some(message) = self.notification_error_message {
+                return Err(AtmError::daemon_unavailable(message).with_recovery(
+                    "Restore the notification boundary before retrying retained-runtime delivery.",
+                ));
             }
+            self.notification_events
+                .lock()
+                .expect("notification events")
+                .push(event);
+            Ok(())
         }
     }
 

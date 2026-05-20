@@ -68,6 +68,17 @@ These items block `Phase Y` from landing on `develop`.
        `NotificationSink::deliver(...)`
      - no production-path direct `maybe_run_post_send_hook(...)` bypass may
        remain
+   - closure status:
+     - closed by `Y.15` on
+       `feature/pYd-s15-production-notification-boundary-closure`
+     - accepted proof consists of:
+       - `rg -n "maybe_run_post_send_hook" crates/atm-core/src` returning no
+         matches
+       - surviving `Y.13` boundary tests passing on the accepted candidate
+         line:
+         - `delivery_notifications_use_notification_sink_boundary`
+         - `notification_sink_failure_is_explicit_in_delivery_warnings`
+         - `notification_sink_backpressure_does_not_reopen_hook_helper_bypass`
 
 3. Daemon retained-runtime composition must install the live
    `NotificationSink`.

@@ -1,7 +1,7 @@
 ---
 id: Y.15
 title: Production Notification Boundary Closure
-status: planned
+status: complete
 branch: feature/pYd-s15-production-notification-boundary-closure
 worktree: ../atm-core-worktrees/feature/pYd-s15-production-notification-boundary-closure
 target: integrate/phase-Y
@@ -48,6 +48,8 @@ target: integrate/phase-Y
   direct helper bypass
 - the blocker inventory and readiness record explicitly record the `Y.15`
   closure result
+- surviving `Y.13` boundary tests continue to prove the accepted candidate
+  line does not reopen the helper-bypass path
 
 ## Relationship To Phase Yc
 
