@@ -117,10 +117,15 @@ fn project_runtime_health(
 - any explicit reclassification path must be recorded in `docs/phase-Y/issues.md`
   under the blocker entry with rationale stating why it no longer blocks
   landing on `develop`
+- if the explicit reclassification path is taken, `arch-qa` must verify
+  `docs/phase-Y/issues.md` contains the reclassification entry and rationale
 - any liveness closure uses a thin runtime-owned signal rather than
   compensating logic inside `runtime_health`
 - `rg -n "queue\\.len|retry_count|pending_events" crates/atm-daemon/src/runtime_health.rs`
   returns no matches
+- named test proves the projection sources worker liveness from the runtime
+  seam rather than a default or inferred unit value:
+  - `runtime_health_projects_worker_liveness_from_notification_runtime`
 - named test proves the health projection does not inspect queue internals:
   - `runtime_health_projection_does_not_inspect_queue_internals`
 - `docs/phase-Yd/readiness.md` says whether `Phase Y` may land on `develop`
@@ -131,6 +136,7 @@ fn project_runtime_health(
 ## Required Validation
 
 - `rg -n "queue\\.len|retry_count|pending_events" crates/atm-daemon/src/runtime_health.rs`
+- `cargo test --workspace runtime_health_projects_worker_liveness_from_notification_runtime runtime_health_projection_does_not_inspect_queue_internals`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`

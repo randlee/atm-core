@@ -91,7 +91,7 @@ target: integrate/phase-Y
 
 ```rust
 // Owned by `atm_daemon::composition`.
-pub fn build_production_runtime(
+pub(crate) fn build_production_runtime(
     mail_store: Arc<dyn MailStore + Send + Sync>,
     task_store: Arc<dyn TaskStore + Send + Sync>,
     roster_store: Arc<dyn RosterStore + Send + Sync>,
