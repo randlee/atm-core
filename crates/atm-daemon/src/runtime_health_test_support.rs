@@ -59,7 +59,7 @@ impl DaemonRequestDispatcher {
             Arc::clone(&runtime_observability),
         );
         Self {
-            home_dir: home_dir.clone(),
+            home_dir: crate::AtmHomeDir::from_path_for_test(home_dir.clone()),
             observability: runtime_observability,
             advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability,

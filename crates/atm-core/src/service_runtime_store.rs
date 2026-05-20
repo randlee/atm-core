@@ -8,16 +8,26 @@ use crate::types::{AgentName, TeamName};
 
 type DefaultRuntimeFactory = fn() -> Result<LocalServiceRuntime, AtmError>;
 
-static DEFAULT_RUNTIME_FACTORY: OnceLock<DefaultRuntimeFactory> = OnceLock::new();
+#[derive(Clone)]
+enum DefaultRuntimeProvider {
+    Factory(DefaultRuntimeFactory),
+    Instance(LocalServiceRuntime),
+}
+
+static DEFAULT_RUNTIME_PROVIDER: OnceLock<DefaultRuntimeProvider> = OnceLock::new();
 
 pub fn install_default_runtime_factory(factory: DefaultRuntimeFactory) {
-    let _ = DEFAULT_RUNTIME_FACTORY.set(factory);
+    let _ = DEFAULT_RUNTIME_PROVIDER.set(DefaultRuntimeProvider::Factory(factory));
+}
+
+pub fn install_default_runtime_instance(runtime: LocalServiceRuntime) {
+    let _ = DEFAULT_RUNTIME_PROVIDER.set(DefaultRuntimeProvider::Instance(runtime));
 }
 
 pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
-    DEFAULT_RUNTIME_FACTORY
+    DEFAULT_RUNTIME_PROVIDER
         .get()
-        .copied()
+        .cloned()
         .ok_or_else(|| {
             AtmError::daemon_unavailable(
                 "sqlite-backed retained runtime is unavailable because no default runtime factory is installed",
@@ -25,8 +35,11 @@ pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
             .with_recovery(
                 "Start the daemon-backed ATM runtime or install the sqlite default runtime factory before retrying this command.",
             )
-        })?
-        ()
+        })
+        .and_then(|provider| match provider {
+            DefaultRuntimeProvider::Factory(factory) => factory(),
+            DefaultRuntimeProvider::Instance(runtime) => Ok(runtime),
+        })
 }
 
 pub(crate) trait RetainedMailboxRuntime {

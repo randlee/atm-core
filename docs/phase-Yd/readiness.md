@@ -11,9 +11,9 @@ record explicitly says the line is ready.
 
 | Sprint | Closure Result | Date | Candidate Commit | Notes |
 | --- | --- | --- | --- | --- |
-| `Y.14` | `PASS` | `2026-05-19` | `feature/pYd-s14-recovered-claude-logical-message-set-closure HEAD` | recovered Claude logical-message-set closure re-proved on the accepted candidate line; named all-or-nothing tests pass |
-| `Y.15` | `PASS` | `2026-05-19` | `ad61b3dd` | production `NotificationSink` boundary closure on final accepted candidate line; surviving `Y.13` boundary tests passed and helper-bypass grep is clean |
-| `Y.16` | `PENDING` | `TBD` | `TBD` | retained-runtime composition installs live production `NotificationSink` |
+| `Y.14` | `PASS` | `2026-05-19` | `f2ea0340` | recovered Claude logical-message-set closure re-proved on the accepted candidate line; named all-or-nothing tests pass |
+| `Y.15` | `PASS` | `2026-05-19` | `03260e0d` | production `NotificationSink` boundary closure on final accepted candidate line; surviving `Y.13` boundary tests passed and helper-bypass grep is clean |
+| `Y.16` | `PASS` | `2026-05-20` | `a551bc1c` | retained-runtime composition owns production runtime installation, installs the live daemon `NotificationSink`, and passes `production_runtime_installs_daemon_notification_sink` |
 | `Y.17` | `PENDING` | `TBD` | `TBD` | accepted merge candidate includes required end-of-phase fix line and passes validation |
 | `Y.18` | `PENDING` | `TBD` | `TBD` | thin liveness closure or explicit reclassification with final develop-gate result |
 
