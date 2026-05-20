@@ -536,7 +536,9 @@ impl ReconcileRuntime {
             .with_team(request_team.clone())
             .with_agent(request_agent.clone());
         self.inner.observability.emit_event_or_warn(event);
-        AtmError::daemon_unavailable(message)
+        AtmError::daemon_unavailable(message).with_recovery(
+            "Wait for the daemon reconcile runtime to return to a serving state, then retry the reconcile request.",
+        )
     }
 
     #[cfg(test)]

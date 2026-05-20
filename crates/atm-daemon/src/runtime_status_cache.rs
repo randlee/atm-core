@@ -82,24 +82,14 @@ impl RuntimeStatusCache {
         self.state
             .lock()
             .map(|cache| cache.clone())
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))
-            .map_err(|error| {
-                error.with_recovery(
-                    "Restart the daemon; runtime status cache state can no longer be trusted.",
-                )
-            })
+            .map_err(|_| runtime_status_cache_lock_poisoned())
     }
 
     pub(crate) fn replace_state(&self, next: RuntimeStatusCacheState) -> Result<(), AtmError> {
         let mut cache = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))
-            .map_err(|error| {
-                error.with_recovery(
-                    "Restart the daemon; runtime status cache state can no longer be trusted.",
-                )
-            })?;
+            .map_err(|_| runtime_status_cache_lock_poisoned())?;
         *cache = next;
         Ok(())
     }
@@ -122,7 +112,7 @@ impl RuntimeStatusCache {
         let mut cache = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+            .map_err(|_| runtime_status_cache_lock_poisoned())?;
         evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
         cache.members.insert(
             key,
@@ -154,7 +144,7 @@ impl RuntimeStatusCache {
         let mut cache = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+            .map_err(|_| runtime_status_cache_lock_poisoned())?;
         evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
         let last_active_at = cache
             .members
@@ -189,7 +179,7 @@ impl RuntimeStatusCache {
         let cache = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+            .map_err(|_| runtime_status_cache_lock_poisoned())?;
         Ok(cache
             .members
             .get(&RuntimeMemberKey {
@@ -245,7 +235,7 @@ impl RuntimeStatusCache {
         let cache = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+            .map_err(|_| runtime_status_cache_lock_poisoned())?;
         Ok(build_runtime_snapshot_all(&cache))
     }
 
@@ -256,7 +246,7 @@ impl RuntimeStatusCache {
         let cache = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+            .map_err(|_| runtime_status_cache_lock_poisoned())?;
         Ok(build_runtime_snapshot_scoped(&cache, members))
     }
 }
@@ -533,7 +523,7 @@ impl RuntimeStatusCache {
         let cache = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+            .map_err(|_| runtime_status_cache_lock_poisoned())?;
         Ok(cache
             .members
             .get(&RuntimeMemberKey {
@@ -554,7 +544,7 @@ impl RuntimeStatusCache {
         let mut cache = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+            .map_err(|_| runtime_status_cache_lock_poisoned())?;
         cache.members.insert(
             RuntimeMemberKey { team, member },
             RuntimeMemberRecord {
@@ -570,7 +560,7 @@ impl RuntimeStatusCache {
         let cache = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+            .map_err(|_| runtime_status_cache_lock_poisoned())?;
         Ok(cache.members.len())
     }
 
@@ -596,4 +586,10 @@ impl RuntimeStatusCache {
     ) -> Result<(), AtmError> {
         self.record_identity_conflict(request, existing_pid)
     }
+}
+
+fn runtime_status_cache_lock_poisoned() -> AtmError {
+    AtmError::daemon_unavailable("runtime status cache lock poisoned").with_recovery(
+        "Restart the daemon; runtime status cache state can no longer be trusted.",
+    )
 }
