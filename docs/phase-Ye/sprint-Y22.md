@@ -1,13 +1,19 @@
 ---
 id: Y.22
 title: Reconcile Runtime Cutover
-status: draft
+status: planned
 branch: feature/pYe-s22-reconcile-runtime-cutover
 worktree: ../atm-core-worktrees/feature/pYe-s22-reconcile-runtime-cutover
 target: integrate/phase-Y
 ---
 
 # Sprint Y.22 — Reconcile Runtime Cutover
+
+## Goal
+
+- delete the production shared-state reconcile runtime path
+- land the final actor-owned reconcile implementation, including
+  fingerprint-registry ownership and bounded shutdown
 
 ## Motivation / Problem Statement
 
@@ -95,7 +101,7 @@ coordination after this sprint closes.
 4. worker replies to all waiters and updates reconcile runtime status
 5. shutdown sends one control command and proves bounded termination
 
-## Required Deliverables
+## Deliverables
 
 - production `Mutex<ReconcileState>` and `Condvar` coordination are removed
 - pending/completed/waiter tracking is worker-owned actor state only
@@ -106,11 +112,35 @@ coordination after this sprint closes.
 - daemon requirements, architecture, and boundary docs reflect the cutover
   implementation shape for reconcile ownership
 
-## Named Acceptance Tests
+## Required Work
+
+- replace the production reconcile runtime with the actor-owned runtime shape
+  defined in `Y.21`
+- move the notification fingerprint registry into worker-owned reconcile actor
+  state and delete any surviving side ownership surface
+- delete production shared-state pending/completed/waiter coordination paths
+- prove bounded shutdown on the final actor-owned runtime
+- update daemon requirements, architecture, boundaries, and `ADR-015` so the
+  accepted reconcile ownership model matches the final cutover implementation
+
+## Paths To Delete
+
+- `crates/atm-daemon/src/reconcile_runtime.rs`
+  - delete production `Mutex<ReconcileState>` ownership
+  - delete production `Condvar` reconcile coordination
+  - delete production shared-state pending/completed/waiter tracking paths
+
+## Acceptance Criteria
 
 - `reconcile_runtime_actor_cutover_removes_shared_state_runtime_path`
 - `reconcile_runtime_actor_shutdown_stays_bounded`
 - `reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned`
+- all listed deliverables land at a production-ready level for the sprint
+  scope; no hybrid production runtime survives after cutover
+- the fingerprint registry, debounce state, and completion fanout are owned by
+  one worker lane on the final implementation line
+- the sprint closes reconcile cutover only and does not absorb phase-end proof
+  or final ADR acceptance work
 
 ## Closure Invariants
 

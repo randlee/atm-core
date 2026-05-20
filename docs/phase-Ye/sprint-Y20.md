@@ -1,13 +1,19 @@
 ---
 id: Y.20
 title: Notification Runtime Channel Ownership
-status: draft
+status: planned
 branch: feature/pYe-s20-notification-runtime-channel-ownership
 worktree: ../atm-core-worktrees/feature/pYe-s20-notification-runtime-channel-ownership
 target: integrate/phase-Y
 ---
 
 # Sprint Y.20 — Notification Runtime Channel Ownership
+
+## Goal
+
+- replace `NotificationRuntime` shared queue/lifecycle locking with bounded
+  channel handoff plus worker-owned drain and persistence state
+- keep explicit backpressure and bounded shutdown on the production lane
 
 ## Motivation / Problem Statement
 
@@ -110,7 +116,7 @@ impl NotificationRuntime {
 4. shutdown sends one bounded control command and joins the worker within the
    bounded deadline
 
-## Required Deliverables
+## Deliverables
 
 - `NotificationRuntime` no longer uses `Mutex<NotificationState>` or `Condvar`
   for queue ownership
@@ -127,11 +133,39 @@ impl NotificationRuntime {
 - `ADR-015` names the bounded notification command channel as the accepted
   design
 
-## Named Acceptance Tests
+## Required Work
+
+- replace the production `NotificationState` queue/lifecycle coordination
+  surface with a bounded command channel owned by the notification worker lane
+- keep producer behavior limited to lifecycle checks plus `try_send(...)`
+  submission of explicit `NotificationCommand` values
+- move queue draining, persistence sequencing, degraded-state transitions, and
+  backpressure ownership fully into the worker lane
+- preserve and document the production bounded-cap contract; if the channel
+  capacity changes, update daemon boundary docs in the same sprint
+- make shutdown use one bounded control path that proves the worker can still
+  terminate under backpressure
+- update daemon requirements, architecture, boundaries, and `ADR-015` so the
+  accepted notification ownership rule is worker-owned channel coordination
+
+## Paths To Delete
+
+- `crates/atm-daemon/src/notification_runtime.rs`
+  - delete production `Mutex<NotificationState>` ownership
+  - delete production `Condvar` queue/lifecycle coordination
+  - delete production `VecDeque` queue ownership on the caller-visible path
+
+## Acceptance Criteria
 
 - `notification_runtime_deliver_uses_bounded_command_channel`
 - `notification_runtime_persistence_failure_publishes_degraded_status`
 - `notification_runtime_shutdown_stays_bounded_after_worker_backpressure`
+- all listed deliverables land at a production-ready level for the sprint
+  scope; no producer path still mutates queue state directly
+- the final production lane has one authoritative backpressure seam through the
+  bounded command channel
+- daemon docs and `ADR-015` describe notification runtime ownership as
+  channel-in / worker-owned drain and persistence state
 
 ## Closure Invariants
 

@@ -1,13 +1,20 @@
 ---
 id: Y.19
 title: Runtime Status Snapshot Publication
-status: draft
+status: planned
 branch: feature/pYe-s19-runtime-status-snapshot-publication
 worktree: ../atm-core-worktrees/feature/pYe-s19-runtime-status-snapshot-publication
 target: integrate/phase-Y
 ---
 
 # Sprint Y.19 — Runtime Status Snapshot Publication
+
+## Goal
+
+- replace `RuntimeStatusCache` shared mutable locking with immutable snapshot
+  publication through `ArcSwap`
+- make reader snapshots lock-free and writer publication atomic on the
+  production path
 
 ## Motivation / Problem Statement
 
@@ -118,7 +125,7 @@ impl RuntimeStatusCache {
 4. doctor/status path reads one snapshot and derives counts/readiness from that
    immutable value
 
-## Required Deliverables
+## Deliverables
 
 - `RuntimeStatusCache` uses immutable snapshot publication through `ArcSwap`
 - `Mutex<RuntimeStatusCacheState>` is removed from the production path
@@ -130,11 +137,39 @@ impl RuntimeStatusCache {
 - `ADR-015` is updated to include the final snapshot-publication contract for
   `RuntimeStatusCache`; phase-end acceptance remains a `Y.23` deliverable
 
-## Named Acceptance Tests
+## Required Work
+
+- replace the production `RuntimeStatusCache` state holder with an immutable
+  `ArcSwap<RuntimeStatusCacheState>` publication surface
+- convert heartbeat and sqlite-readiness writers to clone, mutate, and publish
+  a coherent next snapshot instead of mutating shared state behind a mutex
+- update doctor/status snapshot reads so they load one immutable published
+  snapshot and derive health/readiness from that value
+- delete poison-oriented cache recovery behavior that exists only because the
+  production path currently uses a shared mutable mutex
+- update daemon requirements, architecture, and boundary docs so the cache is
+  documented as a snapshot-publication surface rather than a lock-owned cache
+- update `ADR-015` so `Y.19` is the only sprint that closes the snapshot
+  publication cutover
+
+## Paths To Delete
+
+- `crates/atm-daemon/src/runtime_status_cache.rs`
+  - delete production `Mutex<RuntimeStatusCacheState>` ownership
+  - delete poison-driven cache read/write recovery paths that are only needed
+    for the old shared-mutex design
+
+## Acceptance Criteria
 
 - `runtime_status_cache_heartbeat_publish_is_atomically_visible`
 - `runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking`
 - `runtime_status_cache_sqlite_readiness_flip_publishes_one_coherent_snapshot`
+- all listed deliverables land at a production-ready level for the sprint
+  scope; no reader path still depends on `Mutex<RuntimeStatusCacheState>`
+- the accepted design leaves one production publication seam, not a hybrid of
+  mutex mutation plus snapshot reads
+- daemon docs and `ADR-015` describe immutable snapshot publication as the
+  accepted runtime-status ownership rule
 
 ## Closure Invariants
 

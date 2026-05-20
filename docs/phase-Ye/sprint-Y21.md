@@ -1,13 +1,19 @@
 ---
 id: Y.21
 title: Reconcile Runtime Actor Foundation
-status: draft
+status: planned
 branch: feature/pYe-s21-reconcile-runtime-actor-foundation
 worktree: ../atm-core-worktrees/feature/pYe-s21-reconcile-runtime-actor-foundation
 target: integrate/phase-Y
 ---
 
 # Sprint Y.21 — Reconcile Runtime Actor Foundation
+
+## Goal
+
+- freeze the reconcile actor command/reply contract
+- move the authoritative reconcile ownership model to worker-owned actor state
+  without claiming the final shared-state cutover in the same sprint
 
 ## Motivation / Problem Statement
 
@@ -112,7 +118,7 @@ impl ReconcileRuntime {
 4. worker fans one `ReconcileResult` or typed failure back to all waiting
    reply channels for that key
 
-## Required Deliverables
+## Deliverables
 
 - the reconcile actor command/reply model is defined and lands with explicit
   types
@@ -122,11 +128,30 @@ impl ReconcileRuntime {
   a worker-owned actor boundary
 - `ADR-015` is updated to name reconcile as an actor/channel lane
 
-## Named Acceptance Tests
+## Required Work
+
+- define explicit reconcile command and reply types for the final worker-owned
+  actor contract
+- model debounce, coalescing, pending order, and completion fanout as
+  authoritative worker-owned state in the contract docs and implementation seam
+- land reply-path expectations so callers own one request plus one reply
+  receiver rather than shared waiter tracking
+- update daemon requirements, architecture, boundaries, and `ADR-015` so the
+  accepted reconcile ownership rule is actor/channel based
+- leave the production shared-state delete work and final fingerprint-registry
+  cutover to `Y.22` only
+
+## Acceptance Criteria
 
 - `reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run`
 - `reconcile_runtime_actor_fans_one_result_to_all_waiters_for_a_key`
 - `reconcile_runtime_actor_preserves_bounded_debounce_extensions`
+- all listed deliverables land at a production-ready level for the sprint
+  scope; the actor contract is no longer ambiguous or optional
+- the reconcile lane has one authoritative command-in / reply-out model before
+  cutover begins
+- the sprint does not claim deletion of the production shared-state path or
+  final fingerprint-registry ownership closure
 
 ## Closure Invariants
 

@@ -1,13 +1,19 @@
 ---
 id: Y.23
 title: Phase-End Architecture Proof
-status: draft
+status: planned
 branch: feature/pYe-s23-phase-end-architecture-proof
 worktree: ../atm-core-worktrees/feature/pYe-s23-phase-end-architecture-proof
 target: integrate/phase-Y
 ---
 
 # Sprint Y.23 — Phase-End Architecture Proof
+
+## Goal
+
+- prove that `Y.19` through `Y.22` coexist cleanly on the accepted line
+- close the issue ledger, readiness record, ADR acceptance, and final daemon
+  doc alignment for `Phase Ye`
 
 ## Motivation / Problem Statement
 
@@ -81,7 +87,7 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
 5. mark `ADR-015` accepted if the final line matches the decision
 6. leave one final phase-end validation record in the planning/docs surfaces
 
-## Required Deliverables
+## Deliverables
 
 - `docs/phase-Ye/issues.md` marks the ownership redesign items closed on the
   accepted line
@@ -95,7 +101,19 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
 - `docs/project-plan.md` reflects `Phase Ye` closeout state
 - one explicit validation/proof summary exists on the accepted line
 
-## Named Acceptance Tests
+## Required Work
+
+- review the accepted `Phase Ye` line after `Y.22` and verify that all three
+  ownership redesigns are present while the old lock-owned paths are absent
+- update `docs/phase-Ye/issues.md` to record final closure of `Y.19` through
+  `Y.23`
+- update `docs/phase-Ye/readiness.md` with the final accepted commit set,
+  verdicts, and validation record for the phase
+- update `ADR-015` and the daemon docs so the accepted runtime ownership model
+  matches the final implementation line exactly
+- update `docs/project-plan.md` to reflect `Phase Ye` closeout state
+
+## Acceptance Criteria
 
 Doc-state verification (`rg`):
 
@@ -109,6 +127,10 @@ Doc-state verification (`rg`):
   `docs/atm-daemon/boundaries.md` must align on immutable snapshots, bounded
   command-channel handoff, and actor-owned reconcile runtime ownership
 - `docs/project-plan.md` must mark `Phase Ye` closed
+- all listed deliverables land at a production-ready level for the sprint
+  scope; no unresolved ownership redesign is silently carried past `Y.23`
+- this sprint introduces no new runtime redesign and serves only as phase-end
+  proof and document/ADR closure
 
 ## Closure Invariants
 
