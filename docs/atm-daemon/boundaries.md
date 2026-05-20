@@ -379,8 +379,9 @@ Notes:
   degrading to tracing-only behavior.
 - The queue is intentionally bounded at `64` events; overflow fails closed with
   typed backpressure instead of silently buffering unbounded plugin traffic.
-- Phase `Ye` target design is one worker-owned bounded command channel rather
-  than a caller-visible shared mutable queue/lifecycle lock.
+- `Y.20` replaces the caller-visible shared queue/lifecycle lock with one
+  bounded `sync_channel` producer handoff, immutable runtime-status
+  publication, and worker-owned drain/persistence state.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use

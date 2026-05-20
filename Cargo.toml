@@ -33,3 +33,4 @@ uuid = { version = "1", features = ["serde", "v4"] }
 cargo_metadata = "0.23"
 sc-observability = "1.0.0"
 sc-observability-types = "1.0.0"
+arc_swap = { package = "arc-swap", version = "1.7" }

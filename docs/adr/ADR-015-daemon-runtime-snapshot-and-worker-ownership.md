@@ -46,6 +46,8 @@ The post-`Phase Y` daemon runtime line adopts these rules:
    equivalent actor ownership.
    - `NotificationRuntime` uses a bounded channel to hand events to the worker
    - the worker owns queue/drain/persistence state
+   - lifecycle/degraded status is published as immutable runtime state instead
+     of caller-visible queue/lifecycle locking
    - `ReconcileRuntime` uses a bounded command channel plus per-request reply
      channel
    - the worker owns debounce, coalescing, completion fanout, and fingerprint
@@ -107,7 +109,8 @@ reader/writer lock tuning.
 - `Y.19`:
   - `RuntimeStatusCache` -> immutable snapshot publication via `ArcSwap`
 - `Y.20`:
-  - `NotificationRuntime` -> bounded channel + worker-owned persistence state
+  - `NotificationRuntime` -> bounded command channel + immutable runtime-status
+    publication + worker-owned persistence state
 - `Y.21`:
   - `ReconcileRuntime` actor contract and reply-path foundation
 - `Y.22`:

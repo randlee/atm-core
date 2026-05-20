@@ -15,6 +15,7 @@ atm-rusqlite = { path = "../atm-rusqlite", version = "1.2.0" }
 chrono = { version = "0.4", features = ["serde"] }
 fs2 = "0.4"
 interprocess = "2.4.2"
+arc_swap.workspace = true
 sc-observability.workspace = true
 sc-observability-types.workspace = true
 serde_json.workspace = true

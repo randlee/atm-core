@@ -523,8 +523,10 @@ Required daemon-private partitions:
   - owns reconcile debounce, coalescing, and bounded pending-work wakeups
   - target ownership shape is one worker-owned actor lane
 - `notification_runtime`
-  - owns bounded notification delivery worker state and notifier wakeups
-  - target ownership shape is one worker-owned bounded command lane
+  - owns bounded notification delivery command intake, degraded-state
+    publication, and worker-join lifecycle
+  - accepted ownership shape is one bounded `sync_channel` producer handoff
+    plus worker-owned drain/persistence state
 
 Observability rule:
 - daemon-owned `sc-observability` sinks are a cross-cutting runtime facility

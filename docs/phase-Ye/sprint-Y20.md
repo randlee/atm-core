@@ -1,7 +1,7 @@
 ---
 id: Y.20
 title: Notification Runtime Channel Ownership
-status: planned
+status: complete
 branch: feature/pYe-s20-notification-runtime-channel-ownership
 worktree: ../atm-core-worktrees/feature/pYe-s20-notification-runtime-channel-ownership
 target: integrate/phase-Y
@@ -58,31 +58,26 @@ ADR-015 ownership in this sprint:
 - `crates/atm-daemon/Cargo.toml`
 - `crates/atm-daemon/src/worker_support.rs`
 - `crates/atm-daemon/src/notification_runtime.rs`
-- `crates/atm-daemon/src/boundary_adapters.rs`
-- `crates/atm-daemon/src/composition.rs`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
   - update the `DaemonNotificationSinkAdapter` record
+- `docs/phase-Ye/sprint-Y20.md`
 
 ## Proposed Design
 
 ### Types
 
 ```rust
-use std::thread::JoinHandle;
-
 #[derive(Debug)]
 pub(crate) struct JoinHandleOwner {
     join_handle: Mutex<Option<JoinHandle<()>>>,
 }
 
 impl JoinHandleOwner {
-    pub(crate) fn join_with_deadline(
-        &self,
-        deadline: Duration,
-    ) -> Result<(), AtmError>;
+    pub(crate) fn install(&self, handle: JoinHandle<()>) -> Result<(), AtmError>;
+    pub(crate) fn take(&self) -> Result<Option<JoinHandle<()>>, AtmError>;
 }
 
 ```
@@ -92,22 +87,28 @@ impl JoinHandleOwner {
 reuse that helper rather than redefining it in lane-local files.
 
 ```rust
-use std::sync::mpsc::{Receiver, SyncSender};
+use std::sync::mpsc::SyncSender;
 
 pub(crate) enum NotificationCommand {
     Deliver { event: NotificationEvent },
-    Shutdown,
 }
 
 #[derive(Debug, Clone)]
 pub(crate) struct NotificationRuntimeStatus {
     started: bool,
+    shutdown_requested: bool,
     degraded_message: Option<Arc<str>>,
+    worker_liveness: NotificationWorkerLiveness,
 }
 
 #[derive(Clone)]
 pub(crate) struct NotificationRuntime {
-    tx: SyncSender<NotificationCommand>,
+    inner: Arc<NotificationRuntimeInner>,
+}
+
+struct NotificationRuntimeInner {
+    command_tx: SyncSender<NotificationCommand>,
+    command_rx: Mutex<Option<Receiver<NotificationCommand>>>,
     status: Arc<ArcSwap<NotificationRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
     observability: SubsystemObservability,
@@ -117,7 +118,8 @@ pub(crate) struct NotificationRuntime {
 ```rust
 impl NotificationRuntime {
     pub(crate) fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError> {
-        self.tx
+        self.inner
+            .command_tx
             .try_send(NotificationCommand::Deliver { event })
             .map_err(map_notification_backpressure)
     }
@@ -142,8 +144,9 @@ impl NotificationRuntime {
    one `NotificationCommand::Deliver`
 3. worker receives commands, persists events, and publishes degraded state if
    persistence fails
-4. shutdown sends one bounded control command and joins the worker within the
-   bounded deadline
+4. shutdown publishes one bounded shutdown state transition, the worker drains
+   any already-buffered commands until empty or deadline exhaustion, and the
+   join helper enforces the bounded shutdown deadline
 
 ## Deliverables
 
