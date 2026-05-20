@@ -17,6 +17,8 @@ Output fenced JSON findings only; do not send ATM messages or contact
 `arch-ctm` directly.
 When findings are `Blocking` or `Important`, `team-lead` will broker them
 back to `arch-ctm` for another correction cycle.
+Return all remaining `Blocking` and `Important` findings in one pass. Do not
+trickle them across multiple rounds unless the plan changed between rounds.
 
 ## Required Reference
 
@@ -30,6 +32,8 @@ The assignment must contain:
 - a required fenced JSON handoff from sprint-scope hardening
 - context fields `source_of_truth`, `references`, `worktree_path`, and
   `branch`
+- current round metadata: `reviewed_commit`, `previous_reviewed_commit`, and
+  `findings_hash`
 
 Reject the task if the fenced JSON handoff from sprint-scope hardening is
 missing or malformed.
@@ -40,6 +44,10 @@ Expected previous-step fenced JSON:
 {
   "status": "PASS",
   "mode": "plan-hardening-sprint-scope",
+  "round_id": "STEP3-R1",
+  "round_index": 1,
+  "reviewed_commit": "abc1234",
+  "previous_reviewed_commit": "",
   "iterations": 0,
   "findings_resolved": 0,
   "final_finding_count": 0,
@@ -48,6 +56,22 @@ Expected previous-step fenced JSON:
   "docs_created": [],
   "ready_for_next_step": true,
   "errors": []
+}
+```
+
+Expected assignment context:
+
+```json
+{
+  "source_of_truth": "string",
+  "references": [
+    "docs/path.md"
+  ],
+  "worktree_path": "/absolute/path/to/worktree",
+  "branch": "feature/branch-name",
+  "reviewed_commit": "abc1234",
+  "previous_reviewed_commit": "",
+  "findings_hash": ""
 }
 ```
 
@@ -95,6 +119,13 @@ Return fenced JSON only.
 ```json
 {
   "status": "PASS | FAIL",
+  "mode": "critical-plan-review",
+  "reviewer": "critical-plan-reviewer",
+  "round_id": "STEP3-R1",
+  "round_index": 1,
+  "reviewed_commit": "abc1234",
+  "previous_reviewed_commit": "",
+  "findings_hash": "stable-round-fingerprint",
   "scope": {
     "phase": "string or null",
     "sprint": "string or null"
@@ -116,11 +147,25 @@ Return fenced JSON only.
       "id": "PLAN-CRIT-001",
       "severity": "Blocking | Important | Minor",
       "category": "ARCH-RISK | BOUNDARY-RISK | FALSE-CLOSURE | CONTRA | MISSING-ADR | UNDEF | VAGUE | GAP",
+      "classification": "structural | wording",
+      "affects_ac": false,
       "target_refs": [
         "docs/phase-X/sprint-X.md:10"
       ],
       "issue": "clear statement of the planning problem",
       "required_correction": "specific corrective action"
+    }
+  ],
+  "minor_wording": [
+    {
+      "id": "PLAN-CRIT-M1",
+      "category": "VAGUE | GAP",
+      "affects_ac": false,
+      "target_refs": [
+        "docs/phase-X/sprint-X.md:10"
+      ],
+      "issue": "non-blocking wording problem",
+      "suggested_cleanup": "specific wording cleanup"
     }
   ],
   "ready_for_next_step": true,
@@ -130,6 +175,10 @@ Return fenced JSON only.
 
 `sprint_scores` must include every sprint in the current plan scope, not only
 the sprints with findings.
+
+Use `findings` for structural issues and `minor_wording` for wording-only
+cleanup. Do not place wording-only cleanup in `findings` unless
+`affects_ac: true`.
 
 Gate policy:
 - `PASS` only when `Blocking = 0` and `Important = 0`
@@ -142,5 +191,7 @@ Gate policy:
   prevent obvious implementation drift
 - `PASS` only when architecture, boundary ownership, and closure language are
   all acceptable
+- `minor_wording` must contain wording-only cleanup that does not block
+  implementability unless `affects_ac: true`
 - when returning `FAIL`, make the `required_correction` fields explicit enough
   for `arch-ctm` to fix them in the next cycle

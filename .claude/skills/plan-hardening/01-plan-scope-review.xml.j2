@@ -12,6 +12,9 @@ required_variables:
   - pr_target
   - source_of_truth
   - references
+  - round_id
+  - round_index
+  - replay_nonce
 ---
 <atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening-guidelines-pass">
   <description>{{ description }}</description>
@@ -19,6 +22,8 @@ required_variables:
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
   <pr-target>{{ pr_target }}</pr-target>
+  <round id="{{ round_id }}" index="{{ round_index }}" reviewer="plan-scope-reviewer" supersedes="{{ supersedes_task_id | default('') }}"/>
+  <replay-nonce>{{ replay_nonce }}</replay-nonce>
 
   <source-of-truth>
 {{ source_of_truth }}
@@ -78,6 +83,10 @@ required_variables:
     {
       "status": "PASS | FAIL",
       "mode": "plan-hardening-guidelines-pass",
+      "round_id": "{{ round_id }}",
+      "round_index": {{ round_index }},
+      "reviewed_commit": "<commit-sha>",
+      "previous_reviewed_commit": "{{ previous_reviewed_commit | default('') }}",
       "iterations": 0,
       "docs_modified": [],
       "docs_created": [],

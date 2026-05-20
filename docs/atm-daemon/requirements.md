@@ -114,6 +114,11 @@ Initial crate requirement IDs:
   must not create a relock/unlink race for the host-wide ownership path.
   Satisfies:
   `REQ-P-RUNTIME-002`, `REQ-P-DAEMON-LIFECYCLE-001`, `REQ-CORE-DAEMON-001`.
+- `REQ-DAEMON-RUNTIME-009` daemon background worker lanes that own active
+  coordination state must use single-owner bounded command channels or
+  equivalent actor ownership rather than daemon-shared queue/debounce mutable
+  locks. Satisfies:
+  `REQ-CORE-BOUNDARY-002`, `REQ-DAEMON-RUNTIME-004`.
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
   - one cross-platform local IPC contract for same-host
@@ -170,6 +175,10 @@ Initial crate requirement IDs:
   projection remain owned by the runtime-status partition and must not bypass
   daemon-owned status truth. Satisfies:
   `REQ-CORE-DOCTOR-002`.
+- `REQ-DAEMON-STATUS-004` read-mostly daemon status projection must publish
+  immutable coherent snapshots for readers; doctor/status consumers must not
+  depend on one daemon-shared mutable cache lock for ordinary reads. Satisfies:
+  `REQ-CORE-DOCTOR-002`, `REQ-DAEMON-STATUS-001`.
 - `REQ-DAEMON-CONFIG-001` `atm-daemon` owns daemon config validation at startup
   and on lifecycle-control-triggered reload or rescan. Invalid config must
   produce a typed failure or bounded reload rejection rather than a silent
@@ -279,6 +288,8 @@ Requirement IDs:
 - `REQ-DAEMON-RUNTIME-005`
 - `REQ-DAEMON-RUNTIME-006`
 - `REQ-DAEMON-RUNTIME-007`
+- `REQ-DAEMON-RUNTIME-008`
+- `REQ-DAEMON-RUNTIME-009`
 - `REQ-DAEMON-TRANSPORT-001`
 - `REQ-DAEMON-TRANSPORT-002`
 - `REQ-DAEMON-TRANSPORT-003`
@@ -290,12 +301,16 @@ Requirement IDs:
 - `REQ-DAEMON-STATUS-001`
 - `REQ-DAEMON-STATUS-002`
 - `REQ-DAEMON-STATUS-003`
+- `REQ-DAEMON-STATUS-004`
 - `REQ-DAEMON-CONFIG-001`
 - `REQ-DAEMON-TEST-001`
 - `REQ-DAEMON-TEST-002`
 - `REQ-DAEMON-TEST-003`
 - `REQ-DAEMON-TEST-004`
 - `REQ-DAEMON-OBS-001`
+- `REQ-DAEMON-OBS-002`
+- `REQ-DAEMON-OBS-003`
+- `REQ-DAEMON-OBS-004`
 - `REQ-DAEMON-HEALTH-001`
 - `REQ-DAEMON-SIGNAL-001`
 - `REQ-DAEMON-PLATFORM-001`

@@ -68,3 +68,26 @@ Sprint docs must be short and structured enough that:
 
 If that is not true, shorten or tighten the sprint doc instead of adding more
 prompt ceremony.
+
+## Finding Classification
+
+Classify each finding as either structural or wording before assigning
+severity.
+
+Structural findings:
+- missing acceptance or validation gate
+- incorrect command, test name, or grep gate
+- uncovered call site, file, module, or runtime path
+- missing type, trait, function, boundary contract, or ADR
+- false-closure wording that hides still-open runtime or boundary work
+
+Structural findings always remain in the main `findings` array and must be
+rated `Blocking` or `Important` when they affect implementability or closure.
+
+Wording findings:
+- prose ambiguity that does not change scope or closure meaning
+- formatting cleanup
+- non-normative wording polish
+
+Wording findings belong in `minor_wording` and do not fail the round unless
+the reviewer marks them `affects_ac: true`.
