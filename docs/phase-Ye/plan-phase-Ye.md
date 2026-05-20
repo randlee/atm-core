@@ -22,8 +22,8 @@ runtime ownership, not to reopen `Phase Y` delivery closure or to absorb
   - `84764175`
 - implementation prerequisite:
   - `Phase Y` must first land on `develop`
-- future integration branch:
-  - `integrate/phase-Ye`
+- implementation baseline and branch root:
+  - `integrate/phase-Y`
 - issue inventory:
   - [issues.md](./issues.md)
 
@@ -80,6 +80,17 @@ hardened yet.
 - change product surface or CLI behavior
 - merge `Phase Z` rollout or canary work into daemon architecture cleanup
 
+## Implementation Branch Model
+
+`Phase Ye` does not introduce a second long-lived integration branch.
+
+Implementation work branches from the current accepted `integrate/phase-Y`
+line:
+
+- each `Y.19` through `Y.23` worktree is created off `integrate/phase-Y`
+- accepted sprint branches merge back into `integrate/phase-Y`
+- the planning line remains on this `develop`-based worktree only
+
 ## Sprint Sequence
 
 ### Y.19 Runtime Status Snapshot Publication
@@ -115,17 +126,34 @@ Authoritative sprint doc:
 
 - [sprint-Y21.md](./sprint-Y21.md)
 
-### Y.22 Reconcile Runtime Cutover And Proof
+### Y.22 Reconcile Runtime Cutover
 
 Purpose:
 
-- complete the reconcile actor cutover, delete the shared-state runtime path,
-  and leave one phase-end proof that the daemon lock-removal line closed
-  cleanly
+- complete the reconcile actor cutover and delete the shared-state runtime
+  path
 
 Authoritative sprint doc:
 
 - [sprint-Y22.md](./sprint-Y22.md)
+
+### Y.23 Phase-End Architecture Proof
+
+Purpose:
+
+- leave one explicit phase-end proof that the daemon lock-removal line closed
+  cleanly
+- mark the issue ledger closed
+- accept the ADR and final daemon-doc alignment on the accepted line
+- finalize the named readiness/proof artifact for the accepted line
+
+Authoritative sprint doc:
+
+- [sprint-Y23.md](./sprint-Y23.md)
+
+Named closure artifact:
+
+- [readiness.md](./readiness.md)
 
 ## Exit Condition
 
@@ -139,4 +167,8 @@ Authoritative sprint doc:
   request/worker ownership
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md` is
   accepted and reflected in daemon requirement/architecture docs
+- `docs/phase-Ye/issues.md` marks the ownership redesign items closed on the
+  accepted line
+- `docs/phase-Ye/readiness.md` records the final accepted proof state for the
+  phase
 - the daemon validation stack passes on the final accepted `Phase Ye` line

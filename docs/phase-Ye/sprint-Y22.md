@@ -1,19 +1,19 @@
 ---
 id: Y.22
-title: Reconcile Runtime Cutover And Proof
+title: Reconcile Runtime Cutover
 status: draft
-branch: feature/pYe-s22-reconcile-runtime-cutover-and-proof
-worktree: ../atm-core-worktrees/feature/pYe-s22-reconcile-runtime-cutover-and-proof
-target: integrate/phase-Ye
+branch: feature/pYe-s22-reconcile-runtime-cutover
+worktree: ../atm-core-worktrees/feature/pYe-s22-reconcile-runtime-cutover
+target: integrate/phase-Y
 ---
 
-# Sprint Y.22 — Reconcile Runtime Cutover And Proof
+# Sprint Y.22 — Reconcile Runtime Cutover
 
 ## Motivation / Problem Statement
 
-`Y.21` defines the reconcile actor contract. `Y.22` exists so the phase closes
-only after the old shared-state runtime path is deleted and the final actor
-design is proven on the accepted line.
+`Y.21` defines the reconcile actor contract. `Y.22` exists to delete the old
+shared-state runtime path and land the actor-owned reconcile implementation on
+the accepted line.
 
 Without a dedicated cutover sprint, the reconcile lane is the most likely part
 of `Phase Ye` to claim closure while still carrying the old lock-heavy
@@ -23,7 +23,6 @@ implementation in parallel.
 
 - `Y.21` must close first
 - `docs/phase-Ye/plan-phase-Ye.md`
-- `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
@@ -32,12 +31,9 @@ implementation in parallel.
 
 - `crates/atm-daemon/src/reconcile_runtime.rs`
 - `crates/atm-daemon/src/composition.rs`
-- `docs/phase-Ye/issues.md`
-- `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
-- `docs/project-plan.md`
 
 ## Proposed Design
 
@@ -71,19 +67,17 @@ coordination after this sprint closes.
 1. caller submits reconcile request over the bounded command channel
 2. worker coalesces and debounces
 3. worker executes watch/ingress/notification work
-4. worker replies to all waiters and updates runtime status publication
+4. worker replies to all waiters and updates reconcile runtime status
 5. shutdown sends one control command and proves bounded termination
 
 ## Required Deliverables
 
 - production `Mutex<ReconcileState>` and `Condvar` coordination are removed
 - pending/completed/waiter tracking is worker-owned actor state only
-- phase-end validation proves reconcile coalescing, completion fanout, and
-  bounded shutdown on the final actor design
-- `docs/phase-Ye/issues.md` is updated to mark all three lock-removal items
-  closed
-- `ADR-015` is accepted and reflected in daemon requirements and architecture
-  docs
+- reconcile coalescing, completion fanout, and bounded shutdown are proven on
+  the final actor design
+- daemon requirements, architecture, and boundary docs reflect the cutover
+  implementation shape for reconcile ownership
 
 ## Named Acceptance Tests
 
@@ -97,14 +91,14 @@ coordination after this sprint closes.
   `Condvar`
 - reconcile coalescing, completion fanout, and notification dedupe are owned
   by one worker lane
-- `Phase Ye` closes only when all three daemon ownership redesigns are proven
-  on the accepted line
+- this sprint closes the reconcile runtime cutover itself, not the whole phase
 
 ## Scope Estimate
 
 This sprint is credible only because `Y.21` isolates the actor contract first.
-If the team attempts to reintroduce additional daemon-runtime redesign in this
-same sprint, it should split before implementation.
+If the team attempts to reintroduce phase-end proof, ADR acceptance, or
+cross-phase closeout work into this same sprint, it should split before
+implementation.
 
 ## Required Validation
 

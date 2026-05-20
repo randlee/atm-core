@@ -4,7 +4,7 @@ title: Reconcile Runtime Actor Foundation
 status: draft
 branch: feature/pYe-s21-reconcile-runtime-actor-foundation
 worktree: ../atm-core-worktrees/feature/pYe-s21-reconcile-runtime-actor-foundation
-target: integrate/phase-Ye
+target: integrate/phase-Y
 ---
 
 # Sprint Y.21 — Reconcile Runtime Actor Foundation

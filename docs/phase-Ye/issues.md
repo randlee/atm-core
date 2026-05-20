@@ -96,5 +96,6 @@ These items are explicitly out of scope for `Phase Ye`:
 - `Y.20` closes the `NotificationRuntime` bounded-channel ownership redesign.
 - `Y.21` closes the `ReconcileRuntime` actor foundation and public contract
   shift.
-- `Y.22` closes the `ReconcileRuntime` cutover, proof, and phase-end
-  architecture validation.
+- `Y.22` closes the `ReconcileRuntime` actor cutover.
+- `Y.23` closes the phase-end proof, ADR acceptance, and architecture
+  validation for the full lock-removal line.

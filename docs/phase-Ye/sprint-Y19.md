@@ -4,7 +4,7 @@ title: Runtime Status Snapshot Publication
 status: draft
 branch: feature/pYe-s19-runtime-status-snapshot-publication
 worktree: ../atm-core-worktrees/feature/pYe-s19-runtime-status-snapshot-publication
-target: integrate/phase-Ye
+target: integrate/phase-Y
 ---
 
 # Sprint Y.19 — Runtime Status Snapshot Publication
@@ -104,8 +104,8 @@ impl RuntimeStatusCache {
 - heartbeat and sqlite-readiness writers publish coherent next snapshots
 - daemon requirements and architecture docs explicitly state that live status
   projection is a snapshot-publication surface, not a shared mutable cache lock
-- `ADR-015` is updated from planning proposal to accepted status for this
-  status-publication rule if no later sprint changes the decision
+- `ADR-015` is updated to include the final snapshot-publication contract for
+  `RuntimeStatusCache`; phase-end acceptance remains a `Y.23` deliverable
 
 ## Named Acceptance Tests
 

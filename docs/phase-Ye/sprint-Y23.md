@@ -1,0 +1,113 @@
+---
+id: Y.23
+title: Phase-End Architecture Proof
+status: draft
+branch: feature/pYe-s23-phase-end-architecture-proof
+worktree: ../atm-core-worktrees/feature/pYe-s23-phase-end-architecture-proof
+target: integrate/phase-Y
+---
+
+# Sprint Y.23 — Phase-End Architecture Proof
+
+## Motivation / Problem Statement
+
+After `Y.19` through `Y.22` land, the phase still needs one explicit closure
+sprint that proves the three ownership redesigns coexist cleanly on the
+accepted line and that the daemon contract documents match the implementation.
+
+That phase-end proof should not be mixed into the reconcile cutover itself.
+
+## Hard Dependencies
+
+- `Y.22` must close first
+- `docs/phase-Ye/plan-phase-Ye.md`
+- `docs/phase-Ye/issues.md`
+- `docs/phase-Ye/readiness.md`
+- `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
+- `docs/atm-daemon/requirements.md`
+- `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/boundaries.md`
+- `docs/project-plan.md`
+
+## Exact Targets
+
+- `docs/phase-Ye/issues.md`
+- `docs/phase-Ye/readiness.md`
+- `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
+- `docs/adr/INDEX.md`
+- `docs/atm-daemon/requirements.md`
+- `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/boundaries.md`
+- `docs/project-plan.md`
+- any final acceptance-proof references added by `Y.19` through `Y.22`
+
+## Proposed Design
+
+### Proof Shape
+
+`Y.23` does not introduce a new daemon runtime design. It proves that the
+accepted `Phase Ye` line satisfies the already-planned ownership model:
+
+- `RuntimeStatusCache` uses immutable snapshot publication
+- `NotificationRuntime` uses bounded channel / worker-owned queue ownership
+- `ReconcileRuntime` uses actor-owned request, debounce, and completion
+  routing
+
+### Ownership
+
+- this sprint owns closure proof, issue-ledger closure, and ADR/doc acceptance
+- it does not own another runtime redesign
+
+### Data Flow
+
+1. review the accepted `Phase Ye` line after `Y.22`
+2. verify each ownership redesign is present and the old lock path is absent
+3. update the issue ledger to closed state
+4. update `docs/phase-Ye/readiness.md` with the final proof record
+5. mark `ADR-015` accepted if the final line matches the decision
+6. leave one final phase-end validation record in the planning/docs surfaces
+
+## Required Deliverables
+
+- `docs/phase-Ye/issues.md` marks the ownership redesign items closed on the
+  accepted line
+- `docs/phase-Ye/readiness.md` records the final closure verdict, accepted
+  implementation commit(s), and validation stack for the phase
+- `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md` is
+  accepted and matches the final implementation line
+- daemon requirements, architecture, and boundary docs are aligned with the
+  final accepted runtime ownership shapes
+- `docs/project-plan.md` reflects `Phase Ye` closeout state
+- one explicit validation/proof summary exists on the accepted line
+
+## Named Acceptance Tests
+
+- `runtime_status_cache_heartbeat_publish_is_atomically_visible`
+- `notification_runtime_deliver_uses_bounded_command_channel`
+- `reconcile_runtime_actor_cutover_removes_shared_state_runtime_path`
+
+## Closure Invariants
+
+- `Phase Ye` closes only when all three daemon ownership redesigns are proven
+  on the accepted line
+- the issue ledger and ADR state match the accepted implementation
+- the readiness/proof record matches the accepted implementation
+- no new runtime redesign work is smuggled into the closure sprint
+
+## Scope Estimate
+
+This sprint is intentionally documentation/proof-oriented. If more code
+redesign is still needed, `Y.22` was not actually closed and the phase should
+not claim completion.
+
+## Required Validation
+
+- `rg -n "Mutex<RuntimeStatusCacheState>|Mutex<NotificationState>|Mutex<ReconcileState>|Condvar" crates/atm-daemon/src`
+- `cargo test --workspace runtime_status_cache_heartbeat_publish_is_atomically_visible -- --nocapture`
+- `cargo test --workspace notification_runtime_deliver_uses_bounded_command_channel -- --nocapture`
+- `cargo test --workspace reconcile_runtime_actor_cutover_removes_shared_state_runtime_path -- --nocapture`
+- `cargo fmt --all`
+- `python3 .just/run_lint.py all`
+- `cargo clippy --workspace -- -D warnings`
+- `cargo test --workspace`
+- `git diff --check`

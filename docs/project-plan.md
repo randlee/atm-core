@@ -3656,6 +3656,8 @@ Status summary:
   - `ReconcileRuntime`
 - `Phase Ye` is the follow-on design line that simplifies those surfaces after
   `Phase Y` lands on `develop`.
+- implementation continues on the existing `integrate/phase-Y` line rather
+  than creating a second long-lived integration branch
 
 Goal:
 - replace read-mostly daemon status locking with immutable snapshot publication
@@ -3667,21 +3669,24 @@ Execution shape:
 - planning-only branch:
   - `plan/phase-Y-lock-removal`
 - implementation target branch:
-  - `integrate/phase-Ye`
+  - `integrate/phase-Y`
 - implementation sequence:
   - `Y.19` runtime status snapshot publication
   - `Y.20` notification runtime channel ownership
   - `Y.21` reconcile runtime actor foundation
-  - `Y.22` reconcile runtime cutover and proof
+  - `Y.22` reconcile runtime cutover
+  - `Y.23` phase-end architecture proof
 
 Immediate planning outputs:
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/phase-Ye/issues.md`
 - `docs/phase-Ye/plan-phase-Ye.md`
+- `docs/phase-Ye/readiness.md`
 - `docs/phase-Ye/sprint-Y19.md`
 - `docs/phase-Ye/sprint-Y20.md`
 - `docs/phase-Ye/sprint-Y21.md`
 - `docs/phase-Ye/sprint-Y22.md`
+- `docs/phase-Ye/sprint-Y23.md`
 
 Phase rules:
 - `Phase Ye` does not reopen `Phase Y` delivery correctness work
@@ -3690,3 +3695,5 @@ Phase rules:
   surface, not a broad daemon-health redesign
 - `ReconcileRuntime` is intentionally split into foundation and cutover sprints
   so the actor contract lands before the old shared-state path is deleted
+- `Phase Ye` ends with one separate proof sprint so reconcile cutover does not
+  also have to carry whole-phase closure

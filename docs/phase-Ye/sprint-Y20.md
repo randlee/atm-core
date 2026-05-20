@@ -4,7 +4,7 @@ title: Notification Runtime Channel Ownership
 status: draft
 branch: feature/pYe-s20-notification-runtime-channel-ownership
 worktree: ../atm-core-worktrees/feature/pYe-s20-notification-runtime-channel-ownership
-target: integrate/phase-Ye
+target: integrate/phase-Y
 ---
 
 # Sprint Y.20 — Notification Runtime Channel Ownership

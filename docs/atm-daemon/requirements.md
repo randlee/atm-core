@@ -114,7 +114,7 @@ Initial crate requirement IDs:
   must not create a relock/unlink race for the host-wide ownership path.
   Satisfies:
   `REQ-P-RUNTIME-002`, `REQ-P-DAEMON-LIFECYCLE-001`, `REQ-CORE-DAEMON-001`.
-- `REQ-DAEMON-RUNTIME-008` daemon background worker lanes that own active
+- `REQ-DAEMON-RUNTIME-009` daemon background worker lanes that own active
   coordination state must use single-owner bounded command channels or
   equivalent actor ownership rather than daemon-shared queue/debounce mutable
   locks. Satisfies:
@@ -288,6 +288,8 @@ Requirement IDs:
 - `REQ-DAEMON-RUNTIME-005`
 - `REQ-DAEMON-RUNTIME-006`
 - `REQ-DAEMON-RUNTIME-007`
+- `REQ-DAEMON-RUNTIME-008`
+- `REQ-DAEMON-RUNTIME-009`
 - `REQ-DAEMON-TRANSPORT-001`
 - `REQ-DAEMON-TRANSPORT-002`
 - `REQ-DAEMON-TRANSPORT-003`
@@ -299,12 +301,16 @@ Requirement IDs:
 - `REQ-DAEMON-STATUS-001`
 - `REQ-DAEMON-STATUS-002`
 - `REQ-DAEMON-STATUS-003`
+- `REQ-DAEMON-STATUS-004`
 - `REQ-DAEMON-CONFIG-001`
 - `REQ-DAEMON-TEST-001`
 - `REQ-DAEMON-TEST-002`
 - `REQ-DAEMON-TEST-003`
 - `REQ-DAEMON-TEST-004`
 - `REQ-DAEMON-OBS-001`
+- `REQ-DAEMON-OBS-002`
+- `REQ-DAEMON-OBS-003`
+- `REQ-DAEMON-OBS-004`
 - `REQ-DAEMON-HEALTH-001`
 - `REQ-DAEMON-SIGNAL-001`
 - `REQ-DAEMON-PLATFORM-001`
