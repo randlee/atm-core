@@ -14,6 +14,13 @@ sc-compose render \
 
 The vars file or rendered task must include `step-2` fenced JSON as the
 required input payload.
+It must also carry current round metadata:
+- `round_id`
+- `round_index`
+- `replay_nonce`
+- `reviewed_commit`
+- `previous_reviewed_commit`
+- `findings_hash`
 
 **2. Send to `arch-ctm`**
 
@@ -35,6 +42,15 @@ Save the extracted fenced JSON to `/tmp/step-3.json`.
 
 - `PASS` -> proceed to Step 4
 - `FAIL` -> re-render and re-send Step 3 to `arch-ctm`
+- if `arch-ctm` ACKs but responds as though the same already-fixed round is
+  being replayed, increment `round_index`, update `round_id`, refresh
+  `replay_nonce` with the current UTC timestamp, and re-render before
+  re-sending
+
+Maintain the round table after every Step 3 / Step 4 loop:
+
+| Round | Step | Reviewer | reviewed_commit | status | blocking | important | minor | findings_hash | supersedes | Note |
+|-------|------|----------|-----------------|--------|----------|-----------|-------|---------------|------------|------|
 
 ## Hard stops
 

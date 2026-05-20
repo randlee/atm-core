@@ -13,6 +13,9 @@ required_variables:
   - source_of_truth
   - references
   - previous_step_json
+  - round_id
+  - round_index
+  - replay_nonce
 ---
 <atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening-consistency">
   <description>{{ description }}</description>
@@ -20,6 +23,8 @@ required_variables:
   <worktree>{{ worktree_path }}</worktree>
   <branch>{{ branch }}</branch>
   <pr-target>{{ pr_target }}</pr-target>
+  <round id="{{ round_id }}" index="{{ round_index }}" reviewer="quality-mgr" reviewed-commit="{{ reviewed_commit | default('') }}" supersedes="{{ supersedes_task_id | default('') }}"/>
+  <replay-nonce>{{ replay_nonce }}</replay-nonce>
 
   <source-of-truth>
 {{ source_of_truth }}
@@ -51,6 +56,13 @@ required_variables:
     ```json
     {
       "status": "PASS | FAIL",
+      "mode": "critical-plan-review",
+      "reviewer": "critical-plan-reviewer",
+      "round_id": "STEP3-R1",
+      "round_index": 1,
+      "reviewed_commit": "abc1234",
+      "previous_reviewed_commit": "",
+      "findings_hash": "stable-round-fingerprint",
       "scope": {
         "phase": "string or null",
         "sprint": "string or null"
@@ -66,6 +78,7 @@ required_variables:
       ],
       "docs_read": [],
       "findings": [],
+      "minor_wording": [],
       "ready_for_next_step": true,
       "errors": []
     }
@@ -205,6 +218,10 @@ required_variables:
       {
         "status": "PASS | FAIL",
         "mode": "plan-hardening-consistency",
+        "round_id": "{{ round_id }}",
+        "round_index": {{ round_index }},
+        "reviewed_commit": "<commit-sha>",
+        "previous_reviewed_commit": "{{ previous_reviewed_commit | default('') }}",
         "iterations": 0,
         "findings_resolved": 0,
         "final_finding_count": 0,
