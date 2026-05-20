@@ -108,7 +108,9 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
 - update `docs/phase-Ye/issues.md` to record final closure of `Y.19` through
   `Y.23`
 - update `docs/phase-Ye/readiness.md` with the final accepted commit set,
-  verdicts, and validation record for the phase
+  verdicts, and validation record for the phase; `Y.23` owns writing the
+  final readiness rows for `Y.19` through `Y.22` if earlier sprint executors
+  left those rows in placeholder state
 - update `ADR-015` and the daemon docs so the accepted runtime ownership model
   matches the final implementation line exactly
 - update `docs/project-plan.md` to reflect `Phase Ye` closeout state

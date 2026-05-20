@@ -55,6 +55,8 @@ ADR-015 ownership in this sprint:
 
 ## Exact Targets
 
+- `Cargo.toml`
+- `crates/atm-daemon/Cargo.toml`
 - `crates/atm-daemon/src/runtime_status_cache.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-daemon/src/composition.rs`
@@ -87,16 +89,17 @@ pub(crate) struct RuntimeStatusCache {
 
 ```rust
 impl RuntimeStatusCache {
-    pub(crate) fn snapshot_state(&self) -> Arc<RuntimeStatusCacheState>;
+    pub(crate) fn snapshot(&self) -> Arc<RuntimeStatusCacheState>;
+
+    pub(crate) fn snapshot_for_members(
+        &self,
+        members: &[RuntimeMemberKey],
+    ) -> Arc<RuntimeStatusCacheState>;
 
     pub(crate) fn publish_state(
         &self,
         next: RuntimeStatusCacheState,
     );
-
-    pub(crate) fn update_state<F>(&self, mutate: F)
-    where
-        F: FnOnce(&mut RuntimeStatusCacheState);
 }
 ```
 
@@ -139,6 +142,8 @@ impl RuntimeStatusCache {
 
 ## Required Work
 
+- add `arc_swap` to the workspace `Cargo.toml` dependency table and to
+  `crates/atm-daemon/Cargo.toml` before the runtime-status snapshot work lands
 - replace the production `RuntimeStatusCache` state holder with an immutable
   `ArcSwap<RuntimeStatusCacheState>` publication surface
 - convert heartbeat and sqlite-readiness writers to clone, mutate, and publish
@@ -168,6 +173,8 @@ impl RuntimeStatusCache {
   scope; no reader path still depends on `Mutex<RuntimeStatusCacheState>`
 - the accepted design leaves one production publication seam, not a hybrid of
   mutex mutation plus snapshot reads
+- the authoritative reader interface is `snapshot()` and
+  `snapshot_for_members(...)`; no parallel `snapshot_state()` contract remains
 - daemon docs and `ADR-015` describe immutable snapshot publication as the
   accepted runtime-status ownership rule
 
@@ -196,6 +203,7 @@ implementation.
 
 ## Required Validation
 
+- `rg -n 'arc_swap' Cargo.toml crates/atm-daemon/Cargo.toml`
 - `rg -n "Mutex<RuntimeStatusCacheState>|lock poisoned" crates/atm-daemon/src/runtime_status_cache.rs`
 - `cargo test --workspace runtime_status_cache_heartbeat_publish_is_atomically_visible -- --nocapture`
 - `cargo test --workspace runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking -- --nocapture`

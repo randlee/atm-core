@@ -50,6 +50,8 @@ ADR-015 ownership in this sprint:
 
 ## Exact Targets
 
+- `Cargo.toml`
+- `crates/atm-daemon/Cargo.toml`
 - `crates/atm-daemon/src/reconcile_runtime.rs`
 - `crates/atm-daemon/src/composition.rs`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
@@ -114,6 +116,9 @@ coordination after this sprint closes.
 
 ## Required Work
 
+- reuse the `arc_swap` dependency introduced in `Y.19`; if `Y.19` is not yet
+  on the accepted line, add `arc_swap` to the workspace `Cargo.toml`
+  dependency table and to `crates/atm-daemon/Cargo.toml` in this sprint
 - replace the production reconcile runtime with the actor-owned runtime shape
   defined in `Y.21`
 - move the notification fingerprint registry into worker-owned reconcile actor
@@ -164,6 +169,7 @@ implementation.
 
 ## Required Validation
 
+- `rg -n 'arc_swap' Cargo.toml crates/atm-daemon/Cargo.toml`
 - `rg -n "Mutex<ReconcileState>|Condvar" crates/atm-daemon/src/reconcile_runtime.rs`
 - `cargo test --workspace reconcile_runtime_actor_cutover_removes_shared_state_runtime_path -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_shutdown_stays_bounded -- --nocapture`

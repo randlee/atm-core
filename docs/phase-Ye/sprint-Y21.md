@@ -68,6 +68,22 @@ ADR-015 ownership in this sprint:
 ### Types
 
 ```rust
+use std::thread::JoinHandle;
+
+#[derive(Debug)]
+pub(crate) struct JoinHandleOwner {
+    join_handle: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl JoinHandleOwner {
+    pub(crate) fn join_with_deadline(
+        &self,
+        deadline: Duration,
+    ) -> Result<(), AtmError>;
+}
+```
+
+```rust
 use std::sync::mpsc::{Receiver, SyncSender};
 
 pub(crate) enum ReconcileCommand {
@@ -149,15 +165,21 @@ impl ReconcileRuntime {
 - all listed deliverables land at a production-ready level for the sprint
   scope; the actor contract is no longer ambiguous or optional
 - the reconcile lane has one authoritative command-in / reply-out model before
-  cutover begins
+  cutover begins as the frozen target contract for `Y.22`, even though the
+  production shared-state runtime path is not yet deleted in `Y.21`
 - the sprint does not claim deletion of the production shared-state path or
   final fingerprint-registry ownership closure
+- the sprint explicitly defines `JoinHandleOwner` and
+  `ReconcileWorkerState`; neither remains an undefined placeholder in the
+  accepted contract
 
 ## Closure Invariants
 
-- the authoritative reconcile contract is command-in / reply-out
-- worker-owned state, not daemon-shared lock state, owns debounce and pending
-  request coordination
+- the reconcile actor contract is frozen as command-in / reply-out for the
+  final cutover target
+- worker-owned state is the target ownership model for debounce and pending
+  request coordination, but `Y.21` does not yet claim deletion of the
+  production shared-state runtime path
 - this sprint closes the actor contract, not yet the full shared-state
   implementation deletion
 
@@ -180,6 +202,8 @@ again before implementation.
 
 ## Required Validation
 
+- `rg -n 'struct ReconcileWorkerState' crates/atm-daemon/src/reconcile_runtime.rs`
+- `rg -n 'struct JoinHandleOwner' docs/phase-Ye/sprint-Y20.md docs/phase-Ye/sprint-Y21.md`
 - `cargo test --workspace reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_fans_one_result_to_all_waiters_for_a_key -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_preserves_bounded_debounce_extensions -- --nocapture`

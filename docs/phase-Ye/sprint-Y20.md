@@ -53,6 +53,8 @@ ADR-015 ownership in this sprint:
 
 ## Exact Targets
 
+- `Cargo.toml`
+- `crates/atm-daemon/Cargo.toml`
 - `crates/atm-daemon/src/notification_runtime.rs`
 - `crates/atm-daemon/src/boundary_adapters.rs`
 - `crates/atm-daemon/src/composition.rs`
@@ -64,6 +66,23 @@ ADR-015 ownership in this sprint:
 ## Proposed Design
 
 ### Types
+
+```rust
+use std::thread::JoinHandle;
+
+#[derive(Debug)]
+pub(crate) struct JoinHandleOwner {
+    join_handle: Mutex<Option<JoinHandle<()>>>,
+}
+
+impl JoinHandleOwner {
+    pub(crate) fn join_with_deadline(
+        &self,
+        deadline: Duration,
+    ) -> Result<(), AtmError>;
+}
+
+```
 
 ```rust
 use std::sync::mpsc::{Receiver, SyncSender};
@@ -135,6 +154,9 @@ impl NotificationRuntime {
 
 ## Required Work
 
+- reuse the `arc_swap` dependency introduced in `Y.19`; if `Y.19` is not yet
+  on the accepted line, add `arc_swap` to the workspace `Cargo.toml`
+  dependency table and to `crates/atm-daemon/Cargo.toml` in this sprint
 - replace the production `NotificationState` queue/lifecycle coordination
   surface with a bounded command channel owned by the notification worker lane
 - keep producer behavior limited to lifecycle checks plus `try_send(...)`
@@ -164,6 +186,8 @@ impl NotificationRuntime {
   scope; no producer path still mutates queue state directly
 - the final production lane has one authoritative backpressure seam through the
   bounded command channel
+- `JoinHandleOwner` is explicitly defined as the worker-join ownership helper,
+  not left as an undefined placeholder type
 - daemon docs and `ADR-015` describe notification runtime ownership as
   channel-in / worker-owned drain and persistence state
 
@@ -192,6 +216,8 @@ or plugin contracts, the sprint must split before implementation.
 
 ## Required Validation
 
+- `rg -n 'arc_swap' Cargo.toml crates/atm-daemon/Cargo.toml`
+- `rg -n 'struct JoinHandleOwner' docs/phase-Ye/sprint-Y20.md docs/phase-Ye/sprint-Y21.md`
 - `rg -n "Mutex<NotificationState>|Condvar|VecDeque" crates/atm-daemon/src/notification_runtime.rs`
 - `cargo test --workspace notification_runtime_deliver_uses_bounded_command_channel -- --nocapture`
 - `cargo test --workspace notification_runtime_persistence_failure_publishes_degraded_status -- --nocapture`
