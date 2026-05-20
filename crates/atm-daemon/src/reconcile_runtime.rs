@@ -43,13 +43,13 @@ struct ReconcileRuntimeInner {
     debounce: Duration,
     executor: ReconcileExecutor,
     observability: SubsystemObservability,
-    // Lock ordering invariant: if code ever needs both runtime state and the
-    // fingerprint registry, it must drop `state` before locking this mutex.
-    // The registry is ancillary reconcile-emission state and must never nest
-    // inside the primary runtime lifecycle lock.
-    // Mutex required: reconcile worker and callers both mutate fingerprint
-    // dedupe state across requests and shutdown.
     #[cfg_attr(not(test), allow(dead_code))]
+    // Lock ordering invariant: if code ever needs both runtime state and this
+    // fingerprint registry, it must drop `state` before locking the registry
+    // mutex. The registry is ancillary reconcile-emission state and must never
+    // nest inside the primary runtime lifecycle lock.
+    // Mutex required because reconcile worker and callers both mutate
+    // fingerprint dedupe state across requests and shutdown.
     notification_fingerprints: Arc<Mutex<NotificationFingerprintRegistry>>,
 }
 
@@ -505,6 +505,9 @@ impl ReconcileRuntime {
                 .wait_timeout(state, DEFAULT_RECONCILE_COMPLETION_TIMEOUT)
                 .map_err(|_| {
                     AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
+                        .with_recovery(
+                            "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
+                        )
                 })?;
             state = wait.0;
             if wait.1.timed_out() {

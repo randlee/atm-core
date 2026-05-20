@@ -79,3 +79,7 @@ Final develop-gate verdict:
 
 - `Phase Y` is ready to land on `develop`
 - `Phase Z` may begin
+
+Phase Z status:
+
+- `BLOCKED` — `Y.18` not yet closed
