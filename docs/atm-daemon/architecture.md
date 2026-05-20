@@ -137,6 +137,12 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - daemon runtime-health/status assembly must discover teams and members only
   through the installed `RosterStore`; `ATM_HOME/.claude/teams` is a config
   ingress surface, not a runtime-truth discovery path
+- read-mostly daemon runtime-health/status projection must publish immutable
+  snapshots to readers rather than coordinating ordinary reads through one
+  daemon-shared mutable cache lock
+- daemon worker lanes with active queue/debounce/completion state must use one
+  worker-owned command-channel or actor ownership model rather than exposing
+  shared mutable coordination locks to callers
 - `atm-daemon` owns runtime implementations of one shared ATM protocol with
   multiple transport implementations:
   - cross-platform local IPC for same-host daemon access
@@ -506,6 +512,8 @@ Required daemon-private partitions:
   - owns the live status cache, cache-cap semantics, roster hydration,
     reload-time runtime-view assembly, and doctor-health projection into
     `atm doctor`
+  - reader projection must converge on immutable snapshot publication rather
+    than shared mutable cache locking
 - `peer_transport`
   - owns remote delivery, replay, retry, and remote transport-specific failure
     handling
@@ -513,8 +521,10 @@ Required daemon-private partitions:
   - owns bounded watch subscription state and watch worker polling
 - `reconcile_runtime`
   - owns reconcile debounce, coalescing, and bounded pending-work wakeups
+  - target ownership shape is one worker-owned actor lane
 - `notification_runtime`
   - owns bounded notification delivery worker state and notifier wakeups
+  - target ownership shape is one worker-owned bounded command lane
 
 Observability rule:
 - daemon-owned `sc-observability` sinks are a cross-cutting runtime facility

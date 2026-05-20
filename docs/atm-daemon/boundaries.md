@@ -40,6 +40,8 @@ even though they are not public cross-crate traits:
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving and peer transport code
+  - Phase `Ye` target design is immutable snapshot publication for readers,
+    not one daemon-shared mutable cache lock
 
 ## Planned R.20 partition map
 
@@ -257,6 +259,9 @@ Notes:
   internals.
 - Notification delivery in the reconcile path is boundary-only; tests exercise
   fake `NotificationSink` implementations rather than plugin/runtime internals.
+- Phase `Ye` target design is one worker-owned actor lane with bounded command
+  input plus per-request reply routing; pending/completed/debounce state must
+  not remain daemon-shared mutex state at closure.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use
@@ -372,8 +377,10 @@ Notes:
 - It returns typed unavailable/backpressure failures at the boundary and
   persists delivered events through the runtime-owned notifier path instead of
   degrading to tracing-only behavior.
-- The queue is intentionally bounded at `256` events; overflow fails closed with
+- The queue is intentionally bounded at `64` events; overflow fails closed with
   typed backpressure instead of silently buffering unbounded plugin traffic.
+- Phase `Ye` target design is one worker-owned bounded command channel rather
+  than a caller-visible shared mutable queue/lifecycle lock.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use
@@ -424,6 +431,9 @@ Notes:
   dispatcher and projected into `atm doctor`.
 - The cache-cap rule must bound actual retained entries, not only member-state
   labels.
+- Phase `Ye` target design is immutable snapshot publication through `ArcSwap`
+  for readers; there must be no daemon-shared mutable cache lock on the
+  accepted `Phase Ye` line.
 - `Phase Yd` adds one daemon-private liveness DTO family owned by
   `atm_daemon::runtime_health` for final `Phase Y` closeout:
   - `NotificationWorkerLiveness`
