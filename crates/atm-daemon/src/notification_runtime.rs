@@ -157,7 +157,11 @@ impl NotificationRuntime {
                 "degraded",
                 "notification runtime is degraded and rejecting delivery",
             );
-            return Err(AtmError::daemon_unavailable(message.as_str()));
+            return Err(
+                AtmError::daemon_unavailable(message.as_str()).with_recovery(
+                    "Restart atm-daemon; the notification persistence lane is degraded.",
+                ),
+            );
         }
         if state.queue.len() >= self.inner.queue_capacity {
             self.inner.observability.emit_or_warn(
