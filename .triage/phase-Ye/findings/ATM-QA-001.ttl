@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "boundaries.md uses future-target phrasing for Y.19 deliverable" ;
+  triage:description "docs/atm-daemon/boundaries.md:43-44 and :434-436 — RuntimeStatusCache control-plane note and DaemonStatusSourceAdapter record say \"Phase Ye target design is immutable snapshot publication.\" Needs confirmed-delivery phrasing." ;
+  triage:phaseId "phase-Ye" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-20T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pYe-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pYe-s19/2> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s19/d2694d8b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pYe-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 43 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pYe-s19/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 434 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:worktree/pYe-s19/d2694d8b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003" ;
+  triage:title "sprint-Y19.md validation command uses wrong arc_swap separator" ;
+  triage:description "docs/phase-Ye/sprint-Y19.md:211 — validation command uses arc_swap (underscore) but Cargo.toml has arc-swap (hyphen). Verbatim execution produces zero matches." ;
+  triage:phaseId "phase-Ye" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-20T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/pYe-s19/1> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s19/d2694d8b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/pYe-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Ye/sprint-Y19.md" ;
+  triage:line 211 ;
+  triage:snippet "arc_swap (underscore in validation command, should be arc-swap with hyphen)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:worktree/pYe-s19/d2694d8b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:orderIndex 1 .
