@@ -35,6 +35,10 @@ impl DaemonNotificationSink {
         Self { runtime }
     }
 
+    pub(crate) fn runtime(&self) -> NotificationRuntime {
+        self.runtime.clone()
+    }
+
     #[cfg(test)]
     pub(crate) fn new_for_test_with_path(path: std::path::PathBuf, queue_capacity: usize) -> Self {
         Self {

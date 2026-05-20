@@ -18,6 +18,13 @@ const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
 const NOTIFICATION_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
 const MAX_NOTIFICATION_EVENT_BYTES: usize = 64 * 1024;
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum NotificationWorkerLiveness {
+    Live,
+    Degraded,
+    Stopped,
+}
+
 #[derive(Clone)]
 pub(crate) struct NotificationRuntime {
     inner: Arc<NotificationRuntimeInner>,
@@ -45,6 +52,8 @@ struct NotificationState {
     degraded_message: Option<String>,
     queue: VecDeque<NotificationEvent>,
     worker: Option<JoinHandle<()>>,
+    #[cfg(test)]
+    liveness_override: Option<NotificationWorkerLiveness>,
 }
 
 impl NotificationRuntime {
@@ -148,7 +157,11 @@ impl NotificationRuntime {
                 "degraded",
                 "notification runtime is degraded and rejecting delivery",
             );
-            return Err(AtmError::daemon_unavailable(message.as_str()));
+            return Err(
+                AtmError::daemon_unavailable(message.as_str()).with_recovery(
+                    "Restart atm-daemon; the notification persistence lane is degraded.",
+                ),
+            );
         }
         if state.queue.len() >= self.inner.queue_capacity {
             self.inner.observability.emit_or_warn(
@@ -163,6 +176,26 @@ impl NotificationRuntime {
         state.queue.push_back(event);
         self.inner.wake.notify_one();
         Ok(())
+    }
+
+    pub(crate) fn worker_liveness(&self) -> NotificationWorkerLiveness {
+        let state = match self.inner.state.lock() {
+            Ok(state) => state,
+            Err(_) => return NotificationWorkerLiveness::Degraded,
+        };
+        #[cfg(test)]
+        if let Some(override_liveness) = state.liveness_override {
+            return override_liveness;
+        }
+        if state.degraded_message.is_some() {
+            return NotificationWorkerLiveness::Degraded;
+        }
+        match &state.worker {
+            Some(worker) if state.started && !state.shutdown && !worker.is_finished() => {
+                NotificationWorkerLiveness::Live
+            }
+            _ => NotificationWorkerLiveness::Stopped,
+        }
     }
 
     #[cfg(test)]
@@ -192,6 +225,19 @@ impl NotificationRuntime {
                 ),
             }),
         }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn set_liveness_override_for_test(
+        &self,
+        liveness: Option<NotificationWorkerLiveness>,
+    ) {
+        let mut state = self
+            .inner
+            .state
+            .lock()
+            .expect("notification runtime state lock");
+        state.liveness_override = liveness;
     }
 }
 

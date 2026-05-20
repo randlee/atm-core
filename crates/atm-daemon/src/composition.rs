@@ -6,6 +6,7 @@ use crate::daemon_runtime_observability::{DaemonRuntimeObservability, SubsystemO
 use crate::host_ownership::HostOwnershipAdapter;
 use crate::local_ipc_transport::{PreparedRuntimeServer, RuntimeServeHooks, SocketEndpointGuard};
 use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
+use crate::notification_runtime::NotificationRuntime;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::sqlite_observability::DaemonSqliteObservability;
@@ -21,9 +22,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
-
-#[cfg(test)]
-use crate::notification_runtime::NotificationRuntime;
 
 const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
 
@@ -243,8 +241,13 @@ impl RuntimeComposition {
         .map_err(|error| replay_store_assembly_failed(error, &composition_observability))?;
         atm_core::install_default_runtime_instance(production_runtime.clone());
         let server_transport = build_server_transport(&observability);
-        let request_dispatcher =
-            build_request_dispatcher(home_dir, &status_cache, &observability, production_boundary);
+        let request_dispatcher = build_request_dispatcher(
+            home_dir,
+            &status_cache,
+            &observability,
+            production_boundary,
+            notification_sink.runtime(),
+        );
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             _host_ownership_adapter: HostOwnershipAdapter::new_with_observability(
@@ -706,12 +709,14 @@ fn build_request_dispatcher(
     status_cache: &RuntimeStatusCache,
     observability: &Arc<dyn DaemonRuntimeObservability>,
     sqlite_boundary: SqliteBoundaryAssembly,
+    notification_runtime: NotificationRuntime,
 ) -> Arc<DaemonRequestDispatcher> {
     Arc::new(DaemonRequestDispatcher::new(
         home_dir,
         status_cache.clone(),
         Arc::clone(observability),
         sqlite_boundary,
+        notification_runtime,
     ))
 }
 
