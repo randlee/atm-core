@@ -217,6 +217,7 @@ or plugin contracts, the sprint must split before implementation.
 ## Required Validation
 
 - `rg -n 'arc_swap' Cargo.toml crates/atm-daemon/Cargo.toml`
+- `rg -n 'struct JoinHandleOwner' crates/atm-daemon/src/notification_runtime.rs`
 - `rg -n 'struct JoinHandleOwner' docs/phase-Ye/sprint-Y20.md docs/phase-Ye/sprint-Y21.md`
 - `rg -n "Mutex<NotificationState>|Condvar|VecDeque" crates/atm-daemon/src/notification_runtime.rs`
 - `cargo test --workspace notification_runtime_deliver_uses_bounded_command_channel -- --nocapture`

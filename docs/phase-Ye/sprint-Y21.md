@@ -203,6 +203,7 @@ again before implementation.
 ## Required Validation
 
 - `rg -n 'struct ReconcileWorkerState' crates/atm-daemon/src/reconcile_runtime.rs`
+- `rg -n 'struct JoinHandleOwner' crates/atm-daemon/src/reconcile_runtime.rs`
 - `rg -n 'struct JoinHandleOwner' docs/phase-Ye/sprint-Y20.md docs/phase-Ye/sprint-Y21.md`
 - `cargo test --workspace reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_fans_one_result_to_all_waiters_for_a_key -- --nocapture`
