@@ -17,7 +17,15 @@ target: integrate/phase-Y
 
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/plan-phase-Yd.md`
+- `docs/phase-Yd/readiness.md`
 - `docs/phase-Yc/plan-phase-Yc.md`
+- `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/atm-core/requirements.md`
+- `docs/atm-core/architecture.md`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-daemon/boundaries.md`
 - `Y.14` must close first
 
 ## Exact Targets
@@ -43,7 +51,7 @@ target: integrate/phase-Y
   `docs/phase-Y/issues.md`
 - update the blocker inventory and readiness record to reflect the closure
   state
-- keep `Phase Z` blocked while the later `Y.16` and `Y.17` closures remain
+- keep `Phase Z` blocked while the later `Y.16` through `Y.18` closures remain
   open
 
 ## This Sprint Does Not Close
@@ -58,6 +66,9 @@ target: integrate/phase-Y
 - the production notification boundary blocker assigned to `Y.15` in
   `docs/phase-Y/issues.md` is closed or explicitly reclassified with
   documented rationale
+- the production notification path executes only through
+  `NotificationSink::deliver(...)` and no direct helper bypass remains on the
+  accepted line
 - the final accepted `Phase Y` merge candidate is boundary-clean for the
   `Y.15` scope
 - `docs/phase-Yd/readiness.md` is updated with the `Y.15` closure result

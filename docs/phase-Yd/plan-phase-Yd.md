@@ -64,19 +64,28 @@ Authoritative sprint doc:
 
 - [sprint-Y15.md](./sprint-Y15.md)
 
-### Y.16 Retained-Runtime Composition And Candidate Closure
+### Y.16 Retained-Runtime Composition Closure
 
 Purpose:
 
 - close the retained-runtime composition blocker
-- verify the accepted `Phase Y` merge candidate includes the required
-  end-of-phase fix line and is validation-clean
 
 Authoritative sprint doc:
 
 - [sprint-Y16.md](./sprint-Y16.md)
 
-### Y.17 Thin Liveness Closure And Final Develop Gate
+### Y.17 Candidate Closure
+
+Purpose:
+
+- verify the accepted `Phase Y` merge candidate includes the required
+  end-of-phase fix line and is validation-clean
+
+Authoritative sprint doc:
+
+- [sprint-Y17.md](./sprint-Y17.md)
+
+### Y.18 Thin Liveness Closure And Final Develop Gate
 
 Purpose:
 
@@ -87,9 +96,9 @@ Purpose:
 
 Authoritative sprint doc:
 
-- [sprint-Y17.md](./sprint-Y17.md)
+- [sprint-Y18.md](./sprint-Y18.md)
 
-Named readiness record produced by `Y.17`:
+Named readiness record produced by `Y.18`:
 
 - [readiness.md](./readiness.md)
 

@@ -1,19 +1,18 @@
 ---
 id: Y.17
-title: Thin Liveness Closure And Final Develop Gate
+title: Candidate Closure
 status: planned
-branch: feature/pYd-s17-thin-liveness-closure-and-final-develop-gate
-worktree: ../atm-core-worktrees/feature/pYd-s17-thin-liveness-closure-and-final-develop-gate
+branch: feature/pYd-s17-candidate-closure
+worktree: ../atm-core-worktrees/feature/pYd-s17-candidate-closure
 target: integrate/phase-Y
 ---
 
-# Sprint Y.17 — Thin Liveness Closure And Final Develop Gate
+# Sprint Y.17 — Candidate Closure
 
 ## Goal
 
-- close the remaining minimal operational/liveness gate for `Phase Y`
-- leave the final `develop`-gate record
-- explicitly unblock `Phase Z` only after the line is ready
+- produce the accepted `Phase Y` merge candidate line with the required
+  end-of-phase fixes present and validation-clean
 
 ## Hard Dependencies
 
@@ -24,48 +23,44 @@ target: integrate/phase-Y
 
 ## Exact Targets
 
-- `crates/atm-daemon/src/runtime_health.rs`
-- any runtime-owned liveness signal source required by the accepted design
+- any files required to absorb the accepted phase-end fix line on the final
+  merge candidate
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/readiness.md`
 - `docs/project-plan.md`
-- `docs/plan-phase-Z.md`
 
 ## Deliverables
 
-- the notification-worker liveness blocker is resolved either by:
-  - a thin runtime-owned signal that `runtime_health` projects directly
-  - or an explicit documented reclassification to non-blocking in
-    `docs/phase-Y/issues.md`
-- `runtime_health` remains a projection layer, not a compensating recovery
-  engine
-- one explicit readiness record states whether `Phase Y` may land on `develop`
-  and whether `Phase Z` may begin
+- the final accepted merge candidate includes the required phase-end fix line
+- the accepted merge candidate passes the required validation stack
+- the blocker inventory and readiness record explicitly record the `Y.17`
+  closure result
 
 ## Required Work
 
-- close or explicitly reclassify the final liveness/readiness blocker from
-  `docs/phase-Y/issues.md` without growing logic-heavy inference inside
-  `runtime_health`
-- update the readiness record with the final `develop`-gate verdict
-- update `Phase Z` docs so they remain blocked until that verdict is positive
+- verify the accepted merge candidate includes the end-of-phase fix line, not
+  just the original `Phase Y` integration baseline
+- validate the accepted candidate line cleanly
+- update the blocker inventory and readiness record to reflect the closure
+  state
+- keep `Phase Z` blocked while the final `Y.18` gate remains open
 
 ## This Sprint Does Not Close
 
-- new `Phase Z` rollout execution
-- unrelated daemon hardening or broad observability redesign
+- final liveness/readiness closure
+- final `develop`-gate authorization itself
+- any broad `Phase Z` rollout or dogfood execution work
 
 ## Acceptance Criteria
 
-- the final `Phase Y` blocker set is closed or explicitly reclassified with
-  documented rationale
-- any liveness closure uses a thin runtime-owned signal rather than
-  compensating logic inside `runtime_health`
-- `docs/phase-Yd/readiness.md` says whether `Phase Y` may land on `develop`
-- `docs/plan-phase-Z.md` reflects the final `Phase Z` gate state accurately
+- the accepted merge candidate includes the required phase-end fix line and is
+  validation-clean for the `Y.17` scope
+- `docs/phase-Yd/readiness.md` is updated with the `Y.17` closure result
 
 ## Required Validation
 
-- focused readiness validation for the accepted liveness signal
+- `cargo fmt --all`
+- `python3 .just/run_lint.py all`
 - `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
 - `git diff --check`

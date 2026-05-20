@@ -1,31 +1,38 @@
 ---
 id: Y.16
-title: Retained-Runtime Composition And Candidate Closure
+title: Retained-Runtime Composition Closure
 status: planned
-branch: feature/pYd-s16-retained-runtime-composition-and-candidate-closure
-worktree: ../atm-core-worktrees/feature/pYd-s16-retained-runtime-composition-and-candidate-closure
+branch: feature/pYd-s16-retained-runtime-composition-closure
+worktree: ../atm-core-worktrees/feature/pYd-s16-retained-runtime-composition-closure
 target: integrate/phase-Y
 ---
 
-# Sprint Y.16 — Retained-Runtime Composition And Candidate Closure
+# Sprint Y.16 — Retained-Runtime Composition Closure
 
 ## Goal
 
-- close the remaining production composition blocker and produce the accepted
-  `Phase Y` merge candidate line with the required end-of-phase fixes present
+- close the remaining production composition blocker on the `Phase Y` line
 
 ## Hard Dependencies
 
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/plan-phase-Yd.md`
+- `docs/phase-Yd/readiness.md`
+- `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/atm-daemon/requirements.md`
+- `docs/atm-daemon/architecture.md`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-daemon/boundaries.md`
 - `Y.15` must close first
 
 ## Exact Targets
 
 - `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-daemon/src/boundary_adapters.rs`
-- any files required to absorb the accepted phase-end fix line on the final
-  merge candidate
+- any directly supporting daemon/runtime assembly files required to install the
+  live production `NotificationSink`
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/readiness.md`
 - `docs/project-plan.md`
@@ -34,8 +41,6 @@ target: integrate/phase-Y
 
 - daemon retained-runtime composition installs the live production
   `NotificationSink`
-- the final accepted merge candidate includes the required phase-end fix line
-  and passes the required validation stack
 - the blocker inventory and readiness record explicitly record the `Y.16`
   closure result
 
@@ -43,14 +48,14 @@ target: integrate/phase-Y
 
 - close the retained-runtime composition blocker recorded in
   `docs/phase-Y/issues.md`
-- verify the accepted merge candidate includes the end-of-phase fix line, not
-  just the original `Phase Y` integration baseline
 - update the blocker inventory and readiness record to reflect the closure
   state
-- keep `Phase Z` blocked while the final `Y.17` gate remains open
+- keep `Phase Z` blocked while the later `Y.17` and `Y.18` closures remain
+  open
 
 ## This Sprint Does Not Close
 
+- accepted phase-end fix candidate absorption
 - final liveness/readiness closure
 - final `develop`-gate authorization itself
 - any broad `Phase Z` rollout or dogfood execution work
@@ -60,8 +65,8 @@ target: integrate/phase-Y
 - the retained-runtime composition blocker assigned to `Y.16` in
   `docs/phase-Y/issues.md` is closed or explicitly reclassified with
   documented rationale
-- the accepted merge candidate includes the required phase-end fix line and is
-  validation-clean for the `Y.16` scope
+- the production retained-runtime path installs the live `NotificationSink`
+  without fallback/helper-owned bypass behavior
 - `docs/phase-Yd/readiness.md` is updated with the `Y.16` closure result
 
 ## Required Validation

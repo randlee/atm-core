@@ -23,10 +23,13 @@ record explicitly says the line is ready.
 
 - the daemon retained-runtime factory installs the live `NotificationSink` on
   the production path
+
+`Y.17` must prove that:
+
 - the accepted merge candidate includes the required end-of-phase fix line and
   passes the required validation stack
 
-`Y.17` must prove that:
+`Y.18` must prove that:
 
 - any remaining notification-worker liveness requirement is either:
   - closed by a thin runtime-owned signal projected by `runtime_health`
@@ -40,7 +43,7 @@ record explicitly says the line is ready.
 `Phase Y` may land on `develop` only after this record is updated to state
 that:
 
-- all required `Y.14` through `Y.17` closure invariants above passed
+- all required `Y.14` through `Y.18` closure invariants above passed
 - the final accepted `Phase Y` candidate is ready for merge to `develop`
 
 ## Phase Z Gate
