@@ -20,13 +20,16 @@ target: integrate/phase-Y
 - `docs/phase-Yd/plan-phase-Yd.md`
 - `docs/phase-Yd/readiness.md`
 - `docs/phase-Yc/plan-phase-Yc.md`
+- `docs/adr/INDEX.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-core/requirements.md`
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/boundaries.md`
+- `boundaries/atm-core/inbox-export.toml`
 - `docs/phase-Y/delivery-state-machines.md`
+- `docs/testing-guidelines.md`
 - the authoritative implementation baseline remains `integrate/phase-Y`
 
 ## Exact Targets
@@ -54,6 +57,36 @@ target: integrate/phase-Y
   state
 - keep `Phase Z` blocked while the later `Y.15` through `Y.18` closures remain
   open
+
+## Explicit Code Samples
+
+```rust
+pub enum DeliveryPlanDisposition {
+    SqliteFailedRecovered {
+        logical_message_set: Vec<CompatInboxMessage>,
+        recovery_error: AtmError,
+    },
+}
+```
+
+```rust
+match disposition {
+    DeliveryPlanDisposition::SqliteFailedRecovered {
+        logical_message_set,
+        recovery_error,
+    } => {
+        inbox_export.append_message_set(&logical_message_set)?;
+        return Err(recovery_error);
+    }
+}
+```
+
+```rust
+// Required Y.14 behavior:
+// either the full logical message set is emitted or the path fails hard.
+// Forbidden behavior:
+// emit message[1], fail on message[2], and still report outward success.
+```
 
 ## This Sprint Does Not Close
 

@@ -19,6 +19,8 @@ target: integrate/phase-Y
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/plan-phase-Yd.md`
 - `docs/phase-Yd/readiness.md`
+- `docs/adr/INDEX.md`
+- `docs/testing-guidelines.md`
 - accepted phase-end fix evidence from:
   - `feature/pY-eop-fix-1` at `fe28ad75169d1ec0bf3c40f8e356c9499917501f`
     (`PY-EOP-FIX-1`)

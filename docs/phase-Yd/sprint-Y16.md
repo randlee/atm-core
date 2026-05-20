@@ -18,6 +18,7 @@ target: integrate/phase-Y
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/plan-phase-Yd.md`
 - `docs/phase-Yd/readiness.md`
+- `docs/adr/INDEX.md`
 - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
@@ -25,6 +26,10 @@ target: integrate/phase-Y
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
+- `boundaries/atm-core/notification-sink.toml`
+- `boundaries/atm-daemon/daemon-notification-sink.toml`
+- `boundaries/atm-daemon/runtime-lifecycle-daemon.toml`
+- `docs/testing-guidelines.md`
 - `Y.15` must close first
 
 ## Exact Targets

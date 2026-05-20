@@ -20,10 +20,15 @@ target: integrate/phase-Y
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/plan-phase-Yd.md`
 - `docs/phase-Yd/readiness.md`
+- `docs/adr/INDEX.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
+- `docs/atm-daemon/boundaries.md`
+- `boundaries/atm-core/status-source.toml`
+- `boundaries/atm-daemon/daemon-status-source.toml`
+- `docs/testing-guidelines.md`
 - `Y.17` must close first
 
 ## Exact Targets

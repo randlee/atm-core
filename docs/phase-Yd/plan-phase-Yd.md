@@ -20,6 +20,38 @@ implementation on this branch.
 - blocking issue inventory:
   - [../phase-Y/issues.md](../phase-Y/issues.md)
 
+## Governing Documents
+
+Phase `Yd` hardening and implementation must remain aligned with:
+
+- product requirements and architecture:
+  - `docs/requirements.md`
+  - `docs/architecture.md`
+- crate requirements, architecture, and boundary inventories:
+  - `docs/atm-core/requirements.md`
+  - `docs/atm-core/architecture.md`
+  - `docs/atm-core/boundaries.md`
+  - `docs/atm-daemon/requirements.md`
+  - `docs/atm-daemon/architecture.md`
+  - `docs/atm-daemon/boundaries.md`
+- ADR inventory and controlling decisions:
+  - `docs/adr/INDEX.md`
+  - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+- machine-readable boundary definitions for the concrete closures in scope:
+  - `boundaries/atm-core/inbox-export.toml`
+  - `boundaries/atm-core/notification-sink.toml`
+  - `boundaries/atm-core/status-source.toml`
+  - `boundaries/atm-daemon/daemon-notification-sink.toml`
+  - `boundaries/atm-daemon/daemon-status-source.toml`
+- testing and validation guidance:
+  - `docs/testing-guidelines.md`
+- issue and readiness tracking:
+  - `docs/phase-Y/issues.md`
+  - `docs/phase-Yd/readiness.md`
+
+If any sprint-level deliverable cannot be justified against this governing set,
+the sprint is not hardened yet.
+
 ## Scope
 
 `Phase Yd` is not a new architecture line. It is a develop-gate closeout line.
