@@ -1,7 +1,7 @@
 ---
 id: Y.14
 title: Recovered Claude Logical-Message-Set Closure
-status: planned
+status: complete
 branch: feature/pYd-s14-recovered-claude-logical-message-set-closure
 worktree: ../atm-core-worktrees/feature/pYd-s14-recovered-claude-logical-message-set-closure
 target: integrate/phase-Y

@@ -3660,6 +3660,9 @@ Status summary:
 - before `integrate/phase-Y` lands on `develop`, the broader `Phase Y`
   blocker set must be documented explicitly and closed on a final
   develop-gate line.
+- `Y.14` recovered Claude logical-message-set closure is complete on
+  `feature/pYd-s14-recovered-claude-logical-message-set-closure`; the
+  remaining `Y.15` through `Y.18` develop-gate closures stay open.
 - `Phase Z` remains blocked until that closeout line says `Phase Y` is ready
   for `develop`.
 

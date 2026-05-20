@@ -39,15 +39,23 @@ Key findings from that review:
 
 These items block `Phase Y` from landing on `develop`.
 
-1. Recovered Claude logical-message-set closure is not yet proven on the final
-   accepted line.
+1. Recovered Claude logical-message-set closure on the final accepted line.
    - issue class:
      - behavioral correctness
    - historical owner:
      - `Y.12`
+   - current status:
+     - `CLOSED by Y.14` on the candidate branch
    - closure requirement:
      - the recovered Claude SQLite-failure path either materializes the full
        logical message set or fails hard
+   - `Y.14` closure result:
+     - closed on `feature/pYd-s14-recovered-claude-logical-message-set-closure`
+     - recovered Claude delivery now routes the final-candidate
+       `SqliteFailedRecovered` path through the message-set seam only
+     - named proof tests:
+       - `sqlite_failure_for_claude_requires_full_logical_message_set_delivery`
+       - `sqlite_failure_for_claude_does_not_emit_message1_without_message2`
 
 2. Production notification execution still bypasses the owned notification
    boundary.

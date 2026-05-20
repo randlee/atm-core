@@ -194,27 +194,7 @@ where
     )
 }
 
-pub(crate) fn execute_reply_delivery_plan<R>(
-    runtime: &R,
-    config: Option<&AtmConfig>,
-    plan: &DeliveryPlan,
-) -> Result<DeliveryExecutionResult, AtmError>
-where
-    R: ClaudeInboxWriter + NonClaudeOutboundDeliveryWriter + crate::boundary::NotificationSink,
-{
-    execute_messages(
-        runtime,
-        config,
-        ExecutionView {
-            disposition: plan.disposition,
-            delivery_target: &plan.delivery_target,
-            recipient: &plan.recipient,
-            recipient_pane_id: plan.recipient_pane_id.as_deref(),
-            messages: &plan.messages,
-            notifications: &plan.notifications,
-        },
-    )
-}
+pub(crate) use execute_delivery_plan as execute_reply_delivery_plan;
 
 struct ExecutionView<'a> {
     disposition: DeliveryPlanDisposition,
@@ -302,20 +282,7 @@ pub(crate) fn emit_delivery_plan_transitions(
     )
 }
 
-pub(crate) fn emit_reply_delivery_plan_transitions(
-    observability: &dyn ObservabilityPort,
-    context: DeliveryTransitionContext<'_>,
-    plan: &DeliveryPlan,
-    execution: &DeliveryExecutionResult,
-) -> Result<(), AtmError> {
-    emit_plan_transitions(
-        observability,
-        context,
-        plan.disposition,
-        plan.delivery_target.harness_path(),
-        execution.disposition,
-    )
-}
+pub(crate) use emit_delivery_plan_transitions as emit_reply_delivery_plan_transitions;
 
 fn emit_plan_transitions(
     observability: &dyn ObservabilityPort,
@@ -401,22 +368,37 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
     messages: &[LogicalMessage],
     result: &mut DeliveryExecutionResult,
 ) -> Result<(), AtmError> {
-    if disposition == DeliveryPlanDisposition::SqliteFailedRecovered {
-        runtime.append_claude_message_set(inbox_path, recipient, disposition, messages)?;
-        return Ok(());
-    }
-
-    for (index, message) in messages.iter().enumerate() {
-        if let Err(error) =
-            runtime.append_claude_inbox_message(inbox_path, recipient, &message.envelope)
-        {
-            result.disposition = DeliveryExecutionDisposition::AppendDegraded;
-            result
-                .warnings
-                .push(build_append_warning(disposition, recipient, index, error));
+    match disposition {
+        DeliveryPlanDisposition::SqliteFailedRecovered => {
+            runtime.append_claude_message_set(inbox_path, recipient, disposition, messages)?;
+            Ok(())
+        }
+        DeliveryPlanDisposition::Persisted => {
+            execute_persisted_claude_delivery(runtime, inbox_path, recipient, messages, result);
+            Ok(())
         }
     }
-    Ok(())
+}
+
+fn execute_persisted_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
+    runtime: &R,
+    inbox_path: &Path,
+    recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+    messages: &[LogicalMessage],
+    result: &mut DeliveryExecutionResult,
+) {
+    for (index, message) in messages.iter().enumerate() {
+        let envelope = &message.envelope;
+        if let Err(error) = runtime.append_claude_inbox_message(inbox_path, recipient, envelope) {
+            result.disposition = DeliveryExecutionDisposition::AppendDegraded;
+            result.warnings.push(build_append_warning(
+                DeliveryPlanDisposition::Persisted,
+                recipient,
+                index,
+                error,
+            ));
+        }
+    }
 }
 
 fn claude_compatibility_delivery_mode_for_disposition(
@@ -427,7 +409,7 @@ fn claude_compatibility_delivery_mode_for_disposition(
             Ok(ClaudeCompatibilityDeliveryMode::RecoveredLogicalMessageSet)
         }
         _ => Err(AtmError::new(
-            AtmErrorKind::Internal,
+            AtmErrorKind::Validation,
             "claude_compatibility_delivery_mode_for_disposition only accepts DeliveryPlanDisposition::SqliteFailedRecovered",
         )
         .with_recovery(
@@ -456,7 +438,7 @@ fn build_append_warning(
     } else {
         (
             format!(
-                "error: degraded Claude Code delivery append failed for {}@{} message[{ordinal}] after SQLite failure: {error}",
+                "degraded Claude Code delivery append failed for {}@{} message[{ordinal}] after SQLite failure: {error}",
                 recipient.agent, recipient.team
             ),
             Some(
@@ -724,14 +706,17 @@ mod tests {
     }
 
     fn transition_context(message_id: AtmMessageId) -> DeliveryTransitionContext<'static> {
-        let team = Box::leak(Box::new(TeamName::from_validated(TEST_TEAM)));
-        let agent = Box::leak(Box::new(AgentName::from_validated("recipient")));
-        let sender = Box::leak(Box::new(AgentName::from_validated(TEST_SENDER)));
+        static TEAM: std::sync::LazyLock<TeamName> =
+            std::sync::LazyLock::new(|| TeamName::from_validated(TEST_TEAM));
+        static AGENT: std::sync::LazyLock<AgentName> =
+            std::sync::LazyLock::new(|| AgentName::from_validated("recipient"));
+        static SENDER: std::sync::LazyLock<AgentName> =
+            std::sync::LazyLock::new(|| AgentName::from_validated(TEST_SENDER));
         DeliveryTransitionContext {
             family: DeliveryEventFamily::NewMessage,
-            team,
-            agent,
-            sender,
+            team: &TEAM,
+            agent: &AGENT,
+            sender: &SENDER,
             message_id,
             task_id: None,
         }
