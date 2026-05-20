@@ -18,6 +18,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 - [ADR-011 — Host-Scoped Retained Log Root](./ADR-011-host-scoped-retained-log-root.md)
 - [ADR-012 — One Message Identity](./ADR-012-one-message-identity.md)
 - [ADR-013 — Unified Delivery Plan And State-Machine-Owned Path Decisions](./ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
+- [ADR-014 — Runtime Health Projection And Liveness Signal Ownership](./ADR-014-runtime-health-projection-and-liveness-signal-ownership.md)
 
 ## Extracted Crate-Local ADRs
 

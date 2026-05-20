@@ -27,6 +27,7 @@ Every QA update, both ATM and PR, must include:
 - sprint or task identifier
 - branch, commit, PR number
 - verdict (`PASS | FAIL | IN-FLIGHT`)
+- deliverable completion (`complete`, `total`, `percent`)
 - finding counts by severity (`blocking`, `important`, `minor`)
 - blocking ids with concise summaries
 - next required action plus owner
@@ -42,6 +43,11 @@ Use fenced JSON for machine-readable status payloads:
   "commit": "abc1234",
   "pr": 123,
   "verdict": "FAIL",
+  "deliverables": {
+    "complete": 9,
+    "total": 11,
+    "percent": 82
+  },
   "findings": {
     "blocking": 1,
     "important": 2,
@@ -90,7 +96,9 @@ Template:
 Recommended flow:
 1. Gather findings from QA agents.
 2. Render markdown from the template with required variables.
-3. Post to the PR as a blocking review or status comment.
+3. When rechecking prior findings, include a resolved-findings section for
+   items closed since the previous pass.
+4. Post to the PR as a blocking review or status comment.
 
 Suggested commands:
 - blocking review:
@@ -130,6 +138,8 @@ Use the final template only for `PASS` closeout.
 - Fix-pass updates revise status and open findings.
 - Final pass posts `PASS` closeout with residual risk and readiness and should
   use `--approve`.
+- Do not keep QA results ATM-only when a PR exists; append every completed QA
+  update to the PR.
 - Rendered reports must include a fenced JSON block for machine parsing.
 
 ## ATM Coordination Protocol

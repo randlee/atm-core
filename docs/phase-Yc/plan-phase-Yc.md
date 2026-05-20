@@ -3,9 +3,9 @@
 ## Goal
 
 Close the final production-readiness gaps left on `integrate/phase-Y` after the
-merged `Yb` line so `Phase Z` smoke/dogfood work resumes only after the
-remaining delivery-contract and notification-boundary issues are actually
-closed.
+merged `Yb` line so the remaining delivery-contract and
+notification-boundary issues are actually closed before the broader
+develop-gate closeout proceeds.
 
 This is a planning-only phase on a worktree off `develop`. It does not start
 implementation.
@@ -97,7 +97,8 @@ Purpose:
 
 - move production notification execution onto `NotificationSink`
 - remove the direct post-send-hook helper bypass from the delivery executor
-- prove the integrated `Phase Y` line is ready to hand back to `Phase Z`
+- leave the focused `Yc` readiness record that the later `Phase Yd`
+  develop-gate closeout consumes
 
 Authoritative sprint doc:
 - [sprint-Y13.md](./sprint-Y13.md)
@@ -108,6 +109,12 @@ Supporting issues inventory for the whole `Yc` line:
 Named readiness record produced by `Y.13`:
 - [readiness.md](./readiness.md)
 
+`Yc` is necessary but not sufficient for `Phase Z`.
+
+Even after both `Y.12` and `Y.13` close, `Phase Z` remains blocked until the
+later `Phase Yd` readiness record says `Phase Y` may land on `develop` and
+`Phase Z` may begin.
+
 ## Exit Condition
 
 Phase `Yc` closes only when:
@@ -116,7 +123,8 @@ Phase `Yc` closes only when:
   logical message set while still claiming success
 - `Y.13` proves the production notification path executes through
   `NotificationSink`, not direct hook helpers
-- `Y.13` leaves the named readiness record artifact that records both closure
-  invariants and the `Phase Z` smoke gate
+- `Y.13` leaves the named readiness record artifact that records both `Yc`
+  closure invariants for later `Phase Yd` use during the develop-gate
+  closeout
 - the integrated line can pass a focused production-readiness review without
   reopening the same two issues

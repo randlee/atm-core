@@ -1,5 +1,5 @@
 ---
-name: plan-hardening-sprint-scope-task
+name: 02-sprint-scope-hardening-task
 version: 2.0.0
 description: team-lead assignment template for sprint-scope and deliverable hardening before implementation.
 format: xml
@@ -12,6 +12,7 @@ required_variables:
   - pr_target
   - source_of_truth
   - references
+  - previous_step_json
 ---
 <atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening-sprint-scope">
   <description>{{ description }}</description>
@@ -34,13 +35,60 @@ required_variables:
 {{ references }}
   </references>
 
+{% if reviewer_findings_json is defined and reviewer_findings_json | trim %}
+  <reviewer-findings-json>
+<![CDATA[
+{{ reviewer_findings_json }}
+]]>
+  </reviewer-findings-json>
+{% endif %}
+
+  <required-input>
+    The following fenced JSON handoff from `plan-scope-reviewer` is required
+    input. Reject the task if it is missing or malformed.
+
+    Expected shape:
+    ```json
+    {
+      "status": "PASS | FAIL",
+      "scope": {
+        "phase": "string or null",
+        "sprint": "string or null"
+      },
+      "sprint_scores": [
+        {
+          "sprint": "X.12",
+          "status": "PASS | FAIL",
+          "blocking_count": 0,
+          "important_count": 0,
+          "minor_count": 0
+        }
+      ],
+      "docs_read": [],
+      "findings": [],
+      "ready_for_next_step": true,
+      "errors": []
+    }
+    ```
+<![CDATA[
+{{ previous_step_json }}
+]]>
+  </required-input>
+
   <plan-hardening>
+    Read the current plan docs from disk first, using `<source-of-truth>` and
+    `<references>`, before doing anything else.
+
     This is the first required hardening pass. Your job is to attack the plan
     from the sprint-shape and deliverable side before any broader consistency
     pass. The central question is: are the deliverables split across sprints
     adequately so that every committed item can land at a production-ready
     level with no silent drops, no shape-only completion, and no ambiguous
     ownership?
+
+    Use `.claude/skills/plan-hardening/sprint-planning-guidelines.md` as a
+    required reference for sprint splitting, authoritative checklist shape,
+    production-ready expectations, and QA-consumable sprint-doc structure.
 
     Do not re-read documents to discover the plan — the plan is already in
     context. Use the required-documents list as the target: every committed
@@ -199,28 +247,42 @@ required_variables:
       Continue until audit-phase produces zero findings.
     </repeat>
 
-    <exit-criterion>
-      Output this report when audit-phase produces zero findings:
+    Return fenced JSON to `team-lead` when this pass completes.
 
-        SPRINT-SCOPE HARDENING COMPLETE
-        Iterations:                           N
-        Total findings resolved:              N
-        Final finding count:                  0
-        Sprint splits added:                  N
-        Documents modified:                   [list]
-        Documents created:                    [list]
+    If `team-lead` later sends back fenced JSON findings and `sprint_scores` from
+    `critical-plan-reviewer`, fix those findings and return updated fenced
+    JSON. Continue until `team-lead` reports that
+    `critical-plan-reviewer` returned `PASS`.
+
+    <exit-criterion>
+      Output fenced JSON only when audit-phase produces zero findings:
+
+      ```json
+      {
+        "status": "PASS | FAIL",
+        "mode": "plan-hardening-sprint-scope",
+        "iterations": 0,
+        "findings_resolved": 0,
+        "final_finding_count": 0,
+        "sprint_splits_added": 0,
+        "docs_modified": [],
+        "docs_created": [],
+        "ready_for_next_step": true,
+        "errors": []
+      }
+      ```
     </exit-criterion>
   </plan-hardening>
 
   <workflow>
-    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that hardening is blocked pending user discussion. Team-lead should review that ACK and outline first, then discuss any scope concerns with the user after the ACK is received. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the required fenced JSON handoff from `plan-scope-reviewer` is missing or malformed, reject the task immediately. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that hardening is blocked pending user discussion. Team-lead should review that ACK and outline first, then discuss any scope concerns with the user after the ACK is received. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
     <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
     <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
-    <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead critical review can begin in parallel.</step>
+    <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead can prepare the critical review step.</step>
     <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
     <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
-    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Send the git commit hash to team-lead and explicitly request a critical review of sprint splitting, deliverables, production-ready scope, and code-sample completeness.</step>
-    <step id="h">Team-lead must not route the plan to QA or implementation from this pass alone. The second required consistency hardening pass must run after this sprint-scope pass.</step>
+    <step id="g">After the current hardening pass converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only. If `reviewer-findings-json` is present, treat it as the current correction target from `critical-plan-reviewer` and return updated fenced JSON to `team-lead`.</step>
+    <step id="h">Team-lead must not route the plan to QA or implementation from this pass alone. `critical-plan-reviewer` must run after this pass, and `03-consistency-hardening.xml.j2` must run after that.</step>
     <step id="i">After the validation report, read ATM again for follow-up work.</step>
   </workflow>
 </atm-task>

@@ -58,11 +58,11 @@ silently dropped or partially deferred.
   backpressured notification delivery must degrade through typed warnings or
   errors rather than hidden helper behavior
 - the integrated `Phase Y` line gets a focused production-readiness gate that
-  specifically rechecks the two `Yc` closure invariants before `Phase Z`
-  resumes
+  specifically rechecks the two `Yc` closure invariants before the later
+  `Phase Yd` develop-gate closeout proceeds
 - the sprint leaves one explicit readiness record artifact,
   `docs/phase-Yc/readiness.md`, naming both `Yc` closure invariants and the
-  `Phase Z` smoke gate
+  handoff into `Phase Yd`
 
 ## Required Work
 
@@ -86,8 +86,9 @@ silently dropped or partially deferred.
   - daemon/unit integration tests that build `LocalServiceRuntime` directly
 - update ADR/boundary docs so the production notification path is documented as
   boundary-owned and no longer helper-owned
-- update the project plan/status docs so `Phase Z` smoke is blocked until the
-  `Yc` readiness gate passes and allowed again once it does
+- update the project plan/status docs so `Yc` closes the two original runtime
+  blockers but `Phase Z` stays blocked until the later `Phase Yd`
+  develop-gate record says it may begin
 
 ## Paths To Delete
 
@@ -286,7 +287,9 @@ fn notification_event_from_target(
 - the sprint leaves one explicit readiness record in the docs that says:
   - `Y.12` closed the Claude recovered-message-set contract
   - `Y.13` closed the notification boundary bypass
-  - `Phase Z` smoke may resume only after both proofs pass
+  - `Phase Yd` may now consume the focused `Yc` readiness result, but
+    `Phase Z` remains blocked until `docs/phase-Yd/readiness.md` says it may
+    begin
 
 ## Required Validation
 

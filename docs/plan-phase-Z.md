@@ -3,7 +3,8 @@
 ## Goal
 
 Validate the first daemon + SQLite mail-SSOT release in real executable use
-after the `Phase Y` implementation line closes.
+after the `Phase Y` implementation line closes and the final `develop` gate is
+explicitly opened.
 
 Phase `Z` owns the progressive rollout and release-readiness work that should
 not be mixed into the architectural cleanup history:
@@ -18,11 +19,14 @@ not be mixed into the architectural cleanup history:
 
 - planning branch: `feature/pY-s0-planning`
 - prerequisite implementation line: completed `Phase Y`
+- blocking closeout line before `Phase Z` may begin:
+  - `Phase Yd`
 - future integration branch: `integrate/phase-Z`
 
 ## Phase Entry Criteria
 
-`Phase Z` does not begin until `Phase Y` is closed:
+`Phase Z` does not begin until `Phase Y` is closed and `Phase Yd` says the line
+may land on `develop`:
 
 - the write-owner boundary is enforced
 - the delivery-policy coordinator and required state machines are landed
@@ -30,6 +34,10 @@ not be mixed into the architectural cleanup history:
 - the append-only/export contract decision is complete
 - `Y.0` trivial fixes and `Y.1` through `Y.6` implementation work are merged
   onto the authoritative integration line
+- the blocking issues in `docs/phase-Y/issues.md` are closed
+- the readiness record in `docs/phase-Yd/readiness.md` explicitly states:
+  - `Phase Y` may land on `develop`
+  - `Phase Z` may begin
 
 ## Pre-Phase JSON I/O Status
 

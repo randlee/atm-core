@@ -8,7 +8,7 @@ trait = "NotificationSink"
 
 [implementation]
 type = "DaemonNotificationSink"
-module = "atm_daemon"
+module = "atm_daemon::notification_runtime"
 visibility = "pub(crate)"
 constructor = "pub(crate)"
 
