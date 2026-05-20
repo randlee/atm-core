@@ -22,7 +22,8 @@ dogfood work:
   explicit and QA-auditable
 
 Executable smoke, canary dogfood, and release sign-off move to `Phase Z`
-after the `Phase Y` implementation line closes.
+only after the `Phase Y` implementation line closes **and** the later
+develop-gate closeout record explicitly authorizes `Phase Z` to begin.
 
 ## Baseline
 

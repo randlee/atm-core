@@ -434,3 +434,13 @@ Notes:
 - Phase `Ye` target design is immutable snapshot publication through `ArcSwap`
   for readers; there must be no daemon-shared mutable cache lock on the
   accepted `Phase Ye` line.
+- `Phase Yd` adds one daemon-private liveness DTO family owned by
+  `atm_daemon::runtime_health` for final `Phase Y` closeout:
+  - `NotificationWorkerLiveness`
+  - `RuntimeHealthSnapshot`
+  - `project_runtime_health(...)`
+- these are daemon-private health projection artifacts, not public cross-crate
+  boundary exports
+- `runtime_health` may project the owner-provided
+  `NotificationRuntime::worker_liveness()` signal directly, but it must not
+  inspect queue internals or retry state to reconstruct liveness

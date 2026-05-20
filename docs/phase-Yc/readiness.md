@@ -3,7 +3,9 @@
 ## Purpose
 
 This artifact is the named readiness record that `Y.13` must complete before
-`Phase Z` smoke resumes.
+the later `Phase Yd` develop-gate closeout proceeds.
+
+This record does **not** by itself authorize `Phase Z` to begin.
 
 ## Yc Closure Invariants
 
@@ -15,13 +17,32 @@ This artifact is the named readiness record that `Y.13` must complete before
 - the production notification path executes through
   `NotificationSink::deliver(...)` rather than direct hook helpers
 
-## Phase Z Smoke Gate
+## Handoff To Phase Yd
 
-`Phase Z` smoke remains blocked until this record is updated to state that:
+This record is a valid focused close on the `Yc` line.
+
+This record must be updated to state that:
 - both `Yc` closure invariants above are proven on the merged
   `integrate/phase-Y` line
 - the focused `Yc` readiness validation passed
-- smoke may resume
+- the line is ready to enter the broader `Phase Yd` develop-gate closeout
+
+The later `Phase Yd` line is required to re-prove those same two invariants on
+the final accepted merge-candidate line after subsequent accepted line-state
+changes. That re-proof does not mean `Yc` failed; it means `Yc` is the focused
+closure line and `Yd` is the final develop-gate line.
+
+This record is not the final `develop`-gate authorization. The same closure
+invariants proved here are required to be re-proved by `Phase Yd` on the final
+accepted `Phase Y` merge-candidate line before landing on `develop`.
+
+## Phase Z Gate
+
+`Phase Z` still remains blocked after `Yc` closes.
+
+Only the later `docs/phase-Yd/readiness.md` record may state that:
+- `Phase Y` may land on `develop`
+- `Phase Z` may begin
 
 ## Startup Liveness Requirement
 

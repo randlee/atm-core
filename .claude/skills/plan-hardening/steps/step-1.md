@@ -16,6 +16,14 @@ If `/tmp/plan-hardening-vars.json` does not exist, start from:
 
 `.claude/skills/plan-hardening/examples/plan-hardening-vars.example.json`
 
+Make sure the vars file includes the current round metadata:
+- `round_id`
+- `round_index`
+- `replay_nonce`
+- `reviewed_commit`
+- `previous_reviewed_commit`
+- `findings_hash`
+
 **2. Send to `arch-ctm`**
 
 ```bash
@@ -35,6 +43,9 @@ Save the extracted fenced JSON to `/tmp/step-1.json`.
 
 - `PASS` -> proceed to Step 2
 - `FAIL` -> re-render and re-send Step 1 to `arch-ctm`
+- if `arch-ctm` ACKs but returns no new fenced JSON, increment `round_index`,
+  update `round_id`, refresh `replay_nonce` with the current UTC timestamp,
+  and re-render Step 1 before re-sending
 
 ## Hard stops
 
