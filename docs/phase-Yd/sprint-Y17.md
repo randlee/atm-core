@@ -38,8 +38,8 @@ target: integrate/phase-Y
   - `crates/atm-core/src/delivery_execution.rs`
   - `crates/atm-daemon/src/reconcile_runtime.rs`
   - `crates/atm-daemon/src/tests.rs`
-  - `crates/atm-daemon/src/composition/lifecycle.rs`
-  - `crates/atm-daemon/src/runtime_status.rs`
+  - `crates/atm-daemon/src/composition.rs`
+  - `crates/atm-daemon/src/runtime_status_cache.rs`
   - any directly adjacent files required to merge those accepted fixes onto the
     final candidate line cleanly
 - the accepted merge candidate branch state itself

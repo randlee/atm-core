@@ -12,7 +12,6 @@ use crate::delivery_policy::{
     persisted_success_transition_names, sqlite_failure_transition_names,
 };
 use crate::error::AtmError;
-use crate::error::AtmErrorKind;
 use crate::observability::ObservabilityPort;
 use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::schema::{AtmMessageId, MessageEnvelope};
@@ -97,7 +96,7 @@ where
         disposition: DeliveryPlanDisposition,
         messages: &[LogicalMessage],
     ) -> Result<(), AtmError> {
-        let mode = claude_compatibility_delivery_mode_for_disposition(disposition)?;
+        let mode = claude_compatibility_delivery_mode_for_disposition(disposition);
         // The retained runtime boundary still accepts owned envelopes, so this
         // delivery seam must clone until the boundary contract is widened.
         self.append_compat_inbox_message_set(
@@ -403,19 +402,13 @@ fn execute_persisted_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
 
 fn claude_compatibility_delivery_mode_for_disposition(
     disposition: DeliveryPlanDisposition,
-) -> Result<ClaudeCompatibilityDeliveryMode, AtmError> {
-    match disposition {
-        DeliveryPlanDisposition::SqliteFailedRecovered => {
-            Ok(ClaudeCompatibilityDeliveryMode::RecoveredLogicalMessageSet)
-        }
-        _ => Err(AtmError::new(
-            AtmErrorKind::Validation,
-            "claude_compatibility_delivery_mode_for_disposition only accepts DeliveryPlanDisposition::SqliteFailedRecovered",
-        )
-        .with_recovery(
-            "Call the recovered Claude message-set seam only for SqliteFailedRecovered delivery plans; persisted Claude delivery stays on the single-message append path.",
-        )),
-    }
+) -> ClaudeCompatibilityDeliveryMode {
+    debug_assert_eq!(
+        disposition,
+        DeliveryPlanDisposition::SqliteFailedRecovered,
+        "recovered Claude message-set seam only accepts SqliteFailedRecovered plans",
+    );
+    ClaudeCompatibilityDeliveryMode::RecoveredLogicalMessageSet
 }
 
 fn build_append_warning(
