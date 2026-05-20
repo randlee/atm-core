@@ -62,6 +62,7 @@ ADR-015 ownership in this sprint:
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
+  - update the `DaemonNotificationSinkAdapter` record
 
 ## Proposed Design
 
@@ -124,6 +125,9 @@ impl NotificationRuntime {
 - the worker owns the queue, persistence writes, and drain sequencing
 - degraded status is published as immutable status, not inferred by peeking
   into a shared mutable queue/lifecycle lock
+- `JoinHandleOwner` is the one allowed narrow mutex helper on this lane; its
+  `Mutex<Option<JoinHandle<()>>>` owns only bounded worker join lifecycle and
+  must not become a side queue, lifecycle, or degraded-state control plane
 
 ### Data Flow
 
@@ -157,6 +161,9 @@ impl NotificationRuntime {
 - reuse the `arc_swap` dependency introduced in `Y.19`; if `Y.19` is not yet
   on the accepted line, add `arc_swap` to the workspace `Cargo.toml`
   dependency table and to `crates/atm-daemon/Cargo.toml` in this sprint
+- if `REQ-DAEMON-RUNTIME-009` and the `ADR-015` worker-lane rule are not yet
+  present on the accepted implementation line when this sprint begins, this
+  sprint must land them on that line as part of closure
 - replace the production `NotificationState` queue/lifecycle coordination
   surface with a bounded command channel owned by the notification worker lane
 - keep producer behavior limited to lifecycle checks plus `try_send(...)`

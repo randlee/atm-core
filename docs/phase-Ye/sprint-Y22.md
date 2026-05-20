@@ -58,6 +58,7 @@ ADR-015 ownership in this sprint:
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
+  - update the `DaemonReconcileCoordinatorAdapter` record
 
 ## Proposed Design
 
@@ -94,6 +95,9 @@ coordination after this sprint closes.
 - callers own only request submission and one reply receiver
 - lifecycle/readiness publication is explicit and separate from reconcile
   coordination state
+- `JoinHandleOwner` remains the one allowed narrow mutex helper on this lane;
+  its `Mutex<Option<JoinHandle<()>>>` owns only bounded worker join lifecycle
+  and must not own fingerprint, debounce, queue, or completion state
 
 ### Data Flow
 
@@ -123,6 +127,9 @@ coordination after this sprint closes.
   defined in `Y.21`
 - move the notification fingerprint registry into worker-owned reconcile actor
   state and delete any surviving side ownership surface
+- delete any surviving `Arc<Mutex<NotificationFingerprintRegistry>>` helper,
+  field, or side-owned registry path so fingerprint ownership exists only
+  inside `ReconcileWorkerState`
 - delete production shared-state pending/completed/waiter coordination paths
 - prove bounded shutdown on the final actor-owned runtime
 - update daemon requirements, architecture, boundaries, and `ADR-015` so the
@@ -134,6 +141,8 @@ coordination after this sprint closes.
   - delete production `Mutex<ReconcileState>` ownership
   - delete production `Condvar` reconcile coordination
   - delete production shared-state pending/completed/waiter tracking paths
+  - delete any surviving `Arc<Mutex<NotificationFingerprintRegistry>>` helper,
+    field, or detached side-owned fingerprint registry path
 
 ## Acceptance Criteria
 
@@ -171,6 +180,9 @@ implementation.
 
 - `rg -n 'arc_swap' Cargo.toml crates/atm-daemon/Cargo.toml`
 - `rg -n "Mutex<ReconcileState>|Condvar" crates/atm-daemon/src/reconcile_runtime.rs`
+- `rg -n 'NotificationFingerprintRegistry' crates/atm-daemon/src/reconcile_runtime.rs`
+- `rg -n 'notification_fingerprints: NotificationFingerprintRegistry' crates/atm-daemon/src/reconcile_runtime.rs`
+- `rg -n 'Arc<Mutex<NotificationFingerprintRegistry>>' crates/atm-daemon/src/reconcile_runtime.rs`
 - `cargo test --workspace reconcile_runtime_actor_cutover_removes_shared_state_runtime_path -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_shutdown_stays_bounded -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned -- --nocapture`

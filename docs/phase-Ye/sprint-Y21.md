@@ -62,6 +62,7 @@ ADR-015 ownership in this sprint:
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
+  - update the `DaemonReconcileCoordinatorAdapter` record
 
 ## Proposed Design
 
@@ -125,6 +126,10 @@ impl ReconcileRuntime {
   registry, and completion fanout
 - there is no daemon-shared `completed` map or waiter registry after the full
   cutover
+- `JoinHandleOwner` is the one allowed narrow mutex helper on this lane; its
+  `Mutex<Option<JoinHandle<()>>>` owns only bounded worker join lifecycle and
+  must not become side ownership for debounce, completion, or fingerprint
+  coordination
 
 ### Data Flow
 

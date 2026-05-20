@@ -100,3 +100,13 @@ These items are explicitly out of scope for `Phase Ye`:
 - `Y.22` closes the `ReconcileRuntime` actor cutover.
 - `Y.23` closes the phase-end proof, ADR acceptance, and architecture
   validation for the full lock-removal line.
+
+## Phase-End Closure Record
+
+`Y.23` owns filling these rows on the accepted implementation line.
+
+- `Y.19 closes on accepted line: TBD`
+- `Y.20 closes on accepted line: TBD`
+- `Y.21 closes on accepted line: TBD`
+- `Y.22 closes on accepted line: TBD`
+- `Y.23 closes on accepted line: TBD`

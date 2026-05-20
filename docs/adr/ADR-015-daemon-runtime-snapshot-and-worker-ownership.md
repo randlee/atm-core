@@ -54,6 +54,15 @@ The post-`Phase Y` daemon runtime line adopts these rules:
 3. Shared mutable queue/debounce/completion locks are not the accepted final
    design for these daemon lanes.
 
+4. A narrow worker-join ownership helper is acceptable where needed to own one
+   background thread handle.
+   - `JoinHandleOwner` may use `Mutex<Option<JoinHandle<()>>>` for one-slot
+     bounded join ownership only
+   - that helper must not own queue state, debounce state, completion fanout,
+     or any caller-visible control-plane coordination
+   - review must treat it as a bounded lifecycle helper, not as an exception
+     that reauthorizes lock-heavy runtime state
+
 ## Consequences
 
 ### Positive

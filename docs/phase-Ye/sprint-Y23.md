@@ -50,6 +50,9 @@ That phase-end proof should not be mixed into the reconcile cutover itself.
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
+  - revalidate the `DaemonStatusSourceAdapter` record
+  - revalidate the `DaemonNotificationSinkAdapter` record
+  - revalidate the `DaemonReconcileCoordinatorAdapter` record
 - `docs/project-plan.md`
 - any final acceptance-proof references added by `Y.19` through `Y.22`
 
@@ -105,6 +108,10 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
 
 - review the accepted `Phase Ye` line after `Y.22` and verify that all three
   ownership redesigns are present while the old lock-owned paths are absent
+- if the final accepted implementation line still lacks `REQ-DAEMON-STATUS-004`,
+  `REQ-DAEMON-RUNTIME-009`, `ADR-015`, or the `Phase Ye` readiness record
+  updates planned earlier in the phase, `Y.23` must land those governance and
+  proof updates on that line before phase closure can be claimed
 - update `docs/phase-Ye/issues.md` to record final closure of `Y.19` through
   `Y.23`
 - update `docs/phase-Ye/readiness.md` with the final accepted commit set,

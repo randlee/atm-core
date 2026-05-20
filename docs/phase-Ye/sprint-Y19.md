@@ -64,6 +64,8 @@ ADR-015 ownership in this sprint:
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
+  - update the `DaemonStatusSourceAdapter` record
+  - keep the review-visible `RuntimeStatusCache` control-plane note aligned
 
 ## Proposed Design
 
@@ -144,6 +146,9 @@ impl RuntimeStatusCache {
 
 - add `arc_swap` to the workspace `Cargo.toml` dependency table and to
   `crates/atm-daemon/Cargo.toml` before the runtime-status snapshot work lands
+- if `REQ-DAEMON-STATUS-004` and the `ADR-015` snapshot-publication rule are
+  not yet present on the accepted implementation line when this sprint begins,
+  this sprint must land them on that line as part of closure
 - replace the production `RuntimeStatusCache` state holder with an immutable
   `ArcSwap<RuntimeStatusCacheState>` publication surface
 - convert heartbeat and sqlite-readiness writers to clone, mutate, and publish
