@@ -145,9 +145,7 @@ impl NotificationRuntime {
             return Err(AtmError::daemon_unavailable(
                 "notification runtime is unavailable before daemon startup",
             )
-            .with_recovery(
-                "Start or restart atm-daemon before retrying notification delivery.",
-            ));
+            .with_recovery("Start or restart atm-daemon before retrying notification delivery."));
         }
         if state.shutdown {
             return Err(AtmError::daemon_unavailable(

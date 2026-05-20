@@ -589,7 +589,6 @@ impl RuntimeStatusCache {
 }
 
 fn runtime_status_cache_lock_poisoned() -> AtmError {
-    AtmError::daemon_unavailable("runtime status cache lock poisoned").with_recovery(
-        "Restart the daemon; runtime status cache state can no longer be trusted.",
-    )
+    AtmError::daemon_unavailable("runtime status cache lock poisoned")
+        .with_recovery("Restart the daemon; runtime status cache state can no longer be trusted.")
 }
