@@ -3562,7 +3562,8 @@ Status summary:
   - partial Claude recovered degraded delivery remained possible
   - production notification execution still bypassed `NotificationSink`
 - those blockers are tracked in `Phase Yc`; smoke/dogfood work must not resume
-  until `Phase Yc` closes.
+  until `Phase Yc` closes **and** the later `Phase Yd` develop-gate record
+  says `Phase Z` may begin.
 
 Goal:
 - lock down the exact message-path consolidation work needed after `Phase Y`
@@ -3602,8 +3603,8 @@ Immediate planning outputs:
 ## 33. Phase Yc Final Production-Readiness Closure
 
 Status summary:
-- `integrate/phase-Y` is close enough to resume smoke only after two final
-  production-readiness blockers are explicitly closed.
+- `integrate/phase-Y` still had two final runtime production-readiness
+  blockers reopened by focused review.
 - `Phase Yc` is the dedicated follow-on for those blockers.
 - `Phase Yc` is intentionally split into two sprints so each deliverable lands
   at a production-ready level without mixing behavioral and boundary closure.
@@ -3611,8 +3612,9 @@ Status summary:
 Goal:
 - close the final Claude recovered degraded-delivery contract gap
 - close the final `NotificationSink` boundary bypass
-- hand the merged `Phase Y` line back to `Phase Z` only after a focused
-  readiness gate passes
+- leave the focused readiness record that proves those two original runtime
+  blockers are closed before the broader `Phase Yd` develop-gate closeout
+  begins
 - keep `Y.12` and `Y.13` on their user-discussed runtime/code scope; later
   post-mortem lint recommendations are separate follow-up work, not substitute
   deliverables for these two sprints
@@ -3636,11 +3638,65 @@ Immediate planning outputs:
 Acceptance / Phase Z Smoke Gate:
 - `Phase Z` smoke and dogfood work remain blocked while either `Y.12` or
   `Y.13` is still open.
-- `Phase Z` smoke may resume only after the `Yc` readiness record explicitly
-  states that:
+- the `Yc` readiness record must explicitly state that:
   - the recovered Claude SQLite-failure path cannot partially emit a logical
     message set while still claiming success
   - the production notification path executes through
     `NotificationSink::deliver(...)` rather than direct hook helpers
   - the focused `Yc` readiness validation has passed on the merged
     `integrate/phase-Y` line
+- `Yc` closure alone is not sufficient to start `Phase Z`; the later
+  `Phase Yd` readiness record still controls whether `Phase Z` may begin
+
+## 34. Phase Yd Develop-Gate Closure
+
+Status summary:
+- `Phase Yc` captured the two original runtime blockers reopened by the focused
+  production-readiness review.
+- before `integrate/phase-Y` lands on `develop`, the broader `Phase Y`
+  blocker set must be documented explicitly and closed on a final
+  develop-gate line.
+- `Phase Z` remains blocked until that closeout line says `Phase Y` is ready
+  for `develop`.
+
+Goal:
+- document the full `Phase Y` blocker set, not only the original two `Yc`
+  runtime gaps
+- close the remaining runtime, boundary, composition, accepted phase-end-fix,
+  and thin-liveness blockers before `develop`
+- leave one readiness record that explicitly authorizes `Phase Y` to land on
+  `develop` and `Phase Z` to begin
+
+Execution shape:
+- planning-only branch: `plan/phase-Yd-z-gate`
+- implementation target branch: `integrate/phase-Y`
+- implementation sequence:
+  - `Y.14` recovered Claude logical-message-set closure
+    - branch: `feature/pYd-s14-recovered-claude-logical-message-set-closure`
+  - `Y.15` production notification boundary closure
+    - branch: `feature/pYd-s15-production-notification-boundary-closure`
+  - `Y.16` retained-runtime composition closure
+    - branch: `feature/pYd-s16-retained-runtime-composition-closure`
+  - `Y.17` candidate closure
+    - branch: `feature/pYd-s17-candidate-closure`
+  - `Y.18` thin liveness closure and final develop gate
+    - branch: `feature/pYd-s18-thin-liveness-closure-and-final-develop-gate`
+
+Immediate planning outputs:
+- `docs/phase-Y/issues.md`
+- `docs/phase-Yd/plan-phase-Yd.md`
+- `docs/phase-Yd/readiness.md`
+- `docs/phase-Yd/sprint-Y14.md`
+- `docs/phase-Yd/sprint-Y15.md`
+- `docs/phase-Yd/sprint-Y16.md`
+- `docs/phase-Yd/sprint-Y17.md`
+- `docs/phase-Yd/sprint-Y18.md`
+
+Acceptance / Develop And Phase Z Gate:
+- `Phase Y` does not land on `develop` while any blocking item in
+  `docs/phase-Y/issues.md` remains open.
+- `Phase Z` remains blocked until `docs/phase-Yd/readiness.md` explicitly
+  states that:
+  - the `Phase Y` blocker set is closed
+  - `Phase Y` may land on `develop`
+  - `Phase Z` may begin
