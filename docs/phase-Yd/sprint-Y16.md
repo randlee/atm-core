@@ -69,6 +69,39 @@ target: integrate/phase-Y
   without fallback/helper-owned bypass behavior
 - `docs/phase-Yd/readiness.md` is updated with the `Y.16` closure result
 
+## Explicit Code Samples
+
+```rust
+pub fn build_production_runtime(
+    mail_store: Arc<dyn MailStore + Send + Sync>,
+    task_store: Arc<dyn TaskStore + Send + Sync>,
+    roster_store: Arc<dyn RosterStore + Send + Sync>,
+    non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
+    notification_sink: Arc<dyn NotificationSink + Send + Sync>,
+) -> LocalServiceRuntime {
+    LocalServiceRuntime::new_with_delivery_boundaries(
+        mail_store,
+        task_store,
+        roster_store,
+        non_claude_outbound,
+        notification_sink,
+    )
+}
+```
+
+```rust
+let notification_sink: Arc<dyn NotificationSink + Send + Sync> =
+    Arc::new(DaemonNotificationSink::new(notification_runtime.clone()));
+
+let runtime = build_production_runtime(
+    mail_store,
+    task_store,
+    roster_store,
+    non_claude_outbound,
+    notification_sink,
+);
+```
+
 ## Required Validation
 
 - `cargo fmt --all`

@@ -20,14 +20,27 @@ target: integrate/phase-Y
 - `docs/phase-Yd/plan-phase-Yd.md`
 - `docs/phase-Yd/readiness.md`
 - accepted phase-end fix evidence from:
-  - `PY-EOP-FIX-1`
-  - `PY-EOP-FIX-R2`
+  - `feature/pY-eop-fix-1` at `fe28ad75169d1ec0bf3c40f8e356c9499917501f`
+    (`PY-EOP-FIX-1`)
+  - `feature/pY-eop-fix-1` at `243e473a` (`PY-EOP-FIX-R2`)
 - `Y.16` must close first
 
 ## Exact Targets
 
-- any files required to absorb the accepted phase-end fix line on the final
-  merge candidate
+- accepted merge candidate branch:
+  - `integrate/phase-Y`
+- accepted phase-end fix line source:
+  - `feature/pY-eop-fix-1`
+- files changed by accepted phase-end fix evidence:
+  - `crates/atm-daemon/src/composition.rs`
+  - `crates/atm-daemon/src/peer_transport.rs`
+  - `crates/atm-core/src/delivery_execution.rs`
+  - `crates/atm-daemon/src/reconcile_runtime.rs`
+  - `crates/atm-daemon/src/tests.rs`
+  - `crates/atm-daemon/src/composition/lifecycle.rs`
+  - `crates/atm-daemon/src/runtime_status.rs`
+  - any directly adjacent files required to merge those accepted fixes onto the
+    final candidate line cleanly
 - the accepted merge candidate branch state itself
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/readiness.md`
@@ -45,8 +58,8 @@ target: integrate/phase-Y
 - verify the accepted merge candidate includes the end-of-phase fix line, not
   just the original `Phase Y` integration baseline
 - validate the accepted candidate line cleanly
-- record the accepted candidate commit identity in the readiness record or
-  adjacent project-plan status update so QA does not have to infer which line
+- record the accepted candidate commit identity in
+  `docs/phase-Yd/readiness.md` so QA does not have to infer which line
   satisfied the candidate gate
 - update the blocker inventory and readiness record to reflect the closure
   state
@@ -62,8 +75,8 @@ target: integrate/phase-Y
 
 - the accepted merge candidate includes the required phase-end fix line and is
   validation-clean for the `Y.17` scope
-- the accepted candidate commit used for the `Y.17` gate is named explicitly in
-  the updated readiness/project-plan docs
+- the accepted candidate commit used for the `Y.17` gate is named explicitly
+  in `docs/phase-Yd/readiness.md`
 - `docs/phase-Yd/readiness.md` is updated with the `Y.17` closure result
 
 ## Required Validation

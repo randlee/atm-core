@@ -46,6 +46,38 @@ target: integrate/phase-Y
 - one explicit readiness record states whether `Phase Y` may land on `develop`
   and whether `Phase Z` may begin
 
+## Explicit Code Samples
+
+```rust
+pub enum NotificationWorkerLiveness {
+    Live,
+    Degraded,
+    Stopped,
+}
+```
+
+```rust
+pub struct RuntimeHealthSnapshot {
+    pub notification_worker_liveness: NotificationWorkerLiveness,
+}
+```
+
+```rust
+fn project_runtime_health(
+    runtime: &NotificationRuntime,
+) -> RuntimeHealthSnapshot {
+    RuntimeHealthSnapshot {
+        notification_worker_liveness: runtime.worker_liveness(),
+    }
+}
+```
+
+```rust
+// Maximum acceptable complexity boundary for Y.18:
+// runtime_health projects one runtime-owned signal directly.
+// It does not infer liveness by reconstructing queue, retry, or worker logic.
+```
+
 ## Required Work
 
 - close or explicitly reclassify the final liveness/readiness blocker from
@@ -63,6 +95,9 @@ target: integrate/phase-Y
 
 - the final `Phase Y` blocker set is closed or explicitly reclassified with
   documented rationale
+- any explicit reclassification path must be recorded in `docs/phase-Y/issues.md`
+  under the blocker entry with rationale stating why it no longer blocks
+  landing on `develop`
 - any liveness closure uses a thin runtime-owned signal rather than
   compensating logic inside `runtime_health`
 - `docs/phase-Yd/readiness.md` says whether `Phase Y` may land on `develop`
@@ -72,6 +107,8 @@ target: integrate/phase-Y
 
 ## Required Validation
 
-- focused readiness validation for the accepted liveness signal
+- `cargo fmt --all`
+- `python3 .just/run_lint.py all`
 - `cargo test --workspace`
+- `cargo clippy --workspace -- -D warnings`
 - `git diff --check`

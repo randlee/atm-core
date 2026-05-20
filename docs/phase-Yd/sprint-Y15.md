@@ -73,6 +73,30 @@ target: integrate/phase-Y
   `Y.15` scope
 - `docs/phase-Yd/readiness.md` is updated with the `Y.15` closure result
 
+## Explicit Code Samples
+
+```rust
+pub trait NotificationSink: sealed::Sealed {
+    fn deliver(&self, event: NotificationEvent) -> Result<(), AtmError>;
+}
+```
+
+```rust
+fn deliver_notifications(
+    notification_sink: &dyn NotificationSink,
+    event: NotificationEvent,
+) -> Result<(), AtmError> {
+    notification_sink.deliver(event)
+}
+```
+
+```rust
+// Required call-site shape on the production path:
+notification_sink.deliver(notification_event)?;
+// Forbidden bypass shape:
+// maybe_run_post_send_hook(...)
+```
+
 ## Required Validation
 
 - `cargo fmt --all`
