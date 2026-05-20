@@ -1,7 +1,7 @@
 ---
 id: Y.19
 title: Runtime Status Snapshot Publication
-status: planned
+status: complete
 branch: feature/pYe-s19-runtime-status-snapshot-publication
 worktree: ../atm-core-worktrees/feature/pYe-s19-runtime-status-snapshot-publication
 target: integrate/phase-Y

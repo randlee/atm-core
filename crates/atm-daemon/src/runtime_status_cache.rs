@@ -1,6 +1,7 @@
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 
+use arc_swap::ArcSwap;
 use atm_core::boundary;
 use atm_core::doctor::{DoctorFinding, DoctorSeverity};
 use atm_core::error::AtmError;
@@ -31,10 +32,6 @@ struct RuntimeMemberRecord {
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct RuntimeStatusCacheState {
-    // Request handlers and doctor/status readers must observe one coherent
-    // live-status projection. One mutex covers the full cache state so member
-    // inserts/evictions and sqlite/degraded-ingest flips cannot interleave into
-    // torn doctor snapshots.
     members: HashMap<RuntimeMemberKey, RuntimeMemberRecord>,
     sqlite_ready: bool,
     sqlite_detail: Option<String>,
@@ -49,7 +46,7 @@ impl RuntimeStatusCacheState {
 
 #[derive(Debug, Clone)]
 pub(crate) struct RuntimeStatusCache {
-    state: Arc<Mutex<RuntimeStatusCacheState>>,
+    state: Arc<ArcSwap<RuntimeStatusCacheState>>,
     observability: SubsystemObservability,
 }
 
@@ -68,7 +65,7 @@ impl RuntimeStatusCache {
 
     pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self {
-            state: Arc::new(Mutex::new(RuntimeStatusCacheState {
+            state: Arc::new(ArcSwap::from_pointee(RuntimeStatusCacheState {
                 members: HashMap::new(),
                 sqlite_ready: true,
                 sqlite_detail: None,
@@ -79,19 +76,11 @@ impl RuntimeStatusCache {
     }
 
     pub(crate) fn clone_state(&self) -> Result<RuntimeStatusCacheState, AtmError> {
-        self.state
-            .lock()
-            .map(|cache| cache.clone())
-            .map_err(|_| runtime_status_cache_lock_poisoned())
+        Ok(self.state.load().as_ref().clone())
     }
 
-    pub(crate) fn replace_state(&self, next: RuntimeStatusCacheState) -> Result<(), AtmError> {
-        let mut cache = self
-            .state
-            .lock()
-            .map_err(|_| runtime_status_cache_lock_poisoned())?;
-        *cache = next;
-        Ok(())
+    pub(crate) fn publish_state(&self, next: RuntimeStatusCacheState) {
+        self.state.store(Arc::new(next));
     }
 
     pub(crate) fn record_heartbeat(
@@ -109,10 +98,7 @@ impl RuntimeStatusCache {
             member: request.member.clone(),
         };
         let last_active_at = Some(request.observed_at);
-        let mut cache = self
-            .state
-            .lock()
-            .map_err(|_| runtime_status_cache_lock_poisoned())?;
+        let mut cache = self.clone_state()?;
         evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
         cache.members.insert(
             key,
@@ -122,6 +108,7 @@ impl RuntimeStatusCache {
                 last_active_at,
             },
         );
+        self.publish_state(cache);
         Ok(TeamMemberHeartbeatResponse {
             team: request.team.clone(),
             member: request.member.clone(),
@@ -141,10 +128,7 @@ impl RuntimeStatusCache {
             team: request.team.clone(),
             member: request.member.clone(),
         };
-        let mut cache = self
-            .state
-            .lock()
-            .map_err(|_| runtime_status_cache_lock_poisoned())?;
+        let mut cache = self.clone_state()?;
         evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
         let last_active_at = cache
             .members
@@ -158,6 +142,7 @@ impl RuntimeStatusCache {
                 last_active_at,
             },
         );
+        self.publish_state(cache);
         let event = self
             .observability
             .event(
@@ -176,10 +161,7 @@ impl RuntimeStatusCache {
         team: &TeamName,
         member: &AgentName,
     ) -> Result<Option<u32>, AtmError> {
-        let cache = self
-            .state
-            .lock()
-            .map_err(|_| runtime_status_cache_lock_poisoned())?;
+        let cache = self.state.load();
         Ok(cache
             .members
             .get(&RuntimeMemberKey {
@@ -190,17 +172,9 @@ impl RuntimeStatusCache {
     }
 
     pub(crate) fn mark_sqlite_unavailable(&self) {
-        let mut cache = self.state.lock().unwrap_or_else(|_| {
-            tracing::error!(
-                subsystem = "runtime_status_cache",
-                action = "mark_sqlite_unavailable",
-                outcome = "lock_poisoned",
-                "runtime status cache lock poisoned while marking sqlite unavailable"
-            );
-            panic!("runtime status cache lock poisoned while marking sqlite unavailable");
-        });
+        let mut cache = self.state.load().as_ref().clone();
         cache.sqlite_ready = false;
-        drop(cache);
+        self.publish_state(cache);
         // Emit failure is intentionally best-effort here because the in-memory sqlite
         // readiness downgrade is the source of truth for doctor/status consumers.
         self.observability.emit_or_warn(
@@ -215,27 +189,14 @@ impl RuntimeStatusCache {
     /// observability event independently; this helper only updates the cached
     /// doctor/runtime-health projection state.
     pub(crate) fn mark_sqlite_unavailable_with_detail(&self, detail: impl Into<String>) {
-        match self.state.lock() {
-            Ok(mut cache) => {
-                cache.sqlite_ready = false;
-                cache.sqlite_detail = Some(detail.into());
-            }
-            Err(_) => {
-                tracing::error!(
-                    subsystem = "runtime_status_cache",
-                    action = "mark_sqlite_unavailable_with_detail",
-                    outcome = "lock_poisoned",
-                    "runtime status cache lock poisoned while recording sqlite degradation detail"
-                );
-            }
-        }
+        let mut cache = self.state.load().as_ref().clone();
+        cache.sqlite_ready = false;
+        cache.sqlite_detail = Some(detail.into());
+        self.publish_state(cache);
     }
 
     pub(crate) fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
-        let cache = self
-            .state
-            .lock()
-            .map_err(|_| runtime_status_cache_lock_poisoned())?;
+        let cache = self.state.load();
         Ok(build_runtime_snapshot_all(&cache))
     }
 
@@ -243,10 +204,7 @@ impl RuntimeStatusCache {
         &self,
         members: impl IntoIterator<Item = (TeamName, AgentName)>,
     ) -> Result<RuntimeStatusSnapshot, AtmError> {
-        let cache = self
-            .state
-            .lock()
-            .map_err(|_| runtime_status_cache_lock_poisoned())?;
+        let cache = self.state.load();
         Ok(build_runtime_snapshot_scoped(&cache, members))
     }
 }
@@ -520,10 +478,7 @@ impl RuntimeStatusCache {
         team: &TeamName,
         member: &AgentName,
     ) -> Result<Option<RuntimeMemberState>, AtmError> {
-        let cache = self
-            .state
-            .lock()
-            .map_err(|_| runtime_status_cache_lock_poisoned())?;
+        let cache = self.state.load();
         Ok(cache
             .members
             .get(&RuntimeMemberKey {
@@ -541,10 +496,7 @@ impl RuntimeStatusCache {
         state: RuntimeMemberState,
         last_active_at: Option<IsoTimestamp>,
     ) -> Result<(), AtmError> {
-        let mut cache = self
-            .state
-            .lock()
-            .map_err(|_| runtime_status_cache_lock_poisoned())?;
+        let mut cache = self.clone_state()?;
         cache.members.insert(
             RuntimeMemberKey { team, member },
             RuntimeMemberRecord {
@@ -553,14 +505,12 @@ impl RuntimeStatusCache {
                 last_active_at,
             },
         );
+        self.publish_state(cache);
         Ok(())
     }
 
     pub(crate) fn member_count_for_test(&self) -> Result<usize, AtmError> {
-        let cache = self
-            .state
-            .lock()
-            .map_err(|_| runtime_status_cache_lock_poisoned())?;
+        let cache = self.state.load();
         Ok(cache.members.len())
     }
 
@@ -588,7 +538,124 @@ impl RuntimeStatusCache {
     }
 }
 
-fn runtime_status_cache_lock_poisoned() -> AtmError {
-    AtmError::daemon_unavailable("runtime status cache lock poisoned")
-        .with_recovery("Restart the daemon; runtime status cache state can no longer be trusted.")
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use atm_core::protocol::{
+        HeartbeatActivity, RuntimeMemberState, RuntimeReadinessState, TeamMemberHeartbeatRequest,
+    };
+    use atm_core::test_support::{ROLE_TEAM_LEAD, TEST_QA, TEST_RECIPIENT, TEST_SENDER};
+    use atm_core::types::AgentName;
+
+    fn test_team() -> TeamName {
+        "qa-team".parse().expect("team")
+    }
+
+    #[test]
+    fn runtime_status_cache_heartbeat_publish_is_atomically_visible() {
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
+
+        status_cache
+            .record_heartbeat_for_test(
+                &TeamMemberHeartbeatRequest {
+                    team: team.clone(),
+                    member: member.clone(),
+                    pid: std::process::id(),
+                    observed_at: IsoTimestamp::now(),
+                    activity: HeartbeatActivity::ActiveToolUse,
+                },
+                false,
+            )
+            .expect("heartbeat");
+
+        let snapshot = status_cache.snapshot().expect("snapshot");
+        assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
+        assert!(snapshot.sqlite_ready);
+        assert!(!snapshot.degraded_ingest);
+        assert_eq!(snapshot.member_counts.active_members, 1);
+        assert_eq!(snapshot.member_counts.idle_members, 0);
+        assert_eq!(snapshot.member_counts.offline_members, 0);
+        assert_eq!(snapshot.member_counts.unknown_members, 0);
+
+        let scoped = status_cache
+            .snapshot_for_members_for_test([(team, member)])
+            .expect("scoped snapshot");
+        assert_eq!(scoped.member_counts.active_members, 1);
+        assert_eq!(scoped.member_counts.unknown_members, 0);
+    }
+
+    #[test]
+    fn runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking() {
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let active: AgentName = TEST_QA.parse().expect("member");
+        let idle: AgentName = TEST_RECIPIENT.parse().expect("member");
+        let missing: AgentName = TEST_SENDER.parse().expect("member");
+
+        status_cache
+            .insert_member_for_test(
+                team.clone(),
+                active.clone(),
+                Some(100),
+                RuntimeMemberState::Active,
+                Some(IsoTimestamp::now()),
+            )
+            .expect("insert active member");
+        status_cache
+            .insert_member_for_test(
+                team.clone(),
+                idle.clone(),
+                Some(101),
+                RuntimeMemberState::Idle,
+                Some(IsoTimestamp::now()),
+            )
+            .expect("insert idle member");
+
+        let snapshot = status_cache
+            .snapshot_for_members_for_test([
+                (team.clone(), active),
+                (team.clone(), idle),
+                (team, missing),
+            ])
+            .expect("scoped snapshot");
+
+        assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
+        assert_eq!(snapshot.member_counts.active_members, 1);
+        assert_eq!(snapshot.member_counts.idle_members, 1);
+        assert_eq!(snapshot.member_counts.offline_members, 0);
+        assert_eq!(snapshot.member_counts.unknown_members, 1);
+    }
+
+    #[test]
+    fn runtime_status_cache_sqlite_readiness_flip_publishes_one_coherent_snapshot() {
+        let status_cache = RuntimeStatusCache::new();
+        let team = test_team();
+        let member: AgentName = TEST_SENDER.parse().expect("member");
+
+        status_cache
+            .insert_member_for_test(
+                team,
+                member,
+                Some(200),
+                RuntimeMemberState::Active,
+                Some(IsoTimestamp::now()),
+            )
+            .expect("insert active member");
+
+        status_cache.mark_sqlite_unavailable_with_detail("sqlite writer submit failed");
+
+        let snapshot = status_cache.snapshot().expect("snapshot");
+        assert!(!snapshot.sqlite_ready);
+        assert_eq!(snapshot.readiness, RuntimeReadinessState::Degraded);
+        assert_eq!(snapshot.member_counts.active_members, 1);
+        assert_eq!(snapshot.member_counts.unknown_members, 0);
+        assert!(
+            snapshot
+                .detail
+                .as_deref()
+                .is_some_and(|detail| detail.contains("sqlite writer submit failed"))
+        );
+    }
 }

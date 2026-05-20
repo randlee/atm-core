@@ -326,22 +326,23 @@ impl DaemonRequestDispatcher {
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
-        if let Err(error) = build_runtime_status_cache_state(None, sqlite_boundary.roster_store())
-            .and_then(|state| status_cache.replace_state(state))
-        {
-            tracing::warn!(
-                subsystem = "runtime_health",
-                action = "sqlite_cache_hydration",
-                outcome = "degraded",
-                %error,
-                "failed to hydrate runtime status cache from sqlite roster state"
-            );
-            runtime_health_observability.emit_or_warn(
-                "sqlite_cache_hydration",
-                "degraded",
-                "failed to hydrate runtime status cache from sqlite roster state",
-            );
-            status_cache.mark_sqlite_unavailable();
+        match build_runtime_status_cache_state(None, sqlite_boundary.roster_store()) {
+            Ok(state) => status_cache.publish_state(state),
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "sqlite_cache_hydration",
+                    outcome = "degraded",
+                    %error,
+                    "failed to hydrate runtime status cache from sqlite roster state"
+                );
+                runtime_health_observability.emit_or_warn(
+                    "sqlite_cache_hydration",
+                    "degraded",
+                    "failed to hydrate runtime status cache from sqlite roster state",
+                );
+                status_cache.mark_sqlite_unavailable();
+            }
         }
         Self {
             home_dir,
@@ -471,7 +472,7 @@ impl DaemonRequestDispatcher {
         let current_state = self.status_cache.clone_state()?;
         let next_state = build_runtime_status_cache_state(Some(&current_state), roster_store)?;
         let reloaded_members = next_state.member_count();
-        self.status_cache.replace_state(next_state)?;
+        self.status_cache.publish_state(next_state);
         tracing::info!(
             reloaded_members,
             "bounded daemon config/roster reload applied successfully"
