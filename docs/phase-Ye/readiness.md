@@ -28,6 +28,19 @@ line. `Y.23` owns the final update.
 - accepted closure sprint:
   - `Y.23`
 
+## Record Schema
+
+The readiness rows below use one fixed schema so `Y.23` proof gates and QA
+checks do not have to infer field names:
+
+- `accepted commit: <sha | TBD-...>`
+- `verdict: <PASS | FAIL | TBD>`
+
+The phase-end status block uses:
+
+- `current status: <draft | ready | blocked>`
+- `final Y.23 verdict: <PASS | FAIL | TBD>`
+
 ## Per-Sprint Closure Record
 
 - `Y.19`
