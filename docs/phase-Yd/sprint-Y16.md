@@ -34,8 +34,10 @@ target: integrate/phase-Y
 
 ## Exact Targets
 
+- `crates/atm-daemon/src/composition.rs`
 - `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-daemon/src/boundary_adapters.rs`
+- `crates/atm-daemon/src/notification_runtime.rs`
 - any directly supporting daemon/runtime assembly files required to install the
   live production `NotificationSink`
 - `docs/phase-Y/issues.md`
@@ -72,11 +74,17 @@ target: integrate/phase-Y
   documented rationale
 - the production retained-runtime path installs the live `NotificationSink`
   without fallback/helper-owned bypass behavior
+- `rg -n "DaemonNotificationSink::new" crates/atm-daemon/src/composition.rs`
+  returns at least one match on the production factory path
+- named test proves production retained-runtime composition installs the live
+  notification sink:
+  - `production_runtime_installs_daemon_notification_sink`
 - `docs/phase-Yd/readiness.md` is updated with the `Y.16` closure result
 
 ## Explicit Code Samples
 
 ```rust
+// Owned by `atm_daemon::composition`.
 pub fn build_production_runtime(
     mail_store: Arc<dyn MailStore + Send + Sync>,
     task_store: Arc<dyn TaskStore + Send + Sync>,
@@ -98,7 +106,7 @@ pub fn build_production_runtime(
 let notification_sink: Arc<dyn NotificationSink + Send + Sync> =
     Arc::new(DaemonNotificationSink::new(notification_runtime.clone()));
 
-let runtime = build_production_runtime(
+let runtime = atm_daemon::composition::build_production_runtime(
     mail_store,
     task_store,
     roster_store,
@@ -109,6 +117,7 @@ let runtime = build_production_runtime(
 
 ## Required Validation
 
+- `rg -n "DaemonNotificationSink::new" crates/atm-daemon/src/composition.rs`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`

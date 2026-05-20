@@ -49,6 +49,16 @@ target: integrate/phase-Y
 - the blocker inventory and readiness record explicitly record the `Y.14`
   closure result
 
+## Relationship To Phase Yc
+
+`Y.12` already defined and first proved the recovered Claude
+logical-message-set closure invariant on the focused `Yc` line.
+
+`Y.14` does not silently reopen that design. It re-proves the same invariant on
+the final accepted `Phase Y` candidate line after later accepted line-state
+changes. `Y.14` is therefore a final-candidate behavioral re-proof sprint, not
+a new semantic redesign of the recovered Claude path.
+
 ## Required Work
 
 - close the recovered Claude logical-message-set blocker recorded in
@@ -101,14 +111,24 @@ match disposition {
 
 - the recovered Claude blocker assigned to `Y.14` in `docs/phase-Y/issues.md`
   is closed or explicitly reclassified with documented rationale
+- `rg -n "if disposition == DeliveryPlanDisposition::SqliteFailedRecovered \\{[[:space:]]*break;" crates/atm-core/src/delivery_execution.rs`
+  returns no matches
+- `rg -n "append_claude_inbox_message\\(inbox_path, recipient, &message\\.envelope\\)" crates/atm-core/src/delivery_execution.rs`
+  no longer shows the recovered Claude path implemented as a one-message loop
 - the recovered Claude path either materializes the full logical message set
   or fails hard; no partial outward success remains on the accepted line
+- named tests prove all-or-nothing recovered Claude logical-message-set
+  behavior on the final accepted line:
+  - `sqlite_failure_for_claude_requires_full_logical_message_set_delivery`
+  - `sqlite_failure_for_claude_does_not_emit_message1_without_message2`
 - the final accepted `Phase Y` merge candidate is behavioral-clean for the
   recovered Claude scope
 - `docs/phase-Yd/readiness.md` is updated with the `Y.14` closure result
 
 ## Required Validation
 
+- `rg -n "if disposition == DeliveryPlanDisposition::SqliteFailedRecovered \\{[[:space:]]*break;" crates/atm-core/src/delivery_execution.rs`
+- `rg -n "append_claude_inbox_message\\(inbox_path, recipient, &message\\.envelope\\)" crates/atm-core/src/delivery_execution.rs`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`

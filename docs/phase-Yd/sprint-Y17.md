@@ -22,9 +22,7 @@ target: integrate/phase-Y
 - `docs/adr/INDEX.md`
 - `docs/testing-guidelines.md`
 - accepted phase-end fix evidence from:
-  - `feature/pY-eop-fix-1` at `fe28ad75169d1ec0bf3c40f8e356c9499917501f`
-    (`PY-EOP-FIX-1`)
-  - `feature/pY-eop-fix-1` at `243e473a` (`PY-EOP-FIX-R2`)
+  - `feature/pY-eop-fix-1` through tip commit `243e473a` (`PY-EOP-FIX-R2`)
 - `Y.16` must close first
 
 ## Exact Targets
@@ -59,6 +57,9 @@ target: integrate/phase-Y
 
 - verify the accepted merge candidate includes the end-of-phase fix line, not
   just the original `Phase Y` integration baseline
+- treat `PY-EOP-FIX-R2` at `243e473a` as the authoritative superseding tip of
+  `feature/pY-eop-fix-1`; `PY-EOP-FIX-1` remains historical context only and
+  does not stay as a second independent candidate gate
 - validate the accepted candidate line cleanly
 - record the accepted candidate commit identity in
   `docs/phase-Yd/readiness.md` so QA does not have to infer which line

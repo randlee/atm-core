@@ -25,6 +25,11 @@ This record must be updated to state that:
 - the focused `Yc` readiness validation passed
 - the line is ready to enter the broader `Phase Yd` develop-gate closeout
 
+The later `Phase Yd` line is required to re-prove those same two invariants on
+the final accepted merge-candidate line after subsequent accepted line-state
+changes. That re-proof does not mean `Yc` failed; it means `Yc` is the focused
+closure line and `Yd` is the final develop-gate line.
+
 ## Phase Z Gate
 
 `Phase Z` still remains blocked after `Yc` closes.

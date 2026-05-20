@@ -21,6 +21,7 @@ target: integrate/phase-Y
 - `docs/phase-Yd/plan-phase-Yd.md`
 - `docs/phase-Yd/readiness.md`
 - `docs/adr/INDEX.md`
+- `docs/adr/ADR-014-runtime-health-projection-and-liveness-signal-ownership.md`
 - `docs/requirements.md`
 - `docs/architecture.md`
 - `docs/atm-daemon/requirements.md`
@@ -34,6 +35,7 @@ target: integrate/phase-Y
 ## Exact Targets
 
 - `crates/atm-daemon/src/runtime_health.rs`
+- `crates/atm-daemon/src/notification_runtime.rs`
 - any runtime-owned liveness signal source required by the accepted design
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/readiness.md`
@@ -54,6 +56,8 @@ target: integrate/phase-Y
 ## Explicit Code Samples
 
 ```rust
+// `NotificationWorkerLiveness` is a daemon-owned health DTO that lands in
+// `crates/atm-daemon/src/runtime_health.rs`.
 pub enum NotificationWorkerLiveness {
     Live,
     Degraded,
@@ -64,6 +68,13 @@ pub enum NotificationWorkerLiveness {
 ```rust
 pub struct RuntimeHealthSnapshot {
     pub notification_worker_liveness: NotificationWorkerLiveness,
+}
+```
+
+```rust
+// New method on `crates/atm-daemon/src/notification_runtime.rs`.
+impl NotificationRuntime {
+    pub fn worker_liveness(&self) -> NotificationWorkerLiveness;
 }
 ```
 

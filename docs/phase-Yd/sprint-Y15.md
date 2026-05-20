@@ -49,6 +49,16 @@ target: integrate/phase-Y
 - the blocker inventory and readiness record explicitly record the `Y.15`
   closure result
 
+## Relationship To Phase Yc
+
+`Y.13` already defined and first proved the `NotificationSink` boundary-closure
+shape on the focused `Yc` line.
+
+`Y.15` does not silently reopen that design. It re-proves the same invariant on
+the final accepted `Phase Y` candidate line after later accepted line-state
+changes. `Y.15` is therefore a final-candidate boundary re-proof sprint, not a
+new notification ownership redesign.
+
 ## Required Work
 
 - close the production notification execution blocker recorded in
@@ -73,6 +83,10 @@ target: integrate/phase-Y
 - the production notification path executes only through
   `NotificationSink::deliver(...)` and no direct helper bypass remains on the
   accepted line
+- `rg -n "maybe_run_post_send_hook" crates/atm-core/src/delivery_execution.rs`
+  returns no matches
+- `rg -n "fn maybe_run_post_send_hook" crates/atm-core/src/service_runtime.rs`
+  returns no matches
 - the final accepted `Phase Y` merge candidate is boundary-clean for the
   `Y.15` scope
 - `docs/phase-Yd/readiness.md` is updated with the `Y.15` closure result
@@ -103,6 +117,8 @@ notification_sink.deliver(notification_event)?;
 
 ## Required Validation
 
+- `rg -n "maybe_run_post_send_hook" crates/atm-core/src/delivery_execution.rs`
+- `rg -n "fn maybe_run_post_send_hook" crates/atm-core/src/service_runtime.rs`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`

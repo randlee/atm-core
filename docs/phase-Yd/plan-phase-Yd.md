@@ -37,6 +37,7 @@ Phase `Yd` hardening and implementation must remain aligned with:
 - ADR inventory and controlling decisions:
   - `docs/adr/INDEX.md`
   - `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+  - `docs/adr/ADR-014-runtime-health-projection-and-liveness-signal-ownership.md`
 - machine-readable boundary definitions for the concrete closures in scope:
   - `boundaries/atm-core/inbox-export.toml`
   - `boundaries/atm-core/notification-sink.toml`
@@ -71,6 +72,34 @@ It does not exist to:
 - reopen broad `Phase Z` rollout planning inside the closeout sprints
 - add unrelated lint-only or docs-only reinterpretations of prior `Y.12` /
   `Y.13` runtime deliverables
+
+## Relationship To Phase Yc
+
+`Phase Yc` (`Y.12` and `Y.13`) was the first focused closure attempt for the
+two original production-readiness blockers:
+
+- `Y.12` proved the recovered Claude logical-message-set closure shape on the
+  accepted `Yc` line
+- `Y.13` proved the production `NotificationSink` boundary closure shape on
+  the accepted `Yc` line
+
+`Phase Yd` does not redefine those closures. It exists because the
+develop-gate closeout must prove those same blockers on the final accepted
+`Phase Y` candidate line after later accepted line-state changes, including
+the end-of-phase fix line and the final merge-candidate assembly.
+
+So:
+
+- `Y.14` is a re-proof sprint for the `Y.12` closure invariant on the final
+  accepted candidate line
+- `Y.15` is a re-proof sprint for the `Y.13` closure invariant on the final
+  accepted candidate line
+- `Yc` therefore remains a valid historical closure line, but not the final
+  `develop` authorization line
+
+`docs/phase-Yc/readiness.md` must describe this as a valid focused close on
+the `Yc` line whose invariants are consumed and re-proved by `Phase Yd`, not
+as the final `develop` gate itself.
 
 ## Sprint Sequence
 
