@@ -3,8 +3,13 @@ use super::runtime_health::{
 };
 use super::{
     LocalIpcServerTransportAdapter,
+    boundary_adapters::DaemonNotificationSink,
+    composition::build_production_runtime,
+    daemon_runtime_observability::SubsystemObservability,
     lifecycle_control::LifecycleControlSourceAdapter,
     local_ipc_transport::RuntimeServeHooks,
+    non_claude_outbound_runtime::DaemonNonClaudeOutbound,
+    notification_runtime::NotificationRuntime,
     test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
 };
 use atm_core::boundary::RequestDispatcher;
@@ -18,6 +23,7 @@ use atm_core::protocol::{
     RuntimeReadinessState, TeamMemberHeartbeatRequest,
 };
 use atm_core::schema::{AgentMember, TeamConfig};
+use atm_core::send::{SendMessageSource, SendRequest, send_mail_with_runtime};
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
@@ -356,6 +362,72 @@ fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
         serde_json::to_vec(&config).expect("team config"),
     )
     .expect("write team config");
+}
+
+fn write_workspace_config(workspace_dir: &std::path::Path) {
+    std::fs::write(workspace_dir.join(".atm.toml"), "[atm]\n").expect("workspace config");
+}
+
+fn read_notification_output(path: &std::path::Path) -> String {
+    std::fs::read_to_string(path).expect("notification output")
+}
+
+#[test]
+fn production_runtime_installs_daemon_notification_sink() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let workspace_dir = tempdir.path().join("workspace");
+    let atm_home = tempdir.path().join("atm-home");
+    let db_path = tempdir.path().join("mail.db");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    write_workspace_config(&workspace_dir);
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+
+    let _env = EnvGuard::set_many([
+        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+    ]);
+    let notification_path = atm_core::home::host_runtime_dir()
+        .expect("host runtime dir")
+        .join("notifications.jsonl");
+    let sink = DaemonNotificationSink::new(NotificationRuntime::new_with_observability(
+        SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
+    ));
+    sink.start().expect("start notification sink");
+    let assembly = assemble_boundary(&db_path).expect("sqlite boundary");
+    let runtime = build_production_runtime(
+        assembly.mail_store_arc(),
+        assembly.task_store_arc(),
+        assembly.roster_store_arc(),
+        Arc::new(DaemonNonClaudeOutbound::new()),
+        Arc::new(sink.clone()),
+    );
+
+    let request = SendRequest::new(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        Some(ROLE_TEAM_LEAD),
+        "qa-a@test-team",
+        Some(TEST_TEAM),
+        SendMessageSource::Inline("boundary install proof".to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("send request");
+    let observability = atm_core::observability::NullObservability;
+
+    send_mail_with_runtime(request, &observability, &runtime).expect("send mail");
+    sink.shutdown().expect("shutdown notification sink");
+
+    let output = read_notification_output(&notification_path);
+    assert!(
+        output.contains("\"kind\":\"delivery\""),
+        "expected delivery notification output, got: {output}"
+    );
 }
 
 #[test]

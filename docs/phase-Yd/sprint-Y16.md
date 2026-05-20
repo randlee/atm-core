@@ -1,7 +1,7 @@
 ---
 id: Y.16
 title: Retained-Runtime Composition Closure
-status: planned
+status: complete
 branch: feature/pYd-s16-retained-runtime-composition-closure
 worktree: ../atm-core-worktrees/feature/pYd-s16-retained-runtime-composition-closure
 target: integrate/phase-Y

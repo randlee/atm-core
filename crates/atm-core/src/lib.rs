@@ -136,3 +136,5 @@ pub use service_runtime::{
 };
 #[doc(hidden)]
 pub use service_runtime_store::install_default_runtime_factory;
+#[doc(hidden)]
+pub use service_runtime_store::install_default_runtime_instance;

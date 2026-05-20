@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -27,18 +26,13 @@ use atm_core::{
     read::read_mail,
     send::send_mail,
 };
-use atm_rusqlite::{
-    SqliteBoundaryAssembly, SqliteObservability, assemble_default_boundary,
-    assemble_default_boundary_with_observability,
-};
+use atm_rusqlite::SqliteBoundaryAssembly;
 
 use crate::AtmHomeDir;
 use crate::advisory_runtime::AdvisoryRuntime;
-use crate::boundary_adapters::DaemonNotificationSink;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
-use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -55,19 +49,10 @@ const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 // to recover and join those retained workers later.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
-#[cfg_attr(
-    test,
-    allow(
-        dead_code,
-        reason = "Production retained-runtime installation is compiled out in daemon lib tests."
-    )
-)]
-static INSTALL_DAEMON_RUNTIME_FACTORY: std::sync::Once = std::sync::Once::new();
-
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,
     // not an arbitrary workspace path.
-    home_dir: PathBuf,
+    home_dir: AtmHomeDir,
     observability: Arc<dyn DaemonRuntimeObservability>,
     advisory_runtime_observability: SubsystemObservability,
     runtime_health_observability: SubsystemObservability,
@@ -79,7 +64,7 @@ pub(crate) struct DaemonRequestDispatcher {
 impl std::fmt::Debug for DaemonRequestDispatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DaemonRequestDispatcher")
-            .field("home_dir", &self.home_dir)
+            .field("home_dir", &self.home_dir.as_path())
             .field("status_cache", &self.status_cache)
             .field("sqlite_boundary_present", &self.sqlite_boundary.is_some())
             .field("advisory_runtime", &"AdvisoryRuntime")
@@ -315,104 +300,43 @@ impl DaemonRequestDispatcher {
         home_dir: AtmHomeDir,
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
-        sqlite_observability: Arc<dyn SqliteObservability>,
+        sqlite_boundary: SqliteBoundaryAssembly,
     ) -> Self {
-        #[cfg(not(test))]
-        install_daemon_runtime_factory();
-        let home_dir = home_dir.into_inner();
         let advisory_runtime_observability = SubsystemObservability::new(
             DaemonSubsystem::AdvisoryRuntime,
             Arc::clone(&observability),
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
-        let sqlite_boundary =
-            match assemble_default_boundary_with_observability(sqlite_observability) {
-                Ok(boundary) => {
-                    if let Err(error) =
-                        build_runtime_status_cache_state(None, boundary.roster_store())
-                            .and_then(|state| status_cache.replace_state(state))
-                    {
-                        tracing::warn!(
-                            subsystem = "runtime_health",
-                            action = "sqlite_cache_hydration",
-                            outcome = "degraded",
-                            %error,
-                            "failed to hydrate runtime status cache from sqlite roster state"
-                        );
-                        runtime_health_observability.emit_or_warn(
-                            "sqlite_cache_hydration",
-                            "degraded",
-                            "failed to hydrate runtime status cache from sqlite roster state",
-                        );
-                        status_cache.mark_sqlite_unavailable();
-                    }
-                    Some(boundary)
-                }
-                Err(error) => {
-                    tracing::warn!(
-                        subsystem = "runtime_health",
-                        action = "sqlite_boundary_assembly",
-                        outcome = "failed",
-                        %error,
-                        "failed to assemble default sqlite boundary for daemon runtime health"
-                    );
-                    runtime_health_observability.emit_or_warn(
-                        "sqlite_boundary_assembly",
-                        "failed",
-                        "failed to assemble sqlite boundary for daemon runtime health",
-                    );
-                    status_cache.mark_sqlite_unavailable();
-                    None
-                }
-            };
+        if let Err(error) = build_runtime_status_cache_state(None, sqlite_boundary.roster_store())
+            .and_then(|state| status_cache.replace_state(state))
+        {
+            tracing::warn!(
+                subsystem = "runtime_health",
+                action = "sqlite_cache_hydration",
+                outcome = "degraded",
+                %error,
+                "failed to hydrate runtime status cache from sqlite roster state"
+            );
+            runtime_health_observability.emit_or_warn(
+                "sqlite_cache_hydration",
+                "degraded",
+                "failed to hydrate runtime status cache from sqlite roster state",
+            );
+            status_cache.mark_sqlite_unavailable();
+        }
         Self {
-            home_dir: home_dir.clone(),
+            home_dir,
             observability: Arc::clone(&observability),
             advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability: runtime_health_observability.clone(),
             status_cache,
-            sqlite_boundary,
+            sqlite_boundary: Some(sqlite_boundary),
             advisory_runtime: AdvisoryRuntime::new_with_observability(
                 advisory_runtime_observability,
             ),
         }
     }
-}
-
-#[cfg_attr(
-    test,
-    allow(
-        dead_code,
-        reason = "Production retained-runtime installation is compiled out in daemon lib tests."
-    )
-)]
-fn install_daemon_runtime_factory() {
-    INSTALL_DAEMON_RUNTIME_FACTORY.call_once(|| {
-        atm_core::install_default_runtime_factory(daemon_local_runtime);
-    });
-}
-
-#[cfg_attr(
-    test,
-    allow(
-        dead_code,
-        reason = "Production retained-runtime installation is compiled out in daemon lib tests."
-    )
-)]
-fn daemon_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
-    let assembly = assemble_default_boundary()?;
-    let notification_sink = DaemonNotificationSink::new_with_observability(
-        SubsystemObservability::disabled(DaemonSubsystem::NotificationRuntime),
-    );
-    notification_sink.start()?;
-    Ok(atm_core::LocalServiceRuntime::new_with_delivery_boundaries(
-        assembly.mail_store_arc(),
-        assembly.task_store_arc(),
-        assembly.roster_store_arc(),
-        Arc::new(DaemonNonClaudeOutbound::new()),
-        Arc::new(notification_sink),
-    ))
 }
 
 fn with_shutdown_finalizer_registry<R>(

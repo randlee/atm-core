@@ -103,10 +103,6 @@ impl AtmHomeDir {
         &self.0
     }
 
-    pub(crate) fn into_inner(self) -> PathBuf {
-        self.0
-    }
-
     #[cfg(test)]
     pub(crate) fn from_path_for_test(path: PathBuf) -> Self {
         Self(path)
