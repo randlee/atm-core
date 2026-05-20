@@ -78,12 +78,15 @@ target: integrate/phase-Y
 
 - the accepted merge candidate includes the required phase-end fix line and is
   validation-clean for the `Y.17` scope
+- git confirms commit `243e473a` (`PY-EOP-FIX-R2`) is an ancestor of the
+  accepted merge candidate
 - the accepted candidate commit used for the `Y.17` gate is named explicitly
   in `docs/phase-Yd/readiness.md`
 - `docs/phase-Yd/readiness.md` is updated with the `Y.17` closure result
 
 ## Required Validation
 
+- `git merge-base --is-ancestor 243e473a integrate/phase-Y && echo PASS || echo FAIL`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`

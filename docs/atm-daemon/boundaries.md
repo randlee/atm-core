@@ -424,3 +424,13 @@ Notes:
   dispatcher and projected into `atm doctor`.
 - The cache-cap rule must bound actual retained entries, not only member-state
   labels.
+- `Phase Yd` adds one daemon-private liveness DTO family owned by
+  `atm_daemon::runtime_health` for final `Phase Y` closeout:
+  - `NotificationWorkerLiveness`
+  - `RuntimeHealthSnapshot`
+  - `project_runtime_health(...)`
+- these are daemon-private health projection artifacts, not public cross-crate
+  boundary exports
+- `runtime_health` may project the owner-provided
+  `NotificationRuntime::worker_liveness()` signal directly, but it must not
+  inspect queue internals or retry state to reconstruct liveness

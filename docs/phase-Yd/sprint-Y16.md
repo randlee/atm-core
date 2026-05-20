@@ -55,6 +55,9 @@ target: integrate/phase-Y
 
 - close the retained-runtime composition blocker recorded in
   `docs/phase-Y/issues.md`
+- keep `atm_daemon::composition::compose_runtime` as the machine-readable
+  composition root and treat `build_production_runtime(...)` as an internal
+  helper that is called from within `compose_runtime(...)`
 - update the blocker inventory and readiness record to reflect the closure
   state
 - keep `Phase Z` blocked while the later `Y.17` and `Y.18` closures remain
@@ -76,6 +79,9 @@ target: integrate/phase-Y
   without fallback/helper-owned bypass behavior
 - `rg -n "DaemonNotificationSink::new" crates/atm-daemon/src/composition.rs`
   returns at least one match on the production factory path
+- `rg -n "compose_runtime|build_production_runtime" crates/atm-daemon/src/composition.rs`
+  shows `compose_runtime(...)` calling `build_production_runtime(...)` so the
+  declared TOML composition root remains authoritative
 - named test proves production retained-runtime composition installs the live
   notification sink:
   - `production_runtime_installs_daemon_notification_sink`
@@ -103,6 +109,23 @@ pub fn build_production_runtime(
 ```
 
 ```rust
+pub fn compose_runtime(/* ... */) -> RuntimeComposition {
+    let notification_sink: Arc<dyn NotificationSink + Send + Sync> =
+        Arc::new(DaemonNotificationSink::new(notification_runtime.clone()));
+
+    let runtime = build_production_runtime(
+        mail_store,
+        task_store,
+        roster_store,
+        non_claude_outbound,
+        notification_sink,
+    );
+
+    RuntimeComposition::from_runtime(runtime)
+}
+```
+
+```rust
 let notification_sink: Arc<dyn NotificationSink + Send + Sync> =
     Arc::new(DaemonNotificationSink::new(notification_runtime.clone()));
 
@@ -118,6 +141,7 @@ let runtime = atm_daemon::composition::build_production_runtime(
 ## Required Validation
 
 - `rg -n "DaemonNotificationSink::new" crates/atm-daemon/src/composition.rs`
+- `rg -n "compose_runtime|build_production_runtime" crates/atm-daemon/src/composition.rs`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`

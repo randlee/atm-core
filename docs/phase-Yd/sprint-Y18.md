@@ -27,6 +27,7 @@ target: integrate/phase-Y
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/boundaries.md`
+- `docs/plan-phase-Z.md`
 - `boundaries/atm-core/status-source.toml`
 - `boundaries/atm-daemon/daemon-status-source.toml`
 - `docs/testing-guidelines.md`
@@ -37,6 +38,8 @@ target: integrate/phase-Y
 - `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-daemon/src/notification_runtime.rs`
 - any runtime-owned liveness signal source required by the accepted design
+- `docs/atm-daemon/boundaries.md`
+- `boundaries/atm-daemon/daemon-status-source.toml`
 - `docs/phase-Y/issues.md`
 - `docs/phase-Yd/readiness.md`
 - `docs/project-plan.md`
@@ -116,6 +119,10 @@ fn project_runtime_health(
   landing on `develop`
 - any liveness closure uses a thin runtime-owned signal rather than
   compensating logic inside `runtime_health`
+- `rg -n "queue\\.len|retry_count|pending_events" crates/atm-daemon/src/runtime_health.rs`
+  returns no matches
+- named test proves the health projection does not inspect queue internals:
+  - `runtime_health_projection_does_not_inspect_queue_internals`
 - `docs/phase-Yd/readiness.md` says whether `Phase Y` may land on `develop`
 - `docs/phase-Yd/readiness.md` names the final accepted candidate line that is
   authorized for merge to `develop`
@@ -123,6 +130,7 @@ fn project_runtime_health(
 
 ## Required Validation
 
+- `rg -n "queue\\.len|retry_count|pending_events" crates/atm-daemon/src/runtime_health.rs`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo test --workspace`

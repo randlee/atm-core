@@ -87,6 +87,11 @@ new notification ownership redesign.
   returns no matches
 - `rg -n "fn maybe_run_post_send_hook" crates/atm-core/src/service_runtime.rs`
   returns no matches
+- named tests from `Y.13` survive and pass on the final accepted candidate
+  line:
+  - `delivery_notifications_use_notification_sink_boundary`
+  - `notification_sink_failure_is_explicit_in_delivery_warnings`
+  - `notification_sink_backpressure_does_not_reopen_hook_helper_bypass`
 - the final accepted `Phase Y` merge candidate is boundary-clean for the
   `Y.15` scope
 - `docs/phase-Yd/readiness.md` is updated with the `Y.15` closure result

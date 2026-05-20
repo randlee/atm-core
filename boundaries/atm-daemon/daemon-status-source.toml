@@ -30,7 +30,7 @@ forbidden = ["DaemonStatusSource"]
 
 [contracts]
 request_types = ["status source requests"]
-response_types = ["status snapshot batches"]
+response_types = ["status snapshot batches", "NotificationWorkerLiveness", "RuntimeHealthSnapshot"]
 error_types = ["AtmError"]
 
 [testing]
