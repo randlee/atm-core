@@ -97,11 +97,18 @@ accepted `Phase Ye` line satisfies the already-planned ownership model:
 
 ## Named Acceptance Tests
 
-- `phase_ye_issues_ledger_closed_for_y19_y23`
-- `phase_ye_readiness_record_names_final_accepted_commits_and_verdicts`
-- `adr_015_status_is_accepted_and_matches_final_runtime_ownership`
-- `phase_ye_daemon_docs_align_with_snapshot_and_actor_ownership`
-- `project_plan_marks_phase_ye_closed`
+Doc-state verification (`rg`):
+
+- `docs/phase-Ye/issues.md` must record `Y.19` through `Y.23` as closed on
+  the accepted line
+- `docs/phase-Ye/readiness.md` must name the final accepted commit(s) and
+  phase verdict
+- `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md` must set
+  `status: accepted` and describe the final runtime ownership model
+- `docs/atm-daemon/requirements.md`, `docs/atm-daemon/architecture.md`, and
+  `docs/atm-daemon/boundaries.md` must align on immutable snapshots, bounded
+  command-channel handoff, and actor-owned reconcile runtime ownership
+- `docs/project-plan.md` must mark `Phase Ye` closed
 
 ## Closure Invariants
 
