@@ -105,6 +105,18 @@ These items block `Phase Y` from landing on `develop`.
      - release gate / phase-end closure
    - evidence source:
      - post-review fix batches `PY-EOP-FIX-1` and `PY-EOP-FIX-R2`
+  - closure status:
+     - `CLOSED by Y.17` on accepted candidate `2fd404dc`
+  - closure evidence:
+     - `git merge-base --is-ancestor 243e473a integrate/phase-Y` returned
+       `PASS` when `integrate/phase-Y` pointed at accepted candidate
+       `2fd404dc`
+     - the accepted candidate passed:
+       - `cargo fmt --all`
+       - `python3 .just/run_lint.py all`
+       - `cargo test --workspace`
+       - `cargo clippy --workspace -- -D warnings`
+       - `git diff --check`
    - closure requirement:
      - the accepted merge candidate must include the end-of-phase fixes and
        pass the required validation stack before the line is proposed for

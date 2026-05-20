@@ -3657,12 +3657,16 @@ Status summary:
   `feature/pYd-s15-production-notification-boundary-closure`; the surviving
   notification boundary proof now lives on the final accepted `Phase Y`
   candidate line instead of only on the focused `Yc` line.
+- `Y.16` retained-runtime composition closure is now present on the accepted
+  candidate line through merge commit `2fd404dc`.
+- `Y.17` candidate closure is now complete at `2fd404dc`; the accepted
+  candidate contains the required phase-end fix line and is validation-clean.
 - before `integrate/phase-Y` lands on `develop`, the broader `Phase Y`
   blocker set must be documented explicitly and closed on a final
   develop-gate line.
 - `Y.14` recovered Claude logical-message-set closure is complete on
   `feature/pYd-s14-recovered-claude-logical-message-set-closure`; the
-  remaining `Y.15` through `Y.18` develop-gate closures stay open.
+  remaining `Y.18` develop-gate closure stays open.
 - `Phase Z` remains blocked until that closeout line says `Phase Y` is ready
   for `develop`.
 

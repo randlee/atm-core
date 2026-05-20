@@ -1,7 +1,7 @@
 ---
 id: Y.17
 title: Candidate Closure
-status: planned
+status: complete
 branch: feature/pYd-s17-candidate-closure
 worktree: ../atm-core-worktrees/feature/pYd-s17-candidate-closure
 target: integrate/phase-Y
@@ -38,8 +38,8 @@ target: integrate/phase-Y
   - `crates/atm-core/src/delivery_execution.rs`
   - `crates/atm-daemon/src/reconcile_runtime.rs`
   - `crates/atm-daemon/src/tests.rs`
-  - `crates/atm-daemon/src/composition/lifecycle.rs`
-  - `crates/atm-daemon/src/runtime_status.rs`
+  - `crates/atm-daemon/src/composition.rs`
+  - `crates/atm-daemon/src/runtime_status_cache.rs`
   - any directly adjacent files required to merge those accepted fixes onto the
     final candidate line cleanly
 - the accepted merge candidate branch state itself

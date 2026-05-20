@@ -83,13 +83,23 @@ impl RuntimeStatusCache {
             .lock()
             .map(|cache| cache.clone())
             .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))
+            .map_err(|error| {
+                error.with_recovery(
+                    "Restart the daemon; runtime status cache state can no longer be trusted.",
+                )
+            })
     }
 
     pub(crate) fn replace_state(&self, next: RuntimeStatusCacheState) -> Result<(), AtmError> {
         let mut cache = self
             .state
             .lock()
-            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))?;
+            .map_err(|_| AtmError::daemon_unavailable("runtime status cache lock poisoned"))
+            .map_err(|error| {
+                error.with_recovery(
+                    "Restart the daemon; runtime status cache state can no longer be trusted.",
+                )
+            })?;
         *cache = next;
         Ok(())
     }
@@ -190,28 +200,24 @@ impl RuntimeStatusCache {
     }
 
     pub(crate) fn mark_sqlite_unavailable(&self) {
-        match self.state.lock() {
-            Ok(mut cache) => {
-                cache.sqlite_ready = false;
-                drop(cache);
-                // Emit failure is intentionally best-effort here because the in-memory sqlite
-                // readiness downgrade is the source of truth for doctor/status consumers.
-                self.observability.emit_or_warn(
-                    "mark_sqlite_unavailable",
-                    "degraded",
-                    "runtime status cache marked sqlite unavailable",
-                );
-            }
-            Err(_) => {
-                // Cannot propagate: fn returns (), tracing::error! is max-severity available at this boundary.
-                tracing::error!(
-                    subsystem = "runtime_status_cache",
-                    action = "mark_sqlite_unavailable",
-                    outcome = "lock_poisoned",
-                    "runtime status cache lock poisoned while marking sqlite unavailable"
-                );
-            }
-        }
+        let mut cache = self.state.lock().unwrap_or_else(|_| {
+            tracing::error!(
+                subsystem = "runtime_status_cache",
+                action = "mark_sqlite_unavailable",
+                outcome = "lock_poisoned",
+                "runtime status cache lock poisoned while marking sqlite unavailable"
+            );
+            panic!("runtime status cache lock poisoned while marking sqlite unavailable");
+        });
+        cache.sqlite_ready = false;
+        drop(cache);
+        // Emit failure is intentionally best-effort here because the in-memory sqlite
+        // readiness downgrade is the source of truth for doctor/status consumers.
+        self.observability.emit_or_warn(
+            "mark_sqlite_unavailable",
+            "degraded",
+            "runtime status cache marked sqlite unavailable",
+        );
     }
 
     /// Record SQLite degradation detail after the caller has decided which
