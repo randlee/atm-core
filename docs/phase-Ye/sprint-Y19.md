@@ -164,6 +164,7 @@ implementation.
 - `rg -n "Mutex<RuntimeStatusCacheState>|lock poisoned" crates/atm-daemon/src/runtime_status_cache.rs`
 - `cargo test --workspace runtime_status_cache_heartbeat_publish_is_atomically_visible -- --nocapture`
 - `cargo test --workspace runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking -- --nocapture`
+- `cargo test --workspace runtime_status_cache_sqlite_readiness_flip_publishes_one_coherent_snapshot -- --nocapture`
 - `cargo fmt --all`
 - `python3 .just/run_lint.py all`
 - `cargo clippy --workspace -- -D warnings`
