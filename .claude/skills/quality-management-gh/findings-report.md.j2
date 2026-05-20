@@ -12,6 +12,9 @@ required_variables:
   - commit
   - pr_number
   - verdict
+  - deliverables_complete
+  - deliverables_total
+  - deliverables_percent
   - merge_readiness
   - merge_reason
   - findings_blocking
@@ -22,6 +25,8 @@ required_variables:
   - detailed_findings_md
   - next_action
   - action_owner
+optional_variables:
+  - resolved_findings_md
 ---
 # QA Findings Update
 
@@ -42,6 +47,11 @@ Verdict: **{{ verdict }}**
   "commit": "{{ commit }}",
   "pr": {{ pr_number }},
   "verdict": "{{ verdict }}",
+  "deliverables": {
+    "complete": {{ deliverables_complete }},
+    "total": {{ deliverables_total }},
+    "percent": {{ deliverables_percent }}
+  },
   "findings": {
     "blocking": {{ findings_blocking }},
     "important": {{ findings_important }},
@@ -56,6 +66,7 @@ Verdict: **{{ verdict }}**
 ```
 
 ## Findings Summary
+- Deliverables: {{ deliverables_complete }}/{{ deliverables_total }} ({{ deliverables_percent }}%)
 - Blocking: {{ findings_blocking }}
 - Important: {{ findings_important }}
 - Minor: {{ findings_minor }}
@@ -70,6 +81,13 @@ Verdict: **{{ verdict }}**
 ## Detailed Findings
 {% if detailed_findings_md -%}
 {{ detailed_findings_md }}
+{% else -%}
+- none
+{% endif %}
+
+## Resolved Since Last Pass
+{% if resolved_findings_md -%}
+{{ resolved_findings_md }}
 {% else -%}
 - none
 {% endif %}

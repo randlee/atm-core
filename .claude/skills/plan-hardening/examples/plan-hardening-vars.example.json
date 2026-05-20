@@ -1,0 +1,13 @@
+{
+  "task_id": "phase-x-plan-hardening-step-1",
+  "phase": "phase-X",
+  "description": "Plan hardening for phase-X current plan state",
+  "worktree_path": "/absolute/path/to/worktree",
+  "branch": "plan/phase-x",
+  "pr_target": "develop",
+  "source_of_truth": "- docs/phase-X/plan-phase-X.md\n- docs/project-plan.md",
+  "references": "- docs/requirements.md\n- docs/architecture.md\n- docs/phase-X/sprint-X1.md\n- docs/phase-X/sprint-X2.md",
+  "questions_or_concerns": "",
+  "previous_step_json": "",
+  "reviewer_findings_json": ""
+}

@@ -11,6 +11,12 @@ agents:
   arch-qa:
     version: 0.1.0
     path: .claude/agents/arch-qa.md
+  plan-scope-reviewer:
+    version: 0.1.0
+    path: .claude/agents/plan-scope-reviewer.md
+  critical-plan-reviewer:
+    version: 0.1.0
+    path: .claude/agents/critical-plan-reviewer.md
   flaky-test-qa:
     version: 0.1.0
     path: .claude/agents/flaky-test-qa.md
