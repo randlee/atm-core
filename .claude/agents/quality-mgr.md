@@ -130,22 +130,37 @@ TODO-specific rule:
 
 ## Default Reviewer Set
 
-For implementation work in this Rust repo:
+For implementation QA-1 in this Rust repo:
 - always run `req-qa`
 - always run `arch-qa`
 - always run `rust-qa-agent`
-- run `rust-best-practices-agent` when Rust code, requirements, or architecture
-  documents are in scope
-- run `rust-service-hardening-agent` only when the scope is service-like or the
-  Rust supplement indicates a hardening review is warranted
+- always run `rust-best-practices-agent`
+- always run `rust-service-hardening-agent`
 - run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
   `rust-qa-agent` surfaces unstable execution symptoms
+
+For QA-2 and later rechecks of implementation work:
+- always run `req-qa`
+- always run `arch-qa`
+- always run `rust-qa-agent`
+- do not run `rust-best-practices-agent`
+- do not run `rust-service-hardening-agent`
+- run `flaky-test-qa` when tests changed, CI shows intermittent behavior, or
+  `rust-qa-agent` surfaces unstable execution symptoms
+
+For phase-ending QA:
+- always run `req-qa`
+- always run `arch-qa`
+- always run `rust-qa-agent`
+- always run `rust-best-practices-agent`
+- always run `rust-service-hardening-agent`
+- always run `flaky-test-qa`
 
 For docs-only plan review (`review_mode: plan`):
 - run `req-qa`
 - run `arch-qa`
-- use the Rust supplement to decide whether `rust-best-practices-agent` or
-  `rust-service-hardening-agent` should be added
+- always run `rust-best-practices-agent`
+- always run `rust-service-hardening-agent`
 - do not run `rust-qa-agent` for docs-only review
 
 Reviewer ownership note:

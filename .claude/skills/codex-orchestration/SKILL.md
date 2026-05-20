@@ -64,14 +64,15 @@ Before starting a sprint:
    - `req-qa`
    - `arch-qa`
    - `rust-qa-agent`
-   - `rust-best-practices-agent` in QA-1 only
-   - `rust-service-hardening-agent` when service-runtime review is in scope
+   - `rust-best-practices-agent`
+   - `rust-service-hardening-agent`
    - `flaky-test-qa` when test instability risk is present
-7. QA-2 and later rounds must omit `rust-best-practices-agent`. All RBP
-   findings from QA-1 must be fixed before merge — merge gate is 0B+0I+0m
-   with no exceptions and no backlog deferral.
-   QA-1 RBP findings route back to `arch-ctm` via `fix-assignment.xml.j2`
-   before QA-2, following the standard triage-and-fix path.
+7. QA-2 and later rounds must omit `rust-best-practices-agent` and
+   `rust-service-hardening-agent`. All RBP and service-hardening findings from
+   QA-1 must be fixed before merge — merge gate is 0B+0I+0m with no
+   exceptions and no backlog deferral. QA-1 findings route back to `arch-ctm`
+   via `fix-assignment.xml.j2` before QA-2, following the standard
+   triage-and-fix path.
 8. If QA passes and CI is green, merge may proceed.
 9. If QA fails, `team-lead` first runs `/triaging-findings` to correlate the
    findings across worktrees and determine the promoted fix branch.
@@ -90,7 +91,8 @@ Before starting a sprint:
 4. `quality-mgr` treats `review_mode: plan` as docs-only review and launches:
    - `req-qa`
    - `arch-qa`
-   - optional Rust doc reviewers only if the Rust supplement requires them
+   - `rust-best-practices-agent`
+   - `rust-service-hardening-agent`
 5. If plan QA passes, the hardened plan is ready for implementation dispatch.
 6. If plan QA fails, `team-lead` uses the normal codex-orchestration
    triage-and-fix loop to route concrete fixes back to `arch-ctm`.
@@ -111,6 +113,15 @@ Before starting a sprint:
 
 For extraction-readiness or phase-close reviews, use `review-template.xml.j2`
 to assign a read-only review to `arch-ctm`.
+
+For phase-ending QA routed through `quality-mgr`, the reviewer set is
+mandatory:
+- `req-qa`
+- `arch-qa`
+- `rust-qa-agent`
+- `rust-best-practices-agent`
+- `rust-service-hardening-agent`
+- `flaky-test-qa`
 
 ## CI
 
