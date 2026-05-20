@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -53,7 +52,7 @@ static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,
     // not an arbitrary workspace path.
-    home_dir: PathBuf,
+    home_dir: AtmHomeDir,
     observability: Arc<dyn DaemonRuntimeObservability>,
     advisory_runtime_observability: SubsystemObservability,
     runtime_health_observability: SubsystemObservability,
@@ -65,7 +64,7 @@ pub(crate) struct DaemonRequestDispatcher {
 impl std::fmt::Debug for DaemonRequestDispatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DaemonRequestDispatcher")
-            .field("home_dir", &self.home_dir)
+            .field("home_dir", &self.home_dir.as_path())
             .field("status_cache", &self.status_cache)
             .field("sqlite_boundary_present", &self.sqlite_boundary.is_some())
             .field("advisory_runtime", &"AdvisoryRuntime")
@@ -303,7 +302,6 @@ impl DaemonRequestDispatcher {
         observability: Arc<dyn DaemonRuntimeObservability>,
         sqlite_boundary: SqliteBoundaryAssembly,
     ) -> Self {
-        let home_dir = home_dir.into_inner();
         let advisory_runtime_observability = SubsystemObservability::new(
             DaemonSubsystem::AdvisoryRuntime,
             Arc::clone(&observability),
@@ -328,7 +326,7 @@ impl DaemonRequestDispatcher {
             status_cache.mark_sqlite_unavailable();
         }
         Self {
-            home_dir: home_dir.clone(),
+            home_dir,
             observability: Arc::clone(&observability),
             advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability: runtime_health_observability.clone(),

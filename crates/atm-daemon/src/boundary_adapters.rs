@@ -31,10 +31,8 @@ impl std::fmt::Debug for DaemonNotificationSink {
 }
 
 impl DaemonNotificationSink {
-    pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
-        Self {
-            runtime: NotificationRuntime::new_with_observability(observability),
-        }
+    pub(crate) fn new(runtime: NotificationRuntime) -> Self {
+        Self { runtime }
     }
 
     #[cfg(test)]

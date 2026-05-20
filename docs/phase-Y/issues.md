@@ -63,6 +63,8 @@ These items block `Phase Y` from landing on `develop`.
 
 3. Daemon retained-runtime composition must install the live
    `NotificationSink`.
+   - status:
+     - `CLOSED: Y.16`
    - issue class:
      - production composition
    - historical owner:

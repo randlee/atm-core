@@ -1,10 +1,13 @@
 use std::sync::Arc;
 
 use atm_core::error::AtmError;
+use sc_observability as _;
 
 mod daemon_observability;
 
 use daemon_observability::DaemonObservability;
+
+const _: Option<fn(sc_observability::Logger)> = None;
 
 fn main() {
     let exit_code = match run() {
