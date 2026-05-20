@@ -3662,7 +3662,7 @@ Status summary:
 - `Y.17` candidate closure is now complete at `2fd404dc`; the accepted
   candidate contains the required phase-end fix line and is validation-clean.
 - `Y.18` thin-liveness closure and final develop gate are now complete at
-  `FINAL_Y18_COMMIT`; the accepted candidate is authorized for `develop`, and
+  `19376e42`; the accepted candidate is authorized for `develop`, and
   `Phase Z` may begin.
 - before `integrate/phase-Y` lands on `develop`, the broader `Phase Y`
   blocker set must be documented explicitly and closed on a final

@@ -41,7 +41,7 @@ may land on `develop`:
 
 Current gate status:
 
-- `Phase Yd` final accepted candidate line: `FINAL_Y18_COMMIT`
+- `Phase Yd` final accepted candidate line: `19376e42`
 - `Phase Y` may land on `develop`
 - `Phase Z` may begin
 

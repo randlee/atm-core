@@ -126,7 +126,7 @@ These items block `Phase Y` from landing on `develop`.
    - issue class:
      - operational readiness
    - closure status:
-     - `CLOSED by Y.18` on accepted candidate `FINAL_Y18_COMMIT`
+     - `CLOSED by Y.18` on accepted candidate `19376e42`
    - closure rule:
      - if this remains a `develop` blocker, it must close with a simple
        runtime-owned liveness signal that `runtime_health` projects directly
