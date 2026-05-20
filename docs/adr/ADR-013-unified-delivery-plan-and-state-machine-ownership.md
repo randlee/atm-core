@@ -11,6 +11,10 @@ Closeout note:
 - `Y.12` closed the recovered Claude logical-message-set contract
 - `Y.13` closed the production `NotificationSink` boundary bypass and narrowed
   retained-runtime assembly to one approved delivery-boundary constructor
+- `Y.15` re-proved the production `NotificationSink` boundary invariant on the
+  final accepted `Phase Y` candidate line at `ad61b3dd`, preserving
+  `NotificationSink::deliver(...)` as the only approved notification side
+  effect on the live send/ack path
 
 ## Context
 

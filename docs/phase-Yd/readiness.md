@@ -12,7 +12,7 @@ record explicitly says the line is ready.
 | Sprint | Closure Result | Date | Candidate Commit | Notes |
 | --- | --- | --- | --- | --- |
 | `Y.14` | `PENDING` | `TBD` | `TBD` | recovered Claude logical-message-set closure on final accepted candidate line |
-| `Y.15` | `PASS` | `2026-05-19` | `feature/pYd-s15-production-notification-boundary-closure HEAD` | production `NotificationSink` boundary closure on final accepted candidate line; surviving `Y.13` boundary tests passed and helper-bypass grep is clean |
+| `Y.15` | `PASS` | `2026-05-19` | `ad61b3dd` | production `NotificationSink` boundary closure on final accepted candidate line; surviving `Y.13` boundary tests passed and helper-bypass grep is clean |
 | `Y.16` | `PENDING` | `TBD` | `TBD` | retained-runtime composition installs live production `NotificationSink` |
 | `Y.17` | `PENDING` | `TBD` | `TBD` | accepted merge candidate includes required end-of-phase fix line and passes validation |
 | `Y.18` | `PENDING` | `TBD` | `TBD` | thin liveness closure or explicit reclassification with final develop-gate result |

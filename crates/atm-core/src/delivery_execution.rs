@@ -1,5 +1,7 @@
 use std::path::Path;
 
+use serde::Serialize;
+
 use crate::boundary::ClaudeCompatibilityDeliveryMode;
 use crate::config::AtmConfig;
 use crate::delivery_plan::{
@@ -46,6 +48,17 @@ pub(crate) struct DeliveryTransitionContext<'a> {
     pub(crate) sender: &'a AgentName,
     pub(crate) message_id: AtmMessageId,
     pub(crate) task_id: Option<TaskId>,
+}
+
+#[derive(Debug, Serialize)]
+struct DeliveryNotificationDetail<'a> {
+    sender: String,
+    sender_team: Option<String>,
+    message_id: String,
+    requires_ack: bool,
+    is_ack: bool,
+    task_id: Option<String>,
+    recipient_pane_id: Option<&'a str>,
 }
 
 pub(crate) trait ClaudeInboxWriter: crate::boundary::sealed::Sealed {
@@ -256,18 +269,19 @@ fn notification_event_from_target(
     recipient_pane_id: Option<&str>,
     notification: &NotificationTarget,
 ) -> NotificationEvent {
+    let detail = DeliveryNotificationDetail {
+        sender: notification.sender.to_string(),
+        sender_team: notification.sender_team.as_ref().map(ToString::to_string),
+        message_id: notification.message_id.to_string(),
+        requires_ack: notification.requires_ack,
+        is_ack: notification.is_ack,
+        task_id: notification.task_id.as_ref().map(ToString::to_string),
+        recipient_pane_id,
+    };
     NotificationEvent {
         kind: NotificationKind::Delivery,
-        detail: serde_json::json!({
-            "sender": notification.sender.to_string(),
-            "sender_team": notification.sender_team.as_ref().map(ToString::to_string),
-            "message_id": notification.message_id.to_string(),
-            "requires_ack": notification.requires_ack,
-            "is_ack": notification.is_ack,
-            "task_id": notification.task_id.as_ref().map(ToString::to_string),
-            "recipient_pane_id": recipient_pane_id,
-        })
-        .to_string(),
+        detail: serde_json::to_string(&detail)
+            .expect("delivery notification detail must serialize to valid JSON"),
         team: Some(recipient.team.clone()),
         agent: Some(recipient.agent.clone()),
     }
