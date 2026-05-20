@@ -1,7 +1,7 @@
 ---
 id: Y.17
 title: Candidate Closure
-status: planned
+status: complete
 branch: feature/pYd-s17-candidate-closure
 worktree: ../atm-core-worktrees/feature/pYd-s17-candidate-closure
 target: integrate/phase-Y

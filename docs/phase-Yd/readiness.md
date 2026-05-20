@@ -14,7 +14,7 @@ record explicitly says the line is ready.
 | `Y.14` | `PASS` | `2026-05-19` | `f2ea0340` | recovered Claude logical-message-set closure re-proved on the accepted candidate line; named all-or-nothing tests pass |
 | `Y.15` | `PASS` | `2026-05-19` | `03260e0d` | production `NotificationSink` boundary closure on final accepted candidate line; surviving `Y.13` boundary tests passed and helper-bypass grep is clean |
 | `Y.16` | `PASS` | `2026-05-20` | `a551bc1c` | retained-runtime composition owns production runtime installation, installs the live daemon `NotificationSink`, and passes `production_runtime_installs_daemon_notification_sink` |
-| `Y.17` | `PENDING` | `TBD` | `TBD` | accepted merge candidate includes required end-of-phase fix line and passes validation |
+| `Y.17` | `PASS` | `2026-05-20` | `2fd404dc` | accepted merge candidate contains `243e473a` in ancestry, includes the required phase-end fix line, and is validation-clean for the Y.17 gate |
 | `Y.18` | `PENDING` | `TBD` | `TBD` | thin liveness closure or explicit reclassification with final develop-gate result |
 
 Allowed closure-result values:
@@ -71,7 +71,7 @@ that:
 Final develop-gate verdict:
 
 - `NOT AUTHORIZED`
-- final accepted candidate line: `TBD`
+- final accepted candidate line: `2fd404dc`
 
 ## Phase Z Gate
 
