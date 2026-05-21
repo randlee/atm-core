@@ -2,6 +2,7 @@ use super::{
     MAX_RECONCILE_DEBOUNCE_EXTENSIONS, MAX_RECONCILE_FINGERPRINT_KEYS,
     MAX_RECONCILE_FINGERPRINTS_PER_KEY, ReconcileRuntime,
 };
+use crate::worker_support::{reap_retained_join_helpers, retained_join_helper_count_for_test};
 use atm_core::boundary::{
     self, InboxIngress, InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
     InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
@@ -262,6 +263,7 @@ fn reconcile_runtime_actor_cutover_removes_shared_state_runtime_path() {
 
 #[test]
 fn reconcile_runtime_actor_shutdown_stays_bounded() {
+    reap_retained_join_helpers();
     let (started_tx, started_rx) = std::sync::mpsc::channel();
     let release = Arc::new((Mutex::new(false), Condvar::new()));
     let runtime = ReconcileRuntime::new_for_test(
@@ -302,6 +304,22 @@ fn reconcile_runtime_actor_shutdown_stays_bounded() {
             .message
             .contains("reconcile runtime worker exceeded the bounded shutdown deadline")
     );
+    assert_eq!(retained_join_helper_count_for_test(), 1);
+
+    let recovery_runtime = ReconcileRuntime::new_for_test(
+        Arc::new(|_| {
+            Ok(super::ReconcileExecution {
+                result: ReconcileResult {
+                    observed_paths: 1,
+                    imported_sources: 1,
+                },
+                current_fingerprints: Some(Default::default()),
+            })
+        }),
+        Duration::from_millis(10),
+    );
+    recovery_runtime.start().expect("recovery start");
+    recovery_runtime.shutdown().expect("recovery shutdown");
 
     let (released, wake) = &*release;
     *released.lock().expect("released") = true;
@@ -311,6 +329,16 @@ fn reconcile_runtime_actor_shutdown_stays_bounded() {
         result.is_ok(),
         "reconcile worker thread panicked during bounded shutdown test: {result:?}"
     );
+
+    let started = std::time::Instant::now();
+    while retained_join_helper_count_for_test() != 0 {
+        reap_retained_join_helpers();
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "reconcile retained join helper was never reaped"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 #[test]

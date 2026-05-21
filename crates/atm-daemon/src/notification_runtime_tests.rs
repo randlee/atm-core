@@ -1,4 +1,5 @@
 use super::NotificationRuntime;
+use crate::worker_support::{reap_retained_join_helpers, retained_join_helper_count_for_test};
 use atm_core::protocol::{NotificationEvent, NotificationKind};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -96,8 +97,10 @@ fn notification_runtime_persistence_failure_publishes_degraded_status() {
 
 #[test]
 fn notification_runtime_shutdown_stays_bounded_after_worker_backpressure() {
+    reap_retained_join_helpers();
     let tempdir = TempDir::new().expect("tempdir");
     let output_path = tempdir.path().join("notifications.jsonl");
+    let blocked_output_path = output_path.clone();
     let entered_gate = Arc::new((Mutex::new(false), Condvar::new()));
     let release_gate = Arc::new((Mutex::new(false), Condvar::new()));
     let runtime = NotificationRuntime::new_for_test_with_path_factory_and_deadline(
@@ -118,7 +121,7 @@ fn notification_runtime_shutdown_stays_bounded_after_worker_backpressure() {
                 }
                 drop(released);
 
-                Ok(output_path.clone())
+                Ok(blocked_output_path.clone())
             }
         }),
         8,
@@ -142,6 +145,12 @@ fn notification_runtime_shutdown_stays_bounded_after_worker_backpressure() {
     }
 
     let error = runtime.shutdown().expect_err("shutdown should time out");
+    assert_eq!(retained_join_helper_count_for_test(), 1);
+
+    let recovery_runtime = NotificationRuntime::new_for_test_with_path(output_path.clone(), 8);
+    recovery_runtime.start().expect("recovery start");
+    recovery_runtime.shutdown().expect("recovery shutdown");
+
     {
         let (release_lock, release_wake) = &*release_gate;
         let mut released = release_lock.lock().expect("release gate lock");
@@ -153,6 +162,16 @@ fn notification_runtime_shutdown_stays_bounded_after_worker_backpressure() {
             .message
             .contains("notification runtime shutdown exceeded")
     );
+
+    let started = std::time::Instant::now();
+    while retained_join_helper_count_for_test() != 0 {
+        reap_retained_join_helpers();
+        assert!(
+            started.elapsed() < Duration::from_secs(1),
+            "notification retained join helper was never reaped"
+        );
+        std::thread::sleep(Duration::from_millis(10));
+    }
 }
 
 fn notification_event(detail: &str) -> NotificationEvent {

@@ -13,7 +13,7 @@ use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
-use crate::worker_support::JoinHandleOwner;
+use crate::worker_support::{JoinHandleOwner, reap_retained_join_helpers, retain_join_helper};
 use crate::{DaemonSubsystem, SubsystemObservability};
 
 const DEFAULT_RECONCILE_QUEUE_CAPACITY: usize = 64;
@@ -222,6 +222,7 @@ impl ReconcileRuntime {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
+        reap_retained_join_helpers();
         if self.inner.start_claimed.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
@@ -473,13 +474,17 @@ impl ReconcileRuntime {
         );
         tracing::warn!(
             subsystem = "reconcile",
-            action = "shutdown_detach",
+            action = "shutdown_retain",
             outcome = "deadline_exceeded",
             thread_id = ?worker_thread_id,
             timeout_ms = self.inner.shutdown_deadline.as_millis(),
-            "reconcile runtime worker exceeded shutdown deadline; detaching join helper"
+            "reconcile runtime worker exceeded shutdown deadline; retaining join helper for later cleanup"
         );
-        drop(join_helper);
+        retain_join_helper(
+            "reconcile_runtime_worker",
+            join_helper,
+            self.inner.shutdown_deadline,
+        );
         Err(AtmError::daemon_unavailable(
             "reconcile runtime worker exceeded the bounded shutdown deadline",
         )
