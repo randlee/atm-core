@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S21-RSH-I002>
+  a triage:Finding ;
+  triage:findingId "S21-RSH-I002" ;
+  triage:title "no shutdown check between batch executor calls" ;
+  triage:description "reconcile_runtime.rs — no shutdown check between batch executor calls; shutdown signal may be delayed." ;
+  triage:phaseId "phase-Ye" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-20T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S21-RSH-I002/pYe-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S21-RSH-I002/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s21/f9d8d0cc> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/9d9ca6af> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYe-s21/f9d8d0cc> .
+
+<urn:atm:triage:occurrence/S21-RSH-I002/pYe-s21/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 700 ;
+  triage:snippet "for pending_request in pending { ... (inner.executor)... } // no shutdown check between iterations" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+  triage:headSha "f9d8d0cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s21/f9d8d0cc> .
+
+<urn:atm:triage:occurrence/S21-RSH-I002/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 700 ;
+  triage:snippet "for pending_request in pending { ... (inner.executor)... } // no shutdown check between iterations" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-Y" ;
+  triage:headSha "9d9ca6af" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/9d9ca6af> .
+
+<urn:atm:triage:worktree/pYe-s21/f9d8d0cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+  triage:headSha "f9d8d0cc" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/integrate/9d9ca6af>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "9d9ca6af" ;
+  triage:orderIndex 4 .

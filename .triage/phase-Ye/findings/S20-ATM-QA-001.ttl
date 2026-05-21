@@ -5,25 +5,29 @@
   a triage:Finding ;
   triage:findingId "S20-ATM-QA-001" ;
   triage:title "architecture.md queue depth says 256, implementation and other docs say 64" ;
-  triage:description "docs/atm-daemon/architecture.md:661 and :805 state notification work queue depth = 256. requirements.md:450, boundaries.md:380, and notification_runtime.rs:21 (DEFAULT_NOTIFICATION_QUEUE_CAPACITY) all say 64. Y.20 Exact Targets includes architecture.md; bounded-cap contract must be consistent." ;
+  triage:description "docs/atm-daemon/architecture.md states notification work queue depth = 256. requirements.md, boundaries.md, and notification_runtime.rs (DEFAULT_NOTIFICATION_QUEUE_CAPACITY) all say 64. Open on Y.19, Y.20, Y.21, and integrate/phase-Y. Y.20 Exact Targets includes architecture.md; bounded-cap contract must be consistent across all branches." ;
   triage:phaseId "phase-Ye" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:category "ATM-QA" ;
-  triage:severity "blocking" ;
+  triage:severity "important" ;
   triage:repeatable true ;
   triage:sweepScope "file_only" ;
   triage:status "open" ;
   triage:dispatchReady false ;
-  triage:triagedAt "2026-05-20T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedAt "2026-05-20T12:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S20-ATM-QA-001/s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S20-ATM-QA-001/s19/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S20-ATM-QA-001/s20/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S20-ATM-QA-001/s20/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S20-ATM-QA-001/s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S20-ATM-QA-001/s21/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S20-ATM-QA-001/integrate/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S20-ATM-QA-001/integrate/2> ;
   triage:openOn <urn:atm:triage:worktree/s19/d2694d8b> ;
   triage:openOn <urn:atm:triage:worktree/s20/ea517bb5> ;
+  triage:openOn <urn:atm:triage:worktree/s21/f9d8d0cc> ;
   triage:openOn <urn:atm:triage:worktree/integrate/9d9ca6af> ;
-  triage:promoteTo <urn:atm:triage:worktree/s20/ea517bb5> .
+  triage:promoteTo <urn:atm:triage:worktree/s21/f9d8d0cc> .
 
 <urn:atm:triage:occurrence/S20-ATM-QA-001/s19/1>
   a triage:Occurrence ;
@@ -69,6 +73,28 @@
   triage:headSha "ea517bb5" ;
   triage:occursIn <urn:atm:triage:worktree/s20/ea517bb5> .
 
+<urn:atm:triage:occurrence/S20-ATM-QA-001/s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 665 ;
+  triage:snippet "- notification work queue depth: `256`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+  triage:headSha "f9d8d0cc" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/f9d8d0cc> .
+
+<urn:atm:triage:occurrence/S20-ATM-QA-001/s21/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 809 ;
+  triage:snippet "- bounded at `256` in-memory events with typed backpressure on overflow" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+  triage:headSha "f9d8d0cc" ;
+  triage:occursIn <urn:atm:triage:worktree/s21/f9d8d0cc> .
+
 <urn:atm:triage:occurrence/S20-ATM-QA-001/integrate/1>
   a triage:Occurrence ;
   triage:file "docs/atm-daemon/architecture.md" ;
@@ -105,9 +131,16 @@
   triage:headSha "ea517bb5" ;
   triage:orderIndex 2 .
 
+<urn:atm:triage:worktree/s21/f9d8d0cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+  triage:headSha "f9d8d0cc" ;
+  triage:orderIndex 3 .
+
 <urn:atm:triage:worktree/integrate/9d9ca6af>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-Y" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
   triage:headSha "9d9ca6af" ;
-  triage:orderIndex 3 .
+  triage:orderIndex 4 .
