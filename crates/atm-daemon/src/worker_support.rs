@@ -166,6 +166,8 @@ pub(crate) fn reap_retained_join_helpers_until_empty_for_test() {
             return;
         }
         std::thread::yield_now();
+        // lint-fixed-sleep: allow-next-line — reap loop polls for retained join-helper thread exit;
+        // recv() returning does not guarantee thread has exited; 1ms yield gives scheduler budget.
         std::thread::sleep(Duration::from_millis(1));
     }
     panic!("retained join helpers were not reaped after the worker completion signal");
