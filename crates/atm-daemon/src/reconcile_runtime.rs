@@ -618,16 +618,16 @@ fn reconcile_worker_loop(
             }
         };
 
+        // Accepted limitation: once a pending batch is drained, shutdown is not
+        // re-checked between individual executor calls, so a shutdown signal can
+        // be delayed by at most one in-flight drained batch.
         for pending_request in pending {
             let outcome = execute_reconcile_request(
                 inner.as_ref(),
                 &mut worker_state,
                 &pending_request.request,
             );
-            if record_reconcile_outcome(pending_request, outcome).is_none() {
-                inner.mark_worker_stopped();
-                return;
-            }
+            record_reconcile_outcome(pending_request, outcome);
         }
     }
 }
@@ -717,6 +717,9 @@ fn execute_reconcile_request(
     worker_state: &mut ReconcileWorkerState,
     request: &ReconcileRequest,
 ) -> Result<ReconcileResult, AtmError> {
+    // Accepted limitation: there is no per-executor timeout here, so a hung
+    // reconcile execution can outlive the bounded shutdown deadline until the
+    // executor itself returns.
     let execution = (inner.executor)(request)?;
     if should_emit_reconcile_notification(worker_state, request, execution.current_fingerprints)? {
         inner.notification_sink.deliver(NotificationEvent {
@@ -795,11 +798,10 @@ fn should_emit_reconcile_notification(
 fn record_reconcile_outcome(
     pending_request: PendingReconcile,
     outcome: Result<ReconcileResult, AtmError>,
-) -> Option<()> {
+) {
     for reply in pending_request.replies {
         let _ = reply.send(clone_reconcile_outcome(&outcome));
     }
-    Some(())
 }
 
 fn clone_reconcile_outcome(

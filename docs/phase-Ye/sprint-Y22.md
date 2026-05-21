@@ -69,10 +69,20 @@ surface:
 
 ```rust
 pub(crate) struct ReconcileRuntime {
-    tx: SyncSender<ReconcileCommand>,
+    inner: Arc<ReconcileRuntimeInner>,
+}
+
+struct ReconcileRuntimeInner {
+    command_tx: SyncSender<ReconcileCommand>,
+    command_rx: Mutex<Option<Receiver<ReconcileCommand>>>,
     status: Arc<ArcSwap<ReconcileRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
+    debounce: Duration,
+    executor: ReconcileExecutor,
+    notification_sink: Arc<dyn NotificationSink + Send + Sync>,
+    shutdown_deadline: Duration,
     observability: SubsystemObservability,
+    start_claimed: AtomicBool,
 }
 ```
 
@@ -81,6 +91,7 @@ pub(crate) struct ReconcileRuntime {
 pub(crate) struct ReconcileRuntimeStatus {
     started: bool,
     shutdown_requested: bool,
+    shutdown_started_at: Option<Instant>,
     degraded_message: Option<Arc<str>>,
 }
 ```
