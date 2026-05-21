@@ -40,7 +40,7 @@ even though they are not public cross-crate traits:
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving and peer transport code
-  - Phase `Ye` target design is immutable snapshot publication for readers,
+  - accepted `Phase Ye` design is immutable snapshot publication for readers,
     not one daemon-shared mutable cache lock
 
 ## Planned R.20 partition map
@@ -259,9 +259,9 @@ Notes:
   internals.
 - Notification delivery in the reconcile path is boundary-only; tests exercise
   fake `NotificationSink` implementations rather than plugin/runtime internals.
-- Phase `Ye` target design is one worker-owned actor lane with bounded command
-  input plus per-request reply routing; pending/completed/debounce state must
-  not remain daemon-shared mutex state at closure.
+- accepted `Phase Ye` design is one worker-owned actor lane with bounded
+  command input plus per-request reply routing; pending/completed/debounce
+  state must not remain daemon-shared mutex state at closure.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use
@@ -432,9 +432,9 @@ Notes:
   dispatcher and projected into `atm doctor`.
 - The cache-cap rule must bound actual retained entries, not only member-state
   labels.
-- Phase `Ye` target design is immutable snapshot publication through `ArcSwap`
-  for readers; there must be no daemon-shared mutable cache lock on the
-  accepted `Phase Ye` line.
+- accepted `Phase Ye` design is immutable snapshot publication through
+  `ArcSwap` for readers; there must be no daemon-shared mutable cache lock on
+  the accepted `Phase Ye` line.
 - `Phase Yd` adds one daemon-private liveness DTO family owned by
   `atm_daemon::runtime_health` for final `Phase Y` closeout:
   - `NotificationWorkerLiveness`
