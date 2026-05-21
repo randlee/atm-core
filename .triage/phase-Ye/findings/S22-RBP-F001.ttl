@@ -1,0 +1,74 @@
+@prefix atm:  <https://atm-core.dev/triage/> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+atm:finding_S22-RBP-F001
+    atm:finding_id              "S22-RBP-F001" ;
+    atm:title                   "Dead Result arm in compute_reconcile_notification_fingerprints" ;
+    atm:phase_id                "phase-Ye" ;
+    atm:severity                "important" ;
+    atm:status                  "invalid" ;
+    atm:triage_mode             "initial_pass" ;
+    atm:triage_verdict          "NOT_A_FINDING" ;
+    atm:triage_rationale        "compute_reconcile_notification_fingerprints is introduced in feature/pYe-s22-reconcile-runtime-cutover. Its sole call site (line 186-189) uses the ? operator, propagating the Err arm to the caller execute_reconcile_request, which itself returns Result<ReconcileResult, AtmError>. The Err arm is not ignored. RBP-007 is not violated. Finding description is factually incorrect." ;
+    atm:highest_open_branch     "feature/pYe-s22-reconcile-runtime-cutover" ;
+    atm:promote_to_branch       "feature/pYe-s22-reconcile-runtime-cutover" ;
+    atm:dispatch_ready          "false"^^xsd:boolean ;
+    atm:dispatch_blocked_pending_triage_commit "true"^^xsd:boolean ;
+    atm:sweep_scope             "crates/atm-daemon/src/reconcile_runtime.rs" ;
+    atm:repeatable              "true"^^xsd:boolean ;
+    atm:triage_date             "2026-05-20"^^xsd:date ;
+
+    atm:occurrence [
+        atm:branch  "feature/pYe-s22-reconcile-runtime-cutover" ;
+        atm:commit  "57e505b1" ;
+        atm:file    "crates/atm-daemon/src/reconcile_runtime.rs" ;
+        atm:lines   "565-586" ;
+        atm:note    "Function defined; called at line 186 with ? — Err propagated" ;
+        atm:verdict "NOT_A_FINDING"
+    ] ;
+    atm:occurrence [
+        atm:branch  "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:commit  "197272e1" ;
+        atm:file    "crates/atm-daemon/src/reconcile_runtime.rs" ;
+        atm:lines   "565-586" ;
+        atm:note    "Same implementation carried forward; call site uses ? — Err propagated" ;
+        atm:verdict "NOT_A_FINDING"
+    ] ;
+
+    atm:branch_state [
+        atm:branch   "feature/pYe-s19-runtime-status-snapshot-publication" ;
+        atm:commit   "d2694d8b" ;
+        atm:present  "false"^^xsd:boolean ;
+        atm:verdict  "ABSENT"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s20-notification-runtime-channel-ownership" ;
+        atm:commit   "ea517bb5" ;
+        atm:present  "false"^^xsd:boolean ;
+        atm:verdict  "ABSENT"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+        atm:commit   "f9d8d0cc" ;
+        atm:present  "false"^^xsd:boolean ;
+        atm:verdict  "ABSENT"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s22-reconcile-runtime-cutover" ;
+        atm:commit   "57e505b1" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "NOT_A_FINDING"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:commit   "197272e1" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "NOT_A_FINDING"
+    ] ;
+    atm:branch_state [
+        atm:branch   "integrate/phase-Y" ;
+        atm:commit   "9d9ca6af" ;
+        atm:present  "false"^^xsd:boolean ;
+        atm:verdict  "ABSENT"
+    ] .

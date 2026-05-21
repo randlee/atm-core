@@ -1,0 +1,50 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F003>
+  a triage:Finding ;
+  triage:findingId "RBP-F003" ;
+  triage:title "snapshot() and snapshot_for_members() infallible Result return" ;
+  triage:description "runtime_status_cache.rs:198,203 — snapshot() and snapshot_for_members() wrap pure-computation helpers in Result<..., AtmError> with no failure path." ;
+  triage:phaseId "phase-Ye" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "Minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-20T16:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/pYe-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F003/pYe-s19/2> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s19/d2694d8b> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:occurrence/RBP-F003/pYe-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 198 ;
+  triage:snippet "pub(crate) fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:occurrence/RBP-F003/pYe-s19/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 203 ;
+  triage:snippet "pub(crate) fn snapshot_for_members(&self) -> Result<RuntimeStatusSnapshot, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:worktree/pYe-s19/d2694d8b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:orderIndex 1 .

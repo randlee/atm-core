@@ -69,10 +69,20 @@ surface:
 
 ```rust
 pub(crate) struct ReconcileRuntime {
-    tx: SyncSender<ReconcileCommand>,
+    inner: Arc<ReconcileRuntimeInner>,
+}
+
+struct ReconcileRuntimeInner {
+    command_tx: SyncSender<ReconcileCommand>,
+    command_rx: Mutex<Option<Receiver<ReconcileCommand>>>,
     status: Arc<ArcSwap<ReconcileRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
+    debounce: Duration,
+    executor: ReconcileExecutor,
+    notification_sink: Arc<dyn NotificationSink + Send + Sync>,
+    shutdown_deadline: Duration,
     observability: SubsystemObservability,
+    start_claimed: AtomicBool,
 }
 ```
 
@@ -81,6 +91,7 @@ pub(crate) struct ReconcileRuntime {
 pub(crate) struct ReconcileRuntimeStatus {
     started: bool,
     shutdown_requested: bool,
+    shutdown_started_at: Option<Instant>,
     degraded_message: Option<Arc<str>>,
 }
 ```
@@ -174,6 +185,13 @@ and does not reintroduce a lane-local duplicate.
 
 - no phase-end ADR acceptance or readiness closeout in this sprint
 - no additional daemon-lane redesign outside reconcile cutover
+
+## Known Limitations
+
+- There is no per-executor timeout on reconcile execution. A hung reconcile
+  executor can outlive the bounded shutdown deadline until the executor itself
+  returns. This is an accepted limitation (see `reconcile_runtime.rs` lines
+  720–722).
 
 ## Scope Estimate
 

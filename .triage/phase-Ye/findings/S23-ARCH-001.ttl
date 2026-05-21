@@ -1,0 +1,132 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S23-ARCH-001>
+  a triage:Finding ;
+  triage:findingId "S23-ARCH-001" ;
+  triage:title "boundaries.md:43 runtime-status section uses forward-looking 'Phase Ye target design' language" ;
+  triage:description "boundaries.md line 43 contains 'Phase `Ye` target design is immutable snapshot publication for readers, not one daemon-shared mutable cache lock' — must be rewritten as accepted-state prose (past tense or present declarative), not forward-looking target language." ;
+  triage:phaseId "phase-Ye" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable true ;
+  triage:sweepScope "docs/atm-daemon/boundaries.md" ;
+  triage:category "doc-language-forward-looking" ;
+  triage:severity "blocking" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:dispatchBlockedPendingTriageCommit true ;
+  triage:triagedAt "2026-05-20T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S23-ARCH-001/pYe-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S23-ARCH-001/pYe-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S23-ARCH-001/pYe-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S23-ARCH-001/pYe-s22/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S23-ARCH-001/pYe-s23/1> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s19/d2694d8b> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s20/ea517bb5> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s21/f9d8d0cc> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s22/57e505b1> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s23/197272e1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:occurrence/S23-ARCH-001/pYe-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 43 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication for readers," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:occurrence/S23-ARCH-001/pYe-s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 43 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication for readers," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:headSha "ea517bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s20/ea517bb5> .
+
+<urn:atm:triage:occurrence/S23-ARCH-001/pYe-s21/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 43 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication for readers," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+  triage:headSha "f9d8d0cc" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s21/f9d8d0cc> .
+
+<urn:atm:triage:occurrence/S23-ARCH-001/pYe-s22/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 43 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication for readers," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s22-reconcile-runtime-cutover" ;
+  triage:headSha "57e505b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s22/57e505b1> .
+
+<urn:atm:triage:occurrence/S23-ARCH-001/pYe-s23/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 43 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication for readers," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s23-phase-end-architecture-proof" ;
+  triage:headSha "197272e1" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s23/197272e1> .
+
+<urn:atm:triage:worktree/pYe-s19/d2694d8b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:orderIndex 1 ;
+  triage:findingStatus "open" .
+
+<urn:atm:triage:worktree/pYe-s20/ea517bb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:headSha "ea517bb5" ;
+  triage:orderIndex 2 ;
+  triage:findingStatus "open" .
+
+<urn:atm:triage:worktree/pYe-s21/f9d8d0cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+  triage:headSha "f9d8d0cc" ;
+  triage:orderIndex 3 ;
+  triage:findingStatus "open" .
+
+<urn:atm:triage:worktree/pYe-s22/57e505b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s22-reconcile-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s22-reconcile-runtime-cutover" ;
+  triage:headSha "57e505b1" ;
+  triage:orderIndex 4 ;
+  triage:findingStatus "open" .
+
+<urn:atm:triage:worktree/pYe-s23/197272e1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s23-phase-end-architecture-proof" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s23-phase-end-architecture-proof" ;
+  triage:headSha "197272e1" ;
+  triage:orderIndex 5 ;
+  triage:findingStatus "open" .
+
+<urn:atm:triage:worktree/phase-Y/9d9ca6af>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "9d9ca6af" ;
+  triage:orderIndex 6 ;
+  triage:findingStatus "absent" .
