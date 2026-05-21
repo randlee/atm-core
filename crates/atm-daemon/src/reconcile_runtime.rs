@@ -300,16 +300,14 @@ impl ReconcileRuntime {
         }
 
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
-        let command_tx =
-            self.inner
-                .command_tx
-                .get()
-                .ok_or_else(|| self.reconcile_unavailable_error(
-                    "rejected",
-                    "reconcile runtime command channel is unavailable before daemon startup",
-                    &request_team,
-                    &request_agent,
-                ))?;
+        let command_tx = self.inner.command_tx.get().ok_or_else(|| {
+            self.reconcile_unavailable_error(
+                "rejected",
+                "reconcile runtime command channel is unavailable before daemon startup",
+                &request_team,
+                &request_agent,
+            )
+        })?;
         match command_tx.try_send(ReconcileCommand::Reconcile { request, reply_tx }) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => {
