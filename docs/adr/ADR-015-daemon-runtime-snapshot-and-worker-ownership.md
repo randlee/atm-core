@@ -65,6 +65,15 @@ The post-`Phase Y` daemon runtime line adopts these rules:
    - review must treat it as a bounded lifecycle helper, not as an exception
      that reauthorizes lock-heavy runtime state
 
+5. A bounded retained join-helper registry is acceptable only for timed-out
+   shutdown recovery.
+   - `RETAINED_JOIN_HELPERS` may hold process-global timed-out join helpers so
+     bounded shutdown can fail closed without dropping worker ownership
+   - the registry must remain capacity-bounded
+   - it must not become a general runtime coordination surface
+   - tests that exercise retained join helpers must isolate access to that
+     process-global registry explicitly
+
 ## Consequences
 
 ### Positive

@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 #[cfg(test)]
 use crate::DaemonSubsystem;
 use crate::SubsystemObservability;
-use crate::worker_support::JoinHandleOwner;
+use crate::worker_support::{JoinHandleOwner, reap_retained_join_helpers, retain_join_helper};
 
 const DEFAULT_NOTIFICATION_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_NOTIFICATION_IDLE_INTERVAL: Duration = Duration::from_millis(50);
@@ -112,6 +112,7 @@ impl NotificationRuntime {
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
+        reap_retained_join_helpers();
         if self.inner.start_claimed.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
@@ -354,6 +355,12 @@ impl NotificationRuntime {
         join_helper: JoinHandle<()>,
         worker_thread_id: thread::ThreadId,
     ) -> Result<(), AtmError> {
+        let timeout_elapsed = self
+            .inner
+            .status_snapshot()
+            .shutdown_started_at
+            .map(|started_at| started_at.elapsed())
+            .unwrap_or(self.inner.shutdown_deadline);
         self.inner.observability.emit_or_warn(
             "shutdown",
             "degraded",
@@ -361,21 +368,16 @@ impl NotificationRuntime {
         );
         tracing::warn!(
             subsystem = "notification",
-            action = "shutdown_detach",
+            action = "shutdown_retain",
             outcome = "deadline_exceeded",
             thread_id = ?worker_thread_id,
-            timeout_ms = self.inner.shutdown_deadline.as_millis(),
-            "notification runtime worker exceeded shutdown deadline; detaching join helper"
+            timeout_ms = timeout_elapsed.as_millis(),
+            "notification runtime worker exceeded shutdown deadline; retaining join helper for later cleanup"
         );
-        // The worker thread can remain blocked inside synchronous filesystem I/O
-        // after the bounded shutdown window closes, so the join helper is
-        // intentionally detached with no upper-bound completion guarantee.
-        drop(join_helper);
-        tracing::warn!(
-            subsystem = "notification",
-            action = "shutdown_drain",
-            outcome = "deadline_exceeded",
-            "notification drain deadline exceeded; detaching worker"
+        retain_join_helper(
+            "notification_runtime_worker",
+            join_helper,
+            self.inner.shutdown_deadline,
         );
         Err(AtmError::daemon_unavailable(format!(
             "notification runtime shutdown exceeded the {:?} deadline",
