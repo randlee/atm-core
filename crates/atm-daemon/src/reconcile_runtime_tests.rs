@@ -44,6 +44,47 @@ fn request_for(agent: &str) -> ReconcileRequest {
     }
 }
 
+fn prepare_started_runtime(
+    runtime: &ReconcileRuntime,
+) -> std::sync::mpsc::Receiver<super::ReconcileCommand> {
+    let (command_tx, command_rx) = std::sync::mpsc::sync_channel(16);
+    runtime
+        .inner
+        .command_tx
+        .set(command_tx)
+        .expect("set command tx");
+    runtime.inner.start_claimed.store(true, Ordering::Release);
+    runtime.inner.mark_started();
+    command_rx
+}
+
+fn spawn_runtime_worker(
+    runtime: &ReconcileRuntime,
+    command_rx: std::sync::mpsc::Receiver<super::ReconcileCommand>,
+) {
+    let inner = Arc::clone(&runtime.inner);
+    let handle = std::thread::Builder::new()
+        .name("atm-daemon-reconcile-test".to_string())
+        .spawn(move || super::reconcile_worker_loop(inner, command_rx))
+        .expect("spawn worker");
+    runtime
+        .inner
+        .worker
+        .install(handle)
+        .expect("install worker");
+}
+
+fn dispatch_reconcile_command_for_test(
+    runtime: &ReconcileRuntime,
+    request: ReconcileRequest,
+) -> std::sync::mpsc::Receiver<Result<ReconcileResult, AtmError>> {
+    let request_team = request.team.clone();
+    let request_agent = request.agent.clone();
+    runtime
+        .dispatch_reconcile_command(request, &request_team, &request_agent)
+        .expect("dispatch command")
+}
+
 #[test]
 fn reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run() {
     let calls = Arc::new(Mutex::new(0usize));
@@ -63,16 +104,27 @@ fn reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run() {
         }),
         Duration::from_millis(200),
     );
-    runtime.start().expect("start");
+    let command_rx = prepare_started_runtime(&runtime);
 
-    let runtime_a = runtime.clone();
-    let runtime_b = runtime.clone();
-    let request_a = request();
-    let request_b = request_a.clone();
-    let first = std::thread::spawn(move || runtime_a.reconcile(request_a).expect("first"));
-    let second = std::thread::spawn(move || runtime_b.reconcile(request_b).expect("second"));
-    assert_eq!(first.join().expect("join").observed_paths, 2);
-    assert_eq!(second.join().expect("join").imported_sources, 1);
+    let request = request();
+    let first = dispatch_reconcile_command_for_test(&runtime, request.clone());
+    let second = dispatch_reconcile_command_for_test(&runtime, request);
+    spawn_runtime_worker(&runtime, command_rx);
+
+    assert_eq!(
+        first.recv().expect("first reply").expect("first"),
+        ReconcileResult {
+            observed_paths: 2,
+            imported_sources: 1,
+        }
+    );
+    assert_eq!(
+        second.recv().expect("second reply").expect("second"),
+        ReconcileResult {
+            observed_paths: 2,
+            imported_sources: 1,
+        }
+    );
     assert_eq!(*calls.lock().expect("calls"), 1);
     runtime.shutdown().expect("shutdown");
 }
@@ -193,7 +245,19 @@ fn reconcile_runtime_actor_preserves_bounded_debounce_extensions() {
 
 #[test]
 fn reconcile_runtime_actor_cutover_removes_shared_state_runtime_path() {
-    reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run();
+    let source = include_str!("reconcile_runtime.rs");
+    assert!(
+        !source.contains("Mutex<ReconcileState>"),
+        "shared-state reconcile runtime lock path must be absent after cutover"
+    );
+    assert!(
+        !source.contains("Condvar"),
+        "shared-state reconcile runtime condvar path must be absent after cutover"
+    );
+    assert!(
+        !source.contains("Arc<Mutex<NotificationFingerprintRegistry>>"),
+        "fingerprint registry side mutex must be absent after cutover"
+    );
 }
 
 #[test]
@@ -340,20 +404,18 @@ fn reconcile_runtime_preserves_trigger_order_and_signals_completion() {
         }),
         Duration::from_millis(10),
     );
-    runtime.start().expect("start");
+    let command_rx = prepare_started_runtime(&runtime);
 
-    let runtime_a = runtime.clone();
-    let runtime_b = runtime.clone();
-    let first = std::thread::spawn(move || runtime_a.reconcile(request_for("agent-a")));
+    let first = dispatch_reconcile_command_for_test(&runtime, request_for("agent-a"));
+    let second = dispatch_reconcile_command_for_test(&runtime, request_for("agent-b"));
+    spawn_runtime_worker(&runtime, command_rx);
     assert_eq!(started_rx.recv().expect("first started"), "agent-a");
-    let second = std::thread::spawn(move || runtime_b.reconcile(request_for("agent-b")));
-    std::thread::sleep(Duration::from_millis(50));
     let (released, wake) = &*release;
     *released.lock().expect("released") = true;
     wake.notify_all();
 
-    let first_result = first.join().expect("first join").expect("first result");
-    let second_result = second.join().expect("second join").expect("second result");
+    let first_result = first.recv().expect("first join").expect("first result");
+    let second_result = second.recv().expect("second join").expect("second result");
     assert_eq!(first_result.observed_paths, 1);
     assert_eq!(second_result.imported_sources, 1);
     assert_eq!(

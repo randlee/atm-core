@@ -538,7 +538,7 @@ impl DaemonRequestDispatcher {
             && process_is_alive(existing_pid)
         {
             self.status_cache
-                .record_identity_conflict(&request, existing_pid)?;
+                .record_identity_conflict(&request, existing_pid);
             return Err(AtmError::identity_conflict(
                 "ATM_IDENTITY_CONFLICT: stop and report to user immediately",
             )
@@ -546,8 +546,9 @@ impl DaemonRequestDispatcher {
                 "Stop the conflicting ATM process, confirm the stale PID is gone, then retry the heartbeat from the active runtime owner.",
             ));
         }
-        self.status_cache
-            .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid))
+        Ok(self
+            .status_cache
+            .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid)))
     }
 
     fn register_advisory_session(
@@ -865,34 +866,30 @@ mod tests {
             } else {
                 format!("heartbeat-{index}").parse().expect("member")
             };
-            status_cache
-                .record_heartbeat_for_test(
-                    &TeamMemberHeartbeatRequest {
-                        team: team.clone(),
-                        member: member_name,
-                        pid: index as u32 + 1,
-                        observed_at: IsoTimestamp::from_datetime(
-                            base + ChronoDuration::seconds(index as i64),
-                        ),
-                        activity: HeartbeatActivity::Idle,
-                    },
-                    false,
-                )
-                .expect("seed heartbeat member");
-        }
-
-        let response = status_cache
-            .record_heartbeat_for_test(
+            status_cache.record_heartbeat_for_test(
                 &TeamMemberHeartbeatRequest {
                     team: team.clone(),
-                    member: trigger_member.clone(),
-                    pid: std::process::id(),
-                    observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
-                    activity: HeartbeatActivity::ActiveToolUse,
+                    member: member_name,
+                    pid: index as u32 + 1,
+                    observed_at: IsoTimestamp::from_datetime(
+                        base + ChronoDuration::seconds(index as i64),
+                    ),
+                    activity: HeartbeatActivity::Idle,
                 },
                 false,
-            )
-            .expect("trigger heartbeat");
+            );
+        }
+
+        let response = status_cache.record_heartbeat_for_test(
+            &TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: trigger_member.clone(),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
+                activity: HeartbeatActivity::ActiveToolUse,
+            },
+            false,
+        );
         assert_eq!(response.state, RuntimeMemberState::Active);
 
         assert_eq!(

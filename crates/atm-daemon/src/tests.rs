@@ -764,18 +764,16 @@ fn heartbeat_evicts_oldest_member_and_projects_missing_roster_entries_as_unknown
             .expect("insert member");
     }
 
-    let response = status_cache
-        .record_heartbeat_for_test(
-            &TeamMemberHeartbeatRequest {
-                team: team.clone(),
-                member: "trigger-member".parse().expect("member"),
-                pid: std::process::id(),
-                observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(2)),
-                activity: HeartbeatActivity::ActiveToolUse,
-            },
-            false,
-        )
-        .expect("heartbeat");
+    let response = status_cache.record_heartbeat_for_test(
+        &TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: "trigger-member".parse().expect("member"),
+            pid: std::process::id(),
+            observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(2)),
+            activity: HeartbeatActivity::ActiveToolUse,
+        },
+        false,
+    );
     assert_eq!(response.state, RuntimeMemberState::Active);
 
     assert_eq!(
@@ -879,9 +877,7 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
         observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
         activity: HeartbeatActivity::ActiveToolUse,
     };
-    status_cache
-        .record_identity_conflict_for_test(&request, u32::MAX)
-        .expect("record conflict");
+    status_cache.record_identity_conflict_for_test(&request, u32::MAX);
 
     assert_eq!(
         status_cache.member_count_for_test().expect("member count"),

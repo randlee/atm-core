@@ -630,7 +630,13 @@ fn reconcile_worker_loop(
             }
         };
 
-        for pending_request in pending {
+        let mut pending_iter = pending.into_iter();
+        while let Some(pending_request) = pending_iter.next() {
+            if inner.status_snapshot().shutdown_requested {
+                interrupt_pending_reconcile_batch(pending_request, pending_iter);
+                inner.mark_worker_stopped();
+                return;
+            }
             let outcome = execute_reconcile_request(
                 inner.as_ref(),
                 &mut worker_state,
@@ -639,6 +645,23 @@ fn reconcile_worker_loop(
             record_reconcile_outcome(pending_request, outcome);
         }
     }
+}
+
+fn interrupt_pending_reconcile_batch(
+    pending_request: PendingReconcile,
+    remaining: impl IntoIterator<Item = PendingReconcile>,
+) {
+    record_reconcile_outcome(pending_request, Err(reconcile_shutdown_interrupted_error()));
+    for pending_request in remaining {
+        record_reconcile_outcome(pending_request, Err(reconcile_shutdown_interrupted_error()));
+    }
+}
+
+fn reconcile_shutdown_interrupted_error() -> AtmError {
+    AtmError::daemon_unavailable("reconcile runtime is unavailable during daemon shutdown")
+        .with_recovery(
+            "Wait for the daemon reconcile runtime to finish shutting down, then retry the reconcile request.",
+        )
 }
 
 fn enqueue_pending_reconcile_command(

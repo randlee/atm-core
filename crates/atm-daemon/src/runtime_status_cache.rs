@@ -87,7 +87,7 @@ impl RuntimeStatusCache {
         &self,
         request: &TeamMemberHeartbeatRequest,
         pid_changed: bool,
-    ) -> Result<TeamMemberHeartbeatResponse, AtmError> {
+    ) -> TeamMemberHeartbeatResponse {
         let state = match request.activity {
             HeartbeatActivity::ActiveToolUse => RuntimeMemberState::Active,
             HeartbeatActivity::Idle => RuntimeMemberState::Idle,
@@ -109,21 +109,21 @@ impl RuntimeStatusCache {
             },
         );
         self.publish_state(cache);
-        Ok(TeamMemberHeartbeatResponse {
+        TeamMemberHeartbeatResponse {
             team: request.team.clone(),
             member: request.member.clone(),
             pid: request.pid,
             pid_changed,
             state,
             last_active_at,
-        })
+        }
     }
 
     pub(crate) fn record_identity_conflict(
         &self,
         request: &TeamMemberHeartbeatRequest,
         existing_pid: u32,
-    ) -> Result<(), AtmError> {
+    ) {
         let key = RuntimeMemberKey {
             team: request.team.clone(),
             member: request.member.clone(),
@@ -153,7 +153,6 @@ impl RuntimeStatusCache {
             .with_team(request.team.clone())
             .with_agent(request.member.clone());
         self.observability.emit_event_or_warn(event);
-        Ok(())
     }
 
     pub(crate) fn cached_pid(&self, team: &TeamName, member: &AgentName) -> Option<u32> {
@@ -521,7 +520,7 @@ impl RuntimeStatusCache {
         &self,
         request: &TeamMemberHeartbeatRequest,
         pid_changed: bool,
-    ) -> Result<TeamMemberHeartbeatResponse, AtmError> {
+    ) -> TeamMemberHeartbeatResponse {
         self.record_heartbeat(request, pid_changed)
     }
 
@@ -529,7 +528,7 @@ impl RuntimeStatusCache {
         &self,
         request: &TeamMemberHeartbeatRequest,
         existing_pid: u32,
-    ) -> Result<(), AtmError> {
+    ) {
         self.record_identity_conflict(request, existing_pid)
     }
 }
@@ -553,18 +552,16 @@ mod tests {
         let team = test_team();
         let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
-        status_cache
-            .record_heartbeat_for_test(
-                &TeamMemberHeartbeatRequest {
-                    team: team.clone(),
-                    member: member.clone(),
-                    pid: std::process::id(),
-                    observed_at: IsoTimestamp::now(),
-                    activity: HeartbeatActivity::ActiveToolUse,
-                },
-                false,
-            )
-            .expect("heartbeat");
+        status_cache.record_heartbeat_for_test(
+            &TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: member.clone(),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::now(),
+                activity: HeartbeatActivity::ActiveToolUse,
+            },
+            false,
+        );
 
         let snapshot = status_cache.snapshot();
         assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
