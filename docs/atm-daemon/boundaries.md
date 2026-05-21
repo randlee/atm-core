@@ -259,9 +259,9 @@ Notes:
   internals.
 - Notification delivery in the reconcile path is boundary-only; tests exercise
   fake `NotificationSink` implementations rather than plugin/runtime internals.
-- Phase `Ye` closes this boundary on one worker-owned actor lane with bounded
+- accepted `Phase Ye` design is one worker-owned actor lane with bounded
   command input plus per-request reply routing; pending/completed/debounce
-  state does not remain daemon-shared mutex state at closure.
+  state must not remain daemon-shared mutex state at closure.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use
@@ -379,8 +379,9 @@ Notes:
   degrading to tracing-only behavior.
 - The queue is intentionally bounded at `64` events; overflow fails closed with
   typed backpressure instead of silently buffering unbounded plugin traffic.
-- Phase `Ye` closes this boundary on one worker-owned bounded command channel
-  rather than a caller-visible shared mutable queue/lifecycle lock.
+- `Y.20` replaces the caller-visible shared queue/lifecycle lock with one
+  bounded `sync_channel` producer handoff, immutable runtime-status
+  publication, and worker-owned drain/persistence state.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use

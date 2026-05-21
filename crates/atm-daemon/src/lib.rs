@@ -35,6 +35,7 @@ mod tests_host_ownership;
 #[cfg(test)]
 mod tests_lifecycle;
 mod watch_runtime;
+mod worker_support;
 
 use std::path::PathBuf;
 use std::sync::Arc;

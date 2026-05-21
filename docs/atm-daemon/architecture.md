@@ -512,8 +512,8 @@ Required daemon-private partitions:
   - owns the live status cache, cache-cap semantics, roster hydration,
     reload-time runtime-view assembly, and doctor-health projection into
     `atm doctor`
-  - reader projection must converge on immutable snapshot publication rather
-    than shared mutable cache locking
+  - reader projection uses immutable snapshot publication rather than shared
+    mutable cache locking
 - `peer_transport`
   - owns remote delivery, replay, retry, and remote transport-specific failure
     handling
@@ -523,8 +523,10 @@ Required daemon-private partitions:
   - owns reconcile debounce, coalescing, and bounded pending-work wakeups
   - target ownership shape is one worker-owned actor lane
 - `notification_runtime`
-  - owns bounded notification delivery worker state and notifier wakeups
-  - target ownership shape is one worker-owned bounded command lane
+  - owns bounded notification delivery command intake, degraded-state
+    publication, and worker-join lifecycle
+  - accepted ownership shape is one bounded `sync_channel` producer handoff
+    plus worker-owned drain/persistence state
 
 Observability rule:
 - daemon-owned `sc-observability` sinks are a cross-cutting runtime facility
