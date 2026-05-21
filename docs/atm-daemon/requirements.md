@@ -126,6 +126,9 @@ Initial crate requirement IDs:
   by freezing the command-in / reply-out actor contract and shared
   `JoinHandleOwner` lifecycle helper ahead of the final `Y.22` production
   cutover.
+  `ReconcileRuntime` closes the final production rule in `Y.22` by removing
+  the daemon-shared reconcile mutex/condvar path and moving notification
+  fingerprint ownership into `ReconcileWorkerState`.
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
   - one cross-platform local IPC contract for same-host

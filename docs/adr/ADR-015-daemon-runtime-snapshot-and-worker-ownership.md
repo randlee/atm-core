@@ -115,7 +115,7 @@ reader/writer lock tuning.
   - `ReconcileRuntime` actor contract and reply-path foundation, including
     shared `JoinHandleOwner` reuse and per-request reply fanout
 - `Y.22`:
-  - `ReconcileRuntime` actor cutover and deletion of the shared-state runtime
-    path
+  - `ReconcileRuntime` actor cutover, worker-owned fingerprint-registry
+    ownership, and deletion of the shared-state runtime path
 - `Y.23`:
   - phase-end proof, readiness record, and ADR acceptance on the final line

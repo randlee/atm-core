@@ -264,7 +264,8 @@ Notes:
   not remain daemon-shared mutex state at closure.
 - `Y.21` closes the command/reply contract, reply fanout, and shared
   `JoinHandleOwner` lifecycle helper; `Y.22` closes deletion of the remaining
-  production shared-state runtime path and final fingerprint-registry cutover.
+  production shared-state runtime path and moves notification fingerprint
+  ownership fully inside `ReconcileWorkerState`.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use
