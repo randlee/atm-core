@@ -355,6 +355,12 @@ impl NotificationRuntime {
         join_helper: JoinHandle<()>,
         worker_thread_id: thread::ThreadId,
     ) -> Result<(), AtmError> {
+        let timeout_elapsed = self
+            .inner
+            .status_snapshot()
+            .shutdown_started_at
+            .map(|started_at| started_at.elapsed())
+            .unwrap_or(self.inner.shutdown_deadline);
         self.inner.observability.emit_or_warn(
             "shutdown",
             "degraded",
@@ -365,20 +371,10 @@ impl NotificationRuntime {
             action = "shutdown_retain",
             outcome = "deadline_exceeded",
             thread_id = ?worker_thread_id,
-            timeout_ms = self.inner.shutdown_deadline.as_millis(),
+            timeout_ms = timeout_elapsed.as_millis(),
             "notification runtime worker exceeded shutdown deadline; retaining join helper for later cleanup"
         );
-        retain_join_helper(
-            "notification_runtime_worker",
-            join_helper,
-            self.inner.shutdown_deadline,
-        );
-        tracing::warn!(
-            subsystem = "notification",
-            action = "shutdown_recovery",
-            outcome = "deadline_exceeded",
-            "notification drain deadline exceeded; worker retained for later cleanup"
-        );
+        retain_join_helper("notification_runtime_worker", join_helper, timeout_elapsed);
         Err(AtmError::daemon_unavailable(format!(
             "notification runtime shutdown exceeded the {:?} deadline",
             self.inner.shutdown_deadline

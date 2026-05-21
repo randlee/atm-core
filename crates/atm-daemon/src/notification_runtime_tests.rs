@@ -1,5 +1,8 @@
 use super::NotificationRuntime;
-use crate::worker_support::{reap_retained_join_helpers, retained_join_helper_count_for_test};
+use crate::worker_support::{
+    reap_retained_join_helpers, reap_retained_join_helpers_until_empty_for_test,
+    retained_join_helper_count_for_test,
+};
 use atm_core::protocol::{NotificationEvent, NotificationKind};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
@@ -96,6 +99,7 @@ fn notification_runtime_persistence_failure_publishes_degraded_status() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn notification_runtime_shutdown_stays_bounded_after_worker_backpressure() {
     reap_retained_join_helpers();
     let tempdir = TempDir::new().expect("tempdir");
@@ -103,10 +107,12 @@ fn notification_runtime_shutdown_stays_bounded_after_worker_backpressure() {
     let blocked_output_path = output_path.clone();
     let entered_gate = Arc::new((Mutex::new(false), Condvar::new()));
     let release_gate = Arc::new((Mutex::new(false), Condvar::new()));
+    let (worker_done_tx, worker_done_rx) = std::sync::mpsc::sync_channel(1);
     let runtime = NotificationRuntime::new_for_test_with_path_factory_and_deadline(
         Arc::new({
             let entered_gate = Arc::clone(&entered_gate);
             let release_gate = Arc::clone(&release_gate);
+            let worker_done_tx = worker_done_tx.clone();
             move || {
                 let (entered_lock, entered_wake) = &*entered_gate;
                 let mut entered = entered_lock.lock().expect("entered gate lock");
@@ -120,6 +126,7 @@ fn notification_runtime_shutdown_stays_bounded_after_worker_backpressure() {
                     released = release_wake.wait(released).expect("release gate wait");
                 }
                 drop(released);
+                worker_done_tx.send(()).expect("worker done");
 
                 Ok(blocked_output_path.clone())
             }
@@ -162,16 +169,8 @@ fn notification_runtime_shutdown_stays_bounded_after_worker_backpressure() {
             .message
             .contains("notification runtime shutdown exceeded")
     );
-
-    let started = std::time::Instant::now();
-    while retained_join_helper_count_for_test() != 0 {
-        reap_retained_join_helpers();
-        assert!(
-            started.elapsed() < Duration::from_secs(1),
-            "notification retained join helper was never reaped"
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
+    worker_done_rx.recv().expect("worker done recv");
+    reap_retained_join_helpers_until_empty_for_test();
 }
 
 fn notification_event(detail: &str) -> NotificationEvent {

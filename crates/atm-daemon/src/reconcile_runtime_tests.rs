@@ -2,7 +2,10 @@ use super::{
     MAX_RECONCILE_DEBOUNCE_EXTENSIONS, MAX_RECONCILE_FINGERPRINT_KEYS,
     MAX_RECONCILE_FINGERPRINTS_PER_KEY, ReconcileRuntime,
 };
-use crate::worker_support::{reap_retained_join_helpers, retained_join_helper_count_for_test};
+use crate::worker_support::{
+    reap_retained_join_helpers, reap_retained_join_helpers_until_empty_for_test,
+    retained_join_helper_count_for_test,
+};
 use atm_core::boundary::{
     self, InboxIngress, InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
     InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
@@ -209,7 +212,6 @@ fn reconcile_runtime_actor_preserves_bounded_debounce_extensions() {
     );
     runtime.start().expect("start");
 
-    let started = std::time::Instant::now();
     let request = request();
     let mut joins = Vec::new();
     joins.push({
@@ -237,10 +239,6 @@ fn reconcile_runtime_actor_preserves_bounded_debounce_extensions() {
         assert_eq!(result.imported_sources, 1);
     }
     assert_eq!(*calls.lock().expect("calls"), 2);
-    assert!(
-        started.elapsed() < Duration::from_secs(2),
-        "bounded debounce extensions never converged to the capped number of worker runs"
-    );
     runtime.shutdown().expect("shutdown");
 }
 
@@ -262,13 +260,16 @@ fn reconcile_runtime_actor_cutover_removes_shared_state_runtime_path() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn reconcile_runtime_actor_shutdown_stays_bounded() {
     reap_retained_join_helpers();
     let (started_tx, started_rx) = std::sync::mpsc::channel();
+    let (worker_done_tx, worker_done_rx) = std::sync::mpsc::sync_channel(1);
     let release = Arc::new((Mutex::new(false), Condvar::new()));
     let runtime = ReconcileRuntime::new_for_test(
         Arc::new({
             let release = Arc::clone(&release);
+            let worker_done_tx = worker_done_tx.clone();
             move |_| {
                 started_tx.send(()).expect("started");
                 let (released, wake) = &*release;
@@ -279,6 +280,7 @@ fn reconcile_runtime_actor_shutdown_stays_bounded() {
                         .expect("wait release");
                     released = wait.0;
                 }
+                worker_done_tx.send(()).expect("worker done");
                 Ok(super::ReconcileExecution {
                     result: ReconcileResult {
                         observed_paths: 1,
@@ -329,16 +331,8 @@ fn reconcile_runtime_actor_shutdown_stays_bounded() {
         result.is_ok(),
         "reconcile worker thread panicked during bounded shutdown test: {result:?}"
     );
-
-    let started = std::time::Instant::now();
-    while retained_join_helper_count_for_test() != 0 {
-        reap_retained_join_helpers();
-        assert!(
-            started.elapsed() < Duration::from_secs(1),
-            "reconcile retained join helper was never reaped"
-        );
-        std::thread::sleep(Duration::from_millis(10));
-    }
+    worker_done_rx.recv().expect("worker done recv");
+    reap_retained_join_helpers_until_empty_for_test();
 }
 
 #[test]

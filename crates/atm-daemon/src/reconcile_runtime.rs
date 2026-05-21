@@ -24,10 +24,7 @@ const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
 const MAX_RECONCILE_FINGERPRINT_KEYS: usize = 1024;
 const MAX_RECONCILE_FINGERPRINTS_PER_KEY: usize = 256;
 const MAX_RECONCILE_WAITERS: usize = 1024;
-#[cfg(not(test))]
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
-#[cfg(test)]
-const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ReconcileRuntimeStatus {
@@ -186,7 +183,7 @@ impl ReconcileRuntime {
                     current_fingerprints: compute_reconcile_notification_fingerprints(
                         &import,
                         inbox_ingress.as_ref(),
-                    )?,
+                    ),
                 })
             }),
             notification_sink,
@@ -565,10 +562,7 @@ impl ReconcileRuntimeInner {
     }
 
     fn mark_worker_stopped(&self) {
-        self.publish_status(|status| ReconcileRuntimeStatus {
-            degraded_message: None,
-            ..status.clone()
-        });
+        self.publish_status(|status| ReconcileRuntimeStatus { ..status.clone() });
     }
 
     fn mark_worker_degraded(&self, message: &'static str) {
@@ -582,7 +576,7 @@ impl ReconcileRuntimeInner {
 fn compute_reconcile_notification_fingerprints(
     import: &atm_core::boundary::InboxIngressImportResponse,
     inbox_ingress: &dyn InboxIngress,
-) -> Result<Option<HashSet<String>>, AtmError> {
+) -> Option<HashSet<String>> {
     let mut current_fingerprints = HashSet::new();
     for source in &import.source_files {
         for message in &source.messages {
@@ -593,13 +587,11 @@ fn compute_reconcile_notification_fingerprints(
                     },
                 )
                 .fingerprint;
-            let Some(fingerprint) = fingerprint else {
-                return Ok(None);
-            };
+            let fingerprint = fingerprint?;
             current_fingerprints.insert(fingerprint);
         }
     }
-    Ok(Some(current_fingerprints))
+    Some(current_fingerprints)
 }
 
 fn reconcile_worker_loop(
@@ -718,6 +710,10 @@ fn debounce_pending_reconcile_batch(
     let mut debounce_extensions = 0u32;
     loop {
         if inner.status_snapshot().shutdown_requested {
+            let mut pending = drain_pending_reconcile_batch(worker_state).into_iter();
+            if let Some(first_pending) = pending.next() {
+                interrupt_pending_reconcile_batch(first_pending, pending);
+            }
             return None;
         }
         match command_rx.recv_timeout(inner.debounce) {
@@ -757,7 +753,7 @@ fn execute_reconcile_request(
     // `Y.22` accepts one actor-owned request lane here; the caller-facing
     // bounded command-channel handoff has already ended before execution.
     let execution = (inner.executor)(request)?;
-    if should_emit_reconcile_notification(worker_state, request, execution.current_fingerprints)? {
+    if should_emit_reconcile_notification(worker_state, request, execution.current_fingerprints) {
         inner.notification_sink.deliver(NotificationEvent {
             kind: NotificationKind::ReconcileComplete,
             detail: format!(
@@ -775,9 +771,9 @@ fn should_emit_reconcile_notification(
     worker_state: &mut ReconcileWorkerState,
     request: &ReconcileRequest,
     current_fingerprints: Option<HashSet<String>>,
-) -> Result<bool, AtmError> {
+) -> bool {
     let Some(mut current_fingerprints) = current_fingerprints else {
-        return Ok(true);
+        return true;
     };
 
     let key = ReconcileKey::from_request(request);
@@ -828,7 +824,7 @@ fn should_emit_reconcile_notification(
         fingerprints.order.push_back(key.clone());
     }
     fingerprints.entries.insert(key, current_fingerprints);
-    Ok(changed)
+    changed
 }
 
 fn record_reconcile_outcome(

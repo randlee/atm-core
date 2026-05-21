@@ -12,6 +12,9 @@ struct RetainedJoinHelper {
     join_helper: JoinHandle<()>,
 }
 
+// Narrow RBP-006 exception: this process-global registry owns only timed-out
+// join helpers that must outlive one bounded shutdown attempt. It must not
+// expand into shared runtime coordination, queue ownership, or request state.
 static RETAINED_JOIN_HELPERS: Mutex<Vec<RetainedJoinHelper>> = Mutex::new(Vec::new());
 
 #[derive(Debug, Default)]
@@ -97,6 +100,8 @@ pub(crate) fn retain_join_helper(
     join_helper: JoinHandle<()>,
     deadline: Duration,
 ) {
+    // Timeout retention is intentional: once bounded shutdown expires, keeping
+    // the join helper is safer than dropping lifecycle ownership silently.
     reap_retained_join_helpers();
 
     let mut retained = match RETAINED_JOIN_HELPERS.lock() {
@@ -122,6 +127,7 @@ pub(crate) fn retain_join_helper(
             outcome = "capacity_exceeded",
             label,
             cap = MAX_RETAINED_JOIN_HELPERS,
+            current_len = retained.len(),
             timeout_ms = deadline.as_millis(),
             "retained join-helper registry is full; dropping timed-out worker helper"
         );
@@ -150,4 +156,16 @@ pub(crate) fn retained_join_helper_count_for_test() -> usize {
         .lock()
         .expect("retained join helper registry lock")
         .len()
+}
+
+#[cfg(test)]
+pub(crate) fn reap_retained_join_helpers_until_empty_for_test() {
+    for _ in 0..1024 {
+        reap_retained_join_helpers();
+        if retained_join_helper_count_for_test() == 0 {
+            return;
+        }
+        std::thread::yield_now();
+    }
+    panic!("retained join helpers were not reaped after the worker completion signal");
 }
