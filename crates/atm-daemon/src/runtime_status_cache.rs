@@ -156,11 +156,7 @@ impl RuntimeStatusCache {
         Ok(())
     }
 
-    pub(crate) fn cached_pid(
-        &self,
-        team: &TeamName,
-        member: &AgentName,
-    ) -> Option<u32> {
+    pub(crate) fn cached_pid(&self, team: &TeamName, member: &AgentName) -> Option<u32> {
         let cache = self.state.load();
         cache
             .members

@@ -533,9 +533,7 @@ impl DaemonRequestDispatcher {
                 request.team.as_str(),
             ));
         }
-        let cached_pid = self
-            .status_cache
-            .cached_pid(&request.team, &request.member);
+        let cached_pid = self.status_cache.cached_pid(&request.team, &request.member);
         if let Some(existing_pid) = cached_pid.filter(|pid| *pid != request.pid)
             && process_is_alive(existing_pid)
         {
