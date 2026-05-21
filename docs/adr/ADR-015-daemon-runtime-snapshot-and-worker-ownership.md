@@ -1,6 +1,6 @@
 # ADR-015 — Daemon Runtime Snapshot Publication And Worker Ownership
 
-- status: proposed
+- status: accepted
 - date: 2026-05-20
 - deciders:
   - team-lead
@@ -117,5 +117,4 @@ reader/writer lock tuning.
 - `Y.22`:
   - `ReconcileRuntime` actor cutover, worker-owned fingerprint-registry
     ownership, and deletion of the shared-state runtime path
-- `Y.23`:
-  - phase-end proof, readiness record, and ADR acceptance on the final line
+- `Y.23`: phase-end proof, readiness record, and ADR acceptance on the final line

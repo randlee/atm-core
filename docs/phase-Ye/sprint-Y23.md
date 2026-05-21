@@ -1,7 +1,7 @@
 ---
 id: Y.23
 title: Phase-End Architecture Proof
-status: planned
+status: complete
 branch: feature/pYe-s23-phase-end-architecture-proof
 worktree: ../atm-core-worktrees/feature/pYe-s23-phase-end-architecture-proof
 target: integrate/phase-Y
@@ -163,7 +163,9 @@ not claim completion.
 
 ## Required Validation
 
-- `rg -n "Mutex<RuntimeStatusCacheState>|Mutex<NotificationState>|Mutex<ReconcileState>|Condvar" crates/atm-daemon/src`
+- `rg -n "Mutex<RuntimeStatusCacheState>|lock poisoned" crates/atm-daemon/src/runtime_status_cache.rs` # expected: zero matches
+- `rg -n "Mutex<NotificationState>|Condvar|VecDeque" crates/atm-daemon/src/notification_runtime.rs` # expected: zero matches
+- `rg -n "Mutex<ReconcileState>|Condvar|Arc<Mutex<NotificationFingerprintRegistry>>" crates/atm-daemon/src/reconcile_runtime.rs` # expected: zero matches
 - `cargo test --workspace runtime_status_cache_heartbeat_publish_is_atomically_visible -- --nocapture`
 - `cargo test --workspace notification_runtime_deliver_uses_bounded_command_channel -- --nocapture`
 - `cargo test --workspace reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run -- --nocapture`

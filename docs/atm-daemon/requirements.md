@@ -117,7 +117,8 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-RUNTIME-009` daemon background worker lanes that own active
   coordination state must use single-owner bounded command channels or
   equivalent actor ownership rather than daemon-shared queue/debounce mutable
-  locks. Satisfies:
+  locks. The accepted ownership rule is bounded command-channel handoff into
+  one actor-owned request lane. Satisfies:
   `REQ-CORE-BOUNDARY-002`, `REQ-DAEMON-RUNTIME-004`.
   `NotificationRuntime` closes this rule in `Y.20` by using one bounded
   `sync_channel` handoff, immutable runtime-status publication, and a

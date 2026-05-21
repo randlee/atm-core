@@ -260,12 +260,18 @@ Notes:
 - Notification delivery in the reconcile path is boundary-only; tests exercise
   fake `NotificationSink` implementations rather than plugin/runtime internals.
 - accepted `Phase Ye` design is one worker-owned actor lane with bounded
-  command input plus per-request reply routing; pending/completed/debounce
-  state must not remain daemon-shared mutex state at closure.
+  command-channel handoff plus per-request reply routing; pending/completed/
+  debounce state must not remain daemon-shared mutex state at closure.
+- the accepted reconcile lane is an actor-owned request path; callers submit
+  work through the bounded command channel and do not share worker state.
+- `Y.21` closed the command/reply contract, reply fanout, and shared
+  `JoinHandleOwner` lifecycle helper; `Y.22` closed deletion of the remaining
+  production shared-state runtime path and moved notification fingerprint
+  ownership fully inside `ReconcileWorkerState`.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use
-  `ReconcileCoordinator::reconcile(...)` only and must not manage worker
+    `ReconcileCoordinator::reconcile(...)` only and must not manage worker
     lifetime directly
 
 ## DaemonRequestDispatcherAdapter
@@ -379,8 +385,8 @@ Notes:
   degrading to tracing-only behavior.
 - The queue is intentionally bounded at `64` events; overflow fails closed with
   typed backpressure instead of silently buffering unbounded plugin traffic.
-- `Y.20` replaces the caller-visible shared queue/lifecycle lock with one
-  bounded `sync_channel` producer handoff, immutable runtime-status
+- `Y.20` replaced the caller-visible shared queue/lifecycle lock with one
+  bounded command-channel handoff (`sync_channel`), immutable runtime-status
   publication, and worker-owned drain/persistence state.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities

@@ -243,7 +243,10 @@ fn reconcile_runtime_actor_shutdown_stays_bounded() {
     *released.lock().expect("released") = true;
     wake.notify_all();
     let result = join.join().expect("join");
-    assert!(result.is_ok() || result.is_err());
+    assert!(
+        result.is_ok(),
+        "reconcile worker thread panicked during bounded shutdown test: {result:?}"
+    );
 }
 
 #[test]

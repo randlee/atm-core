@@ -526,7 +526,8 @@ Required daemon-private partitions:
   - owns bounded watch subscription state and watch worker polling
 - `reconcile_runtime`
   - owns reconcile debounce, coalescing, and bounded pending-work wakeups
-  - target ownership shape is one worker-owned actor lane
+  - accepted ownership shape is one worker-owned actor lane with bounded
+    command-channel handoff and actor-owned request routing
 - `notification_runtime`
   - owns bounded notification delivery command intake, degraded-state
     publication, and worker-join lifecycle
