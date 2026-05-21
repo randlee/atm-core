@@ -40,8 +40,8 @@ even though they are not public cross-crate traits:
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving and peer transport code
-  - accepted `Phase Ye` design is immutable snapshot publication for readers,
-    not one daemon-shared mutable cache lock
+  - immutable snapshot publication is the accepted design for readers; no
+    daemon-shared mutable cache lock is used
 
 ## Planned R.20 partition map
 
@@ -432,9 +432,8 @@ Notes:
   dispatcher and projected into `atm doctor`.
 - The cache-cap rule must bound actual retained entries, not only member-state
   labels.
-- accepted `Phase Ye` design is immutable snapshot publication through
-  `ArcSwap` for readers; there must be no daemon-shared mutable cache lock on
-  the accepted `Phase Ye` line.
+- immutable snapshot publication through `ArcSwap` is the accepted design for
+  readers; no daemon-shared mutable cache lock is used.
 - `Phase Yd` adds one daemon-private liveness DTO family owned by
   `atm_daemon::runtime_health` for final `Phase Y` closeout:
   - `NotificationWorkerLiveness`
