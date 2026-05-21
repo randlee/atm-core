@@ -53,10 +53,10 @@ The phase-end status block uses:
   - accepted commit: `f9d8d0cc`
   - verdict: `PASS`
 - `Y.22`
-  - accepted commit: `197272e1`
+  - accepted commit: `fc0c4197`
   - verdict: `PASS`
 - `Y.23`
-  - accepted commit: `197272e1`
+  - accepted commit: `fc0c4197`
   - verdict: `PASS`
 
 ## Validation Record

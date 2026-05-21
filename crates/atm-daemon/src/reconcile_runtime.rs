@@ -289,16 +289,16 @@ impl ReconcileRuntime {
             return Err(self.reconcile_unavailable_error(
                 "rejected",
                 "reconcile runtime is unavailable before daemon startup",
-                &request_team,
-                &request_agent,
+                request_team,
+                request_agent,
             ));
         }
         if status.shutdown_requested {
             return Err(self.reconcile_unavailable_error(
                 "rejected",
                 "reconcile runtime is unavailable during daemon shutdown",
-                &request_team,
-                &request_agent,
+                request_team,
+                request_agent,
             ));
         }
         if let Some(message) = &status.degraded_message {
@@ -314,8 +314,8 @@ impl ReconcileRuntime {
             self.reconcile_unavailable_error(
                 "rejected",
                 "reconcile runtime command channel is unavailable before daemon startup",
-                &request_team,
-                &request_agent,
+                request_team,
+                request_agent,
             )
         })?;
         match command_tx.try_send(ReconcileCommand::Reconcile { request, reply_tx }) {
@@ -336,27 +336,10 @@ impl ReconcileRuntime {
                 );
             }
             Err(TrySendError::Disconnected(_)) => {
-                let latest_status = self.inner.status_snapshot();
-                if let Some(message) = &latest_status.degraded_message {
-                    return Err(
-                        AtmError::daemon_unavailable(message.as_ref()).with_recovery(
-                            "Restart atm-daemon; the reconcile runtime worker lane is degraded.",
-                        ),
-                    );
-                }
-                if latest_status.shutdown_requested {
-                    return Err(self.reconcile_unavailable_error(
-                        "rejected",
-                        "reconcile runtime is unavailable during daemon shutdown",
-                        &request_team,
-                        &request_agent,
-                    ));
-                }
-                return Err(AtmError::daemon_unavailable(
-                    "reconcile runtime command channel is unavailable",
-                )
-                .with_recovery(
-                    "Restart atm-daemon; the reconcile worker lane is no longer receiving commands.",
+                return Err(self.handle_send_error(
+                    self.inner.status_snapshot(),
+                    request_team,
+                    request_agent,
                 ));
             }
         }
@@ -403,6 +386,31 @@ impl ReconcileRuntime {
         AtmError::daemon_unavailable(message).with_recovery(
             "Wait for the daemon reconcile runtime to return to a serving state, then retry the reconcile request.",
         )
+    }
+
+    fn handle_send_error(
+        &self,
+        latest_status: Arc<ReconcileRuntimeStatus>,
+        request_team: &atm_core::types::TeamName,
+        request_agent: &atm_core::types::AgentName,
+    ) -> AtmError {
+        if let Some(message) = &latest_status.degraded_message {
+            return AtmError::daemon_unavailable(message.as_ref()).with_recovery(
+                "Restart atm-daemon; the reconcile runtime worker lane is degraded.",
+            );
+        }
+        if latest_status.shutdown_requested {
+            return self.reconcile_unavailable_error(
+                "rejected",
+                "reconcile runtime is unavailable during daemon shutdown",
+                request_team,
+                request_agent,
+            );
+        }
+        AtmError::daemon_unavailable("reconcile runtime command channel is unavailable")
+            .with_recovery(
+                "Restart atm-daemon; the reconcile worker lane is no longer receiving commands.",
+            )
     }
 
     fn take_worker_for_shutdown(&self) -> Result<Option<JoinHandle<()>>, AtmError> {
