@@ -101,7 +101,7 @@ mod tests {
                 std::time::Duration::from_secs(1),
             )
             .expect("retained log sqlite message");
-        let snapshot = status_cache.snapshot().expect("snapshot");
+        let snapshot = status_cache.snapshot();
         assert!(!snapshot.sqlite_ready);
         assert!(
             snapshot

@@ -9,7 +9,7 @@ use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
@@ -43,10 +43,10 @@ pub(crate) struct ReconcileRuntime {
 }
 
 struct ReconcileRuntimeInner {
-    command_tx: SyncSender<ReconcileCommand>,
-    command_rx: Mutex<Option<Receiver<ReconcileCommand>>>,
+    command_tx: OnceLock<SyncSender<ReconcileCommand>>,
     status: Arc<ArcSwap<ReconcileRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
+    queue_capacity: usize,
     debounce: Duration,
     executor: ReconcileExecutor,
     notification_sink: Arc<dyn NotificationSink + Send + Sync>,
@@ -205,13 +205,12 @@ impl ReconcileRuntime {
         shutdown_deadline: Duration,
         observability: SubsystemObservability,
     ) -> Self {
-        let (command_tx, command_rx) = mpsc::sync_channel(queue_capacity);
         Self {
             inner: Arc::new(ReconcileRuntimeInner {
-                command_tx,
-                command_rx: Mutex::new(Some(command_rx)),
+                command_tx: OnceLock::new(),
                 status: Arc::new(ArcSwap::from_pointee(ReconcileRuntimeStatus::default())),
                 worker: Arc::new(JoinHandleOwner::default()),
+                queue_capacity,
                 debounce,
                 executor,
                 notification_sink,
@@ -227,15 +226,7 @@ impl ReconcileRuntime {
             return Ok(());
         }
 
-        let Some(command_rx) = self.inner.take_command_rx()? else {
-            self.inner.start_claimed.store(false, Ordering::Release);
-            return Err(AtmError::daemon_unavailable(
-                "reconcile runtime command receiver was unavailable during startup",
-            )
-            .with_recovery(
-                "Restart atm-daemon; the reconcile worker lane could not claim its command receiver.",
-            ));
-        };
+        let (command_tx, command_rx) = mpsc::sync_channel(self.inner.queue_capacity);
 
         let inner = Arc::clone(&self.inner);
         let handle = thread::Builder::new()
@@ -255,6 +246,15 @@ impl ReconcileRuntime {
         self.inner.worker.install(handle).inspect_err(|_| {
             self.inner.start_claimed.store(false, Ordering::Release);
         })?;
+        if self.inner.command_tx.set(command_tx).is_err() {
+            self.inner.start_claimed.store(false, Ordering::Release);
+            return Err(AtmError::daemon_unavailable(
+                "reconcile runtime command sender was already initialized during startup",
+            )
+            .with_recovery(
+                "Restart atm-daemon; the reconcile worker lane already claimed its bounded command-channel handoff.",
+            ));
+        }
         self.inner.mark_started();
         self.inner
             .observability
@@ -300,11 +300,17 @@ impl ReconcileRuntime {
         }
 
         let (reply_tx, reply_rx) = mpsc::sync_channel(1);
-        match self
-            .inner
-            .command_tx
-            .try_send(ReconcileCommand::Reconcile { request, reply_tx })
-        {
+        let command_tx =
+            self.inner
+                .command_tx
+                .get()
+                .ok_or_else(|| self.reconcile_unavailable_error(
+                    "rejected",
+                    "reconcile runtime command channel is unavailable before daemon startup",
+                    &request_team,
+                    &request_agent,
+                ))?;
+        match command_tx.try_send(ReconcileCommand::Reconcile { request, reply_tx }) {
             Ok(()) => {}
             Err(TrySendError::Full(_)) => {
                 self.inner.observability.emit_or_warn(
@@ -509,15 +515,6 @@ impl ReconcileRuntime {
 }
 
 impl ReconcileRuntimeInner {
-    fn take_command_rx(&self) -> Result<Option<Receiver<ReconcileCommand>>, AtmError> {
-        let mut receiver = self.command_rx.lock().map_err(|_| {
-            AtmError::daemon_unavailable("reconcile runtime receiver lock poisoned").with_recovery(
-                "Restart atm-daemon; reconcile command receiver ownership can no longer be trusted.",
-            )
-        })?;
-        Ok(receiver.take())
-    }
-
     fn status_snapshot(&self) -> Arc<ReconcileRuntimeStatus> {
         self.status.load_full()
     }
@@ -624,10 +621,7 @@ fn reconcile_worker_loop(
                 &mut worker_state,
                 &pending_request.request,
             );
-            if record_reconcile_outcome(pending_request, outcome).is_none() {
-                inner.mark_worker_stopped();
-                return;
-            }
+            record_reconcile_outcome(pending_request, outcome);
         }
     }
 }
@@ -717,6 +711,8 @@ fn execute_reconcile_request(
     worker_state: &mut ReconcileWorkerState,
     request: &ReconcileRequest,
 ) -> Result<ReconcileResult, AtmError> {
+    // `Y.22` accepts one actor-owned request lane here; the caller-facing
+    // bounded command-channel handoff has already ended before execution.
     let execution = (inner.executor)(request)?;
     if should_emit_reconcile_notification(worker_state, request, execution.current_fingerprints)? {
         inner.notification_sink.deliver(NotificationEvent {
@@ -795,11 +791,10 @@ fn should_emit_reconcile_notification(
 fn record_reconcile_outcome(
     pending_request: PendingReconcile,
     outcome: Result<ReconcileResult, AtmError>,
-) -> Option<()> {
+) {
     for reply in pending_request.replies {
         let _ = reply.send(clone_reconcile_outcome(&outcome));
     }
-    Some(())
 }
 
 fn clone_reconcile_outcome(

@@ -75,8 +75,8 @@ impl RuntimeStatusCache {
         }
     }
 
-    pub(crate) fn clone_state(&self) -> Result<RuntimeStatusCacheState, AtmError> {
-        Ok(self.state.load().as_ref().clone())
+    pub(crate) fn clone_state(&self) -> RuntimeStatusCacheState {
+        self.state.load().as_ref().clone()
     }
 
     pub(crate) fn publish_state(&self, next: RuntimeStatusCacheState) {
@@ -98,7 +98,7 @@ impl RuntimeStatusCache {
             member: request.member.clone(),
         };
         let last_active_at = Some(request.observed_at);
-        let mut cache = self.clone_state()?;
+        let mut cache = self.clone_state();
         evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
         cache.members.insert(
             key,
@@ -128,7 +128,7 @@ impl RuntimeStatusCache {
             team: request.team.clone(),
             member: request.member.clone(),
         };
-        let mut cache = self.clone_state()?;
+        let mut cache = self.clone_state();
         evict_status_cache_entry_if_needed(&mut cache, &key, &self.observability);
         let last_active_at = cache
             .members
@@ -156,19 +156,15 @@ impl RuntimeStatusCache {
         Ok(())
     }
 
-    pub(crate) fn cached_pid(
-        &self,
-        team: &TeamName,
-        member: &AgentName,
-    ) -> Result<Option<u32>, AtmError> {
+    pub(crate) fn cached_pid(&self, team: &TeamName, member: &AgentName) -> Option<u32> {
         let cache = self.state.load();
-        Ok(cache
+        cache
             .members
             .get(&RuntimeMemberKey {
                 team: team.clone(),
                 member: member.clone(),
             })
-            .and_then(|record| record.pid))
+            .and_then(|record| record.pid)
     }
 
     pub(crate) fn mark_sqlite_unavailable(&self) {
@@ -195,17 +191,17 @@ impl RuntimeStatusCache {
         self.publish_state(cache);
     }
 
-    pub(crate) fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
+    pub(crate) fn snapshot(&self) -> RuntimeStatusSnapshot {
         let cache = self.state.load();
-        Ok(build_runtime_snapshot_all(&cache))
+        build_runtime_snapshot_all(&cache)
     }
 
     pub(crate) fn snapshot_for_members(
         &self,
         members: impl IntoIterator<Item = (TeamName, AgentName)>,
-    ) -> Result<RuntimeStatusSnapshot, AtmError> {
+    ) -> RuntimeStatusSnapshot {
         let cache = self.state.load();
-        Ok(build_runtime_snapshot_scoped(&cache, members))
+        build_runtime_snapshot_scoped(&cache, members)
     }
 }
 
@@ -496,7 +492,7 @@ impl RuntimeStatusCache {
         state: RuntimeMemberState,
         last_active_at: Option<IsoTimestamp>,
     ) -> Result<(), AtmError> {
-        let mut cache = self.clone_state()?;
+        let mut cache = self.clone_state();
         cache.members.insert(
             RuntimeMemberKey { team, member },
             RuntimeMemberRecord {
@@ -518,7 +514,7 @@ impl RuntimeStatusCache {
         &self,
         members: impl IntoIterator<Item = (TeamName, AgentName)>,
     ) -> Result<RuntimeStatusSnapshot, AtmError> {
-        self.snapshot_for_members(members)
+        Ok(self.snapshot_for_members(members))
     }
 
     pub(crate) fn record_heartbeat_for_test(
@@ -570,7 +566,7 @@ mod tests {
             )
             .expect("heartbeat");
 
-        let snapshot = status_cache.snapshot().expect("snapshot");
+        let snapshot = status_cache.snapshot();
         assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
         assert!(snapshot.sqlite_ready);
         assert!(!snapshot.degraded_ingest);
@@ -646,7 +642,7 @@ mod tests {
 
         status_cache.mark_sqlite_unavailable_with_detail("sqlite writer submit failed");
 
-        let snapshot = status_cache.snapshot().expect("snapshot");
+        let snapshot = status_cache.snapshot();
         assert!(!snapshot.sqlite_ready);
         assert_eq!(snapshot.readiness, RuntimeReadinessState::Degraded);
         assert_eq!(snapshot.member_counts.active_members, 1);
@@ -654,8 +650,8 @@ mod tests {
         assert!(
             snapshot
                 .detail
-                .as_deref()
-                .is_some_and(|detail| detail.contains("sqlite writer submit failed"))
+                .as_ref()
+                .is_some_and(|detail: &String| detail.contains("sqlite writer submit failed"))
         );
     }
 }

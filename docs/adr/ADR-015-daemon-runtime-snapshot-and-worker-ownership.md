@@ -117,7 +117,4 @@ reader/writer lock tuning.
 - `Y.22`:
   - `ReconcileRuntime` actor cutover, worker-owned fingerprint-registry
     ownership, and deletion of the shared-state runtime path
-- `Y.23`:
-  - phase-end proof, readiness record, and ADR acceptance on the final line
-  - records the accepted `Phase Ye` closure state without introducing another
-    runtime redesign
+- `Y.23`: phase-end proof, readiness record, and ADR acceptance on the final line

@@ -3730,6 +3730,7 @@ Status summary:
   than creating a second long-lived integration branch
 - `Phase Ye` closes on the accepted line once `Y.23` records the phase-end
   architecture proof and `ADR-015` acceptance.
+- `Phase Ye: closed — Y.23 phase-end proof recorded and ADR-015 accepted.`
 
 Goal:
 - replace read-mostly daemon status locking with immutable snapshot publication
