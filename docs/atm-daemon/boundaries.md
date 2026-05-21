@@ -265,7 +265,7 @@ Notes:
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use
-    `ReconcileCoordinator::reconcile(...)` only and must not manage worker
+  `ReconcileCoordinator::reconcile(...)` only and must not manage worker
     lifetime directly
 
 ## DaemonRequestDispatcherAdapter
