@@ -112,7 +112,8 @@ reader/writer lock tuning.
   - `NotificationRuntime` -> bounded command channel + immutable runtime-status
     publication + worker-owned persistence state
 - `Y.21`:
-  - `ReconcileRuntime` actor contract and reply-path foundation
+  - `ReconcileRuntime` actor contract and reply-path foundation, including
+    shared `JoinHandleOwner` reuse and per-request reply fanout
 - `Y.22`:
   - `ReconcileRuntime` actor cutover and deletion of the shared-state runtime
     path

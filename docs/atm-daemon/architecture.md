@@ -143,6 +143,10 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - daemon worker lanes with active queue/debounce/completion state must use one
   worker-owned command-channel or actor ownership model rather than exposing
   shared mutable coordination locks to callers
+  - `Y.21` freezes the reconcile lane on the command-in / reply-out actor
+    contract and shared `JoinHandleOwner` lifecycle helper
+  - `Y.22` owns deletion of the remaining production shared-state reconcile
+    runtime path
 - `atm-daemon` owns runtime implementations of one shared ATM protocol with
   multiple transport implementations:
   - cross-platform local IPC for same-host daemon access

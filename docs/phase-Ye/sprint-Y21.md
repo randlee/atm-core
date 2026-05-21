@@ -1,7 +1,7 @@
 ---
 id: Y.21
 title: Reconcile Runtime Actor Foundation
-status: planned
+status: complete
 branch: feature/pYe-s21-reconcile-runtime-actor-foundation
 worktree: ../atm-core-worktrees/feature/pYe-s21-reconcile-runtime-actor-foundation
 target: integrate/phase-Y
@@ -59,7 +59,6 @@ ADR-015 ownership in this sprint:
 
 - `crates/atm-daemon/src/worker_support.rs`
 - `crates/atm-daemon/src/reconcile_runtime.rs`
-- `crates/atm-daemon/src/composition.rs`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
@@ -136,6 +135,8 @@ impl ReconcileRuntime {
   types
 - debounce, coalescing, and reply fanout are modeled as worker-owned state
   rather than daemon-shared lock state
+- `JoinHandleOwner` is reused from `crates/atm-daemon/src/worker_support.rs`
+  rather than redefined inside the reconcile lane
 - daemon requirements and architecture docs explicitly state that reconcile is
   a worker-owned actor boundary
 - `ADR-015` is updated to name reconcile as an actor/channel lane

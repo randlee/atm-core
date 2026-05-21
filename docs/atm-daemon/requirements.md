@@ -122,6 +122,10 @@ Initial crate requirement IDs:
   `NotificationRuntime` closes this rule in `Y.20` by using one bounded
   `sync_channel` handoff, immutable runtime-status publication, and a
   worker-owned persistence/drain lane.
+  `ReconcileRuntime` closes the contract/fanout half of this rule in `Y.21`
+  by freezing the command-in / reply-out actor contract and shared
+  `JoinHandleOwner` lifecycle helper ahead of the final `Y.22` production
+  cutover.
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
   - one cross-platform local IPC contract for same-host
