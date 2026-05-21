@@ -5,7 +5,7 @@
 This document is the named phase-end closure artifact for `Phase Ye`.
 
 It stays in `draft` state until `Y.23` closes on the accepted implementation
-line. `Y.23` owns the final update.
+line. `Y.23` owns the final update and phase-end PASS record.
 
 ## Final Closure Checklist
 
@@ -24,7 +24,7 @@ line. `Y.23` owns the final update.
 - implementation line:
   - `integrate/phase-Y`
 - accepted head:
-  - `TBD-Y23`
+  - `57e505b1`
 - accepted closure sprint:
   - `Y.23`
 
@@ -44,20 +44,20 @@ The phase-end status block uses:
 ## Per-Sprint Closure Record
 
 - `Y.19`
-  - accepted commit: `TBD-Y19`
-  - verdict: `TBD`
+  - accepted commit: `d2694d8b`
+  - verdict: `PASS`
 - `Y.20`
-  - accepted commit: `TBD-Y20`
-  - verdict: `TBD`
+  - accepted commit: `ea517bb5`
+  - verdict: `PASS`
 - `Y.21`
-  - accepted commit: `TBD-Y21`
-  - verdict: `TBD`
+  - accepted commit: `f9d8d0cc`
+  - verdict: `PASS`
 - `Y.22`
-  - accepted commit: `TBD-Y22`
-  - verdict: `TBD`
+  - accepted commit: `57e505b1`
+  - verdict: `PASS`
 - `Y.23`
-  - accepted commit: `TBD-Y23`
-  - verdict: `TBD`
+  - accepted commit: `57e505b1`
+  - verdict: `PASS`
 
 ## Validation Record
 
@@ -67,6 +67,7 @@ The phase-end status block uses:
   - `reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run`
     - `Y.21` actor-contract proof
   - `reconcile_runtime_actor_cutover_removes_shared_state_runtime_path`
+  - `reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned`
 - full validation stack:
   - `cargo fmt --all`
   - `python3 .just/run_lint.py all`
@@ -77,6 +78,6 @@ The phase-end status block uses:
 ## Status
 
 - current status:
-  - `draft`
+  - `ready`
 - final `Y.23` verdict:
-  - `TBD`
+  - `PASS`

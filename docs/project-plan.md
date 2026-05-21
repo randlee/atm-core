@@ -3728,6 +3728,8 @@ Status summary:
   `Phase Y` lands on `develop`.
 - implementation continues on the existing `integrate/phase-Y` line rather
   than creating a second long-lived integration branch
+- `Phase Ye` closes on the accepted line once `Y.23` records the phase-end
+  architecture proof and `ADR-015` acceptance.
 
 Goal:
 - replace read-mostly daemon status locking with immutable snapshot publication
@@ -3746,6 +3748,7 @@ Execution shape:
   - `Y.21` reconcile runtime actor foundation
   - `Y.22` reconcile runtime cutover
   - `Y.23` phase-end architecture proof
+  - closed on accepted line after `Y.23` phase-end architecture proof
 
 Immediate planning outputs:
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
