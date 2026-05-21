@@ -174,15 +174,16 @@ impl DaemonRequestDispatcher {
                 cap = MAX_SHUTDOWN_FINALIZER_THREADS,
                 "shutdown finalizer thread cap reached; dropping retained worker handle"
             );
+        } else {
+            tracing::warn!(
+                subsystem = "runtime_health",
+                action = "shutdown_retain",
+                outcome = "deadline_exceeded",
+                step = label,
+                timeout_ms = deadline.as_millis(),
+                "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
+            );
         }
-        tracing::warn!(
-            subsystem = "runtime_health",
-            action = "shutdown_retain",
-            outcome = "deadline_exceeded",
-            step = label,
-            timeout_ms = deadline.as_millis(),
-            "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
-        );
     }
 
     fn spawn_shutdown_join_helper(
@@ -326,22 +327,23 @@ impl DaemonRequestDispatcher {
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
-        if let Err(error) = build_runtime_status_cache_state(None, sqlite_boundary.roster_store())
-            .and_then(|state| status_cache.replace_state(state))
-        {
-            tracing::warn!(
-                subsystem = "runtime_health",
-                action = "sqlite_cache_hydration",
-                outcome = "degraded",
-                %error,
-                "failed to hydrate runtime status cache from sqlite roster state"
-            );
-            runtime_health_observability.emit_or_warn(
-                "sqlite_cache_hydration",
-                "degraded",
-                "failed to hydrate runtime status cache from sqlite roster state",
-            );
-            status_cache.mark_sqlite_unavailable();
+        match build_runtime_status_cache_state(None, sqlite_boundary.roster_store()) {
+            Ok(state) => status_cache.publish_state(state),
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "sqlite_cache_hydration",
+                    outcome = "degraded",
+                    %error,
+                    "failed to hydrate runtime status cache from sqlite roster state"
+                );
+                runtime_health_observability.emit_or_warn(
+                    "sqlite_cache_hydration",
+                    "degraded",
+                    "failed to hydrate runtime status cache from sqlite roster state",
+                );
+                status_cache.mark_sqlite_unavailable();
+            }
         }
         Self {
             home_dir,
@@ -468,10 +470,10 @@ impl DaemonRequestDispatcher {
                     "Restore the host-scoped ATM SQLite durable-state database and restart atm-daemon before retrying SIGHUP reload.",
                 )
             })?;
-        let current_state = self.status_cache.clone_state()?;
+        let current_state = self.status_cache.clone_state();
         let next_state = build_runtime_status_cache_state(Some(&current_state), roster_store)?;
         let reloaded_members = next_state.member_count();
-        self.status_cache.replace_state(next_state)?;
+        self.status_cache.publish_state(next_state);
         tracing::info!(
             reloaded_members,
             "bounded daemon config/roster reload applied successfully"
@@ -531,9 +533,7 @@ impl DaemonRequestDispatcher {
                 request.team.as_str(),
             ));
         }
-        let cached_pid = self
-            .status_cache
-            .cached_pid(&request.team, &request.member)?;
+        let cached_pid = self.status_cache.cached_pid(&request.team, &request.member);
         if let Some(existing_pid) = cached_pid.filter(|pid| *pid != request.pid)
             && process_is_alive(existing_pid)
         {
@@ -594,8 +594,8 @@ impl DaemonRequestDispatcher {
                     .members
                     .iter()
                     .map(|member| (roster.team.clone(), member.name.clone())),
-            )?,
-            None => self.status_cache.snapshot()?,
+            ),
+            None => self.status_cache.snapshot(),
         };
         report
             .findings
@@ -726,7 +726,7 @@ impl boundary::sealed::Sealed for DaemonStatusSource {}
 
 impl boundary::StatusSource for DaemonStatusSource {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
-        self.status_cache.snapshot()
+        Ok(self.status_cache.snapshot())
     }
 }
 

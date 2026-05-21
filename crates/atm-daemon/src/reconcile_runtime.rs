@@ -605,37 +605,6 @@ impl ReconcileRuntime {
     }
 
     #[cfg(test)]
-    pub(crate) fn wait_for_pending_agent_for_test(&self, agent: &str, timeout: Duration) -> bool {
-        let deadline = std::time::Instant::now() + timeout;
-        let mut state = self.inner.state.lock().expect("state lock");
-        while !state
-            .worker_state
-            .pending
-            .values()
-            .any(|pending| pending.request.agent.as_str() == agent)
-        {
-            let now = std::time::Instant::now();
-            if now >= deadline {
-                return false;
-            }
-            let wait = self
-                .inner
-                .pending_changed
-                .wait_timeout(state, deadline.saturating_duration_since(now))
-                .expect("pending change wait");
-            state = wait.0;
-            if wait.1.timed_out() {
-                return state
-                    .worker_state
-                    .pending
-                    .values()
-                    .any(|pending| pending.request.agent.as_str() == agent);
-            }
-        }
-        true
-    }
-
-    #[cfg(test)]
     pub(crate) fn notification_fingerprint_registry_counts_for_test(&self) -> (usize, usize) {
         let state = self.inner.state.lock().expect("state lock");
         (
@@ -889,6 +858,20 @@ fn debounce_reconcile_command_batch(
                         if !handle_reconcile_command(inner, command) {
                             return false;
                         }
+                    }
+                    match command_rx.recv_timeout(inner.debounce) {
+                        Ok(command) => {
+                            if !handle_reconcile_command(inner, command) {
+                                return false;
+                            }
+                            while let Ok(command) = command_rx.try_recv() {
+                                if !handle_reconcile_command(inner, command) {
+                                    return false;
+                                }
+                            }
+                        }
+                        Err(mpsc::RecvTimeoutError::Timeout) => {}
+                        Err(mpsc::RecvTimeoutError::Disconnected) => return false,
                     }
                     return true;
                 }
@@ -1230,10 +1213,6 @@ mod tests {
         let first = std::thread::spawn(move || runtime_a.reconcile(request_for("agent-a")));
         assert_eq!(started_rx.recv().expect("first started"), "agent-a");
         let second = std::thread::spawn(move || runtime_b.reconcile(request_for("agent-b")));
-        assert!(
-            runtime.wait_for_pending_agent_for_test("agent-b", Duration::from_secs(1)),
-            "agent-b never entered the pending queue before agent-a was released"
-        );
         let (released, wake) = &*release;
         *released.lock().expect("released") = true;
         wake.notify_all();

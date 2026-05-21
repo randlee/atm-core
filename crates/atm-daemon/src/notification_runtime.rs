@@ -65,7 +65,10 @@ type NotificationPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send 
 
 struct NotificationRuntimeInner {
     command_tx: SyncSender<NotificationCommand>,
+    // The worker lane claims the receiver exactly once at startup; the mutex
+    // exists only to serialize that single take across concurrent start calls.
     command_rx: Mutex<Option<Receiver<NotificationCommand>>>,
+    queue_capacity: usize,
     status: Arc<ArcSwap<NotificationRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
     path_factory: NotificationPathFactory,
@@ -95,6 +98,7 @@ impl NotificationRuntime {
             inner: Arc::new(NotificationRuntimeInner {
                 command_tx,
                 command_rx: Mutex::new(Some(command_rx)),
+                queue_capacity,
                 status: Arc::new(ArcSwap::from_pointee(NotificationRuntimeStatus::default())),
                 worker: Arc::new(JoinHandleOwner::default()),
                 path_factory,
@@ -141,6 +145,14 @@ impl NotificationRuntime {
             self.inner.start_claimed.store(false, Ordering::Release);
         })?;
         self.inner.mark_started();
+        tracing::info!(
+            subsystem = "notification",
+            action = "worker_start",
+            outcome = "configured",
+            queue_capacity = self.inner.queue_capacity,
+            idle_interval_ms = DEFAULT_NOTIFICATION_IDLE_INTERVAL.as_millis(),
+            "notification runtime worker configuration accepted"
+        );
         self.inner
             .observability
             .emit_or_warn("start", "ok", "notification runtime worker started");
@@ -199,6 +211,9 @@ impl NotificationRuntime {
                 );
                 Err(AtmError::daemon_unavailable(
                     "notification runtime queue is full; delivery is backpressured",
+                )
+                .with_recovery(
+                    "Wait for the notification worker lane to drain or restart atm-daemon if the queue remains saturated.",
                 ))
             }
             Err(TrySendError::Disconnected(_)) => {
@@ -256,6 +271,7 @@ impl NotificationRuntime {
             inner: Arc::new(NotificationRuntimeInner {
                 command_tx,
                 command_rx: Mutex::new(Some(command_rx)),
+                queue_capacity,
                 status: Arc::new(ArcSwap::from_pointee(NotificationRuntimeStatus::default())),
                 worker: Arc::new(JoinHandleOwner::default()),
                 path_factory,
@@ -291,7 +307,10 @@ impl NotificationRuntime {
         let worker_thread_id = handle.thread().id();
         let (join_helper, result_rx) = spawn_shutdown_join_helper(handle)?;
         match result_rx.recv_timeout(self.inner.shutdown_deadline) {
-            Ok(Ok(())) => self.handle_shutdown_joined(join_helper),
+            Ok(Ok(())) => {
+                self.handle_shutdown_joined(join_helper);
+                Ok(())
+            }
             Ok(Err(_)) => self.handle_shutdown_panic(join_helper),
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 self.handle_shutdown_timeout(join_helper, worker_thread_id)
@@ -302,7 +321,7 @@ impl NotificationRuntime {
         }
     }
 
-    fn handle_shutdown_joined(&self, join_helper: JoinHandle<()>) -> Result<(), AtmError> {
+    fn handle_shutdown_joined(&self, join_helper: JoinHandle<()>) {
         let _ = join_helper.join();
         self.inner.mark_worker_stopped();
         self.inner.observability.emit_or_warn(
@@ -310,7 +329,6 @@ impl NotificationRuntime {
             "ok",
             "notification runtime worker shut down cleanly",
         );
-        Ok(())
     }
 
     fn handle_shutdown_panic(&self, join_helper: JoinHandle<()>) -> Result<(), AtmError> {
@@ -349,6 +367,9 @@ impl NotificationRuntime {
             timeout_ms = self.inner.shutdown_deadline.as_millis(),
             "notification runtime worker exceeded shutdown deadline; detaching join helper"
         );
+        // The worker thread can remain blocked inside synchronous filesystem I/O
+        // after the bounded shutdown window closes, so the join helper is
+        // intentionally detached with no upper-bound completion guarantee.
         drop(join_helper);
         tracing::warn!(
             subsystem = "notification",
@@ -587,6 +608,8 @@ fn persist_notification(
     let encoded = serde_json::to_vec(event).map_err(|source| {
         AtmError::daemon_unavailable("failed to encode notification event").with_source(source)
     })?;
+    // The cap applies to the bytes that actually hit disk; checking after
+    // encoding avoids undercounting escaping and framing overhead.
     if encoded.len() > MAX_NOTIFICATION_EVENT_BYTES {
         return Err(AtmError::daemon_unavailable(format!(
             "notification event payload exceeded {} bytes",
@@ -597,6 +620,9 @@ fn persist_notification(
         ));
     }
     ensure_shutdown_budget_remaining(inner)?;
+    // Notification persistence intentionally stays on a dedicated std::thread
+    // worker with blocking file I/O rather than introducing Tokio into the
+    // daemon runtime.
     let mut file = OpenOptions::new()
         .create(true)
         .append(true)
@@ -608,9 +634,9 @@ fn persist_notification(
             ))
             .with_source(source)
         })?;
-    // TODO(Y.14): std::fs append writes are still synchronous once they start.
-    // Y.20 bounds queue drain before each persistence step, but it cannot
-    // preempt a single blocked write_all/flush call mid-flight.
+    // Accepted limitation: the worker re-checks shutdown budget before each
+    // persistence step, but once a blocking write_all/flush call begins it
+    // cannot be interrupted mid-write on this dedicated std::thread lane.
     file.write_all(&encoded)
         .and_then(|_| file.write_all(b"\n"))
         .map_err(|source| {

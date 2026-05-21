@@ -516,8 +516,8 @@ Required daemon-private partitions:
   - owns the live status cache, cache-cap semantics, roster hydration,
     reload-time runtime-view assembly, and doctor-health projection into
     `atm doctor`
-  - reader projection must converge on immutable snapshot publication rather
-    than shared mutable cache locking
+  - reader projection uses immutable snapshot publication rather than shared
+    mutable cache locking
 - `peer_transport`
   - owns remote delivery, replay, retry, and remote transport-specific failure
     handling
