@@ -127,3 +127,8 @@ reader/writer lock tuning.
   - `ReconcileRuntime` actor cutover, worker-owned fingerprint-registry
     ownership, and deletion of the shared-state runtime path
 - `Y.23`: phase-end proof, readiness record, and ADR acceptance on the final line
+  - phase-ending fix-r1 (`9c78d4b3`) closed the last `Rule 4` notification
+    startup seam by removing
+    `command_rx: Mutex<Option<Receiver<NotificationCommand>>>` and keeping
+    notification command-channel handoff fully startup-owned plus `OnceLock`
+    sender publication

@@ -24,7 +24,7 @@ line. `Y.23` owns the final update and phase-end PASS record.
 - implementation line:
   - `integrate/phase-Y`
 - accepted head:
-  - `d86a44fe`
+  - `9c78d4b3`
 - accepted closure sprint:
   - `Y.23`
 
@@ -56,7 +56,7 @@ The phase-end status block uses:
   - accepted commit: `fc0c4197`
   - verdict: `PASS`
 - `Y.23`
-  - accepted commit: `d86a44fe`
+  - accepted commit: `9c78d4b3`
   - verdict: `PASS`
 
 ## Validation Record
