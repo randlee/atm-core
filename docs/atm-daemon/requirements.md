@@ -117,8 +117,19 @@ Initial crate requirement IDs:
 - `REQ-DAEMON-RUNTIME-009` daemon background worker lanes that own active
   coordination state must use single-owner bounded command channels or
   equivalent actor ownership rather than daemon-shared queue/debounce mutable
-  locks. Satisfies:
+  locks. The accepted ownership rule is bounded command-channel handoff into
+  one actor-owned request lane. Satisfies:
   `REQ-CORE-BOUNDARY-002`, `REQ-DAEMON-RUNTIME-004`.
+  `NotificationRuntime` closes this rule in `Y.20` by using one bounded
+  `sync_channel` handoff, immutable runtime-status publication, and a
+  worker-owned persistence/drain lane.
+  `ReconcileRuntime` closes the contract/fanout half of this rule in `Y.21`
+  by freezing the command-in / reply-out actor contract and shared
+  `JoinHandleOwner` lifecycle helper ahead of the final `Y.22` production
+  cutover.
+  `ReconcileRuntime` closes the final production rule in `Y.22` by removing
+  the daemon-shared reconcile mutex/condvar path and moving notification
+  fingerprint ownership into `ReconcileWorkerState`.
 - `REQ-DAEMON-TRANSPORT-001` `atm-daemon` owns one protocol with two
   production transport implementations plus one test transport:
   - one cross-platform local IPC contract for same-host
@@ -444,7 +455,7 @@ Required runtime rules:
   - reconcile notification fingerprint registry cap:
     `MAX_RECONCILE_FINGERPRINT_KEYS = 1024`, evict-oldest-and-log
   - watch subscription cap: `256`
-  - notification work queue depth: `256`
+  - notification work queue depth: `64`
 - request work launched from the server path must remain tracked by runtime
   shutdown accounting until it completes or is cancelled
 - the current Phase R transport remains single-request-per-connection, so the
@@ -468,6 +479,9 @@ Required runtime rules:
   retaining unbounded watcher state
 - notification runtime must reject or degrade delivery beyond the bounded queue
   cap rather than silently buffering unbounded work
+- notification runtime producer paths must publish only lifecycle/degraded
+  checks plus bounded command-channel submission; callers must not mutate queue
+  state or persistence sequencing directly
 - until `schooks 1.0` is released, pid/activity updates may arrive through the
   interim Python hooks installed from `../agent-team-mail`
 - after `schooks 1.0` is released, `schooks` becomes the controlled hook

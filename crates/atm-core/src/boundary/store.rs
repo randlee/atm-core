@@ -69,7 +69,7 @@ pub struct RosterMemberRecord {
     #[serde(default)]
     pub model: String,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recipient_pane_id: Option<String>,
+    pub recipient_pane_id: Option<String>, // PaneId newtype deferred to post-Yb phase
     #[serde(default)]
     pub metadata_json: Map<String, Value>,
 }
@@ -427,6 +427,26 @@ pub struct InboxExportReexportMessageResponse {
     pub wrote_messages: usize,
 }
 
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "kebab-case")]
+pub enum ClaudeCompatibilityDeliveryMode {
+    RecoveredLogicalMessageSet,
+}
+
+/// Explicit inbox-export append-message-set request for recovered Claude delivery.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct InboxExportAppendMessageSetRequest {
+    pub path: PathBuf,
+    pub messages: Vec<MessageEnvelope>,
+    pub mode: ClaudeCompatibilityDeliveryMode,
+}
+
+/// Explicit inbox-export append-message-set response for recovered Claude delivery.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct InboxExportAppendMessageSetResponse {
+    pub wrote_messages: usize,
+}
+
 /// Canonical Phase R inbox-export request entrypoint payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InboxExportRequest;
@@ -434,6 +454,23 @@ pub struct InboxExportRequest;
 /// Canonical Phase R inbox-export response entrypoint payload.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct InboxExportResponse;
+
+/// Canonical non-Claude outbound request payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
+pub struct NonClaudeOutboundDeliveryRequest {
+    pub team: TeamName,
+    pub agent: AgentName,
+    pub recipient_pane_id: Option<String>,
+    /// Payload serialized to JSONL must not exceed `MAX_NON_CLAUDE_PAYLOAD_BYTES` (1 MiB),
+    /// enforced by `DaemonNonClaudeOutbound::deliver_payloads`.
+    pub messages: Vec<MessageEnvelope>,
+}
+
+/// Canonical non-Claude outbound response payload.
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct NonClaudeOutboundDeliveryResponse {
+    pub delivered_messages: usize,
+}
 
 /// BOUNDARY-TaskStore — see docs/atm-core/boundaries.md.
 pub trait TaskStore: sealed::Sealed {
@@ -555,20 +592,14 @@ pub trait InboxIngress: sealed::Sealed {
         &self,
         request: InboxIngressImportRequest,
     ) -> Result<InboxIngressImportResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when identity fingerprinting cannot be computed.
     fn compute_identity_fingerprint(
         &self,
         request: InboxIngressIdentityFingerprintRequest,
-    ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when inbox diagnostics cannot be generated.
+    ) -> InboxIngressIdentityFingerprintResponse;
     fn report_diagnostics(
         &self,
         request: InboxIngressDiagnosticsRequest,
-    ) -> Result<InboxIngressDiagnosticsResponse, AtmError>;
+    ) -> InboxIngressDiagnosticsResponse;
 }
 
 /// BOUNDARY-InboxExport — see docs/atm-core/boundaries.md.
@@ -588,4 +619,24 @@ pub trait InboxExport: sealed::Sealed {
         &self,
         request: InboxExportReexportMessageRequest,
     ) -> Result<InboxExportReexportMessageResponse, AtmError>;
+    /// # Errors
+    ///
+    /// Returns `AtmError` when a recovered Claude logical message set cannot
+    /// be materialized through one owned export operation.
+    fn append_message_set(
+        &self,
+        request: InboxExportAppendMessageSetRequest,
+    ) -> Result<InboxExportAppendMessageSetResponse, AtmError>;
+}
+
+/// BOUNDARY-NonClaudeOutbound — see docs/atm-core/boundaries.md.
+pub trait NonClaudeOutbound: sealed::Sealed {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when non-Claude logical payload delivery cannot be
+    /// executed through the approved outbound boundary.
+    fn deliver_payloads(
+        &self,
+        request: NonClaudeOutboundDeliveryRequest,
+    ) -> Result<NonClaudeOutboundDeliveryResponse, AtmError>;
 }

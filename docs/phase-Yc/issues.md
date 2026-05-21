@@ -40,3 +40,16 @@ runtime sprint deliverables.
 If any later task or review attempts to convert `Y.12` or `Y.13` into
 lint-only, docs-only, or otherwise non-runtime implementation work, treat that
 as a scope conflict and require user discussion before changing the plan.
+
+## Deferred Follow-Up
+
+1. `Y.14` notification append preemption hardening.
+   - source seam:
+     - `crates/atm-daemon/src/notification_runtime.rs`
+   - current limitation:
+     - bounded shutdown checks run before each persistence step, but a single
+       synchronous `write_all` / `flush` call cannot be preempted once it has
+       started
+   - future closeout:
+     - either move the retained notification append path to a preemptible I/O
+       mechanism or document and test a stronger bounded-write contract

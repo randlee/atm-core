@@ -2,22 +2,18 @@
 
 ## Purpose
 
-Record the daemon-runtime design issues that remain open after the `Phase Y`
-closeout line and that justify a dedicated follow-on architecture phase rather
-than ad hoc cleanup commits.
+Record the daemon-runtime design issues that `Phase Ye` was created to close
+after the `Phase Y` closeout line, and preserve the final accepted-line
+closure record for those redesigns.
 
-This is a planning artifact on a worktree off `develop`. It does not authorize
-implementation on this branch.
+## Accepted Line
 
-## Baseline
-
-- planning branch:
-  - `plan/phase-Y-lock-removal`
-- planning worktree:
-  - `../atm-core-worktrees/plan/phase-Y-lock-removal`
-- implementation prerequisite:
-  - the accepted `Phase Y` line must land on `develop` before `Phase Ye`
-    implementation begins
+- implementation line:
+  - `integrate/phase-Y`
+- accepted closure branch:
+  - `feature/pYe-s23-phase-end-architecture-proof`
+- governing ADR:
+  - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 
 ## Confirmed Design Gaps
 
@@ -105,10 +101,10 @@ These items are explicitly out of scope for `Phase Ye`:
 
 ## Phase-End Closure Record
 
-`Y.23` owns filling these rows on the accepted implementation line.
+`Y.23` owns the final accepted-line closure record.
 
-- `Y.19 closes on accepted line: TBD`
-- `Y.20 closes on accepted line: TBD`
-- `Y.21 closes on accepted line: TBD`
-- `Y.22 closes on accepted line: TBD`
-- `Y.23 closes on accepted line: TBD`
+- `Y.19 closes on accepted line: ab2bd715`
+- `Y.20 closes on accepted line: 715c157c`
+- `Y.21 closes on accepted line: 87f39c7c`
+- `Y.22 closes on accepted line: 57e505b1`
+- `Y.23 closes on accepted line: 9c78d4b3`

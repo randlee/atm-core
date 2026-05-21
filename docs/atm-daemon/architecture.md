@@ -143,6 +143,11 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - daemon worker lanes with active queue/debounce/completion state must use one
   worker-owned command-channel or actor ownership model rather than exposing
   shared mutable coordination locks to callers
+  - `Y.21` freezes the reconcile lane on the command-in / reply-out actor
+    contract and shared `JoinHandleOwner` lifecycle helper
+  - `Y.22` deletes the remaining production shared-state reconcile runtime
+    path and moves notification fingerprint ownership fully into worker-owned
+    reconcile state
 - `atm-daemon` owns runtime implementations of one shared ATM protocol with
   multiple transport implementations:
   - cross-platform local IPC for same-host daemon access
@@ -512,8 +517,8 @@ Required daemon-private partitions:
   - owns the live status cache, cache-cap semantics, roster hydration,
     reload-time runtime-view assembly, and doctor-health projection into
     `atm doctor`
-  - reader projection must converge on immutable snapshot publication rather
-    than shared mutable cache locking
+  - reader projection uses immutable snapshot publication rather than shared
+    mutable cache locking
 - `peer_transport`
   - owns remote delivery, replay, retry, and remote transport-specific failure
     handling
@@ -521,10 +526,13 @@ Required daemon-private partitions:
   - owns bounded watch subscription state and watch worker polling
 - `reconcile_runtime`
   - owns reconcile debounce, coalescing, and bounded pending-work wakeups
-  - target ownership shape is one worker-owned actor lane
+  - accepted ownership shape is one worker-owned actor lane with bounded
+    command-channel handoff and actor-owned request routing
 - `notification_runtime`
-  - owns bounded notification delivery worker state and notifier wakeups
-  - target ownership shape is one worker-owned bounded command lane
+  - owns bounded notification delivery command intake, degraded-state
+    publication, and worker-join lifecycle
+  - accepted ownership shape is one bounded `sync_channel` producer handoff
+    plus worker-owned drain/persistence state
 
 Observability rule:
 - daemon-owned `sc-observability` sinks are a cross-cutting runtime facility
@@ -656,7 +664,7 @@ Required caps:
 - live status-cache cap: `4096` entries
 - reconcile notification fingerprint registry cap: `1024` keys
 - watch subscription cap: `256` active subscriptions
-- notification work queue depth: `256`
+- notification work queue depth: `64`
 
 Required saturation behavior:
 - connection cap exceeded: reject new accepts with a typed over-capacity error
@@ -800,4 +808,4 @@ Initial use cases:
 - remote daemon-to-daemon protocol structure
 - runtime watch/reconcile orchestration
 - queued notifier/runtime delivery structure
-  - bounded at `256` in-memory events with typed backpressure on overflow
+  - bounded at `64` in-memory events with typed backpressure on overflow

@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-Y6-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-Y6-004" ;
+  triage:title "NonClaudeHarnessNewMessageState enum missing from delivery_policy.rs" ;
+  triage:description "docs/phase-Y/delivery-state-machines.md §1 specifies the required NonClaudeHarnessNewMessageState enum with states: Received, PersistSqlite, SqliteCommitted, DeliverOriginal, DeliverErrorMessage, RunPrimaryNudge, RunErrorNudge, Delivered, Failed. The implementation defines ClaudeHarnessNewMessageState but the corresponding non-Claude machine enum is absent from delivery_policy.rs. The delivery-state-machines.md §Required QA Artifacts section requires this enum. Fix: add NonClaudeHarnessNewMessageState to delivery_policy.rs with all required states; apply #[expect(dead_code, reason = ...)] if not all transitions are yet exercised." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/delivery_policy.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-Y6-004/pY-s6/1> .
+
+<urn:atm:triage:occurrence/ATM-QA-Y6-004/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/delivery_policy.rs" ;
+  triage:line 1 ;
+  triage:snippet "NonClaudeHarnessNewMessageState enum absent — delivery-state-machines.md §1 and §Required QA Artifacts require it" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/2b808428> .
+
+<urn:atm:triage:worktree/pY-s6/2b808428>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

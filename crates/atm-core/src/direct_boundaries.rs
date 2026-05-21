@@ -1,5 +1,6 @@
 use crate::boundary::{
     ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse,
+    InboxExportAppendMessageSetRequest, InboxExportAppendMessageSetResponse,
     InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
     InboxExportReexportMessageResponse, InboxIngressDiagnosticsRequest,
     InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
@@ -44,5 +45,14 @@ pub fn export_source_files(
 pub fn reexport_messages(
     request: InboxExportReexportMessageRequest,
 ) -> Result<InboxExportReexportMessageResponse, AtmError> {
+    // Yb Y.10 constrains full mailbox re-export to explicit repair/rebuild
+    // seams. Normal runtime delivery must use append-only Claude execution or
+    // the typed non-Claude outbound boundary instead.
     crate::boundary_support::reexport_messages(request)
+}
+
+pub fn append_message_set(
+    request: InboxExportAppendMessageSetRequest,
+) -> Result<InboxExportAppendMessageSetResponse, AtmError> {
+    crate::boundary_support::append_message_set(request)
 }

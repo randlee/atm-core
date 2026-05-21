@@ -2,6 +2,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use super::DaemonRequestDispatcher;
+use crate::notification_runtime::NotificationRuntime;
 use crate::runtime_status_cache::{RuntimeStatusCache, build_runtime_status_cache_state};
 use crate::sqlite_observability::DaemonSqliteObservability;
 
@@ -29,14 +30,15 @@ impl DaemonRequestDispatcher {
             Arc::clone(&sqlite_observability),
         ) {
             Ok(boundary) => {
-                if let Err(error) = build_runtime_status_cache_state(None, boundary.roster_store())
-                    .and_then(|state| status_cache.replace_state(state))
-                {
-                    tracing::warn!(
-                        %error,
-                        "failed to hydrate test runtime status cache from sqlite roster state"
-                    );
-                    status_cache.mark_sqlite_unavailable();
+                match build_runtime_status_cache_state(None, boundary.roster_store()) {
+                    Ok(state) => status_cache.publish_state(state),
+                    Err(error) => {
+                        tracing::warn!(
+                            %error,
+                            "failed to hydrate test runtime status cache from sqlite roster state"
+                        );
+                        status_cache.mark_sqlite_unavailable();
+                    }
                 }
                 Some(boundary)
             }
@@ -58,13 +60,20 @@ impl DaemonRequestDispatcher {
             crate::DaemonSubsystem::RuntimeHealth,
             Arc::clone(&runtime_observability),
         );
+        let notification_runtime = NotificationRuntime::new_with_observability(
+            crate::SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
+        );
+        notification_runtime.set_liveness_override_for_test(Some(
+            crate::notification_runtime::NotificationWorkerLiveness::Live,
+        ));
         Self {
-            home_dir: home_dir.clone(),
+            home_dir: crate::AtmHomeDir::from_path_for_test(home_dir.clone()),
             observability: runtime_observability,
             advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability,
             status_cache,
             sqlite_boundary,
+            notification_runtime,
             advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new_with_observability(
                 advisory_runtime_observability,
             ),

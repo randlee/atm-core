@@ -32,6 +32,9 @@ use atm_daemon_client::{
     BootstrapTraceability, DaemonSupervisor, parse_bootstrap_agent, parse_bootstrap_team,
 };
 
+#[cfg(test)]
+use atm_core::send::SendCommandOutcome;
+
 mod runtime;
 mod transport;
 
@@ -1008,7 +1011,7 @@ mod tests {
                     team: TEST_TEAM.parse().expect("team"),
                     agent: "agent-b".parse().expect("agent"),
                     sender: request.sender_override.expect("sender"),
-                    outcome: "sent".to_string(),
+                    outcome: SendCommandOutcome::Sent,
                     message_id: AtmMessageId::new(),
                     requires_ack: false,
                     task_id: None,
@@ -1056,7 +1059,7 @@ mod tests {
         let send_outcome = client
             .send_message(send_request(root.path()))
             .expect("send");
-        assert_eq!(send_outcome.outcome, "sent");
+        assert_eq!(send_outcome.outcome, SendCommandOutcome::Sent);
 
         let read_outcome = client.read_message(read_query(root.path())).expect("read");
         assert_eq!(read_outcome.count, 1);

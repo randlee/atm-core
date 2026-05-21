@@ -4,12 +4,13 @@
 use std::collections::HashSet;
 
 use crate::boundary::{
-    ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse,
-    InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
-    InboxExportReexportMessageResponse, InboxIngressDiagnosticsRequest,
-    InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
-    InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest, InboxIngressImportResponse,
-    InboxSourceFileRecord,
+    ClaudeCompatibilityDeliveryMode, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
+    ConfigTeamLoadResponse, InboxExportAppendMessageSetRequest,
+    InboxExportAppendMessageSetResponse, InboxExportRecordRequest, InboxExportRecordResponse,
+    InboxExportReexportMessageRequest, InboxExportReexportMessageResponse,
+    InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
+    InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
+    InboxIngressImportRequest, InboxIngressImportResponse, InboxSourceFileRecord,
 };
 use crate::config;
 use crate::error::AtmError;
@@ -169,6 +170,8 @@ pub(crate) fn export_source_files(
 pub(crate) fn reexport_messages(
     request: InboxExportReexportMessageRequest,
 ) -> Result<InboxExportReexportMessageResponse, AtmError> {
+    // This seam is rebuild-only after Yb Y.10. Runtime send/ack delivery must
+    // not route through full mailbox rewrite.
     let wrote_messages = request.messages.len();
     mailbox::export_compat_mailbox_projection(&request.path, &request.messages).map_err(
         |error| {
@@ -183,4 +186,42 @@ pub(crate) fn reexport_messages(
         },
     )?;
     Ok(InboxExportReexportMessageResponse { wrote_messages })
+}
+
+pub(crate) fn append_message_set(
+    request: InboxExportAppendMessageSetRequest,
+) -> Result<InboxExportAppendMessageSetResponse, AtmError> {
+    let wrote_messages = request.messages.len();
+    match request.mode {
+        ClaudeCompatibilityDeliveryMode::RecoveredLogicalMessageSet => {
+            let export_policy = mailbox::store::export_policy_for_path(&request.path).map_err(
+                |error| {
+                    AtmError::daemon_unavailable(format!(
+                        "daemon inbox export could not resolve recovered export policy for {}",
+                        request.path.display()
+                    ))
+                    .with_recovery(
+                        "Fix the ATM config beside the destination mailbox projection before retrying recovered Claude compatibility delivery.",
+                    )
+                    .with_source(error)
+                },
+            )?;
+            mailbox::store::append_compat_mailbox_message_set(
+                &request.path,
+                export_policy,
+                &request.messages,
+            )
+            .map_err(|error| {
+                AtmError::daemon_unavailable(format!(
+                    "daemon inbox export could not materialize recovered logical message set for {}",
+                    request.path.display()
+                ))
+                .with_recovery(
+                    "Fix the destination mailbox projection path or file permissions before retrying recovered Claude compatibility delivery.",
+                )
+                .with_source(error)
+            })?;
+        }
+    }
+    Ok(InboxExportAppendMessageSetResponse { wrote_messages })
 }

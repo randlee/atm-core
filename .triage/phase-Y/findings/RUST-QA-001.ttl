@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RUST-QA-001>
+  a triage:Finding ;
+  triage:findingId "RUST-QA-001" ;
+  triage:title "output.rs:564 pre-existing #[allow(dead_code)] on render_runtime_member_state" ;
+  triage:description "crates/atm/src/output.rs:564 has #[allow(dead_code)] on render_runtime_member_state — pre-existing suppression. Fix: wire or remove." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RUST-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm/src/output.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-001/pY-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-001/integrate-Y/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s1/b4735abf> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-Y/292b8e38> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s1/b4735abf> ;
+  triage:triagedAt "2026-05-16T00:00:00Z"^^xsd:dateTime .
+
+<urn:atm:triage:occurrence/RUST-QA-001/pY-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/output.rs" ;
+  triage:line 564 ;
+  triage:snippet "#[allow(dead_code)] fn render_runtime_member_state(state: RuntimeMemberState) -> &'static str" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s1-atm-help-and-ux" ;
+  triage:headSha "b4735abf" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s1/b4735abf> .
+
+<urn:atm:triage:occurrence/RUST-QA-001/integrate-Y/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/output.rs" ;
+  triage:line 544 ;
+  triage:snippet "#[allow(dead_code)] fn render_runtime_member_state(state: RuntimeMemberState) -> &'static str" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-Y" ;
+  triage:headSha "292b8e38" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-Y/292b8e38> .
+
+<urn:atm:triage:worktree/pY-s1/b4735abf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s1-atm-help-and-ux" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s1-atm-help-and-ux" ;
+  triage:headSha "b4735abf" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-Y/292b8e38>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "292b8e38" ;
+  triage:orderIndex 2 .

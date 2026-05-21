@@ -1,7 +1,7 @@
 ---
 id: Y.12
 title: Claude Degraded Delivery Set Closure
-status: planned
+status: complete
 branch: feature/pYc-s12-claude-degraded-delivery-set-closure
 worktree: ../atm-core-worktrees/feature/pYc-s12-claude-degraded-delivery-set-closure
 target: integrate/phase-Y
@@ -157,6 +157,13 @@ fn claude_compatibility_delivery_mode_for_disposition(
 
 ```rust
 pub(crate) trait ClaudeInboxWriter {
+    fn append_claude_inbox_message(
+        &self,
+        inbox_path: &Path,
+        recipient: &DeliveryRecipientSnapshot,
+        message: &MessageEnvelope,
+    ) -> Result<(), AtmError>;
+
     fn append_claude_message_set(
         &self,
         inbox_path: &Path,
@@ -194,7 +201,8 @@ fn execute_claude_delivery<R: ClaudeInboxWriter + ?Sized>(
   - it must not be reused as proof that recovered logical-message-set export is
     allowed to partially succeed
 - `claude_compatibility_delivery_mode_for_disposition(...)` returns
-  `AtmError::validation(...)` with `AtmErrorCode::MessageValidationFailed`
+  `AtmError::new(AtmErrorKind::Internal, ...)` with
+  `AtmErrorCode::InternalError`
   when called with any `DeliveryPlanDisposition` other than
   `DeliveryPlanDisposition::SqliteFailedRecovered`; non-recovered dispositions
   are invalid inputs for the recovered Claude message-set mapping seam

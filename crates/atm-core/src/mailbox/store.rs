@@ -11,19 +11,52 @@ use crate::schema::MessageEnvelope;
 use crate::schema::inbox_message::SharedInboxExportPolicy;
 use crate::types::{AgentName, TeamName};
 
+const MAX_RECOVERED_MESSAGE_SET_COUNT: usize = 2;
+const MAX_RECOVERED_MESSAGE_SET_BYTES: usize = 1024 * 1024;
+const MAX_COMPAT_MAILBOX_FILE_BYTES: u64 = 8 * 1024 * 1024;
+
 /// Write one compatibility mailbox file projection through the mailbox layer.
 ///
 /// The mailbox layer owns writes to the Claude-owned inbox compatibility
 /// surface. Callers should express mailbox intent here instead of reaching
 /// down to low-level atomic replacement directly.
+///
+/// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 pub(crate) fn write_compat_mailbox_projection(
     path: &Path,
     messages: &[MessageEnvelope],
 ) -> Result<(), AtmError> {
-    let export_policy = load_export_policy(path)?;
+    let export_policy = export_policy_for_path(path)?;
     write_compat_mailbox_projection_with_policy(path, messages, export_policy)
 }
 
+pub(crate) fn append_compat_mailbox_message(
+    path: &Path,
+    message: &MessageEnvelope,
+) -> Result<(), AtmError> {
+    let export_policy = export_policy_for_path(path)?;
+    atomic::append_message(path, message, export_policy)
+}
+
+/// Recovered-delivery only — atomically materializes one logical message set
+/// after loading the existing compatibility inbox projection.
+pub(crate) fn append_compat_mailbox_message_set(
+    path: &Path,
+    export_policy: SharedInboxExportPolicy,
+    messages: &[MessageEnvelope],
+) -> Result<(), AtmError> {
+    validate_recovered_message_set(messages)?;
+    validate_compat_mailbox_file_size(path)?;
+    let mut existing_messages = if path.exists() {
+        crate::mailbox::load_compat_mailbox_messages(path)?
+    } else {
+        Vec::new()
+    };
+    existing_messages.extend(messages.iter().cloned());
+    write_compat_mailbox_projection_with_policy(path, &existing_messages, export_policy)
+}
+
+/// Repair/rebuild only — not reachable from normal runtime send or ack paths.
 fn write_compat_mailbox_projection_with_policy(
     path: &Path,
     messages: &[MessageEnvelope],
@@ -44,7 +77,7 @@ pub(crate) fn write_compat_source_projections(source_files: &[SourceFile]) -> Re
         let export_policy = if let Some(policy) = export_policy_by_dir.get(&config_dir).copied() {
             policy
         } else {
-            let policy = load_export_policy(&source.path)?;
+            let policy = export_policy_for_path(&source.path)?;
             export_policy_by_dir.insert(config_dir, policy);
             policy
         };
@@ -53,7 +86,7 @@ pub(crate) fn write_compat_source_projections(source_files: &[SourceFile]) -> Re
     Ok(())
 }
 
-fn load_export_policy(path: &Path) -> Result<SharedInboxExportPolicy, AtmError> {
+pub(crate) fn export_policy_for_path(path: &Path) -> Result<SharedInboxExportPolicy, AtmError> {
     let config_dir = path.parent().unwrap_or_else(|| Path::new("."));
     let atm_authored_body_export_max_bytes = config::load_config(config_dir)?
         .map(|config| config.claude_jsonl_body_export_max_bytes)
@@ -61,6 +94,48 @@ fn load_export_policy(path: &Path) -> Result<SharedInboxExportPolicy, AtmError> 
     Ok(SharedInboxExportPolicy {
         atm_authored_body_export_max_bytes,
     })
+}
+
+fn validate_recovered_message_set(messages: &[MessageEnvelope]) -> Result<(), AtmError> {
+    if messages.len() > MAX_RECOVERED_MESSAGE_SET_COUNT {
+        return Err(AtmError::validation(format!(
+            "recovered Claude logical message set exceeded {MAX_RECOVERED_MESSAGE_SET_COUNT} messages"
+        ))
+        .with_recovery(
+            "Keep recovered Claude compatibility delivery to the original message plus one optional companion error message before retrying.",
+        ));
+    }
+
+    let encoded = serde_json::to_vec(messages).map_err(|error| {
+        AtmError::mailbox_write("failed to measure recovered Claude logical message set size")
+            .with_source(error)
+    })?;
+    if encoded.len() > MAX_RECOVERED_MESSAGE_SET_BYTES {
+        return Err(AtmError::validation(format!(
+            "recovered Claude logical message set exceeded {MAX_RECOVERED_MESSAGE_SET_BYTES} bytes"
+        ))
+        .with_recovery(
+            "Reduce the recovered Claude message bodies or attachments before retrying compatibility export.",
+        ));
+    }
+
+    Ok(())
+}
+
+fn validate_compat_mailbox_file_size(path: &Path) -> Result<(), AtmError> {
+    let Ok(metadata) = std::fs::metadata(path) else {
+        return Ok(());
+    };
+    if metadata.len() > MAX_COMPAT_MAILBOX_FILE_BYTES {
+        return Err(AtmError::validation(format!(
+            "compatibility inbox {} exceeded the {MAX_COMPAT_MAILBOX_FILE_BYTES}-byte recovered export ceiling",
+            path.display()
+        ))
+        .with_recovery(
+            "Run the explicit repair/rebuild inbox projection path or reduce retained inbox size before retrying recovered Claude compatibility delivery.",
+        ));
+    }
+    Ok(())
 }
 
 /// Load the current inbox projection set without mailbox locks.
@@ -77,13 +152,17 @@ pub(crate) fn load_source_projections(
 mod tests {
     use tempfile::tempdir;
 
-    use super::{write_compat_mailbox_projection, write_compat_source_projections};
+    use super::{
+        append_compat_mailbox_message, append_compat_mailbox_message_set,
+        write_compat_mailbox_projection, write_compat_source_projections,
+    };
     use crate::mailbox::load_compat_mailbox_messages;
     use crate::mailbox::source::SourceFile;
     use crate::roles::ROLE_TEAM_LEAD;
+    use crate::schema::inbox_message::SharedInboxExportPolicy;
     use crate::schema::{AtmMessageId, MessageEnvelope};
-    use crate::test_support::{TEST_QA, TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use crate::test_support::{TEST_QA, TEST_SENDER};
+    use crate::types::{AgentName, IsoTimestamp};
 
     #[test]
     fn write_compat_mailbox_projection_rewrites_mailbox_array_with_only_new_messages() {
@@ -102,9 +181,19 @@ mod tests {
         let encoded: Vec<serde_json::Value> = serde_json::from_str(&raw).expect("json array");
         assert_eq!(encoded.len(), 2);
         assert!(raw.ends_with('\n'));
-        assert_eq!(
-            load_compat_mailbox_messages(&path).expect("read mailbox"),
-            messages
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), messages.len());
+        assert_eq!(read_back[0].text, messages[0].text);
+        assert_eq!(read_back[1].text, messages[1].text);
+        assert!(
+            read_back
+                .iter()
+                .all(|message| message.source_team.is_none())
+        );
+        assert!(
+            read_back.iter().all(
+                |message| message.pending_ack_at.is_none() && message.acknowledged_at.is_none()
+            )
         );
     }
 
@@ -137,6 +226,90 @@ mod tests {
     }
 
     #[test]
+    fn append_compat_mailbox_message_writes_jsonl_records() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
+        let first = sample_message(ROLE_TEAM_LEAD, "first line");
+        let second = sample_message(TEST_QA, "second line");
+
+        append_compat_mailbox_message(&path, &first).expect("append first");
+        append_compat_mailbox_message(&path, &second).expect("append second");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        assert_eq!(raw.lines().count(), 2);
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), 2);
+        assert_eq!(read_back[0].text, first.text);
+        assert_eq!(read_back[1].text, second.text);
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_exports_retrieval_stub_when_config_cap_is_zero() {
+        let tempdir = tempdir().expect("tempdir");
+        std::fs::write(
+            tempdir.path().join(".atm.toml"),
+            "[atm]\nclaude_jsonl_body_export_max_bytes = 0\n",
+        )
+        .expect("config");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
+        let mut message = sample_message(ROLE_TEAM_LEAD, "full body retained elsewhere");
+        let message_id = message.message_id.expect("message id");
+        message.summary = Some("stub summary".to_string());
+
+        append_compat_mailbox_message(&path, &message).expect("append message");
+
+        let raw = std::fs::read_to_string(&path).expect("mailbox contents");
+        let first_line = raw.lines().next().expect("jsonl record");
+        let encoded: serde_json::Value = serde_json::from_str(first_line).expect("json object");
+        assert_eq!(
+            encoded["text"],
+            serde_json::Value::String(format!("atm read --message-id {message_id}"))
+        );
+        assert_eq!(
+            encoded["summary"],
+            serde_json::Value::String("stub summary".into())
+        );
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_set_appends_existing_messages_atomically() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
+        let existing = sample_message(ROLE_TEAM_LEAD, "existing");
+        let appended = [
+            sample_message(TEST_QA, "new first"),
+            sample_message(TEST_SENDER, "new second"),
+        ];
+        let export_policy = SharedInboxExportPolicy::default();
+
+        append_compat_mailbox_message(&path, &existing).expect("seed existing");
+        append_compat_mailbox_message_set(&path, export_policy, &appended).expect("append set");
+
+        let read_back = load_compat_mailbox_messages(&path).expect("read mailbox");
+        assert_eq!(read_back.len(), 3);
+        assert_eq!(read_back[0].text, existing.text);
+        assert_eq!(read_back[1].text, appended[0].text);
+        assert_eq!(read_back[2].text, appended[1].text);
+    }
+
+    #[test]
+    fn append_compat_mailbox_message_set_rejects_more_than_two_messages() {
+        let tempdir = tempdir().expect("tempdir");
+        let path = tempdir.path().join(format!("{TEST_SENDER}.jsonl"));
+        let appended = [
+            sample_message(TEST_QA, "new first"),
+            sample_message(TEST_SENDER, "new second"),
+            sample_message(ROLE_TEAM_LEAD, "new third"),
+        ];
+
+        let error =
+            append_compat_mailbox_message_set(&path, SharedInboxExportPolicy::default(), &appended)
+                .expect_err("reject oversized recovered message set");
+        assert!(error.is_validation());
+        assert!(error.message.contains("exceeded 2 messages"));
+    }
+
+    #[test]
     fn write_compat_source_projections_commits_each_source_path() {
         let tempdir = tempdir().expect("tempdir");
         let left_path = tempdir.path().join(format!("{TEST_SENDER}.json"));
@@ -159,14 +332,15 @@ mod tests {
         ])
         .expect("commit source files");
 
-        assert_eq!(
-            load_compat_mailbox_messages(&left_path).expect("left inbox"),
-            left_messages
-        );
-        assert_eq!(
-            load_compat_mailbox_messages(&right_path).expect("right inbox"),
-            right_messages
-        );
+        let left = load_compat_mailbox_messages(&left_path).expect("left inbox");
+        let right = load_compat_mailbox_messages(&right_path).expect("right inbox");
+        assert_eq!(left.len(), left_messages.len());
+        assert_eq!(right.len(), right_messages.len());
+        assert_eq!(left[0].text, left_messages[0].text);
+        assert_eq!(right[0].text, right_messages[0].text);
+        assert_eq!(right[1].text, right_messages[1].text);
+        assert!(left.iter().all(|message| message.source_team.is_none()));
+        assert!(right.iter().all(|message| message.source_team.is_none()));
     }
 
     #[test]
@@ -210,7 +384,7 @@ mod tests {
             text: text.to_string(),
             timestamp: IsoTimestamp::now(),
             read: false,
-            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team name")),
+            source_team: None,
             summary: None,
             message_id: Some(message_id),
             pending_ack_at: None,

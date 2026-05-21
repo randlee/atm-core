@@ -1,3 +1,4 @@
+use arc_swap::ArcSwap;
 use atm_core::boundary::{
     InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, WatchEventSource,
     WatchSubscriptionRequest,
@@ -6,12 +7,16 @@ use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
-use std::sync::{Arc, Condvar, Mutex, mpsc};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
+use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
+use crate::worker_support::{JoinHandleOwner, reap_retained_join_helpers, retain_join_helper};
 use crate::{DaemonSubsystem, SubsystemObservability};
 
+const DEFAULT_RECONCILE_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_RECONCILE_DEBOUNCE: Duration = Duration::from_millis(25);
 const DEFAULT_RECONCILE_COMPLETION_TIMEOUT: Duration = Duration::from_secs(5);
 const DEFAULT_RECONCILE_IDLE_INTERVAL: Duration = Duration::from_millis(50);
@@ -19,86 +24,73 @@ const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
 const MAX_RECONCILE_FINGERPRINT_KEYS: usize = 1024;
 const MAX_RECONCILE_FINGERPRINTS_PER_KEY: usize = 256;
 const MAX_RECONCILE_WAITERS: usize = 1024;
-#[cfg(not(test))]
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
-#[cfg(test)]
-const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_millis(100);
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReconcileWorkerLiveness {
+    Live,
+    Degraded,
+    Stopped,
+}
+
+#[derive(Debug, Clone)]
+pub(crate) struct ReconcileRuntimeStatus {
+    started: bool,
+    shutdown_requested: bool,
+    shutdown_started_at: Option<Instant>,
+    degraded_message: Option<Arc<str>>,
+    worker_liveness: ReconcileWorkerLiveness,
+}
+
+impl Default for ReconcileRuntimeStatus {
+    fn default() -> Self {
+        Self {
+            started: false,
+            shutdown_requested: false,
+            shutdown_started_at: None,
+            degraded_message: None,
+            worker_liveness: ReconcileWorkerLiveness::Stopped,
+        }
+    }
+}
 
 #[derive(Clone)]
 pub(crate) struct ReconcileRuntime {
     inner: Arc<ReconcileRuntimeInner>,
 }
 
-type ReconcileExecutor =
-    Arc<dyn Fn(&ReconcileRequest) -> Result<ReconcileResult, AtmError> + Send + Sync>;
-
 struct ReconcileRuntimeInner {
-    // Worker thread, reconcile callers, and shutdown path all access state
-    // concurrently; Mutex+Condvar guards the lifecycle and pending/completed
-    // reconcile registries.
-    state: Mutex<ReconcileState>,
-    wake: Condvar,
-    #[cfg(test)]
-    pending_changed: Condvar,
+    command_tx: OnceLock<SyncSender<ReconcileCommand>>,
+    status: Arc<ArcSwap<ReconcileRuntimeStatus>>,
+    worker: Arc<JoinHandleOwner>,
+    queue_capacity: usize,
     debounce: Duration,
     executor: ReconcileExecutor,
+    notification_sink: Arc<dyn NotificationSink + Send + Sync>,
+    shutdown_deadline: Duration,
     observability: SubsystemObservability,
-    // Lock ordering invariant: if code ever needs both runtime state and the
-    // fingerprint registry, it must drop `state` before locking this mutex.
-    // The registry is ancillary reconcile-emission state and must never nest
-    // inside the primary runtime lifecycle lock.
-    #[cfg_attr(not(test), allow(dead_code))]
-    notification_fingerprints: Arc<Mutex<NotificationFingerprintRegistry>>,
+    start_claimed: AtomicBool,
 }
 
-#[derive(Default)]
-struct ReconcileState {
-    started: bool,
-    shutdown: bool,
-    worker: Option<JoinHandle<()>>,
-    next_waiter_id: u64,
-    pending_epoch: u64,
-    pending: HashMap<ReconcileKey, PendingReconcile>,
-    pending_order: VecDeque<ReconcileKey>,
-    active_waiters: HashSet<u64>,
-    completed: HashMap<u64, ReconcileOutcome>,
+type ReconcileExecutor =
+    Arc<dyn Fn(&ReconcileRequest) -> Result<ReconcileExecution, AtmError> + Send + Sync>;
+type ReconcileReplyRx = Receiver<Result<ReconcileResult, AtmError>>;
+type ReconcileDispatch = (
+    ReconcileReplyRx,
+    atm_core::types::TeamName,
+    atm_core::types::AgentName,
+);
+
+pub(crate) struct ReconcileExecution {
+    result: ReconcileResult,
+    current_fingerprints: Option<HashSet<NotificationFingerprint>>,
 }
 
-impl ReconcileState {
-    fn release_waiter(&mut self, waiter_id: u64) {
-        self.active_waiters.remove(&waiter_id);
-        self.completed.remove(&waiter_id);
-        for pending in self.pending.values_mut() {
-            pending.waiters.retain(|candidate| *candidate != waiter_id);
-        }
-        self.pending
-            .retain(|_, pending| !pending.waiters.is_empty());
-        self.pending_order
-            .retain(|key| self.pending.contains_key(key));
-    }
-
-    #[cfg(test)]
-    fn counts(&self) -> (usize, usize, usize) {
-        (
-            self.pending.len(),
-            self.pending_order.len(),
-            self.completed.len(),
-        )
-    }
-
-    #[cfg(test)]
-    fn waiter_count(&self) -> usize {
-        self.pending
-            .values()
-            .map(|pending| pending.waiters.len())
-            .sum()
-    }
-}
-
-#[derive(Clone)]
-enum ReconcileOutcome {
-    Success(ReconcileResult),
-    Failure(ReconcileFailureSnapshot),
+pub(crate) enum ReconcileCommand {
+    Reconcile {
+        request: ReconcileRequest,
+        reply_tx: SyncSender<Result<ReconcileResult, AtmError>>,
+    },
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -110,41 +102,68 @@ struct ReconcileKey {
 
 struct PendingReconcile {
     request: ReconcileRequest,
-    waiters: Vec<u64>,
+    replies: Vec<SyncSender<Result<ReconcileResult, AtmError>>>,
+}
+
+#[derive(Default)]
+struct ReconcileWorkerState {
+    pending_epoch: u64,
+    pending: HashMap<ReconcileKey, PendingReconcile>,
+    pending_order: VecDeque<ReconcileKey>,
+    notification_fingerprints: NotificationFingerprintRegistry,
+}
+
+impl ReconcileWorkerState {
+    fn waiter_count(&self) -> usize {
+        self.pending
+            .values()
+            .map(|pending| pending.replies.len())
+            .sum()
+    }
 }
 
 #[derive(Default)]
 struct NotificationFingerprintRegistry {
-    // Each key retains the distinct fingerprint strings already emitted for one
-    // reconcile target so duplicate inbox projections do not re-notify until a
-    // genuinely new fingerprint appears.
-    entries: HashMap<ReconcileKey, HashSet<String>>,
+    entries: HashMap<ReconcileKey, HashSet<NotificationFingerprint>>,
     order: VecDeque<ReconcileKey>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct NotificationFingerprint(String);
+
+impl NotificationFingerprint {
+    fn new(value: String) -> Option<Self> {
+        if value.is_empty() {
+            None
+        } else {
+            Some(Self(value))
+        }
+    }
+}
+
 #[derive(Clone)]
-struct ReconcileFailureSnapshot {
+struct ReconcileReplyErrorSnapshot {
     code: atm_core::error_codes::AtmErrorCode,
     message: String,
     recovery: Option<String>,
 }
 
-impl From<AtmError> for ReconcileFailureSnapshot {
-    fn from(error: AtmError) -> Self {
+impl From<&AtmError> for ReconcileReplyErrorSnapshot {
+    fn from(error: &AtmError) -> Self {
         Self {
             code: error.code,
-            message: error.message,
-            recovery: error.recovery,
+            message: error.message.clone(),
+            recovery: error.recovery.clone(),
         }
     }
 }
 
-impl ReconcileFailureSnapshot {
-    fn to_error(&self) -> AtmError {
+impl ReconcileReplyErrorSnapshot {
+    fn into_error(self) -> AtmError {
         ProtocolErrorEnvelope {
             code: self.code,
-            message: self.message.clone(),
-            recovery: self.recovery.clone(),
+            message: self.message,
+            recovery: self.recovery,
         }
         .into_atm_error()
     }
@@ -181,13 +200,7 @@ impl ReconcileRuntime {
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
         observability: SubsystemObservability,
     ) -> Self {
-        // Fingerprints must survive across executor invocations so duplicate
-        // reconcile cycles can compare the newest inbox projection with the
-        // previous one before deciding whether to emit a notification.
-        let notification_fingerprints =
-            Arc::new(Mutex::new(NotificationFingerprintRegistry::default()));
-        let notification_fingerprints_for_executor = Arc::clone(&notification_fingerprints);
-        Self::new_with_executor(
+        Self::new_with_executor_and_sink(
             Arc::new(move |request| {
                 let batch = watch_source.poll(WatchSubscriptionRequest {
                     home_dir: request.home_dir.clone(),
@@ -201,72 +214,71 @@ impl ReconcileRuntime {
                         agent: request.agent.clone(),
                     },
                 )?;
-                if should_emit_reconcile_notification(
-                    request,
-                    &import,
-                    inbox_ingress.as_ref(),
-                    notification_fingerprints_for_executor.as_ref(),
-                )? {
-                    notification_sink.deliver(NotificationEvent {
-                        kind: NotificationKind::ReconcileComplete,
-                        detail: format!(
-                            "observed_paths={} imported_sources={}",
-                            batch.paths.len(),
-                            import.source_files.len()
-                        ),
-                        team: Some(request.team.clone()),
-                        agent: Some(request.agent.clone()),
-                    })?;
-                }
-                Ok(ReconcileResult {
-                    observed_paths: batch.paths.len(),
-                    imported_sources: import.source_files.len(),
+                Ok(ReconcileExecution {
+                    result: ReconcileResult {
+                        observed_paths: batch.paths.len(),
+                        imported_sources: import.source_files.len(),
+                    },
+                    current_fingerprints: compute_reconcile_notification_fingerprints(
+                        &import,
+                        inbox_ingress.as_ref(),
+                    ),
                 })
             }),
+            notification_sink,
+            DEFAULT_RECONCILE_QUEUE_CAPACITY,
             DEFAULT_RECONCILE_DEBOUNCE,
-            notification_fingerprints,
+            RECONCILE_SHUTDOWN_DEADLINE,
             observability,
         )
     }
 
-    fn new_with_executor(
+    fn new_with_executor_and_sink(
         executor: ReconcileExecutor,
+        notification_sink: Arc<dyn NotificationSink + Send + Sync>,
+        queue_capacity: usize,
         debounce: Duration,
-        notification_fingerprints: Arc<Mutex<NotificationFingerprintRegistry>>,
+        shutdown_deadline: Duration,
         observability: SubsystemObservability,
     ) -> Self {
+        assert!(
+            queue_capacity >= 1,
+            "reconcile runtime queue_capacity must be at least 1"
+        );
+        assert!(
+            !shutdown_deadline.is_zero(),
+            "reconcile runtime shutdown_deadline must be greater than zero"
+        );
         Self {
             inner: Arc::new(ReconcileRuntimeInner {
-                state: Mutex::new(ReconcileState::default()),
-                wake: Condvar::new(),
-                #[cfg(test)]
-                pending_changed: Condvar::new(),
+                command_tx: OnceLock::new(),
+                status: Arc::new(ArcSwap::from_pointee(ReconcileRuntimeStatus::default())),
+                worker: Arc::new(JoinHandleOwner::default()),
+                queue_capacity,
                 debounce,
                 executor,
+                notification_sink,
+                shutdown_deadline,
                 observability,
-                notification_fingerprints,
+                start_claimed: AtomicBool::new(false),
             }),
         }
     }
 
     pub(crate) fn start(&self) -> Result<(), AtmError> {
-        let mut state = self.inner.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
-                "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
-            )
-        })?;
-        if state.started {
+        reap_retained_join_helpers();
+        if self.inner.start_claimed.swap(true, Ordering::AcqRel) {
             return Ok(());
         }
-        state.started = true;
-        state.shutdown = false;
-        drop(state);
+
+        let (command_tx, command_rx) = mpsc::sync_channel(self.inner.queue_capacity);
 
         let inner = Arc::clone(&self.inner);
         let handle = thread::Builder::new()
             .name("atm-daemon-reconcile".to_string())
-            .spawn(move || reconcile_worker_loop(inner))
+            .spawn(move || reconcile_worker_loop(inner, command_rx))
             .map_err(|source| {
+                self.inner.start_claimed.store(false, Ordering::Release);
                 self.inner.observability.emit_or_warn(
                     "start",
                     "failed",
@@ -275,19 +287,28 @@ impl ReconcileRuntime {
                 AtmError::daemon_unavailable("failed to spawn reconcile runtime worker")
                     .with_source(source)
             })?;
-        let mut state = match self.inner.state.lock() {
-            Ok(state) => state,
-            Err(_) => {
-                let _ = handle.join();
-                return Err(
-                    AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
-                        .with_recovery(
-                            "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
-                        ),
-                );
-            }
-        };
-        state.worker = Some(handle);
+
+        if self.inner.command_tx.set(command_tx).is_err() {
+            self.inner.start_claimed.store(false, Ordering::Release);
+            return Err(AtmError::daemon_unavailable(
+                "reconcile runtime command sender was already initialized during startup",
+            )
+            .with_recovery(
+                "Restart atm-daemon; the reconcile worker lane already claimed its bounded command-channel handoff.",
+            ));
+        }
+        self.inner.worker.install(handle).inspect_err(|_| {
+            self.inner.start_claimed.store(false, Ordering::Release);
+        })?;
+        self.inner.mark_started();
+        tracing::info!(
+            subsystem = "reconcile",
+            action = "worker_start",
+            outcome = "configured",
+            queue_capacity = self.inner.queue_capacity,
+            debounce_ms = self.inner.debounce.as_millis(),
+            "reconcile runtime worker configuration accepted"
+        );
         self.inner
             .observability
             .emit_or_warn("start", "ok", "reconcile runtime worker started");
@@ -295,134 +316,34 @@ impl ReconcileRuntime {
     }
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
-        let handle = {
-            let mut state = self.inner.state.lock().map_err(|_| {
-                AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
-                    "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
-                )
-            })?;
-            state.shutdown = true;
-            self.inner.wake.notify_all();
-            state.worker.take()
+        let Some(handle) = self.take_worker_for_shutdown()? else {
+            self.inner.mark_shutdown_requested();
+            self.inner.mark_worker_stopped();
+            return Ok(());
         };
-        if let Some(handle) = handle {
-            let worker_thread_id = handle.thread().id();
-            let (result_rx, join_helper) = spawn_reconcile_join_helper(handle)?;
-            match wait_for_reconcile_join(result_rx) {
-                Ok(Ok(())) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "ok",
-                        "reconcile runtime worker shut down cleanly",
-                    );
-                }
-                Ok(Err(_)) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "failed",
-                        "reconcile runtime worker panicked during shutdown",
-                    );
-                    return Err(AtmError::daemon_unavailable(
-                        "reconcile runtime worker panicked during shutdown",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon; the reconcile background lane crashed while shutting down.",
-                    ));
-                }
-                Err(ReconcileJoinStatus::Timeout) => {
-                    drop(join_helper);
-                    tracing::warn!(
-                        thread_id = ?worker_thread_id,
-                        timeout_ms = RECONCILE_SHUTDOWN_DEADLINE.as_millis(),
-                        "reconcile runtime worker exceeded shutdown deadline; detaching join helper"
-                    );
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "degraded",
-                        "reconcile runtime worker exceeded its shutdown deadline",
-                    );
-                    return Err(AtmError::daemon_unavailable(
-                        "reconcile runtime worker exceeded the bounded shutdown deadline",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon after the reconcile background lane becomes responsive again.",
-                    ));
-                }
-                Err(ReconcileJoinStatus::Disconnected) => {
-                    let _ = join_helper.join();
-                    self.inner.observability.emit_or_warn(
-                        "shutdown",
-                        "failed",
-                        "reconcile runtime join helper disconnected during shutdown",
-                    );
-                    tracing::warn!(
-                        thread_id = ?worker_thread_id,
-                        "reconcile runtime worker join helper exited before reporting shutdown status"
-                    );
-                    return Err(AtmError::daemon_unavailable(
-                        "reconcile runtime join helper disconnected during shutdown",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon; the reconcile background lane did not report bounded shutdown status cleanly.",
-                    ));
-                }
-            }
-        }
-        Ok(())
+        self.await_worker_shutdown(handle)
+    }
+
+    #[cfg(test)]
+    pub(crate) fn worker_liveness(&self) -> ReconcileWorkerLiveness {
+        self.inner.status_snapshot().worker_liveness
     }
 
     pub(crate) fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
-        let request_team = request.team.clone();
-        let request_agent = request.agent.clone();
-        let waiter_id = self.enqueue_reconcile_request(&request, &request_team, &request_agent)?;
-        self.wait_for_reconcile_result(waiter_id, &request_team, &request_agent)
+        let (reply_rx, request_team, request_agent) = self.dispatch_reconcile_command(request)?;
+        self.wait_for_reconcile_result(reply_rx, &request_team, &request_agent)
     }
 
-    fn enqueue_reconcile_request(
+    fn dispatch_reconcile_command(
         &self,
-        request: &ReconcileRequest,
-        request_team: &atm_core::types::TeamName,
-        request_agent: &atm_core::types::AgentName,
-    ) -> Result<u64, AtmError> {
-        let mut state = self.inner.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
-                "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
-            )
-        })?;
-        self.validate_reconcile_runtime_state(&state, request_team, request_agent)?;
-        let waiter_id = state.next_waiter_id;
-        state.next_waiter_id += 1;
-        state.active_waiters.insert(waiter_id);
-        state.pending_epoch = state.pending_epoch.saturating_add(1);
-        let key = ReconcileKey::from_request(request);
-        if let Some(pending) = state.pending.get_mut(&key) {
-            pending.request = request.clone();
-            pending.waiters.push(waiter_id);
-        } else {
-            state.pending_order.push_back(key.clone());
-            state.pending.insert(
-                key,
-                PendingReconcile {
-                    request: request.clone(),
-                    waiters: vec![waiter_id],
-                },
-            );
-        }
-        self.inner.wake.notify_one();
-        #[cfg(test)]
-        self.inner.pending_changed.notify_all();
-        Ok(waiter_id)
-    }
-
-    fn validate_reconcile_runtime_state(
-        &self,
-        state: &ReconcileState,
-        request_team: &atm_core::types::TeamName,
-        request_agent: &atm_core::types::AgentName,
-    ) -> Result<(), AtmError> {
-        if !state.started {
+        request: ReconcileRequest,
+    ) -> Result<ReconcileDispatch, AtmError> {
+        let request_team_owned = request.team.clone();
+        let request_agent_owned = request.agent.clone();
+        let request_team = &request_team_owned;
+        let request_agent = &request_agent_owned;
+        let status = self.inner.status_snapshot();
+        if !status.started {
             return Err(self.reconcile_unavailable_error(
                 "rejected",
                 "reconcile runtime is unavailable before daemon startup",
@@ -430,7 +351,7 @@ impl ReconcileRuntime {
                 request_agent,
             ));
         }
-        if state.shutdown {
+        if status.shutdown_requested {
             return Err(self.reconcile_unavailable_error(
                 "rejected",
                 "reconcile runtime is unavailable during daemon shutdown",
@@ -438,66 +359,71 @@ impl ReconcileRuntime {
                 request_agent,
             ));
         }
-        if state.active_waiters.len() >= MAX_RECONCILE_WAITERS {
-            return Err(self
-                .reconcile_unavailable_error(
-                    "rejected",
-                    "reconcile runtime hit its concurrent waiter capacity",
-                    request_team,
-                    request_agent,
-                )
-                .with_recovery(
-                    "Reduce concurrent reconcile waiters or retry after earlier reconcile requests complete.",
-                ));
+        if let Some(message) = &status.degraded_message {
+            return Err(
+                AtmError::daemon_unavailable(message.as_ref()).with_recovery(
+                    "Restart atm-daemon; the reconcile runtime worker lane is degraded.",
+                ),
+            );
         }
-        Ok(())
+
+        let (reply_tx, reply_rx) = mpsc::sync_channel(1);
+        let command_tx = self.inner.command_tx.get().ok_or_else(|| {
+            self.reconcile_unavailable_error(
+                "rejected",
+                "reconcile runtime command channel is unavailable before daemon startup",
+                request_team,
+                request_agent,
+            )
+        })?;
+        match command_tx.try_send(ReconcileCommand::Reconcile { request, reply_tx }) {
+            Ok(()) => {}
+            Err(TrySendError::Full(_)) => {
+                self.inner.observability.emit_or_warn(
+                    "reconcile",
+                    "rejected",
+                    "reconcile runtime command queue is full",
+                );
+                return Err(
+                    AtmError::daemon_unavailable(
+                        "reconcile runtime command queue is full; requests are backpressured",
+                    )
+                    .with_recovery(
+                        "Retry after earlier reconcile requests complete or reduce concurrent reconcile load.",
+                    ),
+                );
+            }
+            Err(TrySendError::Disconnected(_)) => {
+                return Err(self.handle_send_error(
+                    self.inner.status_snapshot(),
+                    &request_team_owned,
+                    &request_agent_owned,
+                ));
+            }
+        }
+        Ok((reply_rx, request_team_owned, request_agent_owned))
     }
 
     fn wait_for_reconcile_result(
         &self,
-        waiter_id: u64,
+        reply_rx: Receiver<Result<ReconcileResult, AtmError>>,
         request_team: &atm_core::types::TeamName,
         request_agent: &atm_core::types::AgentName,
     ) -> Result<ReconcileResult, AtmError> {
-        let mut state = self.inner.state.lock().map_err(|_| {
-            AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
-                "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
-            )
-        })?;
-        loop {
-            if state.shutdown {
-                state.release_waiter(waiter_id);
-                return Err(self.reconcile_unavailable_error(
-                    "degraded",
-                    "reconcile runtime shut down before completion",
-                    request_team,
-                    request_agent,
-                ));
-            }
-            if let Some(outcome) = state.completed.remove(&waiter_id) {
-                state.active_waiters.remove(&waiter_id);
-                return match outcome {
-                    ReconcileOutcome::Success(result) => Ok(result),
-                    ReconcileOutcome::Failure(failure) => Err(failure.to_error()),
-                };
-            }
-            let wait = self
-                .inner
-                .wake
-                .wait_timeout(state, DEFAULT_RECONCILE_COMPLETION_TIMEOUT)
-                .map_err(|_| {
-                    AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
-                })?;
-            state = wait.0;
-            if wait.1.timed_out() {
-                state.release_waiter(waiter_id);
-                return Err(self.reconcile_unavailable_error(
-                    "degraded",
-                    "reconcile runtime timed out waiting for background completion",
-                    request_team,
-                    request_agent,
-                ));
-            }
+        match reply_rx.recv_timeout(DEFAULT_RECONCILE_COMPLETION_TIMEOUT) {
+            Ok(result) => result,
+            Err(mpsc::RecvTimeoutError::Timeout) => Err(self.reconcile_unavailable_error(
+                "degraded",
+                "reconcile runtime timed out waiting for background completion",
+                request_team,
+                request_agent,
+            )),
+            Err(mpsc::RecvTimeoutError::Disconnected) => Err(self.reconcile_unavailable_error(
+                "degraded",
+                "reconcile runtime shut down before completion",
+                request_team,
+                request_agent,
+            )),
         }
     }
 
@@ -515,112 +441,221 @@ impl ReconcileRuntime {
             .with_team(request_team.clone())
             .with_agent(request_agent.clone());
         self.inner.observability.emit_event_or_warn(event);
-        AtmError::daemon_unavailable(message)
+        AtmError::daemon_unavailable(message).with_recovery(
+            "Wait for the daemon reconcile runtime to return to a serving state, then retry the reconcile request.",
+        )
+    }
+
+    fn handle_send_error(
+        &self,
+        latest_status: Arc<ReconcileRuntimeStatus>,
+        request_team: &atm_core::types::TeamName,
+        request_agent: &atm_core::types::AgentName,
+    ) -> AtmError {
+        if let Some(message) = &latest_status.degraded_message {
+            return AtmError::daemon_unavailable(message.as_ref()).with_recovery(
+                "Restart atm-daemon; the reconcile runtime worker lane is degraded.",
+            );
+        }
+        if latest_status.shutdown_requested {
+            return self.reconcile_unavailable_error(
+                "rejected",
+                "reconcile runtime is unavailable during daemon shutdown",
+                request_team,
+                request_agent,
+            );
+        }
+        if latest_status.worker_liveness == ReconcileWorkerLiveness::Stopped {
+            return self.reconcile_unavailable_error(
+                "rejected",
+                "reconcile runtime worker stopped receiving commands",
+                request_team,
+                request_agent,
+            );
+        }
+        AtmError::daemon_unavailable("reconcile runtime command channel is unavailable")
+            .with_recovery(
+                "Restart atm-daemon; the reconcile worker lane is no longer receiving commands.",
+            )
+    }
+
+    fn take_worker_for_shutdown(&self) -> Result<Option<JoinHandle<()>>, AtmError> {
+        self.inner.mark_shutdown_requested();
+        self.inner.worker.take()
+    }
+
+    fn await_worker_shutdown(&self, handle: JoinHandle<()>) -> Result<(), AtmError> {
+        let worker_thread_id = handle.thread().id();
+        let (join_helper, result_rx) = spawn_reconcile_join_helper(handle)?;
+        match result_rx.recv_timeout(self.inner.shutdown_deadline) {
+            Ok(Ok(())) => self.handle_shutdown_joined(join_helper),
+            Ok(Err(_)) => self.handle_shutdown_panic(join_helper),
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                self.handle_shutdown_timeout(join_helper, worker_thread_id)
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                self.handle_shutdown_disconnect(join_helper, worker_thread_id)
+            }
+        }
+    }
+
+    fn handle_shutdown_joined(&self, join_helper: JoinHandle<()>) -> Result<(), AtmError> {
+        let _ = join_helper.join();
+        self.inner.mark_worker_stopped();
+        self.inner.observability.emit_or_warn(
+            "shutdown",
+            "ok",
+            "reconcile runtime worker shut down cleanly",
+        );
+        Ok(())
+    }
+
+    fn handle_shutdown_panic(&self, join_helper: JoinHandle<()>) -> Result<(), AtmError> {
+        let _ = join_helper.join();
+        self.inner
+            .mark_worker_degraded("reconcile runtime worker panicked during shutdown");
+        self.inner.observability.emit_or_warn(
+            "shutdown",
+            "failed",
+            "reconcile runtime worker panicked during shutdown",
+        );
+        Err(AtmError::daemon_unavailable(
+            "reconcile runtime worker panicked during shutdown",
+        )
+        .with_recovery(
+            "Restart atm-daemon; the reconcile background lane crashed while shutting down.",
+        ))
+    }
+
+    fn handle_shutdown_timeout(
+        &self,
+        join_helper: JoinHandle<()>,
+        worker_thread_id: thread::ThreadId,
+    ) -> Result<(), AtmError> {
+        let timeout_elapsed = self
+            .inner
+            .status_snapshot()
+            .shutdown_started_at
+            .map(|started_at| started_at.elapsed())
+            .unwrap_or(self.inner.shutdown_deadline);
+        self.inner.observability.emit_or_warn(
+            "shutdown",
+            "degraded",
+            "reconcile runtime worker exceeded its shutdown deadline",
+        );
+        tracing::warn!(
+            subsystem = "reconcile",
+            action = "shutdown_retain",
+            outcome = "deadline_exceeded",
+            thread_id = ?worker_thread_id,
+            timeout_ms = timeout_elapsed.as_millis(),
+            "reconcile runtime worker exceeded shutdown deadline; retaining join helper for later cleanup"
+        );
+        retain_join_helper(
+            "reconcile_runtime_worker",
+            join_helper,
+            self.inner.shutdown_deadline,
+        );
+        Err(AtmError::daemon_unavailable(
+            "reconcile runtime worker exceeded the bounded shutdown deadline",
+        )
+        .with_recovery(
+            "Restart atm-daemon after the reconcile background lane becomes responsive again.",
+        ))
+    }
+
+    fn handle_shutdown_disconnect(
+        &self,
+        join_helper: JoinHandle<()>,
+        worker_thread_id: thread::ThreadId,
+    ) -> Result<(), AtmError> {
+        let _ = join_helper.join();
+        self.inner
+            .mark_worker_degraded("reconcile runtime join helper disconnected during shutdown");
+        self.inner.observability.emit_or_warn(
+            "shutdown",
+            "failed",
+            "reconcile runtime join helper disconnected during shutdown",
+        );
+        tracing::warn!(
+            subsystem = "reconcile",
+            action = "shutdown_join_helper",
+            outcome = "disconnected",
+            thread_id = ?worker_thread_id,
+            "reconcile runtime join helper exited before reporting shutdown status"
+        );
+        Err(AtmError::daemon_unavailable(
+            "reconcile runtime join helper disconnected during shutdown",
+        )
+        .with_recovery(
+            "Restart atm-daemon; the reconcile background lane did not report bounded shutdown status cleanly.",
+        ))
     }
 
     #[cfg(test)]
     pub(crate) fn new_for_test(executor: ReconcileExecutor, debounce: Duration) -> Self {
-        Self::new_with_executor(
+        Self::new_with_executor_and_sink(
             executor,
+            Arc::new(TestNotificationSink),
+            DEFAULT_RECONCILE_QUEUE_CAPACITY,
             debounce,
-            Arc::new(Mutex::new(NotificationFingerprintRegistry::default())),
+            RECONCILE_SHUTDOWN_DEADLINE,
             SubsystemObservability::disabled(DaemonSubsystem::ReconcileRuntime),
         )
     }
+}
 
-    #[cfg(test)]
-    pub(crate) fn state_counts_for_test(&self) -> (usize, usize, usize) {
-        self.inner.state.lock().expect("state lock").counts()
+impl ReconcileRuntimeInner {
+    fn status_snapshot(&self) -> Arc<ReconcileRuntimeStatus> {
+        self.status.load_full()
     }
 
-    #[cfg(test)]
-    pub(crate) fn wait_for_pending_count_for_test(
+    fn publish_status(
         &self,
-        minimum_pending: usize,
-        timeout: Duration,
-    ) -> bool {
-        let deadline = std::time::Instant::now() + timeout;
-        let mut state = self.inner.state.lock().expect("state lock");
-        while state.pending.len() < minimum_pending {
-            let now = std::time::Instant::now();
-            if now >= deadline {
-                return false;
-            }
-            let wait = self
-                .inner
-                .pending_changed
-                .wait_timeout(state, deadline.saturating_duration_since(now))
-                .expect("pending change wait");
-            state = wait.0;
-            if wait.1.timed_out() {
-                return state.pending.len() >= minimum_pending;
-            }
-        }
-        true
+        mutate: impl FnOnce(&ReconcileRuntimeStatus) -> ReconcileRuntimeStatus,
+    ) {
+        let current = self.status.load_full();
+        self.status.store(Arc::new(mutate(current.as_ref())));
     }
 
-    #[cfg(test)]
-    pub(crate) fn wait_for_pending_waiter_count_for_test(
-        &self,
-        minimum_waiters: usize,
-        timeout: Duration,
-    ) -> bool {
-        let deadline = std::time::Instant::now() + timeout;
-        let mut state = self.inner.state.lock().expect("state lock");
-        while state.waiter_count() < minimum_waiters {
-            let now = std::time::Instant::now();
-            if now >= deadline {
-                return false;
-            }
-            let wait = self
-                .inner
-                .pending_changed
-                .wait_timeout(state, deadline.saturating_duration_since(now))
-                .expect("pending change wait");
-            state = wait.0;
-            if wait.1.timed_out() {
-                return state.waiter_count() >= minimum_waiters;
-            }
-        }
-        true
+    fn mark_started(&self) {
+        self.status.store(Arc::new(ReconcileRuntimeStatus {
+            started: true,
+            shutdown_requested: false,
+            shutdown_started_at: None,
+            degraded_message: None,
+            worker_liveness: ReconcileWorkerLiveness::Live,
+        }));
     }
 
-    #[cfg(test)]
-    pub(crate) fn wait_for_pending_agent_for_test(&self, agent: &str, timeout: Duration) -> bool {
-        let deadline = std::time::Instant::now() + timeout;
-        let mut state = self.inner.state.lock().expect("state lock");
-        while !state
-            .pending
-            .values()
-            .any(|pending| pending.request.agent.as_str() == agent)
-        {
-            let now = std::time::Instant::now();
-            if now >= deadline {
-                return false;
-            }
-            let wait = self
-                .inner
-                .pending_changed
-                .wait_timeout(state, deadline.saturating_duration_since(now))
-                .expect("pending change wait");
-            state = wait.0;
-            if wait.1.timed_out() {
-                return state
-                    .pending
-                    .values()
-                    .any(|pending| pending.request.agent.as_str() == agent);
-            }
-        }
-        true
+    fn mark_shutdown_requested(&self) {
+        self.publish_status(|status| ReconcileRuntimeStatus {
+            shutdown_requested: true,
+            shutdown_started_at: status.shutdown_started_at.or(Some(Instant::now())),
+            ..status.clone()
+        });
+    }
+
+    fn mark_worker_stopped(&self) {
+        self.publish_status(|status| ReconcileRuntimeStatus {
+            worker_liveness: ReconcileWorkerLiveness::Stopped,
+            ..status.clone()
+        });
+    }
+
+    fn mark_worker_degraded(&self, message: &'static str) {
+        self.publish_status(|status| ReconcileRuntimeStatus {
+            degraded_message: Some(Arc::<str>::from(message)),
+            worker_liveness: ReconcileWorkerLiveness::Degraded,
+            ..status.clone()
+        });
     }
 }
 
-fn should_emit_reconcile_notification(
-    request: &ReconcileRequest,
+fn compute_reconcile_notification_fingerprints(
     import: &atm_core::boundary::InboxIngressImportResponse,
     inbox_ingress: &dyn InboxIngress,
-    notification_fingerprints: &Mutex<NotificationFingerprintRegistry>,
-) -> Result<bool, AtmError> {
+) -> Option<HashSet<NotificationFingerprint>> {
     let mut current_fingerprints = HashSet::new();
     for source in &import.source_files {
         for message in &source.messages {
@@ -629,14 +664,196 @@ fn should_emit_reconcile_notification(
                     atm_core::boundary::InboxIngressIdentityFingerprintRequest {
                         message: message.clone(),
                     },
-                )?
+                )
                 .fingerprint;
-            let Some(fingerprint) = fingerprint else {
-                return Ok(true);
-            };
-            current_fingerprints.insert(fingerprint);
+            let fingerprint = fingerprint?;
+            current_fingerprints.insert(NotificationFingerprint::new(fingerprint)?);
         }
     }
+    Some(current_fingerprints)
+}
+
+fn reconcile_worker_loop(
+    inner: Arc<ReconcileRuntimeInner>,
+    command_rx: Receiver<ReconcileCommand>,
+) {
+    let mut worker_state = ReconcileWorkerState::default();
+    loop {
+        if inner.status_snapshot().shutdown_requested {
+            inner.mark_worker_stopped();
+            return;
+        }
+
+        let first_command = match command_rx.recv_timeout(DEFAULT_RECONCILE_IDLE_INTERVAL) {
+            Ok(command) => command,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                inner.mark_worker_stopped();
+                return;
+            }
+        };
+        enqueue_pending_reconcile_command(inner.as_ref(), &mut worker_state, first_command);
+
+        let pending = match debounce_pending_reconcile_batch(
+            inner.as_ref(),
+            &command_rx,
+            &mut worker_state,
+        ) {
+            Some(pending) => pending,
+            None => {
+                inner.mark_worker_stopped();
+                return;
+            }
+        };
+
+        let mut pending_iter = pending.into_iter();
+        while let Some(pending_request) = pending_iter.next() {
+            if inner.status_snapshot().shutdown_requested {
+                interrupt_pending_reconcile_batch(pending_request, pending_iter);
+                inner.mark_worker_stopped();
+                return;
+            }
+            let outcome = execute_reconcile_request(
+                inner.as_ref(),
+                &mut worker_state,
+                &pending_request.request,
+            );
+            record_reconcile_outcome(pending_request, outcome);
+        }
+    }
+}
+
+fn interrupt_pending_reconcile_batch(
+    pending_request: PendingReconcile,
+    remaining: impl IntoIterator<Item = PendingReconcile>,
+) {
+    record_reconcile_outcome(pending_request, Err(reconcile_shutdown_interrupted_error()));
+    for pending_request in remaining {
+        record_reconcile_outcome(pending_request, Err(reconcile_shutdown_interrupted_error()));
+    }
+}
+
+fn reconcile_shutdown_interrupted_error() -> AtmError {
+    AtmError::daemon_unavailable("reconcile runtime is unavailable during daemon shutdown")
+        .with_recovery(
+            "Wait for the daemon reconcile runtime to finish shutting down, then retry the reconcile request.",
+        )
+}
+
+fn enqueue_pending_reconcile_command(
+    inner: &ReconcileRuntimeInner,
+    worker_state: &mut ReconcileWorkerState,
+    command: ReconcileCommand,
+) {
+    match command {
+        ReconcileCommand::Reconcile { request, reply_tx } => {
+            if worker_state.waiter_count() >= MAX_RECONCILE_WAITERS {
+                let _ = reply_tx.send(Err(AtmError::daemon_unavailable(
+                        "reconcile runtime hit its concurrent waiter capacity",
+                    )
+                    .with_recovery(
+                        "Reduce concurrent reconcile waiters or retry after earlier reconcile requests complete.",
+                    )));
+                inner.observability.emit_or_warn(
+                    "reconcile",
+                    "rejected",
+                    "reconcile runtime hit its concurrent waiter capacity",
+                );
+                return;
+            }
+            worker_state.pending_epoch = worker_state.pending_epoch.saturating_add(1);
+            let key = ReconcileKey::from_request(&request);
+            if let Some(pending) = worker_state.pending.get_mut(&key) {
+                pending.request = request;
+                pending.replies.push(reply_tx);
+            } else {
+                worker_state.pending_order.push_back(key.clone());
+                worker_state.pending.insert(
+                    key,
+                    PendingReconcile {
+                        request,
+                        replies: vec![reply_tx],
+                    },
+                );
+            }
+        }
+    }
+}
+
+fn debounce_pending_reconcile_batch(
+    inner: &ReconcileRuntimeInner,
+    command_rx: &Receiver<ReconcileCommand>,
+    worker_state: &mut ReconcileWorkerState,
+) -> Option<Vec<PendingReconcile>> {
+    let mut debounce_epoch = worker_state.pending_epoch;
+    let mut debounce_extensions = 0u32;
+    loop {
+        if inner.status_snapshot().shutdown_requested {
+            let mut pending = drain_pending_reconcile_batch(worker_state).into_iter();
+            if let Some(first_pending) = pending.next() {
+                interrupt_pending_reconcile_batch(first_pending, pending);
+            }
+            return None;
+        }
+        match command_rx.recv_timeout(inner.debounce) {
+            Ok(command) => {
+                enqueue_pending_reconcile_command(inner, worker_state, command);
+                if worker_state.pending_epoch != debounce_epoch {
+                    debounce_epoch = worker_state.pending_epoch;
+                    debounce_extensions = debounce_extensions.saturating_add(1);
+                    if debounce_extensions >= MAX_RECONCILE_DEBOUNCE_EXTENSIONS {
+                        break;
+                    }
+                }
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => break,
+            Err(mpsc::RecvTimeoutError::Disconnected) => break,
+        }
+    }
+    Some(drain_pending_reconcile_batch(worker_state))
+}
+
+fn drain_pending_reconcile_batch(worker_state: &mut ReconcileWorkerState) -> Vec<PendingReconcile> {
+    let pending_order = std::mem::take(&mut worker_state.pending_order);
+    let mut drained = Vec::with_capacity(pending_order.len());
+    for key in pending_order {
+        if let Some(pending) = worker_state.pending.remove(&key) {
+            drained.push(pending);
+        }
+    }
+    drained
+}
+
+fn execute_reconcile_request(
+    inner: &ReconcileRuntimeInner,
+    worker_state: &mut ReconcileWorkerState,
+    request: &ReconcileRequest,
+) -> Result<ReconcileResult, AtmError> {
+    // `Y.22` accepts one actor-owned request lane here; the caller-facing
+    // bounded command-channel handoff has already ended before execution.
+    let execution = (inner.executor)(request)?;
+    if should_emit_reconcile_notification(worker_state, request, execution.current_fingerprints) {
+        inner.notification_sink.deliver(NotificationEvent {
+            kind: NotificationKind::ReconcileComplete,
+            detail: format!(
+                "observed_paths={} imported_sources={}",
+                execution.result.observed_paths, execution.result.imported_sources
+            ),
+            team: Some(request.team.clone()),
+            agent: Some(request.agent.clone()),
+        })?;
+    }
+    Ok(execution.result)
+}
+
+fn should_emit_reconcile_notification(
+    worker_state: &mut ReconcileWorkerState,
+    request: &ReconcileRequest,
+    current_fingerprints: Option<HashSet<NotificationFingerprint>>,
+) -> bool {
+    let Some(mut current_fingerprints) = current_fingerprints else {
+        return true;
+    };
 
     let key = ReconcileKey::from_request(request);
     if current_fingerprints.len() > MAX_RECONCILE_FINGERPRINTS_PER_KEY {
@@ -648,6 +865,9 @@ fn should_emit_reconcile_notification(
         ordered.truncate(MAX_RECONCILE_FINGERPRINTS_PER_KEY);
         current_fingerprints.extend(ordered);
         tracing::warn!(
+            subsystem = "reconcile",
+            action = "fingerprint_truncate",
+            outcome = "cap_exceeded",
             team = %key.team,
             agent = %key.agent,
             retained = MAX_RECONCILE_FINGERPRINTS_PER_KEY,
@@ -655,9 +875,8 @@ fn should_emit_reconcile_notification(
             "reconcile notification fingerprint set exceeded the per-key bounded cap; truncating deterministically"
         );
     }
-    let mut fingerprints = notification_fingerprints.lock().map_err(|_| {
-        AtmError::daemon_unavailable("reconcile notification fingerprint state lock poisoned")
-    })?;
+
+    let fingerprints = &mut worker_state.notification_fingerprints;
     let changed = fingerprints
         .entries
         .get(&key)
@@ -668,6 +887,9 @@ fn should_emit_reconcile_notification(
         while let Some(evicted_key) = fingerprints.order.pop_front() {
             if fingerprints.entries.remove(&evicted_key).is_some() {
                 tracing::warn!(
+                    subsystem = "reconcile",
+                    action = "fingerprint_evict",
+                    outcome = "cap_exceeded",
                     team = %evicted_key.team,
                     agent = %evicted_key.agent,
                     cap = MAX_RECONCILE_FINGERPRINT_KEYS,
@@ -681,49 +903,37 @@ fn should_emit_reconcile_notification(
         fingerprints.order.push_back(key.clone());
     }
     fingerprints.entries.insert(key, current_fingerprints);
-    Ok(changed)
+    changed
 }
 
-fn reconcile_worker_loop(inner: Arc<ReconcileRuntimeInner>) {
-    loop {
-        let pending = match take_pending_reconcile_batch(inner.as_ref()) {
-            Some(pending) => pending,
-            None => return,
-        };
-
-        for pending_request in pending {
-            let outcome = match (inner.executor)(&pending_request.request) {
-                Ok(result) => ReconcileOutcome::Success(result),
-                Err(error) => {
-                    tracing::warn!(
-                        team = %pending_request.request.team,
-                        agent = %pending_request.request.agent,
-                        %error,
-                        "reconcile runtime executor failed"
-                    );
-                    ReconcileOutcome::Failure(error.into())
-                }
-            };
-            if record_reconcile_outcome(inner.as_ref(), pending_request, outcome).is_none() {
-                return;
-            }
-        }
+fn record_reconcile_outcome(
+    pending_request: PendingReconcile,
+    outcome: Result<ReconcileResult, AtmError>,
+) {
+    for reply in pending_request.replies {
+        let _ = reply.send(clone_reconcile_outcome(&outcome));
     }
 }
 
-enum ReconcileJoinStatus {
-    Timeout,
-    Disconnected,
+fn clone_reconcile_outcome(
+    outcome: &Result<ReconcileResult, AtmError>,
+) -> Result<ReconcileResult, AtmError> {
+    match outcome {
+        Ok(result) => Ok(result.clone()),
+        Err(error) => Err(ReconcileReplyErrorSnapshot::from(error).into_error()),
+    }
 }
 
 fn spawn_reconcile_join_helper(
     handle: JoinHandle<()>,
-) -> Result<(mpsc::Receiver<std::thread::Result<()>>, JoinHandle<()>), AtmError> {
+) -> Result<(JoinHandle<()>, Receiver<std::thread::Result<()>>), AtmError> {
     let (result_tx, result_rx) = mpsc::sync_channel(1);
     let join_helper = thread::Builder::new()
         .name("atm-daemon-reconcile-join".to_string())
         .spawn(move || {
             let _ = result_tx.send(handle.join());
+            #[cfg(test)]
+            crate::worker_support::signal_retained_join_helper_exit_for_test();
         })
         .map_err(|source| {
             AtmError::daemon_unavailable(
@@ -734,620 +944,22 @@ fn spawn_reconcile_join_helper(
             )
             .with_source(source)
         })?;
-    Ok((result_rx, join_helper))
-}
-
-fn wait_for_reconcile_join(
-    result_rx: mpsc::Receiver<std::thread::Result<()>>,
-) -> Result<std::thread::Result<()>, ReconcileJoinStatus> {
-    result_rx
-        .recv_timeout(RECONCILE_SHUTDOWN_DEADLINE)
-        .map_err(|error| match error {
-            mpsc::RecvTimeoutError::Timeout => ReconcileJoinStatus::Timeout,
-            mpsc::RecvTimeoutError::Disconnected => ReconcileJoinStatus::Disconnected,
-        })
-}
-
-fn take_pending_reconcile_batch(inner: &ReconcileRuntimeInner) -> Option<Vec<PendingReconcile>> {
-    let mut state = inner.state.lock().ok()?;
-    while state.pending.is_empty() && !state.shutdown {
-        let wait = inner
-            .wake
-            .wait_timeout(state, DEFAULT_RECONCILE_IDLE_INTERVAL)
-            .ok()?;
-        state = wait.0;
-    }
-    if state.shutdown {
-        return None;
-    }
-    debounce_pending_reconcile_batch(inner, state)
-}
-
-fn debounce_pending_reconcile_batch(
-    inner: &ReconcileRuntimeInner,
-    mut state: std::sync::MutexGuard<'_, ReconcileState>,
-) -> Option<Vec<PendingReconcile>> {
-    let mut debounce_epoch = state.pending_epoch;
-    let mut debounce_extensions = 0u32;
-    loop {
-        let wait = inner.wake.wait_timeout(state, inner.debounce).ok()?;
-        state = wait.0;
-        if state.shutdown {
-            return None;
-        }
-        if state.pending_epoch != debounce_epoch {
-            debounce_epoch = state.pending_epoch;
-            debounce_extensions = debounce_extensions.saturating_add(1);
-            if debounce_extensions >= MAX_RECONCILE_DEBOUNCE_EXTENSIONS {
-                break;
-            }
-            continue;
-        }
-        if wait.1.timed_out() {
-            break;
-        }
-    }
-    let drained = drain_pending_reconcile_batch(&mut state);
-    #[cfg(test)]
-    inner.pending_changed.notify_all();
-    Some(drained)
-}
-
-fn drain_pending_reconcile_batch(state: &mut ReconcileState) -> Vec<PendingReconcile> {
-    let pending_order = std::mem::take(&mut state.pending_order);
-    let mut drained = Vec::with_capacity(pending_order.len());
-    for key in pending_order {
-        if let Some(pending) = state.pending.remove(&key) {
-            drained.push(pending);
-        }
-    }
-    drained
-}
-
-fn record_reconcile_outcome(
-    inner: &ReconcileRuntimeInner,
-    pending_request: PendingReconcile,
-    outcome: ReconcileOutcome,
-) -> Option<()> {
-    let mut state = inner.state.lock().ok()?;
-    for waiter in pending_request.waiters {
-        if state.active_waiters.contains(&waiter) {
-            state.completed.insert(waiter, outcome.clone());
-        }
-    }
-    inner.wake.notify_all();
-    Some(())
+    Ok((join_helper, result_rx))
 }
 
 #[cfg(test)]
-mod tests {
-    use super::{
-        MAX_RECONCILE_FINGERPRINT_KEYS, MAX_RECONCILE_FINGERPRINTS_PER_KEY, ReconcileKey,
-        ReconcileRuntime,
-    };
-    use atm_core::boundary::{
-        self, InboxIngress, InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
-        InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-        InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, NotificationSink,
-        ReconcileRequest, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
-    };
-    use atm_core::protocol::ReconcileResult;
-    use atm_core::roles::ROLE_TEAM_LEAD;
-    use atm_core::schema::{AtmMessageId, MessageEnvelope};
-    use atm_core::types::IsoTimestamp;
-    use chrono::Utc;
-    use serde_json::Map;
-    use std::sync::atomic::{AtomicU64, Ordering};
-    use std::sync::{Arc, Condvar, Mutex, mpsc};
-    use std::time::Duration;
+struct TestNotificationSink;
 
-    fn unique_home_dir() -> std::path::PathBuf {
-        static NEXT: AtomicU64 = AtomicU64::new(0);
-        std::env::temp_dir().join(format!(
-            "atm-reconcile-test-{}-{}",
-            std::process::id(),
-            NEXT.fetch_add(1, Ordering::Relaxed)
-        ))
-    }
+#[cfg(test)]
+impl atm_core::boundary::sealed::Sealed for TestNotificationSink {}
 
-    fn request() -> ReconcileRequest {
-        ReconcileRequest {
-            home_dir: unique_home_dir(),
-            team: "test-team".parse().expect("team"),
-            agent: "test-agent".parse().expect("agent"),
-        }
-    }
-
-    fn request_for(agent: &str) -> ReconcileRequest {
-        ReconcileRequest {
-            home_dir: unique_home_dir(),
-            team: "test-team".parse().expect("team"),
-            agent: agent.parse().expect("agent"),
-        }
-    }
-
-    #[test]
-    fn reconcile_runtime_coalesces_duplicate_requests() {
-        let calls = Arc::new(Mutex::new(0usize));
-        let runtime = ReconcileRuntime::new_for_test(
-            Arc::new({
-                let calls = Arc::clone(&calls);
-                move |_| {
-                    *calls.lock().expect("calls") += 1;
-                    Ok(ReconcileResult {
-                        observed_paths: 2,
-                        imported_sources: 1,
-                    })
-                }
-            }),
-            Duration::from_millis(200),
-        );
-        runtime.start().expect("start");
-
-        let runtime_a = runtime.clone();
-        let runtime_b = runtime.clone();
-        let request_a = request();
-        let request_b = request_a.clone();
-        let first = std::thread::spawn(move || runtime_a.reconcile(request_a).expect("first"));
-        assert!(
-            runtime.wait_for_pending_count_for_test(1, Duration::from_secs(1)),
-            "first reconcile request never entered the pending queue"
-        );
-        assert!(
-            runtime.wait_for_pending_waiter_count_for_test(1, Duration::from_secs(1)),
-            "first reconcile waiter never entered the pending queue"
-        );
-        let second = std::thread::spawn(move || runtime_b.reconcile(request_b).expect("second"));
-        assert!(
-            runtime.wait_for_pending_waiter_count_for_test(2, Duration::from_secs(1)),
-            "duplicate reconcile requests never shared the same pending work item"
-        );
-        assert_eq!(first.join().expect("join").observed_paths, 2);
-        assert_eq!(second.join().expect("join").imported_sources, 1);
-        assert_eq!(*calls.lock().expect("calls"), 1);
-        runtime.shutdown().expect("shutdown");
-    }
-
-    #[test]
-    fn reconcile_runtime_cleans_up_pending_waiters_during_shutdown() {
-        let runtime = ReconcileRuntime::new_for_test(
-            Arc::new(|_| {
-                Ok(ReconcileResult {
-                    observed_paths: 1,
-                    imported_sources: 1,
-                })
-            }),
-            Duration::from_millis(250),
-        );
-        runtime.start().expect("start");
-
-        let runtime_for_thread = runtime.clone();
-        let join = std::thread::spawn(move || runtime_for_thread.reconcile(request()));
-        assert!(
-            runtime.wait_for_pending_count_for_test(1, Duration::from_secs(1)),
-            "reconcile request never entered the pending queue"
-        );
-        runtime.shutdown().expect("shutdown");
-
-        let error = join
-            .join()
-            .expect("join")
-            .expect_err("shutdown interruption");
-        assert!(error.message.contains("shut down before completion"));
-        assert_eq!(runtime.state_counts_for_test(), (0, 0, 0));
-    }
-
-    #[test]
-    fn reconcile_runtime_returns_executor_failures() {
-        let runtime = ReconcileRuntime::new_for_test(
-            Arc::new(|_| {
-                Err(atm_core::error::AtmError::daemon_unavailable(
-                    "reconcile failed",
-                ))
-            }),
-            Duration::from_millis(10),
-        );
-        runtime.start().expect("start");
-        let error = runtime.reconcile(request()).expect_err("failure");
-        assert!(error.message.contains("reconcile failed"));
-        runtime.shutdown().expect("shutdown");
-    }
-
-    #[test]
-    fn reconcile_runtime_preserves_trigger_order_and_signals_completion() {
-        let order = Arc::new(Mutex::new(Vec::new()));
-        let (started_tx, started_rx) = mpsc::channel();
-        let release = Arc::new((Mutex::new(false), Condvar::new()));
-        let runtime = ReconcileRuntime::new_for_test(
-            Arc::new({
-                let order = Arc::clone(&order);
-                let started_tx = started_tx.clone();
-                let release = Arc::clone(&release);
-                move |request| {
-                    order
-                        .lock()
-                        .expect("order")
-                        .push(request.agent.as_str().to_string());
-                    started_tx
-                        .send(request.agent.as_str().to_string())
-                        .expect("started");
-                    if request.agent.as_str() == "agent-a" {
-                        let (released, wake) = &*release;
-                        let mut released = released.lock().expect("released");
-                        while !*released {
-                            let wait = wake
-                                .wait_timeout(released, Duration::from_secs(1))
-                                .expect("wait release");
-                            released = wait.0;
-                            assert!(!wait.1.timed_out(), "agent-a release timed out");
-                        }
-                    }
-                    Ok(ReconcileResult {
-                        observed_paths: 1,
-                        imported_sources: 1,
-                    })
-                }
-            }),
-            Duration::from_millis(10),
-        );
-        runtime.start().expect("start");
-
-        let runtime_a = runtime.clone();
-        let runtime_b = runtime.clone();
-        let first = std::thread::spawn(move || runtime_a.reconcile(request_for("agent-a")));
-        assert_eq!(started_rx.recv().expect("first started"), "agent-a");
-        let second = std::thread::spawn(move || runtime_b.reconcile(request_for("agent-b")));
-        assert!(
-            runtime.wait_for_pending_agent_for_test("agent-b", Duration::from_secs(1)),
-            "agent-b never entered the pending queue before agent-a was released"
-        );
-        let (released, wake) = &*release;
-        *released.lock().expect("released") = true;
-        wake.notify_all();
-
-        let first_result = first.join().expect("first join").expect("first result");
-        let second_result = second.join().expect("second join").expect("second result");
-        assert_eq!(first_result.observed_paths, 1);
-        assert_eq!(second_result.imported_sources, 1);
-        assert_eq!(
-            order.lock().expect("order").as_slice(),
-            ["agent-a".to_string(), "agent-b".to_string()]
-        );
-        runtime.shutdown().expect("shutdown");
-    }
-
-    #[derive(Clone)]
-    struct FakeWatchSource;
-
-    impl boundary::sealed::Sealed for FakeWatchSource {}
-
-    impl WatchEventSource for FakeWatchSource {
-        fn poll(
-            &self,
-            _request: WatchSubscriptionRequest,
-        ) -> Result<WatchEventBatch, atm_core::error::AtmError> {
-            Ok(WatchEventBatch {
-                paths: vec![std::env::temp_dir().join("watch.json")],
-            })
-        }
-    }
-
-    #[derive(Clone)]
-    struct FakeInboxIngress {
-        imports: Arc<Mutex<Vec<InboxIngressImportResponse>>>,
-    }
-
-    impl FakeInboxIngress {
-        fn new(imports: Vec<InboxIngressImportResponse>) -> Self {
-            Self {
-                imports: Arc::new(Mutex::new(imports)),
-            }
-        }
-    }
-
-    impl boundary::sealed::Sealed for FakeInboxIngress {}
-
-    impl InboxIngress for FakeInboxIngress {
-        fn import_inbox_source(
-            &self,
-            _request: InboxIngressImportRequest,
-        ) -> Result<InboxIngressImportResponse, atm_core::error::AtmError> {
-            let mut imports = self.imports.lock().expect("imports");
-            if imports.is_empty() {
-                return Ok(InboxIngressImportResponse {
-                    source_files: Vec::new(),
-                });
-            }
-            Ok(imports.remove(0))
-        }
-
-        fn compute_identity_fingerprint(
-            &self,
-            request: InboxIngressIdentityFingerprintRequest,
-        ) -> Result<InboxIngressIdentityFingerprintResponse, atm_core::error::AtmError> {
-            Ok(InboxIngressIdentityFingerprintResponse {
-                fingerprint: request
-                    .message
-                    .message_id
-                    .map(|message_id| message_id.to_string()),
-            })
-        }
-
-        fn report_diagnostics(
-            &self,
-            _request: InboxIngressDiagnosticsRequest,
-        ) -> Result<InboxIngressDiagnosticsResponse, atm_core::error::AtmError> {
-            Ok(InboxIngressDiagnosticsResponse {
-                duplicate_message_ids: 0,
-                messages_without_ids: 0,
-            })
-        }
-    }
-
-    #[derive(Clone)]
-    struct FakeNotificationSink {
-        delivered: Arc<Mutex<Vec<NotificationEvent>>>,
-    }
-
-    impl boundary::sealed::Sealed for FakeNotificationSink {}
-
-    impl NotificationSink for FakeNotificationSink {
-        fn deliver(&self, event: NotificationEvent) -> Result<(), atm_core::error::AtmError> {
-            self.delivered.lock().expect("delivered").push(event);
-            Ok(())
-        }
-    }
-
-    #[test]
-    fn reconcile_runtime_routes_notifications_through_notification_sink_boundary() {
-        let delivered = Arc::new(Mutex::new(Vec::new()));
-        let ingress = FakeInboxIngress::new(vec![InboxIngressImportResponse {
-            source_files: vec![inbox_source_with_message(sample_message(
-                "projected message",
-            ))],
-        }]);
-        let runtime = ReconcileRuntime::new(
-            Arc::new(FakeWatchSource),
-            Arc::new(ingress),
-            Arc::new(FakeNotificationSink {
-                delivered: Arc::clone(&delivered),
-            }),
-        );
-        runtime.start().expect("start");
-
-        let result = runtime.reconcile(request()).expect("reconcile result");
-        assert_eq!(result.observed_paths, 1);
-        assert_eq!(result.imported_sources, 1);
-
-        let delivered = delivered.lock().expect("delivered");
-        assert_eq!(delivered.len(), 1);
-        assert_eq!(
-            delivered[0].kind,
-            atm_core::protocol::NotificationKind::ReconcileComplete
-        );
-
-        runtime.shutdown().expect("shutdown");
-    }
-
-    #[test]
-    fn reconcile_runtime_suppresses_duplicate_notifications_for_same_message_snapshot() {
-        let delivered = Arc::new(Mutex::new(Vec::new()));
-        let watch_polls = Arc::new(AtomicU64::new(0));
-        let repeated_message = sample_message("same logical message");
-        let repeated_source = inbox_source_with_message(repeated_message);
-        let runtime = ReconcileRuntime::new(
-            Arc::new(CountingWatchSource {
-                calls: Arc::clone(&watch_polls),
-            }),
-            Arc::new(FakeInboxIngress::new(vec![
-                InboxIngressImportResponse {
-                    source_files: vec![repeated_source.clone()],
-                },
-                InboxIngressImportResponse {
-                    source_files: vec![repeated_source],
-                },
-            ])),
-            Arc::new(FakeNotificationSink {
-                delivered: Arc::clone(&delivered),
-            }),
-        );
-        runtime.start().expect("start");
-
-        let request = request();
-        let first = runtime.reconcile(request.clone()).expect("first reconcile");
-        let second = runtime.reconcile(request).expect("second reconcile");
-        assert_eq!(first.imported_sources, 1);
-        assert_eq!(second.imported_sources, 1);
-        assert_eq!(watch_polls.load(Ordering::Relaxed), 2);
-
-        let delivered = delivered.lock().expect("delivered");
-        assert_eq!(delivered.len(), 1);
-        assert_eq!(
-            delivered[0].kind,
-            atm_core::protocol::NotificationKind::ReconcileComplete
-        );
-
-        runtime.shutdown().expect("shutdown");
-    }
-
-    #[test]
-    fn reconcile_runtime_bounds_notification_fingerprint_registry_and_re_emits_after_eviction() {
-        let delivered = Arc::new(Mutex::new(Vec::new()));
-        let imports = (0..=MAX_RECONCILE_FINGERPRINT_KEYS)
-            .map(|index| InboxIngressImportResponse {
-                source_files: vec![inbox_source_with_message(sample_message(&format!(
-                    "message-{index}"
-                )))],
-            })
-            .collect::<Vec<_>>();
-        let runtime = ReconcileRuntime::new(
-            Arc::new(FakeWatchSource),
-            Arc::new(FakeInboxIngress::new(imports)),
-            Arc::new(FakeNotificationSink {
-                delivered: Arc::clone(&delivered),
-            }),
-        );
-        runtime.start().expect("start");
-
-        let first_request = request_for("agent-0");
-        runtime
-            .reconcile(first_request.clone())
-            .expect("first reconcile");
-        for index in 1..=MAX_RECONCILE_FINGERPRINT_KEYS {
-            runtime
-                .reconcile(request_for(&format!("agent-{index}")))
-                .expect("bounded reconcile");
-        }
-        runtime
-            .reconcile(first_request)
-            .expect("reconcile after eviction");
-
-        let fingerprints = runtime
-            .inner
-            .notification_fingerprints
-            .lock()
-            .expect("fingerprints");
-        assert_eq!(fingerprints.entries.len(), MAX_RECONCILE_FINGERPRINT_KEYS);
-        assert_eq!(fingerprints.order.len(), MAX_RECONCILE_FINGERPRINT_KEYS);
-        drop(fingerprints);
-
-        let delivered = delivered.lock().expect("delivered");
-        assert_eq!(delivered.len(), MAX_RECONCILE_FINGERPRINT_KEYS + 2);
-
-        runtime.shutdown().expect("shutdown");
-    }
-
-    #[test]
-    fn reconcile_runtime_bounds_per_key_fingerprint_sets() {
-        let runtime = ReconcileRuntime::new(
-            Arc::new(FakeWatchSource),
-            Arc::new(FakeInboxIngress::new(vec![InboxIngressImportResponse {
-                source_files: (0..=MAX_RECONCILE_FINGERPRINTS_PER_KEY)
-                    .map(|index| {
-                        inbox_source_with_message(sample_message(&format!("message-{index}")))
-                    })
-                    .collect(),
-            }])),
-            Arc::new(FakeNotificationSink {
-                delivered: Arc::new(Mutex::new(Vec::new())),
-            }),
-        );
-        runtime.start().expect("start");
-        let request = request();
-        runtime.reconcile(request.clone()).expect("reconcile");
-
-        let fingerprints = runtime
-            .inner
-            .notification_fingerprints
-            .lock()
-            .expect("fingerprints");
-        assert_eq!(
-            fingerprints
-                .entries
-                .get(&ReconcileKey::from_request(&request))
-                .expect("entry")
-                .len(),
-            MAX_RECONCILE_FINGERPRINTS_PER_KEY
-        );
-        drop(fingerprints);
-
-        runtime.shutdown().expect("shutdown");
-    }
-
-    #[test]
-    fn reconcile_runtime_discards_completed_entries_for_timed_out_waiters() {
-        let (started_tx, started_rx) = mpsc::channel();
-        let release: Arc<(Mutex<bool>, Condvar)> = Arc::new((Mutex::new(false), Condvar::new()));
-        let runtime = ReconcileRuntime::new_for_test(
-            Arc::new({
-                let release = Arc::clone(&release);
-                move |_| {
-                    started_tx.send(()).expect("started");
-                    let (released, wake) = &*release;
-                    let mut released = released.lock().expect("released");
-                    while !*released {
-                        let wait = wake
-                            .wait_timeout(released, Duration::from_secs(1))
-                            .expect("wait release");
-                        released = wait.0;
-                    }
-                    Ok(ReconcileResult {
-                        observed_paths: 1,
-                        imported_sources: 1,
-                    })
-                }
-            }),
-            Duration::from_millis(10),
-        );
-        runtime.start().expect("start");
-
-        let runtime_for_thread = runtime.clone();
-        let join = std::thread::spawn(move || runtime_for_thread.reconcile(request()));
-        started_rx
-            .recv_timeout(Duration::from_secs(1))
-            .expect("started");
-        let error = join.join().expect("join").expect_err("timeout should fail");
-        assert!(error.message.contains("timed out"));
-
-        let (released, wake) = &*release;
-        *released.lock().expect("released") = true;
-        wake.notify_all();
-        assert!(
-            runtime.wait_for_pending_count_for_test(0, Duration::from_secs(1)),
-            "pending reconcile work did not drain after release"
-        );
-        assert_eq!(runtime.state_counts_for_test(), (0, 0, 0));
-
-        runtime.shutdown().expect("shutdown");
-    }
-
-    #[derive(Clone)]
-    struct CountingWatchSource {
-        calls: Arc<AtomicU64>,
-    }
-
-    impl boundary::sealed::Sealed for CountingWatchSource {}
-
-    impl WatchEventSource for CountingWatchSource {
-        fn poll(
-            &self,
-            _request: WatchSubscriptionRequest,
-        ) -> Result<WatchEventBatch, atm_core::error::AtmError> {
-            self.calls.fetch_add(1, Ordering::Relaxed);
-            Ok(WatchEventBatch {
-                paths: vec![std::env::temp_dir().join("watch.json")],
-            })
-        }
-    }
-
-    fn inbox_source_with_message(
-        message: MessageEnvelope,
-    ) -> atm_core::boundary::InboxSourceFileRecord {
-        atm_core::boundary::InboxSourceFileRecord {
-            path: std::env::temp_dir().join("watch.json"),
-            messages: vec![message],
-        }
-    }
-
-    fn sample_message(text: &str) -> MessageEnvelope {
-        let message_id = AtmMessageId::new();
-
-        MessageEnvelope {
-            from: ROLE_TEAM_LEAD.parse().expect("agent"),
-            text: text.to_string(),
-            timestamp: IsoTimestamp::from_datetime(Utc::now()),
-            read: false,
-            source_team: Some("test-team".parse().expect("team")),
-            summary: Some("summary".to_string()),
-            message_id: Some(message_id),
-            pending_ack_at: None,
-            acknowledged_at: None,
-            acknowledges_message_id: None,
-            parent_message_id: None,
-            thread_mode: None,
-            expires_at: None,
-            task_id: None,
-            extra: Map::new(),
-        }
+#[cfg(test)]
+impl NotificationSink for TestNotificationSink {
+    fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
+        Ok(())
     }
 }
+
+#[cfg(test)]
+#[path = "reconcile_runtime_tests.rs"]
+mod tests;

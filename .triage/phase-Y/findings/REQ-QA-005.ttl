@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/REQ-QA-005>
+  a triage:Finding ;
+  triage:findingId "REQ-QA-005" ;
+  triage:title "Missing write-boundary gate tests — send/ack command path tests absent per sprint-Y3.md sub-tasks 1-2" ;
+  triage:description "Sprint Y.3 sub-tasks 1 and 2 require explicit tests: 'send succeeds without command-owned mailbox rewrite', 'ack succeeds without command-owned mailbox rewrite', and 'only the approved owner path can produce a normal runtime compatibility export — non-owner attempts fail mechanically or are impossible to compile'. No such tests exist in send/mod.rs or ack/mod.rs test sections. The structural barrier (no mailbox::store import in command modules) is correct, but the sprint's required test coverage for write-path routing is absent. Fix: add tests in atm-core that exercise send/ack paths through a mock RetainedServiceRuntime, asserting refresh_compat_inbox_projection is called and write_compat_mailbox_projection is never called directly from command path." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/send/mod.rs crates/atm-core/src/ack/mod.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQ-QA-005/pY-s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s3/cd2c64c3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s3/cd2c64c3> .
+
+<urn:atm:triage:occurrence/REQ-QA-005/pY-s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 714 ;
+  triage:snippet "// test section — no write-boundary gate tests present" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "cd2c64c3" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s3/cd2c64c3> .
+
+<urn:atm:triage:worktree/pY-s3/cd2c64c3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "cd2c64c3" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

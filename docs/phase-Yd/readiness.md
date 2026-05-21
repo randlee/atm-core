@@ -11,11 +11,11 @@ record explicitly says the line is ready.
 
 | Sprint | Closure Result | Date | Candidate Commit | Notes |
 | --- | --- | --- | --- | --- |
-| `Y.14` | `PENDING` | `TBD` | `TBD` | recovered Claude logical-message-set closure on final accepted candidate line |
-| `Y.15` | `PENDING` | `TBD` | `TBD` | production `NotificationSink` boundary closure on final accepted candidate line |
-| `Y.16` | `PENDING` | `TBD` | `TBD` | retained-runtime composition installs live production `NotificationSink` |
-| `Y.17` | `PENDING` | `TBD` | `TBD` | accepted merge candidate includes required end-of-phase fix line and passes validation |
-| `Y.18` | `PENDING` | `TBD` | `TBD` | thin liveness closure or explicit reclassification with final develop-gate result |
+| `Y.14` | `PASS` | `2026-05-19` | `feature/pYd-s14-recovered-claude-logical-message-set-closure HEAD` | recovered Claude logical-message-set closure re-proved on the accepted candidate line; named all-or-nothing tests pass |
+| `Y.15` | `PASS` | `2026-05-19` | `ad61b3dd` | production `NotificationSink` boundary closure on final accepted candidate line; surviving `Y.13` boundary tests passed and helper-bypass grep is clean |
+| `Y.16` | `PASS` | `2026-05-20` | `a551bc1c` | retained-runtime composition owns production runtime installation, installs the live daemon `NotificationSink`, and passes `production_runtime_installs_daemon_notification_sink` |
+| `Y.17` | `PASS` | `2026-05-20` | `2fd404dc` | accepted merge candidate contains `243e473a` in ancestry, includes the required phase-end fix line, and is validation-clean for the Y.17 gate |
+| `Y.18` | `PASS` | `2026-05-20` | `19376e42` | thin runtime-owned notification-worker liveness signal projected directly by runtime_health; develop gate authorized and Phase Z may begin |
 
 Allowed closure-result values:
 
@@ -38,6 +38,8 @@ this table.
 
 - the production send/ack notification path executes through
   `NotificationSink::deliver(...)`
+- the accepted candidate line contains no production-path
+  `maybe_run_post_send_hook(...)` bypass
 
 `Y.16` must prove that:
 
@@ -68,12 +70,16 @@ that:
 
 Final develop-gate verdict:
 
-- `NOT AUTHORIZED`
-- final accepted candidate line: `TBD`
+- `AUTHORIZED`
+- final accepted candidate line: `19376e42`
 
 ## Phase Z Gate
 
-`Phase Z` remains blocked until this record is updated to state that:
+`Phase Z` may begin because this record now states that:
 
 - `Phase Y` is ready to land on `develop`
 - `Phase Z` may begin
+
+Phase Z status:
+
+- `UNBLOCKED` — `Y.18` closed; `Phase Y` ready to land on `develop`; `Phase Z` may begin

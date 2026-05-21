@@ -1,6 +1,6 @@
 # ADR-015 — Daemon Runtime Snapshot Publication And Worker Ownership
 
-- status: proposed
+- status: accepted
 - date: 2026-05-20
 - deciders:
   - team-lead
@@ -46,6 +46,8 @@ The post-`Phase Y` daemon runtime line adopts these rules:
    equivalent actor ownership.
    - `NotificationRuntime` uses a bounded channel to hand events to the worker
    - the worker owns queue/drain/persistence state
+   - lifecycle/degraded status is published as immutable runtime state instead
+     of caller-visible queue/lifecycle locking
    - `ReconcileRuntime` uses a bounded command channel plus per-request reply
      channel
    - the worker owns debounce, coalescing, completion fanout, and fingerprint
@@ -62,6 +64,15 @@ The post-`Phase Y` daemon runtime line adopts these rules:
      or any caller-visible control-plane coordination
    - review must treat it as a bounded lifecycle helper, not as an exception
      that reauthorizes lock-heavy runtime state
+
+5. A bounded retained join-helper registry is acceptable only for timed-out
+   shutdown recovery.
+   - `RETAINED_JOIN_HELPERS` may hold process-global timed-out join helpers so
+     bounded shutdown can fail closed without dropping worker ownership
+   - the registry must remain capacity-bounded
+   - it must not become a general runtime coordination surface
+   - tests that exercise retained join helpers must isolate access to that
+     process-global registry explicitly
 
 ## Consequences
 
@@ -107,11 +118,17 @@ reader/writer lock tuning.
 - `Y.19`:
   - `RuntimeStatusCache` -> immutable snapshot publication via `ArcSwap`
 - `Y.20`:
-  - `NotificationRuntime` -> bounded channel + worker-owned persistence state
+  - `NotificationRuntime` -> bounded command channel + immutable runtime-status
+    publication + worker-owned persistence state
 - `Y.21`:
-  - `ReconcileRuntime` actor contract and reply-path foundation
+  - `ReconcileRuntime` actor contract and reply-path foundation, including
+    shared `JoinHandleOwner` reuse and per-request reply fanout
 - `Y.22`:
-  - `ReconcileRuntime` actor cutover and deletion of the shared-state runtime
-    path
-- `Y.23`:
-  - phase-end proof, readiness record, and ADR acceptance on the final line
+  - `ReconcileRuntime` actor cutover, worker-owned fingerprint-registry
+    ownership, and deletion of the shared-state runtime path
+- `Y.23`: phase-end proof, readiness record, and ADR acceptance on the final line
+  - phase-ending fix-r1 (`9c78d4b3`) closed the last `Rule 4` notification
+    startup seam by removing
+    `command_rx: Mutex<Option<Receiver<NotificationCommand>>>` and keeping
+    notification command-channel handoff fully startup-owned plus `OnceLock`
+    sender publication

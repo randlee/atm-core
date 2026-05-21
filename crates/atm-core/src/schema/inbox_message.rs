@@ -319,6 +319,18 @@ fn strip_metadata_atm_namespace(object: &mut Map<String, Value>) {
     }
 }
 
+fn strip_removed_compatibility_fields(object: &mut Map<String, Value>) {
+    for field in [
+        "source_team",
+        "pendingAckAt",
+        "acknowledgedAt",
+        "acknowledgesMessageId",
+        "expiresAt",
+    ] {
+        object.remove(field);
+    }
+}
+
 pub(crate) fn to_shared_inbox_value_with_policy(
     message: &MessageEnvelope,
     policy: SharedInboxExportPolicy,
@@ -342,8 +354,9 @@ pub(crate) fn to_shared_inbox_value_with_policy(
             )
         })?;
     strip_metadata_atm_namespace(object);
+    strip_removed_compatibility_fields(object);
     if should_export_retrieval_stub(message, policy)? {
-        let retrieval_stub = retrieval_stub_text(message)?;
+        let retrieval_stub = retrieval_stub_text(message);
         object.insert("text".to_string(), Value::String(retrieval_stub));
     }
     Ok(value)
@@ -370,17 +383,11 @@ fn should_export_retrieval_stub(
         && (policy.atm_authored_body_export_max_bytes.is_zero() || message.text.len() > export_cap))
 }
 
-fn retrieval_stub_text(message: &MessageEnvelope) -> Result<String, AtmError> {
-    let Some(message_id) = message.message_id else {
-        return Err(AtmError::mailbox_write(format!(
-            "failed to project shared inbox retrieval stub for {} at {:?}: ATM-authored message is missing message_id",
-            message.from, message.timestamp
-        ))
-        .with_recovery(
-            "Ensure ATM-authored messages retain message_id so the retrieval stub can reference the shared compatibility message id.",
-        ));
-    };
-    Ok(format!("atm read --message-id {message_id}"))
+fn retrieval_stub_text(message: &MessageEnvelope) -> String {
+    let message_id = message
+        .message_id
+        .expect("retrieval stubs are only emitted for ATM-authored messages with message_id");
+    format!("atm read --message-id {message_id}")
 }
 
 #[cfg(test)]
@@ -392,7 +399,8 @@ mod tests {
 
     use super::{
         AlertKind, AtmMessageId, IsoTimestamp, MessageEnvelope, PendingAck,
-        SharedInboxExportPolicy, to_shared_inbox_value, to_shared_inbox_value_with_policy,
+        SharedInboxExportPolicy, ThreadMode, to_shared_inbox_value,
+        to_shared_inbox_value_with_policy,
     };
     use crate::config::types::ByteCount;
     use crate::roles::ROLE_TEAM_LEAD;
@@ -556,7 +564,7 @@ mod tests {
     }
 
     #[test]
-    fn shared_inbox_write_keeps_machine_fields_top_level() {
+    fn shared_inbox_write_keeps_only_approved_immutable_fields() {
         let envelope = MessageEnvelope {
             from: TEST_SENDER.parse().expect("agent"),
             text: "hello".into(),
@@ -586,8 +594,8 @@ mod tests {
         let encoded = to_shared_inbox_value(&envelope).expect("encode");
         let object = encoded.as_object().expect("object");
         assert!(object.contains_key("message_id"));
-        assert!(object.contains_key("source_team"));
-        assert!(object.contains_key("pendingAckAt"));
+        assert!(!object.contains_key("source_team"));
+        assert!(!object.contains_key("pendingAckAt"));
         assert!(object.contains_key("taskId"));
         assert!(
             object
@@ -599,7 +607,83 @@ mod tests {
     }
 
     #[test]
-    fn shared_inbox_write_keeps_ack_fields_top_level() {
+    fn shared_inbox_write_keeps_parent_message_id_and_thread_mode_when_set() {
+        // parentMessageId and threadMode are approved immutable fields and must
+        // survive to_shared_inbox_value when they carry non-None values.
+        let envelope = MessageEnvelope {
+            from: TEST_SENDER.parse().expect("agent"),
+            text: "threaded message".into(),
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: None,
+            summary: None,
+            message_id: Some(AtmMessageId::new()),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: Some(AtmMessageId::new()),
+            thread_mode: Some(ThreadMode::AddDetails),
+            expires_at: None,
+            task_id: None,
+            extra: Map::new(),
+        };
+
+        let encoded = to_shared_inbox_value(&envelope).expect("encode");
+        let object = encoded.as_object().expect("object");
+        assert!(
+            object.contains_key("parentMessageId"),
+            "parentMessageId must be kept in shared inbox export"
+        );
+        assert!(
+            object.contains_key("threadMode"),
+            "threadMode must be kept in shared inbox export"
+        );
+    }
+
+    #[test]
+    fn shared_inbox_write_strips_expires_at() {
+        // expiresAt is a removed compatibility field and must not appear in the
+        // shared inbox export even when the envelope carries a non-None value.
+        let envelope = MessageEnvelope {
+            from: TEST_SENDER.parse().expect("agent"),
+            text: "expiring message".into(),
+            timestamp: IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            ),
+            read: false,
+            source_team: None,
+            summary: None,
+            message_id: Some(AtmMessageId::new()),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: None,
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: Some(IsoTimestamp::from_datetime(
+                Utc.with_ymd_and_hms(2026, 3, 31, 0, 0, 0)
+                    .single()
+                    .expect("timestamp"),
+            )),
+            task_id: None,
+            extra: Map::new(),
+        };
+
+        let encoded = to_shared_inbox_value(&envelope).expect("encode");
+        let object = encoded.as_object().expect("object");
+        assert!(
+            !object.contains_key("expiresAt"),
+            "expiresAt must be stripped from shared inbox export"
+        );
+    }
+
+    #[test]
+    fn shared_inbox_write_strips_ack_workflow_fields_from_export() {
         let acknowledged_at = IsoTimestamp::from_datetime(
             Utc.with_ymd_and_hms(2026, 3, 30, 0, 0, 2)
                 .single()
@@ -629,11 +713,8 @@ mod tests {
 
         let encoded = to_shared_inbox_value(&envelope).expect("encode");
         let object = encoded.as_object().expect("object");
-        assert_eq!(
-            object.get("acknowledgedAt"),
-            Some(&json!("2026-03-30T00:00:02Z"))
-        );
-        assert!(object["acknowledgesMessageId"].as_str().is_some());
+        assert!(!object.contains_key("acknowledgedAt"));
+        assert!(!object.contains_key("acknowledgesMessageId"));
     }
 
     #[test]

@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-QA-S5-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-QA-S5-001" ;
+  triage:title "docs/atm-core/boundaries.md InboxExport section not updated for Y.5 field-stripping" ;
+  triage:description "The InboxExport section of docs/atm-core/boundaries.md documents the compat JSONL output contract but stops at Y.4 changes. It does not reflect the Y.5 removal of source_team, pendingAckAt, acknowledgedAt, acknowledgesMessageId, expiresAt, and metadata.atm.* from the compat output via strip_removed_compatibility_fields() and strip_metadata_atm_namespace(). Fix: update the InboxExport section to list the Y.5 field-stripping changes and reference inbox-field-inventory.md for the full disposition table." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "ARCH" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/atm-core/boundaries.md" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed in Y.5 fix-r1 commit 1c5cd9db: boundaries.md lines 212-219 now explicitly document strip_removed_compatibility_fields (lists all 5 removed fields) and strip_metadata_atm_namespace, with cross-reference to docs/phase-Y/inbox-field-inventory.md. QA-2 arch-qa recheck PASS." ;
+  triage:closedOn <urn:atm:triage:worktree/pY-s5/e55b0c89> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-QA-S5-001/pY-s5/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/1dd78933> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/ARCH-QA-S5-001/pY-s5/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 1 ;
+  triage:snippet "docs/atm-core/boundaries.md InboxExport section — Y.5 field-stripping not documented" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/ARCH-QA-S5-001/pY-s5/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 212 ;
+  triage:snippet "boundaries.md:212-219 Y.5 InboxExport note: strip_removed_compatibility_fields + strip_metadata_atm_namespace documented, inbox-field-inventory.md cross-referenced — COMPLIANT" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "e55b0c89" ;
+  triage:closureNote "Fix-r1 commit 1c5cd9db. All 3 closure conditions satisfied: strip functions named, 5 removed fields listed, inbox-field-inventory.md cross-referenced." ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/e55b0c89> .
+
+<urn:atm:triage:worktree/pY-s5/1dd78933>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pY-s5/e55b0c89>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "e55b0c89" ;
+  triage:orderIndex 2 ;
+  triage:status "closed" .

@@ -486,6 +486,13 @@ mod tests {
             unreachable!("doctor tests do not touch the mail store boundary")
         }
 
+        fn load_stored_message(
+            &self,
+            _request: boundary::MailStoreLoadStoredMessageRequest,
+        ) -> Result<boundary::MailStoreLoadStoredMessageResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
         fn query_mailbox_metadata(
             &self,
             _request: boundary::MailStoreQueryMailboxMetadataRequest,
@@ -625,10 +632,14 @@ mod tests {
     }
 
     fn test_runtime() -> LocalServiceRuntime {
-        LocalServiceRuntime::new(
+        LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
             Arc::new(UnusedTaskStore),
             Arc::new(UnusedRosterStore),
+            Arc::new(crate::LocalFileNonClaudeOutbound::new()),
+            Arc::new(crate::LocalFileNotificationSink::at_path(
+                std::env::temp_dir().join("atm-core-doctor-notifications.jsonl"),
+            )),
         )
     }
 

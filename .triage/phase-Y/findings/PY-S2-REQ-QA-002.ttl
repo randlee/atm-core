@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/REQ-QA-002>
+  a triage:Finding ;
+  triage:findingId "REQ-QA-002" ;
+  triage:title "help.md:57 forward-ref to non-existent docs/phase-Z/cli-json-io-audit.md" ;
+  triage:description "docs/phase-Y/help.md contains a forward reference to docs/phase-Z/cli-json-io-audit.md which does not exist. Fix: mark the reference as a planned future artifact (e.g., add '(planned)' annotation or convert to a note)." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "REQ-QA" ;
+  triage:severity "MINOR" ;
+  triage:repeatable false ;
+  triage:sweepScope "docs/phase-Y/help.md:57" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-16T23:19:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQ-QA-002/pY-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQ-QA-002/pY-s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQ-QA-002/pY-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQ-QA-002/pY-s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQ-QA-002/pY-s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/REQ-QA-002/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s2/63f9c1a8> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s3/891733d9> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s4/afc03311> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/caf628d3> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/9b47f38b> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/ee8de8e3> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/9b47f38b> .
+
+<urn:atm:triage:occurrence/REQ-QA-002/pY-s2/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Y/help.md" ;
+  triage:line 57 ;
+  triage:snippet "- `docs/phase-Z/cli-json-io-audit.md`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s2/63f9c1a8> .
+
+<urn:atm:triage:occurrence/REQ-QA-002/pY-s3/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Y/help.md" ;
+  triage:line 57 ;
+  triage:snippet "- `docs/phase-Z/cli-json-io-audit.md`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "891733d9" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s3/891733d9> .
+
+<urn:atm:triage:occurrence/REQ-QA-002/pY-s4/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Y/help.md" ;
+  triage:line 48 ;
+  triage:snippet "- `docs/phase-Z/cli-json-io-audit.md`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s4-delivery-coordinator-and-state-machines" ;
+  triage:headSha "afc03311" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s4/afc03311> .
+
+<urn:atm:triage:occurrence/REQ-QA-002/pY-s5/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Y/help.md" ;
+  triage:line 48 ;
+  triage:snippet "- `docs/phase-Z/cli-json-io-audit.md`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "caf628d3" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/caf628d3> .
+
+<urn:atm:triage:occurrence/REQ-QA-002/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Y/help.md" ;
+  triage:line 48 ;
+  triage:snippet "- `docs/phase-Z/cli-json-io-audit.md`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "9b47f38b" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/9b47f38b> .
+
+<urn:atm:triage:occurrence/REQ-QA-002/integrate/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Y/help.md" ;
+  triage:line 48 ;
+  triage:snippet "- `docs/phase-Z/cli-json-io-audit.md`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-Y" ;
+  triage:headSha "ee8de8e3" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/ee8de8e3> .
+
+<urn:atm:triage:worktree/pY-s2/63f9c1a8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s2-pre-smoke-easy-fixes" ;
+  triage:headSha "63f9c1a8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pY-s3/891733d9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s3-hard-write-boundary-consolidation" ;
+  triage:headSha "891733d9" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pY-s4/afc03311>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s4-delivery-coordinator-and-state-machines" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s4-delivery-coordinator-and-state-machines" ;
+  triage:headSha "afc03311" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pY-s5/caf628d3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "caf628d3" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pY-s6/9b47f38b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "9b47f38b" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate/ee8de8e3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "ee8de8e3" ;
+  triage:orderIndex 6 .

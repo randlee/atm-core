@@ -39,15 +39,23 @@ Key findings from that review:
 
 These items block `Phase Y` from landing on `develop`.
 
-1. Recovered Claude logical-message-set closure is not yet proven on the final
-   accepted line.
+1. Recovered Claude logical-message-set closure on the final accepted line.
    - issue class:
      - behavioral correctness
    - historical owner:
      - `Y.12`
+   - current status:
+     - `CLOSED by Y.14` on the candidate branch
    - closure requirement:
      - the recovered Claude SQLite-failure path either materializes the full
        logical message set or fails hard
+   - `Y.14` closure result:
+     - closed on `feature/pYd-s14-recovered-claude-logical-message-set-closure`
+     - recovered Claude delivery now routes the final-candidate
+       `SqliteFailedRecovered` path through the message-set seam only
+     - named proof tests:
+       - `sqlite_failure_for_claude_requires_full_logical_message_set_delivery`
+       - `sqlite_failure_for_claude_does_not_emit_message1_without_message2`
 
 2. Production notification execution still bypasses the owned notification
    boundary.
@@ -60,9 +68,22 @@ These items block `Phase Y` from landing on `develop`.
        `NotificationSink::deliver(...)`
      - no production-path direct `maybe_run_post_send_hook(...)` bypass may
        remain
+   - closure status:
+     - closed by `Y.15` on
+       `feature/pYd-s15-production-notification-boundary-closure`
+     - accepted proof consists of:
+       - `rg -n "maybe_run_post_send_hook" crates/atm-core/src` returning no
+         matches
+       - surviving `Y.13` boundary tests passing on the accepted candidate
+         line:
+         - `delivery_notifications_use_notification_sink_boundary`
+         - `notification_sink_failure_is_explicit_in_delivery_warnings`
+         - `notification_sink_backpressure_does_not_reopen_hook_helper_bypass`
 
 3. Daemon retained-runtime composition must install the live
    `NotificationSink`.
+   - status:
+     - `CLOSED: Y.16`
    - issue class:
      - production composition
    - historical owner:
@@ -70,6 +91,13 @@ These items block `Phase Y` from landing on `develop`.
    - closure requirement:
      - the live retained runtime used by the daemon must construct and install
        the daemon-owned `NotificationSink`
+   - closure evidence:
+     - `Y.16` moves retained-runtime installation ownership into
+       `atm_daemon::composition::compose_runtime`
+     - the production retained runtime is built through
+       `build_production_runtime(...)`
+     - named proof test:
+       - `production_runtime_installs_daemon_notification_sink`
 
 4. The final accepted `Phase Y` line must be lint-clean, test-clean, and
    phase-end-review clean on the candidate merge line.
@@ -77,6 +105,18 @@ These items block `Phase Y` from landing on `develop`.
      - release gate / phase-end closure
    - evidence source:
      - post-review fix batches `PY-EOP-FIX-1` and `PY-EOP-FIX-R2`
+  - closure status:
+     - `CLOSED by Y.17` on accepted candidate `2fd404dc`
+  - closure evidence:
+     - `git merge-base --is-ancestor 243e473a integrate/phase-Y` returned
+       `PASS` when `integrate/phase-Y` pointed at accepted candidate
+       `2fd404dc`
+     - the accepted candidate passed:
+       - `cargo fmt --all`
+       - `python3 .just/run_lint.py all`
+       - `cargo test --workspace`
+       - `cargo clippy --workspace -- -D warnings`
+       - `git diff --check`
    - closure requirement:
      - the accepted merge candidate must include the end-of-phase fixes and
        pass the required validation stack before the line is proposed for
@@ -87,10 +127,20 @@ These items block `Phase Y` from landing on `develop`.
    `runtime_health`.
    - issue class:
      - operational readiness
+   - closure status:
+     - `CLOSED by Y.18` on accepted candidate `19376e42`
    - closure rule:
      - if this remains a `develop` blocker, it must close with a simple
        runtime-owned liveness signal that `runtime_health` projects directly
      - do not grow `runtime_health` into a logic-heavy recovery layer
+   - closure evidence:
+     - `NotificationRuntime::worker_liveness()` is the single owner-provided
+       liveness seam
+     - `RuntimeHealthSnapshot.notification_worker_liveness` projects that seam
+       directly
+     - named proof tests:
+       - `runtime_health_projects_worker_liveness_from_notification_runtime`
+       - `runtime_health_projection_does_not_inspect_queue_internals`
 
 ## Non-Blocking Follow-Up
 

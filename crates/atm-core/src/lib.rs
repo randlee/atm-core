@@ -12,6 +12,12 @@ pub mod boundary_support;
 pub mod clear;
 /// Internal configuration discovery and resolution helpers.
 pub(crate) mod config;
+/// Internal shared delivery-plan execution helpers for message-path unification.
+pub(crate) mod delivery_execution;
+/// Internal typed delivery-plan contracts owned by the message state machines.
+pub(crate) mod delivery_plan;
+/// Internal delivery-policy coordinator and event-family state machines.
+pub(crate) mod delivery_policy;
 /// Hidden daemon-facing wrapper surface over crate-private boundary helpers.
 #[doc(hidden)]
 pub mod direct_boundaries;
@@ -125,6 +131,10 @@ pub use graft::{
     AtmGraftClient,
 };
 pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
-pub use service_runtime::LocalServiceRuntime;
+pub use service_runtime::{
+    LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
+};
 #[doc(hidden)]
 pub use service_runtime_store::install_default_runtime_factory;
+#[doc(hidden)]
+pub use service_runtime_store::install_default_runtime_instance;

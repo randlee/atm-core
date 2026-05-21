@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-Y6-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-Y6-003" ;
+  triage:title "write_messages retained without repair-only doc marker per inbox-write-path-audit.md" ;
+  triage:description "docs/phase-Y/inbox-write-path-audit.md states write_messages at mailbox/atomic.rs:28 and write_compat_mailbox_projection stack at mailbox/store.rs are conditionally deleted in Y.6 or retained only behind repair/rebuild visibility. Y.6 retains these as active production functions without explicit repair-only doc comments or visibility restriction. No module-level note marks these as non-reachable from normal runtime send/ack paths. Fix: add doc comments to write_messages, write_compat_mailbox_projection, and write_compat_mailbox_projection_with_policy stating repair/rebuild only; update inbox-write-path-audit.md §5 ledger to reflect final Y.6 status." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/mailbox/atomic.rs crates/atm-core/src/mailbox/store.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-Y6-003/pY-s6/1> .
+
+<urn:atm:triage:occurrence/ATM-QA-Y6-003/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/atomic.rs" ;
+  triage:line 28 ;
+  triage:snippet "fn write_messages — retained without repair-only doc; inbox-write-path-audit.md expected deletion or explicit repair-only marking" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/2b808428> .
+
+<urn:atm:triage:worktree/pY-s6/2b808428>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

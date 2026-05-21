@@ -3,8 +3,13 @@ use super::runtime_health::{
 };
 use super::{
     LocalIpcServerTransportAdapter,
+    boundary_adapters::DaemonNotificationSink,
+    composition::build_production_runtime,
+    daemon_runtime_observability::SubsystemObservability,
     lifecycle_control::LifecycleControlSourceAdapter,
     local_ipc_transport::RuntimeServeHooks,
+    non_claude_outbound_runtime::DaemonNonClaudeOutbound,
+    notification_runtime::NotificationRuntime,
     test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
 };
 use atm_core::boundary::RequestDispatcher;
@@ -18,6 +23,7 @@ use atm_core::protocol::{
     RuntimeReadinessState, TeamMemberHeartbeatRequest,
 };
 use atm_core::schema::{AgentMember, TeamConfig};
+use atm_core::send::{SendMessageSource, SendRequest, send_mail_with_runtime};
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
@@ -58,10 +64,14 @@ fn test_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
         .with_recovery("Set ATM_TEST_SQLITE_DB_PATH before running daemon doctor/runtime tests.")
     })?;
     let assembly = atm_rusqlite::SqliteBoundaryAssembly::new(std::path::PathBuf::from(path))?;
-    Ok(atm_core::LocalServiceRuntime::new(
+    Ok(atm_core::LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.mail_store_arc(),
         assembly.task_store_arc(),
         assembly.roster_store_arc(),
+        Arc::new(atm_core::LocalFileNonClaudeOutbound::new()),
+        Arc::new(atm_core::LocalFileNotificationSink::at_path(
+            atm_core::home::host_runtime_dir()?.join("notifications.jsonl"),
+        )),
     ))
 }
 
@@ -354,6 +364,72 @@ fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
     .expect("write team config");
 }
 
+fn write_workspace_config(workspace_dir: &std::path::Path) {
+    std::fs::write(workspace_dir.join(".atm.toml"), "[atm]\n").expect("workspace config");
+}
+
+fn read_notification_output(path: &std::path::Path) -> String {
+    std::fs::read_to_string(path).expect("notification output")
+}
+
+#[test]
+fn production_runtime_installs_daemon_notification_sink() {
+    let tempdir = TempDir::new().expect("tempdir");
+    let workspace_dir = tempdir.path().join("workspace");
+    let atm_home = tempdir.path().join("atm-home");
+    let db_path = tempdir.path().join("mail.db");
+    std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    write_workspace_config(&workspace_dir);
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
+    write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
+
+    let _env = EnvGuard::set_many([
+        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+    ]);
+    let notification_path = atm_core::home::host_runtime_dir()
+        .expect("host runtime dir")
+        .join("notifications.jsonl");
+    let sink = DaemonNotificationSink::new(NotificationRuntime::new_with_observability(
+        SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
+    ));
+    sink.start().expect("start notification sink");
+    let assembly = assemble_boundary(&db_path).expect("sqlite boundary");
+    let runtime = build_production_runtime(
+        assembly.mail_store_arc(),
+        assembly.task_store_arc(),
+        assembly.roster_store_arc(),
+        Arc::new(DaemonNonClaudeOutbound::new()),
+        Arc::new(sink.clone()),
+    );
+
+    let request = SendRequest::new(
+        atm_home.clone(),
+        workspace_dir.clone(),
+        Some(ROLE_TEAM_LEAD),
+        "qa-a@test-team",
+        Some(TEST_TEAM),
+        SendMessageSource::Inline("boundary install proof".to_string()),
+        None,
+        false,
+        None,
+        false,
+    )
+    .expect("send request");
+    let observability = atm_core::observability::NullObservability;
+
+    send_mail_with_runtime(request, &observability, &runtime).expect("send mail");
+    sink.shutdown().expect("shutdown notification sink");
+
+    let output = read_notification_output(&notification_path);
+    assert!(
+        output.contains("\"kind\":\"delivery\""),
+        "expected delivery notification output, got: {output}"
+    );
+}
+
 #[test]
 #[serial_test::serial(env)]
 fn heartbeat_updates_status_cache_and_doctor_projection() {
@@ -397,7 +473,7 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
         other => panic!("expected heartbeat response, got {other:?}"),
     }
 
-    let snapshot = status_cache.snapshot().expect("snapshot");
+    let snapshot = status_cache.snapshot();
     assert_eq!(snapshot.liveness, RuntimeLivenessState::Running);
     assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
     assert_eq!(snapshot.member_counts.active_members, 1);
@@ -433,7 +509,7 @@ fn dispatcher_hydrates_unknown_members_from_team_roster_on_startup() {
     let _dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
 
-    let snapshot = status_cache.snapshot().expect("snapshot");
+    let snapshot = status_cache.snapshot();
     assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
     assert_eq!(snapshot.member_counts.active_members, 0);
     assert_eq!(snapshot.member_counts.idle_members, 0);
@@ -479,15 +555,11 @@ fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
         .expect("runtime view reload should succeed");
 
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &leader)
-            .expect("leader state"),
+        status_cache.member_state_for_test(&team, &leader),
         Some(RuntimeMemberState::Active)
     );
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &qa)
-            .expect("qa state"),
+        status_cache.member_state_for_test(&team, &qa),
         Some(RuntimeMemberState::Unknown)
     );
 }
@@ -523,15 +595,13 @@ fn reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_stat
         .join("teams")
         .join(TEST_TEAM)
         .join("config.json");
-    std::fs::write(&config_path, br#"{"members":["team-lead",}"#).expect("invalid config");
+    std::fs::write(&config_path, br#"{"members":["some-member",}"#).expect("invalid config");
 
     dispatcher
         .reload_runtime_view()
         .expect("invalid config should be ignored once roster truth is in sqlite");
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &leader)
-            .expect("leader state"),
+        status_cache.member_state_for_test(&team, &leader),
         Some(RuntimeMemberState::Active)
     );
 }
@@ -593,18 +663,16 @@ fn heartbeat_rejects_live_pid_conflict() {
         "ATM_IDENTITY_CONFLICT: stop and report to user immediately"
     );
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &member)
-            .expect("member state"),
+        status_cache.member_state_for_test(&team, &member),
         Some(RuntimeMemberState::IdentityConflict)
     );
-    let snapshot = status_cache.snapshot().expect("snapshot");
+    let snapshot = status_cache.snapshot();
     assert_eq!(snapshot.readiness, RuntimeReadinessState::Degraded);
     assert!(
         snapshot
             .detail
-            .as_deref()
-            .is_some_and(|detail| detail.contains("identity conflict"))
+            .as_ref()
+            .is_some_and(|detail: &String| detail.contains("identity conflict"))
     );
 }
 
@@ -663,64 +731,48 @@ fn heartbeat_evicts_oldest_member_and_projects_missing_roster_entries_as_unknown
     let team = test_team().clone();
     let member: AgentName = "qa-a".parse().expect("member");
     let base = Utc::now();
-    status_cache
-        .insert_member_for_test(
-            team.clone(),
-            member.clone(),
-            Some(u32::MAX),
-            RuntimeMemberState::Idle,
-            Some(IsoTimestamp::from_datetime(base)),
-        )
-        .expect("seed evicted member");
+    status_cache.insert_member_for_test(
+        team.clone(),
+        member.clone(),
+        Some(u32::MAX),
+        RuntimeMemberState::Idle,
+        Some(IsoTimestamp::from_datetime(base)),
+    );
 
     for index in 0..4095 {
         let member_name: AgentName = format!("member-{index}").parse().expect("member");
-        status_cache
-            .insert_member_for_test(
-                team.clone(),
-                member_name,
-                Some(index as u32 + 2),
-                RuntimeMemberState::Idle,
-                Some(IsoTimestamp::from_datetime(
-                    base + ChronoDuration::seconds(index as i64 + 1),
-                )),
-            )
-            .expect("insert member");
+        status_cache.insert_member_for_test(
+            team.clone(),
+            member_name,
+            Some(index as u32 + 2),
+            RuntimeMemberState::Idle,
+            Some(IsoTimestamp::from_datetime(
+                base + ChronoDuration::seconds(index as i64 + 1),
+            )),
+        );
     }
 
-    let response = status_cache
-        .record_heartbeat_for_test(
-            &TeamMemberHeartbeatRequest {
-                team: team.clone(),
-                member: "trigger-member".parse().expect("member"),
-                pid: std::process::id(),
-                observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(2)),
-                activity: HeartbeatActivity::ActiveToolUse,
-            },
-            false,
-        )
-        .expect("heartbeat");
+    let response = status_cache.record_heartbeat_for_test(
+        &TeamMemberHeartbeatRequest {
+            team: team.clone(),
+            member: "trigger-member".parse().expect("member"),
+            pid: std::process::id(),
+            observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(2)),
+            activity: HeartbeatActivity::ActiveToolUse,
+        },
+        false,
+    );
     assert_eq!(response.state, RuntimeMemberState::Active);
 
-    assert_eq!(
-        status_cache.member_count_for_test().expect("member count"),
-        4096
-    );
-    assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &member)
-            .expect("member state"),
-        None
-    );
-    let scoped_snapshot = status_cache
-        .snapshot_for_members_for_test([
-            (
-                team.clone(),
-                "trigger-member".parse().expect("trigger member"),
-            ),
-            (team.clone(), member.clone()),
-        ])
-        .expect("scoped snapshot");
+    assert_eq!(status_cache.member_count_for_test(), 4096);
+    assert_eq!(status_cache.member_state_for_test(&team, &member), None);
+    let scoped_snapshot = status_cache.snapshot_for_members_for_test([
+        (
+            team.clone(),
+            "trigger-member".parse().expect("trigger member"),
+        ),
+        (team.clone(), member.clone()),
+    ]);
     assert_eq!(scoped_snapshot.member_counts.active_members, 1);
     assert_eq!(scoped_snapshot.member_counts.unknown_members, 1);
 }
@@ -739,15 +791,13 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
     let team = test_team().clone();
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
-    status_cache
-        .insert_member_for_test(
-            team.clone(),
-            member.clone(),
-            Some(u32::MAX),
-            RuntimeMemberState::IdentityConflict,
-            None,
-        )
-        .expect("seed stale conflict");
+    status_cache.insert_member_for_test(
+        team.clone(),
+        member.clone(),
+        Some(u32::MAX),
+        RuntimeMemberState::IdentityConflict,
+        None,
+    );
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
@@ -783,17 +833,15 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
         } else {
             format!("conflict-{index}").parse().expect("member")
         };
-        status_cache
-            .insert_member_for_test(
-                team.clone(),
-                member_name,
-                Some(index as u32 + 1),
-                RuntimeMemberState::IdentityConflict,
-                Some(IsoTimestamp::from_datetime(
-                    base + ChronoDuration::seconds(index as i64),
-                )),
-            )
-            .expect("seed conflict member");
+        status_cache.insert_member_for_test(
+            team.clone(),
+            member_name,
+            Some(index as u32 + 1),
+            RuntimeMemberState::IdentityConflict,
+            Some(IsoTimestamp::from_datetime(
+                base + ChronoDuration::seconds(index as i64),
+            )),
+        );
     }
 
     let request = TeamMemberHeartbeatRequest {
@@ -803,24 +851,18 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
         observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
         activity: HeartbeatActivity::ActiveToolUse,
     };
-    status_cache
-        .record_identity_conflict_for_test(&request, u32::MAX)
-        .expect("record conflict");
+    status_cache.record_identity_conflict_for_test(&request, u32::MAX);
 
     assert_eq!(
-        status_cache.member_count_for_test().expect("member count"),
+        status_cache.member_count_for_test(),
         MAX_STATUS_CACHE_ENTRIES
     );
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &oldest_member)
-            .expect("oldest member state"),
+        status_cache.member_state_for_test(&team, &oldest_member),
         None
     );
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &request.member)
-            .expect("trigger member state"),
+        status_cache.member_state_for_test(&team, &request.member),
         Some(RuntimeMemberState::IdentityConflict)
     );
 }

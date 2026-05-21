@@ -16,6 +16,7 @@ mod lifecycle_control;
 mod local_ipc_connection;
 mod local_ipc_transport;
 mod local_ipc_wake;
+mod non_claude_outbound_runtime;
 mod notification_runtime;
 mod peer_transport;
 mod reconcile_runtime;
@@ -34,6 +35,7 @@ mod tests_host_ownership;
 #[cfg(test)]
 mod tests_lifecycle;
 mod watch_runtime;
+mod worker_support;
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -100,10 +102,6 @@ impl AtmHomeDir {
 
     pub(crate) fn as_path(&self) -> &std::path::Path {
         &self.0
-    }
-
-    pub(crate) fn into_inner(self) -> PathBuf {
-        self.0
     }
 
     #[cfg(test)]

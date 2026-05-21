@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-024>
+  a triage:Finding ;
+  triage:findingId "YB-024" ;
+  triage:title "sprint-Y11.md status: planned (must be complete)" ;
+  triage:description "docs/phase-Yb/sprint-Y11.md frontmatter still shows status: planned after implementation is complete. DOC-001 pattern for Y.11." ;
+  triage:phaseId "phase-Yb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "PYB-PHASE-END-QA-2" ;
+  triage:fixedOnBranch "integrate/phase-Y" ;
+  triage:fixedAtCommit "9d5b3474" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-024/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-024/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s7/29f8c388> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s11/29f8c388> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYb-s11/29f8c388> .
+
+<urn:atm:triage:occurrence/YB-024/s7/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Yb/sprint-Y11.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "29f8c388" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s7/29f8c388> .
+
+<urn:atm:triage:occurrence/YB-024/s11/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Yb/sprint-Y11.md" ;
+  triage:line 4 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "29f8c388" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s11/29f8c388> .
+
+<urn:atm:triage:worktree/pYb-s7/29f8c388>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "29f8c388" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pYb-s11/29f8c388>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "29f8c388" ;
+  triage:orderIndex 5 .

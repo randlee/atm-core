@@ -3653,10 +3653,24 @@ Acceptance / Phase Z Smoke Gate:
 Status summary:
 - `Phase Yc` captured the two original runtime blockers reopened by the focused
   production-readiness review.
+- `Y.15` is now closed on
+  `feature/pYd-s15-production-notification-boundary-closure`; the surviving
+  notification boundary proof now lives on the final accepted `Phase Y`
+  candidate line instead of only on the focused `Yc` line.
+- `Y.16` retained-runtime composition closure is now present on the accepted
+  candidate line through merge commit `2fd404dc`.
+- `Y.17` candidate closure is now complete at `2fd404dc`; the accepted
+  candidate contains the required phase-end fix line and is validation-clean.
+- `Y.18` thin-liveness closure and final develop gate are now complete at
+  `19376e42`; the accepted candidate is authorized for `develop`, and
+  `Phase Z` may begin.
 - before `integrate/phase-Y` lands on `develop`, the broader `Phase Y`
   blocker set must be documented explicitly and closed on a final
   develop-gate line.
-- `Phase Z` remains blocked until that closeout line says `Phase Y` is ready
+- `Y.14` recovered Claude logical-message-set closure is complete on
+  `feature/pYd-s14-recovered-claude-logical-message-set-closure`; the
+  full `Y.14` through `Y.18` closeout line is now complete.
+- `Phase Z` is unblocked because the closeout line now says `Phase Y` is ready
   for `develop`.
 
 Goal:
@@ -3714,6 +3728,9 @@ Status summary:
   `Phase Y` lands on `develop`.
 - implementation continues on the existing `integrate/phase-Y` line rather
   than creating a second long-lived integration branch
+- `Phase Ye` closes on the accepted line once `Y.23` records the phase-end
+  architecture proof and `ADR-015` acceptance.
+- `Phase Ye: closed — Y.23 phase-end proof recorded and ADR-015 accepted.`
 
 Goal:
 - replace read-mostly daemon status locking with immutable snapshot publication
@@ -3732,6 +3749,7 @@ Execution shape:
   - `Y.21` reconcile runtime actor foundation
   - `Y.22` reconcile runtime cutover
   - `Y.23` phase-end architecture proof
+  - closed on accepted line after `Y.23` phase-end architecture proof
 
 Immediate planning outputs:
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`

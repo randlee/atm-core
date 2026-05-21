@@ -1,0 +1,133 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-008>
+  a triage:Finding ;
+  triage:findingId "YB-008" ;
+  triage:title "DaemonNonClaudeOutbound dead phantom never wired into delivery path" ;
+  triage:description "RuntimeComposition._non_claude_outbound (composition.rs:229) holds DaemonNonClaudeOutbound but never injects it into LocalServiceRuntime used for actual request handling. default_local_runtime() calls LocalServiceRuntime::new with 3-arg constructor installing LocalFileNonClaudeOutbound instead. RULE-004 dual-surface violation." ;
+  triage:phaseId "phase-Yb" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "workspace" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "PYB-PHASE-END-QA-2" ;
+  triage:fixedOnBranch "integrate/phase-Y" ;
+  triage:fixedAtCommit "9d5b3474" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:dispatchBlockedReason "FIX-R1 added explanatory comment but did not remove dead field or inject it into delivery path. RULE-004 violation remains: field is instantiated at line 232 but never referenced (3 total references: import + declaration + instantiation)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-008/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-008/s9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-008/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-008/s10/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-008/s11/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-008/s11/2> ;
+  triage:openOn <urn:atm:triage:worktree/s9/c3426bb4> ;
+  triage:openOn <urn:atm:triage:worktree/s10/c531c3ab> ;
+  triage:openOn <urn:atm:triage:worktree/s11/e0ea1f07> ;
+  triage:promoteTo <urn:atm:triage:worktree/s9/c3426bb4> .
+
+<urn:atm:triage:occurrence/YB-008/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 147 ;
+  triage:snippet "_non_claude_outbound: DaemonNonClaudeOutbound," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/c3426bb4> .
+
+<urn:atm:triage:occurrence/YB-008/s9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 229 ;
+  triage:snippet "_non_claude_outbound: DaemonNonClaudeOutbound::new()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:occursIn <urn:atm:triage:worktree/s9/c3426bb4> .
+
+<urn:atm:triage:occurrence/YB-008/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 147 ;
+  triage:snippet "_non_claude_outbound: DaemonNonClaudeOutbound," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/c531c3ab> .
+
+<urn:atm:triage:occurrence/YB-008/s10/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 229 ;
+  triage:snippet "_non_claude_outbound: DaemonNonClaudeOutbound::new()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:occursIn <urn:atm:triage:worktree/s10/c531c3ab> .
+
+<urn:atm:triage:occurrence/YB-008/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 147 ;
+  triage:snippet "_non_claude_outbound: DaemonNonClaudeOutbound," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "e0ea1f07" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/e0ea1f07> .
+
+<urn:atm:triage:occurrence/YB-008/s11/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 229 ;
+  triage:snippet "_non_claude_outbound: DaemonNonClaudeOutbound::new()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "e0ea1f07" ;
+  triage:occursIn <urn:atm:triage:worktree/s11/e0ea1f07> .
+
+<urn:atm:triage:worktree/s7/61e9dfd9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "61e9dfd9" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s8/6b7725bc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:headSha "6b7725bc" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s9/c3426bb4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s10/c531c3ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s11/e0ea1f07>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "e0ea1f07" ;
+  triage:orderIndex 5 .

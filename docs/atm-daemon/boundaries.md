@@ -40,8 +40,8 @@ even though they are not public cross-crate traits:
   - hydrates durable team/member truth only through `RosterStore`; it must not
     rediscover teams by walking `ATM_HOME/.claude/teams`
   - must remain separate from socket serving and peer transport code
-  - Phase `Ye` target design is immutable snapshot publication for readers,
-    not one daemon-shared mutable cache lock
+  - immutable snapshot publication is the accepted design for readers; no
+    daemon-shared mutable cache lock is used
 
 ## Planned R.20 partition map
 
@@ -259,9 +259,15 @@ Notes:
   internals.
 - Notification delivery in the reconcile path is boundary-only; tests exercise
   fake `NotificationSink` implementations rather than plugin/runtime internals.
-- Phase `Ye` target design is one worker-owned actor lane with bounded command
-  input plus per-request reply routing; pending/completed/debounce state must
-  not remain daemon-shared mutex state at closure.
+- accepted `Phase Ye` design is one worker-owned actor lane with bounded
+  command-channel handoff plus per-request reply routing; pending/completed/
+  debounce state must not remain daemon-shared mutex state at closure.
+- the accepted reconcile lane is an actor-owned request path; callers submit
+  work through the bounded command channel and do not share worker state.
+- `Y.21` closed the command/reply contract, reply fanout, and shared
+  `JoinHandleOwner` lifecycle helper; `Y.22` closed deletion of the remaining
+  production shared-state runtime path and moved notification fingerprint
+  ownership fully inside `ReconcileWorkerState`.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use
@@ -379,15 +385,16 @@ Notes:
   degrading to tracing-only behavior.
 - The queue is intentionally bounded at `64` events; overflow fails closed with
   typed backpressure instead of silently buffering unbounded plugin traffic.
-- Phase `Ye` target design is one worker-owned bounded command channel rather
-  than a caller-visible shared mutable queue/lifecycle lock.
+- `Y.20` replaced the caller-visible shared queue/lifecycle lock with one
+  bounded command-channel handoff (`sync_channel`), immutable runtime-status
+  publication, and worker-owned drain/persistence state.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use
     `NotificationSink::deliver(...)` only and must not open plugin/agent
     delivery paths directly
-- `Phase Yc` closes the last daemon/runtime consistency gap for this boundary:
-  - `Y.13` must ensure the retained runtime factory installs the daemon-owned
+- `Phase Yc` closed the last daemon/runtime consistency gap for this boundary:
+  - `Y.13` ensures the retained runtime factory installs the daemon-owned
     `NotificationSink` adapter on the live send/ack executor path rather than
     allowing direct helper-owned notification execution to survive
   - shutdown remains bounded by the current `3s`
@@ -431,9 +438,8 @@ Notes:
   dispatcher and projected into `atm doctor`.
 - The cache-cap rule must bound actual retained entries, not only member-state
   labels.
-- Phase `Ye` target design is immutable snapshot publication through `ArcSwap`
-  for readers; there must be no daemon-shared mutable cache lock on the
-  accepted `Phase Ye` line.
+- immutable snapshot publication through `ArcSwap` is the accepted design for
+  readers; no daemon-shared mutable cache lock is used.
 - `Phase Yd` adds one daemon-private liveness DTO family owned by
   `atm_daemon::runtime_health` for final `Phase Y` closeout:
   - `NotificationWorkerLiveness`

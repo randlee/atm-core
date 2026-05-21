@@ -39,6 +39,12 @@ may land on `develop`:
   - `Phase Y` may land on `develop`
   - `Phase Z` may begin
 
+Current gate status:
+
+- `Phase Yd` final accepted candidate line: `19376e42`
+- `Phase Y` may land on `develop`
+- `Phase Z` may begin
+
 ## Pre-Phase JSON I/O Status
 
 The CLI JSON I/O audit is already complete:

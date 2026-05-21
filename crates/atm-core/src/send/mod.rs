@@ -7,24 +7,40 @@ use serde_json::Map;
 use tracing::warn;
 
 use crate::address::AgentAddress;
-use crate::boundary;
 use crate::config;
-use crate::error::{AtmError, AtmErrorCode};
+use crate::delivery_execution::{
+    DeliveryTransitionContext, emit_delivery_plan_transitions, execute_delivery_plan,
+};
+use crate::delivery_plan::{
+    DeliveryPlan, delivery_plan_disposition, logical_messages_from_persistence,
+};
+use crate::delivery_policy::{
+    DeliveryEventFamily, DeliveryPolicyCoordinator, DeliveryRecipientSnapshot,
+};
+use crate::error::AtmError;
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort};
-use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
-use crate::workflow;
 
 mod alert_state;
+mod delivery_persistence;
 pub(crate) mod file_policy;
-pub(super) mod hook;
+#[allow(
+    dead_code,
+    reason = "The direct CLI post-send hook helper is intentionally dormant while retained-runtime notification delivery is boundary-owned."
+)]
+pub(crate) mod hook;
 pub(crate) mod input;
+mod missing_config_notice;
+mod persistence;
 pub(crate) mod summary;
+
+pub(crate) use delivery_persistence::{DeliveryPersistenceDisposition, DeliveryPersistenceResult};
+pub(crate) use persistence::persist_message_and_seed_workflow;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub enum SendMessageSource {
@@ -92,7 +108,7 @@ pub struct SendOutcome {
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
-    pub outcome: String,
+    pub outcome: SendCommandOutcome,
     pub message_id: AtmMessageId,
     pub requires_ack: bool,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -105,6 +121,22 @@ pub struct SendOutcome {
     pub warnings: Vec<WarningEntry>,
     #[serde(default, skip_serializing_if = "is_false")]
     pub dry_run: bool,
+}
+
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
+#[serde(rename_all = "snake_case")]
+pub enum SendCommandOutcome {
+    Sent,
+    DryRun,
+}
+
+impl SendCommandOutcome {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Self::Sent => "sent",
+            Self::DryRun => "dry_run",
+        }
+    }
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
@@ -162,11 +194,190 @@ pub fn send_mail_with_runtime(
     send_mail_with_runtime_impl(request, observability, runtime)
 }
 
-fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn send_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     request: SendRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
 ) -> Result<SendOutcome, AtmError> {
+    let context = prepare_send_context(runtime, &request)?;
+    let task_id = request.task_id.clone();
+    let requires_ack = request.requires_ack || task_id.is_some();
+    let body = resolve_message_body(
+        &request.message_source,
+        &request.current_dir,
+        &request.home_dir,
+        &context.recipient.team,
+    )?;
+    let summary = summary::build_summary(&body, request.summary_override.clone());
+    let message_id = AtmMessageId::new();
+    let timestamp = IsoTimestamp::now();
+
+    let persistence = persist_send_message(
+        runtime,
+        &request,
+        &context,
+        &body,
+        &summary,
+        message_id,
+        timestamp,
+        requires_ack,
+        task_id.clone(),
+    )?;
+    finalize_send_outcome(
+        runtime,
+        observability,
+        &request,
+        &context,
+        &body,
+        &summary,
+        message_id,
+        requires_ack,
+        task_id,
+        persistence,
+    )
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Y.6 closeout keeps the explicit send outcome pieces visible at the sprint seam."
+)]
+fn finalize_send_outcome<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    runtime: &R,
+    observability: &dyn ObservabilityPort,
+    request: &SendRequest,
+    context: &SendExecutionContext,
+    body: &str,
+    summary: &str,
+    message_id: AtmMessageId,
+    requires_ack: bool,
+    task_id: Option<TaskId>,
+    persistence: DeliveryPersistenceResult,
+) -> Result<SendOutcome, AtmError> {
+    let command_outcome = if request.dry_run {
+        SendCommandOutcome::DryRun
+    } else {
+        SendCommandOutcome::Sent
+    };
+    let mut outcome = build_send_outcome(
+        request,
+        context,
+        body,
+        summary,
+        message_id,
+        requires_ack,
+        task_id.clone(),
+        command_outcome,
+        &persistence,
+    );
+    if !request.dry_run {
+        let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
+        let execution = execute_delivery_plan(runtime, context.config.as_ref(), &plan)?;
+        emit_delivery_plan_transitions(
+            observability,
+            DeliveryTransitionContext {
+                family: context.delivery_family,
+                team: &context.recipient.team,
+                agent: &context.recipient.agent,
+                sender: &context.canonical_sender,
+                message_id,
+                task_id: task_id.clone(),
+            },
+            &plan,
+            &execution,
+        )?;
+        outcome.warnings.extend(execution.warnings);
+    }
+    emit_send_command_event(
+        observability,
+        command_outcome.as_str(),
+        &outcome,
+        task_id,
+        &context.canonical_sender,
+    );
+    Ok(outcome)
+}
+
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Y.6 closeout keeps the explicit send outcome fields aligned with the command contract."
+)]
+fn build_send_outcome(
+    request: &SendRequest,
+    context: &SendExecutionContext,
+    body: &str,
+    summary: &str,
+    message_id: AtmMessageId,
+    requires_ack: bool,
+    task_id: Option<TaskId>,
+    command_outcome: SendCommandOutcome,
+    persistence: &DeliveryPersistenceResult,
+) -> SendOutcome {
+    let mut outcome = SendOutcome {
+        action: CommandAction::Send,
+        team: context.recipient.team.clone(),
+        agent: context.recipient.agent.clone(),
+        sender: context.canonical_sender.clone(),
+        outcome: command_outcome,
+        message_id,
+        requires_ack,
+        task_id,
+        summary: Some(summary.to_string()),
+        message: request.dry_run.then_some(body.to_string()),
+        warnings: context.warnings.clone(),
+        dry_run: request.dry_run,
+    };
+    outcome
+        .warnings
+        .extend(persistence.warnings.iter().cloned());
+    outcome
+}
+
+fn build_send_delivery_plan(
+    context: &SendExecutionContext,
+    requires_ack: bool,
+    persistence: &DeliveryPersistenceResult,
+) -> Result<DeliveryPlan, AtmError> {
+    Ok(DeliveryPlan::new(
+        crate::delivery_plan::DeliveryPlanKind::Send,
+        delivery_plan_disposition(persistence.disposition),
+        crate::delivery_plan::delivery_target_for_snapshot(
+            &context.inbox_path,
+            &context.delivery_snapshot,
+        ),
+        context.recipient.clone(),
+        context.delivery_snapshot.recipient_pane_id.clone(),
+        logical_messages_from_persistence(persistence, requires_ack, false)
+            .map_err(|error| {
+                AtmError::mailbox_write(error.to_string()).with_recovery(
+                    "Repair the persisted delivery record shape before retrying delivery-plan execution.",
+                )
+            })?,
+        persistence.warnings.clone(),
+    ))
+}
+
+struct SendExecutionContext {
+    config: Option<config::AtmConfig>,
+    recipient: ResolvedRecipient,
+    sender_team: Option<TeamName>,
+    canonical_sender: AgentName,
+    display_sender: AgentName,
+    inbox_path: PathBuf,
+    delivery_snapshot: DeliveryRecipientSnapshot,
+    delivery_family: DeliveryEventFamily,
+    warnings: Vec<WarningEntry>,
+}
+
+fn prepare_send_context<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    runtime: &R,
+    request: &SendRequest,
+) -> Result<SendExecutionContext, AtmError> {
     let config = runtime.load_config(&request.current_dir)?;
     let canonical_sender =
         identity::resolve_sender_identity(request.sender_override.as_deref(), config.as_ref())?;
@@ -183,21 +394,53 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
         &recipient.team,
         config.as_ref(),
     );
-
     let team_dir = runtime.team_dir(&request.home_dir, &recipient.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&recipient.team));
     }
-
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
     let mut warnings = Vec::new();
+    validate_send_target(
+        runtime,
+        request,
+        &recipient,
+        &team_dir,
+        &inbox_path,
+        &mut warnings,
+    )?;
+    let delivery_policy = DeliveryPolicyCoordinator::new();
+    let delivery_snapshot =
+        delivery_policy.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)?;
+    let delivery_family = DeliveryPolicyCoordinator::resolve_send_family(
+        request.parent_message_id,
+        request.thread_mode,
+    );
+    Ok(SendExecutionContext {
+        config,
+        recipient,
+        sender_team,
+        canonical_sender,
+        display_sender,
+        inbox_path,
+        delivery_snapshot,
+        delivery_family,
+        warnings,
+    })
+}
 
-    match runtime.load_team_config(&team_dir) {
+fn validate_send_target<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
+    runtime: &R,
+    request: &SendRequest,
+    recipient: &ResolvedRecipient,
+    team_dir: &Path,
+    inbox_path: &Path,
+    warnings: &mut Vec<WarningEntry>,
+) -> Result<(), AtmError> {
+    match runtime.load_team_config(team_dir) {
         Ok(team_config) => {
-            alert_state::clear_missing_team_config_alert(
-                &request.home_dir,
-                &alert_state::missing_team_config_alert_key(&team_dir),
-            );
+            clear_missing_team_config_alert(&request.home_dir, team_dir);
             if !team_config
                 .members
                 .iter()
@@ -205,68 +448,50 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
             {
                 return Err(AtmError::agent_not_found(&recipient.agent, &recipient.team));
             }
+            Ok(())
         }
         Err(error) if error.is_missing_document() => {
-            if !inbox_path.exists() {
-                return Err(AtmError::missing_document(format!(
-                    "team config is missing at {} and inbox {} does not exist, so send cannot safely proceed",
-                    team_dir.join("config.json").display(),
-                    inbox_path.display()
-                ))
-                .with_recovery(
-                    "Restore config.json for the team or create the intended inbox by an approved workflow before retrying.",
-                ));
-            }
-
-            warnings.push(WarningEntry::new(
-                format!(
-                    "warning: team config is missing at {}; send used existing inbox fallback for {}@{}.",
-                    team_dir.join("config.json").display(),
-                    recipient.agent,
-                    recipient.team
-                ),
-                Some("Restore the team config."),
-            ));
-            warn!(code = %AtmErrorCode::WarningMissingTeamConfigFallback,
-                config_path = %team_dir.join("config.json").display(),
-                recipient = %recipient.agent,
-                team = %recipient.team,
-                "send used existing inbox fallback; team config is missing"
-            );
-
-            if !request.dry_run {
-                notify_team_lead_missing_config(
-                    runtime,
-                    &request.home_dir,
-                    &team_dir,
-                    &recipient.team,
-                    &recipient.agent,
-                );
-            }
+            missing_config_notice::warn_missing_team_config(
+                runtime, request, recipient, team_dir, inbox_path, warnings,
+            )
         }
-        Err(error) => return Err(error),
+        Err(error) => Err(error),
     }
+}
 
-    let task_id = request.task_id;
-    let requires_ack = request.requires_ack || task_id.is_some();
-    let body = resolve_message_body(
-        &request.message_source,
-        &request.current_dir,
-        &request.home_dir,
-        &recipient.team,
-    )?;
-    let summary = summary::build_summary(&body, request.summary_override);
-    let message_id = AtmMessageId::new();
-    let timestamp = IsoTimestamp::now();
+fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
+    alert_state::clear_missing_team_config_alert(
+        home_dir,
+        &alert_state::missing_team_config_alert_key(team_dir),
+    );
+}
 
-    if !request.dry_run {
-        let envelope = MessageEnvelope {
-            from: display_sender.clone(),
-            text: body.clone(),
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Send persistence needs the explicit request/body/message envelope fields documented in the Y.4 state-machine seam."
+)]
+fn persist_send_message<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    request: &SendRequest,
+    context: &SendExecutionContext,
+    body: &str,
+    summary: &str,
+    message_id: AtmMessageId,
+    timestamp: IsoTimestamp,
+    requires_ack: bool,
+    task_id: Option<TaskId>,
+) -> Result<DeliveryPersistenceResult, AtmError> {
+    if request.dry_run {
+        return Ok(DeliveryPersistenceResult::persisted(MessageEnvelope {
+            from: context.display_sender.clone(),
+            text: body.to_string(),
             timestamp,
             read: false,
-            source_team: sender_team.clone().or_else(|| Some(recipient.team.clone())),
-            summary: Some(summary.clone()),
+            source_team: context
+                .sender_team
+                .clone()
+                .or_else(|| Some(context.recipient.team.clone())),
+            summary: Some(summary.to_string()),
             message_id: Some(message_id),
             pending_ack_at: requires_ack.then_some(timestamp),
             acknowledged_at: None,
@@ -276,58 +501,53 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
             expires_at: request.expires_at,
             task_id: task_id.clone(),
             extra: Map::new(),
-        };
-        append_mailbox_message_and_seed_workflow(
-            runtime,
-            &request.home_dir,
-            &recipient.team,
-            &recipient.agent,
-            &inbox_path,
-            &envelope,
-            false,
-        )?;
+        }));
     }
-
-    let command_outcome = if request.dry_run { "dry_run" } else { "sent" };
-    let mut outcome = SendOutcome {
-        action: CommandAction::Send,
-        team: recipient.team.clone(),
-        agent: recipient.agent.clone(),
-        sender: canonical_sender.clone(),
-        outcome: command_outcome.to_string(),
-        message_id,
-        requires_ack,
+    let envelope = MessageEnvelope {
+        from: context.display_sender.clone(),
+        text: body.to_string(),
+        timestamp,
+        read: false,
+        source_team: context
+            .sender_team
+            .clone()
+            .or_else(|| Some(context.recipient.team.clone())),
+        summary: Some(summary.to_string()),
+        message_id: Some(message_id),
+        pending_ack_at: requires_ack.then_some(timestamp),
+        acknowledged_at: None,
+        acknowledges_message_id: None,
+        parent_message_id: request.parent_message_id,
+        thread_mode: request.thread_mode,
+        expires_at: request.expires_at,
         task_id: task_id.clone(),
-        summary: Some(summary),
-        message: request.dry_run.then_some(body.clone()),
-        warnings,
-        dry_run: request.dry_run,
+        extra: Map::new(),
     };
+    let persistence = persist_message_and_seed_workflow(
+        runtime,
+        &request.home_dir,
+        &context.delivery_snapshot,
+        &context.inbox_path,
+        &envelope,
+        false,
+    )?;
+    Ok(persistence)
+}
 
-    if !request.dry_run {
-        runtime.maybe_run_post_send_hook(
-            &mut outcome.warnings,
-            config.as_ref(),
-            PostSendHookContext {
-                sender: &canonical_sender,
-                sender_team: sender_team.as_ref(),
-                recipient: &recipient,
-                recipient_pane_id: None,
-                message_id,
-                requires_ack,
-                is_ack: false,
-                task_id: task_id.as_ref(),
-            },
-        );
-    }
-
+fn emit_send_command_event(
+    observability: &dyn ObservabilityPort,
+    outcome_name: &'static str,
+    outcome: &SendOutcome,
+    task_id: Option<TaskId>,
+    canonical_sender: &AgentName,
+) {
     if let Err(error) = observability.emit(CommandEvent {
         command: "send",
         action: "send",
-        outcome: command_outcome,
+        outcome: outcome_name,
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
-        sender: canonical_sender,
+        sender: canonical_sender.clone(),
         message_id: Some(outcome.message_id),
         requires_ack: outcome.requires_ack,
         dry_run: outcome.dry_run,
@@ -337,16 +557,18 @@ fn send_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
     }) {
         warn!(%error, command = "send", action = "send", "failed to emit send command event");
     }
-
-    Ok(outcome)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct ResolvedRecipient {
     pub(crate) agent: AgentName,
     pub(crate) team: TeamName,
 }
 
+#[allow(
+    dead_code,
+    reason = "The direct post-send hook payload contract remains documented while the CLI-only helper stays dormant."
+)]
 #[derive(Clone, Copy)]
 pub(crate) struct PostSendHookContext<'a> {
     pub(crate) sender: &'a AgentName,
@@ -403,176 +625,6 @@ fn resolve_message_body(
 
 fn is_false(value: &bool) -> bool {
     !*value
-}
-
-fn notify_team_lead_missing_config(
-    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
-    home_dir: &Path,
-    team_dir: &Path,
-    team: &TeamName,
-    recipient: &AgentName,
-) {
-    // Accepted risk: this fallback notice is best-effort only. ATM may race a fast
-    // shutdown and skip persistence rather than threading a shutdown token through
-    // this compatibility-only warning path.
-    let alert_key = alert_state::missing_team_config_alert_key(team_dir);
-    if !alert_state::register_missing_team_config_alert(home_dir, &alert_key) {
-        return;
-    }
-
-    let team_lead_agent = AgentName::from_validated(ROLE_TEAM_LEAD);
-    let team_lead_inbox = match runtime.inbox_path(home_dir, team, &team_lead_agent) {
-        Ok(path) => path,
-        Err(error) => {
-            warn!(
-                code = %AtmErrorCode::WarningMissingTeamConfigFallback,
-                %error,
-                team = %team,
-                "failed to resolve reserved missing-config inbox for notice"
-            );
-            return;
-        }
-    };
-
-    let config_path = team_dir.join("config.json");
-    let timestamp = IsoTimestamp::now();
-
-    let notice = MessageEnvelope {
-        from: AgentName::from_validated("atm-identity-missing"),
-        text: format!(
-            "ATM warning: send used existing inbox fallback for {recipient}@{team} because team config is missing at {}. Please restore config.json.",
-            config_path.display()
-        ),
-        timestamp,
-        read: false,
-        source_team: Some(team.clone()),
-        summary: Some(format!(
-            "ATM warning: missing team config fallback used for {recipient}@{team}"
-        )),
-        message_id: Some(AtmMessageId::new()),
-        pending_ack_at: None,
-        acknowledged_at: None,
-        acknowledges_message_id: None,
-        parent_message_id: None,
-        thread_mode: None,
-        expires_at: None,
-        task_id: None,
-        extra: Map::new(),
-    };
-
-    if let Err(error) = append_mailbox_message_and_seed_workflow(
-        runtime,
-        home_dir,
-        team,
-        &AgentName::from_validated(ROLE_TEAM_LEAD),
-        &team_lead_inbox,
-        &notice,
-        true,
-    ) {
-        warn!(
-            code = %AtmErrorCode::WarningMissingTeamConfigFallback,
-            %error,
-            path = %team_lead_inbox.display(),
-            team = %team,
-            "failed to persist missing-config notice via shared mailbox/workflow commit path"
-        );
-    }
-}
-
-pub(crate) fn append_mailbox_message_and_seed_workflow(
-    runtime: &(impl RetainedServiceRuntime + RetainedMailboxRuntime),
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-    inbox_path: &Path,
-    envelope: &MessageEnvelope,
-    require_existing_inbox: bool,
-) -> Result<(), AtmError> {
-    runtime.commit_workflow_state(
-        home_dir,
-        team,
-        agent,
-        [inbox_path.to_path_buf()],
-        runtime.mailbox_timeout_policy().workflow_lock_timeout,
-        |workflow_state| {
-            if require_existing_inbox && !inbox_path.exists() {
-                return Ok(((), false));
-            }
-            let mut inbox_messages =
-                load_store_backed_mailbox_projection(runtime, home_dir, team, agent)?;
-            let mut prepared = envelope.clone();
-            prepare_threaded_message(&mut prepared, &inbox_messages)?;
-            inbox_messages.push(prepared.clone());
-            crate::mailbox::store::write_compat_mailbox_projection(inbox_path, &inbox_messages)?;
-            mirror_message_to_store(runtime, team, agent, &prepared)?;
-            Ok((
-                (),
-                workflow::remember_initial_state(workflow_state, &prepared),
-            ))
-        },
-    )
-}
-
-fn load_store_backed_mailbox_projection(
-    runtime: &(impl RetainedMailboxRuntime + ?Sized),
-    home_dir: &Path,
-    team: &TeamName,
-    agent: &AgentName,
-) -> Result<Vec<MessageEnvelope>, AtmError> {
-    let mut metadata_rows = runtime.query_mailbox_metadata_rows(home_dir, team, agent, None)?;
-    metadata_rows.sort_by(|left, right| {
-        left.message_at
-            .cmp(&right.message_at)
-            .then_with(|| left.message_key.as_ref().cmp(right.message_key.as_ref()))
-    });
-
-    metadata_rows
-        .into_iter()
-        .map(|row| {
-            runtime
-                .load_message_record(home_dir, team, agent, &row.message_key)?
-                .map(|record| record.envelope)
-                .ok_or_else(|| {
-                    AtmError::validation(format!(
-                        "sqlite mailbox metadata row {} could not be reloaded for compatibility inbox export",
-                        row.message_key
-                    ))
-                    .with_recovery(
-                        "Repair or remove the malformed sqlite mailbox row before retrying the ATM command.",
-                    )
-                })
-        })
-        .collect()
-}
-
-fn mirror_message_to_store(
-    runtime: &(impl RetainedMailboxRuntime + ?Sized),
-    team: &TeamName,
-    agent: &AgentName,
-    envelope: &MessageEnvelope,
-) -> Result<(), AtmError> {
-    let Some(message_id) = envelope.message_id else {
-        return Ok(());
-    };
-    let message_key = boundary::MessageKey::new(format!("atm:{message_id}"))?;
-    runtime.persist_message_record(boundary::MailStoreMessageRecord {
-        team: team.clone(),
-        agent: agent.clone(),
-        message_key: message_key.clone(),
-        envelope: envelope.clone(),
-    })?;
-    runtime.persist_message_state(boundary::MailMessageState {
-        team: team.clone(),
-        agent: agent.clone(),
-        actor: agent.clone(),
-        message_key,
-        read: envelope.read,
-        pending_ack_at: envelope.pending_ack_at,
-        acknowledged_at: envelope.acknowledged_at,
-        expires_at: envelope.expires_at,
-        deleted_at: None,
-        updated_at: Some(IsoTimestamp::now()),
-    })
 }
 
 fn prepare_threaded_message(
@@ -693,6 +745,10 @@ fn display_sender_identity(
         .unwrap_or_else(|| canonical_sender.clone())
 }
 
+#[allow(
+    dead_code,
+    reason = "Retained for the dormant direct post-send hook helper."
+)]
 pub(super) fn qualified_sender_identity(
     sender: &AgentName,
     sender_team: Option<&TeamName>,
@@ -702,193 +758,5 @@ pub(super) fn qualified_sender_identity(
         .unwrap_or_else(|| sender.to_string())
 }
 
-pub(crate) fn maybe_run_post_send_hook(
-    warnings: &mut Vec<WarningEntry>,
-    config: Option<&config::AtmConfig>,
-    context: PostSendHookContext<'_>,
-) {
-    hook::maybe_run_post_send_hook(warnings, config, context);
-}
-
 #[cfg(test)]
-mod tests {
-    use serde_json::Map;
-    use std::fs;
-    use tempfile::tempdir;
-
-    use super::{alert_state, prepare_threaded_message};
-    use crate::process::process_is_alive;
-    use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
-    use crate::send::{SendMessageSource, SendRequest};
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentName, IsoTimestamp, TeamName};
-
-    fn message(
-        from: &str,
-        message_id: AtmMessageId,
-        parent_message_id: Option<AtmMessageId>,
-        thread_mode: Option<ThreadMode>,
-    ) -> MessageEnvelope {
-        MessageEnvelope {
-            from: from.parse::<AgentName>().expect("agent"),
-            text: "hello".to_string(),
-            timestamp: IsoTimestamp::now(),
-            read: false,
-            source_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
-            summary: None,
-            message_id: Some(message_id),
-            pending_ack_at: None,
-            acknowledged_at: None,
-            acknowledges_message_id: None,
-            parent_message_id,
-            thread_mode,
-            expires_at: None,
-            task_id: None,
-            extra: Map::new(),
-        }
-    }
-
-    #[test]
-    fn load_send_alert_state_parse_errors_are_config_errors() {
-        let tempdir = tempdir().expect("tempdir");
-        let path = alert_state::state_path(tempdir.path());
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("state dir");
-        }
-        fs::write(&path, "{not-json").expect("state file");
-
-        let error = alert_state::load(&path).expect_err("malformed state");
-        assert!(error.is_config());
-    }
-
-    #[test]
-    fn save_send_alert_state_round_trips() {
-        let tempdir = tempdir().expect("tempdir");
-        let path = alert_state::state_path(tempdir.path());
-        let mut state = alert_state::SendAlertState::default();
-        state
-            .missing_team_config_keys
-            .insert(format!("teams/{TEST_TEAM}/config.json"));
-
-        alert_state::save(&path, &state).expect("save");
-        let loaded = alert_state::load(&path).expect("load");
-        assert_eq!(
-            loaded.missing_team_config_keys,
-            state.missing_team_config_keys
-        );
-    }
-
-    #[test]
-    fn process_is_alive_reports_current_process() {
-        assert!(process_is_alive(std::process::id()));
-    }
-
-    #[test]
-    fn acquire_send_alert_lock_evicts_stale_pid_lock() {
-        let tempdir = tempdir().expect("tempdir");
-        let path = alert_state::lock_path(tempdir.path());
-        if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent).expect("lock dir");
-        }
-        fs::write(&path, u32::MAX.to_string()).expect("stale lock");
-
-        let guard = alert_state::acquire_lock(&path).expect("acquire lock");
-        let pid = fs::read_to_string(&path).expect("lock contents");
-        assert_eq!(pid.trim(), std::process::id().to_string());
-        drop(guard);
-        assert!(!path.exists());
-    }
-
-    #[test]
-    fn send_request_new_rejects_invalid_recipient_before_command_execution() {
-        let tempdir = tempdir().expect("tempdir");
-        let error = SendRequest::new(
-            tempdir.path().to_path_buf(),
-            tempdir.path().to_path_buf(),
-            Some(ROLE_TEAM_LEAD),
-            "../evil",
-            Some(TEST_TEAM),
-            SendMessageSource::Inline("hello".to_string()),
-            None,
-            false,
-            None,
-            false,
-        )
-        .expect_err("invalid address");
-
-        assert!(error.message.contains("agent name"));
-    }
-
-    #[test]
-    fn send_request_new_rejects_invalid_team_override_before_command_execution() {
-        let tempdir = tempdir().expect("tempdir");
-        let error = SendRequest::new(
-            tempdir.path().to_path_buf(),
-            tempdir.path().to_path_buf(),
-            Some(ROLE_TEAM_LEAD),
-            TEST_SENDER,
-            Some("../evil"),
-            SendMessageSource::Inline("hello".to_string()),
-            None,
-            false,
-            None,
-            false,
-        )
-        .expect_err("invalid team");
-
-        assert!(error.message.contains("team name"));
-    }
-
-    #[test]
-    fn prepare_threaded_message_reopens_ack_for_ack_required_thread() {
-        let root_id = AtmMessageId::new();
-        let mut root = message(TEST_SENDER, root_id, None, None);
-        root.acknowledged_at = Some(IsoTimestamp::now());
-        let mut update = message(
-            TEST_SENDER,
-            AtmMessageId::new(),
-            Some(root_id),
-            Some(ThreadMode::AddDetails),
-        );
-
-        prepare_threaded_message(&mut update, &[root]).expect("prepare update");
-
-        assert!(update.pending_ack_at.is_some());
-        assert!(update.acknowledged_at.is_none());
-    }
-
-    #[test]
-    fn prepare_threaded_message_reopens_ack_for_ack_required_supersede_thread() {
-        let root_id = AtmMessageId::new();
-        let mut root = message(TEST_SENDER, root_id, None, None);
-        root.acknowledged_at = Some(IsoTimestamp::now());
-        let mut update = message(
-            TEST_SENDER,
-            AtmMessageId::new(),
-            Some(root_id),
-            Some(ThreadMode::Supersede),
-        );
-
-        prepare_threaded_message(&mut update, &[root]).expect("prepare update");
-
-        assert!(update.pending_ack_at.is_some());
-        assert!(update.acknowledged_at.is_none());
-    }
-
-    #[test]
-    fn prepare_threaded_message_rejects_non_originating_sender() {
-        let root_id = AtmMessageId::new();
-        let root = message(TEST_SENDER, root_id, None, None);
-        let mut update = message(
-            ROLE_TEAM_LEAD,
-            AtmMessageId::new(),
-            Some(root_id),
-            Some(ThreadMode::Supersede),
-        );
-
-        let error = prepare_threaded_message(&mut update, &[root]).expect_err("different sender");
-
-        assert!(error.message.contains("original sender"));
-    }
-}
+mod tests;

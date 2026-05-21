@@ -1,5 +1,5 @@
-use std::path::PathBuf;
 use std::sync::Arc;
+use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::{
@@ -26,15 +26,14 @@ use atm_core::{
     read::read_mail,
     send::send_mail,
 };
-use atm_rusqlite::{
-    SqliteBoundaryAssembly, SqliteObservability, assemble_default_boundary_with_observability,
-};
+use atm_rusqlite::SqliteBoundaryAssembly;
 
 use crate::AtmHomeDir;
 use crate::advisory_runtime::AdvisoryRuntime;
 use crate::daemon_runtime_observability::{
     DaemonRuntimeObservability, DaemonSubsystem, SubsystemObservability,
 };
+use crate::notification_runtime::{NotificationRuntime, NotificationWorkerLiveness};
 #[cfg(test)]
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
@@ -51,27 +50,42 @@ const MAX_SHUTDOWN_FINALIZER_THREADS: usize = 16;
 // to recover and join those retained workers later.
 static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =
     std::sync::Mutex::new(Vec::new());
-
 pub(crate) struct DaemonRequestDispatcher {
     // Invariant: this is the validated ATM_HOME root for the running daemon,
     // not an arbitrary workspace path.
-    home_dir: PathBuf,
+    home_dir: AtmHomeDir,
     observability: Arc<dyn DaemonRuntimeObservability>,
     advisory_runtime_observability: SubsystemObservability,
     runtime_health_observability: SubsystemObservability,
     status_cache: RuntimeStatusCache,
     sqlite_boundary: Option<SqliteBoundaryAssembly>,
+    notification_runtime: NotificationRuntime,
     advisory_runtime: AdvisoryRuntime,
 }
 
 impl std::fmt::Debug for DaemonRequestDispatcher {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("DaemonRequestDispatcher")
-            .field("home_dir", &self.home_dir)
+            .field("home_dir", &self.home_dir.as_path())
             .field("status_cache", &self.status_cache)
             .field("sqlite_boundary_present", &self.sqlite_boundary.is_some())
+            .field(
+                "notification_worker_liveness",
+                &self.notification_runtime.worker_liveness(),
+            )
             .field("advisory_runtime", &"AdvisoryRuntime")
             .finish()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) struct RuntimeHealthSnapshot {
+    pub(crate) notification_worker_liveness: NotificationWorkerLiveness,
+}
+
+fn project_runtime_health(notification_runtime: &NotificationRuntime) -> RuntimeHealthSnapshot {
+    RuntimeHealthSnapshot {
+        notification_worker_liveness: notification_runtime.worker_liveness(),
     }
 }
 
@@ -118,6 +132,9 @@ impl DaemonRequestDispatcher {
             .spawn(move || {
                 step().unwrap_or_else(|error| {
                     tracing::warn!(
+                        subsystem = "runtime_health",
+                        action = "shutdown_finalizer_step",
+                        outcome = "failed",
                         %error,
                         step = label,
                         "daemon shutdown finalizer step failed; restart atm-daemon and inspect the retained observability log before retrying shutdown-sensitive work"
@@ -135,15 +152,6 @@ impl DaemonRequestDispatcher {
             })
     }
 
-    fn complete_shutdown_step(label: &'static str, shutdown_handle: std::thread::JoinHandle<()>) {
-        if shutdown_handle.join().is_err() {
-            tracing::warn!(
-                step = label,
-                "daemon shutdown finalizer step panicked before reporting completion; restart atm-daemon and inspect the retained observability log for the failing shutdown step"
-            );
-        }
-    }
-
     fn retain_shutdown_step(
         label: &'static str,
         shutdown_handle: std::thread::JoinHandle<()>,
@@ -159,16 +167,51 @@ impl DaemonRequestDispatcher {
         });
         if !retained {
             tracing::warn!(
+                subsystem = "runtime_health",
+                action = "shutdown_retain",
+                outcome = "capacity_exceeded",
                 step = label,
                 cap = MAX_SHUTDOWN_FINALIZER_THREADS,
                 "shutdown finalizer thread cap reached; dropping retained worker handle"
             );
+        } else {
+            tracing::warn!(
+                subsystem = "runtime_health",
+                action = "shutdown_retain",
+                outcome = "deadline_exceeded",
+                step = label,
+                timeout_ms = deadline.as_millis(),
+                "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
+            );
         }
-        tracing::warn!(
-            step = label,
-            timeout_ms = deadline.as_millis(),
-            "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
-        );
+    }
+
+    fn spawn_shutdown_join_helper(
+        label: &'static str,
+        shutdown_handle: std::thread::JoinHandle<()>,
+    ) -> Result<
+        (
+            std::sync::mpsc::Receiver<std::thread::Result<()>>,
+            std::thread::JoinHandle<()>,
+        ),
+        AtmError,
+    > {
+        let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+        let join_helper = std::thread::Builder::new()
+            .name(format!("shutdown-finalizer-join-{label}"))
+            .spawn(move || {
+                let _ = result_tx.send(shutdown_handle.join());
+            })
+            .map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to spawn daemon shutdown finalizer join helper `{label}`"
+                ))
+                .with_recovery(
+                    "Restart atm-daemon; the bounded shutdown finalizer join helper could not be created.",
+                )
+                .with_source(source)
+            })?;
+        Ok((result_rx, join_helper))
     }
 
     fn run_bounded_shutdown_step(
@@ -180,6 +223,9 @@ impl DaemonRequestDispatcher {
             Ok(handle) => handle,
             Err(error) => {
                 tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "shutdown_spawn",
+                    outcome = "failed",
                     %error,
                     step = label,
                     "daemon shutdown finalizer step could not start; restart atm-daemon because shutdown cleanup could not be scheduled"
@@ -187,22 +233,84 @@ impl DaemonRequestDispatcher {
                 return;
             }
         };
-        let started = std::time::Instant::now();
-        loop {
-            if shutdown_handle.is_finished() {
-                Self::complete_shutdown_step(label, shutdown_handle);
+        let (result_rx, join_helper) = match Self::spawn_shutdown_join_helper(
+            label,
+            shutdown_handle,
+        ) {
+            Ok(helper) => helper,
+            Err(error) => {
+                tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "shutdown_join_helper_spawn",
+                    outcome = "failed",
+                    %error,
+                    step = label,
+                    "daemon shutdown finalizer step could not start its bounded join helper; restart atm-daemon because shutdown cleanup could not be monitored"
+                );
                 return;
             }
-            if started.elapsed() >= deadline {
+        };
+        Self::handle_bounded_shutdown_result(label, deadline, result_rx, join_helper);
+    }
+
+    fn handle_bounded_shutdown_result(
+        label: &'static str,
+        deadline: Duration,
+        result_rx: std::sync::mpsc::Receiver<std::thread::Result<()>>,
+        join_helper: JoinHandle<()>,
+    ) {
+        match result_rx.recv_timeout(deadline) {
+            Ok(join_result) => {
+                Self::finalize_bounded_shutdown_result(label, join_result, join_helper)
+            }
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 // SQLite WAL checkpoint timeout is the highest-risk caller here: a checkpoint can
-                // outlive the bounded shutdown window, but retaining the JoinHandle is still safer
-                // than dropping it orphaned because tests and orderly process teardown can join it
-                // later once the blocking storage step finishes.
-                Self::retain_shutdown_step(label, shutdown_handle, deadline);
-                return;
+                // outlive the bounded shutdown window, but retaining the worker JoinHandle is still
+                // safer than dropping it orphaned because tests and orderly process teardown can
+                // join it later once the blocking storage step finishes.
+                Self::retain_shutdown_step(label, join_helper, deadline);
             }
-            std::thread::sleep(Duration::from_millis(10));
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                Self::report_bounded_shutdown_disconnect(label, join_helper);
+            }
         }
+    }
+
+    fn finalize_bounded_shutdown_result(
+        label: &'static str,
+        join_result: std::thread::Result<()>,
+        join_helper: JoinHandle<()>,
+    ) {
+        if join_helper.join().is_err() {
+            Self::warn_shutdown_join_helper(label, "panic");
+        }
+        if join_result.is_err() {
+            tracing::warn!(
+                subsystem = "runtime_health",
+                action = "shutdown_finalize",
+                outcome = "panic",
+                step = label,
+                "daemon shutdown finalizer step panicked before reporting completion; restart atm-daemon and inspect the retained observability log for the failing shutdown step"
+            );
+        }
+    }
+
+    fn report_bounded_shutdown_disconnect(label: &'static str, join_helper: JoinHandle<()>) {
+        if join_helper.join().is_err() {
+            Self::warn_shutdown_join_helper(label, "panic");
+        } else {
+            Self::warn_shutdown_join_helper(label, "disconnected");
+        }
+    }
+
+    fn warn_shutdown_join_helper(label: &'static str, outcome: &'static str) {
+        tracing::warn!(
+            subsystem = "runtime_health",
+            action = "shutdown_join_helper",
+            outcome,
+            step = label,
+            "daemon shutdown finalizer join helper failed before reporting completion"
+        );
     }
 
     pub(crate) fn new(
@@ -210,50 +318,41 @@ impl DaemonRequestDispatcher {
         home_dir: AtmHomeDir,
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
-        sqlite_observability: Arc<dyn SqliteObservability>,
+        sqlite_boundary: SqliteBoundaryAssembly,
+        notification_runtime: NotificationRuntime,
     ) -> Self {
-        let home_dir = home_dir.into_inner();
         let advisory_runtime_observability = SubsystemObservability::new(
             DaemonSubsystem::AdvisoryRuntime,
             Arc::clone(&observability),
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
-        let sqlite_boundary = match assemble_default_boundary_with_observability(
-            sqlite_observability,
-        ) {
-            Ok(boundary) => {
-                if let Err(error) = build_runtime_status_cache_state(None, boundary.roster_store())
-                    .and_then(|state| status_cache.replace_state(state))
-                {
-                    tracing::warn!(%error, "failed to hydrate runtime status cache from sqlite roster state");
-                    runtime_health_observability.emit_or_warn(
-                        "sqlite_cache_hydration",
-                        "degraded",
-                        "failed to hydrate runtime status cache from sqlite roster state",
-                    );
-                    status_cache.mark_sqlite_unavailable();
-                }
-                Some(boundary)
-            }
+        match build_runtime_status_cache_state(None, sqlite_boundary.roster_store()) {
+            Ok(state) => status_cache.publish_state(state),
             Err(error) => {
-                tracing::warn!(%error, "failed to assemble default sqlite boundary for daemon runtime health");
+                tracing::warn!(
+                    subsystem = "runtime_health",
+                    action = "sqlite_cache_hydration",
+                    outcome = "degraded",
+                    %error,
+                    "failed to hydrate runtime status cache from sqlite roster state"
+                );
                 runtime_health_observability.emit_or_warn(
-                    "sqlite_boundary_assembly",
-                    "failed",
-                    "failed to assemble sqlite boundary for daemon runtime health",
+                    "sqlite_cache_hydration",
+                    "degraded",
+                    "failed to hydrate runtime status cache from sqlite roster state",
                 );
                 status_cache.mark_sqlite_unavailable();
-                None
             }
-        };
+        }
         Self {
-            home_dir: home_dir.clone(),
+            home_dir,
             observability: Arc::clone(&observability),
             advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability: runtime_health_observability.clone(),
             status_cache,
-            sqlite_boundary,
+            sqlite_boundary: Some(sqlite_boundary),
+            notification_runtime,
             advisory_runtime: AdvisoryRuntime::new_with_observability(
                 advisory_runtime_observability,
             ),
@@ -268,6 +367,9 @@ fn with_shutdown_finalizer_registry<R>(
         Ok(mut handles) => f(&mut handles),
         Err(poisoned) => {
             tracing::warn!(
+                subsystem = "runtime_health",
+                action = "shutdown_registry_lock",
+                outcome = "poison_recovered",
                 "shutdown finalizer thread registry lock poisoned; recovering retained worker handles"
             );
             // The registry only owns JoinHandles for timed-out shutdown helpers; recovering the
@@ -368,10 +470,10 @@ impl DaemonRequestDispatcher {
                     "Restore the host-scoped ATM SQLite durable-state database and restart atm-daemon before retrying SIGHUP reload.",
                 )
             })?;
-        let current_state = self.status_cache.clone_state()?;
+        let current_state = self.status_cache.clone_state();
         let next_state = build_runtime_status_cache_state(Some(&current_state), roster_store)?;
         let reloaded_members = next_state.member_count();
-        self.status_cache.replace_state(next_state)?;
+        self.status_cache.publish_state(next_state);
         tracing::info!(
             reloaded_members,
             "bounded daemon config/roster reload applied successfully"
@@ -431,14 +533,12 @@ impl DaemonRequestDispatcher {
                 request.team.as_str(),
             ));
         }
-        let cached_pid = self
-            .status_cache
-            .cached_pid(&request.team, &request.member)?;
+        let cached_pid = self.status_cache.cached_pid(&request.team, &request.member);
         if let Some(existing_pid) = cached_pid.filter(|pid| *pid != request.pid)
             && process_is_alive(existing_pid)
         {
             self.status_cache
-                .record_identity_conflict(&request, existing_pid)?;
+                .record_identity_conflict(&request, existing_pid);
             return Err(AtmError::identity_conflict(
                 "ATM_IDENTITY_CONFLICT: stop and report to user immediately",
             )
@@ -446,8 +546,9 @@ impl DaemonRequestDispatcher {
                 "Stop the conflicting ATM process, confirm the stale PID is gone, then retry the heartbeat from the active runtime owner.",
             ));
         }
-        self.status_cache
-            .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid))
+        Ok(self
+            .status_cache
+            .record_heartbeat(&request, cached_pid.is_some_and(|pid| pid != request.pid)))
     }
 
     fn register_advisory_session(
@@ -485,14 +586,17 @@ impl DaemonRequestDispatcher {
             Err(error) => doctor::health::observability_finding_from_error(&error),
         };
         report.findings.push(daemon_observability_finding);
+        report.findings.push(notification_worker_liveness_finding(
+            project_runtime_health(&self.notification_runtime),
+        ));
         let runtime_status = match &report.member_roster {
             Some(roster) => self.status_cache.snapshot_for_members(
                 roster
                     .members
                     .iter()
                     .map(|member| (roster.team.clone(), member.name.clone())),
-            )?,
-            None => self.status_cache.snapshot()?,
+            ),
+            None => self.status_cache.snapshot(),
         };
         report
             .findings
@@ -525,6 +629,39 @@ impl DaemonRequestDispatcher {
         };
         report.runtime_status = Some(runtime_status);
         Ok(report)
+    }
+}
+
+fn notification_worker_liveness_finding(snapshot: RuntimeHealthSnapshot) -> DoctorFinding {
+    match snapshot.notification_worker_liveness {
+        NotificationWorkerLiveness::Live => DoctorFinding {
+            severity: DoctorSeverity::Info,
+            code: atm_core::error_codes::AtmErrorCode::ObservabilityHealthOk,
+            message:
+                "notification worker liveness is projected directly from the runtime seam"
+                    .to_string(),
+            remediation: None,
+        },
+        NotificationWorkerLiveness::Degraded => DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded,
+            message:
+                "notification worker liveness is degraded on the runtime-owned seam".to_string(),
+            remediation: Some(
+                "Inspect the notification runtime retained output path and recover the runtime-owned worker before re-running the develop gate."
+                    .to_string(),
+            ),
+        },
+        NotificationWorkerLiveness::Stopped => DoctorFinding {
+            severity: DoctorSeverity::Error,
+            code: atm_core::error_codes::AtmErrorCode::DaemonUnavailable,
+            message:
+                "notification worker liveness is stopped on the runtime-owned seam".to_string(),
+            remediation: Some(
+                "Restart atm-daemon so the notification worker is live before completing the develop gate."
+                    .to_string(),
+            ),
+        },
     }
 }
 
@@ -590,15 +727,18 @@ impl boundary::sealed::Sealed for DaemonStatusSource {}
 
 impl boundary::StatusSource for DaemonStatusSource {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
-        self.status_cache.snapshot()
+        Ok(self.status_cache.snapshot())
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::{
-        DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, SHUTDOWN_FINALIZER_THREADS,
+        DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, NotificationWorkerLiveness,
+        SHUTDOWN_FINALIZER_THREADS, project_runtime_health,
     };
+    use crate::notification_runtime::NotificationRuntime;
+    use crate::{DaemonSubsystem, SubsystemObservability};
     use std::sync::{Arc, Condvar, Mutex};
     use std::time::{Duration, Instant};
 
@@ -726,52 +866,80 @@ mod tests {
             } else {
                 format!("heartbeat-{index}").parse().expect("member")
             };
-            status_cache
-                .record_heartbeat_for_test(
-                    &TeamMemberHeartbeatRequest {
-                        team: team.clone(),
-                        member: member_name,
-                        pid: index as u32 + 1,
-                        observed_at: IsoTimestamp::from_datetime(
-                            base + ChronoDuration::seconds(index as i64),
-                        ),
-                        activity: HeartbeatActivity::Idle,
-                    },
-                    false,
-                )
-                .expect("seed heartbeat member");
-        }
-
-        let response = status_cache
-            .record_heartbeat_for_test(
+            status_cache.record_heartbeat_for_test(
                 &TeamMemberHeartbeatRequest {
                     team: team.clone(),
-                    member: trigger_member.clone(),
-                    pid: std::process::id(),
-                    observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
-                    activity: HeartbeatActivity::ActiveToolUse,
+                    member: member_name,
+                    pid: index as u32 + 1,
+                    observed_at: IsoTimestamp::from_datetime(
+                        base + ChronoDuration::seconds(index as i64),
+                    ),
+                    activity: HeartbeatActivity::Idle,
                 },
                 false,
-            )
-            .expect("trigger heartbeat");
+            );
+        }
+
+        let response = status_cache.record_heartbeat_for_test(
+            &TeamMemberHeartbeatRequest {
+                team: team.clone(),
+                member: trigger_member.clone(),
+                pid: std::process::id(),
+                observed_at: IsoTimestamp::from_datetime(base + ChronoDuration::hours(1)),
+                activity: HeartbeatActivity::ActiveToolUse,
+            },
+            false,
+        );
         assert_eq!(response.state, RuntimeMemberState::Active);
 
         assert_eq!(
-            status_cache.member_count_for_test().expect("member count"),
+            status_cache.member_count_for_test(),
             super::MAX_STATUS_CACHE_ENTRIES
         );
         assert_eq!(
-            status_cache
-                .member_state_for_test(&team, &oldest_member)
-                .expect("oldest member state"),
+            status_cache.member_state_for_test(&team, &oldest_member),
             None
         );
         assert_eq!(
-            status_cache
-                .member_state_for_test(&team, &trigger_member)
-                .expect("trigger member state"),
+            status_cache.member_state_for_test(&team, &trigger_member),
             Some(RuntimeMemberState::Active)
         );
+    }
+
+    #[test]
+    fn runtime_health_projects_worker_liveness_from_notification_runtime() {
+        let runtime = NotificationRuntime::new_with_observability(
+            SubsystemObservability::disabled(DaemonSubsystem::NotificationRuntime),
+        );
+        assert_eq!(
+            project_runtime_health(&runtime).notification_worker_liveness,
+            NotificationWorkerLiveness::Stopped
+        );
+        runtime.start().expect("start notification runtime");
+        assert_eq!(
+            project_runtime_health(&runtime).notification_worker_liveness,
+            NotificationWorkerLiveness::Live
+        );
+        runtime.shutdown().expect("shutdown notification runtime");
+        assert_eq!(
+            project_runtime_health(&runtime).notification_worker_liveness,
+            NotificationWorkerLiveness::Stopped
+        );
+    }
+
+    #[test]
+    fn runtime_health_projection_does_not_inspect_queue_internals() {
+        let tempdir = tempfile::TempDir::new().expect("tempdir");
+        let runtime = NotificationRuntime::new_for_test_with_path(
+            tempdir.path().join("notifications.jsonl"),
+            8,
+        );
+        runtime.start().expect("start notification runtime");
+        assert_eq!(
+            project_runtime_health(&runtime).notification_worker_liveness,
+            NotificationWorkerLiveness::Live
+        );
+        runtime.shutdown().expect("shutdown notification runtime");
     }
 }
 

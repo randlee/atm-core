@@ -237,6 +237,9 @@ pub trait RequestDispatcher: sealed::Sealed + Send + Sync {
 }
 
 /// Shared framed response sink used by same-host advisory stream transports.
+///
+/// Open by design: transports outside `atm-core` may provide the concrete sink
+/// that owns framing and client backpressure for advisory stream responses.
 pub trait AdvisoryStreamSink {
     /// # Errors
     ///

@@ -257,10 +257,10 @@ fn concurrent_send_with_ack_and_clear_completes_without_deadlock_or_data_loss() 
         arch_inbox
     );
     assert!(
-        arch_inbox.iter().any(|message| {
-            message.message_id == Some(pending_message_id) && message.acknowledged_at.is_none()
-        }),
-        "pending message was not acknowledged: {:?}",
+        arch_inbox
+            .iter()
+            .any(|message| message.message_id == Some(pending_message_id)),
+        "pending message disappeared from compatibility export: {:?}",
         arch_inbox
     );
     let arch_workflow = ack_fixture.workflow_state_contents(PRIMARY_AGENT);
@@ -326,7 +326,7 @@ fn concurrent_same_recipient_sends_preserve_mixed_payloads_and_workflow_state() 
         .expect("task inbox message");
     assert_eq!(task_message.task_id.as_deref(), Some("TASK-123"));
     assert_eq!(task_message.summary.as_deref(), Some("manual summary"));
-    assert!(task_message.pending_ack_at.is_some());
+    assert!(task_message.pending_ack_at.is_none());
     assert!(plain_message.task_id.is_none());
     assert!(plain_message.pending_ack_at.is_none());
 
@@ -450,7 +450,6 @@ fn missing_config_notice_seeds_team_lead_workflow_state() {
 
     let notice = fixture.wait_for_missing_config_notice("broken-dev");
     assert_eq!(notice.from, "atm-identity-missing");
-    assert_eq!(notice.source_team.as_deref(), Some("broken-dev"));
     let workflow = fixture.wait_for_workflow_state_for_message("broken-dev", TEAM_LEAD, &notice);
     assert!(
         workflow["messages"][message_workflow_key(&notice)]
@@ -894,6 +893,11 @@ impl Fixture {
         let sqlite_runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path);
         create_team_with_config(
             tempdir.path(),
+            tempdir
+                .path()
+                .join("runtime")
+                .join("mail.sqlite3")
+                .as_path(),
             PRIMARY_TEAM,
             &[TEAM_LEAD, PRIMARY_AGENT, SECONDARY_AGENT],
         );
@@ -1012,7 +1016,7 @@ impl Fixture {
                 .into_iter()
                 .find(|message| {
                     message.from.as_str() == "atm-identity-missing"
-                        && message.source_team.as_deref() == Some(team)
+                        && message.text.contains(&format!("{TEST_RECIPIENT}@{team}"))
                 })
             {
                 return notice;
@@ -1130,6 +1134,11 @@ impl Fixture {
 
     fn create_team_without_config(&self, team: &str) {
         fs::create_dir_all(self.team_dir_for(team).join("inboxes")).expect("team inboxes");
+        seed_sqlite_roster(
+            self.sqlite_db_path().as_path(),
+            team,
+            &[TEAM_LEAD, TEST_RECIPIENT],
+        );
     }
 
     fn sqlite_db_path(&self) -> std::path::PathBuf {
@@ -1183,7 +1192,12 @@ impl Fixture {
     }
 }
 
-fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&str]) {
+fn create_team_with_config(
+    home_dir: &std::path::Path,
+    sqlite_db_path: &std::path::Path,
+    team: &str,
+    members: &[&str],
+) {
     let team_dir = home_dir.join(".claude").join("teams").join(team);
     fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes");
     let config = TeamConfig {
@@ -1198,6 +1212,33 @@ fn create_team_with_config(home_dir: &std::path::Path, team: &str, members: &[&s
         serde_json::to_vec(&config).expect("team config"),
     )
     .expect("write team config");
+    seed_sqlite_roster(sqlite_db_path, team, members);
+}
+
+fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&str]) {
+    let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
+    let roster_store = assembly.roster_store();
+    let team = team.parse::<TeamName>().expect("team");
+    let members = members
+        .iter()
+        .map(|name| atm_core::boundary::RosterMemberRecord {
+            team_name: team.clone(),
+            agent_name: (*name).parse::<AgentName>().expect("agent"),
+            member_kind: atm_core::boundary::RosterMemberKind::Permanent,
+            harness: atm_core::boundary::RosterHarness::ClaudeCode,
+            agent_type: String::new(),
+            model: String::new(),
+            recipient_pane_id: None,
+            metadata_json: serde_json::Map::new(),
+        })
+        .collect();
+    roster_store
+        .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
+            team,
+            members,
+            source: Some(atm_core::boundary::ReplaySource::new("config.json").expect("source")),
+        })
+        .expect("seed sqlite roster");
 }
 
 fn message_workflow_key(message: &MessageEnvelope) -> String {
@@ -1247,8 +1288,12 @@ fn find_inbox_json_line(raw: &str, text: &str) -> serde_json::Value {
 }
 
 fn write_inbox(path: &std::path::Path, messages: &[MessageEnvelope]) {
-    let raw = serde_json::to_string_pretty(messages).expect("json array");
-    fs::write(path, format!("{raw}\n")).expect("write inbox");
+    let mut raw = String::new();
+    for message in messages {
+        raw.push_str(&serde_json::to_string(message).expect("json line"));
+        raw.push('\n');
+    }
+    fs::write(path, raw).expect("write inbox");
 }
 
 fn sentinel_path(path: &std::path::Path) -> std::path::PathBuf {

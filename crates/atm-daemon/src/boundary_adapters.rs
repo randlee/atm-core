@@ -1,7 +1,8 @@
 use atm_core::{
     boundary::{
         self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
-        ConfigTeamLoadResponse, InboxExport, InboxExportRecordRequest, InboxExportRecordResponse,
+        ConfigTeamLoadResponse, InboxExport, InboxExportAppendMessageSetRequest,
+        InboxExportAppendMessageSetResponse, InboxExportRecordRequest, InboxExportRecordResponse,
         InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxIngress,
         InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
         InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
@@ -30,10 +31,12 @@ impl std::fmt::Debug for DaemonNotificationSink {
 }
 
 impl DaemonNotificationSink {
-    pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
-        Self {
-            runtime: NotificationRuntime::new_with_observability(observability),
-        }
+    pub(crate) fn new(runtime: NotificationRuntime) -> Self {
+        Self { runtime }
+    }
+
+    pub(crate) fn runtime(&self) -> NotificationRuntime {
+        self.runtime.clone()
     }
 
     #[cfg(test)]
@@ -49,6 +52,20 @@ impl DaemonNotificationSink {
 
     pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
         self.runtime.shutdown()
+    }
+}
+
+impl Drop for DaemonNotificationSink {
+    fn drop(&mut self) {
+        if let Err(error) = self.shutdown() {
+            tracing::warn!(
+                subsystem = "notification",
+                action = "drop_shutdown",
+                outcome = "failed",
+                %error,
+                "DaemonNotificationSink drop could not shut down runtime cleanly"
+            );
+        }
     }
 }
 
@@ -186,14 +203,14 @@ impl InboxIngress for DaemonInboxIngress {
     fn compute_identity_fingerprint(
         &self,
         request: InboxIngressIdentityFingerprintRequest,
-    ) -> Result<InboxIngressIdentityFingerprintResponse, AtmError> {
+    ) -> InboxIngressIdentityFingerprintResponse {
         direct_boundaries::compute_identity_fingerprint(request)
     }
 
     fn report_diagnostics(
         &self,
         request: InboxIngressDiagnosticsRequest,
-    ) -> Result<InboxIngressDiagnosticsResponse, AtmError> {
+    ) -> InboxIngressDiagnosticsResponse {
         direct_boundaries::report_inbox_diagnostics(request)
     }
 }
@@ -222,6 +239,13 @@ impl InboxExport for DaemonInboxExport {
         request: InboxExportReexportMessageRequest,
     ) -> Result<InboxExportReexportMessageResponse, AtmError> {
         direct_boundaries::reexport_messages(request)
+    }
+
+    fn append_message_set(
+        &self,
+        request: InboxExportAppendMessageSetRequest,
+    ) -> Result<InboxExportAppendMessageSetResponse, AtmError> {
+        direct_boundaries::append_message_set(request)
     }
 }
 
@@ -291,7 +315,6 @@ mod tests {
             .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
                 message: message.clone(),
             })
-            .expect("original fingerprint")
             .fingerprint;
 
         export
@@ -330,7 +353,6 @@ mod tests {
             .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
                 message: imported,
             })
-            .expect("imported fingerprint")
             .fingerprint;
         assert_eq!(imported_fingerprint, original_fingerprint);
     }
@@ -358,7 +380,6 @@ mod tests {
             .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
                 message: message.clone(),
             })
-            .expect("original fingerprint")
             .fingerprint;
 
         export
@@ -391,7 +412,6 @@ mod tests {
             .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
                 message: imported,
             })
-            .expect("imported fingerprint")
             .fingerprint;
         assert_eq!(imported_fingerprint, original_fingerprint);
     }

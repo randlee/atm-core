@@ -3,7 +3,7 @@ use std::net::{SocketAddr, TcpStream};
 #[cfg(test)]
 use std::path::PathBuf;
 use std::sync::Arc;
-use std::sync::Mutex;
+use std::sync::OnceLock;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
@@ -21,6 +21,9 @@ use crate::{DaemonSubsystem, SubsystemObservability};
 
 // Architecture authority: docs/architecture.md §21.6.4 daemon operational
 // defaults and remote peer transport rules.
+// These deadlines are intentionally fixed operational constants. Phase Y keeps
+// connect and I/O timeouts non-configurable so remote peer delivery behavior
+// stays bounded and auditable across every host.
 const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
@@ -510,6 +513,9 @@ impl PeerClientTransport {
         let now = Instant::now();
         if now >= retry_state.deadline {
             tracing::error!(
+                subsystem = "peer_transport",
+                action = "send_to_endpoint",
+                outcome = "retry_exhausted",
                 peer_addr = %endpoint,
                 attempt,
                 error_code = %error.code,
@@ -569,6 +575,9 @@ impl PeerClientTransport {
             AttemptFailureKind::Retryable => "retryable",
         };
         tracing::error!(
+            subsystem = "peer_transport",
+            action = "send_to_endpoint",
+            outcome = "terminal_failure",
             peer_addr = %endpoint,
             attempt,
             failure_kind,
@@ -679,25 +688,20 @@ fn wait_for_retry_backoff(terminate: &Arc<AtomicBool>, sleep_for: Duration) -> b
 }
 
 fn daemon_terminate_flag() -> Result<Arc<AtomicBool>, AtmError> {
-    // Global terminate flag for signal handler: handler requires one shared terminate flag;
-    // Mutex<Option<...>> is required because LifecycleControlSourceAdapter::install() is
-    // fallible and OnceLock cannot propagate errors from its once-setter; channel unnecessary
-    // (read-cache, not a queue).
-    static DAEMON_TERMINATE_FLAG: Mutex<Option<Arc<AtomicBool>>> = Mutex::new(None);
+    // Global terminate flag for signal handler: the hot path only needs a
+    // shared cached flag, so OnceLock avoids a per-call mutex while leaving
+    // LifecycleControlSourceAdapter::install() as the fallible owner of setup.
+    static DAEMON_TERMINATE_FLAG: OnceLock<Arc<AtomicBool>> = OnceLock::new();
 
-    let mut cached_flag = DAEMON_TERMINATE_FLAG.lock().map_err(|_| {
-        AtmError::daemon_unavailable("peer transport terminate flag cache lock poisoned")
-            .with_recovery(
-                "Restart the daemon; peer transport can no longer safely reuse the shared lifecycle terminate flag.",
-            )
-    })?;
-    if let Some(flag) = cached_flag.as_ref() {
+    if let Some(flag) = DAEMON_TERMINATE_FLAG.get() {
         return Ok(Arc::clone(flag));
     }
 
     let flag = crate::lifecycle_control::LifecycleControlSourceAdapter::install()?.terminate_flag();
-    *cached_flag = Some(Arc::clone(&flag));
-    Ok(flag)
+    match DAEMON_TERMINATE_FLAG.set(Arc::clone(&flag)) {
+        Ok(()) => Ok(flag),
+        Err(existing) => Ok(existing),
+    }
 }
 
 impl boundary::sealed::Sealed for PeerClientTransport {}

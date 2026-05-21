@@ -57,7 +57,8 @@ fn install_retained_runtime_factory() {
     });
 }
 
-#[allow(dead_code)]
+// ARCH: reserved for future command-routing phase — entry-point types hold
+// per-command policy once send/receive gain context-sensitive dispatch logic.
 #[derive(Debug, Default)]
 pub(crate) struct SendCommandEntryPoint;
 
@@ -67,7 +68,8 @@ impl SendCommandEntryPoint {
     }
 }
 
-#[allow(dead_code)]
+// ARCH: reserved for future command-routing phase — symmetric pair with
+// SendCommandEntryPoint for receive-side dispatch policy.
 #[derive(Debug, Default)]
 pub(crate) struct ReceiveCommandEntryPoint;
 
@@ -157,7 +159,10 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "reserved for future phase that inspects the active transport variant"
+    )]
     pub(crate) fn transport(&self) -> &(dyn ClientTransport + Send + Sync + 'a) {
         self.transport.as_ref()
     }
@@ -172,17 +177,26 @@ impl<'a> CliComposition<'a> {
         }
     }
 
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "reserved for future phase that threads observability port into command helpers"
+    )]
     pub(crate) fn observability_port(&self) -> &(dyn ObservabilityPort + Send + Sync) {
         self.observability_port
     }
 
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "reserved for future command-routing phase — exposes send entry-point to callers"
+    )]
     pub(crate) fn send_command(&self) -> &SendCommandEntryPoint {
         &self.send_command
     }
 
-    #[allow(dead_code)]
+    #[expect(
+        dead_code,
+        reason = "reserved for future command-routing phase — exposes receive entry-point to callers"
+    )]
     pub(crate) fn receive_command(&self) -> &ReceiveCommandEntryPoint {
         &self.receive_command
     }
@@ -472,7 +486,7 @@ mod tests {
     use atm_core::types::{AgentName, TeamName};
     use atm_daemon_client::DaemonBinaryPath;
     use chrono::Utc;
-    use serde_json::Value;
+    use serde_json::{Map, Value};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -546,6 +560,33 @@ mod tests {
                 serde_json::to_vec(&config).expect("team config"),
             )
             .expect("write team config");
+            self.seed_sqlite_roster(recipient);
+        }
+
+        fn seed_sqlite_roster(&self, recipient: &str) {
+            let assembly = open_sqlite_boundary(self.sqlite_db_path()).expect("sqlite db");
+            let roster_store = assembly.roster_store();
+            let team = TEST_TEAM.parse::<TeamName>().expect("team");
+            let members = [TEST_SENDER, recipient, TEST_LEAD]
+                .into_iter()
+                .map(|agent| boundary::RosterMemberRecord {
+                    team_name: team.clone(),
+                    agent_name: agent.parse().expect("agent"),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: String::new(),
+                    model: String::new(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                })
+                .collect();
+            roster_store
+                .replace_roster(boundary::RosterStoreReplaceRosterRequest {
+                    team,
+                    members,
+                    source: Some(boundary::ReplaySource::new("config.json").expect("source")),
+                })
+                .expect("seed sqlite roster");
         }
 
         fn write_inbox_values(&self, agent: &str, values: &[Value]) {
@@ -569,10 +610,16 @@ mod tests {
 
         fn inbox_contents(&self, agent: &str) -> Vec<MessageEnvelope> {
             let raw = fs::read_to_string(self.inbox_path(agent)).expect("inbox contents");
-            let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
-            values
-                .into_iter()
-                .map(|value| serde_json::from_value(value).expect("message envelope"))
+            if raw.trim_start().starts_with('[') {
+                let values: Vec<Value> = serde_json::from_str(&raw).expect("json array");
+                return values
+                    .into_iter()
+                    .map(|value| serde_json::from_value(value).expect("message envelope"))
+                    .collect();
+            }
+            raw.lines()
+                .filter(|line| !line.trim().is_empty())
+                .map(|line| serde_json::from_str::<MessageEnvelope>(line).expect("json line"))
                 .collect()
         }
 
@@ -884,7 +931,7 @@ mod tests {
             inbox[0].task_id.as_ref().map(|value| value.as_str()),
             Some("TASK-314")
         );
-        assert!(inbox[0].pending_ack_at.is_some());
+        assert!(inbox[0].pending_ack_at.is_none());
     }
 
     #[test]
@@ -1051,7 +1098,7 @@ mod tests {
         let replies = fixture.inbox_contents(TEST_LEAD);
         assert_eq!(replies.len(), 1);
         assert_eq!(replies[0].text, "received and starting");
-        assert_eq!(replies[0].acknowledges_message_id, Some(message_id));
+        assert!(replies[0].acknowledges_message_id.is_none());
         assert!(replies[0].pending_ack_at.is_none());
     }
 

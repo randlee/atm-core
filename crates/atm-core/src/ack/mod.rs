@@ -2,15 +2,20 @@ use std::path::PathBuf;
 
 use crate::boundary;
 use crate::config;
+use crate::delivery_execution::{
+    DeliveryTransitionContext, emit_reply_delivery_plan_transitions, execute_reply_delivery_plan,
+};
+use crate::delivery_plan::{
+    DeliveryPlan, DeliveryPlanKind, LogicalMessage, delivery_plan_disposition,
+    delivery_target_for_snapshot, logical_messages_from_persistence,
+};
+use crate::delivery_policy::{DeliveryEventFamily, DeliveryPolicyCoordinator};
 use crate::error::AtmError;
 use crate::identity;
 use crate::observability::{CommandEvent, ObservabilityPort};
 use crate::read::state;
 use crate::schema::{AtmMessageId, MessageEnvelope};
-use crate::send::{
-    PostSendHookContext, ResolvedRecipient, append_mailbox_message_and_seed_workflow, input,
-    summary,
-};
+use crate::send::{ResolvedRecipient, input, persist_message_and_seed_workflow, summary};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
@@ -41,7 +46,7 @@ pub struct AckOutcome {
     pub reply_message_id: AtmMessageId,
     pub reply_text: String,
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub warnings: Vec<String>,
+    pub warnings: Vec<crate::send::WarningEntry>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -121,7 +126,9 @@ pub fn ack_mail_with_runtime(
     ack_mail_with_runtime_impl(request, observability, runtime)
 }
 
-fn ack_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn ack_mail_with_runtime_impl<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -154,7 +161,9 @@ fn ack_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime
     )
 }
 
-fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn ack_mail_with_runtime_sqlite<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     request: AckRequest,
     observability: &dyn ObservabilityPort,
     runtime: &R,
@@ -162,6 +171,7 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
     actor: AgentName,
     team: TeamName,
 ) -> Result<AckOutcome, AtmError> {
+    let delivery_policy = DeliveryPolicyCoordinator::new();
     let source = load_ack_source(
         runtime,
         &request.home_dir,
@@ -170,39 +180,34 @@ fn ack_mail_with_runtime_sqlite<R: RetainedServiceRuntime + RetainedMailboxRunti
         request.message_id,
     )?;
     let reply_target = validate_reply_target(runtime, &request.home_dir, &source.record, &team)?;
-    let persisted = persist_ack_reply(runtime, &request, &actor, &team, &source, &reply_target)?;
-
-    let mut outcome = AckOutcome {
-        action: CommandAction::Ack,
-        team: team.clone(),
-        agent: actor.clone(),
-        message_id: request.message_id,
-        task_id: persisted.task_id.clone(),
-        reply_target: reply_target.clone(),
-        reply_message_id: persisted.reply_message_id,
-        reply_text: persisted.reply_text.clone(),
-        warnings: Vec::new(),
-    };
-
-    outcome.warnings = collect_ack_hook_warnings(
+    let reply_snapshot = delivery_policy.resolve_recipient_snapshot(
         runtime,
-        config,
-        &actor,
-        &team,
-        &reply_target,
-        persisted.reply_message_id,
-        outcome.task_id.as_ref(),
-    );
-
-    record_ack_telemetry(
+        &reply_target.team,
+        &reply_target.agent,
+    )?;
+    let persisted = persist_ack_reply(
+        runtime,
+        AckPersistenceContext {
+            request: &request,
+            actor: &actor,
+            team: &team,
+            source: &source,
+            reply_target: &reply_target,
+        },
+    )?;
+    finalize_ack_outcome(
+        runtime,
         observability,
-        &actor,
-        team,
-        request.message_id,
-        persisted.task_id,
-    );
-
-    Ok(outcome)
+        config,
+        FinalizeAckContext {
+            actor: &actor,
+            team: &team,
+            request_message_id: request.message_id,
+            reply_target: &reply_target,
+            reply_snapshot: &reply_snapshot,
+            persisted: &persisted,
+        },
+    )
 }
 
 #[derive(Clone)]
@@ -215,6 +220,25 @@ struct PersistedAckReply {
     reply_message_id: AtmMessageId,
     reply_text: String,
     task_id: Option<TaskId>,
+    reply_inbox_path: PathBuf,
+    persistence: crate::send::DeliveryPersistenceResult,
+}
+
+struct FinalizeAckContext<'a> {
+    actor: &'a AgentName,
+    team: &'a TeamName,
+    request_message_id: AtmMessageId,
+    reply_target: &'a ReplyTarget,
+    reply_snapshot: &'a crate::delivery_policy::DeliveryRecipientSnapshot,
+    persisted: &'a PersistedAckReply,
+}
+
+struct AckPersistenceContext<'a> {
+    request: &'a AckRequest,
+    actor: &'a AgentName,
+    team: &'a TeamName,
+    source: &'a LoadedAckSource,
+    reply_target: &'a ReplyTarget,
 }
 
 fn load_ack_source<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
@@ -346,26 +370,22 @@ fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
 
 fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     runtime: &R,
-    request: &AckRequest,
-    actor: &AgentName,
-    team: &TeamName,
-    source: &LoadedAckSource,
-    reply_target: &ReplyTarget,
+    context: AckPersistenceContext<'_>,
 ) -> Result<PersistedAckReply, AtmError> {
     let ack_timestamp = IsoTimestamp::now();
-    let reply_text = input::validate_message_text(request.reply_body.clone())?;
+    let reply_text = input::validate_message_text(context.request.reply_body.clone())?;
     let reply_message_id = AtmMessageId::new();
     let reply_message = MessageEnvelope {
-        from: actor.clone(),
+        from: context.actor.clone(),
         text: reply_text.clone(),
         timestamp: ack_timestamp,
         read: false,
-        source_team: Some(team.clone()),
+        source_team: Some(context.team.clone()),
         summary: Some(summary::build_summary(&reply_text, None)),
         message_id: Some(reply_message_id),
         pending_ack_at: None,
         acknowledged_at: None,
-        acknowledges_message_id: Some(request.message_id),
+        acknowledges_message_id: Some(context.request.message_id),
         parent_message_id: None,
         thread_mode: None,
         expires_at: None,
@@ -374,25 +394,32 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     };
 
     runtime.persist_message_state(boundary::MailMessageState {
-        team: team.clone(),
-        agent: actor.clone(),
-        actor: actor.clone(),
-        message_key: source.row.message_key.clone(),
+        team: context.team.clone(),
+        agent: context.actor.clone(),
+        actor: context.actor.clone(),
+        message_key: context.source.row.message_key.clone(),
         read: true,
         pending_ack_at: None,
         acknowledged_at: Some(ack_timestamp),
-        expires_at: source.record.envelope.expires_at,
+        expires_at: context.source.record.envelope.expires_at,
         deleted_at: None,
         updated_at: Some(ack_timestamp),
     })?;
 
-    let reply_inbox_path =
-        runtime.inbox_path(home_dir(request), &reply_target.team, &reply_target.agent)?;
-    append_mailbox_message_and_seed_workflow(
+    let reply_inbox_path = runtime.inbox_path(
+        home_dir(context.request),
+        &context.reply_target.team,
+        &context.reply_target.agent,
+    )?;
+    let reply_snapshot = DeliveryPolicyCoordinator::new().resolve_recipient_snapshot(
         runtime,
-        home_dir(request),
-        &reply_target.team,
-        &reply_target.agent,
+        &context.reply_target.team,
+        &context.reply_target.agent,
+    )?;
+    let persistence = persist_message_and_seed_workflow(
+        runtime,
+        home_dir(context.request),
+        &reply_snapshot,
         &reply_inbox_path,
         &reply_message,
         false,
@@ -401,7 +428,9 @@ fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
     Ok(PersistedAckReply {
         reply_message_id,
         reply_text,
-        task_id: source.record.envelope.task_id.clone(),
+        task_id: context.source.record.envelope.task_id.clone(),
+        reply_inbox_path,
+        persistence,
     })
 }
 
@@ -409,38 +438,129 @@ fn home_dir(request: &AckRequest) -> &std::path::Path {
     request.home_dir.as_path()
 }
 
-fn collect_ack_hook_warnings<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+fn finalize_ack_outcome<
+    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
+>(
     runtime: &R,
+    observability: &dyn ObservabilityPort,
     config: Option<&crate::config::AtmConfig>,
-    actor: &AgentName,
-    team: &TeamName,
-    reply_target: &ReplyTarget,
-    reply_message_id: AtmMessageId,
-    task_id: Option<&TaskId>,
-) -> Vec<String> {
-    let reply_recipient = ResolvedRecipient {
-        agent: reply_target.agent.clone(),
-        team: reply_target.team.clone(),
+    context: FinalizeAckContext<'_>,
+) -> Result<AckOutcome, AtmError> {
+    let plan = build_reply_delivery_plan(&context)?;
+    let execution = execute_reply_delivery_plan(runtime, config, &plan)?;
+    let mut outcome = AckOutcome {
+        action: CommandAction::Ack,
+        team: context.team.clone(),
+        agent: context.actor.clone(),
+        message_id: context.request_message_id,
+        task_id: context.persisted.task_id.clone(),
+        reply_target: context.reply_target.clone(),
+        reply_message_id: context.persisted.reply_message_id,
+        reply_text: context.persisted.reply_text.clone(),
+        warnings: Vec::new(),
     };
-    let mut warnings = Vec::new();
-    runtime.maybe_run_post_send_hook(
-        &mut warnings,
-        config,
-        PostSendHookContext {
-            sender: actor,
-            sender_team: Some(team),
-            recipient: &reply_recipient,
-            recipient_pane_id: None,
-            message_id: reply_message_id,
-            requires_ack: false,
-            is_ack: true,
-            task_id,
+    outcome.warnings.extend(plan.warnings.iter().cloned());
+    emit_reply_delivery_plan_transitions(
+        observability,
+        DeliveryTransitionContext {
+            family: DeliveryEventFamily::AckReply,
+            team: &context.reply_target.team,
+            agent: &context.reply_target.agent,
+            sender: context.actor,
+            message_id: context.persisted.reply_message_id,
+            task_id: context.persisted.task_id.clone(),
         },
+        &plan,
+        &execution,
+    )?;
+    outcome.warnings.extend(execution.warnings);
+    record_ack_telemetry(
+        observability,
+        context.actor,
+        context.team.clone(),
+        context.request_message_id,
+        context.persisted.task_id.clone(),
     );
-    warnings
-        .into_iter()
-        .map(|warning| warning.render())
-        .collect()
+    Ok(outcome)
+}
+
+// Distinct from `crate::delivery_policy::AckReplyStateMachine`, which
+// documents the transition inventory. This seam owns typed reply-plan
+// construction from persisted delivery results.
+enum AckReplyStateMachine {
+    Persisted {
+        messages: Vec<LogicalMessage>,
+        warnings: Vec<crate::send::WarningEntry>,
+    },
+    SqliteFailedRecovered {
+        messages: Vec<LogicalMessage>,
+        warnings: Vec<crate::send::WarningEntry>,
+    },
+}
+
+impl AckReplyStateMachine {
+    fn from_persistence(
+        persistence: &crate::send::DeliveryPersistenceResult,
+    ) -> Result<Self, AtmError> {
+        let messages = logical_messages_from_persistence(persistence, false, true)
+            .map_err(|error| {
+                AtmError::mailbox_write(error.to_string()).with_recovery(
+                    "Repair the persisted reply-delivery record shape before retrying ack reply execution.",
+                )
+            })?;
+        let warnings = persistence.warnings.clone();
+        Ok(match persistence.disposition {
+            crate::send::DeliveryPersistenceDisposition::Persisted => {
+                Self::Persisted { messages, warnings }
+            }
+            crate::send::DeliveryPersistenceDisposition::SqliteFailedRecovered => {
+                Self::SqliteFailedRecovered { messages, warnings }
+            }
+        })
+    }
+
+    fn into_reply_delivery_plan(
+        self,
+        reply_target: &ReplyTarget,
+        reply_snapshot: &crate::delivery_policy::DeliveryRecipientSnapshot,
+        reply_inbox_path: &std::path::Path,
+    ) -> DeliveryPlan {
+        let (disposition, messages, warnings) = match self {
+            Self::Persisted { messages, warnings } => (
+                crate::send::DeliveryPersistenceDisposition::Persisted,
+                messages,
+                warnings,
+            ),
+            Self::SqliteFailedRecovered { messages, warnings } => (
+                crate::send::DeliveryPersistenceDisposition::SqliteFailedRecovered,
+                messages,
+                warnings,
+            ),
+        };
+        DeliveryPlan::new(
+            DeliveryPlanKind::Reply,
+            delivery_plan_disposition(disposition),
+            delivery_target_for_snapshot(reply_inbox_path, reply_snapshot),
+            ResolvedRecipient {
+                agent: reply_target.agent.clone(),
+                team: reply_target.team.clone(),
+            },
+            reply_snapshot.recipient_pane_id.clone(),
+            messages,
+            warnings,
+        )
+    }
+}
+
+fn build_reply_delivery_plan(context: &FinalizeAckContext<'_>) -> Result<DeliveryPlan, AtmError> {
+    Ok(
+        AckReplyStateMachine::from_persistence(&context.persisted.persistence)?
+            .into_reply_delivery_plan(
+                context.reply_target,
+                context.reply_snapshot,
+                &context.persisted.reply_inbox_path,
+            ),
+    )
 }
 
 fn record_ack_telemetry(
@@ -493,11 +613,202 @@ fn canonical_sender_identity(message: &MessageEnvelope) -> AgentName {
 
 #[cfg(test)]
 mod tests {
-    use super::{canonical_sender_identity, resolve_reply_target};
+    use std::path::{Path, PathBuf};
+    use std::sync::Mutex;
+    use std::time::Duration;
+
+    use super::{
+        AckReplyStateMachine, FinalizeAckContext, PersistedAckReply, ReplyTarget,
+        canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
+    };
+    use crate::boundary::{self, ClaudeCompatibilityDeliveryMode, MessageKey};
+    use crate::delivery_plan::{DeliveryPlanDisposition, DeliveryTarget};
+    use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
-    use crate::schema::MessageEnvelope;
+    use crate::schema::{AtmMessageId, MessageEnvelope, TeamConfig};
+    use crate::send::{DeliveryPersistenceDisposition, DeliveryPersistenceResult, WarningEntry};
+    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::TEST_TEAM;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use crate::workflow::WorkflowStateFile;
+
+    struct AckRuntime {
+        appended_messages: Mutex<Vec<MessageEnvelope>>,
+    }
+
+    impl AckRuntime {
+        fn appended_messages(&self) -> Vec<MessageEnvelope> {
+            self.appended_messages
+                .lock()
+                .expect("append captures lock")
+                .clone()
+        }
+    }
+
+    impl crate::boundary::sealed::Sealed for AckRuntime {}
+
+    impl crate::boundary::NotificationSink for AckRuntime {
+        fn deliver(
+            &self,
+            _event: crate::protocol::NotificationEvent,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
+        }
+    }
+
+    impl RetainedServiceRuntime for AckRuntime {
+        fn load_config(
+            &self,
+            _current_dir: &Path,
+        ) -> Result<Option<crate::config::AtmConfig>, crate::error::AtmError> {
+            Ok(None)
+        }
+
+        fn load_team_config(&self, _team_dir: &Path) -> Result<TeamConfig, crate::error::AtmError> {
+            unreachable!("ack writer-path test does not load team config")
+        }
+
+        fn team_dir(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+        ) -> Result<PathBuf, crate::error::AtmError> {
+            unreachable!("ack writer-path test does not resolve team directories")
+        }
+
+        fn inbox_path(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, crate::error::AtmError> {
+            unreachable!("ack writer-path test does not resolve inbox paths")
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, crate::error::AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_millis(1),
+            }
+        }
+
+        fn rebuild_compat_inbox_projection(
+            &self,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack writer-path test should not rebuild compatibility inboxes")
+        }
+
+        fn append_compat_inbox_message(
+            &self,
+            _inbox_path: &Path,
+            message: &MessageEnvelope,
+        ) -> Result<(), crate::error::AtmError> {
+            self.appended_messages
+                .lock()
+                .expect("append captures lock")
+                .push(message.clone());
+            Ok(())
+        }
+
+        fn append_compat_inbox_message_set(
+            &self,
+            _inbox_path: &Path,
+            _mode: ClaudeCompatibilityDeliveryMode,
+            _messages: &[MessageEnvelope],
+        ) -> Result<(), crate::error::AtmError> {
+            panic!("ack writer-path test should use the single-message Claude inbox writer path")
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _messages: &[MessageEnvelope],
+        ) -> Result<(), crate::error::AtmError> {
+            panic!("ack writer-path test should not route through non-Claude delivery")
+        }
+
+        fn load_roster_member(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<boundary::RosterMemberRecord>, crate::error::AtmError> {
+            Ok(None)
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            _body: F,
+        ) -> Result<T, crate::error::AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
+        {
+            unreachable!("ack writer-path test does not commit workflow state")
+        }
+    }
+
+    impl RetainedMailboxRuntime for AckRuntime {
+        fn query_mailbox_metadata_rows(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _limit: Option<usize>,
+        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, crate::error::AtmError> {
+            unreachable!("ack writer-path test does not query mailbox metadata")
+        }
+
+        fn load_message_record(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _message_key: &MessageKey,
+        ) -> Result<Option<boundary::MailStoreMessageRecord>, crate::error::AtmError> {
+            unreachable!("ack writer-path test does not load mailbox records")
+        }
+
+        fn persist_message_record(
+            &self,
+            _record: boundary::MailStoreMessageRecord,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack writer-path test does not persist mailbox records")
+        }
+
+        fn persist_message_state(
+            &self,
+            _state: boundary::MailMessageState,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack writer-path test does not persist mailbox state")
+        }
+    }
 
     fn message_with_from(from: &str) -> MessageEnvelope {
         MessageEnvelope {
@@ -538,5 +849,122 @@ mod tests {
                 TEST_TEAM.parse().expect("team"),
             )
         );
+    }
+
+    #[test]
+    fn ack_reply_state_machine_builds_reply_plan_with_original_and_companion() {
+        let team = TEST_TEAM.parse::<TeamName>().expect("team");
+        let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
+        let mut original = message_with_from(ROLE_TEAM_LEAD);
+        original.message_id = Some(AtmMessageId::new());
+        let mut companion = message_with_from("atm-system");
+        companion.message_id = Some(AtmMessageId::new());
+        companion.source_team = Some(team.clone());
+        let persistence = DeliveryPersistenceResult {
+            disposition: DeliveryPersistenceDisposition::SqliteFailedRecovered,
+            original_message: original.clone(),
+            companion_message: Some(companion.clone()),
+            warnings: vec![WarningEntry::new("warning".to_string(), Some("recovery"))],
+        };
+        let snapshot = crate::delivery_policy::DeliveryRecipientSnapshot {
+            agent: agent.clone(),
+            team: team.clone(),
+            harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,
+            recipient_pane_id: None,
+            roster_backed: true,
+        };
+        let machine = AckReplyStateMachine::from_persistence(&persistence).expect("state machine");
+        let plan = machine.into_reply_delivery_plan(
+            &super::ReplyTarget::new(agent.clone(), team.clone()),
+            &snapshot,
+            std::path::Path::new("reply.jsonl"),
+        );
+
+        assert_eq!(
+            plan.disposition,
+            DeliveryPlanDisposition::SqliteFailedRecovered
+        );
+        assert_eq!(plan.messages.len(), 2);
+        assert_eq!(plan.messages[0].envelope, original);
+        assert_eq!(plan.messages[1].envelope, companion);
+        assert_eq!(plan.notifications.len(), 2);
+        assert_eq!(plan.warnings.len(), 1);
+        match plan.delivery_target {
+            DeliveryTarget::ClaudeCode { .. } => {}
+            DeliveryTarget::NonClaude { .. } => {
+                panic!("expected ClaudeCode target for ClaudeCode harness")
+            }
+        }
+    }
+
+    #[test]
+    fn ack_write_goes_through_compat_inbox_writer_not_direct() {
+        let team = TEST_TEAM.parse::<TeamName>().expect("team");
+        let agent = ROLE_TEAM_LEAD.parse::<AgentName>().expect("agent");
+        let reply_message_id = AtmMessageId::new();
+        let request_message_id = AtmMessageId::new();
+        let reply_text = "ack reply".to_string();
+        let reply_message = MessageEnvelope {
+            from: "sender".parse::<AgentName>().expect("agent"),
+            text: reply_text.clone(),
+            timestamp: IsoTimestamp::now(),
+            read: false,
+            source_team: Some(team.clone()),
+            summary: None,
+            message_id: Some(reply_message_id),
+            pending_ack_at: None,
+            acknowledged_at: None,
+            acknowledges_message_id: Some(request_message_id),
+            parent_message_id: None,
+            thread_mode: None,
+            expires_at: None,
+            task_id: None,
+            extra: serde_json::Map::new(),
+        };
+        let persistence = DeliveryPersistenceResult {
+            disposition: DeliveryPersistenceDisposition::Persisted,
+            original_message: reply_message.clone(),
+            companion_message: None,
+            warnings: Vec::new(),
+        };
+        let reply_snapshot = crate::delivery_policy::DeliveryRecipientSnapshot {
+            agent: agent.clone(),
+            team: team.clone(),
+            harness: crate::delivery_policy::DeliveryHarnessPath::ClaudeCode,
+            recipient_pane_id: None,
+            roster_backed: true,
+        };
+        let reply_target = ReplyTarget::new(agent.clone(), team.clone());
+        let persisted = PersistedAckReply {
+            reply_message_id,
+            reply_text: reply_text.clone(),
+            task_id: None,
+            reply_inbox_path: PathBuf::from("reply.jsonl"),
+            persistence,
+        };
+        let runtime = AckRuntime {
+            appended_messages: Mutex::new(Vec::new()),
+        };
+
+        let outcome = finalize_ack_outcome(
+            &runtime,
+            &NullObservability,
+            None,
+            FinalizeAckContext {
+                actor: &"sender".parse::<AgentName>().expect("agent"),
+                team: &team,
+                request_message_id,
+                reply_target: &reply_target,
+                reply_snapshot: &reply_snapshot,
+                persisted: &persisted,
+            },
+        )
+        .expect("finalize ack outcome");
+
+        let appended_messages = runtime.appended_messages();
+        assert_eq!(appended_messages.len(), 1);
+        assert_eq!(appended_messages[0], reply_message);
+        assert_eq!(outcome.reply_message_id, reply_message_id);
+        assert_eq!(outcome.reply_text, reply_text);
     }
 }

@@ -1,0 +1,74 @@
+@prefix atm:  <https://atm-core.dev/triage/> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+atm:finding_S23-RBP-F001
+    atm:finding_id              "S23-RBP-F001" ;
+    atm:title                   "clone_state() returns infallible Result in runtime_status_cache.rs" ;
+    atm:phase_id                "phase-Ye" ;
+    atm:severity                "important" ;
+    atm:status                  "open" ;
+    atm:triage_mode             "initial_pass" ;
+    atm:triage_verdict          "CONFIRMED_PARTIAL" ;
+    atm:triage_rationale        "Confirmed on feature/pYe-s19 and feature/pYe-s23: clone_state() returns Result<RuntimeStatusCacheState, AtmError> but body is 'Ok(self.state.load().as_ref().clone())' — ArcSwap load is infallible; the Err arm is structurally unreachable. RBP-007 violated. However, on feature/pYe-s20 through integrate/phase-Y the implementation uses a Mutex: 'self.state.lock().map(|cache| cache.clone()).map_err(|_| runtime_status_cache_lock_poisoned())' — lock poison CAN return Err, so Result is NOT infallible there. The finding is open only on s19 and s23 (ArcSwap branches). s23 is the highest branch with the violation; fix belongs on feature/pYe-s23-phase-end-architecture-proof. Change return type to RuntimeStatusCacheState and unwrap the Ok at all call sites, or document why Result is intentionally retained for API symmetry." ;
+    atm:highest_open_branch     "feature/pYe-s23-phase-end-architecture-proof" ;
+    atm:promote_to_branch       "feature/pYe-s23-phase-end-architecture-proof" ;
+    atm:dispatch_ready          "true"^^xsd:boolean ;
+    atm:dispatch_blocked_pending_triage_commit "false"^^xsd:boolean ;
+    atm:sweep_scope             "crates/atm-daemon/src/runtime_status_cache.rs" ;
+    atm:repeatable              "false"^^xsd:boolean ;
+    atm:triage_date             "2026-05-20"^^xsd:date ;
+
+    atm:occurrence [
+        atm:branch  "feature/pYe-s19-runtime-status-snapshot-publication" ;
+        atm:commit  "d2694d8b" ;
+        atm:file    "crates/atm-daemon/src/runtime_status_cache.rs" ;
+        atm:lines   "78-80" ;
+        atm:note    "clone_state() -> Result<...>; body is Ok(self.state.load().as_ref().clone()) — ArcSwap load infallible; Err arm unreachable; RBP-007 violated" ;
+        atm:verdict "CONFIRMED"
+    ] ;
+    atm:occurrence [
+        atm:branch  "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:commit  "197272e1" ;
+        atm:file    "crates/atm-daemon/src/runtime_status_cache.rs" ;
+        atm:lines   "78-80" ;
+        atm:note    "Same ArcSwap implementation as s19; clone_state() infallible Result — RBP-007 violated" ;
+        atm:verdict "CONFIRMED"
+    ] ;
+
+    atm:branch_state [
+        atm:branch   "feature/pYe-s19-runtime-status-snapshot-publication" ;
+        atm:commit   "d2694d8b" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s20-notification-runtime-channel-ownership" ;
+        atm:commit   "ea517bb5" ;
+        atm:present  "false"^^xsd:boolean ;
+        atm:verdict  "NOT_A_FINDING"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+        atm:commit   "f9d8d0cc" ;
+        atm:present  "false"^^xsd:boolean ;
+        atm:verdict  "NOT_A_FINDING"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s22-reconcile-runtime-cutover" ;
+        atm:commit   "57e505b1" ;
+        atm:present  "false"^^xsd:boolean ;
+        atm:verdict  "NOT_A_FINDING"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:commit   "197272e1" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "integrate/phase-Y" ;
+        atm:commit   "9d9ca6af" ;
+        atm:present  "false"^^xsd:boolean ;
+        atm:verdict  "NOT_A_FINDING"
+    ] .
