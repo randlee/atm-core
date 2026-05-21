@@ -31,15 +31,14 @@ pub(crate) struct ReconcileRuntime {
     inner: Arc<ReconcileRuntimeInner>,
 }
 
-type ReconcileExecutor =
-    Arc<
-        dyn Fn(
-                &ReconcileRequest,
-                &mut NotificationFingerprintRegistry,
-            ) -> Result<ReconcileResult, AtmError>
-            + Send
-            + Sync,
-    >;
+type ReconcileExecutor = Arc<
+    dyn Fn(
+            &ReconcileRequest,
+            &mut NotificationFingerprintRegistry,
+        ) -> Result<ReconcileResult, AtmError>
+        + Send
+        + Sync,
+>;
 
 struct ReconcileRuntimeInner {
     state: Mutex<ReconcileState>,
@@ -411,10 +410,9 @@ impl ReconcileRuntime {
     ) -> Result<(), AtmError> {
         let command_tx = {
             let state = self.inner.state.lock().map_err(|_| {
-                AtmError::daemon_unavailable("reconcile runtime state lock poisoned")
-                    .with_recovery(
-                        "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
-                    )
+                AtmError::daemon_unavailable("reconcile runtime state lock poisoned").with_recovery(
+                    "Restart the daemon; reconcile lifecycle state can no longer be trusted.",
+                )
             })?;
             self.validate_reconcile_runtime_state(&state, request_team, request_agent)?;
             let slot = self.inner.command_tx.lock().map_err(|_| {
@@ -713,7 +711,11 @@ fn should_emit_reconcile_notification(
     let is_new_key = !notification_fingerprints.entries.contains_key(&key);
     if is_new_key && notification_fingerprints.entries.len() >= MAX_RECONCILE_FINGERPRINT_KEYS {
         while let Some(evicted_key) = notification_fingerprints.order.pop_front() {
-            if notification_fingerprints.entries.remove(&evicted_key).is_some() {
+            if notification_fingerprints
+                .entries
+                .remove(&evicted_key)
+                .is_some()
+            {
                 tracing::warn!(
                     subsystem = "reconcile",
                     action = "fingerprint_evict",
@@ -764,24 +766,22 @@ fn reconcile_worker_loop(
             };
 
         for pending_request in pending {
-            let outcome = match (inner.executor)(
-                &pending_request.request,
-                &mut notification_fingerprints,
-            ) {
-                Ok(result) => Ok(result),
-                Err(error) => {
-                    tracing::warn!(
-                        subsystem = "reconcile",
-                        action = "executor",
-                        outcome = "failed",
-                        team = %pending_request.request.team,
-                        agent = %pending_request.request.agent,
-                        %error,
-                        "reconcile runtime executor failed"
-                    );
-                    Err(error)
-                }
-            };
+            let outcome =
+                match (inner.executor)(&pending_request.request, &mut notification_fingerprints) {
+                    Ok(result) => Ok(result),
+                    Err(error) => {
+                        tracing::warn!(
+                            subsystem = "reconcile",
+                            action = "executor",
+                            outcome = "failed",
+                            team = %pending_request.request.team,
+                            agent = %pending_request.request.agent,
+                            %error,
+                            "reconcile runtime executor failed"
+                        );
+                        Err(error)
+                    }
+                };
             if record_reconcile_outcome(pending_request, outcome).is_none() {
                 return;
             }
@@ -842,18 +842,14 @@ impl ReconcileRuntimeInner {
     }
 }
 
-fn handle_reconcile_command(
-    inner: &ReconcileRuntimeInner,
-    command: ReconcileCommand,
-) -> bool {
+fn handle_reconcile_command(inner: &ReconcileRuntimeInner, command: ReconcileCommand) -> bool {
     match command {
         ReconcileCommand::Reconcile { request, reply_tx } => {
             let mut state = match inner.state.lock() {
                 Ok(state) => state,
                 Err(_) => return false,
             };
-            state.worker_state.pending_epoch =
-                state.worker_state.pending_epoch.saturating_add(1);
+            state.worker_state.pending_epoch = state.worker_state.pending_epoch.saturating_add(1);
             let key = ReconcileKey::from_request(&request);
             if let Some(pending) = state.worker_state.pending.get_mut(&key) {
                 pending.request = request;
@@ -1439,7 +1435,8 @@ mod tests {
             .reconcile(first_request)
             .expect("reconcile after eviction");
 
-        let (entry_count, order_count) = runtime.notification_fingerprint_registry_counts_for_test();
+        let (entry_count, order_count) =
+            runtime.notification_fingerprint_registry_counts_for_test();
         assert_eq!(entry_count, MAX_RECONCILE_FINGERPRINT_KEYS);
         assert_eq!(order_count, MAX_RECONCILE_FINGERPRINT_KEYS);
 
