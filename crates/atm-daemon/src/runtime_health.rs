@@ -174,15 +174,16 @@ impl DaemonRequestDispatcher {
                 cap = MAX_SHUTDOWN_FINALIZER_THREADS,
                 "shutdown finalizer thread cap reached; dropping retained worker handle"
             );
+        } else {
+            tracing::warn!(
+                subsystem = "runtime_health",
+                action = "shutdown_retain",
+                outcome = "deadline_exceeded",
+                step = label,
+                timeout_ms = deadline.as_millis(),
+                "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
+            );
         }
-        tracing::warn!(
-            subsystem = "runtime_health",
-            action = "shutdown_retain",
-            outcome = "deadline_exceeded",
-            step = label,
-            timeout_ms = deadline.as_millis(),
-            "daemon shutdown finalizer step exceeded its deadline; worker retained for later join"
-        );
     }
 
     fn spawn_shutdown_join_helper(
@@ -469,7 +470,7 @@ impl DaemonRequestDispatcher {
                     "Restore the host-scoped ATM SQLite durable-state database and restart atm-daemon before retrying SIGHUP reload.",
                 )
             })?;
-        let current_state = self.status_cache.clone_state()?;
+        let current_state = self.status_cache.clone_state();
         let next_state = build_runtime_status_cache_state(Some(&current_state), roster_store)?;
         let reloaded_members = next_state.member_count();
         self.status_cache.publish_state(next_state);
@@ -534,7 +535,7 @@ impl DaemonRequestDispatcher {
         }
         let cached_pid = self
             .status_cache
-            .cached_pid(&request.team, &request.member)?;
+            .cached_pid(&request.team, &request.member);
         if let Some(existing_pid) = cached_pid.filter(|pid| *pid != request.pid)
             && process_is_alive(existing_pid)
         {
@@ -595,8 +596,8 @@ impl DaemonRequestDispatcher {
                     .members
                     .iter()
                     .map(|member| (roster.team.clone(), member.name.clone())),
-            )?,
-            None => self.status_cache.snapshot()?,
+            ),
+            None => self.status_cache.snapshot(),
         };
         report
             .findings
@@ -727,7 +728,7 @@ impl boundary::sealed::Sealed for DaemonStatusSource {}
 
 impl boundary::StatusSource for DaemonStatusSource {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
-        self.status_cache.snapshot()
+        Ok(self.status_cache.snapshot())
     }
 }
 
