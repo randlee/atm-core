@@ -44,16 +44,16 @@ The phase-end status block uses:
 ## Per-Sprint Closure Record
 
 - `Y.19`
-  - accepted commit: `d2694d8b`
+  - accepted commit: `ab2bd715`
   - verdict: `PASS`
 - `Y.20`
-  - accepted commit: `ea517bb5`
+  - accepted commit: `715c157c`
   - verdict: `PASS`
 - `Y.21`
-  - accepted commit: `f9d8d0cc`
+  - accepted commit: `87f39c7c`
   - verdict: `PASS`
 - `Y.22`
-  - accepted commit: `fc0c4197`
+  - accepted commit: `57e505b1`
   - verdict: `PASS`
 - `Y.23`
   - accepted commit: `9c78d4b3`

@@ -103,8 +103,8 @@ These items are explicitly out of scope for `Phase Ye`:
 
 `Y.23` owns the final accepted-line closure record.
 
-- `Y.19 closes on accepted line: d2694d8b`
-- `Y.20 closes on accepted line: ea517bb5`
-- `Y.21 closes on accepted line: f9d8d0cc`
-- `Y.22 closes on accepted line: fc0c4197`
+- `Y.19 closes on accepted line: ab2bd715`
+- `Y.20 closes on accepted line: 715c157c`
+- `Y.21 closes on accepted line: 87f39c7c`
+- `Y.22 closes on accepted line: 57e505b1`
 - `Y.23 closes on accepted line: 9c78d4b3`
