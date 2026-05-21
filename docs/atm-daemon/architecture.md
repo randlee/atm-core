@@ -145,8 +145,9 @@ Current retained ATM surfaces outside the daemon request/response packet family:
   shared mutable coordination locks to callers
   - `Y.21` freezes the reconcile lane on the command-in / reply-out actor
     contract and shared `JoinHandleOwner` lifecycle helper
-  - `Y.22` owns deletion of the remaining production shared-state reconcile
-    runtime path
+  - `Y.22` deletes the remaining production shared-state reconcile runtime
+    path and moves notification fingerprint ownership fully into worker-owned
+    reconcile state
 - `atm-daemon` owns runtime implementations of one shared ATM protocol with
   multiple transport implementations:
   - cross-platform local IPC for same-host daemon access

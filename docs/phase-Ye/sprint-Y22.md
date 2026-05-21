@@ -1,7 +1,7 @@
 ---
 id: Y.22
 title: Reconcile Runtime Cutover
-status: planned
+status: complete
 branch: feature/pYe-s22-reconcile-runtime-cutover
 worktree: ../atm-core-worktrees/feature/pYe-s22-reconcile-runtime-cutover
 target: integrate/phase-Y
@@ -54,7 +54,6 @@ ADR-015 ownership in this sprint:
 - `crates/atm-daemon/Cargo.toml`
 - `crates/atm-daemon/src/worker_support.rs`
 - `crates/atm-daemon/src/reconcile_runtime.rs`
-- `crates/atm-daemon/src/composition.rs`
 - `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
@@ -70,10 +69,20 @@ surface:
 
 ```rust
 pub(crate) struct ReconcileRuntime {
-    tx: SyncSender<ReconcileCommand>,
+    inner: Arc<ReconcileRuntimeInner>,
+}
+
+struct ReconcileRuntimeInner {
+    command_tx: SyncSender<ReconcileCommand>,
+    command_rx: Mutex<Option<Receiver<ReconcileCommand>>>,
     status: Arc<ArcSwap<ReconcileRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
+    debounce: Duration,
+    executor: ReconcileExecutor,
+    notification_sink: Arc<dyn NotificationSink + Send + Sync>,
+    shutdown_deadline: Duration,
     observability: SubsystemObservability,
+    start_claimed: AtomicBool,
 }
 ```
 
@@ -82,6 +91,7 @@ pub(crate) struct ReconcileRuntime {
 pub(crate) struct ReconcileRuntimeStatus {
     started: bool,
     shutdown_requested: bool,
+    shutdown_started_at: Option<Instant>,
     degraded_message: Option<Arc<str>>,
 }
 ```
@@ -110,7 +120,7 @@ and does not reintroduce a lane-local duplicate.
 2. worker coalesces and debounces
 3. worker executes watch/ingress/notification work
 4. worker replies to all waiters and updates reconcile runtime status
-5. shutdown sends one control command and proves bounded termination
+5. shutdown flips explicit runtime status and proves bounded worker termination
 
 ## Deliverables
 
@@ -120,6 +130,8 @@ and does not reintroduce a lane-local duplicate.
   actor state; there is no surviving side mutex for fingerprint ownership
 - reconcile coalescing, completion fanout, and bounded shutdown are proven on
   the final actor design
+- `JoinHandleOwner` remains the only narrow mutex helper on the reconcile lane,
+  and it owns join lifecycle only
 - daemon requirements, architecture, and boundary docs reflect the cutover
   implementation shape for reconcile ownership
 
@@ -173,6 +185,13 @@ and does not reintroduce a lane-local duplicate.
 
 - no phase-end ADR acceptance or readiness closeout in this sprint
 - no additional daemon-lane redesign outside reconcile cutover
+
+## Known Limitations
+
+- There is no per-executor timeout on reconcile execution. A hung reconcile
+  executor can outlive the bounded shutdown deadline until the executor itself
+  returns. This is an accepted limitation (see `reconcile_runtime.rs` lines
+  720–722).
 
 ## Scope Estimate
 
