@@ -374,7 +374,11 @@ impl NotificationRuntime {
             timeout_ms = timeout_elapsed.as_millis(),
             "notification runtime worker exceeded shutdown deadline; retaining join helper for later cleanup"
         );
-        retain_join_helper("notification_runtime_worker", join_helper, timeout_elapsed);
+        retain_join_helper(
+            "notification_runtime_worker",
+            join_helper,
+            self.inner.shutdown_deadline,
+        );
         Err(AtmError::daemon_unavailable(format!(
             "notification runtime shutdown exceeded the {:?} deadline",
             self.inner.shutdown_deadline
