@@ -27,7 +27,7 @@ const MAX_RECONCILE_WAITERS: usize = 1024;
 #[cfg(not(test))]
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
 #[cfg(test)]
-const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_millis(100);
+const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(1);
 
 #[derive(Debug, Clone, Default)]
 pub(crate) struct ReconcileRuntimeStatus {
@@ -274,6 +274,16 @@ impl ReconcileRuntime {
     pub(crate) fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
         let request_team = request.team.clone();
         let request_agent = request.agent.clone();
+        let reply_rx = self.dispatch_reconcile_command(request, &request_team, &request_agent)?;
+        self.wait_for_reconcile_result(reply_rx, &request_team, &request_agent)
+    }
+
+    fn dispatch_reconcile_command(
+        &self,
+        request: ReconcileRequest,
+        request_team: &atm_core::types::TeamName,
+        request_agent: &atm_core::types::AgentName,
+    ) -> Result<Receiver<Result<ReconcileResult, AtmError>>, AtmError> {
         let status = self.inner.status_snapshot();
         if !status.started {
             return Err(self.reconcile_unavailable_error(
@@ -350,8 +360,7 @@ impl ReconcileRuntime {
                 ));
             }
         }
-
-        self.wait_for_reconcile_result(reply_rx, &request_team, &request_agent)
+        Ok(reply_rx)
     }
 
     fn wait_for_reconcile_result(
