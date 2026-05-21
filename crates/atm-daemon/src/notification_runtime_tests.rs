@@ -9,7 +9,9 @@ use std::time::Duration;
 use tempfile::TempDir;
 
 #[test]
+#[serial_test::serial(env)]
 fn notification_runtime_deliver_uses_bounded_command_channel() {
+    reap_retained_join_helpers();
     let tempdir = TempDir::new().expect("tempdir");
     let output_path = tempdir.path().join("notifications.jsonl");
     let entered_gate = Arc::new((Mutex::new(false), Condvar::new()));
@@ -74,7 +76,9 @@ fn notification_runtime_deliver_uses_bounded_command_channel() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn notification_runtime_persistence_failure_publishes_degraded_status() {
+    reap_retained_join_helpers();
     let tempdir = TempDir::new().expect("tempdir");
     let blocking_path = tempdir.path().join("blocking-file");
     std::fs::write(&blocking_path, "not-a-dir").expect("blocking file");

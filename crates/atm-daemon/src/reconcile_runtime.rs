@@ -26,12 +26,32 @@ const MAX_RECONCILE_FINGERPRINTS_PER_KEY: usize = 256;
 const MAX_RECONCILE_WAITERS: usize = 1024;
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
 
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ReconcileWorkerLiveness {
+    Live,
+    Degraded,
+    Stopped,
+}
+
+#[derive(Debug, Clone)]
 pub(crate) struct ReconcileRuntimeStatus {
     started: bool,
     shutdown_requested: bool,
     shutdown_started_at: Option<Instant>,
     degraded_message: Option<Arc<str>>,
+    worker_liveness: ReconcileWorkerLiveness,
+}
+
+impl Default for ReconcileRuntimeStatus {
+    fn default() -> Self {
+        Self {
+            started: false,
+            shutdown_requested: false,
+            shutdown_started_at: None,
+            degraded_message: None,
+            worker_liveness: ReconcileWorkerLiveness::Stopped,
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -54,10 +74,16 @@ struct ReconcileRuntimeInner {
 
 type ReconcileExecutor =
     Arc<dyn Fn(&ReconcileRequest) -> Result<ReconcileExecution, AtmError> + Send + Sync>;
+type ReconcileReplyRx = Receiver<Result<ReconcileResult, AtmError>>;
+type ReconcileDispatch = (
+    ReconcileReplyRx,
+    atm_core::types::TeamName,
+    atm_core::types::AgentName,
+);
 
 pub(crate) struct ReconcileExecution {
     result: ReconcileResult,
-    current_fingerprints: Option<HashSet<String>>,
+    current_fingerprints: Option<HashSet<NotificationFingerprint>>,
 }
 
 pub(crate) enum ReconcileCommand {
@@ -98,8 +124,21 @@ impl ReconcileWorkerState {
 
 #[derive(Default)]
 struct NotificationFingerprintRegistry {
-    entries: HashMap<ReconcileKey, HashSet<String>>,
+    entries: HashMap<ReconcileKey, HashSet<NotificationFingerprint>>,
     order: VecDeque<ReconcileKey>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
+struct NotificationFingerprint(String);
+
+impl NotificationFingerprint {
+    fn new(value: String) -> Option<Self> {
+        if value.is_empty() {
+            None
+        } else {
+            Some(Self(value))
+        }
+    }
 }
 
 #[derive(Clone)]
@@ -202,6 +241,14 @@ impl ReconcileRuntime {
         shutdown_deadline: Duration,
         observability: SubsystemObservability,
     ) -> Self {
+        assert!(
+            queue_capacity >= 1,
+            "reconcile runtime queue_capacity must be at least 1"
+        );
+        assert!(
+            !shutdown_deadline.is_zero(),
+            "reconcile runtime shutdown_deadline must be greater than zero"
+        );
         Self {
             inner: Arc::new(ReconcileRuntimeInner {
                 command_tx: OnceLock::new(),
@@ -241,9 +288,6 @@ impl ReconcileRuntime {
                     .with_source(source)
             })?;
 
-        self.inner.worker.install(handle).inspect_err(|_| {
-            self.inner.start_claimed.store(false, Ordering::Release);
-        })?;
         if self.inner.command_tx.set(command_tx).is_err() {
             self.inner.start_claimed.store(false, Ordering::Release);
             return Err(AtmError::daemon_unavailable(
@@ -253,7 +297,18 @@ impl ReconcileRuntime {
                 "Restart atm-daemon; the reconcile worker lane already claimed its bounded command-channel handoff.",
             ));
         }
+        self.inner.worker.install(handle).inspect_err(|_| {
+            self.inner.start_claimed.store(false, Ordering::Release);
+        })?;
         self.inner.mark_started();
+        tracing::info!(
+            subsystem = "reconcile",
+            action = "worker_start",
+            outcome = "configured",
+            queue_capacity = self.inner.queue_capacity,
+            debounce_ms = self.inner.debounce.as_millis(),
+            "reconcile runtime worker configuration accepted"
+        );
         self.inner
             .observability
             .emit_or_warn("start", "ok", "reconcile runtime worker started");
@@ -269,19 +324,24 @@ impl ReconcileRuntime {
         self.await_worker_shutdown(handle)
     }
 
+    #[cfg(test)]
+    pub(crate) fn worker_liveness(&self) -> ReconcileWorkerLiveness {
+        self.inner.status_snapshot().worker_liveness
+    }
+
     pub(crate) fn reconcile(&self, request: ReconcileRequest) -> Result<ReconcileResult, AtmError> {
-        let request_team = request.team.clone();
-        let request_agent = request.agent.clone();
-        let reply_rx = self.dispatch_reconcile_command(request, &request_team, &request_agent)?;
+        let (reply_rx, request_team, request_agent) = self.dispatch_reconcile_command(request)?;
         self.wait_for_reconcile_result(reply_rx, &request_team, &request_agent)
     }
 
     fn dispatch_reconcile_command(
         &self,
         request: ReconcileRequest,
-        request_team: &atm_core::types::TeamName,
-        request_agent: &atm_core::types::AgentName,
-    ) -> Result<Receiver<Result<ReconcileResult, AtmError>>, AtmError> {
+    ) -> Result<ReconcileDispatch, AtmError> {
+        let request_team_owned = request.team.clone();
+        let request_agent_owned = request.agent.clone();
+        let request_team = &request_team_owned;
+        let request_agent = &request_agent_owned;
         let status = self.inner.status_snapshot();
         if !status.started {
             return Err(self.reconcile_unavailable_error(
@@ -336,12 +396,12 @@ impl ReconcileRuntime {
             Err(TrySendError::Disconnected(_)) => {
                 return Err(self.handle_send_error(
                     self.inner.status_snapshot(),
-                    request_team,
-                    request_agent,
+                    &request_team_owned,
+                    &request_agent_owned,
                 ));
             }
         }
-        Ok(reply_rx)
+        Ok((reply_rx, request_team_owned, request_agent_owned))
     }
 
     fn wait_for_reconcile_result(
@@ -405,6 +465,14 @@ impl ReconcileRuntime {
                 request_agent,
             );
         }
+        if latest_status.worker_liveness == ReconcileWorkerLiveness::Stopped {
+            return self.reconcile_unavailable_error(
+                "rejected",
+                "reconcile runtime worker stopped receiving commands",
+                request_team,
+                request_agent,
+            );
+        }
         AtmError::daemon_unavailable("reconcile runtime command channel is unavailable")
             .with_recovery(
                 "Restart atm-daemon; the reconcile worker lane is no longer receiving commands.",
@@ -464,6 +532,12 @@ impl ReconcileRuntime {
         join_helper: JoinHandle<()>,
         worker_thread_id: thread::ThreadId,
     ) -> Result<(), AtmError> {
+        let timeout_elapsed = self
+            .inner
+            .status_snapshot()
+            .shutdown_started_at
+            .map(|started_at| started_at.elapsed())
+            .unwrap_or(self.inner.shutdown_deadline);
         self.inner.observability.emit_or_warn(
             "shutdown",
             "degraded",
@@ -474,7 +548,7 @@ impl ReconcileRuntime {
             action = "shutdown_retain",
             outcome = "deadline_exceeded",
             thread_id = ?worker_thread_id,
-            timeout_ms = self.inner.shutdown_deadline.as_millis(),
+            timeout_ms = timeout_elapsed.as_millis(),
             "reconcile runtime worker exceeded shutdown deadline; retaining join helper for later cleanup"
         );
         retain_join_helper(
@@ -550,6 +624,7 @@ impl ReconcileRuntimeInner {
             shutdown_requested: false,
             shutdown_started_at: None,
             degraded_message: None,
+            worker_liveness: ReconcileWorkerLiveness::Live,
         }));
     }
 
@@ -562,12 +637,16 @@ impl ReconcileRuntimeInner {
     }
 
     fn mark_worker_stopped(&self) {
-        self.publish_status(|status| ReconcileRuntimeStatus { ..status.clone() });
+        self.publish_status(|status| ReconcileRuntimeStatus {
+            worker_liveness: ReconcileWorkerLiveness::Stopped,
+            ..status.clone()
+        });
     }
 
     fn mark_worker_degraded(&self, message: &'static str) {
         self.publish_status(|status| ReconcileRuntimeStatus {
             degraded_message: Some(Arc::<str>::from(message)),
+            worker_liveness: ReconcileWorkerLiveness::Degraded,
             ..status.clone()
         });
     }
@@ -576,7 +655,7 @@ impl ReconcileRuntimeInner {
 fn compute_reconcile_notification_fingerprints(
     import: &atm_core::boundary::InboxIngressImportResponse,
     inbox_ingress: &dyn InboxIngress,
-) -> Option<HashSet<String>> {
+) -> Option<HashSet<NotificationFingerprint>> {
     let mut current_fingerprints = HashSet::new();
     for source in &import.source_files {
         for message in &source.messages {
@@ -588,7 +667,7 @@ fn compute_reconcile_notification_fingerprints(
                 )
                 .fingerprint;
             let fingerprint = fingerprint?;
-            current_fingerprints.insert(fingerprint);
+            current_fingerprints.insert(NotificationFingerprint::new(fingerprint)?);
         }
     }
     Some(current_fingerprints)
@@ -770,7 +849,7 @@ fn execute_reconcile_request(
 fn should_emit_reconcile_notification(
     worker_state: &mut ReconcileWorkerState,
     request: &ReconcileRequest,
-    current_fingerprints: Option<HashSet<String>>,
+    current_fingerprints: Option<HashSet<NotificationFingerprint>>,
 ) -> bool {
     let Some(mut current_fingerprints) = current_fingerprints else {
         return true;
@@ -853,6 +932,8 @@ fn spawn_reconcile_join_helper(
         .name("atm-daemon-reconcile-join".to_string())
         .spawn(move || {
             let _ = result_tx.send(handle.join());
+            #[cfg(test)]
+            crate::worker_support::signal_retained_join_helper_exit_for_test();
         })
         .map_err(|source| {
             AtmError::daemon_unavailable(

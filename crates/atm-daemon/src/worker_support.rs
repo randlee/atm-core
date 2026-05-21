@@ -2,6 +2,11 @@ use atm_core::error::AtmError;
 use std::sync::Mutex;
 use std::thread::JoinHandle;
 use std::time::Duration;
+#[cfg(test)]
+use std::{
+    sync::{Condvar, LazyLock},
+    time::Instant,
+};
 
 const MAX_RETAINED_JOIN_HELPERS: usize = 16;
 
@@ -16,6 +21,10 @@ struct RetainedJoinHelper {
 // join helpers that must outlive one bounded shutdown attempt. It must not
 // expand into shared runtime coordination, queue ownership, or request state.
 static RETAINED_JOIN_HELPERS: Mutex<Vec<RetainedJoinHelper>> = Mutex::new(Vec::new());
+
+#[cfg(test)]
+static RETAINED_JOIN_HELPER_EXIT_SIGNAL: LazyLock<(Mutex<u64>, Condvar)> =
+    LazyLock::new(|| (Mutex::new(0), Condvar::new()));
 
 #[derive(Debug, Default)]
 pub(crate) struct JoinHandleOwner {
@@ -154,21 +163,57 @@ pub(crate) fn retain_join_helper(
 pub(crate) fn retained_join_helper_count_for_test() -> usize {
     RETAINED_JOIN_HELPERS
         .lock()
-        .expect("retained join helper registry lock")
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
         .len()
 }
 
 #[cfg(test)]
 pub(crate) fn reap_retained_join_helpers_until_empty_for_test() {
-    for _ in 0..1024 {
+    let deadline = Instant::now() + Duration::from_secs(5);
+    let mut observed_epoch = retained_join_helper_exit_epoch_for_test();
+    loop {
         reap_retained_join_helpers();
         if retained_join_helper_count_for_test() == 0 {
             return;
         }
-        std::thread::yield_now();
-        // lint-fixed-sleep: allow-next-line — reap loop polls for retained join-helper thread exit;
-        // recv() returning does not guarantee thread has exited; 1ms yield gives scheduler budget.
-        std::thread::sleep(Duration::from_millis(1));
+        let now = Instant::now();
+        if now >= deadline {
+            break;
+        }
+        observed_epoch = wait_for_retained_join_helper_exit_for_test(
+            observed_epoch,
+            deadline.saturating_duration_since(now),
+        );
     }
     panic!("retained join helpers were not reaped after the worker completion signal");
+}
+
+#[cfg(test)]
+pub(crate) fn signal_retained_join_helper_exit_for_test() {
+    let (epoch_lock, wake) = &*RETAINED_JOIN_HELPER_EXIT_SIGNAL;
+    let mut epoch = epoch_lock
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *epoch = epoch.saturating_add(1);
+    wake.notify_all();
+}
+
+#[cfg(test)]
+fn retained_join_helper_exit_epoch_for_test() -> u64 {
+    let (epoch_lock, _) = &*RETAINED_JOIN_HELPER_EXIT_SIGNAL;
+    *epoch_lock
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(test)]
+fn wait_for_retained_join_helper_exit_for_test(previous_epoch: u64, timeout: Duration) -> u64 {
+    let (epoch_lock, wake) = &*RETAINED_JOIN_HELPER_EXIT_SIGNAL;
+    let epoch = epoch_lock
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let (epoch, _) = wake
+        .wait_timeout_while(epoch, timeout, |epoch| *epoch == previous_epoch)
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    *epoch
 }

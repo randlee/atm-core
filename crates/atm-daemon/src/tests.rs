@@ -555,15 +555,11 @@ fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
         .expect("runtime view reload should succeed");
 
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &leader)
-            .expect("leader state"),
+        status_cache.member_state_for_test(&team, &leader),
         Some(RuntimeMemberState::Active)
     );
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &qa)
-            .expect("qa state"),
+        status_cache.member_state_for_test(&team, &qa),
         Some(RuntimeMemberState::Unknown)
     );
 }
@@ -605,9 +601,7 @@ fn reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_stat
         .reload_runtime_view()
         .expect("invalid config should be ignored once roster truth is in sqlite");
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &leader)
-            .expect("leader state"),
+        status_cache.member_state_for_test(&team, &leader),
         Some(RuntimeMemberState::Active)
     );
 }
@@ -669,9 +663,7 @@ fn heartbeat_rejects_live_pid_conflict() {
         "ATM_IDENTITY_CONFLICT: stop and report to user immediately"
     );
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &member)
-            .expect("member state"),
+        status_cache.member_state_for_test(&team, &member),
         Some(RuntimeMemberState::IdentityConflict)
     );
     let snapshot = status_cache.snapshot();
@@ -739,29 +731,25 @@ fn heartbeat_evicts_oldest_member_and_projects_missing_roster_entries_as_unknown
     let team = test_team().clone();
     let member: AgentName = "qa-a".parse().expect("member");
     let base = Utc::now();
-    status_cache
-        .insert_member_for_test(
-            team.clone(),
-            member.clone(),
-            Some(u32::MAX),
-            RuntimeMemberState::Idle,
-            Some(IsoTimestamp::from_datetime(base)),
-        )
-        .expect("seed evicted member");
+    status_cache.insert_member_for_test(
+        team.clone(),
+        member.clone(),
+        Some(u32::MAX),
+        RuntimeMemberState::Idle,
+        Some(IsoTimestamp::from_datetime(base)),
+    );
 
     for index in 0..4095 {
         let member_name: AgentName = format!("member-{index}").parse().expect("member");
-        status_cache
-            .insert_member_for_test(
-                team.clone(),
-                member_name,
-                Some(index as u32 + 2),
-                RuntimeMemberState::Idle,
-                Some(IsoTimestamp::from_datetime(
-                    base + ChronoDuration::seconds(index as i64 + 1),
-                )),
-            )
-            .expect("insert member");
+        status_cache.insert_member_for_test(
+            team.clone(),
+            member_name,
+            Some(index as u32 + 2),
+            RuntimeMemberState::Idle,
+            Some(IsoTimestamp::from_datetime(
+                base + ChronoDuration::seconds(index as i64 + 1),
+            )),
+        );
     }
 
     let response = status_cache.record_heartbeat_for_test(
@@ -776,25 +764,15 @@ fn heartbeat_evicts_oldest_member_and_projects_missing_roster_entries_as_unknown
     );
     assert_eq!(response.state, RuntimeMemberState::Active);
 
-    assert_eq!(
-        status_cache.member_count_for_test().expect("member count"),
-        4096
-    );
-    assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &member)
-            .expect("member state"),
-        None
-    );
-    let scoped_snapshot = status_cache
-        .snapshot_for_members_for_test([
-            (
-                team.clone(),
-                "trigger-member".parse().expect("trigger member"),
-            ),
-            (team.clone(), member.clone()),
-        ])
-        .expect("scoped snapshot");
+    assert_eq!(status_cache.member_count_for_test(), 4096);
+    assert_eq!(status_cache.member_state_for_test(&team, &member), None);
+    let scoped_snapshot = status_cache.snapshot_for_members_for_test([
+        (
+            team.clone(),
+            "trigger-member".parse().expect("trigger member"),
+        ),
+        (team.clone(), member.clone()),
+    ]);
     assert_eq!(scoped_snapshot.member_counts.active_members, 1);
     assert_eq!(scoped_snapshot.member_counts.unknown_members, 1);
 }
@@ -813,15 +791,13 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
     let team = test_team().clone();
     let member: AgentName = ROLE_TEAM_LEAD.parse().expect("member");
 
-    status_cache
-        .insert_member_for_test(
-            team.clone(),
-            member.clone(),
-            Some(u32::MAX),
-            RuntimeMemberState::IdentityConflict,
-            None,
-        )
-        .expect("seed stale conflict");
+    status_cache.insert_member_for_test(
+        team.clone(),
+        member.clone(),
+        Some(u32::MAX),
+        RuntimeMemberState::IdentityConflict,
+        None,
+    );
 
     let response = dispatcher
         .dispatch(RequestEnvelope::Heartbeat(TeamMemberHeartbeatRequest {
@@ -857,17 +833,15 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
         } else {
             format!("conflict-{index}").parse().expect("member")
         };
-        status_cache
-            .insert_member_for_test(
-                team.clone(),
-                member_name,
-                Some(index as u32 + 1),
-                RuntimeMemberState::IdentityConflict,
-                Some(IsoTimestamp::from_datetime(
-                    base + ChronoDuration::seconds(index as i64),
-                )),
-            )
-            .expect("seed conflict member");
+        status_cache.insert_member_for_test(
+            team.clone(),
+            member_name,
+            Some(index as u32 + 1),
+            RuntimeMemberState::IdentityConflict,
+            Some(IsoTimestamp::from_datetime(
+                base + ChronoDuration::seconds(index as i64),
+            )),
+        );
     }
 
     let request = TeamMemberHeartbeatRequest {
@@ -880,19 +854,15 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
     status_cache.record_identity_conflict_for_test(&request, u32::MAX);
 
     assert_eq!(
-        status_cache.member_count_for_test().expect("member count"),
+        status_cache.member_count_for_test(),
         MAX_STATUS_CACHE_ENTRIES
     );
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &oldest_member)
-            .expect("oldest member state"),
+        status_cache.member_state_for_test(&team, &oldest_member),
         None
     );
     assert_eq!(
-        status_cache
-            .member_state_for_test(&team, &request.member)
-            .expect("trigger member state"),
+        status_cache.member_state_for_test(&team, &request.member),
         Some(RuntimeMemberState::IdentityConflict)
     );
 }

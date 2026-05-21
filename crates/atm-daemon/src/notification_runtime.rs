@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::sync::atomic::AtomicU8;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, OnceLock};
 use std::thread;
 use std::thread::JoinHandle;
 use std::time::{Duration, Instant};
@@ -64,10 +64,7 @@ pub(crate) struct NotificationRuntime {
 type NotificationPathFactory = Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
 
 struct NotificationRuntimeInner {
-    command_tx: SyncSender<NotificationCommand>,
-    // The worker lane claims the receiver exactly once at startup; the mutex
-    // exists only to serialize that single take across concurrent start calls.
-    command_rx: Mutex<Option<Receiver<NotificationCommand>>>,
+    command_tx: OnceLock<SyncSender<NotificationCommand>>,
     queue_capacity: usize,
     status: Arc<ArcSwap<NotificationRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
@@ -93,11 +90,13 @@ impl NotificationRuntime {
         queue_capacity: usize,
         observability: SubsystemObservability,
     ) -> Self {
-        let (command_tx, command_rx) = mpsc::sync_channel(queue_capacity);
+        assert!(
+            queue_capacity >= 1,
+            "notification runtime queue_capacity must be at least 1"
+        );
         Self {
             inner: Arc::new(NotificationRuntimeInner {
-                command_tx,
-                command_rx: Mutex::new(Some(command_rx)),
+                command_tx: OnceLock::new(),
                 queue_capacity,
                 status: Arc::new(ArcSwap::from_pointee(NotificationRuntimeStatus::default())),
                 worker: Arc::new(JoinHandleOwner::default()),
@@ -117,15 +116,7 @@ impl NotificationRuntime {
             return Ok(());
         }
 
-        let Some(command_rx) = self.inner.take_command_rx()? else {
-            self.inner.start_claimed.store(false, Ordering::Release);
-            return Err(AtmError::daemon_unavailable(
-                "notification runtime command receiver was unavailable during startup",
-            )
-            .with_recovery(
-                "Restart atm-daemon; the notification worker lane could not claim its command receiver.",
-            ));
-        };
+        let (command_tx, command_rx) = mpsc::sync_channel(self.inner.queue_capacity);
 
         let inner = Arc::clone(&self.inner);
         let handle = thread::Builder::new()
@@ -142,6 +133,15 @@ impl NotificationRuntime {
                     .with_source(source)
             })?;
 
+        if self.inner.command_tx.set(command_tx).is_err() {
+            self.inner.start_claimed.store(false, Ordering::Release);
+            return Err(AtmError::daemon_unavailable(
+                "notification runtime command sender was already initialized during startup",
+            )
+            .with_recovery(
+                "Restart atm-daemon; the notification worker lane already claimed its bounded command-channel handoff.",
+            ));
+        }
         self.inner.worker.install(handle).inspect_err(|_| {
             self.inner.start_claimed.store(false, Ordering::Release);
         })?;
@@ -198,11 +198,14 @@ impl NotificationRuntime {
             );
         }
 
-        match self
-            .inner
-            .command_tx
-            .try_send(NotificationCommand::Deliver { event })
-        {
+        let command_tx = self.inner.command_tx.get().ok_or_else(|| {
+            AtmError::daemon_unavailable(
+                "notification runtime command channel is unavailable before daemon startup",
+            )
+            .with_recovery("Start or restart atm-daemon before retrying notification delivery.")
+        })?;
+
+        match command_tx.try_send(NotificationCommand::Deliver { event }) {
             Ok(()) => Ok(()),
             Err(TrySendError::Full(_)) => {
                 self.inner.observability.emit_or_warn(
@@ -267,11 +270,17 @@ impl NotificationRuntime {
         queue_capacity: usize,
         shutdown_deadline: Duration,
     ) -> Self {
-        let (command_tx, command_rx) = mpsc::sync_channel(queue_capacity);
+        assert!(
+            queue_capacity >= 1,
+            "notification runtime queue_capacity must be at least 1"
+        );
+        assert!(
+            !shutdown_deadline.is_zero(),
+            "notification runtime shutdown_deadline must be greater than zero"
+        );
         Self {
             inner: Arc::new(NotificationRuntimeInner {
-                command_tx,
-                command_rx: Mutex::new(Some(command_rx)),
+                command_tx: OnceLock::new(),
                 queue_capacity,
                 status: Arc::new(ArcSwap::from_pointee(NotificationRuntimeStatus::default())),
                 worker: Arc::new(JoinHandleOwner::default()),
@@ -419,16 +428,6 @@ impl NotificationRuntime {
 }
 
 impl NotificationRuntimeInner {
-    fn take_command_rx(&self) -> Result<Option<Receiver<NotificationCommand>>, AtmError> {
-        let mut receiver = self.command_rx.lock().map_err(|_| {
-            AtmError::daemon_unavailable("notification runtime receiver lock poisoned")
-                .with_recovery(
-                    "Restart atm-daemon; notification command receiver ownership can no longer be trusted.",
-                )
-        })?;
-        Ok(receiver.take())
-    }
-
     fn status_snapshot(&self) -> Arc<NotificationRuntimeStatus> {
         self.status.load_full()
     }
@@ -494,6 +493,8 @@ fn spawn_shutdown_join_helper(
         .name("atm-daemon-notifier-join".to_string())
         .spawn(move || {
             let _ = result_tx.send(handle.join());
+            #[cfg(test)]
+            crate::worker_support::signal_retained_join_helper_exit_for_test();
         })
         .map_err(|source| {
             AtmError::daemon_unavailable(

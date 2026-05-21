@@ -82,11 +82,10 @@ fn dispatch_reconcile_command_for_test(
     runtime: &ReconcileRuntime,
     request: ReconcileRequest,
 ) -> std::sync::mpsc::Receiver<Result<ReconcileResult, AtmError>> {
-    let request_team = request.team.clone();
-    let request_agent = request.agent.clone();
     runtime
-        .dispatch_reconcile_command(request, &request_team, &request_agent)
+        .dispatch_reconcile_command(request)
         .expect("dispatch command")
+        .0
 }
 
 #[test]
@@ -134,7 +133,9 @@ fn reconcile_runtime_actor_coalesces_identical_requests_into_one_worker_run() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn reconcile_runtime_actor_fans_one_result_to_all_waiters_for_a_key() {
+    reap_retained_join_helpers();
     let calls = Arc::new(Mutex::new(0usize));
     let gate = Arc::new((Mutex::new(false), Condvar::new()));
     let runtime = ReconcileRuntime::new_for_test(
@@ -159,15 +160,28 @@ fn reconcile_runtime_actor_fans_one_result_to_all_waiters_for_a_key() {
         }),
         Duration::from_millis(200),
     );
-    runtime.start().expect("start");
+    let command_rx = prepare_started_runtime(&runtime);
 
     let request = request();
-    let runtime_a = runtime.clone();
-    let runtime_b = runtime.clone();
-    let request_a = request.clone();
-    let request_b = request;
-    let first = std::thread::spawn(move || runtime_a.reconcile(request_a).expect("first"));
-    let second = std::thread::spawn(move || runtime_b.reconcile(request_b).expect("second"));
+    let (submitted_tx, submitted_rx) = std::sync::mpsc::sync_channel(2);
+    for request in [request.clone(), request] {
+        let runtime = runtime.clone();
+        let submitted_tx = submitted_tx.clone();
+        std::thread::spawn(move || {
+            let reply_rx = dispatch_reconcile_command_for_test(&runtime, request);
+            submitted_tx
+                .send(reply_rx)
+                .expect("submitted reconcile command");
+        });
+    }
+    drop(submitted_tx);
+    let first = submitted_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("first submitted");
+    let second = submitted_rx
+        .recv_timeout(Duration::from_secs(1))
+        .expect("second submitted");
+    spawn_runtime_worker(&runtime, command_rx);
 
     {
         let (ready_lock, ready_wake) = &*gate;
@@ -175,8 +189,8 @@ fn reconcile_runtime_actor_fans_one_result_to_all_waiters_for_a_key() {
         ready_wake.notify_all();
     }
 
-    let first_result = first.join().expect("join");
-    let second_result = second.join().expect("join");
+    let first_result = first.recv().expect("first recv").expect("first");
+    let second_result = second.recv().expect("second recv").expect("second");
     assert_eq!(first_result, second_result);
     assert_eq!(first_result.observed_paths, 7);
     assert_eq!(first_result.imported_sources, 3);
@@ -185,7 +199,9 @@ fn reconcile_runtime_actor_fans_one_result_to_all_waiters_for_a_key() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn reconcile_runtime_actor_preserves_bounded_debounce_extensions() {
+    reap_retained_join_helpers();
     let calls = Arc::new(Mutex::new(0usize));
     let gate = Arc::new((Mutex::new(false), Condvar::new()));
     let runtime = ReconcileRuntime::new_for_test(
@@ -210,22 +226,32 @@ fn reconcile_runtime_actor_preserves_bounded_debounce_extensions() {
         }),
         Duration::from_millis(25),
     );
-    runtime.start().expect("start");
+    let command_rx = prepare_started_runtime(&runtime);
 
     let request = request();
-    let mut joins = Vec::new();
-    joins.push({
+    let submission_count = 2 + MAX_RECONCILE_DEBOUNCE_EXTENSIONS as usize;
+    let (submitted_tx, submitted_rx) = std::sync::mpsc::sync_channel(submission_count);
+    let mut replies = Vec::new();
+    for _ in 0..submission_count {
         let runtime = runtime.clone();
         let request = request.clone();
-        std::thread::spawn(move || runtime.reconcile(request).expect("first"))
-    });
-    for _ in 0..=MAX_RECONCILE_DEBOUNCE_EXTENSIONS {
-        let runtime = runtime.clone();
-        let request = request.clone();
-        joins.push(std::thread::spawn(move || {
-            runtime.reconcile(request).expect("duplicate")
-        }));
+        let submitted_tx = submitted_tx.clone();
+        std::thread::spawn(move || {
+            let reply_rx = dispatch_reconcile_command_for_test(&runtime, request);
+            submitted_tx
+                .send(reply_rx)
+                .expect("submitted reconcile command");
+        });
     }
+    drop(submitted_tx);
+    for _ in 0..submission_count {
+        replies.push(
+            submitted_rx
+                .recv_timeout(Duration::from_secs(1))
+                .expect("submitted reconcile command"),
+        );
+    }
+    spawn_runtime_worker(&runtime, command_rx);
 
     {
         let (ready_lock, ready_wake) = &*gate;
@@ -233,8 +259,8 @@ fn reconcile_runtime_actor_preserves_bounded_debounce_extensions() {
         ready_wake.notify_all();
     }
 
-    for join in joins {
-        let result = join.join().expect("join");
+    for reply in replies {
+        let result = reply.recv().expect("recv").expect("result");
         assert_eq!(result.observed_paths, 1);
         assert_eq!(result.imported_sources, 1);
     }
@@ -336,7 +362,9 @@ fn reconcile_runtime_actor_shutdown_stays_bounded() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn reconcile_runtime_returns_executor_failures() {
+    reap_retained_join_helpers();
     let runtime = ReconcileRuntime::new_for_test(
         Arc::new(|_| Err(AtmError::daemon_unavailable("reconcile failed"))),
         Duration::from_millis(10),
@@ -348,7 +376,9 @@ fn reconcile_runtime_returns_executor_failures() {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn reconcile_runtime_cleans_up_pending_waiters_during_shutdown() {
+    reap_retained_join_helpers();
     let gate = Arc::new((Mutex::new(false), Condvar::new()));
     let runtime = ReconcileRuntime::new_for_test(
         Arc::new({
@@ -384,6 +414,12 @@ fn reconcile_runtime_cleans_up_pending_waiters_during_shutdown() {
         error.message.contains("shut down before completion")
             || error.message.contains("unavailable during daemon shutdown")
     );
+    if retained_join_helper_count_for_test() > 0 {
+        let (released, wake) = &*gate;
+        *released.lock().expect("released") = true;
+        wake.notify_all();
+        reap_retained_join_helpers_until_empty_for_test();
+    }
 }
 
 #[test]
@@ -558,6 +594,31 @@ fn reconcile_runtime_routes_notifications_through_notification_sink_boundary() {
     );
 
     runtime.shutdown().expect("shutdown");
+}
+
+#[test]
+fn reconcile_runtime_projects_worker_liveness_across_start_and_shutdown() {
+    let runtime = ReconcileRuntime::new(
+        Arc::new(FakeWatchSource),
+        Arc::new(FakeInboxIngress::new(vec![])),
+        Arc::new(FakeNotificationSink {
+            delivered: Arc::new(Mutex::new(Vec::new())),
+        }),
+    );
+    assert_eq!(
+        runtime.worker_liveness(),
+        super::ReconcileWorkerLiveness::Stopped
+    );
+    runtime.start().expect("start");
+    assert_eq!(
+        runtime.worker_liveness(),
+        super::ReconcileWorkerLiveness::Live
+    );
+    runtime.shutdown().expect("shutdown");
+    assert_eq!(
+        runtime.worker_liveness(),
+        super::ReconcileWorkerLiveness::Stopped
+    );
 }
 
 #[test]

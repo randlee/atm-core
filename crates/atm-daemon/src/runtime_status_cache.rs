@@ -472,15 +472,15 @@ impl RuntimeStatusCache {
         &self,
         team: &TeamName,
         member: &AgentName,
-    ) -> Result<Option<RuntimeMemberState>, AtmError> {
+    ) -> Option<RuntimeMemberState> {
         let cache = self.state.load();
-        Ok(cache
+        cache
             .members
             .get(&RuntimeMemberKey {
                 team: team.clone(),
                 member: member.clone(),
             })
-            .map(|record| record.state))
+            .map(|record| record.state)
     }
 
     pub(crate) fn insert_member_for_test(
@@ -490,7 +490,7 @@ impl RuntimeStatusCache {
         pid: Option<u32>,
         state: RuntimeMemberState,
         last_active_at: Option<IsoTimestamp>,
-    ) -> Result<(), AtmError> {
+    ) {
         let mut cache = self.clone_state();
         cache.members.insert(
             RuntimeMemberKey { team, member },
@@ -501,19 +501,18 @@ impl RuntimeStatusCache {
             },
         );
         self.publish_state(cache);
-        Ok(())
     }
 
-    pub(crate) fn member_count_for_test(&self) -> Result<usize, AtmError> {
+    pub(crate) fn member_count_for_test(&self) -> usize {
         let cache = self.state.load();
-        Ok(cache.members.len())
+        cache.members.len()
     }
 
     pub(crate) fn snapshot_for_members_for_test(
         &self,
         members: impl IntoIterator<Item = (TeamName, AgentName)>,
-    ) -> Result<RuntimeStatusSnapshot, AtmError> {
-        Ok(self.snapshot_for_members(members))
+    ) -> RuntimeStatusSnapshot {
+        self.snapshot_for_members(members)
     }
 
     pub(crate) fn record_heartbeat_for_test(
@@ -572,9 +571,7 @@ mod tests {
         assert_eq!(snapshot.member_counts.offline_members, 0);
         assert_eq!(snapshot.member_counts.unknown_members, 0);
 
-        let scoped = status_cache
-            .snapshot_for_members_for_test([(team, member)])
-            .expect("scoped snapshot");
+        let scoped = status_cache.snapshot_for_members_for_test([(team, member)]);
         assert_eq!(scoped.member_counts.active_members, 1);
         assert_eq!(scoped.member_counts.unknown_members, 0);
     }
@@ -587,32 +584,26 @@ mod tests {
         let idle: AgentName = TEST_RECIPIENT.parse().expect("member");
         let missing: AgentName = TEST_SENDER.parse().expect("member");
 
-        status_cache
-            .insert_member_for_test(
-                team.clone(),
-                active.clone(),
-                Some(100),
-                RuntimeMemberState::Active,
-                Some(IsoTimestamp::now()),
-            )
-            .expect("insert active member");
-        status_cache
-            .insert_member_for_test(
-                team.clone(),
-                idle.clone(),
-                Some(101),
-                RuntimeMemberState::Idle,
-                Some(IsoTimestamp::now()),
-            )
-            .expect("insert idle member");
+        status_cache.insert_member_for_test(
+            team.clone(),
+            active.clone(),
+            Some(100),
+            RuntimeMemberState::Active,
+            Some(IsoTimestamp::now()),
+        );
+        status_cache.insert_member_for_test(
+            team.clone(),
+            idle.clone(),
+            Some(101),
+            RuntimeMemberState::Idle,
+            Some(IsoTimestamp::now()),
+        );
 
-        let snapshot = status_cache
-            .snapshot_for_members_for_test([
-                (team.clone(), active),
-                (team.clone(), idle),
-                (team, missing),
-            ])
-            .expect("scoped snapshot");
+        let snapshot = status_cache.snapshot_for_members_for_test([
+            (team.clone(), active),
+            (team.clone(), idle),
+            (team, missing),
+        ]);
 
         assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
         assert_eq!(snapshot.member_counts.active_members, 1);
@@ -627,15 +618,13 @@ mod tests {
         let team = test_team();
         let member: AgentName = TEST_SENDER.parse().expect("member");
 
-        status_cache
-            .insert_member_for_test(
-                team,
-                member,
-                Some(200),
-                RuntimeMemberState::Active,
-                Some(IsoTimestamp::now()),
-            )
-            .expect("insert active member");
+        status_cache.insert_member_for_test(
+            team,
+            member,
+            Some(200),
+            RuntimeMemberState::Active,
+            Some(IsoTimestamp::now()),
+        );
 
         status_cache.mark_sqlite_unavailable_with_detail("sqlite writer submit failed");
 

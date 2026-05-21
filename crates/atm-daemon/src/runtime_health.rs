@@ -893,19 +893,15 @@ mod tests {
         assert_eq!(response.state, RuntimeMemberState::Active);
 
         assert_eq!(
-            status_cache.member_count_for_test().expect("member count"),
+            status_cache.member_count_for_test(),
             super::MAX_STATUS_CACHE_ENTRIES
         );
         assert_eq!(
-            status_cache
-                .member_state_for_test(&team, &oldest_member)
-                .expect("oldest member state"),
+            status_cache.member_state_for_test(&team, &oldest_member),
             None
         );
         assert_eq!(
-            status_cache
-                .member_state_for_test(&team, &trigger_member)
-                .expect("trigger member state"),
+            status_cache.member_state_for_test(&team, &trigger_member),
             Some(RuntimeMemberState::Active)
         );
     }
