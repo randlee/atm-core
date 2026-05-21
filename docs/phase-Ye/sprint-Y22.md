@@ -186,6 +186,13 @@ and does not reintroduce a lane-local duplicate.
 - no phase-end ADR acceptance or readiness closeout in this sprint
 - no additional daemon-lane redesign outside reconcile cutover
 
+## Known Limitations
+
+- There is no per-executor timeout on reconcile execution. A hung reconcile
+  executor can outlive the bounded shutdown deadline until the executor itself
+  returns. This is an accepted limitation (see `reconcile_runtime.rs` lines
+  720–722).
+
 ## Scope Estimate
 
 This sprint is credible only because `Y.21` isolates the actor contract first.
