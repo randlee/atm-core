@@ -7,23 +7,27 @@
   triage:title "record_reconcile_outcome() infallible Option<()> return type (RBP-007)" ;
   triage:description "reconcile_runtime.rs — record_reconcile_outcome() always returns Some(()), return type should be (). RBP-007." ;
   triage:phaseId "phase-Ye" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:repeatable true ;
   triage:sweepScope "crates/atm-daemon/src/reconcile_runtime.rs, crates/atm-daemon/src/notification_runtime.rs" ;
   triage:category "RBP" ;
   triage:severity "important" ;
   triage:status "open" ;
   triage:dispatchReady false ;
+  triage:dispatchBlockedPendingTriageCommit true ;
   triage:triagedAt "2026-05-20T00:00:00Z"^^xsd:dateTime ;
+  triage:updatedAt "2026-05-20T00:00:00Z"^^xsd:dateTime ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S21-RBP-I001/pYe-s19/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S21-RBP-I001/pYe-s20/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S21-RBP-I001/pYe-s21/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S21-RBP-I001/pYe-s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S21-RBP-I001/integrate/1> ;
   triage:openOn <urn:atm:triage:worktree/pYe-s19/d2694d8b> ;
   triage:openOn <urn:atm:triage:worktree/pYe-s20/ea517bb5> ;
   triage:openOn <urn:atm:triage:worktree/pYe-s21/f9d8d0cc> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s22/57e505b1> ;
   triage:openOn <urn:atm:triage:worktree/integrate/9d9ca6af> ;
-  triage:promoteTo <urn:atm:triage:worktree/pYe-s21/f9d8d0cc> .
+  triage:promoteTo <urn:atm:triage:worktree/pYe-s22/57e505b1> .
 
 <urn:atm:triage:occurrence/S21-RBP-I001/pYe-s19/1>
   a triage:Occurrence ;
@@ -58,6 +62,17 @@
   triage:headSha "f9d8d0cc" ;
   triage:occursIn <urn:atm:triage:worktree/pYe-s21/f9d8d0cc> .
 
+<urn:atm:triage:occurrence/S21-RBP-I001/pYe-s22/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 795 ;
+  triage:snippet "fn record_reconcile_outcome(...) -> Option<()> { ... Some(()) }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s22-reconcile-runtime-cutover" ;
+  triage:headSha "57e505b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s22/57e505b1> .
+
 <urn:atm:triage:occurrence/S21-RBP-I001/integrate/1>
   a triage:Occurrence ;
   triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
@@ -90,9 +105,16 @@
   triage:headSha "f9d8d0cc" ;
   triage:orderIndex 3 .
 
+<urn:atm:triage:worktree/pYe-s22/57e505b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s22-reconcile-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s22-reconcile-runtime-cutover" ;
+  triage:headSha "57e505b1" ;
+  triage:orderIndex 4 .
+
 <urn:atm:triage:worktree/integrate/9d9ca6af>
   a triage:WorktreeSnapshot ;
   triage:branch "integrate/phase-Y" ;
   triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
   triage:headSha "9d9ca6af" ;
-  triage:orderIndex 4 .
+  triage:orderIndex 5 .
