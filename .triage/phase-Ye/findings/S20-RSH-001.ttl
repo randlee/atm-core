@@ -1,0 +1,80 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S20-RSH-001>
+  a triage:Finding ;
+  triage:findingId "S20-RSH-001" ;
+  triage:title "persist_notification() blocking file I/O cannot be interrupted mid-write by shutdown deadline" ;
+  triage:description "crates/atm-daemon/src/notification_runtime.rs — persist_notification() blocking file I/O cannot be interrupted mid-write by shutdown deadline. Guards at :575/:577/:599 check only before each I/O op, not during write_all/flush. TODO(Y.14) at :611 acknowledges this. Service hardening finding." ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-Ye" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-20T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S20-RSH-001/pYe-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S20-RSH-001/pYe-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S20-RSH-001/integrate-Y/1> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s19/d2694d8> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s20/ea517bb> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-Y/9d9ca6a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYe-s20/ea517bb> ;
+  triage:highestOpenBranch "feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:highestOpenSha "ea517bb5" .
+
+<urn:atm:triage:occurrence/S20-RSH-001/pYe-s19/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 471 ;
+  triage:snippet "// TODO(Y.14): std::fs append writes are still synchronous once they start." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s19/d2694d8> .
+
+<urn:atm:triage:occurrence/S20-RSH-001/pYe-s20/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 611 ;
+  triage:snippet "// TODO(Y.14): std::fs append writes are still synchronous once they start." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:headSha "ea517bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s20/ea517bb> .
+
+<urn:atm:triage:occurrence/S20-RSH-001/integrate-Y/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/notification_runtime.rs" ;
+  triage:line 473 ;
+  triage:snippet "// TODO(Y.14): std::fs append writes are still synchronous once they start." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-Y" ;
+  triage:headSha "9d9ca6af" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-Y/9d9ca6a> .
+
+<urn:atm:triage:worktree/pYe-s19/d2694d8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pYe-s20/ea517bb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:headSha "ea517bb5" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate-Y/9d9ca6a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "9d9ca6af" ;
+  triage:orderIndex 3 .

@@ -1,0 +1,66 @@
+@prefix atm:  <https://atm-core.dev/triage/> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+atm:finding_S23-ATM-QA-005
+    atm:finding_id              "S23-ATM-QA-005" ;
+    atm:title                   "ADR-015 Y.23 phase-end proof entry split across 2 lines — rg pattern won't match" ;
+    atm:phase_id                "phase-Ye" ;
+    atm:severity                "important" ;
+    atm:status                  "open" ;
+    atm:triage_mode             "initial_pass" ;
+    atm:triage_verdict          "CONFIRMED" ;
+    atm:triage_rationale        "Verified on all feature branches: ADR-015 has '- `Y.23`:' on one line and '  - phase-end proof, readiness record, and ADR acceptance on the final line' on the next. The rg gate pattern 'Y.23.*phase-end proof' requires both tokens on a single line; the split format will never match. The integrate/phase-Y branch does not yet contain the Y.23 entry (s23 not merged). Fix must be applied on feature/pYe-s23-phase-end-architecture-proof — collapse to a single bullet line such as '- `Y.23`: phase-end proof, readiness record, and ADR acceptance on the final line'." ;
+    atm:highest_open_branch     "feature/pYe-s23-phase-end-architecture-proof" ;
+    atm:promote_to_branch       "feature/pYe-s23-phase-end-architecture-proof" ;
+    atm:dispatch_ready          "true"^^xsd:boolean ;
+    atm:dispatch_blocked_pending_triage_commit "false"^^xsd:boolean ;
+    atm:sweep_scope             "docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md" ;
+    atm:repeatable              "false"^^xsd:boolean ;
+    atm:triage_date             "2026-05-20"^^xsd:date ;
+
+    atm:occurrence [
+        atm:branch  "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:commit  "197272e1" ;
+        atm:file    "docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md" ;
+        atm:lines   "120-121" ;
+        atm:note    "Y.23 label on line 120, 'phase-end proof' text on line 121 — split across 2 lines; rg 'Y.23.*phase-end proof' does not match" ;
+        atm:verdict "CONFIRMED"
+    ] ;
+
+    atm:branch_state [
+        atm:branch   "feature/pYe-s19-runtime-status-snapshot-publication" ;
+        atm:commit   "d2694d8b" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s20-notification-runtime-channel-ownership" ;
+        atm:commit   "ea517bb5" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+        atm:commit   "f9d8d0cc" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s22-reconcile-runtime-cutover" ;
+        atm:commit   "57e505b1" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:commit   "197272e1" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "integrate/phase-Y" ;
+        atm:commit   "9d9ca6af" ;
+        atm:present  "false"^^xsd:boolean ;
+        atm:verdict  "ABSENT"
+    ] .

@@ -4,6 +4,9 @@ use std::thread::JoinHandle;
 
 #[derive(Debug, Default)]
 pub(crate) struct JoinHandleOwner {
+    // Narrow RBP-006 exception: this mutex owns only the install-once /
+    // take-once handoff for one worker JoinHandle and must not expand into
+    // general runtime coordination or request-state ownership.
     join_handle: Mutex<Option<JoinHandle<()>>>,
 }
 

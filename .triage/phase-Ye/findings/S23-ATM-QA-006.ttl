@@ -1,0 +1,66 @@
+@prefix atm:  <https://atm-core.dev/triage/> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+atm:finding_S23-ATM-QA-006
+    atm:finding_id              "S23-ATM-QA-006" ;
+    atm:title                   "project-plan.md has no explicit 'Phase Ye.*closed' text" ;
+    atm:phase_id                "phase-Ye" ;
+    atm:severity                "important" ;
+    atm:status                  "open" ;
+    atm:triage_mode             "initial_pass" ;
+    atm:triage_verdict          "CONFIRMED" ;
+    atm:triage_rationale        "Verified on all feature branches: docs/project-plan.md contains no line matching 'Phase Ye.*closed' or 'Phase Ye: closed'. On feature/pYe-s23-phase-end-architecture-proof the closest text is 'Phase Ye closes on the accepted line once Y.23 records the phase-end architecture proof and ADR-015 acceptance.' (lines 3731-3732) — this is a conditional future-tense prose description, not an explicit closure marker. The rg gate requires a positive match on the same line. Fix must be applied on feature/pYe-s23-phase-end-architecture-proof: add an explicit closure line such as 'Phase Ye: closed — Y.23 phase-end proof recorded and ADR-015 accepted.'." ;
+    atm:highest_open_branch     "feature/pYe-s23-phase-end-architecture-proof" ;
+    atm:promote_to_branch       "feature/pYe-s23-phase-end-architecture-proof" ;
+    atm:dispatch_ready          "true"^^xsd:boolean ;
+    atm:dispatch_blocked_pending_triage_commit "false"^^xsd:boolean ;
+    atm:sweep_scope             "docs/project-plan.md" ;
+    atm:repeatable              "false"^^xsd:boolean ;
+    atm:triage_date             "2026-05-20"^^xsd:date ;
+
+    atm:occurrence [
+        atm:branch  "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:commit  "197272e1" ;
+        atm:file    "docs/project-plan.md" ;
+        atm:lines   "3731-3732" ;
+        atm:note    "Prose describes when Phase Ye closes but no explicit 'Phase Ye: closed' marker exists anywhere in the file; rg 'Phase Ye.*closed' returns no match" ;
+        atm:verdict "CONFIRMED"
+    ] ;
+
+    atm:branch_state [
+        atm:branch   "feature/pYe-s19-runtime-status-snapshot-publication" ;
+        atm:commit   "d2694d8b" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s20-notification-runtime-channel-ownership" ;
+        atm:commit   "ea517bb5" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+        atm:commit   "f9d8d0cc" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s22-reconcile-runtime-cutover" ;
+        atm:commit   "57e505b1" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:commit   "197272e1" ;
+        atm:present  "true"^^xsd:boolean ;
+        atm:verdict  "CONFIRMED"
+    ] ;
+    atm:branch_state [
+        atm:branch   "integrate/phase-Y" ;
+        atm:commit   "9d9ca6af" ;
+        atm:present  "false"^^xsd:boolean ;
+        atm:verdict  "ABSENT"
+    ] .

@@ -262,14 +262,10 @@ Notes:
 - accepted `Phase Ye` design is one worker-owned actor lane with bounded
   command input plus per-request reply routing; pending/completed/debounce
   state must not remain daemon-shared mutex state at closure.
-- `Y.21` closes the command/reply contract, reply fanout, and shared
-  `JoinHandleOwner` lifecycle helper; `Y.22` closes deletion of the remaining
-  production shared-state runtime path and moves notification fingerprint
-  ownership fully inside `ReconcileWorkerState`.
 - Runtime lifecycle ownership stays above this boundary:
   - `start()` and `shutdown()` are composition-root responsibilities
   - callers outside `RuntimeComposition` must use
-    `ReconcileCoordinator::reconcile(...)` only and must not manage worker
+  `ReconcileCoordinator::reconcile(...)` only and must not manage worker
     lifetime directly
 
 ## DaemonRequestDispatcherAdapter
