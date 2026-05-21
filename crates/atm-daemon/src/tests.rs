@@ -473,7 +473,7 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
         other => panic!("expected heartbeat response, got {other:?}"),
     }
 
-    let snapshot = status_cache.snapshot().expect("snapshot");
+    let snapshot = status_cache.snapshot();
     assert_eq!(snapshot.liveness, RuntimeLivenessState::Running);
     assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
     assert_eq!(snapshot.member_counts.active_members, 1);
@@ -509,7 +509,7 @@ fn dispatcher_hydrates_unknown_members_from_team_roster_on_startup() {
     let _dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
 
-    let snapshot = status_cache.snapshot().expect("snapshot");
+    let snapshot = status_cache.snapshot();
     assert_eq!(snapshot.readiness, RuntimeReadinessState::Ready);
     assert_eq!(snapshot.member_counts.active_members, 0);
     assert_eq!(snapshot.member_counts.idle_members, 0);
@@ -674,13 +674,13 @@ fn heartbeat_rejects_live_pid_conflict() {
             .expect("member state"),
         Some(RuntimeMemberState::IdentityConflict)
     );
-    let snapshot = status_cache.snapshot().expect("snapshot");
+    let snapshot = status_cache.snapshot();
     assert_eq!(snapshot.readiness, RuntimeReadinessState::Degraded);
     assert!(
         snapshot
             .detail
-            .as_deref()
-            .is_some_and(|detail| detail.contains("identity conflict"))
+            .as_ref()
+            .is_some_and(|detail: &String| detail.contains("identity conflict"))
     );
 }
 

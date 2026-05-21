@@ -30,14 +30,15 @@ impl DaemonRequestDispatcher {
             Arc::clone(&sqlite_observability),
         ) {
             Ok(boundary) => {
-                if let Err(error) = build_runtime_status_cache_state(None, boundary.roster_store())
-                    .and_then(|state| status_cache.replace_state(state))
-                {
-                    tracing::warn!(
-                        %error,
-                        "failed to hydrate test runtime status cache from sqlite roster state"
-                    );
-                    status_cache.mark_sqlite_unavailable();
+                match build_runtime_status_cache_state(None, boundary.roster_store()) {
+                    Ok(state) => status_cache.publish_state(state),
+                    Err(error) => {
+                        tracing::warn!(
+                            %error,
+                            "failed to hydrate test runtime status cache from sqlite roster state"
+                        );
+                        status_cache.mark_sqlite_unavailable();
+                    }
                 }
                 Some(boundary)
             }

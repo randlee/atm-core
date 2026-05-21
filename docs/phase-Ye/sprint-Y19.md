@@ -1,7 +1,7 @@
 ---
 id: Y.19
 title: Runtime Status Snapshot Publication
-status: planned
+status: complete
 branch: feature/pYe-s19-runtime-status-snapshot-publication
 worktree: ../atm-core-worktrees/feature/pYe-s19-runtime-status-snapshot-publication
 target: integrate/phase-Y
@@ -208,7 +208,7 @@ implementation.
 
 ## Required Validation
 
-- `rg -n 'arc_swap' Cargo.toml crates/atm-daemon/Cargo.toml`
+- `rg -n 'arc-swap' Cargo.toml crates/atm-daemon/Cargo.toml`
 - `rg -n "Mutex<RuntimeStatusCacheState>|lock poisoned" crates/atm-daemon/src/runtime_status_cache.rs` # expected: zero matches
 - `cargo test --workspace runtime_status_cache_heartbeat_publish_is_atomically_visible -- --nocapture`
 - `cargo test --workspace runtime_status_cache_scoped_snapshot_reads_do_not_require_shared_locking -- --nocapture`
