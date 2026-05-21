@@ -7,7 +7,7 @@
   triage:title "ReconcileRuntime not flat — command_rx: Mutex<Option<Receiver<ReconcileCommand>>> violates flat-struct mandate" ;
   triage:description "ReconcileRuntime still uses Arc<ReconcileRuntimeInner> indirection. Field command_rx: Mutex<Option<Receiver<ReconcileCommand>>> at reconcile_runtime.rs:47 is a second Mutex on the reconcile lane. Sprint Y.22 deliverable requires JoinHandleOwner as the ONLY narrow mutex helper on the reconcile lane. Fix: create sync_channel inside start(), move Receiver directly to spawned thread, remove command_rx: Mutex from inner struct, collapse ReconcileRuntimeInner to flat struct shape." ;
   triage:phaseId "phase-Ye" ;
-  triage:triageMode "initial_pass" ;
+  triage:triageMode "followup_pass" ;
   triage:repeatable false ;
   triage:sweepScope "crates/atm-daemon/src/reconcile_runtime.rs" ;
   triage:category "flat-struct-mandate" ;
@@ -16,6 +16,8 @@
   triage:dispatchReady false ;
   triage:dispatchBlockedPendingTriageCommit true ;
   triage:triagedAt "2026-05-20T00:00:00Z"^^xsd:dateTime ;
+  triage:followupVerifiedAt "2026-05-20T00:00:00Z"^^xsd:dateTime ;
+  triage:followupNote "Y.23 QA-1 did NOT surface this in its 6B list. Followup verification confirms still open at pYe-s23 (197272e1): line 47 command_rx: Mutex<Option<Receiver<ReconcileCommand>>> present in ReconcileRuntimeInner; line 212 Mutex::new(Some(command_rx)) in constructor; take_command_rx() lock pattern at line 512. promote_to_branch = pYe-s23 confirmed correct." ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S22-ARCH-001/pYe-s22/1> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S22-ARCH-001/pYe-s22/2> ;
   triage:hasOccurrence <urn:atm:triage:occurrence/S22-ARCH-001/pYe-s23/1> ;

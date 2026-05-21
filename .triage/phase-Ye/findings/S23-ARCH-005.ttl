@@ -1,0 +1,54 @@
+@prefix atm:  <https://atm-core.dev/ontology/qa#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+atm:finding-S23-ARCH-005
+    a atm:QAFinding ;
+    atm:findingId         "S23-ARCH-005" ;
+    atm:phase             "phase-Ye" ;
+    atm:sprint            "Y.23" ;
+    atm:title             "Required validation phrases absent from all 3 daemon docs on Y.23 branch" ;
+    atm:severity          atm:Blocking ;
+    atm:repeatable        false ;
+    atm:triageMode        "initial_pass" ;
+    atm:triageDate        "2026-05-20"^^xsd:date ;
+
+    # Phrases that must be present (rg acceptance gate)
+    atm:requiredPhrase    "bounded command-channel handoff" ;
+    atm:requiredPhrase    "actor-owned request" ;
+
+    # Affected branches — phrase absent on ALL branches including integrate
+    atm:affectedBranch    "feature/pYe-s19-runtime-status-snapshot-publication" ;
+    atm:affectedBranch    "feature/pYe-s20-notification-runtime-channel-ownership" ;
+    atm:affectedBranch    "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+    atm:affectedBranch    "feature/pYe-s22-reconcile-runtime-cutover" ;
+    atm:affectedBranch    "feature/pYe-s23-phase-end-architecture-proof" ;
+    atm:affectedBranch    "integrate/phase-Y" ;
+
+    # Highest open branch — fix target
+    atm:promoteToBranch   "feature/pYe-s23-phase-end-architecture-proof" ;
+
+    # Evidence — all 3 files × all branches: both phrases completely absent (count=0)
+    atm:evidence [
+        rdfs:label "pYe-s23: requirements.md — bounded=0, actor-owned=0" ;
+        atm:file   "docs/atm-daemon/requirements.md" ;
+        atm:branch "feature/pYe-s23-phase-end-architecture-proof"
+    ] ;
+    atm:evidence [
+        rdfs:label "pYe-s23: architecture.md — bounded=0, actor-owned=0" ;
+        atm:file   "docs/atm-daemon/architecture.md" ;
+        atm:branch "feature/pYe-s23-phase-end-architecture-proof"
+    ] ;
+    atm:evidence [
+        rdfs:label "pYe-s23: boundaries.md — bounded=0, actor-owned=0" ;
+        atm:file   "docs/atm-daemon/boundaries.md" ;
+        atm:branch "feature/pYe-s23-phase-end-architecture-proof"
+    ] ;
+    atm:evidence [
+        rdfs:label "integrate/phase-Y: all 3 files — both phrases absent" ;
+        atm:branch "integrate/phase-Y"
+    ] ;
+
+    atm:fixDescription    "Add the exact phrases 'bounded command-channel handoff' and 'actor-owned request' to all three files (docs/atm-daemon/requirements.md, docs/atm-daemon/architecture.md, docs/atm-daemon/boundaries.md) in contextually appropriate locations on feature/pYe-s23-phase-end-architecture-proof. Merge-forward closes the finding on earlier branches." ;
+    atm:sweepScope        "docs/atm-daemon/requirements.md docs/atm-daemon/architecture.md docs/atm-daemon/boundaries.md" ;
+    atm:integrateStatus   "open — phrases also absent from integrate/phase-Y; will be resolved by merge-forward after s23 fix" .
