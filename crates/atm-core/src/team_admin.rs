@@ -355,6 +355,14 @@ fn add_member_with_roster_store(
 /// Returns [`AtmError`] when the team/config is missing or backup directory/file
 /// creation fails.
 pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
+    let runtime = service_runtime_store::default_runtime()?;
+    backup_team_with_roster_store(runtime.roster_store.as_ref(), request)
+}
+
+fn backup_team_with_roster_store(
+    roster_store: &dyn RosterStore,
+    request: BackupRequest,
+) -> Result<BackupOutcome, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&request.team));
@@ -398,6 +406,7 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
         &backup_dir.join("tasks"),
         |name| name == ".highwatermark" || name.ends_with(".json"),
     )?;
+    write_roster_audit_snapshot(&backup_dir, roster_store, &request.team)?;
 
     Ok(BackupOutcome {
         action: "backup",
@@ -414,7 +423,8 @@ pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
 /// config-last persistence fails. Failure to remove the restore marker after a
 /// successful restore is degraded to a warning-only follow-up path.
 pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> {
-    restore::restore_team(request)
+    let runtime = service_runtime_store::default_runtime()?;
+    restore::restore_team_with_roster_store(runtime.roster_store.as_ref(), request)
 }
 
 fn ordered_roster_member_summaries(records: &[RosterMemberRecord]) -> Vec<MemberSummary> {
@@ -448,7 +458,7 @@ fn member_summary_from_roster(record: &RosterMemberRecord) -> MemberSummary {
     }
 }
 
-fn load_team_roster(
+pub(super) fn load_team_roster(
     roster_store: &dyn RosterStore,
     team: &TeamName,
 ) -> Result<Vec<RosterMemberRecord>, AtmError> {
@@ -457,7 +467,7 @@ fn load_team_roster(
         .map(|response| response.members)
 }
 
-fn project_team_config_from_roster(
+pub(super) fn project_team_config_from_roster(
     extra: serde_json::Map<String, Value>,
     records: &[RosterMemberRecord],
 ) -> TeamConfig {
@@ -598,6 +608,26 @@ fn atomic_write(path: &Path, bytes: &[u8]) -> Result<(), AtmError> {
     )
 }
 
+fn write_roster_audit_snapshot(
+    backup_dir: &Path,
+    roster_store: &dyn RosterStore,
+    team: &TeamName,
+) -> Result<(), AtmError> {
+    let roster = load_team_roster(roster_store, team)?;
+    let bytes = serde_json::to_vec_pretty(&json!({
+        "team": team,
+        "members": roster,
+    }))
+    .map_err(AtmError::from)?;
+    persistence::atomic_write_bytes(
+        &backup_dir.join("atm-roster.json"),
+        &bytes,
+        AtmErrorKind::FilePolicy,
+        "ATM roster backup snapshot",
+        "Check backup directory permissions and retry the backup.",
+    )
+}
+
 fn copy_regular_files<F>(src: &Path, dst: &Path, include: F) -> Result<(), AtmError>
 where
     F: Fn(&str) -> bool,
@@ -722,8 +752,8 @@ mod tests {
 
     use super::{
         AddMemberRequest, BackupRequest, RestoreRequest, add_member_with_roster_store,
-        backup_root_from_home, list_members_with_roster_store, list_teams_with_roster_store,
-        tasks_dir_from_home,
+        backup_root_from_home, backup_team_with_roster_store, list_members_with_roster_store,
+        list_teams_with_roster_store, tasks_dir_from_home,
     };
     use crate::boundary::{
         self, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
@@ -1069,6 +1099,33 @@ mod tests {
             .find(|member| member.name == TEST_SENDER)
             .expect("member");
         assert_eq!(member.tmux_pane_id.as_deref(), Some("%12"));
+    }
+
+    #[test]
+    fn backup_team_writes_atm_roster_audit_snapshot() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(
+            TEST_TEAM,
+            vec![
+                roster_member(TEST_TEAM, ROLE_TEAM_LEAD),
+                roster_member(TEST_TEAM, TEST_SENDER),
+            ],
+        );
+
+        let outcome = backup_team_with_roster_store(
+            &roster_store,
+            BackupRequest::new(tempdir.path().to_path_buf(), TEST_TEAM).expect("request"),
+        )
+        .expect("backup");
+
+        let snapshot: serde_json::Value = serde_json::from_slice(
+            &std::fs::read(outcome.backup_path.join("atm-roster.json")).expect("snapshot"),
+        )
+        .expect("parse snapshot");
+        assert_eq!(snapshot["team"], serde_json::json!(TEST_TEAM));
+        assert_eq!(snapshot["members"].as_array().map(Vec::len), Some(2));
     }
 
     #[test]
