@@ -39,10 +39,6 @@ surfaces after `Z.10` closes:
 
 | Path | Current Behavior | Violation Status | Owning Sprint | Current Status | Required Resolution |
 | --- | --- | --- | --- | --- | --- |
-<<<<<<< HEAD
-| `crates/atm-core/src/list.rs` | validates mailbox target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `open` | use ATM roster truth only |
-| `crates/atm-core/src/read/mod.rs` | validates explicit target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `open` | use ATM roster truth only |
-| `crates/atm-core/src/clear/mod.rs` | validates clear target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `open` | use ATM roster truth only |
 | `crates/atm-core/src/list.rs` | validates mailbox target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `closed` | explicit target membership now resolves through ATM roster truth only |
 | `crates/atm-core/src/read/mod.rs` | validates explicit target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `closed` | explicit target membership now resolves through ATM roster truth only |
 | `crates/atm-core/src/clear/mod.rs` | validates clear target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `closed` | explicit target membership now resolves through ATM roster truth only |

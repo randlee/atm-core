@@ -6,6 +6,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use super::{AckTransition, MessageKey, ReplaySource, TaskState, sealed};
 
@@ -101,6 +102,43 @@ impl RosterMemberRecord {
             recipient_pane_id,
             metadata_json,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaudeCodeRosterMember {
+    pub member_name: AgentName,
+    pub harness: RosterHarness,
+    pub inbox_path: Option<PathBuf>,
+    pub tmux_pane_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaudeCodeTeamRoster {
+    pub team_name: TeamName,
+    pub members: Arc<[ClaudeCodeRosterMember]>,
+}
+
+impl ClaudeCodeTeamRoster {
+    pub fn from_roster_snapshot(team_name: TeamName, records: &[RosterMemberRecord]) -> Self {
+        let members = records
+            .iter()
+            .filter(|record| record.harness == RosterHarness::ClaudeCode)
+            .map(|record| ClaudeCodeRosterMember {
+                member_name: record.agent_name.clone(),
+                harness: record.harness,
+                inbox_path: None,
+                tmux_pane_id: record.recipient_pane_id.clone(),
+            })
+            .collect::<Vec<_>>()
+            .into();
+        Self { team_name, members }
+    }
+
+    pub fn contains_member(&self, member: &AgentName) -> bool {
+        self.members
+            .iter()
+            .any(|entry| entry.member_name == *member)
     }
 }
 
