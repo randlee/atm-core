@@ -17,33 +17,38 @@ not be mixed into the architectural cleanup history:
 
 ## Baseline
 
-- planning branch: `feature/pY-s0-planning`
-- prerequisite implementation line: completed `Phase Y`
+- planning branch: `plan/phase-Z`
+- prerequisite implementation line:
+  - `Phase Y` accepted through the final `Phase Yd` develop gate
+  - `Phase Ye` closed on `develop`
 - blocking closeout line before `Phase Z` may begin:
   - `Phase Yd`
-- future integration branch: `integrate/phase-Z`
+- future integration branch: `integrate/phase-Z` (not yet created)
 
 ## Phase Entry Criteria
 
-`Phase Z` does not begin until `Phase Y` is closed and `Phase Yd` says the line
-may land on `develop`:
+`Phase Z` does not begin until the accepted `Phase Y` line is develop-ready and
+the final `Phase Yd` record says `Phase Z` may begin:
 
 - the write-owner boundary is enforced
 - the delivery-policy coordinator and required state machines are landed
 - the compatibility field set is finalized
 - the append-only/export contract decision is complete
-- `Y.0` trivial fixes and `Y.1` through `Y.6` implementation work are merged
-  onto the authoritative integration line
+- the later `Phase Yb` / `Phase Yc` message-path and production-readiness
+  follow-up work is closed on the accepted `Phase Y` line
 - the blocking issues in `docs/phase-Y/issues.md` are closed
 - the readiness record in `docs/phase-Yd/readiness.md` explicitly states:
   - `Phase Y` may land on `develop`
   - `Phase Z` may begin
+- the post-`Phase Y` daemon ownership simplification line in `Phase Ye` is
+  complete and no longer changes the rollout gate
 
 Current gate status:
 
 - `Phase Yd` final accepted candidate line: `19376e42`
 - `Phase Y` may land on `develop`
 - `Phase Z` may begin
+- `Phase Ye` is complete and merged on the current `develop` baseline
 
 ## Pre-Phase JSON I/O Status
 
@@ -72,6 +77,14 @@ Purpose:
 - developer-coordinated daemon bring-up
 - feature-by-feature executable smoke pass
 - corner-case and recovery verification on the real binaries
+- freeze the authoritative smoke checklist and smoke findings ledger used by
+  `Z.2`
+
+Execution branch:
+- `feature/pZ-s1-smoke-bring-up`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s1-smoke-bring-up`
 
 ### Z.2 Fix And Revalidate
 
@@ -79,6 +92,13 @@ Purpose:
 
 - close smoke findings from `Z.1`
 - re-run full executable validation on the fixed branch
+- carry forward only the frozen `Z.1` smoke findings ledger
+
+Execution branch:
+- `feature/pZ-s2-fix-and-revalidate`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s2-fix-and-revalidate`
 
 ### Z.3 `atm-dev` Canary / Dogfood
 
@@ -86,6 +106,14 @@ Purpose:
 
 - move from single-operator smoke to `atm-dev` team use on the new binaries
 - verify UX, recovery text, and operational behavior under real use
+- produce the canary participant list, operator-report path, and canary
+  findings ledger used by `Z.4`
+
+Execution branch:
+- `feature/pZ-s3-atm-dev-canary-and-dogfood`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s3-atm-dev-canary-and-dogfood`
 
 ### Z.4 Final Fixes And Release Sign-Off
 
@@ -93,6 +121,33 @@ Purpose:
 
 - close `Z.3` findings
 - produce the final release-readiness verdict
+- rerun the final executable validation and release checklist on the closeout
+  branch
+
+Execution branch:
+- `feature/pZ-s4-final-fixes-and-release-sign-off`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s4-final-fixes-and-release-sign-off`
+
+## Sprint Artifact Rules
+
+`Phase Z` execution must leave explicit evidence artifacts even though those
+artifacts are not part of the planning-only branch deliverables:
+
+- `Z.1` must freeze:
+  - the executable smoke checklist / matrix used for real-binary bring-up
+  - the smoke findings ledger promoted to `Z.2`
+- `Z.2` must update:
+  - the frozen smoke findings ledger with fix/disposition state
+  - the smoke revalidation result on the fixed branch
+- `Z.3` must freeze:
+  - the `atm-dev` canary participant list
+  - the operator reporting path and canary checklist
+  - the canary findings ledger promoted to `Z.4`
+- `Z.4` must produce:
+  - the final executable validation and release checklist result
+  - the final release-ready / not-ready verdict with evidence
 
 ## Phase Rules
 

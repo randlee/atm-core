@@ -3771,3 +3771,51 @@ Phase rules:
   so the actor contract lands before the old shared-state path is deleted
 - `Phase Ye` ends with one separate proof sprint so reconcile cutover does not
   also have to carry whole-phase closure
+
+## 36. Phase Z Smoke, Dogfood, And Release Sign-Off
+
+Status summary:
+- `Phase Yd` is complete and the final readiness record authorizes `Phase Y` to
+  land on `develop` and `Phase Z` to begin.
+- `Phase Ye` is complete on the current `develop` baseline and does not reopen
+  the `Phase Z` rollout gate.
+- `Phase Z` is the next execution line for real-binary smoke, `atm-dev`
+  canary/dogfood, and final release sign-off.
+
+Planning branch:
+- `plan/phase-Z`
+
+Future integration branch:
+- `integrate/phase-Z`
+
+Goal:
+- validate the first daemon + SQLite mail-SSOT release in real executable use
+- run the first real-binary smoke matrix on the accepted `Phase Y` line
+- close smoke findings before broader `atm-dev` dogfood begins
+- produce a final release-ready / not-ready verdict with evidence
+
+Execution shape:
+- `Z.1` smoke bring-up
+  - branch: `feature/pZ-s1-smoke-bring-up`
+- `Z.2` fix and revalidate
+  - branch: `feature/pZ-s2-fix-and-revalidate`
+- `Z.3` `atm-dev` canary and dogfood
+  - branch: `feature/pZ-s3-atm-dev-canary-and-dogfood`
+- `Z.4` final fixes and release sign-off
+  - branch: `feature/pZ-s4-final-fixes-and-release-sign-off`
+
+Immediate planning outputs:
+- `docs/plan-phase-Z.md`
+- `docs/phase-Z/cli-json-io-audit.md`
+- `docs/phase-Z/sprint-Z1.md`
+- `docs/phase-Z/sprint-Z2.md`
+- `docs/phase-Z/sprint-Z3.md`
+- `docs/phase-Z/sprint-Z4.md`
+
+Acceptance / Phase Entry Gate:
+- `docs/phase-Yd/readiness.md` must explicitly state:
+  - `Phase Y` may land on `develop`
+  - `Phase Z` may begin
+- `Phase Ye` must remain closed and must not be used to reopen rollout scope
+- `Phase Z` sprint execution must validate on the real built executables, not
+  only unit or harness tests
