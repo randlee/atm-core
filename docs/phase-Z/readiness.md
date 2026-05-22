@@ -54,6 +54,23 @@ The final release verdict must remain `PENDING` until:
 | Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.10` closure |
 | Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure |
 
+## Deferred Follow-Up Findings
+
+- `RBP-F002` deferred to `Z.11`: introduce a dedicated `PaneId` newtype for
+  Claude pane metadata instead of the current `Option<String>` surface.
+- `RSH-008` deferred to `Z.11`: add the payload-size gate in
+  `deliver_payloads` rather than widening `Z.6` scope.
+- `RSH-010` deferred to `Z.11`: close the remaining send-path hardening item
+  tracked by QA after the `Z.6` runtime-roster-view cutover.
+- `RBP-F003` deferred to `Z.11`: tighten the remaining Rust best-practices
+  follow-up on the `Z.6` roster-view surface.
+- `RBP-F004` deferred to `Z.11`: tighten the remaining Rust best-practices
+  follow-up on the `Z.6` roster-view surface.
+- `RBP-F005` deferred to `Z.11`: tighten the remaining Rust best-practices
+  follow-up on the `Z.6` roster-view surface.
+- `RSH-009` deferred to `Z.11`: close the remaining runtime hardening follow-up
+  after `Z.6`.
+
 Final release verdict:
 
 - integrate/phase-Z candidate: `PENDING`

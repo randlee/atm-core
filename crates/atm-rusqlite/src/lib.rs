@@ -24,8 +24,6 @@ pub use observability::{
 #[cfg(test)]
 use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, OptionalExtension, params};
-#[cfg(test)]
-use serial_test::serial;
 use shared_db::{SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error};
 use std::path::Path;
 #[cfg(test)]
@@ -815,6 +813,7 @@ mod tests {
     use atm_core::types::{
         AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TaskId, TeamName,
     };
+    use serial_test::serial;
     use std::sync::OnceLock;
     use tempfile::TempDir;
 
@@ -1145,7 +1144,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        seed_roster_member(&assembly, &team_name, &agent_name);
+        seed_roster_member(assembly, &team_name, &agent_name);
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
@@ -1221,7 +1220,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        seed_roster_member(&assembly, &team_name, &agent_name);
+        seed_roster_member(assembly, &team_name, &agent_name);
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
