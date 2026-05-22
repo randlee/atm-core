@@ -30,10 +30,13 @@ release sign-off.
 - `docs/plan-phase-Z.md`
 - `docs/phase-Yd/readiness.md`
 - `Z.2` must have closed the executable smoke findings first
+- `Z.5` through `Z.8` must have closed the roster/config/restore follow-on
+  line first
 
 ## Prerequisites
 
 - `Z.2` complete
+- `Z.5` through `Z.8` complete
 - canary participants and reporting path are defined at sprint start and frozen
   before operator use begins
 - the canary participant list is approved by `team-lead` before the first

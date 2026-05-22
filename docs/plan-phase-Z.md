@@ -12,6 +12,8 @@ not be mixed into the architectural cleanup history:
 - daemon bring-up on the real binaries
 - executable smoke coverage across the supported feature set
 - smoke finding closure and revalidation
+- Claude roster / config / restore ownership hardening needed before broader
+  dogfood
 - `atm-dev` canary / dogfood on the new executables
 - final release-fix loop and ship/no-ship verdict
 
@@ -102,6 +104,67 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s2-fix-and-revalidate`
 
+### Z.5 Runtime Roster Truth Cutover
+
+Purpose:
+
+- remove retained runtime `config.json` roster-truth reads
+- introduce immutable `ClaudeCodeTeamRoster` runtime projection
+- keep `doctor` as the explicit config-vs-ATM comparison surface
+
+Execution branch:
+- `feature/pZ-s5-runtime-roster-truth-cutover`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s5-runtime-roster-truth-cutover`
+
+### Z.6 Watcher-Owned Claude Config Ingress
+
+Purpose:
+
+- make watcher / reconcile the only roster-truth reader of `config.json`
+- import new-team and external config changes into canonical ATM roster state
+- land the accepted post-write Claude send warning semantics
+
+Execution branch:
+- `feature/pZ-s6-watcher-owned-claude-config-ingress`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s6-watcher-owned-claude-config-ingress`
+
+### Z.7 Team Admin Roster Authority And Member Metadata
+
+Purpose:
+
+- move `atm members` / `atm teams` to ATM roster truth
+- make ATM member-add the canonical mutation path
+- move retained Claude member metadata such as `tmux_pane_id` into canonical
+  ATM roster ownership
+
+Execution branch:
+- `feature/pZ-s7-team-admin-roster-authority-and-member-metadata`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s7-team-admin-roster-authority-and-member-metadata`
+
+### Z.8 Team Backup Restore Automation And Config Projection
+
+Purpose:
+
+- keep raw backup snapshots for audit value
+- make restore rebuild recreated Claude team config from canonical ATM roster
+  truth
+- replace manual restore-file surgery with ATM-owned projection
+- after `Z.8`, execution resumes on the already-defined canary / release sprints
+  `Z.3` and `Z.4`; those sprint numbers are retained to preserve the original
+  rollout identities
+
+Execution branch:
+- `feature/pZ-s8-team-backup-restore-automation-and-config-projection`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s8-team-backup-restore-automation-and-config-projection`
+
 ### Z.3 `atm-dev` Canary And Dogfood
 
 Purpose:
@@ -139,6 +202,9 @@ Execution worktree:
 - `Z.1` / `Z.2`:
   - `docs/phase-Z/smoke-checklist.md`
   - `docs/phase-Z/smoke-findings-ledger.md`
+- `Z.5` / `Z.6` / `Z.7` / `Z.8`:
+  - `docs/phase-Z/claude-roster-sync-and-restore.md`
+  - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `Z.3`:
   - `docs/phase-Z/canary-dogfood-checklist.md`
   - `docs/phase-Z/canary-findings-ledger.md`
@@ -154,6 +220,8 @@ deliverables, acceptance criteria, and closure rules.
 - all validation is against the real built executables, not only harness/unit
   tests
 - smoke findings feed only the immediately following fix sprint
+- the roster/config/restore follow-on line (`Z.5` through `Z.8`) must close
+  before `atm-dev` canary use begins
 - dogfood findings feed only the final fix/sign-off sprint
 - release readiness is not declared until the documented executable flows and
   recovery behavior are revalidated after each fix round
@@ -167,11 +235,17 @@ Current execution state:
   - `Z1-F002` preexisting-db sqlite schema-init ordering failure
 - `Z.2` is the next-unused sprint and is limited to those findings plus frozen
   checklist revalidation
+- the broader roster/config/restore ownership redesign discovered while
+  analyzing `Z1-F001` is split into `Z.5` through `Z.8`
+- `Z.3` and `Z.4` remain the canary / release sprints, but execution does not
+  resume there until `Z.8` closes
 
 ## Initial Planning Outputs
 
 - `docs/plan-phase-Z.md`
+- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `docs/phase-Z/cli-json-io-audit.md`
+- `docs/phase-Z/claude-roster-sync-and-restore.md`
 - `docs/phase-Z/smoke-checklist.md`
 - `docs/phase-Z/smoke-findings-ledger.md`
 - `docs/phase-Z/canary-dogfood-checklist.md`
@@ -180,5 +254,9 @@ Current execution state:
 - `docs/phase-Z/readiness.md`
 - `docs/phase-Z/sprint-Z1.md`
 - `docs/phase-Z/sprint-Z2.md`
+- `docs/phase-Z/sprint-Z5.md`
+- `docs/phase-Z/sprint-Z6.md`
+- `docs/phase-Z/sprint-Z7.md`
+- `docs/phase-Z/sprint-Z8.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
