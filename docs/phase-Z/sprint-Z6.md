@@ -87,13 +87,15 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
    - preserve the accepted sequence:
      - durable ATM write first
      - attempt Claude inbox write when the inbox exists
-     - only then compare against `config.json`
+     - only then compare against the immutable `ClaudeCodeTeamRoster`
+       projection populated from approved Claude config-ingress state
      - missing Claude roster membership becomes a warning, not a veto
    Required tests:
    - prove send no longer blocks before the SQLite write
    - prove inbox write is still attempted when the inbox exists
    - prove the warning text is returned after the write path when the Claude
-     member is absent from `config.json`
+     member is absent from the immutable Claude roster projection, while the
+     warning text still names the underlying `config.json` roster mismatch
    Required docs:
    - update `docs/phase-Z/config-json-violation-inventory.md`
 
@@ -136,6 +138,8 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
      runtime consumers do not build ad hoc file-backed projections.
    Required tests:
    - cover runtime consumers that need immutable roster inspection
+   - prove the post-write Claude warning path consumes
+     `ClaudeCodeTeamRoster`, not a direct send-path file read
    Required docs:
    - update `docs/phase-Z/claude-roster-sync-and-restore.md`
 

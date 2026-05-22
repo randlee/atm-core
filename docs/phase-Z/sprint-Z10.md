@@ -66,8 +66,11 @@ This sprint owns the final team recovery rewrite before `Z.3` canary begins.
 
 - delete backup `config.json` roster-truth replay from
   `crates/atm-core/src/team_admin/restore.rs`
-- keep only the narrow recreated-shell preservation read needed for current
-  `team-lead` / `leadSessionId`
+- delete generic `load_team_config(...)` use from
+  `crates/atm-core/src/team_admin/restore.rs`
+- if recreated-shell preservation is still needed for current `team-lead` /
+  `leadSessionId`, keep it behind a dedicated narrow preservation helper that
+  does not expose generic roster-truth loading
 
 ## Non-Goals
 
@@ -104,6 +107,10 @@ This sprint owns the final team recovery rewrite before `Z.3` canary begins.
    - preserve current recreated `leadSessionId`
    - preserve canonical member metadata such as `tmux_pane_id`
    - keep deterministic task/inbox recovery behavior
+   - if recreated-shell preservation still requires reading the freshly
+     recreated Claude team shell, perform that through a dedicated helper that
+     returns only the approved lead-shell fields, not through
+     `load_team_config(...)`
    Required tests:
    - prove recreated lead shell values survive restore
    - prove non-lead membership/inboxes/tasks restore without manual file edits
