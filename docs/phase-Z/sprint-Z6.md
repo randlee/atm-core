@@ -42,7 +42,6 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
 ## Governing Boundaries
 
 - `RosterStore`
-- `InboxExport`
 - `ConfigIngress`
 
 ## Prerequisites

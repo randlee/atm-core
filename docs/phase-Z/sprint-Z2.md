@@ -91,9 +91,12 @@ validation set on the fixed branch.
   daemon-backed send path depends on SQLite roster membership:
   - the accepted behavior remains: delivery harness resolution uses canonical
     SQLite roster state, not `config.json` directly
-  - `Z.2` must define and implement the first-team bootstrap handoff that
-    ingests a new team's watcher-observed config-owned roster into canonical
-    SQLite roster truth before first communication on a clean host
+  - the approved pre-`Z.8` bootstrap mechanism is a daemon startup-time,
+    one-shot ATM roster hydration path that uses the existing `ConfigIngress`
+    ingest seam only when the canonical ATM roster is empty and a Claude
+    `config.json` is present
+  - that startup-only hydration path is not watcher infrastructure and must not
+    remain callable as a generic runtime membership lookup after bootstrap
   - Claude Code harness send flow must not use `config.json` as a pre-write
     membership block; after the SQLite write succeeds and the post-write
     notification path selects a Claude Code inbox target, ATM may compare the
@@ -111,6 +114,41 @@ validation set on the fixed branch.
   - the fix must preserve clean-start behavior for brand-new databases
   - the fix must not silently discard or rewrite preexisting mail rows outside
     the approved schema migration path
+
+## Sub-Tasks
+
+1. Implement startup-only first-team bootstrap hydration for `Z1-F001`.
+   Development work:
+   - add the daemon startup-time one-shot ATM roster hydration path
+   - gate it so it runs only when the canonical ATM roster is empty and a
+     Claude `config.json` is present
+   - prove the path is startup-only and not reusable as a generic runtime
+     membership lookup
+   Required tests:
+   - prove a clean host with no preexisting SQLite DB hydrates ATM roster truth
+     before the first daemon-backed communication depends on membership lookup
+   Required docs:
+   - update `docs/atm-daemon/boundaries.md`
+   - update `docs/phase-Z/smoke-findings-ledger.md`
+
+2. Fix the preexisting SQLite schema-init ordering bug for `Z1-F002`.
+   Development work:
+   - fix daemon startup against copied/preexisting `mail.db` state that still
+     exposes `legacy_message_id`
+   Required tests:
+   - prove the copied/preexisting DB starts without silently discarding mail
+     rows
+   Required docs:
+   - update `docs/phase-Z/smoke-findings-ledger.md`
+
+3. Re-run frozen smoke validation and close the records.
+   Development work:
+   - rerun the frozen smoke checklist after fixes land
+   - stamp `Z.2` accepted head and verdict in `docs/phase-Z/readiness.md`
+   Required tests:
+   - `git diff --check`
+   Required docs:
+   - update `docs/phase-Z/readiness.md`
 
 ## Follow-On Inventory For Z.5+
 
@@ -132,6 +170,9 @@ Once `Z.2` closes, execution continues with `Z.5`, `Z.6`, `Z.7`, `Z.8`,
 - `Z1-F001` closeout proves that a clean host with no preexisting SQLite DB
   and a new team config can complete the first daemon-backed communication path
   without bypassing canonical SQLite roster ownership
+- the only permitted pre-`Z.8` roster ingress path is the startup-only
+  one-shot ATM roster hydration call when the ATM roster is empty; no generic
+  runtime config lookup is introduced
 - Claude Code harness send no longer blocks on `config.json` before the SQLite
   write; any config/roster mismatch is surfaced as a post-write warning while
   still writing an existing Claude inbox target
@@ -172,3 +213,8 @@ the `Z.1` handoff without silent carry-forward.
 - `docs/phase-Z/readiness.md`
 - `cargo test --workspace`
 - `git diff --check`
+- `rg -n "load_team_config\\(" crates/atm-core/src/send/mod.rs crates/atm-core/src/delivery_policy.rs`
+  - expected: no production membership-gate matches
+- `rg -n "load_team_config\\(" crates/atm-core/src/boundary_support.rs crates/atm-core/src/direct_boundaries.rs`
+  - expected: at most one named startup-only roster-hydration match for `Z1-F001`
+    closure; any surviving generic runtime lookup match is a failure

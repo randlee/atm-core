@@ -113,8 +113,10 @@ definition. It does not yet implement watcher/reconcile ingest behavior.
    - define the explicit allowlist from
      `docs/phase-Z/config-json-violation-inventory.md`
    Required tests:
-   - lint/CI proof or placeholder validation contract showing the rule family
-     is part of the owning sprint
+   - add a machine-runnable boundary-lint fixture that contains one known-bad
+     direct `config.json` roster lookup and proves the rule family rejects it
+   - wire that fixture into `just lint boundaries` so the rule family produces
+     a verifiable reject signal rather than prose-only documentation
    Required docs:
    - update `docs/requirements.md`
    - update `docs/architecture.md`
@@ -140,12 +142,16 @@ suppression, or external roster change ingestion, stop and move that scope into
 - the helper/adapter chain no longer exposes generic retained command/runtime
   `load_team_config(...)` behavior
 - repo-local lint / `sc-lint`-candidate rule definitions exist for the
-  `config.json` boundary violation family
+  `config.json` boundary violation family and produce a verifiable reject
+  signal on a known-bad fixture
 
 ## Required Validation
 
 - `cargo test --workspace`
 - `git diff --check`
+- `just lint boundaries`
+  - expected: the `SCB-CONFIG-001` / `002` / `003` fixture path is exercised and
+    known-bad direct `config.json` boundary violations are rejected
 - `rg -n "load_team_config\\(" crates/atm-core/src/boundary_support.rs crates/atm-core/src/direct_boundaries.rs crates/atm-daemon/src/boundary_adapters.rs crates/atm-daemon/src/direct_boundaries.rs`
   - expected: surviving matches are explicitly ingress/comparison/preservation
     only

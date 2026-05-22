@@ -42,7 +42,6 @@ This sprint owns the final team recovery rewrite before `Z.3` canary begins.
 
 - `RosterStore`
 - `ConfigIngress`
-- `InboxExport`
 
 ## Prerequisites
 

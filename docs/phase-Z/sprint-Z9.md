@@ -104,24 +104,32 @@ This sprint owns team-admin views and member mutation, not restore automation.
    Approved Rust / schema shape:
    ```rust
    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+   #[serde(rename_all = "camelCase")]
    pub struct AgentMember {
        pub name: AgentName,
-       pub agent_id: AgentId,
+       #[serde(default)]
+       pub agent_id: String,
+       #[serde(default)]
        pub agent_type: AgentType,
-       pub model: Option<String>,
-       pub joined_at: DateTime<Utc>,
-       pub cwd: Option<PathBuf>,
-       pub harness: DeliveryHarness,
+       #[serde(default)]
+       pub model: String,
+       #[serde(default)]
+       pub joined_at: Option<u64>,
        #[serde(default)]
        pub tmux_pane_id: Option<String>,
        #[serde(default)]
-       pub extra: BTreeMap<String, serde_json::Value>,
+       pub cwd: String,
+       #[serde(flatten)]
+       pub extra: Map<String, Value>,
    }
    ```
    Migration contract:
-   - this is the existing `AgentMember` record with its current fields preserved;
-     `Z.9` does not replace it with a parallel type or rename `name` to
-     `member_name`
+   - this is the existing `AgentMember` record with its current field set
+     preserved; `Z.9` does not replace it with a parallel type or rename
+     `name`
+   - the only schema change this sprint owns is `tmux_pane_id` moving from the
+     current default-empty `String` shape to an optional/nullable field with
+     backward-compatible serde defaults
    - SQLite adds a nullable `tmux_pane_id` column to the canonical ATM roster
      member table.
    - preexisting rows default to `NULL` until ATM add, watcher ingest, or
@@ -130,6 +138,9 @@ This sprint owns team-admin views and member mutation, not restore automation.
      `tmux_pane_id` is `Some(...)`.
    Required tests:
    - prove `tmux_pane_id` survives ATM add, watcher ingest, and later restore
+   - prove a legacy `config.json` `AgentMember` shape still deserializes and
+     round-trips when `tmux_pane_id` is omitted or provided as the current
+     Claude field
    Required docs:
    - update `docs/atm-core/requirements.md`
 
