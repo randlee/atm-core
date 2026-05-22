@@ -23,11 +23,11 @@ use crate::{DaemonSubsystem, SubsystemObservability};
 use notification_fingerprints::{
     NotificationFingerprint, NotificationFingerprintRegistry, should_emit_reconcile_notification,
 };
+#[cfg(test)]
+use projection_write_journal::remember_projected_config_write;
 use projection_write_journal::{
     ProjectionWriteJournal, config_document_digest, consume_projected_config_write,
 };
-#[cfg(test)]
-use projection_write_journal::remember_projected_config_write;
 
 const DEFAULT_RECONCILE_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_RECONCILE_DEBOUNCE: Duration = Duration::from_millis(25);
