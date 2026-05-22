@@ -305,6 +305,9 @@ Purpose:
 
 Notes:
 - This adapter owns the daemon-side `ConfigIngress` implementation at the adapter boundary.
+- The adapter is for watcher-owned external ingest and other explicitly
+  approved comparison/preservation callers only; retained runtime command
+  flows must not use it as a generic roster lookup seam.
 
 ## DaemonInboxIngressAdapter
 
@@ -351,6 +354,11 @@ Compatibility and recovery policy placement for daemon-owned config/inbox adapte
 
 - `ConfigIngress` may own document loading, syntax validation, and translation into typed ATM config models.
 - `ConfigIngress` must not own daemon auto-start policy, retained command fallback policy, or mailbox/task workflow mutation.
+- `ConfigIngress` must not be used by retained command/runtime flows as a
+  second roster-truth lookup path; canonical runtime roster truth belongs to
+  the ATM roster store and its immutable projections.
+- repository-local lint / later `sc-lint` extraction should gate generic
+  `load_team_config(...)` use outside the explicit allowlist.
 - `InboxIngress` may own compatibility-shape translation, identity fingerprint derivation, and ingress diagnostics over imported source files.
 - `InboxIngress` must not own read/ack/clear business policy, workflow-state mutation policy, or mailbox lifecycle transitions beyond import normalization.
 - `InboxExport` may own projection from ATM-owned source records back into compatibility mailbox shapes and write-bound export validation.

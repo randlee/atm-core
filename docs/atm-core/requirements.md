@@ -554,27 +554,82 @@ Required service rules:
   - `add-member`
   - team backup
   - team restore
-- these services remain local file/config/inbox operations and must not depend
-  on daemon orchestration or runtime spawning
+- these services remain local user-facing workflows and must not depend on
+  daemon orchestration or runtime spawning, but their team/member truth is the
+  canonical ATM roster rather than raw `config.json`
+- `atm members` and `atm teams` must report ATM roster truth; Claude file drift
+  is reported by `atm doctor`, not by treating `config.json` as the primary
+  team/member surface
 - `add-member` must validate team existence and reject duplicate member names
-  before mutating local team config
+  before mutating canonical ATM roster truth
+- `add-member` must project the resulting approved member set into
+  `config.json`; it must not treat local `config.json` as the durable source
+  of truth
+- retained Claude compatibility member fields such as `tmux_pane_id` are
+  canonical ATM roster-member metadata and must not be durably sourced from
+  `.atm.toml`
 - backup must snapshot:
   - `config.json`
   - team inbox files, excluding transient `*.lock` sentinels, dotfiles, and
     restore markers
   - the ATM team task bucket
+  - ATM-owned durable roster/task state needed for deterministic restore
 - restore must:
+  - require the operator to recreate the Claude team shell through
+    `TeamCreate` before ATM projects restored roster state back into
+    `config.json`
   - preserve the current team-lead entry and current `leadSessionId`
-  - add only missing non-lead members from the snapshot
-  - clear runtime-only restored-member fields such as session or pane state
+  - restore non-lead membership from canonical ATM roster truth rather than
+    from backup `config.json`
+  - preserve canonical member metadata such as `tmux_pane_id`
   - restore non-lead inboxes
   - sweep stale inbox `*.lock` sentinels before copying restored inbox files
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
+- restore must not replay backup `config.json` as roster truth
+- backup remains an audit / emergency-inspection surface rather than the source
+  of roster truth during restore
 - malformed or missing snapshot material must fail with structured errors
   before partial restore is committed
 - `members` must remain useful as a local roster inspection command even when
-  daemon or hook state is unavailable
+  daemon or hook state is unavailable because roster truth is stored in ATM
+  durable state rather than in raw Claude config alone
+
+## 10.1 Claude Config Ingress Ownership
+
+Requirement ID:
+- `REQ-CORE-CLAUDE-ROSTER-001`
+
+Required service rules:
+- ATM roster state in SQLite is the canonical roster truth for runtime
+  membership decisions
+- the immutable public runtime roster surface is `ClaudeCodeTeamRoster`
+- retained runtime commands (`list`, `read`, `clear`, `ack`) must validate
+  membership through ATM roster truth only
+- Claude send must not use `config.json` as a pre-write membership gate
+- `doctor` may read `config.json` only as a comparison surface against
+  canonical ATM roster truth
+- watcher / reconcile is the only approved production reader of external
+  `config.json` roster changes
+- any new-team ingest or external Claude roster edit must flow into canonical
+  ATM roster truth through the watcher / reconcile lane
+
+## 10.2 Config Boundary Static Gates
+
+Requirement ID:
+- `REQ-CORE-CLAUDE-ROSTER-002`
+
+Required service rules:
+- repository-local lint / `sc-lint`-candidate rules must be defined for the
+  `config.json` roster boundary so later regressions are mechanically
+  detectable
+- the first required rules are:
+  - reject production direct `config::load_team_config(...)` roster reads
+    outside the explicit allowlist
+  - reject generic runtime `load_team_config(...)` helper use from retained
+    command paths
+  - reject Claude send paths that consult `config.json` before the durable ATM
+    write has succeeded
 
 ## 11. Phase Yb Delivery-Plan Ownership
 

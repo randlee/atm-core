@@ -3378,6 +3378,10 @@ mail correctness.
     daemon layers
   - Claude compatibility export remains a compatibility projection only and is
     never the ATM-owned runtime truth
+  - runtime roster truth remains the canonical ATM roster rather than
+    `config.json`
+  - `config.json` parsing remains limited to the approved ingress/comparison
+    allowlist rather than generic retained command/runtime access
 
 ### 22.10 Postmortem Lint Backfill
 
@@ -3425,6 +3429,12 @@ mail correctness.
   - `SCB-RUNTIME-001` must reject bare production `Condvar::wait(...)`
   - `SCB-RUNTIME-002` must reject production `wait_timeout*` calls whose
     `WaitTimeoutResult` is discarded or stored only in underscore bindings
+  - `SCB-CONFIG-001` must reject production direct team `config.json` roster
+    reads outside the explicit allowlist
+  - `SCB-CONFIG-002` must reject generic runtime `load_team_config(...)`
+    helper use from retained command/runtime paths
+  - `SCB-CONFIG-003` must reject Claude send paths that consult `config.json`
+    before the durable ATM write has succeeded
   - bare `Condvar::wait(...)` in non-test production code must fail a runtime
     liveness gate; `wait_timeout(...)` and `wait_timeout_while(...)` remain the
     required production shapes
