@@ -880,9 +880,14 @@ mod tests {
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 }],
-                source: Some(boundary::ReplaySource::new("sqlite-test").expect("replay source")),
+                source: Some(replay_source_static("sqlite-test")),
             })
             .expect("replace roster");
+    }
+
+    fn replay_source_static(label: &'static str) -> boundary::ReplaySource {
+        boundary::ReplaySource::new(label)
+            .unwrap_or_else(|_| unreachable!("static replay source must validate"))
     }
 
     fn sqlite_runtime(assembly: &SqliteBoundaryAssembly) -> LocalServiceRuntime {
@@ -2183,7 +2188,7 @@ mod tests {
             .replace_roster(boundary::RosterStoreReplaceRosterRequest {
                 team: team(),
                 members: members.clone(),
-                source: Some(boundary::ReplaySource::new("config.json").expect("replay source")),
+                source: Some(replay_source_static("config.json")),
             })
             .expect("replace");
         assert!(replaced.replaced);
@@ -2240,7 +2245,7 @@ mod tests {
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 }],
-                source: Some(boundary::ReplaySource::new("config.json").expect("replay source")),
+                source: Some(replay_source_static("config.json")),
             })
             .expect("replace bravo roster");
         store
@@ -2256,7 +2261,7 @@ mod tests {
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 }],
-                source: Some(boundary::ReplaySource::new("config.json").expect("replay source")),
+                source: Some(replay_source_static("config.json")),
             })
             .expect("replace alpha roster");
 

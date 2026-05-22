@@ -1,11 +1,12 @@
 use crate::config::AtmConfig;
 use crate::error::AtmError;
-use crate::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use crate::schema::{AgentMember, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 use super::{AckTransition, MessageKey, ReplaySource, TaskState, sealed};
 
@@ -101,6 +102,43 @@ impl RosterMemberRecord {
             recipient_pane_id,
             metadata_json,
         }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaudeCodeRosterMember {
+    pub member_name: AgentName,
+    pub harness: RosterHarness,
+    pub inbox_path: Option<PathBuf>,
+    pub tmux_pane_id: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ClaudeCodeTeamRoster {
+    pub team_name: TeamName,
+    pub members: Arc<[ClaudeCodeRosterMember]>,
+}
+
+impl ClaudeCodeTeamRoster {
+    pub fn from_roster_snapshot(team_name: TeamName, records: &[RosterMemberRecord]) -> Self {
+        let members = records
+            .iter()
+            .filter(|record| record.harness == RosterHarness::ClaudeCode)
+            .map(|record| ClaudeCodeRosterMember {
+                member_name: record.agent_name.clone(),
+                harness: record.harness,
+                inbox_path: None,
+                tmux_pane_id: record.recipient_pane_id.clone(),
+            })
+            .collect::<Vec<_>>()
+            .into();
+        Self { team_name, members }
+    }
+
+    pub fn contains_member(&self, member: &AgentName) -> bool {
+        self.members
+            .iter()
+            .any(|entry| entry.member_name == *member)
     }
 }
 
@@ -334,20 +372,6 @@ pub struct ConfigLoadResponse {
     pub config: Option<AtmConfig>,
 }
 
-/// Team-config load request for the Phase R config-ingress boundary.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ConfigTeamLoadRequest {
-    pub home_dir: PathBuf,
-    pub team: TeamName,
-}
-
-/// Team-config load response for the Phase R config-ingress boundary.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ConfigTeamLoadResponse {
-    pub team_dir: PathBuf,
-    pub team_config: TeamConfig,
-}
-
 /// Imported source-file snapshot returned by inbox ingress.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InboxSourceFileRecord {
@@ -573,13 +597,6 @@ pub trait ConfigIngress: sealed::Sealed {
     /// Returns `AtmError` when persisted ATM configuration cannot be loaded,
     /// parsed, or validated into typed models.
     fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one team config cannot be loaded or validated.
-    fn load_team_config(
-        &self,
-        request: ConfigTeamLoadRequest,
-    ) -> Result<ConfigTeamLoadResponse, AtmError>;
 }
 
 /// BOUNDARY-InboxIngress — see docs/atm-core/boundaries.md.

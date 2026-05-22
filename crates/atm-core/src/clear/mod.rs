@@ -387,7 +387,7 @@ mod tests {
             Ok(None)
         }
 
-        fn load_team_config(
+        fn load_team_config_for_doctor_compare(
             &self,
             _team_dir: &Path,
         ) -> Result<crate::schema::TeamConfig, AtmError> {

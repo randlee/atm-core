@@ -26,7 +26,7 @@ pub(crate) struct RetainedMailboxTimeoutPolicy {
 
 pub(crate) trait RetainedServiceRuntime: crate::boundary::NotificationSink {
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
-    fn load_team_config(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
+    fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
     fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError>;
     fn inbox_path(
         &self,
@@ -83,6 +83,16 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::NotificationSink {
         &self,
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError>;
+    fn load_claude_code_team_roster(
+        &self,
+        team: &TeamName,
+    ) -> Result<crate::boundary::ClaudeCodeTeamRoster, AtmError> {
+        let records = self.load_team_roster(team)?;
+        Ok(crate::boundary::ClaudeCodeTeamRoster::from_roster_snapshot(
+            team.clone(),
+            &records,
+        ))
+    }
 
     fn commit_workflow_state<T, I, F>(
         &self,
@@ -247,8 +257,8 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         config::load_config(current_dir)
     }
 
-    fn load_team_config(&self, team_dir: &Path) -> Result<TeamConfig, AtmError> {
-        config::load_team_config(team_dir)
+    fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError> {
+        config::load_claude_team_config_document(team_dir)
     }
 
     fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError> {

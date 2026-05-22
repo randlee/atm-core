@@ -231,6 +231,9 @@ Phase R redesign notes:
 - `atm-core` owns the immutable public runtime roster projection
   `ClaudeCodeTeamRoster`; that surface is derived from canonical ATM roster
   truth rather than from direct `config.json` reads
+- the `Z.6` Claude send warning path must build `ClaudeCodeTeamRoster` from
+  store-backed ATM roster rows after the durable write succeeds; it must not
+  reopen a direct `config.json` membership lookup seam
 - `atm-core` owns the queue-query semantics shared by `atm list` and
   single-message `atm read`
 - selector-driven queue inspection operates on logical terminal-node messages,
@@ -261,6 +264,10 @@ Config-ingress ownership rules:
   lookup surface
 - normal retained runtime membership decisions belong to ATM roster truth and
   `ClaudeCodeTeamRoster`
+- the only approved retained send-path file-state exception before `Z.8`
+  watcher ownership is the post-write missing-config existing-inbox fallback
+  warning; that exception does not restore generic file-backed membership
+  checks
 - `ConfigIngress` is reserved for watcher-owned external ingest plus approved
   comparison/preservation callers such as `doctor` and recreated-shell restore
   preservation

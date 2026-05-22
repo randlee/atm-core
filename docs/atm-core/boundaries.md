@@ -173,10 +173,19 @@ Notes:
 - This is one of the main explicit corrections to earlier boundary leakage.
 - canonical ATM roster truth does not live here; normal retained runtime
   membership checks must use `RosterStore` / `ClaudeCodeTeamRoster` instead
+- the `Z.6` send warning path is allowed to mention the underlying
+  `config.json` mismatch in returned warning text, but it must obtain member
+  truth from `ClaudeCodeTeamRoster` rather than from `ConfigIngress`
 - approved surviving callers after the `Phase Z` follow-on line are:
   - watcher / reconcile ingest
   - `doctor` comparison
   - narrow recreated-shell preservation reads during restore
+- until `Z.8`, one temporary startup-only bridge is allowed outside the
+  trait surface:
+  - `atm_core::boundary_support::hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
+  - it may seed canonical ATM roster state only when the roster is empty at
+    daemon startup
+  - it is explicitly allowlisted and deleted in `Z.8`
 - generic retained command/runtime `load_team_config(...)` lookup behavior is a
   boundary violation and should be mechanically gated by repository-local lint
   / later `sc-lint` extraction

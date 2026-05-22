@@ -695,7 +695,10 @@ mod tests {
             Ok(None)
         }
 
-        fn load_team_config(&self, _team_dir: &Path) -> Result<TeamConfig, crate::error::AtmError> {
+        fn load_team_config_for_doctor_compare(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<TeamConfig, crate::error::AtmError> {
             unreachable!("ack writer-path test does not load team config")
         }
 
@@ -822,7 +825,10 @@ mod tests {
             }))
         }
 
-        fn load_team_config(&self, _team_dir: &Path) -> Result<TeamConfig, crate::error::AtmError> {
+        fn load_team_config_for_doctor_compare(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<TeamConfig, crate::error::AtmError> {
             unreachable!("ack roster-gate tests must not load team config")
         }
 

@@ -50,9 +50,15 @@ Claude harness `send` behavior is:
 
 1. write ATM durable state first
 2. attempt Claude compatibility inbox write when the target inbox exists
-3. after that path is selected, compare the member against `config.json`
-4. if the member is missing from `config.json`, return the warning:
+3. build the immutable `ClaudeCodeTeamRoster` warning snapshot from canonical
+   ATM roster truth after the durable write succeeds; do not read
+   `config.json` directly for normal member lookup
+4. if the member is missing from the Claude roster projection, return the
+   warning:
    - `'<member-name>' is not on claude code roster <atm-team>/config.json`
+5. if the team `config.json` document is missing entirely, the existing-inbox
+   fallback still raises the retained missing-config warning only after the
+   durable write path is complete
 
 That warning must not veto the inbox write once the inbox target exists.
 
@@ -62,6 +68,14 @@ When a new Claude Code team is ingested, or when the watcher sees a
 `config.json` change that was not caused by a daemon-owned write, the watcher /
 reconcile lane imports the resulting member state into canonical ATM roster
 truth.
+
+Until `Z.8` lands, one temporary startup-only bridge is allowed:
+
+- `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
+
+That helper may seed canonical ATM roster state only when the roster is empty
+at daemon startup. It is allowlisted explicitly, proven to no-op when roster
+state already exists, and deleted in `Z.8`.
 
 ## Accepted Team-Admin Behaviors
 
@@ -131,7 +145,8 @@ path inventory, sprint ownership, and exact delete / rewrite expectations.
 
 - `Z.5` retained runtime command cutover to ATM roster truth
 - `Z.6` Claude send semantics and immutable `ClaudeCodeTeamRoster`
-- `Z.7` config-ingress boundary narrowing and static gate definition
+- `Z.7` config-ingress boundary narrowing, startup-only allowlist, and static
+  gate definition
 - `Z.8` watcher-owned config ingest
 - `Z.9` team-admin roster authority and canonical member metadata
 - `Z.10` backup / restore automation and config projection
