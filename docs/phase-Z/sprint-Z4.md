@@ -52,15 +52,23 @@ and produce the final release-readiness verdict.
 ## Required Work
 
 - fix only the findings promoted from `Z.3`
+- only findings recorded in `docs/phase-Z/canary-findings-ledger.md` are in
+  scope; newly discovered issues found during `Z.4` must be recorded but not
+  fixed in this sprint
 - rerun `docs/phase-Z/release-checklist.md`
 - produce the final release-ready / not-ready decision with evidence in
   `docs/phase-Z/readiness.md`
 
 ## Acceptance Criteria
 
-- every `Z.3` finding is either fixed or explicitly dispositioned
+- every `Z.3` finding is either fixed or explicitly deferred with `team-lead`
+  approval recorded in `docs/phase-Z/canary-findings-ledger.md`
 - the final validation set is rerun on the closeout branch
+- all release-checklist rows that passed before the final fix round still pass
+  after the `Z.4` fixes; any new failure is a blocking finding for this sprint
 - `docs/phase-Z/readiness.md` records the release-readiness verdict
+- `docs/phase-Z/readiness.md` `authorized_by` records an explicit named
+  authority before the release verdict is considered final
 - `docs/phase-Z/release-checklist.md` and `docs/phase-Z/readiness.md`
   identify one authoritative closeout result for the `integrate/phase-Z`
   candidate

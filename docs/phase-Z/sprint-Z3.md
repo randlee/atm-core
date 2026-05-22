@@ -54,15 +54,22 @@ release sign-off.
 
 - run controlled `atm-dev` dogfood on the new executables
 - capture operator-visible UX, recovery, and reliability issues
-- verify real usage does not reintroduce hidden dependency on old inbox
-  behavior
+- verify real usage does not reintroduce dependency on the deprecated
+  pre-Phase-Y file-migration inbox behavior documented in
+  `docs/archive/file-migration-plan.md`
 - record only validated canary findings in
   `docs/phase-Z/canary-findings-ledger.md` for `Z.4`
 
 ## Acceptance Criteria
 
 - `atm-dev` canary usage is completed on the approved binaries
+- `docs/phase-Z/canary-dogfood-checklist.md` records the approved participant
+  list and reporting path as frozen at sprint start, with evidence that
+  predates the first operator report
 - operator-facing findings are recorded for `Z.4`
+- the deprecated pre-Phase-Y file-migration inbox behavior from
+  `docs/archive/file-migration-plan.md` is not required by any canary flow on
+  the approved binaries
 - `docs/phase-Z/canary-dogfood-checklist.md` and
   `docs/phase-Z/canary-findings-ledger.md` are frozen for `Z.4`
 

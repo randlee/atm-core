@@ -51,6 +51,9 @@ validation set on the fixed branch.
 ## Required Work
 
 - fix only the findings promoted from `Z.1`
+- only findings recorded in `docs/phase-Z/smoke-findings-ledger.md` are in
+  scope; newly discovered issues found during `Z.2` must be recorded but not
+  fixed in this sprint
 - keep the branch aligned with the approved `Phase Y` architecture and state
   machines
 - rerun the frozen `docs/phase-Z/smoke-checklist.md` checklist after fixes
@@ -58,8 +61,13 @@ validation set on the fixed branch.
 
 ## Acceptance Criteria
 
-- every `Z.1` finding is either fixed or explicitly deferred with approval
+- every `Z.1` finding is either fixed or explicitly deferred with `team-lead`
+  approval recorded in `docs/phase-Z/smoke-findings-ledger.md`
+- any deferred `Z.1` finding is resolved or explicitly waived by `team-lead`
+  before `Z.3` may begin
 - the smoke checklist is rerun on the fixed branch
+- all checklist rows that passed in `Z.1` still pass after the `Z.2` fixes;
+  any new failure is a blocking finding for this sprint
 - `docs/phase-Z/smoke-findings-ledger.md` records final per-finding
   disposition and revalidation outcome
 

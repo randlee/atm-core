@@ -72,8 +72,13 @@ the first full feature-by-feature smoke pass before broader team dogfood.
 ## Acceptance Criteria
 
 - daemon bring-up is proven on the executable baseline
-- `docs/phase-Z/smoke-checklist.md` exists and covers every intended `Z.1`
-  operator flow
+- `docs/phase-Z/smoke-checklist.md` exists and covers every planned `Z.1`
+  operator flow plus all four required recovery/corner-case categories defined
+  in the smoke checklist schema:
+  - daemon startup failure or degraded-start behavior
+  - notification delivery failure or degraded-notification behavior
+  - reconcile interruption, shutdown, or retry-visible behavior
+  - retained CLI command error reporting and operator recovery guidance
 - every planned smoke flow has a pass/fail verdict
 - only verified smoke findings roll forward to `Z.2`
 - `docs/phase-Z/smoke-findings-ledger.md` is the only authoritative `Z.2`
@@ -93,6 +98,8 @@ for independent QA review.
 
 ## Required Validation
 
+- `cargo build --release` or equivalent release build that produces the smoke
+  executable baseline
 - `docs/phase-Z/smoke-checklist.md` is present and populated for supported
   flows
 - `docs/phase-Z/smoke-findings-ledger.md`

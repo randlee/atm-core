@@ -21,7 +21,8 @@ The final section of this document must record:
 - `integrate_phase_z_candidate`
 - `release_checklist_result`
 - `release_verdict`
-- `authorized_by`
+- `authorized_by` (explicit named authority such as `team-lead` or user
+  approval)
 - `notes`
 
 ## Initial State
