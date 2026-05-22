@@ -2,6 +2,8 @@
 
 Status:
 - complete
+- still current after `Phase Yd` authorization and `Phase Ye` closure because
+  neither line changed the retained public CLI JSON output surface
 
 Purpose:
 - audit the current ATM CLI JSON surface before executable smoke and dogfood
