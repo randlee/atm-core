@@ -50,8 +50,8 @@ The frozen checklist must include at least:
   - disposable `.atm.toml` with `default_team = "z1-team"`
   - disposable `config.json` roster for `z1-team`
 - cloned real-state lane:
-  - disposable copy of `~/.claude/teams/atm-dev` at `<disposable-copy-of-~/.claude/teams/atm-dev>`
-  - disposable copy of `~/.atm/db/mail.db` at `<disposable-copy-of-~/.atm/db/mail.db>`
+  - disposable copy of `~/.claude/teams/atm-dev` at `/tmp/z1-smoke-atm-dev`
+  - disposable copy of `~/.atm/db/mail.db` at `/tmp/z1-smoke-mail.db`
   - no writes against the live host-scoped ATM state
 
 ## Frozen Z.1 Results
@@ -59,7 +59,7 @@ The frozen checklist must include at least:
 | flow_id | operator_flow | command_or_entrypoint | expected_result | recovery_or_corner_case | z1_verdict | z2_revalidation_verdict | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | `Z1-001` | Build the approved smoke baseline | `cargo build --release -p agent-team-mail -p atm-daemon` | release CLI and daemon binaries build successfully on `integrate/phase-Z` baseline | baseline build proof | `PASS` | `PENDING` | `target/release/atm` and `target/release/atm-daemon` built successfully before the smoke pass. |
-| `Z1-002` | Bring up daemon/runtime on a clean-room baseline | `HOME=<tmp> ATM_HOME=<tmp> ATM_TEAM=z1-team ATM_IDENTITY=z1-operator target/release/atm doctor --json` | daemon auto-start succeeds and `doctor` reports ready runtime state | daemon startup / readiness failure or degraded-start behavior | `PASS` | `PENDING` | Clean-room `doctor` succeeded and reported ready runtime state with bootstrap trace and retained observability paths. |
+| `Z1-002` | Bring up daemon/runtime on a clean-room baseline | `HOME=/tmp/z1-smoke-home ATM_HOME=/tmp/z1-smoke-atm ATM_TEAM=z1-team ATM_IDENTITY=z1-operator target/release/atm doctor --json` | daemon auto-start succeeds and `doctor` reports ready runtime state | daemon startup / readiness failure or degraded-start behavior | `PASS` | `PENDING` | Clean-room `doctor` succeeded and reported ready runtime state with bootstrap trace and retained observability paths. |
 | `Z1-003` | Inspect retained local roster surface on a clean-room baseline | `target/release/atm teams --json` and `target/release/atm members --json` in the clean-room environment | retained team and member inspection commands succeed against the frozen team config | retained CLI command coverage | `PASS` | `PENDING` | `teams --json` and `members --json` succeeded against disposable `z1-team` config state. |
 | `Z1-004` | Exercise empty-mailbox retained CLI surface on a clean-room baseline | `target/release/atm list --json`, `read --all --json`, `clear --json`, `log snapshot --json` in the clean-room environment | retained CLI mailbox/log commands succeed on an empty durable-state baseline | retained CLI command coverage | `PASS` | `PENDING` | `list`, `read`, `clear`, and `log snapshot` all succeeded on the disposable empty-store baseline. |
 | `Z1-005` | Send the first message to a config-defined recipient on a clean-room baseline | `target/release/atm send z1-recipient \"hello z1\" --requires-ack --json` | config-defined roster member resolves to a delivery harness and the message persists/delivers successfully | notification delivery failure or degraded-notification behavior | `FAIL` | `PENDING` | Send failed closed with `failed to resolve roster-backed delivery harness for z1-recipient@z1-team`; fresh `config.json` membership alone did not seed the SQLite roster store. |
