@@ -18,12 +18,13 @@ not be mixed into the architectural cleanup history:
 ## Baseline
 
 - planning branch: `plan/phase-Z`
+- follow-up planning branch for post-`Z.1` fix planning: `plan/phase-Z-fix-planning`
 - prerequisite implementation line:
   - `Phase Y` accepted through the final `Phase Yd` develop gate
   - `Phase Ye` closed on `develop`
 - blocking closeout line before `Phase Z` may begin:
   - `Phase Yd`
-- future integration branch: `integrate/phase-Z` (not yet created)
+- execution integration branch: `integrate/phase-Z`
 
 ## Phase Entry Criteria
 
@@ -93,6 +94,7 @@ Purpose:
 - close smoke findings from `Z.1`
 - re-run full executable validation on the fixed branch
 - carry forward only the frozen `Z.1` smoke findings ledger
+- next-unused execution sprint after completed `Z.1`
 
 Execution branch:
 - `feature/pZ-s2-fix-and-revalidate`
@@ -155,6 +157,16 @@ deliverables, acceptance criteria, and closure rules.
 - dogfood findings feed only the final fix/sign-off sprint
 - release readiness is not declared until the documented executable flows and
   recovery behavior are revalidated after each fix round
+
+Current execution state:
+
+- `Z.1` is complete on `feature/pZ-s1-smoke-bring-up @ 70f4fa7f`
+- `Z.1` froze the smoke artifacts and promoted exactly two blocking findings to
+  `Z.2`:
+  - `Z1-F001` first-team roster bootstrap / harness-resolution gap
+  - `Z1-F002` preexisting-db sqlite schema-init ordering failure
+- `Z.2` is the next-unused sprint and is limited to those findings plus frozen
+  checklist revalidation
 
 ## Initial Planning Outputs
 

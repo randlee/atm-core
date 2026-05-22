@@ -3779,8 +3779,10 @@ Status summary:
   land on `develop` and `Phase Z` to begin.
 - `Phase Ye` is complete on the current `develop` baseline and does not reopen
   the `Phase Z` rollout gate.
-- `Phase Z` is the next execution line for real-binary smoke, `atm-dev`
+- `Phase Z` is the active execution line for real-binary smoke, `atm-dev`
   canary/dogfood, and final release sign-off.
+- `Z.1` smoke bring-up is complete at `70f4fa7f` with verdict `FAIL`; two
+  blocking findings are promoted to `Z.2`, which is now the next-unused sprint.
 
 Planning branch:
 - `plan/phase-Z`
