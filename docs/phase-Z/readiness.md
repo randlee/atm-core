@@ -42,7 +42,7 @@ The final release verdict must remain `PENDING` until:
 
 | Sprint | Accepted Commit | Verdict | Current Status | Notes |
 | --- | --- | --- | --- | --- |
-| Z.1 | `PENDING` | `PENDING` | `not started` | smoke checklist and findings ledger not yet frozen |
+| Z.1 | `PENDING` | `FAIL` | `complete` | smoke checklist frozen; two blocking findings promoted to `Z.2` |
 | Z.2 | `PENDING` | `PENDING` | `not started` | awaits `Z.1` closure |
 | Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.2` closure |
 | Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure |

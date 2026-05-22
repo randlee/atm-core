@@ -1,7 +1,7 @@
 ---
 id: Z.1
 title: Smoke Bring-Up
-status: planned
+status: complete
 branch: feature/pZ-s1-smoke-bring-up
 worktree: ../atm-core-worktrees/feature/pZ-s1-smoke-bring-up
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.1
 worktree: ../atm-core-worktrees/feature/pZ-s1-smoke-bring-up
 branch: feature/pZ-s1-smoke-bring-up
-status: planned
+status: complete
 estimated_scope: large
 ```
 
