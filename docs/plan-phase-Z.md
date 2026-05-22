@@ -100,7 +100,7 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s2-fix-and-revalidate`
 
-### Z.3 `atm-dev` Canary and Dogfood
+### Z.3 `atm-dev` Canary And Dogfood
 
 Purpose:
 
