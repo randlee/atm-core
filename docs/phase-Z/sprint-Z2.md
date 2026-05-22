@@ -24,7 +24,7 @@ estimated_scope: medium
 Close the verified smoke findings from `Z.1` and re-run the executable
 validation set on the fixed branch.
 
-## Governing Requirements
+## Hard Dependencies
 
 - `docs/plan-phase-Z.md`
 - `docs/phase-Yd/readiness.md`
@@ -34,6 +34,12 @@ validation set on the fixed branch.
 
 - `Z.1` complete
 - the validated `Z.1` smoke findings ledger is frozen
+
+## Exact Targets
+
+- `docs/phase-Z/smoke-checklist.md`
+- `docs/phase-Z/smoke-findings-ledger.md`
+- the approved fix branch on `integrate/phase-Z`
 
 ## Deliverables
 
@@ -61,6 +67,13 @@ validation set on the fixed branch.
 
 - `Z.2` does not widen the smoke checklist
 - `Z.2` does not begin canary or release-signoff work
+
+## Production-Ready Expectation
+
+Every listed `Z.2` deliverable is expected to land at a production-ready level
+for the smoke-fix scope this sprint claims: the branch must be suitable for
+promotion into canary, and the updated smoke findings ledger must fully close
+the `Z.1` handoff without silent carry-forward.
 
 ## Required Validation
 

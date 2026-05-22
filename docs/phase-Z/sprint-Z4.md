@@ -24,7 +24,7 @@ estimated_scope: medium
 Close the findings from the `atm-dev` canary, rerun the final validation set,
 and produce the final release-readiness verdict.
 
-## Governing Requirements
+## Hard Dependencies
 
 - `docs/plan-phase-Z.md`
 - `docs/phase-Yd/readiness.md`
@@ -34,6 +34,12 @@ and produce the final release-readiness verdict.
 
 - `Z.3` complete
 - the canary findings ledger is frozen
+
+## Exact Targets
+
+- `docs/phase-Z/release-checklist.md`
+- `docs/phase-Z/readiness.md`
+- the `integrate/phase-Z` closeout candidate under final release review
 
 ## Deliverables
 
@@ -62,6 +68,13 @@ and produce the final release-readiness verdict.
 ## Non-Closure
 
 - `Z.4` does not reopen smoke or canary scope outside the frozen ledgers
+
+## Production-Ready Expectation
+
+Every listed `Z.4` deliverable is expected to land at a production-ready level
+for the release-signoff scope this sprint claims: the release checklist and
+readiness record must be sufficient for a ship/no-ship decision without
+additional undocumented evidence.
 
 ## Required Validation
 

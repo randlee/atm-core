@@ -24,7 +24,7 @@ estimated_scope: large
 Bring up the daemon + SQLite mail-SSOT line on the real executables and run
 the first full feature-by-feature smoke pass before broader team dogfood.
 
-## Governing Requirements
+## Hard Dependencies
 
 - `docs/plan-phase-Z.md`
 - `docs/phase-Yd/readiness.md`
@@ -39,6 +39,12 @@ the first full feature-by-feature smoke pass before broader team dogfood.
   - `Phase Z` may begin
 - the current `develop` baseline already includes the accepted `Phase Ye`
   closure
+
+## Exact Targets
+
+- `docs/phase-Z/smoke-checklist.md`
+- `docs/phase-Z/smoke-findings-ledger.md`
+- the approved executable baseline under test on `integrate/phase-Z`
 
 ## Deliverables
 
@@ -77,6 +83,13 @@ the first full feature-by-feature smoke pass before broader team dogfood.
 
 - `Z.1` does not fix smoke findings
 - `Z.1` does not authorize canary use or release readiness
+
+## Production-Ready Expectation
+
+Every listed `Z.1` deliverable is expected to land at a production-ready level
+for the smoke scope this sprint claims: the frozen smoke artifacts must be
+usable as-is by `Z.2`, and the executable bring-up evidence must be sufficient
+for independent QA review.
 
 ## Required Validation
 

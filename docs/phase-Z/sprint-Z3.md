@@ -25,7 +25,7 @@ Move from single-operator smoke to controlled `atm-dev` team use on the new
 executables and verify real operator UX and recovery behavior before final
 release sign-off.
 
-## Governing Requirements
+## Hard Dependencies
 
 - `docs/plan-phase-Z.md`
 - `docs/phase-Yd/readiness.md`
@@ -36,6 +36,12 @@ release sign-off.
 - `Z.2` complete
 - canary participants and reporting path are defined at sprint start and frozen
   before operator use begins
+
+## Exact Targets
+
+- `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-findings-ledger.md`
+- the approved canary binary baseline under test on `integrate/phase-Z`
 
 ## Deliverables
 
@@ -64,6 +70,13 @@ release sign-off.
 
 - `Z.3` does not fix canary findings
 - `Z.3` does not produce the final release verdict
+
+## Production-Ready Expectation
+
+Every listed `Z.3` deliverable is expected to land at a production-ready level
+for the canary scope this sprint claims: the checklist and findings ledger
+must be usable directly by `Z.4` without scope reconstruction or manual QA
+interpretation.
 
 ## Required Validation
 
