@@ -53,6 +53,7 @@ the first full feature-by-feature smoke pass before broader team dogfood.
 - real-binary bring-up evidence for the daemon baseline under test
 - `docs/phase-Z/smoke-findings-ledger.md` containing only validated `Z.1`
   findings promoted to `Z.2`
+- `docs/phase-Z/readiness.md` Z.1 row updated with smoke verdict and commit
 
 ## Required Work
 
