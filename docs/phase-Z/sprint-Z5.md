@@ -1,20 +1,20 @@
 ---
 id: Z.5
-title: Retained Runtime Command Roster Truth Cutover
+title: Runtime Roster Truth Cutover
 status: planned
-branch: feature/pZ-s5-retained-runtime-command-roster-truth-cutover
-worktree: ../atm-core-worktrees/feature/pZ-s5-retained-runtime-command-roster-truth-cutover
+branch: feature/pZ-s5-runtime-roster-truth-cutover
+worktree: ../atm-core-worktrees/feature/pZ-s5-runtime-roster-truth-cutover
 target: integrate/phase-Z
 ---
 
-# Sprint Z.5 — Retained Runtime Command Roster Truth Cutover
+# Sprint Z.5 — Runtime Roster Truth Cutover
 
 ```yaml
 plan_type: sprint_plan
 phase: Z
 sprint: Z.5
-worktree: ../atm-core-worktrees/feature/pZ-s5-retained-runtime-command-roster-truth-cutover
-branch: feature/pZ-s5-retained-runtime-command-roster-truth-cutover
+worktree: ../atm-core-worktrees/feature/pZ-s5-runtime-roster-truth-cutover
+branch: feature/pZ-s5-runtime-roster-truth-cutover
 status: planned
 estimated_scope: medium
 ```
@@ -138,6 +138,9 @@ trait changes, or watcher/reconcile import logic, stop and move that scope into
 - `git diff --check`
 - `rg -n "load_team_config\\(" crates/atm-core/src/list.rs crates/atm-core/src/read/mod.rs crates/atm-core/src/clear/mod.rs crates/atm-core/src/ack/mod.rs`
   - expected: no production matches
+- `rg -n "load_team_config\\(" crates/atm-core/src/doctor/mod.rs`
+  - expected: any surviving match is comparison-only drift reporting; zero
+    production membership-lookup matches are allowed
 - `docs/phase-Z/readiness.md`
 
 ## Required Document Updates

@@ -38,7 +38,7 @@ validation set on the fixed branch.
 - `Z.1` complete
 - the validated `Z.1` smoke findings ledger is frozen
 
-## Exact Targets
+## Exact Targets To Modify
 
 - `docs/phase-Z/smoke-checklist.md`
 - `docs/phase-Z/smoke-findings-ledger.md`
@@ -52,8 +52,14 @@ validation set on the fixed branch.
 - `crates/atm-core/src/boundary_support.rs`
 - `crates/atm-core/src/direct_boundaries.rs`
 - `crates/atm-core/src/config/mod.rs`
-- `crates/atm-core/src/service_runtime.rs`
 - `crates/atm-core/src/send/mod.rs`
+- `crates/atm-core/src/delivery_policy.rs`
+- `crates/atm-rusqlite/src/shared_db.rs`
+- the approved fix branch on `integrate/phase-Z`
+
+## Read-Only Context References
+
+- `crates/atm-core/src/service_runtime.rs`
 - `crates/atm-core/src/list.rs`
 - `crates/atm-core/src/read/mod.rs`
 - `crates/atm-core/src/clear/mod.rs`
@@ -61,9 +67,6 @@ validation set on the fixed branch.
 - `crates/atm-core/src/doctor/mod.rs`
 - `crates/atm-core/src/team_admin.rs`
 - `crates/atm-core/src/team_admin/restore.rs`
-- `crates/atm-core/src/delivery_policy.rs`
-- `crates/atm-rusqlite/src/shared_db.rs`
-- the approved fix branch on `integrate/phase-Z`
 
 ## Deliverables
 

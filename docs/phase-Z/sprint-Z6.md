@@ -102,6 +102,35 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
    - add the immutable public `ClaudeCodeTeamRoster` surface
    - use it as the approved runtime roster projection instead of generic
      `config.json` reads
+   Approved Rust shape:
+   ```rust
+   #[derive(Clone, Debug, Eq, PartialEq)]
+   pub struct ClaudeCodeTeamRoster {
+       team_name: TeamName,
+       members: Arc<[ClaudeCodeRosterMember]>,
+   }
+
+   #[derive(Clone, Debug, Eq, PartialEq)]
+   pub struct ClaudeCodeRosterMember {
+       member_name: AgentName,
+       harness: DeliveryHarness,
+       inbox_path: Option<PathBuf>,
+       tmux_pane_id: Option<String>,
+   }
+
+   impl ClaudeCodeTeamRoster {
+       pub fn from_roster_snapshot(
+           team_name: TeamName,
+           records: &[RosterMemberRecord],
+       ) -> Self
+   }
+   ```
+   Contract notes:
+   - `ClaudeCodeTeamRoster` is `pub` and immutable by construction.
+   - `Arc<[ClaudeCodeRosterMember]>` keeps member order frozen for the lifetime
+     of the snapshot and preserves `Send + Sync` semantics by construction.
+   - `from_roster_snapshot(...)` is the only approved builder in this sprint;
+     runtime consumers do not build ad hoc file-backed projections.
    Required tests:
    - cover runtime consumers that need immutable roster inspection
    Required docs:

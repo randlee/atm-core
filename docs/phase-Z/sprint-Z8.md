@@ -123,6 +123,13 @@ ownership, stop and move that scope into `Z.9` or `Z.10`.
 
 - `cargo test --workspace`
 - `git diff --check`
+- `rg -n "load_team_config\\(" crates/atm-core/src crates/atm-daemon/src`
+  - expected: surviving production matches are restricted to
+    `crates/atm-daemon/src/watch_runtime.rs`,
+    `crates/atm-daemon/src/reconcile_runtime.rs`,
+    `crates/atm-core/src/doctor/mod.rs`, and one explicitly named
+    projection-only helper if this sprint still requires it; any other match is
+    a failure
 - `docs/phase-Z/readiness.md`
 
 ## Required Document Updates

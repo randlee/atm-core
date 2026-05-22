@@ -101,6 +101,23 @@ This sprint owns team-admin views and member mutation, not restore automation.
    - move `tmux_pane_id` and any justified surviving Claude routing metadata
      into canonical ATM roster-member state
    - stop treating `.atm.toml` as durable pane-routing authority
+   Approved Rust / schema shape:
+   ```rust
+   #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
+   pub struct AgentMember {
+       pub member_name: AgentName,
+       pub harness: DeliveryHarness,
+       #[serde(default)]
+       pub tmux_pane_id: Option<String>,
+   }
+   ```
+   Migration contract:
+   - SQLite adds a nullable `tmux_pane_id` column to the canonical ATM roster
+     member table.
+   - preexisting rows default to `NULL` until ATM add, watcher ingest, or
+     restore supplies a value.
+   - `config.json` projection writes the field back out only when
+     `tmux_pane_id` is `Some(...)`.
    Required tests:
    - prove `tmux_pane_id` survives ATM add, watcher ingest, and later restore
    Required docs:
