@@ -1012,7 +1012,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(team_config_write_env)]
     fn add_member_normalizes_tmux_shape_when_pane_is_provided() {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
@@ -1128,7 +1128,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(team_config_write_env)]
     fn add_member_projects_config_from_updated_atm_roster_truth() {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
