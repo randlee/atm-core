@@ -70,4 +70,5 @@ release sign-off.
 
 - `docs/phase-Z/canary-dogfood-checklist.md`
 - `docs/phase-Z/canary-findings-ledger.md`
+- `cargo test --workspace`
 - `git diff --check`

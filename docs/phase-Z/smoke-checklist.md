@@ -28,6 +28,11 @@ The frozen checklist must include at least:
 - retained CLI command coverage that `Phase Z` treats as ship-critical
 - one recovery path for each operator flow where the command or daemon can fail
 - one negative-path or corner-case exercise per feature area claimed by `Z.1`
+- explicit coverage rows for these retained recovery/corner-case categories:
+  - daemon startup / readiness failure or degraded-start behavior
+  - notification delivery failure or degraded-notification behavior
+  - reconcile interruption, shutdown, or retry-visible behavior
+  - retained CLI command error reporting and operator recovery guidance
 
 ## Ownership
 

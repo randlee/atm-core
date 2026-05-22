@@ -54,8 +54,12 @@ the first full feature-by-feature smoke pass before broader team dogfood.
 - freeze `docs/phase-Z/smoke-checklist.md` before the pass begins and use that
   frozen matrix for the entire sprint
 - verify end-to-end feature behavior across the supported operator flows
-- verify corner cases and recovery behavior called out by the `Phase Y`
-  architecture and state-machine docs
+- verify corner cases and recovery behavior called out by:
+  - `docs/phase-Y/issues.md`
+  - `docs/phase-Yd/readiness.md`
+  - `docs/plan-phase-Y.md`
+  - the explicit recovery/corner-case coverage categories frozen in
+    `docs/phase-Z/smoke-checklist.md`
 - record only validated smoke findings in
   `docs/phase-Z/smoke-findings-ledger.md` for `Z.2`
 
