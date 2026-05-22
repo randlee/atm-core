@@ -4,3 +4,10 @@ path = "crates/atm-core/src/boundary_support.rs"
 symbol = "hydrate_roster_from_team_config_once_at_startup_if_empty"
 why = "temporary startup-only roster hydration until watcher-owned ingest lands in Z.8"
 sunset_sprint = "Z.8"
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/team_admin.rs"
+symbol = "load_team_projection_extra_for_member_add"
+why = "temporary non-roster config extra preservation during add-member projection until Z.10 removes the last team-admin config read"
+sunset_sprint = "Z.10"

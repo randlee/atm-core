@@ -1,4 +1,6 @@
 use std::path::Path;
+#[cfg(any(test, feature = "test-utils"))]
+use std::sync::Mutex;
 use std::sync::OnceLock;
 
 use crate::boundary;
@@ -15,8 +17,23 @@ enum DefaultRuntimeProvider {
 }
 
 static DEFAULT_RUNTIME_PROVIDER: OnceLock<DefaultRuntimeProvider> = OnceLock::new();
+#[cfg(any(test, feature = "test-utils"))]
+static TEST_DEFAULT_RUNTIME_PROVIDER: OnceLock<Mutex<Option<DefaultRuntimeProvider>>> =
+    OnceLock::new();
+
+#[cfg(any(test, feature = "test-utils"))]
+fn test_default_runtime_provider() -> &'static Mutex<Option<DefaultRuntimeProvider>> {
+    TEST_DEFAULT_RUNTIME_PROVIDER.get_or_init(|| Mutex::new(None))
+}
 
 pub fn install_default_runtime_factory(factory: DefaultRuntimeFactory) {
+    #[cfg(any(test, feature = "test-utils"))]
+    {
+        *test_default_runtime_provider()
+            .lock()
+            .expect("test default runtime provider") =
+            Some(DefaultRuntimeProvider::Factory(factory));
+    }
     let _ = DEFAULT_RUNTIME_PROVIDER.set(DefaultRuntimeProvider::Factory(factory));
 }
 
@@ -25,6 +42,18 @@ pub fn install_default_runtime_instance(runtime: LocalServiceRuntime) {
 }
 
 pub(crate) fn default_runtime() -> Result<LocalServiceRuntime, AtmError> {
+    #[cfg(any(test, feature = "test-utils"))]
+    if let Some(provider) = test_default_runtime_provider()
+        .lock()
+        .expect("test default runtime provider")
+        .clone()
+    {
+        return match provider {
+            DefaultRuntimeProvider::Factory(factory) => factory(),
+            DefaultRuntimeProvider::Instance(runtime) => Ok(runtime),
+        };
+    }
+
     DEFAULT_RUNTIME_PROVIDER
         .get()
         .cloned()

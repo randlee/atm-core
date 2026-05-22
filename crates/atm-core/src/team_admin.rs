@@ -13,6 +13,7 @@ use crate::boundary::{
 };
 use crate::config::{load_claude_team_config_document, load_config, resolve_team};
 use crate::error::{AtmError, AtmErrorKind};
+use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
@@ -38,7 +39,7 @@ pub struct TeamsList {
     pub teams: Vec<TeamSummary>,
 }
 
-/// One member entry from a team's live `config.json` roster.
+/// One member entry projected from an ATM roster record.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct MemberSummary {
     pub name: AgentName,
@@ -46,7 +47,7 @@ pub struct MemberSummary {
     pub agent_type: String,
     pub model: String,
     pub joined_at: Option<u64>,
-    pub tmux_pane_id: String,
+    pub tmux_pane_id: Option<String>,
     pub cwd: String,
     pub extra: serde_json::Map<String, Value>,
 }
@@ -88,6 +89,8 @@ impl AddMemberRequest {
         cwd: PathBuf,
         tmux_pane_id: Option<String>,
     ) -> Result<Self, AtmError> {
+        validate_member_metadata_field("agent_type", &agent_type)?;
+        validate_member_metadata_field("model", &model)?;
         Ok(Self {
             home_dir,
             team: team.parse()?,
@@ -270,21 +273,31 @@ fn add_member_with_roster_store(
     roster_store: &dyn RosterStore,
     request: AddMemberRequest,
 ) -> Result<AddMemberOutcome, AtmError> {
+    validate_member_metadata_field("agent_type", &request.agent_type)?;
+    validate_member_metadata_field("model", &request.model)?;
+
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&request.team));
     }
 
-    let current_config = load_claude_team_config_document(&team_dir)?;
+    let current_extra = load_team_projection_extra_for_member_add(&team_dir)?;
     let mut existing_roster = load_team_roster(roster_store, &request.team)?;
     if existing_roster
         .iter()
         .any(|member| member.agent_name == request.member)
     {
-        return Err(AtmError::validation(format!(
-            "member '{}' already exists in team '{}'",
-            request.member, request.team
-        )));
+        return Err(AtmError::new_with_code(
+            AtmErrorCode::IdentityConflict,
+            AtmErrorKind::Validation,
+            format!(
+                "member '{}' already exists in team '{}'",
+                request.member, request.team
+            ),
+        )
+        .with_recovery(
+            "Use `atm members` to inspect the current ATM roster and choose a new member name before retrying `atm team member add`.",
+        ));
     }
 
     let inbox_path = home::inbox_path_from_home(&request.home_dir, &request.team, &request.member)?;
@@ -327,7 +340,7 @@ fn add_member_with_roster_store(
                 "Check ATM roster store availability and rerun `atm teams add-member`.",
             )
         })?;
-    let projected_config = project_team_config_from_roster(current_config.extra, &existing_roster);
+    let projected_config = project_team_config_from_roster(current_extra, &existing_roster);
 
     if let Err(error) = write_team_config(&team_dir, &projected_config) {
         if created_inbox {
@@ -442,10 +455,27 @@ fn member_summary_from_roster(record: &RosterMemberRecord) -> MemberSummary {
         agent_type: record.agent_type.clone(),
         model: record.model.clone(),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
-        tmux_pane_id: record.recipient_pane_id.clone().unwrap_or_default(),
+        tmux_pane_id: record.recipient_pane_id.clone(),
         cwd: metadata_string(&record.metadata_json, "cwd").unwrap_or_default(),
         extra: compatibility_extra_fields(&record.metadata_json),
     }
+}
+
+const MAX_MEMBER_METADATA_FIELD_LEN: usize = 256;
+
+fn validate_member_metadata_field(field: &str, value: &str) -> Result<(), AtmError> {
+    if value.len() > MAX_MEMBER_METADATA_FIELD_LEN {
+        return Err(AtmError::validation(format!(
+            "{field} must be at most {MAX_MEMBER_METADATA_FIELD_LEN} bytes"
+        )));
+    }
+    Ok(())
+}
+
+fn load_team_projection_extra_for_member_add(
+    team_dir: &Path,
+) -> Result<serde_json::Map<String, Value>, AtmError> {
+    load_claude_team_config_document(team_dir).map(|config| config.extra)
 }
 
 fn load_team_roster(
@@ -721,9 +751,9 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        AddMemberRequest, BackupRequest, RestoreRequest, add_member_with_roster_store,
-        backup_root_from_home, list_members_with_roster_store, list_teams_with_roster_store,
-        tasks_dir_from_home,
+        AddMemberRequest, BackupRequest, MAX_MEMBER_METADATA_FIELD_LEN, RestoreRequest,
+        add_member_with_roster_store, backup_root_from_home, list_members_with_roster_store,
+        list_teams_with_roster_store, tasks_dir_from_home,
     };
     use crate::boundary::{
         self, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
@@ -740,6 +770,7 @@ mod tests {
 
     #[derive(Default)]
     struct RecordingRosterStore {
+        // Test-only seam: Mutex keeps the fixture simple while serial tests own all access.
         teams: Mutex<BTreeMap<TeamName, Vec<RosterMemberRecord>>>,
     }
 
@@ -993,7 +1024,7 @@ mod tests {
         assert_eq!(members.team.as_str(), TEST_TEAM);
         assert_eq!(members.members.len(), 1);
         assert_eq!(members.members[0].name.as_str(), TEST_SENDER);
-        assert_eq!(members.members[0].tmux_pane_id, "%9");
+        assert_eq!(members.members[0].tmux_pane_id.as_deref(), Some("%9"));
         assert_eq!(members.members[0].cwd, "/tmp/worker");
     }
 
@@ -1069,6 +1100,24 @@ mod tests {
             .find(|member| member.name == TEST_SENDER)
             .expect("member");
         assert_eq!(member.tmux_pane_id.as_deref(), Some("%12"));
+    }
+
+    #[test]
+    fn add_member_rejects_overlong_model_metadata() {
+        let tempdir = tempdir().expect("tempdir");
+        let error = AddMemberRequest::new(
+            tempdir.path().to_path_buf(),
+            TEST_TEAM,
+            TEST_SENDER,
+            "worker".to_string(),
+            "m".repeat(MAX_MEMBER_METADATA_FIELD_LEN + 1),
+            tempdir.path().to_path_buf(),
+            None,
+        )
+        .expect_err("invalid model");
+
+        assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
+        assert!(error.message.contains("model"));
     }
 
     #[test]

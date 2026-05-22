@@ -533,9 +533,10 @@ Required identity rules:
 Required doctor rules:
 - `atm doctor` must flag obsolete `[atm].identity` when present with
   `ATM_WARNING_IDENTITY_DRIFT`
-- `atm doctor` must compare `[atm].team_members` against `config.json.members`
-- missing baseline members are findings
-- extra runtime members in `config.json` are allowed
+- `atm doctor` must compare canonical ATM roster truth against
+  `config.json.members`
+- ATM roster members missing from `config.json` are findings
+- Claude `config.json` members missing from ATM roster truth are findings
 - doctor roster output must show all `config.json` members, with baseline
   members first and `team-lead` first among the baseline set
 - `atm doctor` must snapshot `~/.claude/teams/*/inboxes/*.lock` at start and
