@@ -1,7 +1,7 @@
 ---
 id: Z.1
 title: Smoke Bring-Up
-status: planned
+status: complete
 branch: feature/pZ-s1-smoke-bring-up
 worktree: ../atm-core-worktrees/feature/pZ-s1-smoke-bring-up
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.1
 worktree: ../atm-core-worktrees/feature/pZ-s1-smoke-bring-up
 branch: feature/pZ-s1-smoke-bring-up
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -53,6 +53,7 @@ the first full feature-by-feature smoke pass before broader team dogfood.
 - real-binary bring-up evidence for the daemon baseline under test
 - `docs/phase-Z/smoke-findings-ledger.md` containing only validated `Z.1`
   findings promoted to `Z.2`
+- `docs/phase-Z/readiness.md` Z.1 row updated with smoke verdict and commit
 
 ## Required Work
 
