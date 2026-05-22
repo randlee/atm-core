@@ -45,7 +45,7 @@ The final release verdict must remain `PENDING` until:
 | --- | --- | --- | --- | --- |
 | Z.1 | `70f4fa7f` | `FAIL` | `complete` | smoke checklist frozen; two blocking findings promoted to `Z.2`; cargo test --workspace PASS (CI: macOS/Ubuntu/Windows); git diff --check PASS (CI: Format check) |
 | Z.2 | `PENDING` | `PENDING` | `not started` | awaits `Z.1` closure |
-| Z.5 | `PENDING` | `PENDING` | `not started` | awaits `Z.2` closure |
+| Z.5 | `70a21a0c` | `PASS` | `complete` | retained command membership checks now use ATM roster truth only; doctor drift warnings compare Claude file members against ATM roster truth; `cargo test -p agent-team-mail-core -- --nocapture` PASS; production grep gate leaves only doctor compare-only and test-only `load_team_config(...)` matches |
 | Z.6 | `PENDING` | `PENDING` | `not started` | awaits `Z.5` closure |
 | Z.7 | `PENDING` | `PENDING` | `not started` | awaits `Z.6` closure |
 | Z.8 | `PENDING` | `PENDING` | `not started` | awaits `Z.7` closure |
