@@ -24,8 +24,6 @@ pub use observability::{
 #[cfg(test)]
 use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, OptionalExtension, params};
-#[cfg(test)]
-use serial_test::serial;
 use shared_db::{SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error};
 use std::path::Path;
 #[cfg(test)]
@@ -815,6 +813,7 @@ mod tests {
     use atm_core::types::{
         AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TaskId, TeamName,
     };
+    use serial_test::serial;
     use std::sync::OnceLock;
     use tempfile::TempDir;
 
@@ -860,6 +859,30 @@ mod tests {
             serde_json::to_vec_pretty(&config).expect("encode team config"),
         )
         .expect("write config.json");
+    }
+
+    fn seed_roster_member(
+        assembly: &SqliteBoundaryAssembly,
+        team_name: &TeamName,
+        agent_name: &AgentName,
+    ) {
+        assembly
+            .roster_store()
+            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
+                team: team_name.clone(),
+                members: vec![boundary::RosterMemberRecord {
+                    team_name: team_name.clone(),
+                    agent_name: agent_name.clone(),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: String::new(),
+                    model: String::new(),
+                    recipient_pane_id: None,
+                    metadata_json: serde_json::Map::new(),
+                }],
+                source: Some(boundary::ReplaySource::new("sqlite-test").expect("replay source")),
+            })
+            .expect("replace roster");
     }
 
     fn sqlite_runtime(assembly: &SqliteBoundaryAssembly) -> LocalServiceRuntime {
@@ -989,23 +1012,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record: expired })
             .expect("upsert expired");
-        assembly
-            .roster_store()
-            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
-                team: team(),
-                members: vec![boundary::RosterMemberRecord {
-                    team_name: team(),
-                    agent_name: agent(),
-                    member_kind: boundary::RosterMemberKind::Permanent,
-                    harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: "dev".to_string(),
-                    model: "claude".to_string(),
-                    recipient_pane_id: None,
-                    metadata_json: serde_json::Map::new(),
-                }],
-                source: Some(boundary::ReplaySource::new("test-seed").expect("replay source")),
-            })
-            .expect("replace roster");
+        seed_roster_member(&assembly, &team(), &agent());
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(tempdir.path(), &team(), &[AgentMember::with_name(agent())]);
@@ -1057,23 +1064,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        assembly
-            .roster_store()
-            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
-                team: team(),
-                members: vec![boundary::RosterMemberRecord {
-                    team_name: team(),
-                    agent_name: agent(),
-                    member_kind: boundary::RosterMemberKind::Permanent,
-                    harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: "dev".to_string(),
-                    model: "claude".to_string(),
-                    recipient_pane_id: None,
-                    metadata_json: serde_json::Map::new(),
-                }],
-                source: Some(boundary::ReplaySource::new("test-seed").expect("replay source")),
-            })
-            .expect("replace roster");
+        seed_roster_member(&assembly, &team(), &agent());
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(tempdir.path(), &team(), &[AgentMember::with_name(agent())]);
@@ -1153,23 +1144,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        assembly
-            .roster_store()
-            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
-                team: team_name.clone(),
-                members: vec![boundary::RosterMemberRecord {
-                    team_name: team_name.clone(),
-                    agent_name: agent_name.clone(),
-                    member_kind: boundary::RosterMemberKind::Permanent,
-                    harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: "dev".to_string(),
-                    model: "claude".to_string(),
-                    recipient_pane_id: None,
-                    metadata_json: serde_json::Map::new(),
-                }],
-                source: Some(boundary::ReplaySource::new("test-seed").expect("replay source")),
-            })
-            .expect("replace roster");
+        seed_roster_member(assembly, &team_name, &agent_name);
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
@@ -1245,23 +1220,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        assembly
-            .roster_store()
-            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
-                team: team_name.clone(),
-                members: vec![boundary::RosterMemberRecord {
-                    team_name: team_name.clone(),
-                    agent_name: agent_name.clone(),
-                    member_kind: boundary::RosterMemberKind::Permanent,
-                    harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: "dev".to_string(),
-                    model: "claude".to_string(),
-                    recipient_pane_id: None,
-                    metadata_json: serde_json::Map::new(),
-                }],
-                source: Some(boundary::ReplaySource::new("test-seed").expect("replay source")),
-            })
-            .expect("replace roster");
+        seed_roster_member(assembly, &team_name, &agent_name);
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(

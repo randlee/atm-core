@@ -159,6 +159,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         | AtmErrorCode::WarningOriginInboxEntrySkipped
         | AtmErrorCode::WarningMissingTeamConfigFallback
         | AtmErrorCode::WarningSendAlertStateDegraded
+        | AtmErrorCode::WarningRosterDrift
         | AtmErrorCode::WarningBaselineMemberMissing
         | AtmErrorCode::WarningRestoreInProgress
         | AtmErrorCode::WarningHookSkipped

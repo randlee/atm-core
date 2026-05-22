@@ -50,7 +50,7 @@ The final release verdict must remain `PENDING` until:
 | Z.7 | `1fd6ee1e` | `PASS` | `complete` | `ConfigIngress` no longer exposes generic team-config lookup; daemon/core forwarding chain removed; startup-only `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` allowlisted through `Z.8` and proven to no-op when roster state is non-empty; `just lint boundaries` PASS with fixture self-test; `cargo test --workspace` PASS; `cargo fmt --all --check` PASS; `git diff --check` PASS |
 | Z.8 | `a5ea509a` | `PASS` | `complete` | watcher / reconcile now owns external Claude `config.json` ingest; startup-only bootstrap helper deleted; process-local projection-write suppression skips one matching daemon-authored event and clears on restart; `cargo test --workspace` PASS; targeted `z8_watcher_ingest_hydrates_atm_roster_truth_for_new_team` PASS; targeted `z8_projection_write_suppression_is_process_local` PASS; targeted `z8_deletes_startup_only_config_bootstrap_helper` PASS; `just lint boundaries` PASS; `cargo fmt --all --check` PASS; `git diff --check` PASS |
 | Z.9 | `cd3a3f86` | `PASS` | `complete` | team-admin commands now use ATM roster truth; `add-member` mutates canonical ATM roster first and projects `config.json`; canonical pane metadata maps ATM `recipient_pane_id` to Claude `tmux_pane_id`; `cargo test --workspace` PASS; `cargo fmt --all` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
-| Z.10 | `b4f0cee5` | `PASS` | `complete` | backup now writes `atm-roster.json` as an audit-only canonical ATM roster snapshot; restore rebuilds recreated `config.json` from ATM roster truth instead of replaying backup `config.json`; focused restore proof PASS; `cargo test --workspace` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
+| Z.10 | `b4f0cee5` | `PASS` | `complete` | backup now writes `atm-roster.json` as an audit-only canonical ATM roster snapshot; restore rebuilds recreated `config.json` from ATM roster truth instead of replaying backup `config.json`; focused restore proof PASS; accepted_commit records the implementation head, while readiness stamping landed in a later docs-only commit; `cargo test --workspace` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
 | Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.10` closure |
 | Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure |
 
@@ -61,3 +61,19 @@ Final release verdict:
 - release verdict: `PENDING`
 - authorized by: `PENDING`
 - notes: release sign-off not yet recorded
+
+Deferred follow-up findings:
+
+- `RSH-001` daemon join-handle tracking hardening deferred to `Z.11`
+- `RSH-002` daemon runtime shutdown-path hardening deferred to `Z.11`
+- `RSH-003` daemon lifecycle edge-case hardening deferred to `Z.11`
+- `RSH-004` daemon control-path hardening deferred to `Z.11`
+- `RSH-005` daemon signal-path hardening deferred to `Z.11`
+- `RSH-006` daemon worker coordination hardening deferred to `Z.11`
+- `RSH-007` daemon platform/runtime hardening deferred to `Z.11`
+- `RSH-009` local IPC timeout-path tracing hardening deferred to `Z.11`
+- `RBP-F001` typed newtypes for `RosterMemberRecord.agent_type` / `.model` deferred to `Z.11`
+- `RBP-F003` typed `ResolvedTarget` hardening deferred to `Z.11`
+- `RBP-F004` structured error-diagnostics hardening deferred to `Z.11`
+- `RBP-F005` replayed local IPC path hardening deferred to `Z.11`
+- `M-004` stronger typed/length-constrained `AddMemberRequest.agent_type` / `.model` deferred to `Z.11`

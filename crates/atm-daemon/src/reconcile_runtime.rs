@@ -28,6 +28,7 @@ const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
 const MAX_RECONCILE_FINGERPRINT_KEYS: usize = 1024;
 const MAX_RECONCILE_FINGERPRINTS_PER_KEY: usize = 256;
 const MAX_RECONCILE_WAITERS: usize = 1024;
+const MAX_PROJECTION_WRITE_JOURNAL_ENTRIES: usize = 256;
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -743,6 +744,9 @@ fn remember_projected_config_write(
                 "Restart atm-daemon; the reconcile projection suppression journal can no longer be trusted.",
             )
     })?;
+    if entries.len() >= MAX_PROJECTION_WRITE_JOURNAL_ENTRIES && !entries.contains_key(&key) {
+        return Ok(());
+    }
     *entries.entry(key).or_insert(0) += 1;
     Ok(())
 }

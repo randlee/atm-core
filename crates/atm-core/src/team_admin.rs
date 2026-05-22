@@ -72,6 +72,7 @@ pub struct AddMemberRequest {
     pub home_dir: PathBuf,
     pub team: TeamName,
     pub member: AgentName,
+    // Stronger typed/length-constrained roster metadata remains deferred to Z.11.
     pub agent_type: String,
     pub model: String,
     pub cwd: PathBuf,
@@ -166,6 +167,7 @@ pub struct RestorePlan {
     pub backup_path: PathBuf,
     pub dry_run: bool,
     pub would_restore_members: Vec<AgentName>,
+    // Stronger typing for backup inbox filenames remains deferred to Z.11.
     pub would_restore_inboxes: Vec<String>,
     pub would_restore_tasks: usize,
 }
@@ -275,6 +277,8 @@ fn add_member_with_roster_store(
         return Err(AtmError::team_not_found(&request.team));
     }
 
+    // Load the existing config only to preserve unknown root extra fields during
+    // projection. This is not a roster-truth read; ATM roster state is authoritative.
     let current_config = load_claude_team_config_document(&team_dir)?;
     let mut existing_roster = load_team_roster(roster_store, &request.team)?;
     if existing_roster
