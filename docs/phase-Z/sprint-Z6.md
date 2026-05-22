@@ -133,10 +133,10 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
 
    #[derive(Clone, Debug, Eq, PartialEq)]
    pub struct ClaudeCodeRosterMember {
-       member_name: AgentName,
-       harness: DeliveryHarness,
-       inbox_path: Option<PathBuf>,
-       tmux_pane_id: Option<String>,
+       pub member_name: AgentName,
+       pub harness: RosterHarness,
+       pub inbox_path: Option<PathBuf>,
+       pub tmux_pane_id: Option<String>,
    }
 
    impl ClaudeCodeTeamRoster {

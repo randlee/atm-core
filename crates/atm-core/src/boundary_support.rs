@@ -29,17 +29,21 @@ fn from_boundary_source_file(source: InboxSourceFileRecord) -> SourceFile {
     }
 }
 
+fn replay_source_static(label: &'static str) -> ReplaySource {
+    ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
+}
+
 pub(crate) fn load_workspace_config(
     request: ConfigLoadRequest,
 ) -> Result<ConfigLoadResponse, AtmError> {
     Ok(ConfigLoadResponse {
         config: config::load_config(&request.current_dir).map_err(|error| {
-            AtmError::daemon_unavailable(format!(
+            AtmError::config(format!(
                 "daemon ConfigIngress could not load workspace config from {}",
                 request.current_dir.display()
             ))
             .with_recovery(
-                "Fix the workspace ATM configuration or current-directory selection before retrying daemon startup or same-host bootstrap.",
+                "Fix the workspace ATM configuration or current-directory selection before retrying daemon config ingress.",
             )
             .with_source(error)
         })?,
