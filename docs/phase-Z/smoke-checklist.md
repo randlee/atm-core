@@ -43,14 +43,15 @@ The frozen checklist must include at least:
 
 ## Frozen Baseline Under Test
 
-- release binaries built from `feature/pZ-s1-smoke-bring-up`
+- release binaries: `target/release/atm` and `target/release/atm-daemon` built from `feature/pZ-s1-smoke-bring-up`
 - clean-room bring-up lane:
-  - disposable `HOME` + `ATM_HOME`
+  - `HOME=/tmp/z1-smoke-home`, `ATM_HOME=/tmp/z1-smoke-atm`
+  - `ATM_TEAM=z1-team`, `ATM_IDENTITY=z1-operator`
   - disposable `.atm.toml` with `default_team = "z1-team"`
   - disposable `config.json` roster for `z1-team`
 - cloned real-state lane:
-  - disposable copy of `~/.claude/teams/atm-dev`
-  - disposable copy of `~/.atm/db/mail.db`
+  - disposable copy of `~/.claude/teams/atm-dev` at `<disposable-copy-of-~/.claude/teams/atm-dev>`
+  - disposable copy of `~/.atm/db/mail.db` at `<disposable-copy-of-~/.atm/db/mail.db>`
   - no writes against the live host-scoped ATM state
 
 ## Frozen Z.1 Results
