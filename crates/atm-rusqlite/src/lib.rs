@@ -813,6 +813,7 @@ mod tests {
     use atm_core::types::{
         AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TaskId, TeamName,
     };
+    use serial_test::serial;
     use std::sync::OnceLock;
     use tempfile::TempDir;
 
@@ -1098,6 +1099,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn list_mail_entrypoint_uses_installed_sqlite_runtime_without_inbox_files() {
         install_entrypoint_runtime();
         let assembly = entrypoint_assembly();
@@ -1172,6 +1174,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn read_mail_entrypoint_uses_installed_sqlite_runtime_without_source_files() {
         install_entrypoint_runtime();
         let assembly = entrypoint_assembly();
