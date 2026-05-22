@@ -234,6 +234,9 @@ Notes:
   process; callers must not assume unbounded watch-state retention.
 - `WatchEventSource::poll(...)` now returns the worker-owned snapshot/error
   state instead of running direct synchronous discovery in the caller.
+- `Z.8` extends the watched batch to include the Claude team `config.json`
+  path when present so watcher-owned roster ingest sees external config edits
+  through the same bounded poll surface as inbox changes.
 - Shutdown is observed between polling iterations; one in-flight synchronous
   filesystem scan may complete before the watch worker exits.
 - This adapter captures events only; it does not own reconcile policy.
@@ -257,6 +260,10 @@ Notes:
 - It triggers watch polling, inbox ingress, and notifier callbacks only through
   their owned boundaries; it does not reach around into store or transport
   internals.
+- `Z.8` extends this lane to import externally changed Claude `config.json`
+  roster state into canonical ATM roster truth through `RosterStore` and to
+  suppress one matching daemon-authored projection event with a process-local
+  path+digest journal.
 - Notification delivery in the reconcile path is boundary-only; tests exercise
   fake `NotificationSink` implementations rather than plugin/runtime internals.
 - accepted `Phase Ye` design is one worker-owned actor lane with bounded
@@ -308,10 +315,9 @@ Notes:
 - The adapter is for watcher-owned external ingest and other explicitly
   approved comparison/preservation callers only; retained runtime command
   flows must not use it as a generic roster lookup seam.
-- the daemon-side adapter no longer exposes generic team-config loading; any
-  temporary startup-only roster hydration before `Z.8` stays in the narrow
-  core direct-boundary helper rather than on the daemon `ConfigIngress`
-  adapter surface
+- the daemon-side adapter no longer exposes generic team-config loading; after
+  `Z.8`, external Claude roster ingest is owned by the watch/reconcile lane
+  rather than by any generic daemon `ConfigIngress` lookup surface
 
 ## DaemonInboxIngressAdapter
 
@@ -362,7 +368,7 @@ Compatibility and recovery policy placement for daemon-owned config/inbox adapte
   second roster-truth lookup path; canonical runtime roster truth belongs to
   the ATM roster store and its immutable projections.
 - repository-local lint / later `sc-lint` extraction should gate generic
-  `load_team_config(...)` use outside the explicit allowlist.
+  `load_claude_team_config_document(...)` use outside the explicit allowlist.
 - `InboxIngress` may own compatibility-shape translation, identity fingerprint derivation, and ingress diagnostics over imported source files.
 - `InboxIngress` must not own read/ack/clear business policy, workflow-state mutation policy, or mailbox lifecycle transitions beyond import normalization.
 - `InboxExport` may own projection from ATM-owned source records back into compatibility mailbox shapes and write-bound export validation.
