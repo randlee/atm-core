@@ -1,3 +1,6 @@
+mod notification_fingerprints;
+mod projection_write_journal;
+
 use arc_swap::ArcSwap;
 use atm_core::boundary::{
     InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, ReplaySource, RosterStore,
@@ -5,10 +8,8 @@ use atm_core::boundary::{
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::fs;
-use std::hash::{Hash, Hasher};
+#[cfg(test)]
 use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -19,6 +20,14 @@ use std::time::{Duration, Instant};
 
 use crate::worker_support::{JoinHandleOwner, reap_retained_join_helpers, retain_join_helper};
 use crate::{DaemonSubsystem, SubsystemObservability};
+use notification_fingerprints::{
+    NotificationFingerprint, NotificationFingerprintRegistry, should_emit_reconcile_notification,
+};
+use projection_write_journal::{
+    ProjectionWriteJournal, config_document_digest, consume_projected_config_write,
+};
+#[cfg(test)]
+use projection_write_journal::remember_projected_config_write;
 
 const DEFAULT_RECONCILE_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_RECONCILE_DEBOUNCE: Duration = Duration::from_millis(25);
@@ -126,33 +135,6 @@ impl ReconcileWorkerState {
             .values()
             .map(|pending| pending.replies.len())
             .sum()
-    }
-}
-
-#[derive(Default)]
-struct NotificationFingerprintRegistry {
-    entries: HashMap<ReconcileKey, HashSet<NotificationFingerprint>>,
-    order: VecDeque<ReconcileKey>,
-}
-
-type ProjectionWriteJournal = Arc<Mutex<HashMap<ProjectionWriteJournalKey, usize>>>;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct ProjectionWriteJournalKey {
-    path: PathBuf,
-    digest: u64,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct NotificationFingerprint(String);
-
-impl NotificationFingerprint {
-    fn new(value: String) -> Option<Self> {
-        if value.is_empty() {
-            None
-        } else {
-            Some(Self(value))
-        }
     }
 }
 
@@ -712,75 +694,6 @@ fn ingest_claude_team_config_from_watch_batch(
     Ok(())
 }
 
-fn config_document_digest(path: &Path) -> Result<u64, AtmError> {
-    let bytes = fs::read(path).map_err(|error| {
-        AtmError::daemon_unavailable(format!(
-            "reconcile runtime could not read Claude config digest from {}",
-            path.display()
-        ))
-        .with_recovery(
-            "Verify the Claude team config path remains readable before retrying watcher-owned ingest.",
-        )
-        .with_source(error)
-    })?;
-    let mut hasher = DefaultHasher::new();
-    bytes.hash(&mut hasher);
-    Ok(hasher.finish())
-}
-
-#[cfg_attr(not(test), allow(dead_code))]
-fn remember_projected_config_write(
-    journal: &ProjectionWriteJournal,
-    path: &Path,
-    digest: u64,
-) -> Result<(), AtmError> {
-    let key = ProjectionWriteJournalKey {
-        path: canonical_projection_path(path),
-        digest,
-    };
-    let mut entries = journal.lock().map_err(|_| {
-        AtmError::daemon_unavailable("reconcile projection-write journal lock poisoned")
-            .with_recovery(
-                "Restart atm-daemon; the reconcile projection suppression journal can no longer be trusted.",
-            )
-    })?;
-    if entries.len() >= MAX_PROJECTION_WRITE_JOURNAL_ENTRIES && !entries.contains_key(&key) {
-        return Ok(());
-    }
-    *entries.entry(key).or_insert(0) += 1;
-    Ok(())
-}
-
-fn consume_projected_config_write(
-    journal: &ProjectionWriteJournal,
-    path: &Path,
-    digest: u64,
-) -> Result<bool, AtmError> {
-    let key = ProjectionWriteJournalKey {
-        path: canonical_projection_path(path),
-        digest,
-    };
-    let mut entries = journal.lock().map_err(|_| {
-        AtmError::daemon_unavailable("reconcile projection-write journal lock poisoned")
-            .with_recovery(
-                "Restart atm-daemon; the reconcile projection suppression journal can no longer be trusted.",
-            )
-    })?;
-    let Some(count) = entries.get_mut(&key) else {
-        return Ok(false);
-    };
-    if *count <= 1 {
-        entries.remove(&key);
-    } else {
-        *count -= 1;
-    }
-    Ok(true)
-}
-
-fn canonical_projection_path(path: &Path) -> PathBuf {
-    fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
-}
-
 impl ReconcileRuntimeInner {
     fn status_snapshot(&self) -> Arc<ReconcileRuntimeStatus> {
         self.status.load_full()
@@ -1020,66 +933,6 @@ fn execute_reconcile_request(
         })?;
     }
     Ok(execution.result)
-}
-
-fn should_emit_reconcile_notification(
-    worker_state: &mut ReconcileWorkerState,
-    request: &ReconcileRequest,
-    current_fingerprints: Option<HashSet<NotificationFingerprint>>,
-) -> bool {
-    let Some(mut current_fingerprints) = current_fingerprints else {
-        return true;
-    };
-
-    let key = ReconcileKey::from_request(request);
-    if current_fingerprints.len() > MAX_RECONCILE_FINGERPRINTS_PER_KEY {
-        let mut ordered = current_fingerprints.drain().collect::<Vec<_>>();
-        ordered.sort();
-        let dropped = ordered
-            .len()
-            .saturating_sub(MAX_RECONCILE_FINGERPRINTS_PER_KEY);
-        ordered.truncate(MAX_RECONCILE_FINGERPRINTS_PER_KEY);
-        current_fingerprints.extend(ordered);
-        tracing::warn!(
-            subsystem = "reconcile",
-            action = "fingerprint_truncate",
-            outcome = "cap_exceeded",
-            team = %key.team,
-            agent = %key.agent,
-            retained = MAX_RECONCILE_FINGERPRINTS_PER_KEY,
-            dropped,
-            "reconcile notification fingerprint set exceeded the per-key bounded cap; truncating deterministically"
-        );
-    }
-
-    let fingerprints = &mut worker_state.notification_fingerprints;
-    let changed = fingerprints
-        .entries
-        .get(&key)
-        .map(|previous| previous != &current_fingerprints)
-        .unwrap_or(true);
-    let is_new_key = !fingerprints.entries.contains_key(&key);
-    if is_new_key && fingerprints.entries.len() >= MAX_RECONCILE_FINGERPRINT_KEYS {
-        while let Some(evicted_key) = fingerprints.order.pop_front() {
-            if fingerprints.entries.remove(&evicted_key).is_some() {
-                tracing::warn!(
-                    subsystem = "reconcile",
-                    action = "fingerprint_evict",
-                    outcome = "cap_exceeded",
-                    team = %evicted_key.team,
-                    agent = %evicted_key.agent,
-                    cap = MAX_RECONCILE_FINGERPRINT_KEYS,
-                    "evicted oldest reconcile notification fingerprint entry after reaching the bounded cap"
-                );
-                break;
-            }
-        }
-    }
-    if is_new_key {
-        fingerprints.order.push_back(key.clone());
-    }
-    fingerprints.entries.insert(key, current_fingerprints);
-    changed
 }
 
 fn record_reconcile_outcome(
