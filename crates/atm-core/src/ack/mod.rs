@@ -143,14 +143,12 @@ fn ack_mail_with_runtime_impl<
         return Err(AtmError::team_not_found(&team));
     }
 
-    let team_config = runtime.load_team_config(&team_dir)?;
-    if !team_config
-        .members
-        .iter()
-        .any(|member| member.name == actor.as_str())
-    {
-        return Err(AtmError::agent_not_found(&actor, &team));
-    }
+    ensure_roster_member_exists(
+        runtime,
+        &team,
+        &actor,
+        "Repair or reload the ATM roster before retrying `atm ack`.",
+    )?;
     ack_mail_with_runtime_sqlite(
         request,
         observability,
@@ -356,16 +354,27 @@ fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         return Err(AtmError::team_not_found(&reply_team));
     }
 
-    let reply_team_config = runtime.load_team_config(&reply_team_dir)?;
-    if !reply_team_config
-        .members
-        .iter()
-        .any(|member| member.name == reply_agent.as_str())
-    {
-        return Err(AtmError::agent_not_found(&reply_agent, &reply_team));
-    }
+    ensure_roster_member_exists(
+        runtime,
+        &reply_team,
+        &reply_agent,
+        "Repair or reload the ATM roster before retrying the acknowledgement reply.",
+    )?;
 
     Ok(ReplyTarget::new(reply_agent, reply_team))
+}
+
+fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
+    runtime: &R,
+    team: &TeamName,
+    agent: &AgentName,
+    recovery: &str,
+) -> Result<(), AtmError> {
+    if runtime.load_roster_member(team, agent)?.is_none() {
+        return Err(AtmError::agent_not_found(agent, team).with_recovery(recovery));
+    }
+
+    Ok(())
 }
 
 fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
@@ -629,9 +638,10 @@ mod tests {
     use crate::send::{DeliveryPersistenceDisposition, DeliveryPersistenceResult, WarningEntry};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
-    use crate::test_support::TEST_TEAM;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use crate::workflow::WorkflowStateFile;
+    use serde_json::Map;
 
     struct AckRuntime {
         appended_messages: Mutex<Vec<MessageEnvelope>>,
@@ -646,9 +656,29 @@ mod tests {
         }
     }
 
+    struct AckRosterRuntime {
+        team_dir: PathBuf,
+        roster_members: Vec<(TeamName, AgentName)>,
+        inbox_path: PathBuf,
+        source_row: boundary::MailStoreMailboxMetadataRow,
+        source_record: boundary::MailStoreMessageRecord,
+        appended_messages: Mutex<Vec<MessageEnvelope>>,
+    }
+
     impl crate::boundary::sealed::Sealed for AckRuntime {}
 
     impl crate::boundary::NotificationSink for AckRuntime {
+        fn deliver(
+            &self,
+            _event: crate::protocol::NotificationEvent,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
+        }
+    }
+
+    impl crate::boundary::sealed::Sealed for AckRosterRuntime {}
+
+    impl crate::boundary::NotificationSink for AckRosterRuntime {
         fn deliver(
             &self,
             _event: crate::protocol::NotificationEvent,
@@ -757,6 +787,13 @@ mod tests {
             Ok(None)
         }
 
+        fn load_team_roster(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<boundary::RosterMemberRecord>, crate::error::AtmError> {
+            Ok(Vec::new())
+        }
+
         fn commit_workflow_state<T, I, F>(
             &self,
             _home_dir: &Path,
@@ -771,6 +808,184 @@ mod tests {
             F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
         {
             unreachable!("ack writer-path test does not commit workflow state")
+        }
+    }
+
+    impl RetainedServiceRuntime for AckRosterRuntime {
+        fn load_config(
+            &self,
+            _current_dir: &Path,
+        ) -> Result<Option<crate::config::AtmConfig>, crate::error::AtmError> {
+            Ok(Some(crate::config::AtmConfig {
+                default_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+                ..Default::default()
+            }))
+        }
+
+        fn load_team_config(&self, _team_dir: &Path) -> Result<TeamConfig, crate::error::AtmError> {
+            unreachable!("ack roster-gate tests must not load team config")
+        }
+
+        fn team_dir(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+        ) -> Result<PathBuf, crate::error::AtmError> {
+            Ok(self.team_dir.clone())
+        }
+
+        fn inbox_path(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, crate::error::AtmError> {
+            Ok(self.inbox_path.clone())
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, crate::error::AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_millis(1),
+            }
+        }
+
+        fn rebuild_compat_inbox_projection(
+            &self,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack roster-gate tests do not rebuild compatibility inboxes")
+        }
+
+        fn append_compat_inbox_message(
+            &self,
+            _inbox_path: &Path,
+            message: &MessageEnvelope,
+        ) -> Result<(), crate::error::AtmError> {
+            self.appended_messages
+                .lock()
+                .expect("append captures lock")
+                .push(message.clone());
+            Ok(())
+        }
+
+        fn append_compat_inbox_message_set(
+            &self,
+            _inbox_path: &Path,
+            _mode: ClaudeCompatibilityDeliveryMode,
+            _messages: &[MessageEnvelope],
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack roster-gate tests do not append compatibility inbox message sets")
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _messages: &[MessageEnvelope],
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack roster-gate tests do not route non-Claude delivery")
+        }
+
+        fn load_roster_member(
+            &self,
+            team: &TeamName,
+            agent: &AgentName,
+        ) -> Result<Option<boundary::RosterMemberRecord>, crate::error::AtmError> {
+            Ok(self
+                .roster_members
+                .iter()
+                .any(|(member_team, member_agent)| member_team == team && member_agent == agent)
+                .then(|| boundary::RosterMemberRecord {
+                    team_name: team.clone(),
+                    agent_name: agent.clone(),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: String::new(),
+                    model: String::new(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                }))
+        }
+
+        fn load_team_roster(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<boundary::RosterMemberRecord>, crate::error::AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            body: F,
+        ) -> Result<T, crate::error::AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
+        {
+            let mut workflow = WorkflowStateFile::default();
+            let (result, _changed) = body(&mut workflow)?;
+            Ok(result)
+        }
+    }
+
+    impl RetainedMailboxRuntime for AckRosterRuntime {
+        fn query_mailbox_metadata_rows(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _limit: Option<usize>,
+        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, crate::error::AtmError> {
+            Ok(vec![self.source_row.clone()])
+        }
+
+        fn load_message_record(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            message_key: &MessageKey,
+        ) -> Result<Option<boundary::MailStoreMessageRecord>, crate::error::AtmError> {
+            Ok((message_key == &self.source_row.message_key).then(|| self.source_record.clone()))
+        }
+
+        fn persist_message_record(
+            &self,
+            _record: boundary::MailStoreMessageRecord,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
+        }
+
+        fn persist_message_state(
+            &self,
+            _state: boundary::MailMessageState,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
         }
     }
 
@@ -966,5 +1181,148 @@ mod tests {
         assert_eq!(appended_messages[0], reply_message);
         assert_eq!(outcome.reply_message_id, reply_message_id);
         assert_eq!(outcome.reply_text, reply_text);
+    }
+
+    #[test]
+    fn ack_mail_rejects_actor_missing_from_atm_roster() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let runtime = AckRosterRuntime {
+            team_dir,
+            roster_members: Vec::new(),
+            inbox_path: tempdir.path().join("reply.jsonl"),
+            source_row: boundary::MailStoreMailboxMetadataRow {
+                message_key: MessageKey::new("atm:source").expect("message key"),
+                message_id: Some(AtmMessageId::new()),
+                parent_message_id: None,
+                thread_mode: None,
+                from_agent: TEST_SENDER.parse().expect("agent"),
+                summary: Some("summary".to_string()),
+                message_at: IsoTimestamp::now(),
+                read: false,
+                pending_ack: true,
+                acknowledged_at: None,
+                expires_at: None,
+                task_id: None,
+            },
+            source_record: boundary::MailStoreMessageRecord {
+                team: TEST_TEAM.parse().expect("team"),
+                agent: TEST_SENDER.parse().expect("agent"),
+                message_key: MessageKey::new("atm:source").expect("message key"),
+                envelope: MessageEnvelope {
+                    from: TEST_SENDER.parse().expect("agent"),
+                    text: "source".to_string(),
+                    timestamp: IsoTimestamp::now(),
+                    read: false,
+                    source_team: Some(TEST_TEAM.parse().expect("team")),
+                    summary: Some("summary".to_string()),
+                    message_id: Some(AtmMessageId::new()),
+                    pending_ack_at: Some(IsoTimestamp::now()),
+                    acknowledged_at: None,
+                    acknowledges_message_id: None,
+                    parent_message_id: None,
+                    thread_mode: None,
+                    expires_at: None,
+                    task_id: None,
+                    extra: Map::new(),
+                },
+            },
+            appended_messages: Mutex::new(Vec::new()),
+        };
+
+        let error = super::ack_mail_with_runtime_impl(
+            crate::ack::AckRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                current_dir: tempdir.path().to_path_buf(),
+                actor_override: Some(TEST_SENDER.parse().expect("agent")),
+                team_override: Some(TEST_TEAM.parse().expect("team")),
+                message_id: AtmMessageId::new(),
+                reply_body: "ack".to_string(),
+            },
+            &NullObservability,
+            &runtime,
+        )
+        .expect_err("missing ATM roster member should fail");
+
+        assert!(error.is_agent_not_found(), "{error:?}");
+    }
+
+    #[test]
+    fn ack_mail_uses_atm_roster_truth_for_valid_actor() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let team = TEST_TEAM.parse::<TeamName>().expect("team");
+        let actor = TEST_SENDER.parse::<AgentName>().expect("agent");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(team_dir.join("inboxes")).expect("team inbox dir");
+        let source_message_id = AtmMessageId::new();
+        let source_key = MessageKey::new(format!("atm:{source_message_id}")).expect("message key");
+        let runtime = AckRosterRuntime {
+            team_dir,
+            roster_members: vec![(team.clone(), actor.clone())],
+            inbox_path: tempdir.path().join("reply.jsonl"),
+            source_row: boundary::MailStoreMailboxMetadataRow {
+                message_key: source_key.clone(),
+                message_id: Some(source_message_id),
+                parent_message_id: None,
+                thread_mode: None,
+                from_agent: actor.clone(),
+                summary: Some("summary".to_string()),
+                message_at: IsoTimestamp::now(),
+                read: false,
+                pending_ack: true,
+                acknowledged_at: None,
+                expires_at: None,
+                task_id: None,
+            },
+            source_record: boundary::MailStoreMessageRecord {
+                team: team.clone(),
+                agent: actor.clone(),
+                message_key: source_key,
+                envelope: MessageEnvelope {
+                    from: actor.clone(),
+                    text: "source".to_string(),
+                    timestamp: IsoTimestamp::now(),
+                    read: false,
+                    source_team: Some(team.clone()),
+                    summary: Some("summary".to_string()),
+                    message_id: Some(source_message_id),
+                    pending_ack_at: Some(IsoTimestamp::now()),
+                    acknowledged_at: None,
+                    acknowledges_message_id: None,
+                    parent_message_id: None,
+                    thread_mode: None,
+                    expires_at: None,
+                    task_id: None,
+                    extra: Map::new(),
+                },
+            },
+            appended_messages: Mutex::new(Vec::new()),
+        };
+
+        let outcome = super::ack_mail_with_runtime_impl(
+            crate::ack::AckRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                current_dir: tempdir.path().to_path_buf(),
+                actor_override: Some(actor.clone()),
+                team_override: Some(team.clone()),
+                message_id: source_message_id,
+                reply_body: "ack".to_string(),
+            },
+            &NullObservability,
+            &runtime,
+        )
+        .expect("valid ATM roster member should ack successfully");
+
+        assert_eq!(outcome.team, team);
+        assert_eq!(outcome.agent, actor);
+        assert_eq!(outcome.message_id, source_message_id);
+        assert!(
+            !runtime
+                .appended_messages
+                .lock()
+                .expect("append captures lock")
+                .is_empty()
+        );
     }
 }

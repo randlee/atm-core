@@ -813,6 +813,7 @@ mod tests {
     use atm_core::types::{
         AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TaskId, TeamName,
     };
+    use serial_test::serial;
     use std::sync::OnceLock;
     use tempfile::TempDir;
 
@@ -858,6 +859,30 @@ mod tests {
             serde_json::to_vec_pretty(&config).expect("encode team config"),
         )
         .expect("write config.json");
+    }
+
+    fn seed_roster_member(
+        assembly: &SqliteBoundaryAssembly,
+        team_name: &TeamName,
+        agent_name: &AgentName,
+    ) {
+        assembly
+            .roster_store()
+            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
+                team: team_name.clone(),
+                members: vec![boundary::RosterMemberRecord {
+                    team_name: team_name.clone(),
+                    agent_name: agent_name.clone(),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: String::new(),
+                    model: String::new(),
+                    recipient_pane_id: None,
+                    metadata_json: serde_json::Map::new(),
+                }],
+                source: Some(boundary::ReplaySource::new("sqlite-test").expect("replay source")),
+            })
+            .expect("replace roster");
     }
 
     fn sqlite_runtime(assembly: &SqliteBoundaryAssembly) -> LocalServiceRuntime {
@@ -987,6 +1012,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record: expired })
             .expect("upsert expired");
+        seed_roster_member(&assembly, &team(), &agent());
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(tempdir.path(), &team(), &[AgentMember::with_name(agent())]);
@@ -1038,6 +1064,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
+        seed_roster_member(&assembly, &team(), &agent());
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(tempdir.path(), &team(), &[AgentMember::with_name(agent())]);
@@ -1072,6 +1099,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn list_mail_entrypoint_uses_installed_sqlite_runtime_without_inbox_files() {
         install_entrypoint_runtime();
         let assembly = entrypoint_assembly();
@@ -1116,6 +1144,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
+        seed_roster_member(assembly, &team_name, &agent_name);
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
@@ -1145,6 +1174,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn read_mail_entrypoint_uses_installed_sqlite_runtime_without_source_files() {
         install_entrypoint_runtime();
         let assembly = entrypoint_assembly();
@@ -1190,6 +1220,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
+        seed_roster_member(assembly, &team_name, &agent_name);
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(

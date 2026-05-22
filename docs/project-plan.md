@@ -3779,8 +3779,14 @@ Status summary:
   land on `develop` and `Phase Z` to begin.
 - `Phase Ye` is complete on the current `develop` baseline and does not reopen
   the `Phase Z` rollout gate.
-- `Phase Z` is the next execution line for real-binary smoke, `atm-dev`
+- `Phase Z` is the active execution line for real-binary smoke, `atm-dev`
   canary/dogfood, and final release sign-off.
+- `Z.1` smoke bring-up is complete at `70f4fa7f` with verdict `FAIL`; two
+  blocking findings are promoted to `Z.2`, which is now the next-unused sprint.
+- the `Z1-F001` analysis also reopened a broader follow-on line for roster
+  truth, watcher-owned Claude config ingress, member metadata ownership, and
+  backup / restore automation; that work is now split into `Z.5` through
+  `Z.10` and must close before `Z.3` canary begins.
 
 Planning branch:
 - `plan/phase-Z`
@@ -3792,6 +3798,8 @@ Goal:
 - validate the first daemon + SQLite mail-SSOT release in real executable use
 - run the first real-binary smoke matrix on the accepted `Phase Y` line
 - close smoke findings before broader `atm-dev` dogfood begins
+- close the `config.json` / ATM roster / restore ownership gaps discovered
+  during smoke before broader dogfood begins
 - produce a final release-ready / not-ready verdict with evidence
 
 Execution shape:
@@ -3799,14 +3807,44 @@ Execution shape:
   - branch: `feature/pZ-s1-smoke-bring-up`
 - `Z.2` fix and revalidate
   - branch: `feature/pZ-s2-fix-and-revalidate`
+- `Z.5` runtime roster truth cutover
+  - branch: `feature/pZ-s5-runtime-roster-truth-cutover`
+- `Z.6` Claude send semantics and immutable runtime roster view
+  - branch: `feature/pZ-s6-claude-send-semantics-and-runtime-roster-view`
+- `Z.7` config-ingress boundary narrowing and static gates
+  - branch: `feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates`
+- `Z.8` watcher-owned Claude config ingest
+  - branch: `feature/pZ-s8-watcher-owned-claude-config-ingest`
+- `Z.9` team-admin roster authority and member metadata
+  - branch: `feature/pZ-s9-team-admin-roster-authority-and-member-metadata`
+- `Z.10` team backup / restore automation and config projection
+  - branch: `feature/pZ-s10-team-backup-restore-automation-and-config-projection`
 - `Z.3` `atm-dev` canary and dogfood
   - branch: `feature/pZ-s3-atm-dev-canary-and-dogfood`
 - `Z.4` final fixes and release sign-off
   - branch: `feature/pZ-s4-final-fixes-and-release-sign-off`
 
+Phase Z sprint ledger:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `Z.1` | `complete` | `feature/pZ-s1-smoke-bring-up` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.2` | `planned` | `feature/pZ-s2-fix-and-revalidate` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.5` | `complete` | `feature/pZ-s5-runtime-roster-truth-cutover` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.6` | `planned` | `feature/pZ-s6-claude-send-semantics-and-runtime-roster-view` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md`, `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md` |
+| `Z.7` | `planned` | `feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md`, `.just/allowlists/scb_config_allowlist.toml`, `.just/fixtures/scb_config_known_bad.rs` |
+| `Z.8` | `planned` | `feature/pZ-s8-watcher-owned-claude-config-ingest` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.9` | `planned` | `feature/pZ-s9-team-admin-roster-authority-and-member-metadata` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.10` | `planned` | `feature/pZ-s10-team-backup-restore-automation-and-config-projection` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.3` | `planned` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.4` | `planned` | `feature/pZ-s4-final-fixes-and-release-sign-off` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md` |
+
 Immediate planning outputs:
 - `docs/plan-phase-Z.md`
+- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `docs/phase-Z/cli-json-io-audit.md`
+- `docs/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/smoke-checklist.md`
 - `docs/phase-Z/smoke-findings-ledger.md`
 - `docs/phase-Z/canary-dogfood-checklist.md`
@@ -3815,6 +3853,12 @@ Immediate planning outputs:
 - `docs/phase-Z/readiness.md`
 - `docs/phase-Z/sprint-Z1.md`
 - `docs/phase-Z/sprint-Z2.md`
+- `docs/phase-Z/sprint-Z5.md`
+- `docs/phase-Z/sprint-Z6.md`
+- `docs/phase-Z/sprint-Z7.md`
+- `docs/phase-Z/sprint-Z8.md`
+- `docs/phase-Z/sprint-Z9.md`
+- `docs/phase-Z/sprint-Z10.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
 
@@ -3825,3 +3869,5 @@ Acceptance / Phase Entry Gate:
 - `Phase Ye` must remain closed and must not be used to reopen rollout scope
 - `Phase Z` sprint execution must validate on the real built executables, not
   only unit or harness tests
+- `Z.3` canary execution must not begin until `Z.5` through `Z.10` close on the
+  accepted `integrate/phase-Z` line

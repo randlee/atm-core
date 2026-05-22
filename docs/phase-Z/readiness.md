@@ -26,8 +26,9 @@ The final section of this document must record:
 - `integrate_phase_z_candidate`
 - `release_checklist_result`
 - `release_verdict`
-- `authorized_by` (explicit named authority such as `team-lead` or user
-  approval)
+- `authorized_by` (explicit named authority limited to `team-lead` by ATM
+  identity or explicit user approval recorded by name, plus the approving ATM
+  message id or equivalent named artifact)
 - `notes`
 
 The final release verdict must remain `PENDING` until:
@@ -44,7 +45,13 @@ The final release verdict must remain `PENDING` until:
 | --- | --- | --- | --- | --- |
 | Z.1 | `70f4fa7f` | `FAIL` | `complete` | smoke checklist frozen; two blocking findings promoted to `Z.2`; cargo test --workspace PASS (CI: macOS/Ubuntu/Windows); git diff --check PASS (CI: Format check) |
 | Z.2 | `PENDING` | `PENDING` | `not started` | awaits `Z.1` closure |
-| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.2` closure |
+| Z.5 | `dc07795a` | `PASS` | `complete` | retained command membership checks now use ATM roster truth only; doctor drift warnings compare Claude file members against ATM roster truth; `cargo test --workspace` PASS; `cargo fmt --all --check` PASS; production grep gate leaves only doctor compare-only and test-only `load_team_config(...)` matches; `ack_mail_uses_atm_roster_truth_for_valid_actor` PASS |
+| Z.6 | `PENDING` | `PENDING` | `not started` | awaits `Z.5` closure |
+| Z.7 | `PENDING` | `PENDING` | `not started` | awaits `Z.6` closure |
+| Z.8 | `PENDING` | `PENDING` | `not started` | awaits `Z.7` closure |
+| Z.9 | `PENDING` | `PENDING` | `not started` | awaits `Z.8` closure |
+| Z.10 | `PENDING` | `PENDING` | `not started` | awaits `Z.9` closure |
+| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.10` closure |
 | Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure |
 
 Final release verdict:

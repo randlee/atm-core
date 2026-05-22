@@ -171,6 +171,15 @@ Purpose:
 
 Notes:
 - This is one of the main explicit corrections to earlier boundary leakage.
+- canonical ATM roster truth does not live here; normal retained runtime
+  membership checks must use `RosterStore` / `ClaudeCodeTeamRoster` instead
+- approved surviving callers after the `Phase Z` follow-on line are:
+  - watcher / reconcile ingest
+  - `doctor` comparison
+  - narrow recreated-shell preservation reads during restore
+- generic retained command/runtime `load_team_config(...)` lookup behavior is a
+  boundary violation and should be mechanically gated by repository-local lint
+  / later `sc-lint` extraction
 
 ## InboxIngress
 
