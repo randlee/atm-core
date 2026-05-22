@@ -3430,9 +3430,12 @@ mail correctness.
   - `SCB-RUNTIME-002` must reject production `wait_timeout*` calls whose
     `WaitTimeoutResult` is discarded or stored only in underscore bindings
   - `SCB-CONFIG-001` must reject production direct team `config.json` roster
-    reads outside the explicit allowlist
+    reads outside the explicit allowlist; during `Z.7` the only approved
+    survivor is
+    `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` with
+    `sunset_sprint = "Z.8"`
   - `SCB-CONFIG-002` must reject generic runtime `load_team_config(...)`
-    helper use from retained command/runtime paths
+    helper use from retained command/runtime paths and boundary adapter chains
   - `SCB-CONFIG-003` must reject Claude send paths that consult `config.json`
     before the durable ATM write has succeeded
   - bare `Condvar::wait(...)` in non-test production code must fail a runtime

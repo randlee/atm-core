@@ -218,6 +218,9 @@ Active postmortem rule families:
   - `SCB-CONFIG-002` generic runtime `load_team_config(...)` helper use from
     retained command/runtime paths
   - `SCB-CONFIG-003` Claude send pre-write `config.json` membership gates
+  - `Z.7` keeps the rule family machine-runnable by checking in both the
+    explicit allowlist and a known-bad fixture self-test for
+    `just lint boundaries`
 - ATM-local repository rules:
   - duplicate semantic role-name literals in non-test Rust code
   - targeted same-host daemon test unbounded-wait checks

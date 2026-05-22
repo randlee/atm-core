@@ -68,6 +68,14 @@ When a new Claude Code team is ingested, or when the watcher sees a
 reconcile lane imports the resulting member state into canonical ATM roster
 truth.
 
+Until `Z.8` lands, one temporary startup-only bridge is allowed:
+
+- `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
+
+That helper may seed canonical ATM roster state only when the roster is empty
+at daemon startup. It is allowlisted explicitly, proven to no-op when roster
+state already exists, and deleted in `Z.8`.
+
 ## Accepted Team-Admin Behaviors
 
 ### `atm members` / `atm teams`
@@ -136,7 +144,8 @@ path inventory, sprint ownership, and exact delete / rewrite expectations.
 
 - `Z.5` retained runtime command cutover to ATM roster truth
 - `Z.6` Claude send semantics and immutable `ClaudeCodeTeamRoster`
-- `Z.7` config-ingress boundary narrowing and static gate definition
+- `Z.7` config-ingress boundary narrowing, startup-only allowlist, and static
+  gate definition
 - `Z.8` watcher-owned config ingest
 - `Z.9` team-admin roster authority and canonical member metadata
 - `Z.10` backup / restore automation and config projection

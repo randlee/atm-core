@@ -62,6 +62,26 @@ FORBIDDEN_EDGE_RE = re.compile(
 PUBLIC_TYPE_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+(?:struct|enum|type)\s+{name}\b"
 PUBLIC_REEXPORT_TEMPLATE = r"^\s*pub(?:\([^)]*\))?\s+use\b.*\b{name}\b"
 PUBLIC_FUNCTION_RE = re.compile(r"^\s*pub(?:\([^)]*\))?\s+fn\s+[A-Za-z_][A-Za-z0-9_]*\b")
+SCB_CONFIG_ALLOWLIST_PATH = Path(".just/allowlists/scb_config_allowlist.toml")
+SCB_CONFIG_FIXTURE_PATH = Path(".just/fixtures/scb_config_known_bad.rs")
+SCB_CONFIG_DIRECT_PATTERNS = ("config::load_team_config(", "load_claude_team_config_document(")
+SCB_CONFIG_GENERIC_HELPER_PATTERNS = (
+    "fn load_team_config(",
+    "crate::boundary_support::load_team_config(",
+    "direct_boundaries::load_team_config(",
+    "atm_core::direct_boundaries::load_team_config(",
+)
+SCB_CONFIG_SEND_PATTERNS = (
+    "config::load_team_config(",
+    "load_claude_team_config_document(",
+    ".load_team_config(",
+)
+SCB_CONFIG_BOUNDARY_FILES = (
+    Path("crates/atm-core/src/boundary_support.rs"),
+    Path("crates/atm-core/src/direct_boundaries.rs"),
+    Path("crates/atm-daemon/src/boundary_adapters.rs"),
+    Path("crates/atm-daemon/src/direct_boundaries.rs"),
+)
 
 
 @dataclass(frozen=True)
@@ -70,6 +90,8 @@ class BoundaryViolation:
     message: str
 
     def render(self) -> str:
+        if not self.message:
+            return self.location
         return f"{self.location}: {self.message}"
 
 
@@ -143,6 +165,15 @@ class ManifestSectionRule:
     dependency_package: str
     allowed_sections: tuple[str, ...]
     message: str
+
+
+@dataclass(frozen=True)
+class ScbConfigAllowlistEntry:
+    rule: str
+    path: Path
+    symbol: str
+    why: str
+    sunset_sprint: str
 
 
 def dependency_sections(manifest: dict) -> list[tuple[str, dict]]:
@@ -327,6 +358,83 @@ def tomllib_load(path: Path) -> dict:
     import tomllib
 
     return tomllib.loads(path.read_text(encoding="utf-8"))
+
+
+def scb_config_allowlist(repo_root: Path) -> list[ScbConfigAllowlistEntry]:
+    allowlist_path = repo_root / SCB_CONFIG_ALLOWLIST_PATH
+    if not allowlist_path.exists():
+        raise SystemExit(f"[boundaries] missing required allowlist: {SCB_CONFIG_ALLOWLIST_PATH.as_posix()}")
+    data = tomllib_load(allowlist_path)
+    raw_entries = data.get("allow", [])
+    if not isinstance(raw_entries, list):
+        raise SystemExit("[boundaries.allow] must be an array of tables")
+
+    entries: list[ScbConfigAllowlistEntry] = []
+    for index, raw_entry in enumerate(raw_entries):
+        if not isinstance(raw_entry, dict):
+            raise SystemExit(f"[boundaries.allow][{index}] must be a TOML table")
+        required = ("rule", "path", "symbol", "why", "sunset_sprint")
+        for field in required:
+            value = raw_entry.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise SystemExit(
+                    f"[boundaries.allow][{index}].{field} must be a non-empty string"
+                )
+        entries.append(
+            ScbConfigAllowlistEntry(
+                rule=raw_entry["rule"],
+                path=Path(raw_entry["path"]),
+                symbol=raw_entry["symbol"],
+                why=raw_entry["why"],
+                sunset_sprint=raw_entry["sunset_sprint"],
+            )
+        )
+    return entries
+
+
+def enclosing_function_name(lines: list[str], line_number: int) -> str | None:
+    for index in range(line_number - 1, -1, -1):
+        line = lines[index].strip()
+        match = re.match(r"(?:pub(?:\([^)]*\))?\s+)?fn\s+([A-Za-z_][A-Za-z0-9_]*)\s*\(", line)
+        if match is not None:
+            return match.group(1)
+    return None
+
+
+def is_allowlisted_config_violation(
+    *,
+    entries: list[ScbConfigAllowlistEntry],
+    rule: str,
+    rel_path: Path,
+    symbol: str | None,
+) -> bool:
+    for entry in entries:
+        if entry.rule != rule:
+            continue
+        if entry.path != rel_path:
+            continue
+        if symbol is None or entry.symbol != symbol:
+            continue
+        return True
+    return False
+
+
+def scb_config_fixture_violation(
+    violations: list[BoundaryViolation],
+    expected_rules: set[str],
+) -> BoundaryViolation | None:
+    observed_rules = {
+        violation.location.split(" ", 1)[0]
+        for violation in violations
+        if violation.location.startswith("SCB-CONFIG-")
+    }
+    missing = sorted(expected_rules - observed_rules)
+    if not missing:
+        return None
+    return BoundaryViolation(
+        f"{SCB_CONFIG_FIXTURE_PATH.as_posix()}: fixture self-test did not reject {', '.join(missing)}",
+        "",
+    )
 
 
 def yaml_scalar(value: str) -> object:
@@ -1198,6 +1306,59 @@ def collect_special_case_violations(repo_root: Path) -> list[BoundaryViolation]:
     return violations
 
 
+def collect_scb_config_rule_violations(
+    repo_root: Path,
+    source_paths: list[Path],
+) -> list[BoundaryViolation]:
+    violations: list[BoundaryViolation] = []
+    allowlist = scb_config_allowlist(repo_root)
+
+    for source_path in source_paths:
+        rel_path = source_path.relative_to(repo_root)
+        rel_source = rel_path.as_posix()
+        lines = source_path.read_text(encoding="utf-8").splitlines()
+        is_send_path = "crates/atm-core/src/send/" in rel_source or rel_path == SCB_CONFIG_FIXTURE_PATH
+        is_boundary_file = rel_path in SCB_CONFIG_BOUNDARY_FILES or rel_path == SCB_CONFIG_FIXTURE_PATH
+
+        for line_number, line in enumerate(lines, start=1):
+            if is_comment_line(line):
+                continue
+            symbol = enclosing_function_name(lines, line_number)
+            stripped = line.strip()
+
+            if any(pattern in stripped for pattern in SCB_CONFIG_DIRECT_PATTERNS):
+                if not is_allowlisted_config_violation(
+                    entries=allowlist,
+                    rule="SCB-CONFIG-001",
+                    rel_path=rel_path,
+                    symbol=symbol,
+                ):
+                    violations.append(
+                        BoundaryViolation(
+                            f"SCB-CONFIG-001 {rel_source}:{line_number} direct config.json roster read outside the explicit allowlist",
+                            "",
+                        )
+                    )
+
+            if is_boundary_file and any(pattern in stripped for pattern in SCB_CONFIG_GENERIC_HELPER_PATTERNS):
+                violations.append(
+                    BoundaryViolation(
+                        f"SCB-CONFIG-002 {rel_source}:{line_number} generic load_team_config helper surface is forbidden",
+                        "",
+                    )
+                )
+
+            if is_send_path and any(pattern in stripped for pattern in SCB_CONFIG_SEND_PATTERNS):
+                violations.append(
+                    BoundaryViolation(
+                        f"SCB-CONFIG-003 {rel_source}:{line_number} Claude send path must not consult config.json before durable ATM write completion",
+                        "",
+                    )
+                )
+
+    return violations
+
+
 def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     records, parse_violations = parse_boundary_records(repo_root)
     violations: list[BoundaryViolation] = []
@@ -1210,6 +1371,23 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
+    violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
+    fixture_path = repo_root / SCB_CONFIG_FIXTURE_PATH
+    if not fixture_path.exists():
+        violations.append(
+            BoundaryViolation(
+                SCB_CONFIG_FIXTURE_PATH.as_posix(),
+                "missing required SCB-CONFIG known-bad fixture",
+            )
+        )
+    else:
+        fixture_violations = collect_scb_config_rule_violations(repo_root, [fixture_path])
+        fixture_failure = scb_config_fixture_violation(
+            fixture_violations,
+            {"SCB-CONFIG-001", "SCB-CONFIG-002", "SCB-CONFIG-003"},
+        )
+        if fixture_failure is not None:
+            violations.append(fixture_failure)
     return dedupe_violations(violations)
 
 

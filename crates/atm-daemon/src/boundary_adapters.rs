@@ -1,13 +1,13 @@
 use atm_core::{
     boundary::{
-        self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
-        ConfigTeamLoadResponse, InboxExport, InboxExportAppendMessageSetRequest,
-        InboxExportAppendMessageSetResponse, InboxExportRecordRequest, InboxExportRecordResponse,
-        InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxIngress,
-        InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
-        InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-        InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, ReconcileRequest,
-        ReconcileResult, WatchEventBatch, WatchSubscriptionRequest,
+        self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, InboxExport,
+        InboxExportAppendMessageSetRequest, InboxExportAppendMessageSetResponse,
+        InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
+        InboxExportReexportMessageResponse, InboxIngress, InboxIngressDiagnosticsRequest,
+        InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
+        InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest,
+        InboxIngressImportResponse, NotificationEvent, ReconcileRequest, ReconcileResult,
+        WatchEventBatch, WatchSubscriptionRequest,
     },
     error::AtmError,
 };
@@ -171,13 +171,6 @@ impl boundary::sealed::Sealed for DaemonConfigIngress {}
 impl ConfigIngress for DaemonConfigIngress {
     fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
         direct_boundaries::load_workspace_config(request)
-    }
-
-    fn load_team_config(
-        &self,
-        request: ConfigTeamLoadRequest,
-    ) -> Result<ConfigTeamLoadResponse, AtmError> {
-        direct_boundaries::load_team_config(request)
     }
 }
 

@@ -205,6 +205,7 @@ class LintBoundariesTests(unittest.TestCase):
             (crate_dir / "src/lib.rs").write_text("pub fn example() {}\n", encoding="utf-8")
         for doc_name in ("atm-core", "atm-rusqlite", "atm", "atm-daemon"):
             (repo_root / "docs" / doc_name).mkdir(parents=True)
+        self.write_scb_config_support(repo_root)
 
     def write_manifests(
         self,
@@ -356,6 +357,35 @@ atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
         target.mkdir(parents=True, exist_ok=True)
         (target / file_name).write_text(text, encoding="utf-8")
 
+    def write_scb_config_support(self, repo_root: Path) -> None:
+        (repo_root / ".just/allowlists").mkdir(parents=True, exist_ok=True)
+        (repo_root / ".just/fixtures").mkdir(parents=True, exist_ok=True)
+        (repo_root / ".just/allowlists/scb_config_allowlist.toml").write_text(
+            """\
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/boundary_support.rs"
+symbol = "hydrate_roster_from_team_config_once_at_startup_if_empty"
+why = "temporary startup-only roster hydration until watcher-owned ingest lands in Z.8"
+sunset_sprint = "Z.8"
+""",
+            encoding="utf-8",
+        )
+        (repo_root / ".just/fixtures/scb_config_known_bad.rs").write_text(
+            """\
+use crate::config;
+
+fn load_team_config(team_dir: &std::path::Path) {
+    let _ = config::load_team_config(team_dir);
+}
+
+fn send_bad(team_dir: &std::path::Path) {
+    let _ = load_team_config(team_dir);
+}
+""",
+            encoding="utf-8",
+        )
+
     def test_parse_simple_yaml_document_reads_nested_lists(self) -> None:
         document = textwrap.dedent(
             """\
@@ -371,6 +401,56 @@ atm-daemon = { path = "../atm-daemon", version = "1.1.2" }
         self.assertEqual(parsed["boundary_id"], "BOUNDARY-Test")
         self.assertEqual(parsed["dependencies"]["forbidden_edges"], ["atm -> atm-rusqlite"])
         self.assertEqual(parsed["status"]["state"], "planned")
+
+    def test_collect_boundary_violations_accepts_allowlisted_startup_helper(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_scb_config_support(repo_root)
+            (repo_root / "crates/atm-core/src/boundary_support.rs").write_text(
+                """\
+use crate::config;
+
+fn hydrate_roster_from_team_config_once_at_startup_if_empty(team_dir: &std::path::Path) {
+    let _ = config::load_team_config(team_dir);
+}
+""",
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertEqual(rendered, [])
+
+    def test_collect_boundary_violations_rejects_scb_config_rule_family(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_scb_config_support(repo_root)
+            (repo_root / "crates/atm-core/src/boundary_support.rs").write_text(
+                "fn load_team_config(team_dir: &std::path::Path) { let _ = team_dir; }\n",
+                encoding="utf-8",
+            )
+            send_dir = repo_root / "crates/atm-core/src/send"
+            send_dir.mkdir(parents=True, exist_ok=True)
+            (send_dir / "mod.rs").write_text(
+                """\
+use crate::config;
+
+fn send_bad(team_dir: &std::path::Path) {
+    let _ = config::load_team_config(team_dir);
+}
+""",
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertTrue(any(item.startswith("SCB-CONFIG-001 ") for item in rendered), rendered)
+            self.assertTrue(any(item.startswith("SCB-CONFIG-002 ") for item in rendered), rendered)
+            self.assertTrue(any(item.startswith("SCB-CONFIG-003 ") for item in rendered), rendered)
 
     def test_parse_boundary_records_accepts_planned_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

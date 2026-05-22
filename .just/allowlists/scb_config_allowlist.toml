@@ -1,0 +1,6 @@
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/boundary_support.rs"
+symbol = "hydrate_roster_from_team_config_once_at_startup_if_empty"
+why = "temporary startup-only roster hydration until watcher-owned ingest lands in Z.8"
+sunset_sprint = "Z.8"
