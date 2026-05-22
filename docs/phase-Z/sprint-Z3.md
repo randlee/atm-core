@@ -1,7 +1,7 @@
 ---
 id: Z.3
 title: `atm-dev` Canary And Dogfood
-status: complete
+status: planned
 branch: feature/pZ-s3-atm-dev-canary-and-dogfood
 worktree: ../atm-core-worktrees/feature/pZ-s3-atm-dev-canary-and-dogfood
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.3
 worktree: ../atm-core-worktrees/feature/pZ-s3-atm-dev-canary-and-dogfood
 branch: feature/pZ-s3-atm-dev-canary-and-dogfood
-status: complete
+status: planned
 estimated_scope: large
 ```
 
@@ -36,6 +36,8 @@ release sign-off.
 - `Z.2` complete
 - canary participants and reporting path are defined at sprint start and frozen
   before operator use begins
+- the canary participant list is approved by `team-lead` before the first
+  operator-use session
 
 ## Exact Targets
 
@@ -46,8 +48,9 @@ release sign-off.
 ## Deliverables
 
 - `docs/phase-Z/canary-dogfood-checklist.md`, containing the frozen
-  `atm-dev` canary participant list, the approved binary baseline under
-  evaluation, and the operator reporting path used during the sprint
+  `atm-dev` canary participant list for at least two `atm-dev` participants,
+  the approved binary baseline under evaluation, and the operator reporting
+  path used during the sprint
 - `docs/phase-Z/canary-findings-ledger.md` promoted to `Z.4`
 
 ## Required Work

@@ -23,3 +23,6 @@ Each finding entry must record:
 - only validated `Z.3` operator findings may enter this ledger
 - `Z.4` fixes only findings recorded here
 - deferred items must record explicit approval in the ledger notes
+- newly discovered issues found during `Z.4` that are out of scope for the
+  frozen `Z.3` handoff must be recorded here using `status: out_of_scope`
+  rather than fixed in the `Z.4` sprint

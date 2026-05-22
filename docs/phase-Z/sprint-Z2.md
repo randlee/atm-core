@@ -1,7 +1,7 @@
 ---
 id: Z.2
 title: Fix And Revalidate
-status: complete
+status: planned
 branch: feature/pZ-s2-fix-and-revalidate
 worktree: ../atm-core-worktrees/feature/pZ-s2-fix-and-revalidate
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.2
 worktree: ../atm-core-worktrees/feature/pZ-s2-fix-and-revalidate
 branch: feature/pZ-s2-fix-and-revalidate
-status: complete
+status: planned
 estimated_scope: medium
 ```
 
@@ -53,7 +53,8 @@ validation set on the fixed branch.
 - fix only the findings promoted from `Z.1`
 - only findings recorded in `docs/phase-Z/smoke-findings-ledger.md` are in
   scope; newly discovered issues found during `Z.2` must be recorded but not
-  fixed in this sprint
+  fixed in this sprint, using the `notes` field and `status: out_of_scope`
+  marker in `docs/phase-Z/smoke-findings-ledger.md`
 - keep the branch aligned with the approved `Phase Y` architecture and state
   machines
 - rerun the frozen `docs/phase-Z/smoke-checklist.md` checklist after fixes
@@ -66,6 +67,10 @@ validation set on the fixed branch.
 - any deferred `Z.1` finding is resolved or explicitly waived by `team-lead`
   before `Z.3` may begin
 - the smoke checklist is rerun on the fixed branch
+- all smoke-checklist rows linked to a `Z.1` finding marked fixed, not
+  deferred, in `docs/phase-Z/smoke-findings-ledger.md` record a passing
+  `z2_revalidation_verdict`; any such row that still fails is a blocking
+  finding for this sprint
 - all checklist rows that passed in `Z.1` still pass after the `Z.2` fixes;
   any new failure is a blocking finding for this sprint
 - `docs/phase-Z/smoke-findings-ledger.md` records final per-finding
@@ -85,6 +90,8 @@ the `Z.1` handoff without silent carry-forward.
 
 ## Required Validation
 
+- `cargo build --release` or equivalent release build that refreshes the
+  executable baseline under test
 - rerun `docs/phase-Z/smoke-checklist.md`
 - `docs/phase-Z/smoke-findings-ledger.md`
 - `cargo test --workspace`

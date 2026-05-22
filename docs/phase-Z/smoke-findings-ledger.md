@@ -25,3 +25,6 @@ Each finding entry must record:
 - `Z.2` fixes only findings recorded here
 - if a `Z.1` observation is rejected as non-reproducible, that outcome must
   still be recorded here rather than dropped silently
+- newly discovered issues found during `Z.2` that are out of scope for the
+  frozen `Z.1` handoff must be recorded here using `status: out_of_scope`
+  rather than fixed in the `Z.2` sprint

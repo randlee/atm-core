@@ -1,7 +1,7 @@
 ---
 id: Z.4
 title: Final Fixes And Release Sign-Off
-status: complete
+status: planned
 branch: feature/pZ-s4-final-fixes-and-release-sign-off
 worktree: ../atm-core-worktrees/feature/pZ-s4-final-fixes-and-release-sign-off
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.4
 worktree: ../atm-core-worktrees/feature/pZ-s4-final-fixes-and-release-sign-off
 branch: feature/pZ-s4-final-fixes-and-release-sign-off
-status: complete
+status: planned
 estimated_scope: medium
 ```
 
@@ -54,7 +54,8 @@ and produce the final release-readiness verdict.
 - fix only the findings promoted from `Z.3`
 - only findings recorded in `docs/phase-Z/canary-findings-ledger.md` are in
   scope; newly discovered issues found during `Z.4` must be recorded but not
-  fixed in this sprint
+  fixed in this sprint, using the `notes` field and `status: out_of_scope`
+  marker in `docs/phase-Z/canary-findings-ledger.md`
 - rerun `docs/phase-Z/release-checklist.md`
 - produce the final release-ready / not-ready decision with evidence in
   `docs/phase-Z/readiness.md`
@@ -86,6 +87,8 @@ additional undocumented evidence.
 
 ## Required Validation
 
+- `cargo build --release` or equivalent release build that refreshes the
+  closeout executable baseline under review
 - `docs/phase-Z/release-checklist.md`
 - `docs/phase-Z/readiness.md`
 - `cargo test --workspace`

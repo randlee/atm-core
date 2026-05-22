@@ -14,6 +14,11 @@ Each sprint row must record:
 - `current_status`
 - `notes`
 
+Sprint planning status convention:
+
+- sprint docs remain `status: planned` until execution closes the sprint on the
+  implementation line
+
 ## Final Verdict Record
 
 The final section of this document must record:
