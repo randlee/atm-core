@@ -6,6 +6,7 @@ use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::boundary::RosterMemberRecord;
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
@@ -138,6 +139,28 @@ fn load_member_roster(
     config: Option<&config::AtmConfig>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
+    let team_dir = resolve_doctor_team_dir(runtime, home_dir, team, findings)?;
+    check_restore_marker(team, &team_dir, findings);
+    let (team_config, atm_roster) =
+        load_doctor_roster_compare_inputs(runtime, team, &team_dir, findings)?;
+    let baseline = config
+        .map(|config| config.team_members.as_slice())
+        .unwrap_or(&[]);
+    check_inbox_directory(team, &team_dir.join("inboxes"), findings);
+    record_doctor_roster_drift(team, &team_config, atm_roster, findings);
+
+    Some(MembersList {
+        team: team.clone(),
+        members: ordered_member_summaries(&team_config.members, baseline),
+    })
+}
+
+fn resolve_doctor_team_dir(
+    runtime: &impl RetainedServiceRuntime,
+    home_dir: &Path,
+    team: &TeamName,
+    findings: &mut Vec<DoctorFinding>,
+) -> Option<PathBuf> {
     let team_dir = match runtime.team_dir(home_dir, team) {
         Ok(team_dir) => team_dir,
         Err(error) => {
@@ -160,19 +183,22 @@ fn load_member_roster(
         });
         return None;
     }
+    Some(team_dir)
+}
 
-    check_restore_marker(team, &team_dir, findings);
-
-    let team_config = match runtime.load_team_config_for_doctor_compare(&team_dir) {
+fn load_doctor_roster_compare_inputs(
+    runtime: &impl RetainedServiceRuntime,
+    team: &TeamName,
+    team_dir: &Path,
+    findings: &mut Vec<DoctorFinding>,
+) -> Option<(crate::schema::TeamConfig, Option<Vec<RosterMemberRecord>>)> {
+    let team_config = match runtime.load_team_config_for_doctor_compare(team_dir) {
         Ok(team_config) => team_config,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
             return None;
         }
     };
-    let baseline = config
-        .map(|config| config.team_members.as_slice())
-        .unwrap_or(&[]);
     let atm_roster = match runtime.load_team_roster(team) {
         Ok(roster) => Some(roster),
         Err(error) => {
@@ -180,51 +206,53 @@ fn load_member_roster(
             None
         }
     };
+    Some((team_config, atm_roster))
+}
 
-    check_inbox_directory(team, &team_dir.join("inboxes"), findings);
-
+fn record_doctor_roster_drift(
+    team: &TeamName,
+    team_config: &crate::schema::TeamConfig,
+    atm_roster: Option<Vec<RosterMemberRecord>>,
+    findings: &mut Vec<DoctorFinding>,
+) {
     let present = team_config
         .members
         .iter()
         .map(|member| member.name.clone())
         .collect::<BTreeSet<_>>();
-    if let Some(atm_roster) = atm_roster {
-        let atm_members = atm_roster
-            .into_iter()
-            .map(|member| member.agent_name)
-            .collect::<BTreeSet<_>>();
+    let Some(atm_roster) = atm_roster else {
+        return;
+    };
+    let atm_members = atm_roster
+        .into_iter()
+        .map(|member| member.agent_name)
+        .collect::<BTreeSet<_>>();
 
-        for member in atm_members.difference(&present) {
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningRosterDrift,
-                message: format!(
-                    "ATM roster member '{member}' is missing from team config.json for '{team}'"
-                ),
-                remediation: Some(format!(
-                    "Project the ATM roster back into .claude/teams/{team}/config.json or restore the missing Claude team member before rerunning `atm doctor`."
-                )),
-            });
-        }
-
-        for member in present.difference(&atm_members) {
-            findings.push(DoctorFinding {
-                severity: DoctorSeverity::Warning,
-                code: AtmErrorCode::WarningRosterDrift,
-                message: format!(
-                    "Claude team member '{member}' is missing from ATM roster truth for '{team}'"
-                ),
-                remediation: Some(format!(
-                    "Import the Claude team member into the ATM roster or remove it from .claude/teams/{team}/config.json before rerunning `atm doctor`."
-                )),
-            });
-        }
+    for member in atm_members.difference(&present) {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningRosterDrift,
+            message: format!(
+                "ATM roster member '{member}' is missing from team config.json for '{team}'"
+            ),
+            remediation: Some(format!(
+                "Project the ATM roster back into .claude/teams/{team}/config.json or restore the missing Claude team member before rerunning `atm doctor`."
+            )),
+        });
     }
 
-    Some(MembersList {
-        team: team.clone(),
-        members: ordered_member_summaries(&team_config.members, baseline),
-    })
+    for member in present.difference(&atm_members) {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningRosterDrift,
+            message: format!(
+                "Claude team member '{member}' is missing from ATM roster truth for '{team}'"
+            ),
+            remediation: Some(format!(
+                "Import the Claude team member into the ATM roster or remove it from .claude/teams/{team}/config.json before rerunning `atm doctor`."
+            )),
+        });
+    }
 }
 
 fn push_doctor_error(

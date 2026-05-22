@@ -113,6 +113,12 @@ pub struct AddMemberOutcome {
     pub created_inbox: bool,
 }
 
+struct MemberAddContext {
+    team_dir: PathBuf,
+    current_extra: serde_json::Map<String, Value>,
+    existing_roster: Vec<RosterMemberRecord>,
+}
+
 /// Parameters for creating one team backup.
 #[derive(Debug, Clone)]
 pub struct BackupRequest {
@@ -278,70 +284,16 @@ fn add_member_with_roster_store(
     validate_member_metadata_field("agent_type", &request.agent_type)?;
     validate_member_metadata_field("model", &request.model)?;
 
-    let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-
-    let current_extra = load_team_projection_extra_for_member_add(&team_dir)?;
-    let mut existing_roster = load_team_roster(roster_store, &request.team)?;
-    if existing_roster
-        .iter()
-        .any(|member| member.agent_name == request.member)
-    {
-        return Err(AtmError::new_with_code(
-            AtmErrorCode::IdentityConflict,
-            AtmErrorKind::Validation,
-            format!(
-                "member '{}' already exists in team '{}'",
-                request.member, request.team
-            ),
-        )
-        .with_recovery(
-            "Use `atm members` to inspect the current ATM roster and choose a new member name before retrying `atm team member add`.",
-        ));
-    }
+    let MemberAddContext {
+        team_dir,
+        current_extra,
+        mut existing_roster,
+    } = load_member_add_context(roster_store, &request)?;
 
     let inbox_path = home::inbox_path_from_home(&request.home_dir, &request.team, &request.member)?;
     let created_inbox = ensure_inbox_exists(&inbox_path)?;
-
-    let normalized_tmux_pane_id = normalize_tmux_pane_id(request.tmux_pane_id.as_deref())?;
-    let mut extra = serde_json::Map::new();
-    if normalized_tmux_pane_id.is_some() {
-        extra.insert("backendType".to_string(), json!("tmux"));
-        extra.insert("isActive".to_string(), json!(true));
-    }
-    extra.insert(
-        "agentId".to_string(),
-        json!(format!("{}@{}", request.member, request.team)),
-    );
-    extra.insert(
-        "joinedAt".to_string(),
-        json!(Utc::now().timestamp_millis() as u64),
-    );
-    extra.insert("cwd".to_string(), json!(request.cwd.display().to_string()));
-
-    existing_roster.push(RosterMemberRecord {
-        team_name: request.team.clone(),
-        agent_name: request.member.clone(),
-        member_kind: RosterMemberKind::Permanent,
-        harness: RosterHarness::ClaudeCode,
-        agent_type: request.agent_type,
-        model: request.model,
-        recipient_pane_id: normalized_tmux_pane_id,
-        metadata_json: extra,
-    });
-    roster_store
-        .replace_roster(RosterStoreReplaceRosterRequest {
-            team: request.team.clone(),
-            members: existing_roster.clone(),
-            source: None,
-        })
-        .map_err(|error| {
-            error.with_recovery(
-                "Check ATM roster store availability and rerun `atm teams add-member`.",
-            )
-        })?;
+    existing_roster.push(build_member_add_roster_record(&request)?);
+    replace_roster_for_member_add(roster_store, &request.team, &existing_roster)?;
     let projected_config = project_team_config_from_roster(current_extra, &existing_roster);
 
     if let Err(error) = write_team_config(&team_dir, &projected_config) {
@@ -361,6 +313,96 @@ fn add_member_with_roster_store(
         member: request.member,
         created_inbox,
     })
+}
+
+fn load_member_add_context(
+    roster_store: &dyn RosterStore,
+    request: &AddMemberRequest,
+) -> Result<MemberAddContext, AtmError> {
+    let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
+    if !team_dir.exists() {
+        return Err(AtmError::team_not_found(&request.team));
+    }
+
+    let current_extra = load_team_projection_extra_for_member_add(&team_dir)?;
+    let existing_roster = load_team_roster(roster_store, &request.team)?;
+    ensure_member_absent(&existing_roster, &request.team, &request.member)?;
+    Ok(MemberAddContext {
+        team_dir,
+        current_extra,
+        existing_roster,
+    })
+}
+
+fn ensure_member_absent(
+    existing_roster: &[RosterMemberRecord],
+    team: &TeamName,
+    member: &AgentName,
+) -> Result<(), AtmError> {
+    if existing_roster
+        .iter()
+        .any(|existing_member| existing_member.agent_name == *member)
+    {
+        return Err(AtmError::new_with_code(
+            AtmErrorCode::IdentityConflict,
+            AtmErrorKind::Validation,
+            format!("member '{}' already exists in team '{}'", member, team),
+        )
+        .with_recovery(
+            "Use `atm members` to inspect the current ATM roster and choose a new member name before retrying `atm team member add`.",
+        ));
+    }
+    Ok(())
+}
+
+fn build_member_add_roster_record(
+    request: &AddMemberRequest,
+) -> Result<RosterMemberRecord, AtmError> {
+    let normalized_tmux_pane_id = normalize_tmux_pane_id(request.tmux_pane_id.as_deref())?;
+    let mut extra = serde_json::Map::new();
+    if normalized_tmux_pane_id.is_some() {
+        extra.insert("backendType".to_string(), json!("tmux"));
+        extra.insert("isActive".to_string(), json!(true));
+    }
+    extra.insert(
+        "agentId".to_string(),
+        json!(format!("{}@{}", request.member, request.team)),
+    );
+    extra.insert(
+        "joinedAt".to_string(),
+        json!(Utc::now().timestamp_millis() as u64),
+    );
+    extra.insert("cwd".to_string(), json!(request.cwd.display().to_string()));
+
+    Ok(RosterMemberRecord {
+        team_name: request.team.clone(),
+        agent_name: request.member.clone(),
+        member_kind: RosterMemberKind::Permanent,
+        harness: RosterHarness::ClaudeCode,
+        agent_type: request.agent_type.clone(),
+        model: request.model.clone(),
+        recipient_pane_id: normalized_tmux_pane_id,
+        metadata_json: extra,
+    })
+}
+
+fn replace_roster_for_member_add(
+    roster_store: &dyn RosterStore,
+    team: &TeamName,
+    existing_roster: &[RosterMemberRecord],
+) -> Result<(), AtmError> {
+    roster_store
+        .replace_roster(RosterStoreReplaceRosterRequest {
+            team: team.clone(),
+            members: existing_roster.to_vec(),
+            source: None,
+        })
+        .map(|_| ())
+        .map_err(|error| {
+            error.with_recovery(
+                "Check ATM roster store availability and rerun `atm teams add-member`.",
+            )
+        })
 }
 
 /// Create a point-in-time backup of one team's config, inboxes, and task files.
@@ -487,6 +529,8 @@ fn validate_member_metadata_field(field: &str, value: &str) -> Result<(), AtmErr
 fn load_team_projection_extra_for_member_add(
     team_dir: &Path,
 ) -> Result<serde_json::Map<String, Value>, AtmError> {
+    // Z.11 still preserves non-roster Claude config extras while add-member
+    // projects canonical ATM roster truth back into config.json.
     load_claude_team_config_document(team_dir).map(|config| config.extra)
 }
 

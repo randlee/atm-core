@@ -1,5 +1,4 @@
 mod notification_fingerprints;
-mod projection_write_journal;
 
 use arc_swap::ArcSwap;
 use atm_core::boundary::{
@@ -33,7 +32,6 @@ const MAX_RECONCILE_DEBOUNCE_EXTENSIONS: u32 = 8;
 const MAX_RECONCILE_FINGERPRINT_KEYS: usize = 1024;
 const MAX_RECONCILE_FINGERPRINTS_PER_KEY: usize = 256;
 const MAX_RECONCILE_WAITERS: usize = 1024;
-const MAX_PROJECTION_WRITE_JOURNAL_ENTRIES: usize = 256;
 const RECONCILE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -73,7 +71,7 @@ struct ReconcileRuntimeInner {
     command_tx: OnceLock<SyncSender<ReconcileCommand>>,
     status: Arc<ArcSwap<ReconcileRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
-    // Production writes begin recording projection journal entries in Z.9 when
+    // Production writes begin recording projection journal entries in Z.11 when
     // the team-admin path becomes the canonical config projection writer.
     #[allow(dead_code)]
     projection_write_journal: ProjectionWriteJournal,

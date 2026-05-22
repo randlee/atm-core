@@ -22,93 +22,33 @@ struct RecreatedLeadShellState {
     lead_session_id: Option<Value>,
 }
 
+struct RestoreExecutionPlan {
+    team_dir: PathBuf,
+    backup_dir: PathBuf,
+    updated_config: crate::schema::TeamConfig,
+    members_to_restore: Vec<crate::types::AgentName>,
+    inboxes_to_restore: Vec<String>,
+    tasks_to_restore: usize,
+}
+
 pub(super) fn restore_team_with_roster_store(
     roster_store: &dyn RosterStore,
     request: RestoreRequest,
 ) -> Result<RestoreResult, AtmError> {
-    let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-    let recreated_shell = load_recreated_lead_shell_state(&team_dir)?;
-    let canonical_roster = super::load_team_roster(roster_store, &request.team)?;
-    if canonical_roster.is_empty() {
-        return Err(AtmError::team_not_found(&request.team));
-    }
-    let backup_dir = locate_backup_dir(&request.home_dir, &request.team, request.from.as_deref())?;
-
-    let members_to_restore = canonical_roster
-        .iter()
-        .filter(|member| member.agent_name != ROLE_TEAM_LEAD)
-        .map(|member| member.agent_name.clone())
-        .collect::<Vec<_>>();
-    let members_to_restore_set = members_to_restore.iter().cloned().collect::<BTreeSet<_>>();
-
-    let mut inboxes_to_restore = list_backup_inboxes(&backup_dir)?;
-    inboxes_to_restore.retain(|name| {
-        if name == &format!("{ROLE_TEAM_LEAD}.json") {
-            return false;
-        }
-        name.strip_suffix(".json").is_some_and(|member| {
-            members_to_restore_set
-                .iter()
-                .any(|restored_member| restored_member == &member)
-        })
-    });
-    let tasks_to_restore = count_numeric_task_files(&backup_dir.join("tasks"))?;
+    let plan = build_restore_execution_plan(roster_store, &request)?;
 
     if request.dry_run {
-        return Ok(RestoreResult::DryRun(RestorePlan {
-            action: "restore",
-            team: request.team.clone(),
-            backup_path: backup_dir,
-            dry_run: true,
-            would_restore_members: members_to_restore
-                .into_iter()
-                .map(crate::types::AgentName::from_validated)
-                .collect(),
-            would_restore_inboxes: inboxes_to_restore,
-            would_restore_tasks: tasks_to_restore,
-        }));
+        return Ok(build_restore_dry_run(&request.team, &plan));
     }
 
-    prepare_restore_workspace(&team_dir, &backup_dir)?;
-    let updated_config = build_restored_team_config(&recreated_shell, &canonical_roster);
-
-    let restore_result = (|| {
-        apply_restored_inboxes(&team_dir, &backup_dir, &inboxes_to_restore)?;
-
-        let tasks_dir = super::tasks_dir_from_home(&request.home_dir, &request.team)?;
-        restore_task_state_from_backup(&backup_dir.join("tasks"), &tasks_dir)?;
-        super::write_team_config(&team_dir, &updated_config).map_err(|error| {
-            error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
-        })?;
-
-        Ok::<RestoreOutcome, AtmError>(RestoreOutcome {
-            action: "restore",
-            team: request.team.clone(),
-            backup_path: backup_dir.clone(),
-            members_restored: members_to_restore.len(),
-            inboxes_restored: inboxes_to_restore.len(),
-            tasks_restored: tasks_to_restore,
-        })
-    })();
-    let outcome = match restore_result {
+    prepare_restore_workspace(&plan.team_dir, &plan.backup_dir)?;
+    let outcome = match apply_restore_execution_plan(&request, &plan) {
         Ok(outcome) => outcome,
-        Err(error) => {
-            if let Err(cleanup_error) = cleanup_restore_workspace(&team_dir) {
-                warn!(
-                    team = %request.team,
-                    %cleanup_error,
-                    "restore failed and cleanup of the restore staging directory also failed"
-                );
-            }
-            return Err(error);
-        }
+        Err(error) => return restore_with_cleanup_failure(&request.team, &plan.team_dir, error),
     };
 
-    let marker_cleanup_error = clear_restore_marker(&team_dir).err();
-    cleanup_restore_workspace(&team_dir)?;
+    let marker_cleanup_error = clear_restore_marker(&plan.team_dir).err();
+    cleanup_restore_workspace(&plan.team_dir)?;
     if let Some(error) = marker_cleanup_error {
         warn!(
             code = %AtmErrorCode::WarningRestoreInProgress,
@@ -121,11 +61,124 @@ pub(super) fn restore_team_with_roster_store(
     Ok(RestoreResult::Applied(outcome))
 }
 
+fn build_restore_execution_plan(
+    roster_store: &dyn RosterStore,
+    request: &RestoreRequest,
+) -> Result<RestoreExecutionPlan, AtmError> {
+    let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
+    if !team_dir.exists() {
+        return Err(AtmError::team_not_found(&request.team));
+    }
+
+    let recreated_shell = load_recreated_lead_shell_state(&team_dir)?;
+    let canonical_roster = super::load_team_roster(roster_store, &request.team)?;
+    if canonical_roster.is_empty() {
+        return Err(AtmError::team_not_found(&request.team));
+    }
+
+    let backup_dir = locate_backup_dir(&request.home_dir, &request.team, request.from.as_deref())?;
+    let members_to_restore = canonical_roster
+        .iter()
+        .filter(|member| member.agent_name != ROLE_TEAM_LEAD)
+        .map(|member| member.agent_name.clone())
+        .collect::<Vec<_>>();
+    let inboxes_to_restore = filter_restore_inboxes(&backup_dir, &members_to_restore)?;
+    let tasks_to_restore = count_numeric_task_files(&backup_dir.join("tasks"))?;
+    let updated_config = build_restored_team_config(&recreated_shell, &canonical_roster);
+
+    Ok(RestoreExecutionPlan {
+        team_dir,
+        backup_dir,
+        updated_config,
+        members_to_restore,
+        inboxes_to_restore,
+        tasks_to_restore,
+    })
+}
+
+fn filter_restore_inboxes(
+    backup_dir: &Path,
+    members_to_restore: &[crate::types::AgentName],
+) -> Result<Vec<String>, AtmError> {
+    let members_to_restore_set = members_to_restore.iter().cloned().collect::<BTreeSet<_>>();
+    let mut inboxes_to_restore = list_backup_inboxes(backup_dir)?;
+    inboxes_to_restore.retain(|name| {
+        if name == &format!("{ROLE_TEAM_LEAD}.json") {
+            return false;
+        }
+        name.strip_suffix(".json").is_some_and(|member| {
+            members_to_restore_set
+                .iter()
+                .any(|restored_member| restored_member.as_str() == member)
+        })
+    });
+    Ok(inboxes_to_restore)
+}
+
+fn build_restore_dry_run(
+    team: &crate::types::TeamName,
+    plan: &RestoreExecutionPlan,
+) -> RestoreResult {
+    RestoreResult::DryRun(RestorePlan {
+        action: "restore",
+        team: team.clone(),
+        backup_path: plan.backup_dir.clone(),
+        dry_run: true,
+        would_restore_members: plan
+            .members_to_restore
+            .iter()
+            .cloned()
+            .map(crate::types::AgentName::from_validated)
+            .collect(),
+        would_restore_inboxes: plan.inboxes_to_restore.clone(),
+        would_restore_tasks: plan.tasks_to_restore,
+    })
+}
+
+fn apply_restore_execution_plan(
+    request: &RestoreRequest,
+    plan: &RestoreExecutionPlan,
+) -> Result<RestoreOutcome, AtmError> {
+    apply_restored_inboxes(&plan.team_dir, &plan.backup_dir, &plan.inboxes_to_restore)?;
+
+    let tasks_dir = super::tasks_dir_from_home(&request.home_dir, &request.team)?;
+    restore_task_state_from_backup(&plan.backup_dir.join("tasks"), &tasks_dir)?;
+    super::write_team_config(&plan.team_dir, &plan.updated_config).map_err(|error| {
+        error.with_recovery("Check team config permissions and rerun `atm teams restore`.")
+    })?;
+
+    Ok(RestoreOutcome {
+        action: "restore",
+        team: request.team.clone(),
+        backup_path: plan.backup_dir.clone(),
+        members_restored: plan.members_to_restore.len(),
+        inboxes_restored: plan.inboxes_to_restore.len(),
+        tasks_restored: plan.tasks_to_restore,
+    })
+}
+
+fn restore_with_cleanup_failure(
+    team: &crate::types::TeamName,
+    team_dir: &Path,
+    error: AtmError,
+) -> Result<RestoreResult, AtmError> {
+    if let Err(cleanup_error) = cleanup_restore_workspace(team_dir) {
+        warn!(
+            team = %team,
+            %cleanup_error,
+            "restore failed and cleanup of the restore staging directory also failed"
+        );
+    }
+    Err(error)
+}
+
 fn default_lead_member() -> Result<AgentMember, AtmError> {
     Ok(AgentMember::with_name(ROLE_TEAM_LEAD.parse()?))
 }
 
 fn load_recreated_lead_shell_state(team_dir: &Path) -> Result<RecreatedLeadShellState, AtmError> {
+    // Z.11 still preserves recreated-shell lead metadata that Claude Code mints
+    // during TeamCreate before ATM projects the full canonical roster back out.
     let current_config = load_claude_team_config_document(team_dir)?;
     Ok(RecreatedLeadShellState {
         lead_member: match current_config

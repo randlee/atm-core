@@ -2,10 +2,8 @@ use atm_core::boundary::{
     ReconcileRequest, ReplaySource, RosterStore, RosterStoreReplaceRosterRequest, WatchEventBatch,
 };
 use atm_core::error::AtmError;
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, VecDeque};
 use std::fs;
-use std::hash::{Hash, Hasher};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -33,7 +31,7 @@ impl ProjectionWriteJournal {
         Self::default()
     }
 
-    /// Production wiring is deferred to Z.9 when the team-admin write path
+    /// Production wiring is deferred to Z.11 when the team-admin write path
     /// starts recording daemon-authored Claude config projections.
     #[allow(dead_code)]
     pub(crate) fn remember_projected_config_write(
@@ -97,9 +95,7 @@ pub(crate) fn config_document_digest(path: &Path) -> Result<u64, AtmError> {
         )
         .with_source(error)
     })?;
-    let mut hasher = DefaultHasher::new();
-    bytes.hash(&mut hasher);
-    Ok(hasher.finish())
+    Ok(stable_projection_digest(&bytes))
 }
 
 pub(crate) fn ingest_claude_team_config_from_watch_batch(
@@ -187,6 +183,15 @@ fn evict_oldest_entry_if_full(state: &mut ProjectionWriteJournalState) {
 
 fn replay_source_static(label: &'static str) -> ReplaySource {
     ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
+}
+
+fn stable_projection_digest(bytes: &[u8]) -> u64 {
+    const FNV_OFFSET_BASIS: u64 = 0xcbf29ce484222325;
+    const FNV_PRIME: u64 = 0x100000001b3;
+
+    bytes.iter().fold(FNV_OFFSET_BASIS, |digest, byte| {
+        (digest ^ u64::from(*byte)).wrapping_mul(FNV_PRIME)
+    })
 }
 
 #[cfg(test)]
