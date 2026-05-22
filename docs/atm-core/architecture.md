@@ -231,6 +231,10 @@ Phase R redesign notes:
 - `atm-core` owns the immutable public runtime roster projection
   `ClaudeCodeTeamRoster`; that surface is derived from canonical ATM roster
   truth rather than from direct `config.json` reads
+- `atm-core` team-admin surfaces must treat ATM roster rows as canonical team
+  and member truth; retained Claude `config.json` remains projection/output
+  state plus explicit `doctor` comparison input, not a second team-admin
+  authority
 - the `Z.6` Claude send warning path must build `ClaudeCodeTeamRoster` from
   store-backed ATM roster rows after the durable write succeeds; it must not
   reopen a direct `config.json` membership lookup seam

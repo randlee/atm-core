@@ -255,7 +255,6 @@ pub(super) fn count_numeric_task_files(tasks_dir: &Path) -> Result<usize, AtmErr
 }
 
 pub(super) fn clear_runtime_member_state(member: &mut AgentMember) {
-    member.tmux_pane_id.clear();
     for key in [
         "backendType",
         "sessionId",
@@ -853,6 +852,59 @@ mod tests {
                 .iter()
                 .any(|member| member.name == TEST_SENDER)
         );
+    }
+
+    #[test]
+    #[serial]
+    fn restore_team_preserves_tmux_pane_id_for_restored_members() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(
+            tempdir.path(),
+            TEST_TEAM,
+            json!({"leadSessionId":"lead-current","members":[{"name":ROLE_TEAM_LEAD}]}),
+        );
+        let backup_dir = tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join(".backups")
+            .join(TEST_TEAM)
+            .join("20260423T020305000000000Z");
+        write_backup_config(
+            &backup_dir,
+            json!({
+                "leadSessionId":"lead-backup",
+                "members":[
+                    {"name":ROLE_TEAM_LEAD},
+                    {
+                        "name":TEST_SENDER,
+                        "agentType":"general-purpose",
+                        "model":"sonnet",
+                        "tmuxPaneId":"%42",
+                        "cwd":"/repo"
+                    }
+                ]
+            }),
+        );
+
+        let result = restore_team(RestoreRequest {
+            home_dir: tempdir.path().to_path_buf(),
+            team: TEST_TEAM.parse().expect("team"),
+            from: Some(backup_dir.clone()),
+            dry_run: false,
+        });
+
+        assert!(result.is_ok(), "restore should succeed");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        let config: TeamConfig =
+            serde_json::from_slice(&fs::read(team_dir.join("config.json")).expect("config"))
+                .expect("parse config");
+        let restored = config
+            .members
+            .iter()
+            .find(|member| member.name == TEST_SENDER)
+            .expect("restored member");
+        assert_eq!(restored.tmux_pane_id.as_deref(), Some("%42"));
     }
 
     #[test]

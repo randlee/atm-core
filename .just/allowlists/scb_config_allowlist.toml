@@ -1,1 +1,8 @@
-# Z.8 removed the last startup-only config-ingress survivor.
+# Z.8 removed the startup-only config-ingress survivor; Z.9 adds a temporary add-member extra-preservation entry.
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/team_admin.rs"
+symbol = "load_team_projection_extra_for_member_add"
+why = "temporary non-roster config extra preservation during add-member projection until Z.10 removes the last team-admin config read"
+sunset_sprint = "Z.10"

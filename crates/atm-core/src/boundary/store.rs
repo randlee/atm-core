@@ -77,7 +77,7 @@ pub struct RosterMemberRecord {
 
 impl RosterMemberRecord {
     pub fn from_claude_code_member(team_name: TeamName, member: AgentMember) -> Self {
-        let recipient_pane_id = (!member.tmux_pane_id.is_empty()).then_some(member.tmux_pane_id);
+        let recipient_pane_id = member.tmux_pane_id;
         let mut metadata_json = member.extra;
         if !member.agent_id.is_empty() {
             metadata_json.insert("agentId".to_string(), Value::String(member.agent_id));

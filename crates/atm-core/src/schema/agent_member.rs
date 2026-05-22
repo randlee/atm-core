@@ -104,7 +104,7 @@ pub struct AgentMember {
 
     /// Retained tmux pane identifier copied from `config.json` roster state.
     #[serde(default)]
-    pub tmux_pane_id: String,
+    pub tmux_pane_id: Option<String>,
 
     /// Retained working directory path for the agent process, copied from `config.json` roster state.
     #[serde(default)]
@@ -122,7 +122,7 @@ impl AgentMember {
             agent_type: AgentType::default(),
             model: String::new(),
             joined_at: None,
-            tmux_pane_id: String::new(),
+            tmux_pane_id: None,
             cwd: String::new(),
             extra: Map::new(),
         }
@@ -145,7 +145,7 @@ mod tests {
         assert_eq!(member.agent_type, AgentType::Unknown(String::new()));
         assert!(member.model.is_empty());
         assert_eq!(member.joined_at, None);
-        assert!(member.tmux_pane_id.is_empty());
+        assert_eq!(member.tmux_pane_id, None);
         assert!(member.cwd.is_empty());
         assert!(member.extra.is_empty());
     }
@@ -171,7 +171,7 @@ mod tests {
         assert_eq!(member.agent_type, AgentType::GeneralPurpose);
         assert_eq!(member.model, "claude-sonnet-4-5");
         assert_eq!(member.joined_at, Some(1770765919076));
-        assert_eq!(member.tmux_pane_id, "%1");
+        assert_eq!(member.tmux_pane_id.as_deref(), Some("%1"));
         assert_eq!(member.cwd, "/workspace");
         assert_eq!(member.extra["color"], serde_json::json!("blue"));
 
@@ -191,7 +191,7 @@ mod tests {
         assert!(member.agent_id.is_empty());
         assert!(member.model.is_empty());
         assert_eq!(member.joined_at, None);
-        assert!(member.tmux_pane_id.is_empty());
+        assert_eq!(member.tmux_pane_id, None);
         assert!(member.cwd.is_empty());
     }
 }
