@@ -251,6 +251,25 @@ impl RetainedServiceRuntime for TestRuntime {
         }))
     }
 
+    fn load_team_roster(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError> {
+        Ok(vec![RosterMemberRecord {
+            team_name: team.clone(),
+            agent_name: AgentName::from_validated("recipient"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: match self.recipient_harness {
+                DeliveryHarnessPath::ClaudeCode => RosterHarness::ClaudeCode,
+                DeliveryHarnessPath::NonClaude => RosterHarness::CodexCli,
+            },
+            agent_type: String::new(),
+            model: String::new(),
+            recipient_pane_id: None,
+            metadata_json: Map::new(),
+        }])
+    }
+
     fn commit_workflow_state<T, I, F>(
         &self,
         _home_dir: &Path,

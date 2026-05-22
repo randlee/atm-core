@@ -143,14 +143,7 @@ fn ack_mail_with_runtime_impl<
         return Err(AtmError::team_not_found(&team));
     }
 
-    let team_config = runtime.load_team_config(&team_dir)?;
-    if !team_config
-        .members
-        .iter()
-        .any(|member| member.name == actor.as_str())
-    {
-        return Err(AtmError::agent_not_found(&actor, &team));
-    }
+    ensure_roster_member_exists(runtime, &team, &actor, "Repair or reload the ATM roster before retrying `atm ack`.")?;
     ack_mail_with_runtime_sqlite(
         request,
         observability,
@@ -356,16 +349,27 @@ fn validate_reply_target<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
         return Err(AtmError::team_not_found(&reply_team));
     }
 
-    let reply_team_config = runtime.load_team_config(&reply_team_dir)?;
-    if !reply_team_config
-        .members
-        .iter()
-        .any(|member| member.name == reply_agent.as_str())
-    {
-        return Err(AtmError::agent_not_found(&reply_agent, &reply_team));
-    }
+    ensure_roster_member_exists(
+        runtime,
+        &reply_team,
+        &reply_agent,
+        "Repair or reload the ATM roster before retrying the acknowledgement reply.",
+    )?;
 
     Ok(ReplyTarget::new(reply_agent, reply_team))
+}
+
+fn ensure_roster_member_exists<R: RetainedServiceRuntime>(
+    runtime: &R,
+    team: &TeamName,
+    agent: &AgentName,
+    recovery: &str,
+) -> Result<(), AtmError> {
+    if runtime.load_roster_member(team, agent)?.is_none() {
+        return Err(AtmError::agent_not_found(agent, team).with_recovery(recovery));
+    }
+
+    Ok(())
 }
 
 fn persist_ack_reply<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
@@ -617,6 +621,7 @@ mod tests {
     use std::sync::Mutex;
     use std::time::Duration;
 
+    use serde_json::Map;
     use super::{
         AckReplyStateMachine, FinalizeAckContext, PersistedAckReply, ReplyTarget,
         canonical_sender_identity, finalize_ack_outcome, resolve_reply_target,
@@ -629,7 +634,7 @@ mod tests {
     use crate::send::{DeliveryPersistenceDisposition, DeliveryPersistenceResult, WarningEntry};
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
-    use crate::test_support::TEST_TEAM;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use crate::workflow::WorkflowStateFile;
 
@@ -646,9 +651,25 @@ mod tests {
         }
     }
 
+    struct AckRosterRuntime {
+        team_dir: PathBuf,
+        roster_members: Vec<(TeamName, AgentName)>,
+    }
+
     impl crate::boundary::sealed::Sealed for AckRuntime {}
 
     impl crate::boundary::NotificationSink for AckRuntime {
+        fn deliver(
+            &self,
+            _event: crate::protocol::NotificationEvent,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
+        }
+    }
+
+    impl crate::boundary::sealed::Sealed for AckRosterRuntime {}
+
+    impl crate::boundary::NotificationSink for AckRosterRuntime {
         fn deliver(
             &self,
             _event: crate::protocol::NotificationEvent,
@@ -757,6 +778,13 @@ mod tests {
             Ok(None)
         }
 
+        fn load_team_roster(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<boundary::RosterMemberRecord>, crate::error::AtmError> {
+            Ok(Vec::new())
+        }
+
         fn commit_workflow_state<T, I, F>(
             &self,
             _home_dir: &Path,
@@ -771,6 +799,181 @@ mod tests {
             F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
         {
             unreachable!("ack writer-path test does not commit workflow state")
+        }
+    }
+
+    impl RetainedServiceRuntime for AckRosterRuntime {
+        fn load_config(
+            &self,
+            _current_dir: &Path,
+        ) -> Result<Option<crate::config::AtmConfig>, crate::error::AtmError> {
+            Ok(Some(crate::config::AtmConfig {
+                default_team: Some(TEST_TEAM.parse::<TeamName>().expect("team")),
+                ..Default::default()
+            }))
+        }
+
+        fn load_team_config(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<TeamConfig, crate::error::AtmError> {
+            unreachable!("ack roster-gate tests must not load team config")
+        }
+
+        fn team_dir(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+        ) -> Result<PathBuf, crate::error::AtmError> {
+            Ok(self.team_dir.clone())
+        }
+
+        fn inbox_path(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, crate::error::AtmError> {
+            unreachable!("ack roster-gate tests do not resolve inbox paths")
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, crate::error::AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_millis(1),
+            }
+        }
+
+        fn rebuild_compat_inbox_projection(
+            &self,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack roster-gate tests do not rebuild compatibility inboxes")
+        }
+
+        fn append_compat_inbox_message(
+            &self,
+            _inbox_path: &Path,
+            _message: &MessageEnvelope,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack roster-gate tests do not append compatibility inbox messages")
+        }
+
+        fn append_compat_inbox_message_set(
+            &self,
+            _inbox_path: &Path,
+            _mode: ClaudeCompatibilityDeliveryMode,
+            _messages: &[MessageEnvelope],
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack roster-gate tests do not append compatibility inbox message sets")
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _messages: &[MessageEnvelope],
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack roster-gate tests do not route non-Claude delivery")
+        }
+
+        fn load_roster_member(
+            &self,
+            team: &TeamName,
+            agent: &AgentName,
+        ) -> Result<Option<boundary::RosterMemberRecord>, crate::error::AtmError> {
+            Ok(self
+                .roster_members
+                .iter()
+                .any(|(member_team, member_agent)| member_team == team && member_agent == agent)
+                .then(|| boundary::RosterMemberRecord {
+                    team_name: team.clone(),
+                    agent_name: agent.clone(),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: String::new(),
+                    model: String::new(),
+                    recipient_pane_id: None,
+                    metadata_json: Map::new(),
+                }))
+        }
+
+        fn load_team_roster(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<boundary::RosterMemberRecord>, crate::error::AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            _body: F,
+        ) -> Result<T, crate::error::AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
+        {
+            unreachable!("ack roster-gate tests do not commit workflow state")
+        }
+    }
+
+    impl RetainedMailboxRuntime for AckRosterRuntime {
+        fn query_mailbox_metadata_rows(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _limit: Option<usize>,
+        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, crate::error::AtmError> {
+            unreachable!("ack roster-gate tests must fail before mailbox metadata is queried")
+        }
+
+        fn load_message_record(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _message_key: &MessageKey,
+        ) -> Result<Option<boundary::MailStoreMessageRecord>, crate::error::AtmError> {
+            unreachable!("ack roster-gate tests must fail before message records are loaded")
+        }
+
+        fn persist_message_record(
+            &self,
+            _record: boundary::MailStoreMessageRecord,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack roster-gate tests must fail before message records are persisted")
+        }
+
+        fn persist_message_state(
+            &self,
+            _state: boundary::MailMessageState,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("ack roster-gate tests must fail before mailbox state is persisted")
         }
     }
 
@@ -966,5 +1169,32 @@ mod tests {
         assert_eq!(appended_messages[0], reply_message);
         assert_eq!(outcome.reply_message_id, reply_message_id);
         assert_eq!(outcome.reply_text, reply_text);
+    }
+
+    #[test]
+    fn ack_mail_rejects_actor_missing_from_atm_roster() {
+        let tempdir = tempfile::tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let runtime = AckRosterRuntime {
+            team_dir,
+            roster_members: Vec::new(),
+        };
+
+        let error = super::ack_mail_with_runtime_impl(
+            crate::ack::AckRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                current_dir: tempdir.path().to_path_buf(),
+                actor_override: Some(TEST_SENDER.parse().expect("agent")),
+                team_override: Some(TEST_TEAM.parse().expect("team")),
+                message_id: AtmMessageId::new(),
+                reply_body: "ack".to_string(),
+            },
+            &NullObservability,
+            &runtime,
+        )
+        .expect_err("missing ATM roster member should fail");
+
+        assert!(error.is_agent_not_found(), "{error:?}");
     }
 }

@@ -3830,7 +3830,7 @@ Phase Z sprint ledger:
 | --- | --- | --- | --- |
 | `Z.1` | `complete` | `feature/pZ-s1-smoke-bring-up` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
 | `Z.2` | `planned` | `feature/pZ-s2-fix-and-revalidate` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
-| `Z.5` | `planned` | `feature/pZ-s5-runtime-roster-truth-cutover` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.5` | `complete` | `feature/pZ-s5-runtime-roster-truth-cutover` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
 | `Z.6` | `planned` | `feature/pZ-s6-claude-send-semantics-and-runtime-roster-view` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md`, `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md` |
 | `Z.7` | `planned` | `feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md`, `.just/allowlists/scb_config_allowlist.toml`, `.just/fixtures/scb_config_known_bad.rs` |
 | `Z.8` | `planned` | `feature/pZ-s8-watcher-owned-claude-config-ingest` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
