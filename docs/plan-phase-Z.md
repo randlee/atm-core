@@ -262,12 +262,16 @@ Current execution state:
   `Z.2`:
   - `Z1-F001` first-team roster bootstrap / harness-resolution gap
   - `Z1-F002` preexisting-db sqlite schema-init ordering failure
-- `Z.2` is the next-unused sprint and is limited to those findings plus frozen
-  checklist revalidation
+- `Z.2` has now rerun the frozen smoke checklist on `integrate/phase-Z` and
+  failed closed on three blocking results:
+  - `Z1-F001` still reproduces on the clean-room first-team send path
+  - `Z1-F002` still reproduces on the copied current-state SQLite baseline
+  - `Z2-F001` newly reopened the retained roster inspection row (`Z1-003`)
 - the broader roster/config/restore ownership redesign discovered while
   analyzing `Z1-F001` is split into `Z.5` through `Z.10`
 - `Z.3` and `Z.4` remain the canary / release sprints, but execution does not
-  resume there until `Z.10` closes
+  resume there until the reopened `Z.2` blockers are closed and canary entry
+  is explicitly re-authorized
 
 ## Initial Planning Outputs
 

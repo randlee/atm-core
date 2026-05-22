@@ -1,7 +1,7 @@
 ---
 id: Z.2
 title: Fix And Revalidate
-status: planned
+status: complete
 branch: feature/pZ-s2-fix-and-revalidate
 worktree: ../atm-core-worktrees/feature/pZ-s2-fix-and-revalidate
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.2
 worktree: ../atm-core-worktrees/feature/pZ-s2-fix-and-revalidate
 branch: feature/pZ-s2-fix-and-revalidate
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
