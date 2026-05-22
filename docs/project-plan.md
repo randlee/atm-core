@@ -3516,7 +3516,7 @@ Follow-on validation phase:
   deferred until after `Phase Z`
 - `Z.1` executable smoke bring-up
 - `Z.2` fix and revalidate
-- `Z.3` `atm-dev` canary / dogfood
+- `Z.3` `atm-dev` canary and dogfood
 - `Z.4` final fixes and release sign-off
 
 Immediate planning outputs:
