@@ -52,6 +52,7 @@ restore.
 
 ## Hard Dependencies
 
+- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `docs/phase-Z/claude-roster-sync-and-restore.md`
 - `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/readiness.md`
@@ -131,6 +132,19 @@ trait changes, or watcher/reconcile import logic, stop and move that scope into
   compare against `config.json`
 - the path inventory row for each deleted runtime read is marked closed in
   `docs/phase-Z/config-json-violation-inventory.md`
+
+## Non-Closure
+
+- `Z.5` does not change Claude send warning semantics
+- `Z.5` does not narrow `ConfigIngress` or introduce watcher/reconcile ingest
+- `Z.5` does not change team-admin or restore ownership
+
+## Production-Ready Expectation
+
+Every listed `Z.5` deliverable is expected to land at a production-ready level
+for the retained-command cutover scope this sprint claims: retained runtime
+membership decisions must depend on ATM roster truth only, while `doctor`
+remains a deliberate comparison surface rather than a generic lookup seam.
 
 ## Required Validation
 

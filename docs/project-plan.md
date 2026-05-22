@@ -3824,6 +3824,21 @@ Execution shape:
 - `Z.4` final fixes and release sign-off
   - branch: `feature/pZ-s4-final-fixes-and-release-sign-off`
 
+Phase Z sprint ledger:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `Z.1` | `complete` | `feature/pZ-s1-smoke-bring-up` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.2` | `planned` | `feature/pZ-s2-fix-and-revalidate` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.5` | `planned` | `feature/pZ-s5-runtime-roster-truth-cutover` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.6` | `planned` | `feature/pZ-s6-claude-send-semantics-and-runtime-roster-view` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md`, `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md` |
+| `Z.7` | `planned` | `feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md`, `.just/allowlists/scb_config_allowlist.toml`, `.just/fixtures/scb_config_known_bad.rs` |
+| `Z.8` | `planned` | `feature/pZ-s8-watcher-owned-claude-config-ingest` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.9` | `planned` | `feature/pZ-s9-team-admin-roster-authority-and-member-metadata` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.10` | `planned` | `feature/pZ-s10-team-backup-restore-automation-and-config-projection` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.3` | `planned` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.4` | `planned` | `feature/pZ-s4-final-fixes-and-release-sign-off` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md` |
+
 Immediate planning outputs:
 - `docs/plan-phase-Z.md`
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`

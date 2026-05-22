@@ -196,6 +196,18 @@ suppression, or external roster change ingestion, stop and move that scope into
 - the machine-runnable allowlist file and known-bad fixture are checked in and
   are the authoritative inputs to `just lint boundaries`
 
+## Non-Closure
+
+- `Z.7` does not implement watcher/reconcile ingest behavior
+- `Z.7` does not move team-admin or restore ownership
+
+## Production-Ready Expectation
+
+Every listed `Z.7` deliverable is expected to land at a production-ready level
+for the boundary/gate scope this sprint claims: `ConfigIngress` must no longer
+read as a generic runtime lookup surface, and the static gates must be
+mechanically runnable rather than prose-only guidance.
+
 ## Required Validation
 
 - `cargo test --workspace`

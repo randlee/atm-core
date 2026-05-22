@@ -49,6 +49,7 @@ This sprint owns team-admin views and member mutation, not restore automation.
 
 ## Hard Dependencies
 
+- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/readiness.md`
 
@@ -144,6 +145,14 @@ This sprint owns team-admin views and member mutation, not restore automation.
    Required docs:
    - update `docs/atm-core/requirements.md`
 
+4. Update the planning/closure records.
+   Development work:
+   - stamp `Z.9` accepted head and verdict in `docs/phase-Z/readiness.md`
+   Required tests:
+   - `git diff --check`
+   Required docs:
+   - update `docs/phase-Z/readiness.md`
+
 ## Split Recommendation
 
 If the work starts rebuilding teams from backup material or preserving recreated
@@ -157,6 +166,20 @@ If the work starts rebuilding teams from backup material or preserving recreated
   `config.json`
 - `tmux_pane_id` is canonical ATM roster-member metadata rather than durable
   `.atm.toml` state
+- legacy `AgentMember` payloads remain backward-compatible under serde when
+  `tmux_pane_id` is omitted or serialized in the current Claude-compatible form
+
+## Non-Closure
+
+- `Z.9` does not rewrite backup/restore flow
+- `Z.9` does not begin canary or release-signoff execution
+
+## Production-Ready Expectation
+
+Every listed `Z.9` deliverable is expected to land at a production-ready level
+for the team-admin/member-metadata scope this sprint claims: team-admin
+commands must use ATM roster truth consistently, and `tmux_pane_id` migration
+must preserve backward-compatible serde behavior.
 
 ## Required Validation
 

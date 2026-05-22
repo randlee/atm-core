@@ -49,6 +49,7 @@ This sprint owns the final team recovery rewrite before `Z.3` canary begins.
 
 ## Hard Dependencies
 
+- `docs/phase-Z/claude-roster-sync-and-restore.md`
 - `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/readiness.md`
 - current manual restore procedure received from `team-lead`
@@ -116,6 +117,14 @@ This sprint owns the final team recovery rewrite before `Z.3` canary begins.
    Required docs:
    - update `docs/atm-core/requirements.md`
 
+4. Update the planning/closure records.
+   Development work:
+   - stamp `Z.10` accepted head and verdict in `docs/phase-Z/readiness.md`
+   Required tests:
+   - `git diff --check`
+   Required docs:
+   - update `docs/phase-Z/readiness.md`
+
 ## Split Recommendation
 
 If the work starts re-opening retained runtime command reads or watcher-ingest
@@ -131,6 +140,18 @@ ownership, stop and push that scope back into `Z.5` through `Z.9`.
   canonical member metadata such as `tmux_pane_id`
 - the automated restore path replaces manual file-edit steps before `Z.3`
   begins
+
+## Non-Closure
+
+- `Z.10` does not begin canary/dogfood execution
+- `Z.10` does not perform release sign-off work
+
+## Production-Ready Expectation
+
+Every listed `Z.10` deliverable is expected to land at a production-ready
+level for the backup/restore scope this sprint claims: restore must rebuild the
+Claude team shell from ATM roster truth deterministically, without falling back
+to backup `config.json` authority or manual file surgery.
 
 ## Required Validation
 

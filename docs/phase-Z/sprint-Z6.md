@@ -50,6 +50,7 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
 
 ## Hard Dependencies
 
+- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `docs/phase-Z/claude-roster-sync-and-restore.md`
 - `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/readiness.md`
@@ -69,6 +70,10 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
   `crates/atm-core/src/send/mod.rs`
 - delete or narrow generic runtime `load_team_config(...)` helper use from
   `crates/atm-core/src/service_runtime.rs`
+- introduce `ClaudeCodeTeamRoster` in `crates/atm-core/src/boundary/store.rs`
+  as the approved immutable public runtime roster view in `Z.6`; `Z.7` may
+  narrow adjacent `ConfigIngress` contract language on that file later, but it
+  does not move or delete this roster-view type
 - add immutable `ClaudeCodeTeamRoster` as the approved runtime roster view
 
 ## Non-Goals
@@ -167,6 +172,14 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
    Required docs:
    - update `docs/atm-core/architecture.md`
 
+4. Update the planning/closure records.
+   Development work:
+   - stamp `Z.6` accepted head and verdict in `docs/phase-Z/readiness.md`
+   Required tests:
+   - `git diff --check`
+   Required docs:
+   - update `docs/phase-Z/readiness.md`
+
 ## Split Recommendation
 
 If the work requires `ConfigIngress` trait redesign, boundary adapter changes,
@@ -182,6 +195,18 @@ or watcher/reconcile import ownership, stop and move that scope into `Z.7` or
   direct `config.json` reads
 - generic runtime `load_team_config(...)` helper use is removed from
   `send`-driven command/runtime behavior
+
+## Non-Closure
+
+- `Z.6` does not narrow the `ConfigIngress` trait or daemon-side config adapters
+- `Z.6` does not implement watcher/reconcile ingest or team-admin/restore work
+
+## Production-Ready Expectation
+
+Every listed `Z.6` deliverable is expected to land at a production-ready level
+for the send/runtime-roster-view scope this sprint claims: send must use the
+accepted post-write warning behavior, and `ClaudeCodeTeamRoster` must be the
+immutable public roster surface rather than another mutable source of truth.
 
 ## Required Validation
 
@@ -201,6 +226,7 @@ or watcher/reconcile import ownership, stop and move that scope into `Z.7` or
 - `docs/phase-Z/readiness.md`
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/requirements.md`
+- `docs/atm-core/boundaries.md`
 
 ## Risks And Watchouts
 

@@ -118,7 +118,7 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s5-runtime-roster-truth-cutover`
 
-### Z.6 Claude Send Semantics And Runtime Roster View
+### Z.6 Claude Send Semantics And Immutable Runtime Roster View
 
 Purpose:
 
@@ -183,7 +183,7 @@ Purpose:
 - make restore rebuild recreated Claude team config from canonical ATM roster
   truth
 - replace manual restore-file surgery with ATM-owned projection
-- after `Z.8`, execution resumes on the already-defined canary / release sprints
+- after `Z.10`, execution resumes on the already-defined canary / release sprints
   `Z.3` and `Z.4`; those sprint numbers are retained to preserve the original
   rollout identities
 

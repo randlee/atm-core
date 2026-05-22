@@ -52,6 +52,7 @@ suppression. It assumes the `ConfigIngress` contract is already narrowed by
 
 ## Hard Dependencies
 
+- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/readiness.md`
 
@@ -148,6 +149,19 @@ ownership, stop and move that scope into `Z.9` or `Z.10`.
 - daemon-write suppression is explicit, process-local, and restart-safe:
   a matching projection event is suppressed once, restart drops suppression
   state, and crash recovery falls back to idempotent external ingest
+
+## Non-Closure
+
+- `Z.8` does not move `atm members`, `atm teams`, `add-member`, or restore
+  ownership
+- `Z.8` does not begin canary or release-signoff execution
+
+## Production-Ready Expectation
+
+Every listed `Z.8` deliverable is expected to land at a production-ready level
+for the watcher-ingest scope this sprint claims: watcher/reconcile must become
+the only external `config.json` reader, and daemon-write suppression must be
+explicit, bounded, and restart-safe.
 
 ## Required Validation
 
