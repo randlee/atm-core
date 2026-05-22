@@ -79,6 +79,10 @@ pub(crate) trait RetainedServiceRuntime: crate::boundary::NotificationSink {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError>;
+    fn load_team_roster(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError>;
 
     fn commit_workflow_state<T, I, F>(
         &self,
@@ -342,6 +346,17 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
                 member: agent.clone(),
             })
             .map(|response| response.member)
+    }
+
+    fn load_team_roster(
+        &self,
+        team: &TeamName,
+    ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError> {
+        self.roster_store
+            .load_roster(crate::boundary::RosterStoreLoadRosterRequest {
+                team: team.clone(),
+            })
+            .map(|response| response.members)
     }
 
     fn deliver_non_claude_payloads(

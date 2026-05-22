@@ -109,6 +109,8 @@ pub enum AtmErrorCode {
     WarningSendAlertStateDegraded,
     /// Obsolete .atm.toml identity config is still present.
     WarningIdentityDrift,
+    /// Claude team config and ATM roster truth disagree.
+    WarningRosterDrift,
     /// A baseline team member declared in .atm.toml is missing from config.json.
     WarningBaselineMemberMissing,
     /// A restore operation left a stale in-progress marker behind.
@@ -181,6 +183,7 @@ impl AtmErrorCode {
             Self::WarningMissingTeamConfigFallback => "ATM_WARNING_MISSING_TEAM_CONFIG_FALLBACK",
             Self::WarningSendAlertStateDegraded => "ATM_WARNING_SEND_ALERT_STATE_DEGRADED",
             Self::WarningIdentityDrift => "ATM_WARNING_IDENTITY_DRIFT",
+            Self::WarningRosterDrift => "ATM_WARNING_ROSTER_DRIFT",
             Self::WarningBaselineMemberMissing => "ATM_WARNING_BASELINE_MEMBER_MISSING",
             Self::WarningRestoreInProgress => "ATM_WARNING_RESTORE_IN_PROGRESS",
             Self::WarningStaleMailboxLock => "ATM_WARNING_STALE_MAILBOX_LOCK",
@@ -254,6 +257,7 @@ impl FromStr for AtmErrorCode {
             }
             "ATM_WARNING_SEND_ALERT_STATE_DEGRADED" => Ok(Self::WarningSendAlertStateDegraded),
             "ATM_WARNING_IDENTITY_DRIFT" => Ok(Self::WarningIdentityDrift),
+            "ATM_WARNING_ROSTER_DRIFT" => Ok(Self::WarningRosterDrift),
             "ATM_WARNING_BASELINE_MEMBER_MISSING" => Ok(Self::WarningBaselineMemberMissing),
             "ATM_WARNING_RESTORE_IN_PROGRESS" => Ok(Self::WarningRestoreInProgress),
             "ATM_WARNING_STALE_MAILBOX_LOCK" => Ok(Self::WarningStaleMailboxLock),
