@@ -36,7 +36,8 @@ Canonical roster truth:
 ### Doctor
 
 `doctor` may read `config.json` to compare it against canonical ATM roster
-truth and warn when Claude Code team membership is missing or drifted.
+truth and warn when Claude Code team membership is missing or drifted in
+either direction.
 
 ### Retained Runtime Commands
 
