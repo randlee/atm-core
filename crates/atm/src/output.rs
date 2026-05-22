@@ -372,7 +372,7 @@ pub fn print_members_result(outcome: &MembersList, json: bool) -> Result<()> {
             empty_dash(&member.agent_type),
             empty_dash(&member.model),
             empty_dash(&member.cwd),
-            empty_dash(&member.tmux_pane_id)
+            empty_dash_opt(member.tmux_pane_id.as_deref())
         );
     }
     Ok(())
@@ -441,6 +441,10 @@ pub fn print_restore_result(outcome: &RestoreOutcome, json: bool) -> Result<()> 
 
 fn empty_dash(value: &str) -> &str {
     if value.is_empty() { "-" } else { value }
+}
+
+fn empty_dash_opt(value: Option<&str>) -> &str {
+    value.filter(|value| !value.is_empty()).unwrap_or("-")
 }
 
 fn print_log_record_line(record: &AtmLogRecord) {

@@ -1,22 +1,21 @@
 //! Hidden daemon-side ingress/export helper layer used by concrete boundary
 //! adapters.
 
-use std::collections::HashSet;
-
 use crate::boundary::{
-    ClaudeCompatibilityDeliveryMode, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
-    ConfigTeamLoadResponse, InboxExportAppendMessageSetRequest,
-    InboxExportAppendMessageSetResponse, InboxExportRecordRequest, InboxExportRecordResponse,
-    InboxExportReexportMessageRequest, InboxExportReexportMessageResponse,
-    InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
-    InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-    InboxIngressImportRequest, InboxIngressImportResponse, InboxSourceFileRecord,
+    ClaudeCompatibilityDeliveryMode, ConfigLoadRequest, ConfigLoadResponse,
+    InboxExportAppendMessageSetRequest, InboxExportAppendMessageSetResponse,
+    InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
+    InboxExportReexportMessageResponse, InboxIngressDiagnosticsRequest,
+    InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
+    InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest, InboxIngressImportResponse,
+    InboxSourceFileRecord,
 };
 use crate::config;
 use crate::error::AtmError;
-use crate::home;
 use crate::mailbox;
 use crate::mailbox::source::SourceFile;
+use std::collections::HashSet;
+
 fn to_boundary_source_file(source: SourceFile) -> InboxSourceFileRecord {
     InboxSourceFileRecord {
         path: source.path,
@@ -36,45 +35,15 @@ pub(crate) fn load_workspace_config(
 ) -> Result<ConfigLoadResponse, AtmError> {
     Ok(ConfigLoadResponse {
         config: config::load_config(&request.current_dir).map_err(|error| {
-            AtmError::daemon_unavailable(format!(
+            AtmError::config(format!(
                 "daemon ConfigIngress could not load workspace config from {}",
                 request.current_dir.display()
             ))
             .with_recovery(
-                "Fix the workspace ATM configuration or current-directory selection before retrying daemon startup or same-host bootstrap.",
+                "Fix the workspace ATM configuration or current-directory selection before retrying daemon config ingress.",
             )
             .with_source(error)
         })?,
-    })
-}
-
-pub(crate) fn load_team_config(
-    request: ConfigTeamLoadRequest,
-) -> Result<ConfigTeamLoadResponse, AtmError> {
-    let team_dir = home::team_dir_from_home(&request.home_dir, &request.team).map_err(|error| {
-        AtmError::daemon_unavailable(format!(
-            "daemon ConfigIngress could not resolve team {} from {}",
-            request.team,
-            request.home_dir.display()
-        ))
-        .with_recovery(
-            "Verify the ATM home directory and team roster layout before retrying daemon team configuration hydration.",
-        )
-        .with_source(error)
-    })?;
-    let team_config = config::load_team_config(&team_dir).map_err(|error| {
-        AtmError::daemon_unavailable(format!(
-            "daemon ConfigIngress could not load team config from {}",
-            team_dir.display()
-        ))
-        .with_recovery(
-            "Fix the team ATM configuration and retry daemon startup or team runtime hydration.",
-        )
-        .with_source(error)
-    })?;
-    Ok(ConfigTeamLoadResponse {
-        team_dir,
-        team_config,
     })
 }
 

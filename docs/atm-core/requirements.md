@@ -533,9 +533,10 @@ Required identity rules:
 Required doctor rules:
 - `atm doctor` must flag obsolete `[atm].identity` when present with
   `ATM_WARNING_IDENTITY_DRIFT`
-- `atm doctor` must compare `[atm].team_members` against `config.json.members`
-- missing baseline members are findings
-- extra runtime members in `config.json` are allowed
+- `atm doctor` must compare canonical ATM roster truth against
+  `config.json.members`
+- ATM roster members missing from `config.json` are findings
+- Claude `config.json` members missing from ATM roster truth are findings
 - doctor roster output must show all `config.json` members, with baseline
   members first and `team-lead` first among the baseline set
 - `atm doctor` must snapshot `~/.claude/teams/*/inboxes/*.lock` at start and
@@ -565,15 +566,21 @@ Required service rules:
 - `add-member` must project the resulting approved member set into
   `config.json`; it must not treat local `config.json` as the durable source
   of truth
+- `atm teams` and `atm members` must source their displayed team/member state
+  from canonical ATM roster rows, not from raw Claude file membership
 - retained Claude compatibility member fields such as `tmux_pane_id` are
   canonical ATM roster-member metadata and must not be durably sourced from
   `.atm.toml`
+- ATM-owned member pane metadata is stored on the canonical roster row as
+  `recipient_pane_id` and projected back to Claude compatibility
+  `AgentMember.tmux_pane_id`
 - backup must snapshot:
   - `config.json`
   - team inbox files, excluding transient `*.lock` sentinels, dotfiles, and
     restore markers
   - the ATM team task bucket
   - ATM-owned durable roster/task state needed for deterministic restore
+  - the canonical ATM roster audit snapshot as `atm-roster.json`
 - restore must:
   - require the operator to recreate the Claude team shell through
     `TeamCreate` before ATM projects restored roster state back into
@@ -587,6 +594,9 @@ Required service rules:
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - restore must not replay backup `config.json` as roster truth
+- restore may read the freshly recreated Claude team shell only through a
+  narrow preservation helper for current `team-lead` / `leadSessionId`, not
+  through a generic roster-truth config loader
 - backup remains an audit / emergency-inspection surface rather than the source
   of roster truth during restore
 - malformed or missing snapshot material must fail with structured errors
@@ -607,12 +617,19 @@ Required service rules:
 - retained runtime commands (`list`, `read`, `clear`, `ack`) must validate
   membership through ATM roster truth only
 - Claude send must not use `config.json` as a pre-write membership gate
+- the post-write Claude roster warning path must build
+  `ClaudeCodeTeamRoster` from canonical ATM roster rows through `RosterStore` /
+  SQLite rather than through a direct `config.json` read
 - `doctor` may read `config.json` only as a comparison surface against
   canonical ATM roster truth
 - watcher / reconcile is the only approved production reader of external
   `config.json` roster changes
 - any new-team ingest or external Claude roster edit must flow into canonical
   ATM roster truth through the watcher / reconcile lane
+- daemon-authored Claude `config.json` projection writes must be suppressed
+  once and only once through an explicit process-local journal; restart must
+  clear suppression state and crash recovery must fall back to ordinary
+  idempotent external ingest
 
 ## 10.2 Config Boundary Static Gates
 
@@ -624,10 +641,9 @@ Required service rules:
   `config.json` roster boundary so later regressions are mechanically
   detectable
 - the first required rules are:
-  - reject production direct `config::load_team_config(...)` roster reads
+  - reject production direct `load_claude_team_config_document(...)` roster reads
     outside the explicit allowlist
-  - reject generic runtime `load_team_config(...)` helper use from retained
-    command paths
+  - reject generic runtime team-config helper use from retained command paths
   - reject Claude send paths that consult `config.json` before the durable ATM
     write has succeeded
 

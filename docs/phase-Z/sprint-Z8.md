@@ -1,7 +1,7 @@
 ---
 id: Z.8
 title: Watcher-Owned Claude Config Ingest
-status: planned
+status: complete
 branch: feature/pZ-s8-watcher-owned-claude-config-ingest
 worktree: ../atm-core-worktrees/feature/pZ-s8-watcher-owned-claude-config-ingest
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.8
 worktree: ../atm-core-worktrees/feature/pZ-s8-watcher-owned-claude-config-ingest
 branch: feature/pZ-s8-watcher-owned-claude-config-ingest
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -174,11 +174,13 @@ explicit, bounded, and restart-safe.
     surviving call surface for
     `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
 - `git diff --check`
-- `rg -n "load_team_config\\(" crates/atm-core/src crates/atm-daemon/src`
+- `rg -n "load_claude_team_config_document\\(" crates/atm-core/src crates/atm-daemon/src`
   - expected: surviving production matches are restricted to
-    `crates/atm-daemon/src/watch_runtime.rs`,
     `crates/atm-daemon/src/reconcile_runtime.rs`,
-    and `crates/atm-core/src/doctor/mod.rs`; any surviving match for
+    `crates/atm-daemon/src/projection_write_journal.rs`,
+    `crates/atm-core/src/service_runtime.rs`,
+    `crates/atm-core/src/team_admin.rs`,
+    and `crates/atm-core/src/team_admin/restore.rs`; any surviving match for
     `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` in
     `boundary_support.rs` or `direct_boundaries.rs` is a failure
 - `docs/phase-Z/readiness.md`

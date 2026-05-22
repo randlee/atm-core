@@ -1,13 +1,13 @@
 use atm_core::{
     boundary::{
-        self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
-        ConfigTeamLoadResponse, InboxExport, InboxExportAppendMessageSetRequest,
-        InboxExportAppendMessageSetResponse, InboxExportRecordRequest, InboxExportRecordResponse,
-        InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxIngress,
-        InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
-        InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-        InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, ReconcileRequest,
-        ReconcileResult, WatchEventBatch, WatchSubscriptionRequest,
+        self, ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, InboxExport,
+        InboxExportAppendMessageSetRequest, InboxExportAppendMessageSetResponse,
+        InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
+        InboxExportReexportMessageResponse, InboxIngress, InboxIngressDiagnosticsRequest,
+        InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
+        InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest,
+        InboxIngressImportResponse, NotificationEvent, ReconcileRequest, ReconcileResult,
+        WatchEventBatch, WatchSubscriptionRequest,
     },
     error::AtmError,
 };
@@ -127,6 +127,7 @@ impl DaemonReconcileCoordinator {
     pub(crate) fn new_with_observability(
         watch_event_source: FileWatchEventSource,
         inbox_ingress: DaemonInboxIngress,
+        roster_store: Arc<dyn boundary::RosterStore + Send + Sync>,
         notification_sink: DaemonNotificationSink,
         observability: SubsystemObservability,
     ) -> Self {
@@ -134,6 +135,7 @@ impl DaemonReconcileCoordinator {
             runtime: ReconcileRuntime::new_with_observability(
                 Arc::new(watch_event_source),
                 Arc::new(inbox_ingress),
+                roster_store,
                 Arc::new(notification_sink),
                 observability,
             ),
@@ -171,13 +173,6 @@ impl boundary::sealed::Sealed for DaemonConfigIngress {}
 impl ConfigIngress for DaemonConfigIngress {
     fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
         direct_boundaries::load_workspace_config(request)
-    }
-
-    fn load_team_config(
-        &self,
-        request: ConfigTeamLoadRequest,
-    ) -> Result<ConfigTeamLoadResponse, AtmError> {
-        direct_boundaries::load_team_config(request)
     }
 }
 
@@ -257,12 +252,13 @@ mod tests {
         InboxIngressIdentityFingerprintRequest, InboxIngressImportRequest, NotificationSink,
     };
     use atm_core::protocol::{NotificationEvent, NotificationKind};
-    use atm_core::roles::ROLE_TEAM_LEAD;
     use atm_core::schema::{AtmMessageId, MessageEnvelope};
     use atm_core::test_support::{TEST_SENDER, TEST_TEAM};
     use atm_core::types::{AgentName, IsoTimestamp};
     use std::sync::Arc;
     use tempfile::TempDir;
+
+    const TEST_LEAD: &str = "test-lead";
 
     #[test]
     fn notifier_delivery_stays_behind_boundary_trait() {
@@ -301,7 +297,7 @@ mod tests {
         std::fs::write(
             team_dir.join("config.json"),
             serde_json::json!({
-                "members": [{"name": TEST_SENDER}, {"name": ROLE_TEAM_LEAD}]
+                "members": [{"name": TEST_SENDER}, {"name": TEST_LEAD}]
             })
             .to_string(),
         )
@@ -310,7 +306,7 @@ mod tests {
 
         let export = DaemonInboxExport::new();
         let ingress = DaemonInboxIngress::new();
-        let message = sample_message(ROLE_TEAM_LEAD, "full body that should project to a stub");
+        let message = sample_message(TEST_LEAD, "full body that should project to a stub");
         let original_fingerprint = ingress
             .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
                 message: message.clone(),
@@ -366,7 +362,7 @@ mod tests {
         std::fs::write(
             team_dir.join("config.json"),
             serde_json::json!({
-                "members": [{"name": TEST_SENDER}, {"name": ROLE_TEAM_LEAD}]
+                "members": [{"name": TEST_SENDER}, {"name": TEST_LEAD}]
             })
             .to_string(),
         )
@@ -375,7 +371,7 @@ mod tests {
 
         let export = DaemonInboxExport::new();
         let ingress = DaemonInboxIngress::new();
-        let message = sample_message(ROLE_TEAM_LEAD, "small body stays fully exported");
+        let message = sample_message(TEST_LEAD, "small body stays fully exported");
         let original_fingerprint = ingress
             .compute_identity_fingerprint(InboxIngressIdentityFingerprintRequest {
                 message: message.clone(),

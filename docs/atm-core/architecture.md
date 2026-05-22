@@ -231,6 +231,13 @@ Phase R redesign notes:
 - `atm-core` owns the immutable public runtime roster projection
   `ClaudeCodeTeamRoster`; that surface is derived from canonical ATM roster
   truth rather than from direct `config.json` reads
+- `atm-core` team-admin surfaces must treat ATM roster rows as canonical team
+  and member truth; retained Claude `config.json` remains projection/output
+  state plus explicit `doctor` comparison input, not a second team-admin
+  authority
+- the `Z.6` Claude send warning path must build `ClaudeCodeTeamRoster` from
+  store-backed ATM roster rows after the durable write succeeds; it must not
+  reopen a direct `config.json` membership lookup seam
 - `atm-core` owns the queue-query semantics shared by `atm list` and
   single-message `atm read`
 - selector-driven queue inspection operates on logical terminal-node messages,
@@ -261,6 +268,10 @@ Config-ingress ownership rules:
   lookup surface
 - normal retained runtime membership decisions belong to ATM roster truth and
   `ClaudeCodeTeamRoster`
+- the only approved retained send-path file-state exception before `Z.8`
+  watcher ownership is the post-write missing-config existing-inbox fallback
+  warning; that exception does not restore generic file-backed membership
+  checks
 - `ConfigIngress` is reserved for watcher-owned external ingest plus approved
   comparison/preservation callers such as `doctor` and recreated-shell restore
   preservation
@@ -400,9 +411,11 @@ Identity-specific policy:
   so hook scripts do not need to rediscover pane mappings from file state
 - the reserved diagnostic sender `atm-identity-missing@<team>` is for
   ATM-generated repair/diagnostic notices only
-- doctor should project the live `config.json` roster in a deterministic order:
-  baseline `[atm].team_members` first, `team-lead` first among that baseline,
-  then extra runtime members
+- doctor should compare the live `config.json` roster against canonical ATM
+  roster truth and surface drift in both directions
+- doctor may still project the live `config.json` roster in a deterministic
+  order: baseline `[atm].team_members` first, `team-lead` first among that
+  baseline, then extra runtime members
 - doctor should snapshot `~/.claude/teams/*/inboxes/*.lock` at start and end;
   any lock path present in both snapshots is stale and should surface as
   `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance

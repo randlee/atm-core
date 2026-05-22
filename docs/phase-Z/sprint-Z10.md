@@ -1,7 +1,7 @@
 ---
 id: Z.10
 title: Team Backup Restore Automation And Config Projection
-status: planned
+status: complete
 branch: feature/pZ-s10-team-backup-restore-automation-and-config-projection
 worktree: ../atm-core-worktrees/feature/pZ-s10-team-backup-restore-automation-and-config-projection
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.10
 worktree: ../atm-core-worktrees/feature/pZ-s10-team-backup-restore-automation-and-config-projection
 branch: feature/pZ-s10-team-backup-restore-automation-and-config-projection
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -83,6 +83,7 @@ This sprint owns the final team recovery rewrite before `Z.3` canary begins.
    Development work:
    - preserve backup capture of raw Claude files, inboxes, tasks, and ATM-owned
      durable state
+   - write an ATM roster audit snapshot for the backed-up team
    - explicitly stop treating backup `config.json` as restore authority
    Required tests:
    - prove backup still captures the required artifacts
@@ -133,6 +134,7 @@ ownership, stop and push that scope back into `Z.5` through `Z.9`.
 ## Acceptance Criteria
 
 - backup preserves raw Claude files and ATM-owned durable state for audit use
+- backup writes `atm-roster.json` as an audit-only canonical ATM roster snapshot
 - restore does not read backup `config.json` as roster truth
 - after Claude `TeamCreate`, `atm teams restore` overwrites `config.json` from
   canonical ATM roster truth

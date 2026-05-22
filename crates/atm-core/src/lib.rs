@@ -78,12 +78,14 @@ pub(crate) mod threading;
 pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
+
+pub use config::load_claude_team_config_document;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
 pub use boundary::{
-    AckTransition, AtmProtocol, ClientTransport, ConfigIngress, ConfigLoadRequest,
-    ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse, InboxExport,
+    AckTransition, AtmProtocol, ClaudeCodeRosterMember, ClaudeCodeTeamRoster, ClientTransport,
+    ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, InboxExport,
     InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxExportRequest,
     InboxExportResponse, InboxIngress, InboxIngressDiagnosticsRequest,
     InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,

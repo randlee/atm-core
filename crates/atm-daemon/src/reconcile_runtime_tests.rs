@@ -10,7 +10,11 @@ use atm_core::boundary::{
     self, InboxIngress, InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
     InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
     InboxIngressImportRequest, InboxIngressImportResponse, NotificationEvent, NotificationSink,
-    ReconcileRequest, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    ReconcileRequest, RosterStore, RosterStoreHealthSnapshot, RosterStoreHealthSnapshotRequest,
+    RosterStoreHealthSnapshotResponse, RosterStoreListTeamsRequest, RosterStoreListTeamsResponse,
+    RosterStoreLoadRosterRequest, RosterStoreLoadRosterResponse, RosterStoreQueryMembershipRequest,
+    RosterStoreQueryMembershipResponse, RosterStoreReplaceRosterRequest,
+    RosterStoreReplaceRosterResponse, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::ReconcileResult;
@@ -18,10 +22,14 @@ use atm_core::roles::ROLE_TEAM_LEAD;
 use atm_core::schema::{AtmMessageId, MessageEnvelope};
 use atm_core::types::IsoTimestamp;
 use chrono::Utc;
-use serde_json::Map;
+use serde_json::{Map, json};
+use std::collections::HashMap;
+use std::fs;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Condvar, Mutex};
 use std::time::Duration;
+use tempfile::TempDir;
 
 fn unique_home_dir() -> std::path::PathBuf {
     static NEXT: AtomicU64 = AtomicU64::new(0);
@@ -565,6 +573,264 @@ impl NotificationSink for FakeNotificationSink {
     }
 }
 
+#[derive(Clone, Default)]
+struct RecordingRosterStore {
+    state: Arc<Mutex<RecordingRosterState>>,
+}
+
+#[derive(Default)]
+struct RecordingRosterState {
+    rosters: HashMap<atm_core::types::TeamName, Vec<boundary::RosterMemberRecord>>,
+    replace_count: u64,
+}
+
+impl RecordingRosterStore {
+    fn replace_count(&self) -> u64 {
+        self.state.lock().expect("roster state").replace_count
+    }
+
+    fn members_for(&self, team: &atm_core::types::TeamName) -> Vec<boundary::RosterMemberRecord> {
+        self.state
+            .lock()
+            .expect("roster state")
+            .rosters
+            .get(team)
+            .cloned()
+            .unwrap_or_default()
+    }
+}
+
+impl boundary::sealed::Sealed for RecordingRosterStore {}
+
+impl RosterStore for RecordingRosterStore {
+    fn replace_roster(
+        &self,
+        request: RosterStoreReplaceRosterRequest,
+    ) -> Result<RosterStoreReplaceRosterResponse, AtmError> {
+        let mut state = self.state.lock().expect("roster state");
+        let previous_member_count = state
+            .rosters
+            .get(&request.team)
+            .map_or(0, |members| members.len() as u64);
+        let current_member_count = request.members.len() as u64;
+        state.rosters.insert(request.team.clone(), request.members);
+        state.replace_count += 1;
+        Ok(RosterStoreReplaceRosterResponse {
+            team: request.team,
+            previous_member_count,
+            current_member_count,
+            replaced: true,
+        })
+    }
+
+    fn load_roster(
+        &self,
+        request: RosterStoreLoadRosterRequest,
+    ) -> Result<RosterStoreLoadRosterResponse, AtmError> {
+        Ok(RosterStoreLoadRosterResponse {
+            team: request.team.clone(),
+            members: self.members_for(&request.team),
+        })
+    }
+
+    fn query_membership(
+        &self,
+        request: RosterStoreQueryMembershipRequest,
+    ) -> Result<RosterStoreQueryMembershipResponse, AtmError> {
+        let member = self
+            .members_for(&request.team)
+            .into_iter()
+            .find(|record| record.agent_name == request.member);
+        Ok(RosterStoreQueryMembershipResponse {
+            team: request.team,
+            is_member: member.is_some(),
+            member,
+        })
+    }
+
+    fn list_teams(
+        &self,
+        _request: RosterStoreListTeamsRequest,
+    ) -> Result<RosterStoreListTeamsResponse, AtmError> {
+        Ok(RosterStoreListTeamsResponse {
+            teams: self
+                .state
+                .lock()
+                .expect("roster state")
+                .rosters
+                .keys()
+                .cloned()
+                .collect(),
+        })
+    }
+
+    fn health_snapshot(
+        &self,
+        request: RosterStoreHealthSnapshotRequest,
+    ) -> Result<RosterStoreHealthSnapshotResponse, AtmError> {
+        Ok(RosterStoreHealthSnapshotResponse {
+            snapshot: RosterStoreHealthSnapshot {
+                team: request.team.clone(),
+                member_count: self.members_for(&request.team).len() as u64,
+                stale: false,
+                refreshed_at: Some(IsoTimestamp::from_datetime(Utc::now())),
+            },
+        })
+    }
+}
+
+#[derive(Clone)]
+struct StaticWatchSource {
+    batch: WatchEventBatch,
+}
+
+impl boundary::sealed::Sealed for StaticWatchSource {}
+
+impl WatchEventSource for StaticWatchSource {
+    fn poll(&self, _request: WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> {
+        Ok(self.batch.clone())
+    }
+}
+
+fn write_team_config(
+    home_dir: &Path,
+    team: &atm_core::types::TeamName,
+    members: &[&str],
+) -> PathBuf {
+    let team_dir = atm_core::home::team_dir_from_home(home_dir, team).expect("team dir");
+    fs::create_dir_all(&team_dir).expect("create team dir");
+    let config_path = team_dir.join("config.json");
+    let document = json!({
+        "members": members
+            .iter()
+            .enumerate()
+            .map(|(index, member)| {
+                if index == 0 {
+                    json!({"name": member, "tmuxPaneId": "%1"})
+                } else {
+                    json!({"name": member})
+                }
+            })
+            .collect::<Vec<_>>(),
+    });
+    fs::write(
+        &config_path,
+        serde_json::to_vec_pretty(&document).expect("config bytes"),
+    )
+    .expect("write team config");
+    config_path
+}
+
+#[test]
+fn z8_watcher_ingest_hydrates_atm_roster_truth_for_new_team() {
+    let home_dir = TempDir::new().expect("tempdir");
+    let request = ReconcileRequest {
+        home_dir: home_dir.path().to_path_buf(),
+        team: "test-team".parse().expect("team"),
+        agent: "test-agent".parse().expect("agent"),
+    };
+    let config_path =
+        write_team_config(home_dir.path(), &request.team, &[ROLE_TEAM_LEAD, "worker"]);
+    let roster_store = RecordingRosterStore::default();
+    let runtime = ReconcileRuntime::new(
+        Arc::new(StaticWatchSource {
+            batch: WatchEventBatch {
+                paths: vec![config_path],
+            },
+        }),
+        Arc::new(FakeInboxIngress::new(vec![])),
+        Arc::new(roster_store.clone()),
+        Arc::new(FakeNotificationSink {
+            delivered: Arc::new(Mutex::new(Vec::new())),
+        }),
+    );
+    runtime.start().expect("start");
+
+    let result = runtime.reconcile(request.clone()).expect("reconcile");
+    assert_eq!(result.observed_paths, 1);
+    assert_eq!(result.imported_sources, 0);
+    assert_eq!(roster_store.replace_count(), 1);
+
+    let members = roster_store.members_for(&request.team);
+    assert_eq!(members.len(), 2);
+    assert_eq!(members[0].team_name, request.team);
+    assert_eq!(members[0].agent_name.as_str(), ROLE_TEAM_LEAD);
+    assert_eq!(members[0].recipient_pane_id.as_deref(), Some("%1"));
+
+    runtime.shutdown().expect("shutdown");
+}
+
+#[test]
+fn z8_projection_write_suppression_is_process_local() {
+    let home_dir = TempDir::new().expect("tempdir");
+    let request = ReconcileRequest {
+        home_dir: home_dir.path().to_path_buf(),
+        team: "test-team".parse().expect("team"),
+        agent: "test-agent".parse().expect("agent"),
+    };
+    let config_path = write_team_config(home_dir.path(), &request.team, &[ROLE_TEAM_LEAD]);
+    let watch_source = StaticWatchSource {
+        batch: WatchEventBatch {
+            paths: vec![config_path.clone()],
+        },
+    };
+    let roster_store = RecordingRosterStore::default();
+    let runtime = ReconcileRuntime::new(
+        Arc::new(watch_source.clone()),
+        Arc::new(FakeInboxIngress::new(vec![])),
+        Arc::new(roster_store.clone()),
+        Arc::new(FakeNotificationSink {
+            delivered: Arc::new(Mutex::new(Vec::new())),
+        }),
+    );
+    runtime.start().expect("start");
+    runtime
+        .record_projected_config_write_for_test(&config_path)
+        .expect("record projection write");
+
+    runtime
+        .reconcile(request.clone())
+        .expect("suppressed reconcile");
+    assert_eq!(roster_store.replace_count(), 0);
+
+    runtime
+        .reconcile(request.clone())
+        .expect("second reconcile imports");
+    assert_eq!(roster_store.replace_count(), 1);
+    runtime.shutdown().expect("shutdown");
+
+    let fresh_store = RecordingRosterStore::default();
+    let fresh_runtime = ReconcileRuntime::new(
+        Arc::new(watch_source),
+        Arc::new(FakeInboxIngress::new(vec![])),
+        Arc::new(fresh_store.clone()),
+        Arc::new(FakeNotificationSink {
+            delivered: Arc::new(Mutex::new(Vec::new())),
+        }),
+    );
+    fresh_runtime.start().expect("fresh start");
+    fresh_runtime
+        .reconcile(request)
+        .expect("restart reconcile imports");
+    assert_eq!(fresh_store.replace_count(), 1);
+    fresh_runtime.shutdown().expect("fresh shutdown");
+}
+
+#[test]
+fn z8_deletes_startup_only_config_bootstrap_helper() {
+    let boundary_support = include_str!("../../atm-core/src/boundary_support.rs");
+    let direct_boundaries = include_str!("../../atm-core/src/direct_boundaries.rs");
+
+    assert!(
+        !boundary_support.contains("hydrate_roster_from_team_config_once_at_startup_if_empty"),
+        "boundary support must not retain the startup-only config bootstrap helper after Z.8",
+    );
+    assert!(
+        !direct_boundaries.contains("hydrate_roster_from_team_config_once_at_startup_if_empty"),
+        "direct boundaries must not forward the startup-only config bootstrap helper after Z.8",
+    );
+}
+
 #[test]
 fn reconcile_runtime_routes_notifications_through_notification_sink_boundary() {
     let delivered = Arc::new(Mutex::new(Vec::new()));
@@ -576,6 +842,7 @@ fn reconcile_runtime_routes_notifications_through_notification_sink_boundary() {
     let runtime = ReconcileRuntime::new(
         Arc::new(FakeWatchSource),
         Arc::new(ingress),
+        Arc::new(RecordingRosterStore::default()),
         Arc::new(FakeNotificationSink {
             delivered: Arc::clone(&delivered),
         }),
@@ -601,6 +868,7 @@ fn reconcile_runtime_projects_worker_liveness_across_start_and_shutdown() {
     let runtime = ReconcileRuntime::new(
         Arc::new(FakeWatchSource),
         Arc::new(FakeInboxIngress::new(vec![])),
+        Arc::new(RecordingRosterStore::default()),
         Arc::new(FakeNotificationSink {
             delivered: Arc::new(Mutex::new(Vec::new())),
         }),
@@ -638,6 +906,7 @@ fn reconcile_runtime_actor_notification_fingerprint_registry_is_worker_owned() {
                 source_files: vec![repeated_source],
             },
         ])),
+        Arc::new(RecordingRosterStore::default()),
         Arc::new(FakeNotificationSink {
             delivered: Arc::clone(&delivered),
         }),
@@ -673,6 +942,7 @@ fn reconcile_runtime_bounds_notification_fingerprint_registry_and_re_emits_after
     let runtime = ReconcileRuntime::new(
         Arc::new(FakeWatchSource),
         Arc::new(FakeInboxIngress::new(imports)),
+        Arc::new(RecordingRosterStore::default()),
         Arc::new(FakeNotificationSink {
             delivered: Arc::clone(&delivered),
         }),
@@ -712,6 +982,7 @@ fn reconcile_runtime_bounds_per_key_fingerprint_sets() {
             repeated_import.clone(),
             repeated_import,
         ])),
+        Arc::new(RecordingRosterStore::default()),
         Arc::new(FakeNotificationSink {
             delivered: Arc::clone(&delivered),
         }),

@@ -1,21 +1,15 @@
 use crate::boundary::{
-    ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse,
-    InboxExportAppendMessageSetRequest, InboxExportAppendMessageSetResponse,
-    InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
-    InboxExportReexportMessageResponse, InboxIngressDiagnosticsRequest,
-    InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
-    InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest, InboxIngressImportResponse,
+    ConfigLoadRequest, ConfigLoadResponse, InboxExportAppendMessageSetRequest,
+    InboxExportAppendMessageSetResponse, InboxExportRecordRequest, InboxExportRecordResponse,
+    InboxExportReexportMessageRequest, InboxExportReexportMessageResponse,
+    InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
+    InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
+    InboxIngressImportRequest, InboxIngressImportResponse,
 };
 use crate::error::AtmError;
 
 pub fn load_workspace_config(request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
     crate::boundary_support::load_workspace_config(request)
-}
-
-pub fn load_team_config(
-    request: ConfigTeamLoadRequest,
-) -> Result<ConfigTeamLoadResponse, AtmError> {
-    crate::boundary_support::load_team_config(request)
 }
 
 pub fn import_inbox_source(
