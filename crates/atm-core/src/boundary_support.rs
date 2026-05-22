@@ -291,6 +291,7 @@ mod tests {
         RosterStoreQueryMembershipRequest, RosterStoreQueryMembershipResponse,
         RosterStoreReplaceRosterRequest, RosterStoreReplaceRosterResponse,
     };
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::AgentMember;
     use crate::types::{AgentName, TeamName};
     use std::collections::BTreeSet;
@@ -419,7 +420,7 @@ mod tests {
         let tempdir = TempDir::new().expect("tempdir");
         let team: TeamName = "startup-team".parse().expect("team");
         let sender: AgentName = "sender".parse().expect("agent");
-        let lead: AgentName = "team-lead".parse().expect("agent");
+        let lead: AgentName = ROLE_TEAM_LEAD.parse().expect("agent");
         write_team_config(tempdir.path(), &team, &[sender.clone(), lead.clone()]);
         let roster_store = TestRosterStore::default();
 
