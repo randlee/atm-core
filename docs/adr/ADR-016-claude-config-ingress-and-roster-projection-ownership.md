@@ -108,6 +108,8 @@ Positive:
 - team restore becomes deterministic and ATM-owned rather than a manual
   file-replay procedure
 - per-member Claude metadata survives ATM-owned add / ingest / restore flows
+- repository-local lint / `sc-lint`-candidate gates can mechanically reject
+  new boundary regressions once the current violation inventory is closed
 
 Costs:
 
@@ -115,12 +117,20 @@ Costs:
   behavior must be narrowed or removed
 - team-admin surfaces must be rewritten around ATM roster truth
 - restore implementation is a real behavior change, not a wording-only update
+- the current violation inventory must be carried as an explicit per-path
+  delete / narrow / keep plan rather than loose prose
 
 ## Phase Z Implementation Split
 
 This ADR is implemented by `Phase Z` follow-on sprints:
 
-- `Z.5` runtime roster truth cutover
-- `Z.6` watcher-owned Claude config ingress
-- `Z.7` team-admin roster authority and member metadata
-- `Z.8` backup / restore automation and config projection
+- `Z.5` retained runtime command cutover to ATM roster truth
+- `Z.6` Claude send semantics and immutable `ClaudeCodeTeamRoster`
+- `Z.7` config-ingress boundary narrowing and static gate definition
+- `Z.8` watcher-owned Claude config ingress
+- `Z.9` team-admin roster authority and member metadata
+- `Z.10` backup / restore automation and config projection
+
+The authoritative path-by-path delete / narrow / keep map is:
+
+- `docs/phase-Z/config-json-violation-inventory.md`

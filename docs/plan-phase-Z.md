@@ -108,8 +108,8 @@ Execution worktree:
 
 Purpose:
 
-- remove retained runtime `config.json` roster-truth reads
-- introduce immutable `ClaudeCodeTeamRoster` runtime projection
+- remove retained runtime `config.json` roster-truth reads from `list`,
+  `read`, `clear`, and `ack`
 - keep `doctor` as the explicit config-vs-ATM comparison surface
 
 Execution branch:
@@ -118,21 +118,49 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s5-runtime-roster-truth-cutover`
 
-### Z.6 Watcher-Owned Claude Config Ingress
+### Z.6 Claude Send Semantics And Runtime Roster View
+
+Purpose:
+
+- land the accepted post-write Claude send warning semantics
+- introduce immutable `ClaudeCodeTeamRoster`
+- remove generic runtime `load_team_config(...)` use from the send/runtime
+  helper surface
+
+Execution branch:
+- `feature/pZ-s6-claude-send-semantics-and-runtime-roster-view`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s6-claude-send-semantics-and-runtime-roster-view`
+
+### Z.7 Config Ingress Boundary Narrowing And Static Gates
+
+Purpose:
+
+- narrow `ConfigIngress` so it is no longer a generic runtime roster lookup
+- define repo-local lint / `sc-lint`-candidate gates for `config.json`
+  boundary violations
+
+Execution branch:
+- `feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates`
+
+### Z.8 Watcher-Owned Claude Config Ingest
 
 Purpose:
 
 - make watcher / reconcile the only roster-truth reader of `config.json`
 - import new-team and external config changes into canonical ATM roster state
-- land the accepted post-write Claude send warning semantics
 
 Execution branch:
-- `feature/pZ-s6-watcher-owned-claude-config-ingress`
+- `feature/pZ-s8-watcher-owned-claude-config-ingest`
 
 Execution worktree:
-- `../atm-core-worktrees/feature/pZ-s6-watcher-owned-claude-config-ingress`
+- `../atm-core-worktrees/feature/pZ-s8-watcher-owned-claude-config-ingest`
 
-### Z.7 Team Admin Roster Authority And Member Metadata
+### Z.9 Team Admin Roster Authority And Member Metadata
 
 Purpose:
 
@@ -142,12 +170,12 @@ Purpose:
   ATM roster ownership
 
 Execution branch:
-- `feature/pZ-s7-team-admin-roster-authority-and-member-metadata`
+- `feature/pZ-s9-team-admin-roster-authority-and-member-metadata`
 
 Execution worktree:
-- `../atm-core-worktrees/feature/pZ-s7-team-admin-roster-authority-and-member-metadata`
+- `../atm-core-worktrees/feature/pZ-s9-team-admin-roster-authority-and-member-metadata`
 
-### Z.8 Team Backup Restore Automation And Config Projection
+### Z.10 Team Backup Restore Automation And Config Projection
 
 Purpose:
 
@@ -160,10 +188,10 @@ Purpose:
   rollout identities
 
 Execution branch:
-- `feature/pZ-s8-team-backup-restore-automation-and-config-projection`
+- `feature/pZ-s10-team-backup-restore-automation-and-config-projection`
 
 Execution worktree:
-- `../atm-core-worktrees/feature/pZ-s8-team-backup-restore-automation-and-config-projection`
+- `../atm-core-worktrees/feature/pZ-s10-team-backup-restore-automation-and-config-projection`
 
 ### Z.3 `atm-dev` Canary And Dogfood
 
@@ -202,8 +230,9 @@ Execution worktree:
 - `Z.1` / `Z.2`:
   - `docs/phase-Z/smoke-checklist.md`
   - `docs/phase-Z/smoke-findings-ledger.md`
-- `Z.5` / `Z.6` / `Z.7` / `Z.8`:
+- `Z.5` / `Z.6` / `Z.7` / `Z.8` / `Z.9` / `Z.10`:
   - `docs/phase-Z/claude-roster-sync-and-restore.md`
+  - `docs/phase-Z/config-json-violation-inventory.md`
   - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `Z.3`:
   - `docs/phase-Z/canary-dogfood-checklist.md`
@@ -220,7 +249,7 @@ deliverables, acceptance criteria, and closure rules.
 - all validation is against the real built executables, not only harness/unit
   tests
 - smoke findings feed only the immediately following fix sprint
-- the roster/config/restore follow-on line (`Z.5` through `Z.8`) must close
+- the roster/config/restore follow-on line (`Z.5` through `Z.10`) must close
   before `atm-dev` canary use begins
 - dogfood findings feed only the final fix/sign-off sprint
 - release readiness is not declared until the documented executable flows and
@@ -236,9 +265,9 @@ Current execution state:
 - `Z.2` is the next-unused sprint and is limited to those findings plus frozen
   checklist revalidation
 - the broader roster/config/restore ownership redesign discovered while
-  analyzing `Z1-F001` is split into `Z.5` through `Z.8`
+  analyzing `Z1-F001` is split into `Z.5` through `Z.10`
 - `Z.3` and `Z.4` remain the canary / release sprints, but execution does not
-  resume there until `Z.8` closes
+  resume there until `Z.10` closes
 
 ## Initial Planning Outputs
 
@@ -246,6 +275,7 @@ Current execution state:
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `docs/phase-Z/cli-json-io-audit.md`
 - `docs/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/smoke-checklist.md`
 - `docs/phase-Z/smoke-findings-ledger.md`
 - `docs/phase-Z/canary-dogfood-checklist.md`
@@ -258,5 +288,7 @@ Current execution state:
 - `docs/phase-Z/sprint-Z6.md`
 - `docs/phase-Z/sprint-Z7.md`
 - `docs/phase-Z/sprint-Z8.md`
+- `docs/phase-Z/sprint-Z9.md`
+- `docs/phase-Z/sprint-Z10.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`

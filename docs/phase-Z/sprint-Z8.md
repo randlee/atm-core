@@ -1,107 +1,141 @@
 ---
 id: Z.8
-title: Team Backup Restore Automation And Config Projection
+title: Watcher-Owned Claude Config Ingest
 status: planned
-branch: feature/pZ-s8-team-backup-restore-automation-and-config-projection
-worktree: ../atm-core-worktrees/feature/pZ-s8-team-backup-restore-automation-and-config-projection
+branch: feature/pZ-s8-watcher-owned-claude-config-ingest
+worktree: ../atm-core-worktrees/feature/pZ-s8-watcher-owned-claude-config-ingest
 target: integrate/phase-Z
 ---
 
-# Sprint Z.8 — Team Backup Restore Automation And Config Projection
+# Sprint Z.8 — Watcher-Owned Claude Config Ingest
 
 ```yaml
 plan_type: sprint_plan
 phase: Z
 sprint: Z.8
-worktree: ../atm-core-worktrees/feature/pZ-s8-team-backup-restore-automation-and-config-projection
-branch: feature/pZ-s8-team-backup-restore-automation-and-config-projection
+worktree: ../atm-core-worktrees/feature/pZ-s8-watcher-owned-claude-config-ingest
+branch: feature/pZ-s8-watcher-owned-claude-config-ingest
 status: planned
-estimated_scope: large
+estimated_scope: medium
 ```
 
 ## Goal
 
-Automate team backup / restore around ATM roster truth so backup preserves raw
-files but restore rebuilds the recreated Claude team config from canonical ATM
-state.
+Make watcher / reconcile the only production reader of external Claude
+`config.json` roster changes and import those changes into canonical ATM roster
+truth.
 
-## Hard Dependencies
+## Scope Summary
 
-- `docs/plan-phase-Z.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
+This sprint owns new-team ingest, external edit ingest, and daemon-write
+suppression. It assumes the `ConfigIngress` contract is already narrowed by
+`Z.7`.
+
+## Governing Requirements
+
+- `REQ-CORE-CLAUDE-ROSTER-001`
+- `REQ-CORE-CLAUDE-ROSTER-002`
+
+## Governing ADRs
+
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- accepted `Z.7` closeout
+
+## Governing Boundaries
+
+- `ConfigIngress`
+- `WatchEventSource`
+- `ReconcileCoordinator`
 
 ## Prerequisites
 
 - `Z.7` complete
-- restored-team operator flow is still the current `team-lead` manual
-  procedure anchored on backup, `TeamDelete`, `TeamCreate`, and then
-  `atm teams restore`
+
+## Hard Dependencies
+
+- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/phase-Z/readiness.md`
 
 ## Exact Targets
 
+- `crates/atm-daemon/src/watch_runtime.rs`
+- `crates/atm-daemon/src/reconcile_runtime.rs`
+- `crates/atm-core/src/config/mod.rs`
+- `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/claude-roster-sync-and-restore.md`
 - `docs/phase-Z/readiness.md`
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/atm-core/requirements.md`
-- `docs/atm-core/architecture.md`
-- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- `crates/atm-core/src/team_admin.rs`
-- `crates/atm-core/src/team_admin/restore.rs`
 
-## Deliverables
+## Delete / Narrow Inventory
 
-- backup remains a raw snapshot / audit surface for Claude files, inboxes,
-  tasks, and ATM durable state
-- restore uses canonical ATM roster truth to overwrite the recreated team's
-  `config.json`
-- restore preserves the current recreated `team-lead` entry and current
-  `leadSessionId`
-- restore preserves canonical member metadata such as `tmux_pane_id`
-- `docs/phase-Z/readiness.md` updated with accepted `Z.8` verdict and head
+- delete any remaining non-watcher external `config.json` ingest path
+- narrow parser use in `crates/atm-core/src/config/mod.rs` to approved callers
+- add daemon-write suppression so projection writes do not re-trigger import
 
-## Required Work
+## Non-Goals
 
-- keep raw backup capture behavior for audit / inspection value
-- explicitly stop treating backup `config.json` as restore authority
-- preserve the operator precondition that Claude `TeamCreate` recreates the new
-  team shell before `atm teams restore` projects ATM state back into
-  `config.json`
-- restore non-lead members, approved durable team state, inboxes, and tasks in
-  one synchronized ATM-owned flow
-- preserve current recreated `team-lead` and current `leadSessionId` instead
-  of replaying stale lead state from backup
-- recompute task high-water state and preserve deterministic restore behavior
+- no team-admin cutover
+- no restore automation
+
+## Sub-Tasks
+
+1. Implement watcher-owned external roster ingest.
+   Development work:
+   - make watcher/reconcile the only production reader of external Claude
+     roster changes
+   - handle first-team ingest and later external config edits through canonical
+     ATM roster update logic
+   Required tests:
+   - prove new-team ingest hydrates ATM roster truth before later runtime
+     consumers depend on it
+   Required docs:
+   - update `docs/phase-Z/config-json-violation-inventory.md`
+
+2. Add daemon-owned write suppression.
+   Development work:
+   - ensure ATM-owned config projection does not re-trigger watcher import
+     loops
+   Required tests:
+   - prove daemon-authored projection writes do not self-replay as external
+     ingest
+   Required docs:
+   - update `docs/phase-Z/claude-roster-sync-and-restore.md`
+
+3. Close the ingest ownership records.
+   Development work:
+   - stamp `Z.8` accepted head and verdict in `docs/phase-Z/readiness.md`
+   Required tests:
+   - `git diff --check`
+   Required docs:
+   - update `docs/atm-daemon/boundaries.md`
+
+## Split Recommendation
+
+If the work begins moving `atm members`, `atm teams`, `add-member`, or restore
+ownership, stop and move that scope into `Z.9` or `Z.10`.
 
 ## Acceptance Criteria
 
-- backup still preserves raw Claude files and ATM-owned durable state for audit
-  use
-- restore does not use backup `config.json` as roster truth
-- after `TeamCreate`, `atm teams restore` overwrites `config.json` from
-  canonical ATM roster truth
-- restore preserves current recreated `team-lead`, current `leadSessionId`,
-  and canonical member metadata such as `tmux_pane_id`
-- the automated restore path replaces the current manual file-edit steps as the
-  authoritative ATM recovery flow
-- `Z.3` canary and dogfood remains blocked until `Z.8` closes
-
-## Non-Closure
-
-- `Z.8` does not run canary or release sign-off work
-- `Z.8` does not reopen `Z.1` / `Z.2` smoke findings outside restore-specific
-  fallout discovered during implementation
-
-## Production-Ready Expectation
-
-Every listed `Z.8` deliverable is expected to land at a production-ready level
-for team recovery: the product-owned restore flow must replace manual config
-replay with deterministic ATM-owned projection.
+- watcher / reconcile is the only production reader of external Claude
+  `config.json` roster changes
+- new-team ingest and external config changes update canonical ATM roster truth
+- daemon-owned projection writes do not re-trigger watcher import loops
 
 ## Required Validation
 
 - `cargo test --workspace`
 - `git diff --check`
 - `docs/phase-Z/readiness.md`
+
+## Required Document Updates
+
+- `docs/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/phase-Z/readiness.md`
+- `docs/atm-daemon/boundaries.md`
+- `docs/atm-core/requirements.md`
+
+## Risks And Watchouts
+
+- watcher ingest must not become a second mutation path with different roster
+  rules from `atm team member add`
+- daemon-write suppression has to be explicit; otherwise the import loop will
+  reappear under a different name

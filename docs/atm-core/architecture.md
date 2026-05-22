@@ -228,6 +228,9 @@ Phase R redesign notes:
   store, ingress/export, watch/reconcile, and notification/status surfaces
 - `atm-core` owns the ATM frame schema used by both same-host local IPC and
   cross-host daemon transport
+- `atm-core` owns the immutable public runtime roster projection
+  `ClaudeCodeTeamRoster`; that surface is derived from canonical ATM roster
+  truth rather than from direct `config.json` reads
 - `atm-core` owns the queue-query semantics shared by `atm list` and
   single-message `atm read`
 - selector-driven queue inspection operates on logical terminal-node messages,
@@ -252,6 +255,18 @@ Phase R redesign notes:
   method family
 - queue inspection must not remain one "read many full messages" surface once
   SQLite-backed mailbox history becomes the ordinary durable source of truth
+
+Config-ingress ownership rules:
+- `ConfigIngress` must not remain a generic retained-command/runtime roster
+  lookup surface
+- normal retained runtime membership decisions belong to ATM roster truth and
+  `ClaudeCodeTeamRoster`
+- `ConfigIngress` is reserved for watcher-owned external ingest plus approved
+  comparison/preservation callers such as `doctor` and recreated-shell restore
+  preservation
+- repository-local lint / `sc-lint`-candidate gates should make direct
+  production `config.json` roster reads and generic `load_team_config(...)`
+  helper use mechanically detectable
 
 Required frame direction:
 - transport framing must not depend on EOF or socket half-close semantics

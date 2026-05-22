@@ -48,7 +48,9 @@ The final release verdict must remain `PENDING` until:
 | Z.6 | `PENDING` | `PENDING` | `not started` | awaits `Z.5` closure |
 | Z.7 | `PENDING` | `PENDING` | `not started` | awaits `Z.6` closure |
 | Z.8 | `PENDING` | `PENDING` | `not started` | awaits `Z.7` closure |
-| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.8` closure |
+| Z.9 | `PENDING` | `PENDING` | `not started` | awaits `Z.8` closure |
+| Z.10 | `PENDING` | `PENDING` | `not started` | awaits `Z.9` closure |
+| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.10` closure |
 | Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure |
 
 Final release verdict:

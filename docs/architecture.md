@@ -127,6 +127,9 @@ Product-level boundary rules:
 - direct read-only SQLite consumers are an allowed integration surface, but
   ATM-owned command/runtime writes must not bypass the documented daemon/store
   boundaries
+- canonical roster truth is the ATM roster in SQLite; Claude Code
+  `config.json` is ingress/projection/diagnostic surface only and must not
+  become a second runtime roster-truth dependency
 - mailbox row provenance/timing convenience fields are not part of the public
   message contract unless one clear product requirement explicitly keeps them
 
@@ -145,11 +148,15 @@ Lint and tooling boundary rules:
     - bare production `Condvar::wait(...)` checks
     - fixed-sleep test-hygiene checks after the current repository-local rule
       shape is proven and extracted to `sc-lint`
+    - `config.json` roster-boundary rules after the repository-local allowlist
+      and false-positive shape is proven on `atm-core`
   - ATM-local rules:
     - duplicate semantic string-literal checks in non-test Rust code
     - targeted same-host daemon test unbounded-wait checks until or unless the
       rule family proves reusable enough for `sc-lint`
     - triage Turtle consistency checks
+    - staged `config.json` allowlist gates until the reusable rule semantics
+      stabilize
 
 Crate-local boundary detail is owned by:
 
@@ -192,6 +199,8 @@ Current Phase R lint partition direction:
   allow-list shape is proven on `atm-core`
 - keep triage-record validation as repository-local lint/CI unless its rule
   semantics become clearly reusable
+- keep `config.json` roster-boundary allowlist checks as repository-local
+  lint/CI until the rule semantics and approved-caller inventory stabilize
 
 Active postmortem rule families:
 - reusable analyzer rules:
@@ -204,6 +213,11 @@ Active postmortem rule families:
   - `PORT-005` `cfg_attr(not(unix), allow(dead_code))` portability suppressors
   - `SCB-RUNTIME-001` bare production `Condvar::wait(...)`
   - `SCB-RUNTIME-002` discarded `wait_timeout*` results in production code
+  - `SCB-CONFIG-001` production direct `config.json` roster reads outside the
+    explicit allowlist
+  - `SCB-CONFIG-002` generic runtime `load_team_config(...)` helper use from
+    retained command/runtime paths
+  - `SCB-CONFIG-003` Claude send pre-write `config.json` membership gates
 - ATM-local repository rules:
   - duplicate semantic role-name literals in non-test Rust code
   - targeted same-host daemon test unbounded-wait checks

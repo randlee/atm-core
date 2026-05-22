@@ -1,97 +1,170 @@
 ---
 id: Z.7
-title: Team Admin Roster Authority And Member Metadata
+title: Config Ingress Boundary Narrowing And Static Gates
 status: planned
-branch: feature/pZ-s7-team-admin-roster-authority-and-member-metadata
-worktree: ../atm-core-worktrees/feature/pZ-s7-team-admin-roster-authority-and-member-metadata
+branch: feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates
+worktree: ../atm-core-worktrees/feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates
 target: integrate/phase-Z
 ---
 
-# Sprint Z.7 — Team Admin Roster Authority And Member Metadata
+# Sprint Z.7 — Config Ingress Boundary Narrowing And Static Gates
 
 ```yaml
 plan_type: sprint_plan
 phase: Z
 sprint: Z.7
-worktree: ../atm-core-worktrees/feature/pZ-s7-team-admin-roster-authority-and-member-metadata
-branch: feature/pZ-s7-team-admin-roster-authority-and-member-metadata
+worktree: ../atm-core-worktrees/feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates
+branch: feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates
 status: planned
 estimated_scope: medium
 ```
 
 ## Goal
 
-Make team-admin surfaces operate on ATM roster truth and move retained Claude
-member metadata such as `tmux_pane_id` into canonical ATM roster ownership.
+Narrow `ConfigIngress` so it cannot remain a generic runtime roster lookup
+boundary, and define the repository-local lint / `sc-lint`-candidate gates that
+mechanically guard the approved caller set.
 
-## Hard Dependencies
+## Scope Summary
 
-- `docs/plan-phase-Z.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
+This sprint owns the boundary/helper contract cleanup and static gate
+definition. It does not yet implement watcher/reconcile ingest behavior.
+
+## Governing Requirements
+
+- `REQ-CORE-CLAUDE-ROSTER-001`
+- `REQ-CORE-CLAUDE-ROSTER-002`
+- `REQ-P-LINT-POSTMORTEM-001`
+
+## Governing ADRs
+
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- accepted `Z.6` closeout
+
+## Governing Boundaries
+
+- `ConfigIngress`
+- `DaemonConfigIngressAdapter`
 
 ## Prerequisites
 
 - `Z.6` complete
 
+## Hard Dependencies
+
+- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/phase-Z/readiness.md`
+
 ## Exact Targets
 
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/readiness.md`
+- `crates/atm-core/src/boundary/store.rs`
+- `crates/atm-core/src/boundary_support.rs`
+- `crates/atm-core/src/direct_boundaries.rs`
+- `crates/atm-daemon/src/boundary_adapters.rs`
+- `crates/atm-daemon/src/direct_boundaries.rs`
 - `docs/requirements.md`
 - `docs/architecture.md`
-- `docs/atm-core/requirements.md`
-- `docs/atm-core/architecture.md`
-- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- `crates/atm-core/src/team_admin.rs`
-- `crates/atm-core/src/schema/agent_member.rs`
-- `crates/atm-core/src/boundary/store.rs`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-daemon/boundaries.md`
+- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/phase-Z/readiness.md`
 
-## Deliverables
+## Delete / Narrow Inventory
 
-- `atm members` and `atm teams` report ATM roster truth
-- `atm team member add` mutates ATM roster truth first and then projects to
-  `config.json`
-- `tmux_pane_id` is canonical ATM roster-member metadata rather than a durable
-  `.atm.toml` authority
-- `docs/phase-Z/readiness.md` updated with accepted `Z.7` verdict and head
+- delete generic retained-command/runtime `load_team_config(...)` boundary
+  behavior from:
+  - `crates/atm-core/src/boundary_support.rs`
+  - `crates/atm-core/src/direct_boundaries.rs`
+  - `crates/atm-daemon/src/boundary_adapters.rs`
+  - `crates/atm-daemon/src/direct_boundaries.rs`
+- narrow `ConfigIngress` in `crates/atm-core/src/boundary/store.rs` to the
+  approved caller set
+- define `SCB-CONFIG-001`, `SCB-CONFIG-002`, and `SCB-CONFIG-003`
 
-## Required Work
+## Non-Goals
 
-- replace team-admin file-first roster views with ATM roster-truth views
-- preserve any explicit raw Claude file comparison behavior only as a
-  diagnostic surface outside normal members / teams command output
-- ensure ATM-owned member-add writes the canonical roster and then projects the
-  approved member set into `config.json`
-- store justified Claude member-routing metadata such as `tmux_pane_id` in
-  canonical ATM roster state and project it back into `config.json`
-- stop treating `.atm.toml` as the durable source of per-member pane mapping
+- no watcher/reconcile roster import logic yet
+- no team-admin cutover
+- no restore automation
+
+## Sub-Tasks
+
+1. Narrow the `ConfigIngress` contract.
+   Development work:
+   - remove generic roster-lookup semantics from:
+     - `crates/atm-core/src/boundary/store.rs`
+     - `crates/atm-core/src/boundary_support.rs`
+     - `crates/atm-core/src/direct_boundaries.rs`
+     - `crates/atm-daemon/src/boundary_adapters.rs`
+     - `crates/atm-daemon/src/direct_boundaries.rs`
+   - leave only the approved ingress/comparison/preservation behavior
+   Required tests:
+   - prove generic retained command/runtime lookup no longer compiles or no
+     longer exists on the boundary surface
+   Required docs:
+   - update `docs/atm-core/boundaries.md`
+   - update `docs/atm-daemon/boundaries.md`
+
+2. Define static gates for future regressions.
+   Development work:
+   - define repository-local lint / `sc-lint`-candidate rules:
+     - `SCB-CONFIG-001`
+     - `SCB-CONFIG-002`
+     - `SCB-CONFIG-003`
+   - define the explicit allowlist from
+     `docs/phase-Z/config-json-violation-inventory.md`
+   Required tests:
+   - lint/CI proof or placeholder validation contract showing the rule family
+     is part of the owning sprint
+   Required docs:
+   - update `docs/requirements.md`
+   - update `docs/architecture.md`
+
+3. Sync the planning records.
+   Development work:
+   - stamp `Z.7` accepted head and verdict in `docs/phase-Z/readiness.md`
+   Required tests:
+   - `git diff --check`
+   Required docs:
+   - update `docs/phase-Z/claude-roster-sync-and-restore.md`
+
+## Split Recommendation
+
+If the work starts implementing watcher/reconcile import behavior, daemon-write
+suppression, or external roster change ingestion, stop and move that scope into
+`Z.8`.
 
 ## Acceptance Criteria
 
-- `atm members` and `atm teams` report ATM roster truth rather than raw
-  `config.json` state
-- `atm team member add` persists member additions through canonical ATM roster
-  ownership and projects the resulting config
-- `tmux_pane_id` survives ATM member add, watcher ingest, and later restore
-  through canonical ATM roster ownership
-- `.atm.toml` is no longer the durable source of per-member tmux pane metadata
-
-## Non-Closure
-
-- `Z.7` does not own team restore automation
-- `Z.7` does not reopen the watcher-ingress ownership decision from `Z.6`
-
-## Production-Ready Expectation
-
-Every listed `Z.7` deliverable is expected to land at a production-ready level
-for team-admin roster authority: user-facing team views and member mutation
-must reflect the same canonical roster truth the runtime already uses.
+- `ConfigIngress` is no longer documented or shaped as a generic runtime roster
+  lookup boundary
+- the helper/adapter chain no longer exposes generic retained command/runtime
+  `load_team_config(...)` behavior
+- repo-local lint / `sc-lint`-candidate rule definitions exist for the
+  `config.json` boundary violation family
 
 ## Required Validation
 
 - `cargo test --workspace`
 - `git diff --check`
-- `rg -n "tmux_pane_id" crates/atm-core`
+- `rg -n "load_team_config\\(" crates/atm-core/src/boundary_support.rs crates/atm-core/src/direct_boundaries.rs crates/atm-daemon/src/boundary_adapters.rs crates/atm-daemon/src/direct_boundaries.rs`
+  - expected: surviving matches are explicitly ingress/comparison/preservation
+    only
 - `docs/phase-Z/readiness.md`
+
+## Required Document Updates
+
+- `docs/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/phase-Z/readiness.md`
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/atm-core/boundaries.md`
+- `docs/atm-daemon/boundaries.md`
+
+## Risks And Watchouts
+
+- this sprint is not allowed to hide the boundary leak behind new naming while
+  keeping the same generic behavior
+- the allowlist must stay explicit and narrow
+- if the static gates cannot be stated crisply here, later implementation will
+  drift back toward ad hoc exceptions

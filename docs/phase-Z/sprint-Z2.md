@@ -100,7 +100,7 @@ validation set on the fixed branch.
   - the broader removal of retained `config.json` runtime reads, the
     single-reader watcher/import design, canonical member metadata ownership,
     and team backup/restore automation are follow-on scope reserved for
-    `Z.5` through `Z.8`
+    `Z.5` through `Z.10`
 - close `Z1-F002` by fixing SQLite schema-init ordering for preexisting
   host-scoped databases whose `mail_messages` table still exposes
   `legacy_message_id` instead of `message_id`
@@ -112,9 +112,13 @@ validation set on the fixed branch.
 ## Follow-On Inventory For Z.5+
 
 The broader `config.json` ownership cleanup identified during `Z.1` / `Z.2`
-analysis is intentionally deferred into `Z.5` through `Z.8`. Those later
-sprints own the deletion inventory, watcher-owned ingress narrowing,
-team-admin/restore redesign, and canonical member-metadata migration.
+analysis is intentionally deferred into `Z.5` through `Z.10`. Those later
+sprints own the deletion inventory, immutable runtime roster view, boundary
+narrowing, watcher-owned ingress, team-admin/restore redesign, and canonical
+member-metadata migration.
+
+Once `Z.2` closes, execution continues with `Z.5`, `Z.6`, `Z.7`, `Z.8`,
+`Z.9`, and `Z.10` before `Z.3` canary begins.
 
 ## Acceptance Criteria
 
@@ -147,7 +151,7 @@ team-admin/restore redesign, and canonical member-metadata migration.
 - `Z.2` does not widen the smoke checklist
 - `Z.2` does not begin canary or release-signoff work
 - `Z.2` does not own the full `config.json` single-reader cleanup line; that
-  work is reserved for `Z.5` through `Z.8`
+  work is reserved for `Z.5` through `Z.10`
 
 ## Production-Ready Expectation
 

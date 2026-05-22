@@ -1,107 +1,157 @@
 ---
 id: Z.5
-title: Runtime Roster Truth Cutover
+title: Retained Runtime Command Roster Truth Cutover
 status: planned
-branch: feature/pZ-s5-runtime-roster-truth-cutover
-worktree: ../atm-core-worktrees/feature/pZ-s5-runtime-roster-truth-cutover
+branch: feature/pZ-s5-retained-runtime-command-roster-truth-cutover
+worktree: ../atm-core-worktrees/feature/pZ-s5-retained-runtime-command-roster-truth-cutover
 target: integrate/phase-Z
 ---
 
-# Sprint Z.5 — Runtime Roster Truth Cutover
+# Sprint Z.5 — Retained Runtime Command Roster Truth Cutover
 
 ```yaml
 plan_type: sprint_plan
 phase: Z
 sprint: Z.5
-worktree: ../atm-core-worktrees/feature/pZ-s5-runtime-roster-truth-cutover
-branch: feature/pZ-s5-runtime-roster-truth-cutover
+worktree: ../atm-core-worktrees/feature/pZ-s5-retained-runtime-command-roster-truth-cutover
+branch: feature/pZ-s5-retained-runtime-command-roster-truth-cutover
 status: planned
 estimated_scope: medium
 ```
 
 ## Goal
 
-Make canonical ATM roster state the only runtime membership source for retained
-commands and introduce the immutable public `ClaudeCodeTeamRoster` view.
+Delete the retained runtime `config.json` roster-truth reads in `list`, `read`,
+`clear`, and `ack`, while preserving `doctor` as the explicit config-vs-ATM
+comparison surface.
 
-## Hard Dependencies
+## Scope Summary
 
-- `docs/plan-phase-Z.md`
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
+This sprint owns the retained command cutover only. It does not yet change
+Claude send semantics, boundary helper shape, watcher ingest, team-admin, or
+restore.
+
+## Governing Requirements
+
+- `REQ-CORE-CLAUDE-ROSTER-001`
+- `REQ-CORE-CLAUDE-ROSTER-002`
+- `REQ-CORE-QA-RUNTIME-001`
+
+## Governing ADRs
+
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- accepted `Z.2` closeout
+
+## Governing Boundaries
+
+- `RosterStore`
+- `ConfigIngress`
 
 ## Prerequisites
 
 - `Z.2` complete
-- `Z1-F001` and `Z1-F002` are closed on the accepted `integrate/phase-Z` line
+
+## Hard Dependencies
+
+- `docs/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/phase-Z/readiness.md`
 
 ## Exact Targets
 
-- `docs/phase-Z/claude-roster-sync-and-restore.md`
-- `docs/phase-Z/readiness.md`
-- `docs/requirements.md`
-- `docs/architecture.md`
-- `docs/atm-core/requirements.md`
-- `docs/atm-core/architecture.md`
-- `docs/atm-daemon/boundaries.md`
-- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
-- `crates/atm-core/src/boundary/store.rs`
-- `crates/atm-core/src/service_runtime.rs`
-- `crates/atm-core/src/send/mod.rs`
 - `crates/atm-core/src/list.rs`
 - `crates/atm-core/src/read/mod.rs`
 - `crates/atm-core/src/clear/mod.rs`
 - `crates/atm-core/src/ack/mod.rs`
 - `crates/atm-core/src/doctor/mod.rs`
+- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/phase-Z/readiness.md`
 
-## Deliverables
+## Delete / Narrow Inventory
 
-- immutable public `ClaudeCodeTeamRoster` view backed by ATM roster truth
-- `list`, `read`, `clear`, and `ack` membership validation cut over to ATM
-  roster truth only
-- `send` no longer uses `config.json` as a pre-write membership gate
-- `doctor` remains the explicit config-vs-ATM comparison surface
-- `docs/phase-Z/readiness.md` updated with accepted `Z.5` verdict and head
+- delete `runtime.load_team_config(...)` membership validation from:
+  - `crates/atm-core/src/list.rs`
+  - `crates/atm-core/src/read/mod.rs`
+  - `crates/atm-core/src/clear/mod.rs`
+  - `crates/atm-core/src/ack/mod.rs`
+- keep `crates/atm-core/src/doctor/mod.rs` only as a compare-only reader
 
-## Required Work
+## Non-Goals
 
-- remove normal runtime roster-truth reads of `config.json` from retained
-  command flows
-- route retained runtime membership decisions through ATM roster truth and the
-  immutable `ClaudeCodeTeamRoster` projection only
-- keep `doctor` as a comparison surface that may warn when `config.json` is
-  missing ATM roster members or otherwise drifted
-- document any remaining justified `config.json` read surface explicitly in the
-  updated docs
+- no Claude send warning-semantics work
+- no `ConfigIngress` trait narrowing
+- no watcher/reconcile ingest work
+- no team-admin or restore work
+
+## Sub-Tasks
+
+1. Cut over retained query/mutation commands to ATM roster truth only.
+   Development work:
+   - delete `runtime.load_team_config(...)` membership validation from:
+     - `crates/atm-core/src/list.rs`
+     - `crates/atm-core/src/read/mod.rs`
+     - `crates/atm-core/src/clear/mod.rs`
+     - `crates/atm-core/src/ack/mod.rs`
+   - route those membership decisions through ATM roster truth only
+   Required tests:
+   - command-path tests that prove valid ATM roster members still pass
+   - command-path tests that prove missing ATM roster members fail without any
+     `config.json` dependency
+   Required docs:
+   - update `docs/phase-Z/config-json-violation-inventory.md`
+
+2. Narrow `doctor` to an explicit comparison-only role.
+   Development work:
+   - keep `doctor` file reads only for config-vs-ATM drift reporting
+   - make sure `doctor` does not reopen a generic runtime roster lookup seam
+   Required tests:
+   - drift-report coverage when Claude roster differs from ATM roster truth
+   Required docs:
+   - update `docs/phase-Z/claude-roster-sync-and-restore.md`
+
+3. Update the planning/closure records.
+   Development work:
+   - stamp `Z.5` accepted head and verdict in `docs/phase-Z/readiness.md`
+   Required tests:
+   - `git diff --check`
+   Required docs:
+   - update `docs/project-plan.md` only if execution sequencing changes
+
+## Split Recommendation
+
+If the work requires Claude send post-write warning behavior, `ConfigIngress`
+trait changes, or watcher/reconcile import logic, stop and move that scope into
+`Z.6`, `Z.7`, or `Z.8` instead of widening `Z.5`.
 
 ## Acceptance Criteria
 
-- no normal retained runtime command path reads `config.json` for roster-truth
-  membership validation
-- `list`, `read`, `clear`, and `ack` use ATM roster truth only
-- `send` no longer blocks before durable write based on `config.json`
-- `doctor` can still compare `config.json` against ATM roster truth and report
-  drift
-- `ClaudeCodeTeamRoster` exists as the only approved immutable public runtime
-  roster surface
-
-## Non-Closure
-
-- `Z.5` does not implement watcher-owned `config.json` ingest
-- `Z.5` does not automate team-admin or restore workflows
-- `Z.5` does not move `tmux_pane_id` ownership yet
-
-## Production-Ready Expectation
-
-Every listed `Z.5` deliverable is expected to land at a production-ready level
-for runtime roster-truth ownership: retained commands must be able to run on
-ATM roster truth alone without hidden `config.json` runtime dependencies.
+- `list`, `read`, `clear`, and `ack` no longer read `config.json` for roster
+  truth
+- `doctor` is the only retained runtime surface in this sprint still allowed to
+  compare against `config.json`
+- the path inventory row for each deleted runtime read is marked closed in
+  `docs/phase-Z/config-json-violation-inventory.md`
 
 ## Required Validation
 
 - `cargo test --workspace`
 - `git diff --check`
-- `rg -n "load_team_config\\(" crates/atm-core/src/send/mod.rs crates/atm-core/src/list.rs crates/atm-core/src/read/mod.rs crates/atm-core/src/clear/mod.rs crates/atm-core/src/ack/mod.rs`
-  - expected: no retained-command production matches
+- `rg -n "load_team_config\\(" crates/atm-core/src/list.rs crates/atm-core/src/read/mod.rs crates/atm-core/src/clear/mod.rs crates/atm-core/src/ack/mod.rs`
+  - expected: no production matches
 - `docs/phase-Z/readiness.md`
+
+## Required Document Updates
+
+- `docs/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/phase-Z/readiness.md`
+- `docs/atm-core/requirements.md`
+- `docs/atm-core/architecture.md`
+
+## Risks And Watchouts
+
+- do not silently leave `ack` split between ATM roster truth and file-backed
+  reply-team validation
+- `doctor` is allowed to survive, but only as a comparison surface
+- if command tests still need `load_team_config(...)`, that is a sign the
+  runtime helper cleanup in `Z.6` needs to happen immediately after this sprint

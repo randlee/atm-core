@@ -10,7 +10,11 @@ Document the accepted `Phase Z` follow-on direction for:
 - backup / restore automation
 
 This write-up captures the user-approved behavior and the current
-implementation gaps that the `Z.5` through `Z.8` sprint line must close.
+implementation gaps that the `Z.5` through `Z.10` sprint line must close.
+
+The exact per-path delete / narrow / keep map lives in:
+
+- `docs/phase-Z/config-json-violation-inventory.md`
 
 ## Accepted Ownership Model
 
@@ -119,35 +123,14 @@ These fields are:
 
 ## Current Production Touchpoints To Remove Or Narrow
 
-Runtime roster-truth reads that should be removed from normal command flows:
-
-- `crates/atm-core/src/send/mod.rs`
-- `crates/atm-core/src/list.rs`
-- `crates/atm-core/src/read/mod.rs`
-- `crates/atm-core/src/clear/mod.rs`
-- `crates/atm-core/src/ack/mod.rs`
-- `crates/atm-core/src/service_runtime.rs`
-
-Comparison / admin surfaces that must be narrowed to their justified role:
-
-- `crates/atm-core/src/doctor/mod.rs`
-  - comparison only
-- `crates/atm-core/src/team_admin.rs`
-  - ATM-roster views and ATM-owned mutation / projection only
-- `crates/atm-core/src/team_admin/restore.rs`
-  - ATM-owned restore / projection rather than backup-config replay
-
-Boundary surfaces that must stop behaving like generic roster lookups:
-
-- `crates/atm-core/src/boundary/store.rs`
-- `crates/atm-core/src/boundary_support.rs`
-- `crates/atm-core/src/direct_boundaries.rs`
-- `crates/atm-daemon/src/boundary_adapters.rs`
-- `crates/atm-daemon/src/direct_boundaries.rs`
+See `docs/phase-Z/config-json-violation-inventory.md` for the authoritative
+path inventory, sprint ownership, and exact delete / rewrite expectations.
 
 ## Phase Z Follow-On Sprint Split
 
-- `Z.5` runtime roster truth cutover
-- `Z.6` watcher-owned config ingress and Claude send warning semantics
-- `Z.7` team-admin roster authority and canonical member metadata
-- `Z.8` backup / restore automation and config projection
+- `Z.5` retained runtime command cutover to ATM roster truth
+- `Z.6` Claude send semantics and immutable `ClaudeCodeTeamRoster`
+- `Z.7` config-ingress boundary narrowing and static gate definition
+- `Z.8` watcher-owned config ingest
+- `Z.9` team-admin roster authority and canonical member metadata
+- `Z.10` backup / restore automation and config projection

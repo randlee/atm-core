@@ -3786,7 +3786,7 @@ Status summary:
 - the `Z1-F001` analysis also reopened a broader follow-on line for roster
   truth, watcher-owned Claude config ingress, member metadata ownership, and
   backup / restore automation; that work is now split into `Z.5` through
-  `Z.8` and must close before `Z.3` canary begins.
+  `Z.10` and must close before `Z.3` canary begins.
 
 Planning branch:
 - `plan/phase-Z`
@@ -3809,12 +3809,16 @@ Execution shape:
   - branch: `feature/pZ-s2-fix-and-revalidate`
 - `Z.5` runtime roster truth cutover
   - branch: `feature/pZ-s5-runtime-roster-truth-cutover`
-- `Z.6` watcher-owned Claude config ingress
-  - branch: `feature/pZ-s6-watcher-owned-claude-config-ingress`
-- `Z.7` team-admin roster authority and member metadata
-  - branch: `feature/pZ-s7-team-admin-roster-authority-and-member-metadata`
-- `Z.8` team backup / restore automation and config projection
-  - branch: `feature/pZ-s8-team-backup-restore-automation-and-config-projection`
+- `Z.6` Claude send semantics and immutable runtime roster view
+  - branch: `feature/pZ-s6-claude-send-semantics-and-runtime-roster-view`
+- `Z.7` config-ingress boundary narrowing and static gates
+  - branch: `feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates`
+- `Z.8` watcher-owned Claude config ingest
+  - branch: `feature/pZ-s8-watcher-owned-claude-config-ingest`
+- `Z.9` team-admin roster authority and member metadata
+  - branch: `feature/pZ-s9-team-admin-roster-authority-and-member-metadata`
+- `Z.10` team backup / restore automation and config projection
+  - branch: `feature/pZ-s10-team-backup-restore-automation-and-config-projection`
 - `Z.3` `atm-dev` canary and dogfood
   - branch: `feature/pZ-s3-atm-dev-canary-and-dogfood`
 - `Z.4` final fixes and release sign-off
@@ -3825,6 +3829,7 @@ Immediate planning outputs:
 - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `docs/phase-Z/cli-json-io-audit.md`
 - `docs/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/smoke-checklist.md`
 - `docs/phase-Z/smoke-findings-ledger.md`
 - `docs/phase-Z/canary-dogfood-checklist.md`
@@ -3837,6 +3842,8 @@ Immediate planning outputs:
 - `docs/phase-Z/sprint-Z6.md`
 - `docs/phase-Z/sprint-Z7.md`
 - `docs/phase-Z/sprint-Z8.md`
+- `docs/phase-Z/sprint-Z9.md`
+- `docs/phase-Z/sprint-Z10.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
 
@@ -3847,5 +3854,5 @@ Acceptance / Phase Entry Gate:
 - `Phase Ye` must remain closed and must not be used to reopen rollout scope
 - `Phase Z` sprint execution must validate on the real built executables, not
   only unit or harness tests
-- `Z.3` canary execution must not begin until `Z.5` through `Z.8` close on the
+- `Z.3` canary execution must not begin until `Z.5` through `Z.10` close on the
   accepted `integrate/phase-Z` line
