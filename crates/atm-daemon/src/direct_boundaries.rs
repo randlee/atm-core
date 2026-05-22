@@ -1,12 +1,11 @@
 use atm_core::{
     boundary::{
-        ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse,
-        InboxExportAppendMessageSetRequest, InboxExportAppendMessageSetResponse,
-        InboxExportRecordRequest, InboxExportRecordResponse, InboxExportReexportMessageRequest,
-        InboxExportReexportMessageResponse, InboxIngressDiagnosticsRequest,
-        InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
-        InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest,
-        InboxIngressImportResponse,
+        ConfigLoadRequest, ConfigLoadResponse, InboxExportAppendMessageSetRequest,
+        InboxExportAppendMessageSetResponse, InboxExportRecordRequest, InboxExportRecordResponse,
+        InboxExportReexportMessageRequest, InboxExportReexportMessageResponse,
+        InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
+        InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
+        InboxIngressImportRequest, InboxIngressImportResponse,
     },
     error::AtmError,
 };
@@ -15,12 +14,6 @@ pub(crate) fn load_workspace_config(
     request: ConfigLoadRequest,
 ) -> Result<ConfigLoadResponse, AtmError> {
     atm_core::direct_boundaries::load_workspace_config(request)
-}
-
-pub(crate) fn load_team_config(
-    request: ConfigTeamLoadRequest,
-) -> Result<ConfigTeamLoadResponse, AtmError> {
-    atm_core::direct_boundaries::load_team_config(request)
 }
 
 pub(crate) fn import_inbox_source(

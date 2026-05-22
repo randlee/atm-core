@@ -1,0 +1,27 @@
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/boundary_support.rs"
+symbol = "hydrate_roster_from_team_config_once_at_startup_if_empty"
+why = "temporary startup-only roster hydration until watcher-owned ingest lands in Z.8"
+sunset_sprint = "Z.8"
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/direct_boundaries.rs"
+symbol = "hydrate_roster_from_team_config_once_at_startup_if_empty"
+why = "temporary startup-only roster hydration forwarder until watcher-owned ingest lands in Z.8"
+sunset_sprint = "Z.8"
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/service_runtime.rs"
+symbol = "load_team_config_for_doctor_compare"
+why = "retained runtime may read Claude team config only for doctor compare-only drift reporting"
+sunset_sprint = "Z.10"
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/config/mod.rs"
+symbol = "load_claude_team_config_document"
+why = "single parser entrypoint that approved compare/ingress/projection callers use after runtime lookup narrowing"
+sunset_sprint = "Z.10"

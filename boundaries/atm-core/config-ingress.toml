@@ -5,7 +5,7 @@ name = "ConfigIngress"
 
 [public]
 trait = "ConfigIngress"
-notes = "trait and typed workspace/team config DTOs landed in atm_core::boundary"
+notes = "trait and typed workspace config DTOs landed in atm_core::boundary"
 
 [implementation]
 visibility = "trait_only"
@@ -28,8 +28,8 @@ scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["config load requests"]
-response_types = ["typed ATM config models"]
+request_types = ["workspace config load requests"]
+response_types = ["typed ATM workspace config models"]
 error_types = ["AtmError"]
 
 [testing]
@@ -37,9 +37,9 @@ allowed_test_double_paths = []
 forbidden_test_bypasses = ["std::fs::read_to_string"]
 
 [enforcement]
-lint_rules = ["LINT-BOUNDARY-CONFIG-INGRESS-REFERENCES"]
-review_gates = ["no_direct_config_parser_calls"]
+lint_rules = ["LINT-BOUNDARY-CONFIG-INGRESS-REFERENCES", "SCB-CONFIG-001", "SCB-CONFIG-002"]
+review_gates = ["no_direct_config_parser_calls", "no_generic_runtime_team_lookup"]
 
 [status]
 state = "stub_landed"
-notes = ["typed workspace and team config request/response contracts landed in atm_core::boundary", "retained command/service cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md", "parsing and validation of [atm].claude_jsonl_body_export_max_bytes remains owned here for the ADR-010 compatibility-envelope contract"]
+notes = ["typed workspace config request/response contracts landed in atm_core::boundary", "generic team-config lookup was removed from the ConfigIngress trait during Phase Z Z.7", "one startup-only helper, hydrate_roster_from_team_config_once_at_startup_if_empty(...), remains allowlisted outside the trait until Z.8", "parsing and validation of [atm].claude_jsonl_body_export_max_bytes remains owned here for the ADR-010 compatibility-envelope contract"]
