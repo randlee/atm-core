@@ -173,6 +173,9 @@ Notes:
 - This is one of the main explicit corrections to earlier boundary leakage.
 - canonical ATM roster truth does not live here; normal retained runtime
   membership checks must use `RosterStore` / `ClaudeCodeTeamRoster` instead
+- the `Z.6` send warning path is allowed to mention the underlying
+  `config.json` mismatch in returned warning text, but it must obtain member
+  truth from `ClaudeCodeTeamRoster` rather than from `ConfigIngress`
 - approved surviving callers after the `Phase Z` follow-on line are:
   - watcher / reconcile ingest
   - `doctor` comparison

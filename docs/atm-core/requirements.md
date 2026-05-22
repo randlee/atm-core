@@ -607,6 +607,9 @@ Required service rules:
 - retained runtime commands (`list`, `read`, `clear`, `ack`) must validate
   membership through ATM roster truth only
 - Claude send must not use `config.json` as a pre-write membership gate
+- the post-write Claude roster warning path must build
+  `ClaudeCodeTeamRoster` from canonical ATM roster rows through `RosterStore` /
+  SQLite rather than through a direct `config.json` read
 - `doctor` may read `config.json` only as a comparison surface against
   canonical ATM roster truth
 - watcher / reconcile is the only approved production reader of external

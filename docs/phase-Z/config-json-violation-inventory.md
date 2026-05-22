@@ -39,13 +39,13 @@ surfaces after `Z.10` closes:
 
 | Path | Current Behavior | Violation Status | Owning Sprint | Current Status | Required Resolution |
 | --- | --- | --- | --- | --- | --- |
-| `crates/atm-core/src/list.rs` | validates mailbox target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `open` | use ATM roster truth only |
-| `crates/atm-core/src/read/mod.rs` | validates explicit target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `open` | use ATM roster truth only |
-| `crates/atm-core/src/clear/mod.rs` | validates clear target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `open` | use ATM roster truth only |
-| `crates/atm-core/src/ack/mod.rs` | validates actor/reply-team membership through `runtime.load_team_config(...)` | delete | `Z.5` | `open` | use ATM roster truth only |
-| `crates/atm-core/src/doctor/mod.rs` | reads `config.json` and reports drift/baseline warnings | keep, narrow | `Z.5` | `open` | preserve compare-only role; do not let `doctor` become a generic runtime lookup seam |
-| `crates/atm-core/src/send/mod.rs` | performs pre-write config membership checks before Claude delivery path | rewrite | `Z.6` | `open` | durable ATM write first; if inbox exists, inbox write still attempted; only then return Claude roster warning when member is absent from `config.json` |
-| `crates/atm-core/src/service_runtime.rs` | exposes generic `load_team_config(...)` runtime helper | delete / narrow | `Z.6` | `open` | remove generic runtime helper from normal command flows; replace with ATM roster / `ClaudeCodeTeamRoster` access |
+| `crates/atm-core/src/list.rs` | validates mailbox target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `closed` | explicit target membership now resolves through ATM roster truth only |
+| `crates/atm-core/src/read/mod.rs` | validates explicit target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `closed` | explicit target membership now resolves through ATM roster truth only |
+| `crates/atm-core/src/clear/mod.rs` | validates clear target membership through `runtime.load_team_config(...)` | delete | `Z.5` | `closed` | explicit target membership now resolves through ATM roster truth only |
+| `crates/atm-core/src/ack/mod.rs` | validates actor/reply-team membership through `runtime.load_team_config(...)` | delete | `Z.5` | `closed` | actor and reply-target membership now resolve through ATM roster truth only |
+| `crates/atm-core/src/doctor/mod.rs` | reads `config.json` and reports drift/baseline warnings | keep, narrow | `Z.5` | `closed` | compare-only reader; drift warnings now compare Claude file membership against ATM roster truth |
+| `crates/atm-core/src/send/mod.rs` | performed pre-write config membership checks before Claude delivery path | rewrite | `Z.6` | `closed` | send now writes ATM durable state first, then uses store-backed `ClaudeCodeTeamRoster` for the Claude roster warning path; missing-config fallback remains post-write and only for the existing-inbox fallback case |
+| `crates/atm-core/src/service_runtime.rs` | exposed generic `load_team_config(...)` runtime helper | delete / narrow | `Z.6` | `closed` | generic runtime helper removed from send-driven paths; retained runtime now exposes doctor-only compare loading plus store-backed `ClaudeCodeTeamRoster` access |
 | `crates/atm-core/src/boundary/store.rs` | `ConfigIngress` behaves like a generic config/team lookup boundary | narrow | `Z.7` | `open` | make the boundary watcher-ingress / approved comparison oriented rather than a general runtime roster lookup |
 | `crates/atm-core/src/boundary_support.rs` | helper loads team config through generic boundary support seam | narrow | `Z.7` | `open` | keep only approved ingress / comparison operations |
 | `crates/atm-core/src/direct_boundaries.rs` | forwards generic `load_team_config(...)` boundary call | narrow | `Z.7` | `open` | remove generic runtime lookup forwarding |

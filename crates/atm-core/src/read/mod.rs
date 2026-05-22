@@ -473,19 +473,7 @@ fn resolve_read_context<R: RetainedServiceRuntime>(
         ));
     }
 
-    let team_config = runtime.load_team_config(&team_dir)?;
-    if target.explicit
-        && !team_config
-            .members
-            .iter()
-            .any(|member| member.name == target.agent.as_str())
-    {
-        return Err(
-            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-                "Update the team membership in config.json or read a different mailbox target.",
-            ),
-        );
-    }
+    validate_target_member_in_roster(runtime, &target)?;
 
     let seen_watermark = if query.seen_state_filter && query.selection_mode != ReadSelection::All {
         runtime.load_seen_watermark(&query.home_dir, &target.team, &target.agent)?
@@ -499,6 +487,28 @@ fn resolve_read_context<R: RetainedServiceRuntime>(
         target,
         seen_watermark,
     })
+}
+
+fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
+    runtime: &R,
+    target: &crate::mailbox::source::ResolvedTarget,
+) -> Result<(), AtmError> {
+    if !target.explicit {
+        return Ok(());
+    }
+
+    if runtime
+        .load_roster_member(&target.team, &target.agent)?
+        .is_none()
+    {
+        return Err(
+            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
+                "Repair or reload the ATM roster, or read a different mailbox target.",
+            ),
+        );
+    }
+
+    Ok(())
 }
 
 fn message_key_for_classified(
@@ -731,25 +741,33 @@ fn transition_displayed_message(
 #[cfg(test)]
 mod tests {
     use std::collections::HashMap;
-    use std::path::PathBuf;
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
 
     use serde_json::Map;
     use serde_json::Value;
     use tempfile::tempdir;
 
-    use super::{BucketCounts, ClassifiedMessage, ReadQuery, metadata_selection, state};
+    use super::{
+        BucketCounts, ClassifiedMessage, ReadQuery, metadata_selection,
+        read_mail_with_runtime_impl, state,
+    };
+    use crate::boundary::{self, ClaudeCompatibilityDeliveryMode, RosterHarness, RosterMemberKind};
     use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
     use crate::mailbox::surface::dedupe_message_id_surface;
+    use crate::observability::NullObservability;
     use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
+    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::threading::ThreadIndex;
     use crate::types::{
         AckActivationMode, AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection,
         TaskId, TeamName,
     };
-    use crate::workflow;
+    use crate::workflow::{self, WorkflowStateFile};
 
     fn selection_state_for_source_files(
         source_files: &[SourceFile],
@@ -1024,6 +1042,212 @@ mod tests {
             read,
             IsoTimestamp::now(),
         )
+    }
+
+    struct ReadRuntime {
+        team_dir: PathBuf,
+        roster_present: bool,
+    }
+
+    impl crate::boundary::sealed::Sealed for ReadRuntime {}
+
+    impl crate::boundary::NotificationSink for ReadRuntime {
+        fn deliver(
+            &self,
+            _event: crate::protocol::NotificationEvent,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
+        }
+    }
+
+    impl RetainedServiceRuntime for ReadRuntime {
+        fn load_config(
+            &self,
+            _current_dir: &Path,
+        ) -> Result<Option<crate::config::AtmConfig>, crate::error::AtmError> {
+            Ok(None)
+        }
+
+        fn load_team_config_for_doctor_compare(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<crate::schema::TeamConfig, crate::error::AtmError> {
+            unreachable!("read roster-truth tests must not load team config")
+        }
+
+        fn team_dir(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+        ) -> Result<PathBuf, crate::error::AtmError> {
+            Ok(self.team_dir.clone())
+        }
+
+        fn inbox_path(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, crate::error::AtmError> {
+            unreachable!("read roster-truth tests do not resolve inbox paths")
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, crate::error::AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), crate::error::AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_millis(1),
+            }
+        }
+
+        fn rebuild_compat_inbox_projection(
+            &self,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("read roster-truth tests do not rebuild projections")
+        }
+
+        fn append_compat_inbox_message(
+            &self,
+            _inbox_path: &Path,
+            _message: &MessageEnvelope,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("read roster-truth tests do not append compat inbox messages")
+        }
+
+        fn append_compat_inbox_message_set(
+            &self,
+            _inbox_path: &Path,
+            _mode: ClaudeCompatibilityDeliveryMode,
+            _messages: &[MessageEnvelope],
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("read roster-truth tests do not append compat inbox message sets")
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _messages: &[MessageEnvelope],
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("read roster-truth tests do not route outbound payloads")
+        }
+
+        fn load_roster_member(
+            &self,
+            team: &TeamName,
+            agent: &AgentName,
+        ) -> Result<Option<boundary::RosterMemberRecord>, crate::error::AtmError> {
+            Ok(self.roster_present.then(|| boundary::RosterMemberRecord {
+                team_name: team.clone(),
+                agent_name: agent.clone(),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: String::new(),
+                model: String::new(),
+                recipient_pane_id: None,
+                metadata_json: Map::new(),
+            }))
+        }
+
+        fn load_team_roster(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<boundary::RosterMemberRecord>, crate::error::AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            _body: F,
+        ) -> Result<T, crate::error::AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), crate::error::AtmError>,
+        {
+            unreachable!("read roster-truth tests do not commit workflow state")
+        }
+    }
+
+    impl RetainedMailboxRuntime for ReadRuntime {
+        fn query_mailbox_metadata_rows(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _limit: Option<usize>,
+        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, crate::error::AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn load_message_record(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _message_key: &boundary::MessageKey,
+        ) -> Result<Option<boundary::MailStoreMessageRecord>, crate::error::AtmError> {
+            unreachable!("read roster-truth tests do not load message records")
+        }
+
+        fn persist_message_record(
+            &self,
+            _record: boundary::MailStoreMessageRecord,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("read roster-truth tests do not persist message records")
+        }
+
+        fn persist_message_state(
+            &self,
+            _state: boundary::MailMessageState,
+        ) -> Result<(), crate::error::AtmError> {
+            unreachable!("read roster-truth tests do not persist message state")
+        }
+    }
+
+    fn explicit_read_query(home_dir: PathBuf, current_dir: PathBuf) -> ReadQuery {
+        let target = format!("recipient@{TEST_TEAM}");
+        ReadQuery::new(
+            home_dir,
+            current_dir,
+            Some(TEST_SENDER),
+            Some(&target),
+            None,
+            ReadSelection::All,
+            false,
+            false,
+            AckActivationMode::ReadOnly,
+            None,
+            None,
+            None,
+            None,
+            None,
+            None,
+        )
+        .expect("read query")
     }
 
     #[test]
@@ -1560,5 +1784,47 @@ mod tests {
 
         assert_eq!(selected.len(), 1);
         assert_eq!(selected[0].envelope.message_id, Some(root_id));
+    }
+
+    #[test]
+    fn read_mail_uses_atm_roster_truth_for_explicit_targets() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let runtime = ReadRuntime {
+            team_dir,
+            roster_present: true,
+        };
+
+        let outcome = read_mail_with_runtime_impl(
+            explicit_read_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
+            &NullObservability,
+            &runtime,
+        )
+        .expect("read outcome");
+
+        assert_eq!(outcome.team, TeamName::from_validated(TEST_TEAM));
+        assert_eq!(outcome.agent, AgentName::from_validated("recipient"));
+        assert_eq!(outcome.count, 0);
+    }
+
+    #[test]
+    fn read_mail_rejects_explicit_targets_missing_from_atm_roster() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let runtime = ReadRuntime {
+            team_dir,
+            roster_present: false,
+        };
+
+        let error = read_mail_with_runtime_impl(
+            explicit_read_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
+            &NullObservability,
+            &runtime,
+        )
+        .expect_err("missing ATM roster member should fail");
+
+        assert!(error.is_agent_not_found(), "{error:?}");
     }
 }
