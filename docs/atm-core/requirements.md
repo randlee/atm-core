@@ -617,6 +617,10 @@ Required service rules:
   `config.json` roster changes
 - any new-team ingest or external Claude roster edit must flow into canonical
   ATM roster truth through the watcher / reconcile lane
+- daemon-authored Claude `config.json` projection writes must be suppressed
+  once and only once through an explicit process-local journal; restart must
+  clear suppression state and crash recovery must fall back to ordinary
+  idempotent external ingest
 
 ## 10.2 Config Boundary Static Gates
 
@@ -628,10 +632,9 @@ Required service rules:
   `config.json` roster boundary so later regressions are mechanically
   detectable
 - the first required rules are:
-  - reject production direct `config::load_team_config(...)` roster reads
+  - reject production direct `load_claude_team_config_document(...)` roster reads
     outside the explicit allowlist
-  - reject generic runtime `load_team_config(...)` helper use from retained
-    command paths
+  - reject generic runtime team-config helper use from retained command paths
   - reject Claude send paths that consult `config.json` before the durable ATM
     write has succeeded
 

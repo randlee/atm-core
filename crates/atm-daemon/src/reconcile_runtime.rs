@@ -1,7 +1,7 @@
 use arc_swap::ArcSwap;
 use atm_core::boundary::{
-    InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, WatchEventSource,
-    WatchSubscriptionRequest,
+    InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, RosterStore,
+    WatchEventSource, WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
@@ -13,6 +13,9 @@ use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::projection_write_journal::{
+    ProjectionWriteJournal, ingest_claude_team_config_from_watch_batch,
+};
 use crate::worker_support::{JoinHandleOwner, reap_retained_join_helpers, retain_join_helper};
 use crate::{DaemonSubsystem, SubsystemObservability};
 
@@ -63,6 +66,10 @@ struct ReconcileRuntimeInner {
     command_tx: OnceLock<SyncSender<ReconcileCommand>>,
     status: Arc<ArcSwap<ReconcileRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
+    // Production writes begin recording projection journal entries in Z.9 when
+    // the team-admin path becomes the canonical config projection writer.
+    #[allow(dead_code)]
+    projection_write_journal: ProjectionWriteJournal,
     queue_capacity: usize,
     debounce: Duration,
     executor: ReconcileExecutor,
@@ -184,11 +191,13 @@ impl ReconcileRuntime {
     pub(crate) fn new(
         watch_source: Arc<dyn WatchEventSource + Send + Sync>,
         inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
+        roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
     ) -> Self {
         Self::new_with_observability(
             watch_source,
             inbox_ingress,
+            roster_store,
             notification_sink,
             SubsystemObservability::disabled(DaemonSubsystem::ReconcileRuntime),
         )
@@ -197,9 +206,12 @@ impl ReconcileRuntime {
     pub(crate) fn new_with_observability(
         watch_source: Arc<dyn WatchEventSource + Send + Sync>,
         inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
+        roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
         observability: SubsystemObservability,
     ) -> Self {
+        let projection_write_journal = ProjectionWriteJournal::new();
+        let projection_write_journal_for_executor = projection_write_journal.clone();
         Self::new_with_executor_and_sink(
             Arc::new(move |request| {
                 let batch = watch_source.poll(WatchSubscriptionRequest {
@@ -207,6 +219,12 @@ impl ReconcileRuntime {
                     team: request.team.clone(),
                     agent: request.agent.clone(),
                 })?;
+                ingest_claude_team_config_from_watch_batch(
+                    request,
+                    &batch,
+                    roster_store.as_ref(),
+                    &projection_write_journal_for_executor,
+                )?;
                 let import = inbox_ingress.import_inbox_source(
                     atm_core::boundary::InboxIngressImportRequest {
                         home_dir: request.home_dir.clone(),
@@ -225,6 +243,7 @@ impl ReconcileRuntime {
                     ),
                 })
             }),
+            projection_write_journal,
             notification_sink,
             DEFAULT_RECONCILE_QUEUE_CAPACITY,
             DEFAULT_RECONCILE_DEBOUNCE,
@@ -235,6 +254,7 @@ impl ReconcileRuntime {
 
     fn new_with_executor_and_sink(
         executor: ReconcileExecutor,
+        projection_write_journal: ProjectionWriteJournal,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
         queue_capacity: usize,
         debounce: Duration,
@@ -254,6 +274,7 @@ impl ReconcileRuntime {
                 command_tx: OnceLock::new(),
                 status: Arc::new(ArcSwap::from_pointee(ReconcileRuntimeStatus::default())),
                 worker: Arc::new(JoinHandleOwner::default()),
+                projection_write_journal,
                 queue_capacity,
                 debounce,
                 executor,
@@ -596,12 +617,24 @@ impl ReconcileRuntime {
     pub(crate) fn new_for_test(executor: ReconcileExecutor, debounce: Duration) -> Self {
         Self::new_with_executor_and_sink(
             executor,
+            ProjectionWriteJournal::new(),
             Arc::new(TestNotificationSink),
             DEFAULT_RECONCILE_QUEUE_CAPACITY,
             debounce,
             RECONCILE_SHUTDOWN_DEADLINE,
             SubsystemObservability::disabled(DaemonSubsystem::ReconcileRuntime),
         )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn record_projected_config_write_for_test(
+        &self,
+        path: &std::path::Path,
+    ) -> Result<(), AtmError> {
+        let digest = crate::projection_write_journal::config_document_digest(path)?;
+        self.inner
+            .projection_write_journal
+            .remember_projected_config_write(path, digest)
     }
 }
 

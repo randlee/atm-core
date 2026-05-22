@@ -127,6 +127,7 @@ impl DaemonReconcileCoordinator {
     pub(crate) fn new_with_observability(
         watch_event_source: FileWatchEventSource,
         inbox_ingress: DaemonInboxIngress,
+        roster_store: Arc<dyn boundary::RosterStore + Send + Sync>,
         notification_sink: DaemonNotificationSink,
         observability: SubsystemObservability,
     ) -> Self {
@@ -134,6 +135,7 @@ impl DaemonReconcileCoordinator {
             runtime: ReconcileRuntime::new_with_observability(
                 Arc::new(watch_event_source),
                 Arc::new(inbox_ingress),
+                roster_store,
                 Arc::new(notification_sink),
                 observability,
             ),

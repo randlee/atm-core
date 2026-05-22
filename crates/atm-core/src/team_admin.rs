@@ -7,7 +7,7 @@ use serde_json::{Value, json};
 use tracing::warn;
 
 use crate::address::validate_path_segment;
-use crate::config::{load_config, load_team_config, resolve_team};
+use crate::config::{load_claude_team_config_document, load_config, resolve_team};
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::persistence;
@@ -229,7 +229,7 @@ pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, 
             continue;
         }
 
-        match load_team_config(&path) {
+        match load_claude_team_config_document(&path) {
             Ok(config) => teams.push(TeamSummary {
                 name: TeamName::from_validated(entry.file_name().to_string_lossy().to_string()),
                 member_count: config.members.len(),
@@ -265,7 +265,7 @@ pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&team));
     }
-    let config = load_team_config(&team_dir)?;
+    let config = load_claude_team_config_document(&team_dir)?;
 
     let mut members = Vec::with_capacity(config.members.len());
     if let Some(team_lead) = config
@@ -297,7 +297,7 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
         return Err(AtmError::team_not_found(&request.team));
     }
 
-    let mut config = load_team_config(&team_dir)?;
+    let mut config = load_claude_team_config_document(&team_dir)?;
     if config
         .members
         .iter()

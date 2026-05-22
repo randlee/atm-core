@@ -180,12 +180,12 @@ Notes:
   - watcher / reconcile ingest
   - `doctor` comparison
   - narrow recreated-shell preservation reads during restore
-- until `Z.8`, one temporary startup-only bridge is allowed outside the
+- before `Z.8`, one temporary startup-only bridge was allowed outside the
   trait surface:
   - `atm_core::boundary_support::hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
-  - it may seed canonical ATM roster state only when the roster is empty at
+  - it could seed canonical ATM roster state only when the roster was empty at
     daemon startup
-  - it is explicitly allowlisted and deleted in `Z.8`
+  - it was explicitly allowlisted in `Z.7` and deleted in `Z.8`
 - generic retained command/runtime `load_team_config(...)` lookup behavior is a
   boundary violation and should be mechanically gated by repository-local lint
   / later `sc-lint` extraction

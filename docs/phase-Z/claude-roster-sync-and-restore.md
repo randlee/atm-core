@@ -69,13 +69,22 @@ When a new Claude Code team is ingested, or when the watcher sees a
 reconcile lane imports the resulting member state into canonical ATM roster
 truth.
 
-Until `Z.8` lands, one temporary startup-only bridge is allowed:
+`Z.8` closes the temporary startup-only bridge:
 
 - `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
 
-That helper may seed canonical ATM roster state only when the roster is empty
-at daemon startup. It is allowlisted explicitly, proven to no-op when roster
-state already exists, and deleted in `Z.8`.
+That helper was the last pre-watcher one-shot roster hydration path. It was
+deleted once watcher / reconcile became the only production reader of external
+Claude roster changes.
+
+`Z.8` also adds daemon-owned write suppression:
+
+- ATM-owned `config.json` projection writes are recorded in one in-memory
+  journal keyed by canonical config path plus content digest
+- the watcher / reconcile lane consumes one matching entry and suppresses only
+  that one self-authored event
+- suppression is intentionally process-local; daemon restart clears it and a
+  post-crash event falls back to ordinary idempotent external ingest
 
 ## Accepted Team-Admin Behaviors
 
@@ -147,6 +156,6 @@ path inventory, sprint ownership, and exact delete / rewrite expectations.
 - `Z.6` Claude send semantics and immutable `ClaudeCodeTeamRoster`
 - `Z.7` config-ingress boundary narrowing, startup-only allowlist, and static
   gate definition
-- `Z.8` watcher-owned config ingest
+- `Z.8` watcher-owned config ingest and projection-write suppression
 - `Z.9` team-admin roster authority and canonical member metadata
 - `Z.10` backup / restore automation and config projection

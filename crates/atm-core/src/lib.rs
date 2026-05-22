@@ -78,6 +78,8 @@ pub(crate) mod threading;
 pub mod transport;
 /// Shared enums and semantic newtypes used across ATM core workflows.
 pub mod types;
+
+pub use config::load_claude_team_config_document;
 /// Internal ATM-owned workflow-state helpers shared across mailbox services.
 pub(crate) mod workflow;
 
