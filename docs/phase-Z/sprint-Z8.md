@@ -177,6 +177,7 @@ explicit, bounded, and restart-safe.
 - `rg -n "load_claude_team_config_document\\(" crates/atm-core/src crates/atm-daemon/src`
   - expected: surviving production matches are restricted to
     `crates/atm-daemon/src/reconcile_runtime.rs`,
+    `crates/atm-daemon/src/projection_write_journal.rs`,
     `crates/atm-core/src/service_runtime.rs`,
     `crates/atm-core/src/team_admin.rs`,
     and `crates/atm-core/src/team_admin/restore.rs`; any surviving match for
