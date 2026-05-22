@@ -3516,7 +3516,7 @@ Follow-on validation phase:
   deferred until after `Phase Z`
 - `Z.1` executable smoke bring-up
 - `Z.2` fix and revalidate
-- `Z.3` `atm-dev` canary / dogfood
+- `Z.3` `atm-dev` canary and dogfood
 - `Z.4` final fixes and release sign-off
 
 Immediate planning outputs:
@@ -3807,6 +3807,12 @@ Execution shape:
 Immediate planning outputs:
 - `docs/plan-phase-Z.md`
 - `docs/phase-Z/cli-json-io-audit.md`
+- `docs/phase-Z/smoke-checklist.md`
+- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-findings-ledger.md`
+- `docs/phase-Z/release-checklist.md`
+- `docs/phase-Z/readiness.md`
 - `docs/phase-Z/sprint-Z1.md`
 - `docs/phase-Z/sprint-Z2.md`
 - `docs/phase-Z/sprint-Z3.md`

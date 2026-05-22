@@ -100,7 +100,7 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s2-fix-and-revalidate`
 
-### Z.3 `atm-dev` Canary / Dogfood
+### Z.3 `atm-dev` Canary And Dogfood
 
 Purpose:
 
@@ -130,24 +130,22 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s4-final-fixes-and-release-sign-off`
 
-## Sprint Artifact Rules
+## Sprint Artifact Summary
 
-`Phase Z` execution must leave explicit evidence artifacts even though those
-artifacts are not part of the planning-only branch deliverables:
+`Phase Z` uses one named artifact set throughout execution:
 
-- `Z.1` must freeze:
-  - the executable smoke checklist / matrix used for real-binary bring-up
-  - the smoke findings ledger promoted to `Z.2`
-- `Z.2` must update:
-  - the frozen smoke findings ledger with fix/disposition state
-  - the smoke revalidation result on the fixed branch
-- `Z.3` must freeze:
-  - the `atm-dev` canary participant list
-  - the operator reporting path and canary checklist
-  - the canary findings ledger promoted to `Z.4`
-- `Z.4` must produce:
-  - the final executable validation and release checklist result
-  - the final release-ready / not-ready verdict with evidence
+- `Z.1` / `Z.2`:
+  - `docs/phase-Z/smoke-checklist.md`
+  - `docs/phase-Z/smoke-findings-ledger.md`
+- `Z.3`:
+  - `docs/phase-Z/canary-dogfood-checklist.md`
+  - `docs/phase-Z/canary-findings-ledger.md`
+- `Z.4`:
+  - `docs/phase-Z/release-checklist.md`
+  - `docs/phase-Z/readiness.md`
+
+The sprint docs remain the only authoritative source for per-sprint
+deliverables, acceptance criteria, and closure rules.
 
 ## Phase Rules
 
@@ -162,6 +160,12 @@ artifacts are not part of the planning-only branch deliverables:
 
 - `docs/plan-phase-Z.md`
 - `docs/phase-Z/cli-json-io-audit.md`
+- `docs/phase-Z/smoke-checklist.md`
+- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-findings-ledger.md`
+- `docs/phase-Z/release-checklist.md`
+- `docs/phase-Z/readiness.md`
 - `docs/phase-Z/sprint-Z1.md`
 - `docs/phase-Z/sprint-Z2.md`
 - `docs/phase-Z/sprint-Z3.md`

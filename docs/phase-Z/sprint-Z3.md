@@ -1,7 +1,7 @@
 ---
 id: Z.3
 title: `atm-dev` Canary And Dogfood
-status: complete
+status: planned
 branch: feature/pZ-s3-atm-dev-canary-and-dogfood
 worktree: ../atm-core-worktrees/feature/pZ-s3-atm-dev-canary-and-dogfood
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.3
 worktree: ../atm-core-worktrees/feature/pZ-s3-atm-dev-canary-and-dogfood
 branch: feature/pZ-s3-atm-dev-canary-and-dogfood
-status: complete
+status: planned
 estimated_scope: large
 ```
 
@@ -25,7 +25,7 @@ Move from single-operator smoke to controlled `atm-dev` team use on the new
 executables and verify real operator UX and recovery behavior before final
 release sign-off.
 
-## Governing Requirements
+## Hard Dependencies
 
 - `docs/plan-phase-Z.md`
 - `docs/phase-Yd/readiness.md`
@@ -36,30 +36,66 @@ release sign-off.
 - `Z.2` complete
 - canary participants and reporting path are defined at sprint start and frozen
   before operator use begins
+- the canary participant list is approved by `team-lead` before the first
+  operator-use session
+
+## Exact Targets
+
+- `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-findings-ledger.md`
+- the approved canary binary baseline under test on `integrate/phase-Z`
 
 ## Deliverables
 
-- frozen `atm-dev` canary participant list
-- canary / dogfood checklist for the approved binaries
-- operator reporting path used during the sprint
-- canary findings ledger promoted to `Z.4`
+- `docs/phase-Z/canary-dogfood-checklist.md`, containing the frozen
+  `atm-dev` canary participant list for at least two `atm-dev` participants,
+  the approved binary baseline under evaluation, and the operator reporting
+  path used during the sprint
+- `docs/phase-Z/canary-findings-ledger.md` promoted to `Z.4`
 
 ## Required Work
 
 - run controlled `atm-dev` dogfood on the new executables
 - capture operator-visible UX, recovery, and reliability issues
-- verify real usage does not reintroduce hidden dependency on old inbox
-  behavior
-- record only validated canary findings for `Z.4`
+- verify real usage does not reintroduce dependency on the deprecated
+  pre-Phase-Y file-migration inbox behavior documented in
+  `docs/archive/file-migration-plan.md`
+- record only validated canary findings in
+  `docs/phase-Z/canary-findings-ledger.md` for `Z.4`
 
 ## Acceptance Criteria
 
 - `atm-dev` canary usage is completed on the approved binaries
+- `docs/phase-Z/canary-dogfood-checklist.md` records the approved participant
+  list and reporting path as frozen at sprint start, with evidence that
+  predates the first operator report
 - operator-facing findings are recorded for `Z.4`
-- the participant list, reporting path, and canary findings ledger are frozen
-  for `Z.4`
+- every canary-checklist row in `docs/phase-Z/canary-dogfood-checklist.md`
+  records one authoritative verdict before `Z.3` closes; any row left without
+  a final verdict is blocking for this sprint
+- the deprecated pre-Phase-Y file-migration inbox behavior from
+  `docs/archive/file-migration-plan.md` is not required by any canary flow on
+  the approved binaries
+- `docs/phase-Z/canary-dogfood-checklist.md` and
+  `docs/phase-Z/canary-findings-ledger.md` are frozen for `Z.4`
+
+## Non-Closure
+
+- `Z.3` does not fix canary findings
+- `Z.3` does not produce the final release verdict
+
+## Production-Ready Expectation
+
+Every listed `Z.3` deliverable is expected to land at a production-ready level
+for the canary scope this sprint claims: the checklist and findings ledger
+must be usable directly by `Z.4` without scope reconstruction or manual QA
+interpretation.
 
 ## Required Validation
 
-- dogfood checklist and operator reports
+- `cargo build --release` or equivalent release build that refreshes the
+  canary executable baseline under test
+- `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-findings-ledger.md`
+- `cargo test --workspace`
 - `git diff --check`
