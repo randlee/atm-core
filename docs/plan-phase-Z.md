@@ -162,6 +162,12 @@ artifacts are not part of the planning-only branch deliverables:
 
 - `docs/plan-phase-Z.md`
 - `docs/phase-Z/cli-json-io-audit.md`
+- `docs/phase-Z/smoke-checklist.md`
+- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-findings-ledger.md`
+- `docs/phase-Z/release-checklist.md`
+- `docs/phase-Z/readiness.md`
 - `docs/phase-Z/sprint-Z1.md`
 - `docs/phase-Z/sprint-Z2.md`
 - `docs/phase-Z/sprint-Z3.md`

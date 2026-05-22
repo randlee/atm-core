@@ -39,10 +39,11 @@ release sign-off.
 
 ## Deliverables
 
-- frozen `atm-dev` canary participant list
-- canary / dogfood checklist for the approved binaries
-- operator reporting path used during the sprint
-- canary findings ledger promoted to `Z.4`
+- frozen `atm-dev` canary participant list recorded in
+  `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-dogfood-checklist.md` for the approved binaries
+- operator reporting path recorded in `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-findings-ledger.md` promoted to `Z.4`
 
 ## Required Work
 
@@ -50,16 +51,23 @@ release sign-off.
 - capture operator-visible UX, recovery, and reliability issues
 - verify real usage does not reintroduce hidden dependency on old inbox
   behavior
-- record only validated canary findings for `Z.4`
+- record only validated canary findings in
+  `docs/phase-Z/canary-findings-ledger.md` for `Z.4`
 
 ## Acceptance Criteria
 
 - `atm-dev` canary usage is completed on the approved binaries
 - operator-facing findings are recorded for `Z.4`
-- the participant list, reporting path, and canary findings ledger are frozen
-  for `Z.4`
+- `docs/phase-Z/canary-dogfood-checklist.md` and
+  `docs/phase-Z/canary-findings-ledger.md` are frozen for `Z.4`
+
+## Non-Closure
+
+- `Z.3` does not fix canary findings
+- `Z.3` does not produce the final release verdict
 
 ## Required Validation
 
-- dogfood checklist and operator reports
+- `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-findings-ledger.md`
 - `git diff --check`

@@ -38,25 +38,34 @@ and produce the final release-readiness verdict.
 ## Deliverables
 
 - fixed closeout branch containing only `Z.3` finding closure work
-- final executable validation and release checklist result
-- final release-ready / not-ready verdict with evidence
+- `docs/phase-Z/release-checklist.md` populated with the final executable
+  validation and release checklist result
+- `docs/phase-Z/readiness.md` populated with the final release-ready /
+  not-ready verdict and evidence
 
 ## Required Work
 
 - fix only the findings promoted from `Z.3`
-- rerun the final executable validation and release checklist
-- produce the final release-ready / not-ready decision with evidence
+- rerun `docs/phase-Z/release-checklist.md`
+- produce the final release-ready / not-ready decision with evidence in
+  `docs/phase-Z/readiness.md`
 
 ## Acceptance Criteria
 
 - every `Z.3` finding is either fixed or explicitly dispositioned
 - the final validation set is rerun on the closeout branch
-- the release-readiness verdict is documented
-- the final release checklist and verdict identify one authoritative closeout
-  result for the `integrate/phase-Z` candidate
+- `docs/phase-Z/readiness.md` records the release-readiness verdict
+- `docs/phase-Z/release-checklist.md` and `docs/phase-Z/readiness.md`
+  identify one authoritative closeout result for the `integrate/phase-Z`
+  candidate
+
+## Non-Closure
+
+- `Z.4` does not reopen smoke or canary scope outside the frozen ledgers
 
 ## Required Validation
 
-- final executable validation checklist
+- `docs/phase-Z/release-checklist.md`
+- `docs/phase-Z/readiness.md`
 - `cargo test --workspace`
 - `git diff --check`

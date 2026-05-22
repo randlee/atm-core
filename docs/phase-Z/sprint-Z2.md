@@ -38,8 +38,8 @@ validation set on the fixed branch.
 ## Deliverables
 
 - fixed branch containing only `Z.1` finding closure work
-- updated smoke findings ledger with fix/defer disposition for every carried
-  `Z.1` finding
+- updated `docs/phase-Z/smoke-findings-ledger.md` with fix/defer disposition
+  for every carried `Z.1` finding
 - smoke revalidation result on the fixed branch
 
 ## Required Work
@@ -47,17 +47,23 @@ validation set on the fixed branch.
 - fix only the findings promoted from `Z.1`
 - keep the branch aligned with the approved `Phase Y` architecture and state
   machines
-- rerun the frozen `Z.1` executable smoke checklist after fixes land
+- rerun the frozen `docs/phase-Z/smoke-checklist.md` checklist after fixes
+  land
 
 ## Acceptance Criteria
 
 - every `Z.1` finding is either fixed or explicitly deferred with approval
 - the smoke checklist is rerun on the fixed branch
-- the smoke findings ledger records final per-finding disposition and
-  revalidation outcome
+- `docs/phase-Z/smoke-findings-ledger.md` records final per-finding
+  disposition and revalidation outcome
+
+## Non-Closure
+
+- `Z.2` does not widen the smoke checklist
+- `Z.2` does not begin canary or release-signoff work
 
 ## Required Validation
 
-- rerun the `Z.1` executable smoke checklist
+- rerun `docs/phase-Z/smoke-checklist.md`
 - `cargo test --workspace`
 - `git diff --check`
