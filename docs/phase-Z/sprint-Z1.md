@@ -82,5 +82,6 @@ the first full feature-by-feature smoke pass before broader team dogfood.
 
 - `docs/phase-Z/smoke-checklist.md` is present and populated for supported
   flows
+- `docs/phase-Z/smoke-findings-ledger.md`
 - `cargo test --workspace`
 - `git diff --check`

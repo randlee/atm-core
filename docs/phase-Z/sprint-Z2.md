@@ -65,5 +65,6 @@ validation set on the fixed branch.
 ## Required Validation
 
 - rerun `docs/phase-Z/smoke-checklist.md`
+- `docs/phase-Z/smoke-findings-ledger.md`
 - `cargo test --workspace`
 - `git diff --check`

@@ -39,10 +39,9 @@ release sign-off.
 
 ## Deliverables
 
-- frozen `atm-dev` canary participant list recorded in
-  `docs/phase-Z/canary-dogfood-checklist.md`
-- `docs/phase-Z/canary-dogfood-checklist.md` for the approved binaries
-- operator reporting path recorded in `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-dogfood-checklist.md`, containing the frozen
+  `atm-dev` canary participant list, the approved binary baseline under
+  evaluation, and the operator reporting path used during the sprint
 - `docs/phase-Z/canary-findings-ledger.md` promoted to `Z.4`
 
 ## Required Work
