@@ -1,22 +1,21 @@
 use arc_swap::ArcSwap;
 use atm_core::boundary::{
-    InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, ReplaySource, RosterStore,
-    RosterStoreReplaceRosterRequest, WatchEventBatch, WatchEventSource, WatchSubscriptionRequest,
+    InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, RosterStore,
+    WatchEventSource, WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
-use std::collections::hash_map::DefaultHasher;
 use std::collections::{HashMap, HashSet, VecDeque};
-use std::fs;
-use std::hash::{Hash, Hasher};
-use std::path::Path;
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, SyncSender, TrySendError};
-use std::sync::{Arc, Mutex, OnceLock};
+use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::projection_write_journal::{
+    ProjectionWriteJournal, ingest_claude_team_config_from_watch_batch,
+};
 use crate::worker_support::{JoinHandleOwner, reap_retained_join_helpers, retain_join_helper};
 use crate::{DaemonSubsystem, SubsystemObservability};
 
@@ -67,7 +66,9 @@ struct ReconcileRuntimeInner {
     command_tx: OnceLock<SyncSender<ReconcileCommand>>,
     status: Arc<ArcSwap<ReconcileRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
-    #[cfg_attr(not(test), allow(dead_code))]
+    // Production writes begin recording projection journal entries in Z.9 when
+    // the team-admin path becomes the canonical config projection writer.
+    #[allow(dead_code)]
     projection_write_journal: ProjectionWriteJournal,
     queue_capacity: usize,
     debounce: Duration,
@@ -132,14 +133,6 @@ impl ReconcileWorkerState {
 struct NotificationFingerprintRegistry {
     entries: HashMap<ReconcileKey, HashSet<NotificationFingerprint>>,
     order: VecDeque<ReconcileKey>,
-}
-
-type ProjectionWriteJournal = Arc<Mutex<HashMap<ProjectionWriteJournalKey, usize>>>;
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-struct ProjectionWriteJournalKey {
-    path: PathBuf,
-    digest: u64,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -217,8 +210,8 @@ impl ReconcileRuntime {
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
         observability: SubsystemObservability,
     ) -> Self {
-        let projection_write_journal: ProjectionWriteJournal = Arc::new(Mutex::new(HashMap::new()));
-        let projection_write_journal_for_executor = Arc::clone(&projection_write_journal);
+        let projection_write_journal = ProjectionWriteJournal::new();
+        let projection_write_journal_for_executor = projection_write_journal.clone();
         Self::new_with_executor_and_sink(
             Arc::new(move |request| {
                 let batch = watch_source.poll(WatchSubscriptionRequest {
@@ -624,7 +617,7 @@ impl ReconcileRuntime {
     pub(crate) fn new_for_test(executor: ReconcileExecutor, debounce: Duration) -> Self {
         Self::new_with_executor_and_sink(
             executor,
-            Arc::new(Mutex::new(HashMap::new())),
+            ProjectionWriteJournal::new(),
             Arc::new(TestNotificationSink),
             DEFAULT_RECONCILE_QUEUE_CAPACITY,
             debounce,
@@ -636,145 +629,13 @@ impl ReconcileRuntime {
     #[cfg(test)]
     pub(crate) fn record_projected_config_write_for_test(
         &self,
-        path: &Path,
+        path: &std::path::Path,
     ) -> Result<(), AtmError> {
-        let digest = config_document_digest(path)?;
-        remember_projected_config_write(&self.inner.projection_write_journal, path, digest)
+        let digest = crate::projection_write_journal::config_document_digest(path)?;
+        self.inner
+            .projection_write_journal
+            .remember_projected_config_write(path, digest)
     }
-}
-
-fn ingest_claude_team_config_from_watch_batch(
-    request: &ReconcileRequest,
-    batch: &WatchEventBatch,
-    roster_store: &dyn RosterStore,
-    projection_write_journal: &ProjectionWriteJournal,
-) -> Result<(), AtmError> {
-    let team_dir = atm_core::home::team_dir_from_home(&request.home_dir, &request.team).map_err(
-        |error| {
-            AtmError::daemon_unavailable(format!(
-                "reconcile runtime could not resolve team {} from {} for Claude config ingest",
-                request.team,
-                request.home_dir.display()
-            ))
-            .with_recovery(
-                "Verify the ATM home directory and Claude team layout before retrying reconcile ingest.",
-            )
-            .with_source(error)
-        },
-    )?;
-    let config_path = team_dir.join("config.json");
-    if !batch.paths.iter().any(|path| path == &config_path) || !config_path.is_file() {
-        return Ok(());
-    }
-
-    let digest = config_document_digest(&config_path)?;
-    if consume_projected_config_write(projection_write_journal, &config_path, digest)? {
-        return Ok(());
-    }
-
-    let team_config = atm_core::load_claude_team_config_document(&team_dir).map_err(|error| {
-        AtmError::daemon_unavailable(format!(
-            "reconcile runtime could not load Claude team config from {}",
-            config_path.display()
-        ))
-        .with_recovery(
-            "Repair the Claude team config document before retrying watcher-owned roster ingest.",
-        )
-        .with_source(error)
-    })?;
-    let members = team_config
-        .members
-        .into_iter()
-        .map(|member| {
-            atm_core::boundary::RosterMemberRecord::from_claude_code_member(
-                request.team.clone(),
-                member,
-            )
-        })
-        .collect::<Vec<_>>();
-    roster_store
-        .replace_roster(RosterStoreReplaceRosterRequest {
-            team: request.team.clone(),
-            members,
-            source: Some(ReplaySource::new("watcher-config-ingress").expect("replay source")),
-        })
-        .map_err(|error| {
-            AtmError::daemon_unavailable(format!(
-                "reconcile runtime could not replace canonical ATM roster state from {}",
-                config_path.display()
-            ))
-            .with_recovery(
-                "Repair the ATM roster store or Claude config document before retrying watcher-owned ingest.",
-            )
-            .with_source(error)
-        })?;
-    Ok(())
-}
-
-fn config_document_digest(path: &Path) -> Result<u64, AtmError> {
-    let bytes = fs::read(path).map_err(|error| {
-        AtmError::daemon_unavailable(format!(
-            "reconcile runtime could not read Claude config digest from {}",
-            path.display()
-        ))
-        .with_recovery(
-            "Verify the Claude team config path remains readable before retrying watcher-owned ingest.",
-        )
-        .with_source(error)
-    })?;
-    let mut hasher = DefaultHasher::new();
-    bytes.hash(&mut hasher);
-    Ok(hasher.finish())
-}
-
-#[cfg_attr(not(test), allow(dead_code))]
-fn remember_projected_config_write(
-    journal: &ProjectionWriteJournal,
-    path: &Path,
-    digest: u64,
-) -> Result<(), AtmError> {
-    let key = ProjectionWriteJournalKey {
-        path: canonical_projection_path(path),
-        digest,
-    };
-    let mut entries = journal.lock().map_err(|_| {
-        AtmError::daemon_unavailable("reconcile projection-write journal lock poisoned")
-            .with_recovery(
-                "Restart atm-daemon; the reconcile projection suppression journal can no longer be trusted.",
-            )
-    })?;
-    *entries.entry(key).or_insert(0) += 1;
-    Ok(())
-}
-
-fn consume_projected_config_write(
-    journal: &ProjectionWriteJournal,
-    path: &Path,
-    digest: u64,
-) -> Result<bool, AtmError> {
-    let key = ProjectionWriteJournalKey {
-        path: canonical_projection_path(path),
-        digest,
-    };
-    let mut entries = journal.lock().map_err(|_| {
-        AtmError::daemon_unavailable("reconcile projection-write journal lock poisoned")
-            .with_recovery(
-                "Restart atm-daemon; the reconcile projection suppression journal can no longer be trusted.",
-            )
-    })?;
-    let Some(count) = entries.get_mut(&key) else {
-        return Ok(false);
-    };
-    if *count <= 1 {
-        entries.remove(&key);
-    } else {
-        *count -= 1;
-    }
-    Ok(true)
-}
-
-fn canonical_projection_path(path: &Path) -> PathBuf {
-    fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 impl ReconcileRuntimeInner {
