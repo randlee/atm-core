@@ -1,7 +1,7 @@
 ---
 id: Z.7
 title: Config Ingress Boundary Narrowing And Static Gates
-status: planned
+status: complete
 branch: feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates
 worktree: ../atm-core-worktrees/feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.7
 worktree: ../atm-core-worktrees/feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates
 branch: feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates
-status: planned
+status: complete
 estimated_scope: medium
 ```
 

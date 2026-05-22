@@ -308,6 +308,10 @@ Notes:
 - The adapter is for watcher-owned external ingest and other explicitly
   approved comparison/preservation callers only; retained runtime command
   flows must not use it as a generic roster lookup seam.
+- the daemon-side adapter no longer exposes generic team-config loading; any
+  temporary startup-only roster hydration before `Z.8` stays in the narrow
+  core direct-boundary helper rather than on the daemon `ConfigIngress`
+  adapter surface
 
 ## DaemonInboxIngressAdapter
 

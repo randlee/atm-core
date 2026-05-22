@@ -1,6 +1,6 @@
 use crate::config::AtmConfig;
 use crate::error::AtmError;
-use crate::schema::{AgentMember, MessageEnvelope, TeamConfig};
+use crate::schema::{AgentMember, MessageEnvelope};
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -334,20 +334,6 @@ pub struct ConfigLoadResponse {
     pub config: Option<AtmConfig>,
 }
 
-/// Team-config load request for the Phase R config-ingress boundary.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ConfigTeamLoadRequest {
-    pub home_dir: PathBuf,
-    pub team: TeamName,
-}
-
-/// Team-config load response for the Phase R config-ingress boundary.
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct ConfigTeamLoadResponse {
-    pub team_dir: PathBuf,
-    pub team_config: TeamConfig,
-}
-
 /// Imported source-file snapshot returned by inbox ingress.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct InboxSourceFileRecord {
@@ -573,13 +559,6 @@ pub trait ConfigIngress: sealed::Sealed {
     /// Returns `AtmError` when persisted ATM configuration cannot be loaded,
     /// parsed, or validated into typed models.
     fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError>;
-    /// # Errors
-    ///
-    /// Returns `AtmError` when one team config cannot be loaded or validated.
-    fn load_team_config(
-        &self,
-        request: ConfigTeamLoadRequest,
-    ) -> Result<ConfigTeamLoadResponse, AtmError>;
 }
 
 /// BOUNDARY-InboxIngress — see docs/atm-core/boundaries.md.

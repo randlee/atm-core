@@ -82,8 +82,8 @@ pub mod types;
 pub(crate) mod workflow;
 
 pub use boundary::{
-    AckTransition, AtmProtocol, ClientTransport, ConfigIngress, ConfigLoadRequest,
-    ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse, InboxExport,
+    AckTransition, AtmProtocol, ClaudeCodeRosterMember, ClaudeCodeTeamRoster, ClientTransport,
+    ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, InboxExport,
     InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxExportRequest,
     InboxExportResponse, InboxIngress, InboxIngressDiagnosticsRequest,
     InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
