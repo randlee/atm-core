@@ -408,7 +408,7 @@ fn member_summary(member: &AgentMember) -> MemberSummary {
         agent_type: member.agent_type.to_string(),
         model: member.model.clone(),
         joined_at: member.joined_at,
-        tmux_pane_id: member.tmux_pane_id.clone().unwrap_or_default(),
+        tmux_pane_id: member.tmux_pane_id.clone(),
         cwd: member.cwd.clone(),
         extra: member.extra.clone(),
     }

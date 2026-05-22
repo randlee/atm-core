@@ -1479,6 +1479,23 @@ def run(repo_root: Path) -> int:
     violations.extend(collect_test_bypass_violations(repo_root, records))
     violations.extend(collect_active_implementation_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
+    violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
+    fixture_path = repo_root / SCB_CONFIG_FIXTURE_PATH
+    if not fixture_path.exists():
+        violations.append(
+            BoundaryViolation(
+                SCB_CONFIG_FIXTURE_PATH.as_posix(),
+                "missing required SCB-CONFIG known-bad fixture",
+            )
+        )
+    else:
+        fixture_violations = collect_scb_config_rule_violations(repo_root, [fixture_path])
+        fixture_failure = scb_config_fixture_violation(
+            fixture_violations,
+            {"SCB-CONFIG-001", "SCB-CONFIG-002", "SCB-CONFIG-003"},
+        )
+        if fixture_failure is not None:
+            violations.append(fixture_failure)
     violations = dedupe_violations(violations)
 
     duration_seconds = monotonic_now() - started_monotonic

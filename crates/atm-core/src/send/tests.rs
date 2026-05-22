@@ -293,7 +293,6 @@ impl RetainedServiceRuntime for TestRuntime {
             &records,
         ))
     }
-
     fn commit_workflow_state<T, I, F>(
         &self,
         _home_dir: &Path,

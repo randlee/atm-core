@@ -160,7 +160,7 @@ mod tests {
     #[test]
     fn build_query_preserves_team_override() {
         let command = MembersCommand {
-            team: Some("test-team".to_string()),
+            team: Some(TEST_TEAM.to_string()),
             json: true,
         };
         let tempdir = TempDir::new().expect("tempdir");
@@ -173,7 +173,7 @@ mod tests {
 
         assert_eq!(
             query.team_override.as_ref().map(|value| value.as_str()),
-            Some("test-team")
+            Some(TEST_TEAM)
         );
         assert_eq!(query.home_dir, home_dir);
         assert_eq!(query.current_dir, current_dir);
