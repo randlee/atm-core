@@ -15,6 +15,7 @@ use crate::error::AtmError;
 use crate::mailbox;
 use crate::mailbox::source::SourceFile;
 use std::collections::HashSet;
+
 fn to_boundary_source_file(source: SourceFile) -> InboxSourceFileRecord {
     InboxSourceFileRecord {
         path: source.path,
@@ -27,10 +28,6 @@ fn from_boundary_source_file(source: InboxSourceFileRecord) -> SourceFile {
         path: source.path,
         messages: source.messages,
     }
-}
-
-fn replay_source_static(label: &'static str) -> ReplaySource {
-    ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
 }
 
 pub(crate) fn load_workspace_config(
