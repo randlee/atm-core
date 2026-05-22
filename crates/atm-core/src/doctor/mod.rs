@@ -163,7 +163,7 @@ fn load_member_roster(
 
     check_restore_marker(team, &team_dir, findings);
 
-    let team_config = match runtime.load_team_config(&team_dir) {
+    let team_config = match runtime.load_team_config_for_doctor_compare(&team_dir) {
         Ok(team_config) => team_config,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);

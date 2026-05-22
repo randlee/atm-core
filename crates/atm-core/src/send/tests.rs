@@ -27,7 +27,6 @@ use crate::observability::{
 use crate::process::process_is_alive;
 use crate::protocol::{NotificationEvent, NotificationKind};
 use crate::roles::ROLE_TEAM_LEAD;
-use crate::schema::{AgentMember, TeamConfig};
 use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::send::{SendCommandOutcome, SendMessageSource, SendRequest};
 use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
@@ -85,6 +84,7 @@ struct TestRuntime {
     commit_error_message: Option<&'static str>,
     append_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
+    claude_roster_members: Vec<AgentName>,
     // Mutex required because concurrent send-path tests share the same runtime.
     appended_messages: Mutex<Vec<MessageEnvelope>>,
     // Mutex required because concurrent send-path tests share the same runtime.
@@ -103,6 +103,7 @@ impl TestRuntime {
             commit_error_message,
             append_error_message,
             recipient_harness,
+            claude_roster_members: vec![AgentName::from_validated("recipient")],
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
             notification_events: Mutex::new(Vec::new()),
@@ -127,13 +128,11 @@ impl RetainedServiceRuntime for TestRuntime {
         Ok(None)
     }
 
-    fn load_team_config(&self, _team_dir: &Path) -> Result<TeamConfig, AtmError> {
-        Ok(TeamConfig {
-            members: vec![AgentMember::with_name(AgentName::from_validated(
-                "recipient",
-            ))],
-            extra: Map::new(),
-        })
+    fn load_team_config_for_doctor_compare(
+        &self,
+        _team_dir: &Path,
+    ) -> Result<crate::schema::TeamConfig, AtmError> {
+        Ok(crate::schema::TeamConfig::default())
     }
 
     fn team_dir(&self, home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
@@ -270,6 +269,31 @@ impl RetainedServiceRuntime for TestRuntime {
         }])
     }
 
+    fn load_claude_code_team_roster(
+        &self,
+        team: &TeamName,
+    ) -> Result<crate::boundary::ClaudeCodeTeamRoster, AtmError> {
+        let records = self
+            .claude_roster_members
+            .iter()
+            .cloned()
+            .map(|agent_name| RosterMemberRecord {
+                team_name: team.clone(),
+                agent_name,
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: String::new(),
+                model: String::new(),
+                recipient_pane_id: None,
+                metadata_json: Map::new(),
+            })
+            .collect::<Vec<_>>();
+        Ok(crate::boundary::ClaudeCodeTeamRoster::from_roster_snapshot(
+            team.clone(),
+            &records,
+        ))
+    }
+
     fn commit_workflow_state<T, I, F>(
         &self,
         _home_dir: &Path,
@@ -367,6 +391,12 @@ fn send_request(home_dir: &Path) -> SendRequest {
         expires_at: None,
         dry_run: false,
     }
+}
+
+fn send_runtime_with_missing_claude_member() -> TestRuntime {
+    let mut runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
+    runtime.claude_roster_members.clear();
+    runtime
 }
 
 #[derive(Default)]
@@ -782,6 +812,30 @@ fn send_claude_success_appends_original_via_compat_inbox_writer() {
         event.command == "delivery_policy"
             && event.outcome == "delivery_policy.new_message.compat_append_original"
     }));
+}
+
+#[test]
+fn z6_post_write_warning_uses_store_backed_claude_roster() {
+    let runtime = send_runtime_with_missing_claude_member();
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+    fs::write(tempdir.path().join("config.json"), r#"{"members":[]}"#).expect("config");
+
+    let outcome =
+        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
+            .expect("send outcome");
+
+    assert_eq!(outcome.outcome, SendCommandOutcome::Sent);
+    assert_eq!(
+        runtime.appended_messages.lock().expect("append lock").len(),
+        1
+    );
+    assert_eq!(outcome.warnings.len(), 1);
+    assert!(
+        outcome.warnings[0]
+            .message
+            .contains("'recipient' is not on claude code roster")
+    );
 }
 
 #[test]

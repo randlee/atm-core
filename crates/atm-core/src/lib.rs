@@ -82,13 +82,14 @@ pub mod types;
 pub(crate) mod workflow;
 
 pub use boundary::{
-    AckTransition, AtmProtocol, ClientTransport, ConfigIngress, ConfigLoadRequest,
-    ConfigLoadResponse, ConfigTeamLoadRequest, ConfigTeamLoadResponse, InboxExport,
-    InboxExportReexportMessageRequest, InboxExportReexportMessageResponse, InboxExportRequest,
-    InboxExportResponse, InboxIngress, InboxIngressDiagnosticsRequest,
-    InboxIngressDiagnosticsResponse, InboxIngressIdentityFingerprintRequest,
-    InboxIngressIdentityFingerprintResponse, InboxIngressImportRequest, InboxIngressImportResponse,
-    InboxIngressRequest, InboxIngressResponse, InboxSourceFileRecord, LoadMailMessageStateRequest,
+    AckTransition, AtmProtocol, ClaudeCodeRosterMember, ClaudeCodeTeamRoster, ClientTransport,
+    ConfigIngress, ConfigLoadRequest, ConfigLoadResponse, ConfigTeamLoadRequest,
+    ConfigTeamLoadResponse, InboxExport, InboxExportReexportMessageRequest,
+    InboxExportReexportMessageResponse, InboxExportRequest, InboxExportResponse, InboxIngress,
+    InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
+    InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
+    InboxIngressImportRequest, InboxIngressImportResponse, InboxIngressRequest,
+    InboxIngressResponse, InboxSourceFileRecord, LoadMailMessageStateRequest,
     LoadMailMessageStateResponse, MailMessageState, MailStore, MailStoreBootstrapRequest,
     MailStoreBootstrapResponse, MailStoreHealthSnapshot, MailStoreHealthSnapshotRequest,
     MailStoreHealthSnapshotResponse, MailStoreIngestReplayState,

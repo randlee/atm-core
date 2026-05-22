@@ -50,9 +50,15 @@ Claude harness `send` behavior is:
 
 1. write ATM durable state first
 2. attempt Claude compatibility inbox write when the target inbox exists
-3. after that path is selected, compare the member against `config.json`
-4. if the member is missing from `config.json`, return the warning:
+3. build the immutable `ClaudeCodeTeamRoster` warning snapshot from canonical
+   ATM roster truth after the durable write succeeds; do not read
+   `config.json` directly for normal member lookup
+4. if the member is missing from the Claude roster projection, return the
+   warning:
    - `'<member-name>' is not on claude code roster <atm-team>/config.json`
+5. if the team `config.json` document is missing entirely, the existing-inbox
+   fallback still raises the retained missing-config warning only after the
+   durable write path is complete
 
 That warning must not veto the inbox write once the inbox target exists.
 

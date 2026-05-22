@@ -156,6 +156,10 @@ pub fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     parse_team_config(&config_path, &raw)
 }
 
+pub fn load_claude_team_config_document(team_dir: &Path) -> Result<TeamConfig, AtmError> {
+    load_team_config(team_dir)
+}
+
 /// Resolves the sender identity for outgoing messages.
 ///
 /// The `_config` parameter is retained only to preserve the shared config-aware

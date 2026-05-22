@@ -26,6 +26,10 @@ use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
 use crate::threading::{ThreadIndex, canonical_sender_identity, is_ephemeral};
 use crate::types::{AgentName, CommandAction, IsoTimestamp, TaskId, TeamName};
 
+#[allow(
+    dead_code,
+    reason = "Z.6 removes the production send-path config gate; alert-state helpers remain test-covered until the follow-on cleanup deletes the obsolete file-backed alert seam."
+)]
 mod alert_state;
 mod delivery_persistence;
 pub(crate) mod file_policy;
@@ -274,6 +278,9 @@ fn finalize_send_outcome<
         &persistence,
     );
     if !request.dry_run {
+        if let Some(warning) = build_claude_roster_warning(runtime, request, context)? {
+            outcome.warnings.push(warning);
+        }
         let plan = build_send_delivery_plan(context, requires_ack, &persistence)?;
         let execution = execute_delivery_plan(runtime, context.config.as_ref(), &plan)?;
         emit_delivery_plan_transitions(
@@ -299,6 +306,48 @@ fn finalize_send_outcome<
         &context.canonical_sender,
     );
     Ok(outcome)
+}
+
+fn build_claude_roster_warning<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    request: &SendRequest,
+    context: &SendExecutionContext,
+) -> Result<Option<WarningEntry>, AtmError> {
+    if !matches!(
+        context.delivery_snapshot.harness,
+        crate::delivery_policy::DeliveryHarnessPath::ClaudeCode
+    ) {
+        return Ok(None);
+    }
+    let team_dir = runtime.team_dir(&request.home_dir, &context.recipient.team)?;
+    if !team_dir.join("config.json").is_file() {
+        if !context.inbox_path.exists() {
+            return Ok(None);
+        }
+        let mut warnings = Vec::new();
+        missing_config_notice::warn_missing_team_config(
+            runtime,
+            request,
+            &context.recipient,
+            &team_dir,
+            &context.inbox_path,
+            &mut warnings,
+        )?;
+        return Ok(warnings.into_iter().next());
+    }
+    let roster = runtime.load_claude_code_team_roster(&context.recipient.team)?;
+    if roster.contains_member(&context.recipient.agent) {
+        return Ok(None);
+    }
+    Ok(Some(WarningEntry::new(
+        format!(
+            "'{}' is not on claude code roster {}/config.json",
+            context.recipient.agent, context.recipient.team
+        ),
+        Some(
+            "Import the member through the approved Claude config-ingress path or project ATM roster truth back into config.json before relying on Claude compatibility delivery.",
+        ),
+    )))
 }
 
 #[expect(
@@ -399,15 +448,6 @@ fn prepare_send_context<
         return Err(AtmError::team_not_found(&recipient.team));
     }
     let inbox_path = runtime.inbox_path(&request.home_dir, &recipient.team, &recipient.agent)?;
-    let mut warnings = Vec::new();
-    validate_send_target(
-        runtime,
-        request,
-        &recipient,
-        &team_dir,
-        &inbox_path,
-        &mut warnings,
-    )?;
     let delivery_policy = DeliveryPolicyCoordinator::new();
     let delivery_snapshot =
         delivery_policy.resolve_recipient_snapshot(runtime, &recipient.team, &recipient.agent)?;
@@ -424,46 +464,8 @@ fn prepare_send_context<
         inbox_path,
         delivery_snapshot,
         delivery_family,
-        warnings,
+        warnings: Vec::new(),
     })
-}
-
-fn validate_send_target<
-    R: RetainedServiceRuntime + RetainedMailboxRuntime + crate::boundary::sealed::Sealed,
->(
-    runtime: &R,
-    request: &SendRequest,
-    recipient: &ResolvedRecipient,
-    team_dir: &Path,
-    inbox_path: &Path,
-    warnings: &mut Vec<WarningEntry>,
-) -> Result<(), AtmError> {
-    match runtime.load_team_config(team_dir) {
-        Ok(team_config) => {
-            clear_missing_team_config_alert(&request.home_dir, team_dir);
-            if !team_config
-                .members
-                .iter()
-                .any(|member| member.name == recipient.agent.as_str())
-            {
-                return Err(AtmError::agent_not_found(&recipient.agent, &recipient.team));
-            }
-            Ok(())
-        }
-        Err(error) if error.is_missing_document() => {
-            missing_config_notice::warn_missing_team_config(
-                runtime, request, recipient, team_dir, inbox_path, warnings,
-            )
-        }
-        Err(error) => Err(error),
-    }
-}
-
-fn clear_missing_team_config_alert(home_dir: &Path, team_dir: &Path) {
-    alert_state::clear_missing_team_config_alert(
-        home_dir,
-        &alert_state::missing_team_config_alert_key(team_dir),
-    );
 }
 
 #[expect(

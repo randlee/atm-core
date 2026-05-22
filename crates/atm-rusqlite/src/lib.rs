@@ -24,6 +24,8 @@ pub use observability::{
 #[cfg(test)]
 use rusqlite::Error as RusqliteError;
 use rusqlite::{Connection, OptionalExtension, params};
+#[cfg(test)]
+use serial_test::serial;
 use shared_db::{SharedDb, SharedDbTarget, deserialize_json, serialize_json, sqlite_error};
 use std::path::Path;
 #[cfg(test)]
@@ -1098,6 +1100,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn list_mail_entrypoint_uses_installed_sqlite_runtime_without_inbox_files() {
         install_entrypoint_runtime();
         let assembly = entrypoint_assembly();
@@ -1172,6 +1175,7 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn read_mail_entrypoint_uses_installed_sqlite_runtime_without_source_files() {
         install_entrypoint_runtime();
         let assembly = entrypoint_assembly();
