@@ -64,6 +64,10 @@ and produce the final release-readiness verdict.
 
 - every `Z.3` finding is either fixed or explicitly deferred with `team-lead`
   approval recorded in `docs/phase-Z/canary-findings-ledger.md`
+- no `Z.3` finding may remain in an undecided state before the release
+  verdict; every deferred `Z.3` finding must record explicit `team-lead`
+  approval in `docs/phase-Z/canary-findings-ledger.md`, and any missing
+  approval is blocking for this sprint
 - the final validation set is rerun on the closeout branch
 - all release-checklist rows that passed before the final fix round still pass
   after the `Z.4` fixes; any new failure is a blocking finding for this sprint

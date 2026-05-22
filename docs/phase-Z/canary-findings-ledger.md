@@ -13,6 +13,7 @@ Each finding entry must record:
 - `linked_operator_flow`
 - `summary`
 - `severity`
+- `fix_owner`
 - `status`
 - `z4_disposition`
 - `revalidation_result`

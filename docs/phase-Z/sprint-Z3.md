@@ -70,6 +70,9 @@ release sign-off.
   list and reporting path as frozen at sprint start, with evidence that
   predates the first operator report
 - operator-facing findings are recorded for `Z.4`
+- every canary-checklist row in `docs/phase-Z/canary-dogfood-checklist.md`
+  records one authoritative verdict before `Z.3` closes; any row left without
+  a final verdict is blocking for this sprint
 - the deprecated pre-Phase-Y file-migration inbox behavior from
   `docs/archive/file-migration-plan.md` is not required by any canary flow on
   the approved binaries
@@ -90,6 +93,8 @@ interpretation.
 
 ## Required Validation
 
+- `cargo build --release` or equivalent release build that refreshes the
+  canary executable baseline under test
 - `docs/phase-Z/canary-dogfood-checklist.md`
 - `docs/phase-Z/canary-findings-ledger.md`
 - `cargo test --workspace`
