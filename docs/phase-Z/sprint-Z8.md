@@ -66,7 +66,11 @@ suppression. It assumes the `ConfigIngress` contract is already narrowed by
 
 ## Delete / Narrow Inventory
 
-- delete any remaining non-watcher external `config.json` ingest path
+- delete any remaining non-watcher external `config.json` ingest path,
+  including
+  `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` in
+  `crates/atm-core/src/boundary_support.rs` and its forwarding in
+  `crates/atm-core/src/direct_boundaries.rs`
 - narrow parser use in `crates/atm-core/src/config/mod.rs` to approved callers
 - add daemon-write suppression so projection writes do not re-trigger import
 
@@ -83,9 +87,16 @@ suppression. It assumes the `ConfigIngress` contract is already narrowed by
      roster changes
    - handle first-team ingest and later external config edits through canonical
      ATM roster update logic
+   - delete
+     `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` from
+     `crates/atm-core/src/boundary_support.rs` and delete its forwarding from
+     `crates/atm-core/src/direct_boundaries.rs` once watcher/reconcile owns the
+     first-team ingest path
    Required tests:
    - prove new-team ingest hydrates ATM roster truth before later runtime
      consumers depend on it
+   - prove the startup-only bootstrap helper no longer exists on the production
+     call surface after `Z.8` closes
    Required docs:
    - update `docs/phase-Z/config-json-violation-inventory.md`
 
@@ -131,6 +142,8 @@ ownership, stop and move that scope into `Z.9` or `Z.10`.
 - watcher / reconcile is the only production reader of external Claude
   `config.json` roster changes
 - new-team ingest and external config changes update canonical ATM roster truth
+- `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` and its
+  forwarding are deleted once watcher/reconcile owns first-team ingest
 - daemon-owned projection writes do not re-trigger watcher import loops
 - daemon-write suppression is explicit, process-local, and restart-safe:
   a matching projection event is suppressed once, restart drops suppression
@@ -142,14 +155,18 @@ ownership, stop and move that scope into `Z.9` or `Z.10`.
 - `cargo test --workspace z8_projection_write_suppression_is_process_local -- --nocapture`
   - expected: matching projection write event is suppressed once; restart or
     crash leaves no durable suppression residue
+- `cargo test --workspace z8_deletes_startup_only_config_bootstrap_helper -- --nocapture`
+  - expected: watcher/reconcile first-team ingest path passes without any
+    surviving call surface for
+    `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
 - `git diff --check`
 - `rg -n "load_team_config\\(" crates/atm-core/src crates/atm-daemon/src`
   - expected: surviving production matches are restricted to
     `crates/atm-daemon/src/watch_runtime.rs`,
     `crates/atm-daemon/src/reconcile_runtime.rs`,
-    `crates/atm-core/src/doctor/mod.rs`, and one explicitly named
-    projection-only helper if this sprint still requires it; any other match is
-    a failure
+    and `crates/atm-core/src/doctor/mod.rs`; any surviving match for
+    `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` in
+    `boundary_support.rs` or `direct_boundaries.rs` is a failure
 - `docs/phase-Z/readiness.md`
 
 ## Required Document Updates

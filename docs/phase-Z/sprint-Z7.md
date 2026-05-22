@@ -77,6 +77,12 @@ definition. It does not yet implement watcher/reconcile ingest behavior.
   - `crates/atm-core/src/direct_boundaries.rs`
   - `crates/atm-daemon/src/boundary_adapters.rs`
   - `crates/atm-daemon/src/direct_boundaries.rs`
+- do not delete the startup-only bootstrap hydration helper in `Z.7`:
+  rename `hydrate_roster_from_team_config_if_empty(...)` to
+  `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`, keep only
+  that renamed symbol as the sole surviving boundary-support carve-out, and add
+  it to `.just/allowlists/scb_config_allowlist.toml` with
+  `sunset_sprint = "Z.8"`
 - narrow `ConfigIngress` in `crates/atm-core/src/boundary/store.rs` to the
   approved caller set
 - define `SCB-CONFIG-001`, `SCB-CONFIG-002`, and `SCB-CONFIG-003`
@@ -97,10 +103,29 @@ definition. It does not yet implement watcher/reconcile ingest behavior.
      - `crates/atm-core/src/direct_boundaries.rs`
      - `crates/atm-daemon/src/boundary_adapters.rs`
      - `crates/atm-daemon/src/direct_boundaries.rs`
-   - leave only the approved ingress/comparison/preservation behavior
+   - leave only the approved ingress/comparison/preservation behavior plus one
+     temporary startup-only carve-out:
+     `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
+   - rename `hydrate_roster_from_team_config_if_empty(...)` to
+     `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` so the
+     production symbol reflects startup-only bootstrap intent
+   - add the renamed startup-only helper to
+     `.just/allowlists/scb_config_allowlist.toml` with:
+     - `rule`
+     - `path`
+     - `symbol`
+     - `why`
+     - `sunset_sprint = "Z.8"`
+   - prove the renamed helper is a no-op when canonical ATM roster state is
+     already non-empty
+   - delete any other generic `load_team_config(...)` caller that is not the
+     renamed startup-only bootstrap helper
    Required tests:
    - prove generic retained command/runtime lookup no longer compiles or no
      longer exists on the boundary surface
+   - prove
+     `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
+     performs no roster mutation when ATM roster state is already non-empty
    Required docs:
    - update `docs/atm-core/boundaries.md`
    - update `docs/atm-daemon/boundaries.md`
@@ -160,6 +185,11 @@ suppression, or external roster change ingestion, stop and move that scope into
   lookup boundary
 - the helper/adapter chain no longer exposes generic retained command/runtime
   `load_team_config(...)` behavior
+- the startup-only bootstrap hydration helper is renamed to
+  `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`, added to the
+  checked-in allowlist with `sunset_sprint = "Z.8"`, and proven to be the only
+  surviving non-ingress/comparison/preservation `load_team_config(...)`
+  boundary match
 - repo-local lint / `sc-lint`-candidate rule definitions exist for the
   `config.json` boundary violation family and produce a verifiable reject
   signal on a known-bad fixture
@@ -177,7 +207,9 @@ suppression, or external roster change ingestion, stop and move that scope into
     non-zero and print `SCB-CONFIG-00X <path>:<line> <summary>`
 - `rg -n "load_team_config\\(" crates/atm-core/src/boundary_support.rs crates/atm-core/src/direct_boundaries.rs crates/atm-daemon/src/boundary_adapters.rs crates/atm-daemon/src/direct_boundaries.rs`
   - expected: surviving matches are explicitly ingress/comparison/preservation
-    only
+    only, except for one permitted `boundary_support.rs` match:
+    `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`, which is
+    temporary, allowlisted, and deleted in `Z.8`
 - `docs/phase-Z/readiness.md`
 
 ## Required Document Updates
