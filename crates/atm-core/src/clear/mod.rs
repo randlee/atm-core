@@ -200,9 +200,11 @@ fn validate_clear_target_member_in_roster<R: RetainedServiceRuntime>(
         .load_roster_member(&target.team, &target.agent)?
         .is_none()
     {
-        return Err(AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-            "Repair or reload the ATM roster, or clear a different mailbox target.",
-        ));
+        return Err(
+            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
+                "Repair or reload the ATM roster, or clear a different mailbox target.",
+            ),
+        );
     }
 
     Ok(())
@@ -320,10 +322,16 @@ fn count_removed(counts: &mut RemovedByClass, class: MessageClass) {
 
 #[cfg(test)]
 mod tests {
-    use std::{ffi::OsString, panic, panic::AssertUnwindSafe, path::{Path, PathBuf}, time::Duration};
+    use std::{
+        ffi::OsString,
+        panic,
+        panic::AssertUnwindSafe,
+        path::{Path, PathBuf},
+        time::Duration,
+    };
 
-    use serde_json::Map;
     use crate::test_support::{EnvGuard, remove_env_var, set_env_var};
+    use serde_json::Map;
     use tempfile::tempdir;
 
     use super::{ClearQuery, clear_mail_with_runtime_impl};
@@ -372,11 +380,17 @@ mod tests {
     }
 
     impl RetainedServiceRuntime for ClearRuntime {
-        fn load_config(&self, _current_dir: &Path) -> Result<Option<crate::config::AtmConfig>, AtmError> {
+        fn load_config(
+            &self,
+            _current_dir: &Path,
+        ) -> Result<Option<crate::config::AtmConfig>, AtmError> {
             Ok(None)
         }
 
-        fn load_team_config(&self, _team_dir: &Path) -> Result<crate::schema::TeamConfig, AtmError> {
+        fn load_team_config(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<crate::schema::TeamConfig, AtmError> {
             unreachable!("clear roster-truth tests must not load team config")
         }
 
@@ -521,7 +535,10 @@ mod tests {
             unreachable!("clear roster-truth tests do not persist message records")
         }
 
-        fn persist_message_state(&self, _state: boundary::MailMessageState) -> Result<(), AtmError> {
+        fn persist_message_state(
+            &self,
+            _state: boundary::MailMessageState,
+        ) -> Result<(), AtmError> {
             unreachable!("clear roster-truth tests do not persist message state")
         }
     }

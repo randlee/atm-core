@@ -429,11 +429,11 @@ mod tests {
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
         LogTailSession, ObservabilityPort,
     };
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AgentMember, TeamConfig};
     use crate::service_runtime::LocalServiceRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
-    use crate::roles::ROLE_TEAM_LEAD;
 
     enum StubHealth {
         Ok(AtmObservabilityHealth),

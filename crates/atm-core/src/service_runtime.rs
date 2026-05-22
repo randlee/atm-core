@@ -353,9 +353,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError> {
         self.roster_store
-            .load_roster(crate::boundary::RosterStoreLoadRosterRequest {
-                team: team.clone(),
-            })
+            .load_roster(crate::boundary::RosterStoreLoadRosterRequest { team: team.clone() })
             .map(|response| response.members)
     }
 
