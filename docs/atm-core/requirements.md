@@ -580,6 +580,7 @@ Required service rules:
     restore markers
   - the ATM team task bucket
   - ATM-owned durable roster/task state needed for deterministic restore
+  - the canonical ATM roster audit snapshot as `atm-roster.json`
 - restore must:
   - require the operator to recreate the Claude team shell through
     `TeamCreate` before ATM projects restored roster state back into
@@ -593,6 +594,9 @@ Required service rules:
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - restore must not replay backup `config.json` as roster truth
+- restore may read the freshly recreated Claude team shell only through a
+  narrow preservation helper for current `team-lead` / `leadSessionId`, not
+  through a generic roster-truth config loader
 - backup remains an audit / emergency-inspection surface rather than the source
   of roster truth during restore
 - malformed or missing snapshot material must fail with structured errors

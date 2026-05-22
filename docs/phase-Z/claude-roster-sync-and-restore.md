@@ -123,6 +123,13 @@ Backup keeps raw Claude team files and ATM-owned state for:
 - emergency inspection
 - manual fallback if needed
 
+`Z.10` adds an explicit ATM roster audit artifact to each backup:
+
+- `atm-roster.json` contains the canonical ATM roster snapshot for that team at
+  backup time
+- the snapshot is preserved for audit and inspection only; restore does not use
+  it as roster truth
+
 Backup does not make backup `config.json` the restore authority.
 
 ### `atm teams restore`
@@ -142,6 +149,8 @@ Restore must preserve:
 - member metadata such as `tmux_pane_id`
 
 Restore must not treat backup `config.json` as the roster source of truth.
+The only surviving `config.json` read in restore is the narrow recreated-shell
+preservation read for current `team-lead` and current `leadSessionId`.
 
 ## Member Metadata
 
