@@ -1142,7 +1142,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        seed_roster_member(&assembly, &team_name, &agent_name);
+        seed_roster_member(assembly, &team_name, &agent_name);
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
@@ -1217,7 +1217,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        seed_roster_member(&assembly, &team_name, &agent_name);
+        seed_roster_member(assembly, &team_name, &agent_name);
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
