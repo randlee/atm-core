@@ -30,6 +30,14 @@ The final section of this document must record:
   approval)
 - `notes`
 
+The final release verdict must remain `PENDING` until:
+
+- `docs/phase-Z/release-checklist.md` records a final checklist result for the
+  closeout candidate
+- every row in `docs/phase-Z/canary-findings-ledger.md` records a final
+  `z4_disposition`
+- every deferred `Z.3` finding records explicit `team-lead` approval
+
 ## Initial State
 
 | Sprint | Accepted Commit | Verdict | Current Status | Notes |

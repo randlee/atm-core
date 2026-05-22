@@ -26,5 +26,7 @@ Each checklist row must record:
 ## Rules
 
 - this checklist is frozen at the start of `Z.3`
+- every checklist row must record one final verdict before `Z.3` closes; any
+  row left without a final verdict is blocking for the sprint
 - operator reports that do not map back to a checklist row must be added as
   explicit findings with notes explaining the extra coverage

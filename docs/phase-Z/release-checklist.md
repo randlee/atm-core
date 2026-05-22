@@ -24,6 +24,8 @@ The final release checklist must include:
     `docs/phase-Z/smoke-checklist.md`
   - the promoted `Z.3` operator-facing canary coverage represented by
     `docs/phase-Z/canary-dogfood-checklist.md`
-- confirmation that all `Z.3` findings are fixed or explicitly dispositioned
+- confirmation, via `docs/phase-Z/canary-findings-ledger.md`, that every
+  `Z.3` finding is either fixed or explicitly deferred and that every deferred
+  row records `team-lead` approval before the release verdict may become final
 - confirmation that the release verdict in `docs/phase-Z/readiness.md`
   references this checklist result
