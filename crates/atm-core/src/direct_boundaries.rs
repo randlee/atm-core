@@ -4,26 +4,12 @@ use crate::boundary::{
     InboxExportReexportMessageRequest, InboxExportReexportMessageResponse,
     InboxIngressDiagnosticsRequest, InboxIngressDiagnosticsResponse,
     InboxIngressIdentityFingerprintRequest, InboxIngressIdentityFingerprintResponse,
-    InboxIngressImportRequest, InboxIngressImportResponse, RosterStore,
+    InboxIngressImportRequest, InboxIngressImportResponse,
 };
 use crate::error::AtmError;
-use crate::types::TeamName;
-use std::path::Path;
 
 pub fn load_workspace_config(request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError> {
     crate::boundary_support::load_workspace_config(request)
-}
-
-pub fn hydrate_roster_from_team_config_once_at_startup_if_empty(
-    home_dir: &Path,
-    team: &TeamName,
-    roster_store: &dyn RosterStore,
-) -> Result<bool, AtmError> {
-    crate::boundary_support::hydrate_roster_from_team_config_once_at_startup_if_empty(
-        home_dir,
-        team,
-        roster_store,
-    )
 }
 
 pub fn import_inbox_source(

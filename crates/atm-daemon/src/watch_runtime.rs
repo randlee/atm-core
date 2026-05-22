@@ -117,12 +117,18 @@ impl WatchRuntime {
     pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
         Self::new_with_poller(
             Arc::new(|request| {
+                let team_dir =
+                    atm_core::home::team_dir_from_home(&request.home_dir, &request.team)?;
+                let config_path = team_dir.join("config.json");
                 let inbox_path = atm_core::home::inbox_path_from_home(
                     &request.home_dir,
                     &request.team,
                     &request.agent,
                 )?;
                 let mut paths = Vec::new();
+                if config_path.is_file() {
+                    paths.push(config_path);
+                }
                 if inbox_path.exists() {
                     paths.push(inbox_path.clone());
                 }
@@ -583,6 +589,14 @@ mod tests {
     #[test]
     fn watch_runtime_ignores_host_scoped_log_directory() {
         let tempdir = TempDir::new().expect("tempdir");
+        let team_dir = tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join("test-team");
+        fs::create_dir_all(&team_dir).expect("create team dir");
+        let config_path = team_dir.join("config.json");
+        fs::write(&config_path, r#"{"members":[]}"#).expect("write config");
         let inboxes_dir = tempdir
             .path()
             .join(".claude")
@@ -614,7 +628,7 @@ mod tests {
             .expect("poll");
         runtime.shutdown().expect("shutdown");
 
-        assert_eq!(batch.paths, vec![origin, primary]);
+        assert_eq!(batch.paths, vec![config_path, origin, primary]);
         assert!(
             batch.paths.iter().all(|path| !path.starts_with(&logs_dir)),
             "watch runtime must not subscribe to the host-scoped retained log directory"

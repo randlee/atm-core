@@ -5,7 +5,7 @@ use std::path::{Path, PathBuf};
 use chrono::Utc;
 use tracing::warn;
 
-use crate::config::load_team_config;
+use crate::config::load_claude_team_config_document;
 use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
 use crate::home;
 use crate::mailbox::lock;
@@ -20,9 +20,9 @@ pub(super) fn restore_team(request: RestoreRequest) -> Result<RestoreResult, Atm
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&request.team));
     }
-    let current_config = load_team_config(&team_dir)?;
+    let current_config = load_claude_team_config_document(&team_dir)?;
     let backup_dir = locate_backup_dir(&request.home_dir, &request.team, request.from.as_deref())?;
-    let backup_config = load_team_config(&backup_dir)?;
+    let backup_config = load_claude_team_config_document(&backup_dir)?;
 
     let members_to_restore = backup_config
         .members
