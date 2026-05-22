@@ -860,6 +860,30 @@ mod tests {
         .expect("write config.json");
     }
 
+    fn seed_roster_member(
+        assembly: &SqliteBoundaryAssembly,
+        team_name: &TeamName,
+        agent_name: &AgentName,
+    ) {
+        assembly
+            .roster_store()
+            .replace_roster(boundary::RosterStoreReplaceRosterRequest {
+                team: team_name.clone(),
+                members: vec![boundary::RosterMemberRecord {
+                    team_name: team_name.clone(),
+                    agent_name: agent_name.clone(),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: String::new(),
+                    model: String::new(),
+                    recipient_pane_id: None,
+                    metadata_json: serde_json::Map::new(),
+                }],
+                source: Some(boundary::ReplaySource::new("sqlite-test").expect("replay source")),
+            })
+            .expect("replace roster");
+    }
+
     fn sqlite_runtime(assembly: &SqliteBoundaryAssembly) -> LocalServiceRuntime {
         LocalServiceRuntime::new_with_delivery_boundaries(
             assembly.mail_store_arc(),
@@ -987,6 +1011,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record: expired })
             .expect("upsert expired");
+        seed_roster_member(&assembly, &team(), &agent());
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(tempdir.path(), &team(), &[AgentMember::with_name(agent())]);
@@ -1038,6 +1063,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
+        seed_roster_member(&assembly, &team(), &agent());
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(tempdir.path(), &team(), &[AgentMember::with_name(agent())]);
@@ -1116,6 +1142,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
+        seed_roster_member(&assembly, &team_name, &agent_name);
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
@@ -1190,6 +1217,7 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
+        seed_roster_member(&assembly, &team_name, &agent_name);
 
         let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
