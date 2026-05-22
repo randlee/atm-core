@@ -207,9 +207,11 @@ fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
         .load_roster_member(&target.team, &target.agent)?
         .is_none()
     {
-        return Err(AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-            "Repair or reload the ATM roster, or list a different mailbox target.",
-        ));
+        return Err(
+            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
+                "Repair or reload the ATM roster, or list a different mailbox target.",
+            ),
+        );
     }
 
     Ok(())
@@ -259,7 +261,9 @@ mod tests {
     use serde_json::Map;
     use tempfile::tempdir;
 
-    use super::{ListQuery, apply_list_filters, list_mail_with_runtime_impl, logical_current_messages};
+    use super::{
+        ListQuery, apply_list_filters, list_mail_with_runtime_impl, logical_current_messages,
+    };
     use crate::boundary::{self, ClaudeCompatibilityDeliveryMode, RosterHarness, RosterMemberKind};
     use crate::error::AtmError;
     use crate::observability::NullObservability;
@@ -268,7 +272,9 @@ mod tests {
     use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
     use crate::service_runtime_store::RetainedMailboxRuntime;
     use crate::test_support::{TEST_SENDER, TEST_TEAM};
-    use crate::types::{AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TaskId, TeamName};
+    use crate::types::{
+        AgentName, DisplayBucket, IsoTimestamp, MessageClass, ReadSelection, TaskId, TeamName,
+    };
     use crate::workflow::WorkflowStateFile;
 
     fn classified_message(
@@ -357,11 +363,17 @@ mod tests {
     }
 
     impl RetainedServiceRuntime for ListRuntime {
-        fn load_config(&self, _current_dir: &Path) -> Result<Option<crate::config::AtmConfig>, AtmError> {
+        fn load_config(
+            &self,
+            _current_dir: &Path,
+        ) -> Result<Option<crate::config::AtmConfig>, AtmError> {
             Ok(None)
         }
 
-        fn load_team_config(&self, _team_dir: &Path) -> Result<crate::schema::TeamConfig, AtmError> {
+        fn load_team_config(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<crate::schema::TeamConfig, AtmError> {
             unreachable!("list roster-truth tests must not load team config")
         }
 
@@ -506,7 +518,10 @@ mod tests {
             unreachable!("list roster-truth tests do not persist message records")
         }
 
-        fn persist_message_state(&self, _state: boundary::MailMessageState) -> Result<(), AtmError> {
+        fn persist_message_state(
+            &self,
+            _state: boundary::MailMessageState,
+        ) -> Result<(), AtmError> {
             unreachable!("list roster-truth tests do not persist message state")
         }
     }

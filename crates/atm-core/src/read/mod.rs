@@ -501,9 +501,11 @@ fn validate_target_member_in_roster<R: RetainedServiceRuntime>(
         .load_roster_member(&target.team, &target.agent)?
         .is_none()
     {
-        return Err(AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-            "Repair or reload the ATM roster, or read a different mailbox target.",
-        ));
+        return Err(
+            AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
+                "Repair or reload the ATM roster, or read a different mailbox target.",
+            ),
+        );
     }
 
     Ok(())
@@ -746,7 +748,10 @@ mod tests {
     use serde_json::Value;
     use tempfile::tempdir;
 
-    use super::{BucketCounts, ClassifiedMessage, ReadQuery, metadata_selection, read_mail_with_runtime_impl, state};
+    use super::{
+        BucketCounts, ClassifiedMessage, ReadQuery, metadata_selection,
+        read_mail_with_runtime_impl, state,
+    };
     use crate::boundary::{self, ClaudeCompatibilityDeliveryMode, RosterHarness, RosterMemberKind};
     use crate::mailbox::source::SourceFile;
     use crate::mailbox::source::SourcedMessage;
