@@ -7,12 +7,17 @@ use serde_json::{Value, json};
 use tracing::warn;
 
 use crate::address::validate_path_segment;
+use crate::boundary::{
+    RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore, RosterStoreListTeamsRequest,
+    RosterStoreLoadRosterRequest, RosterStoreReplaceRosterRequest,
+};
 use crate::config::{load_claude_team_config_document, load_config, resolve_team};
-use crate::error::{AtmError, AtmErrorCode, AtmErrorKind};
+use crate::error::{AtmError, AtmErrorKind};
 use crate::home;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AgentMember, TeamConfig};
+use crate::service_runtime_store;
 use crate::types::{AgentName, TeamName};
 
 #[path = "team_admin/restore.rs"]
@@ -189,66 +194,11 @@ pub enum RestoreResult {
 ///
 /// Returns [`AtmError`] when `.atm.toml` cannot be loaded or the teams root
 /// cannot be enumerated.
-pub fn list_teams(home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, AtmError> {
+pub fn list_teams(_home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, AtmError> {
     let config = load_config(&current_dir)?;
     let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
-    let teams_root = teams_root_from_home(&home_dir);
-    if !teams_root.exists() {
-        return Ok(TeamsList {
-            action: "list".to_string(),
-            team: current_team,
-            teams: Vec::new(),
-        });
-    }
-
-    let mut teams = Vec::new();
-    for entry in fs::read_dir(&teams_root).map_err(|error| {
-        AtmError::file_policy(format!(
-            "failed to read teams directory {}: {error}",
-            teams_root.display()
-        ))
-        .with_source(error)
-        .with_recovery("Check ATM_HOME and ensure the teams directory is readable.")
-    })? {
-        let entry = entry.map_err(|error| {
-            AtmError::file_policy(format!(
-                "failed to read teams directory entry under {}: {error}",
-                teams_root.display()
-            ))
-            .with_source(error)
-            .with_recovery("Check ATM_HOME and ensure the teams directory is readable.")
-        })?;
-        let path = entry.path();
-        if !path.is_dir() {
-            continue;
-        }
-        if entry.file_name().to_string_lossy().starts_with('.') {
-            continue;
-        }
-        if !path.join("config.json").is_file() {
-            continue;
-        }
-
-        match load_claude_team_config_document(&path) {
-            Ok(config) => teams.push(TeamSummary {
-                name: TeamName::from_validated(entry.file_name().to_string_lossy().to_string()),
-                member_count: config.members.len(),
-            }),
-            Err(error) => warn!(
-                code = %AtmErrorCode::ConfigTeamParseFailed,
-                path = %path.display(),
-                %error,
-                "skipping malformed team config while listing teams"
-            ),
-        }
-    }
-
-    teams.sort_by(|a, b| a.name.cmp(&b.name));
-    Ok(TeamsList {
-        action: "list".to_string(),
-        team: current_team,
-        teams,
-    })
+    let runtime = service_runtime_store::default_runtime()?;
+    list_teams_with_roster_store(runtime.roster_store.as_ref(), current_team)
 }
 
 /// List the current member roster for one team.
@@ -261,28 +211,8 @@ pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
     let config = load_config(&query.current_dir)?;
     let team = resolve_team(query.team_override.as_deref(), config.as_ref())
         .ok_or_else(AtmError::team_unavailable)?;
-    let team_dir = home::team_dir_from_home(&query.home_dir, &team)?;
-    if !team_dir.exists() {
-        return Err(AtmError::team_not_found(&team));
-    }
-    let config = load_claude_team_config_document(&team_dir)?;
-
-    let mut members = Vec::with_capacity(config.members.len());
-    if let Some(team_lead) = config
-        .members
-        .iter()
-        .find(|member| member.name == ROLE_TEAM_LEAD)
-    {
-        members.push(member_summary(team_lead));
-    }
-    for member in &config.members {
-        if member.name == ROLE_TEAM_LEAD {
-            continue;
-        }
-        members.push(member_summary(member));
-    }
-
-    Ok(MembersList { team, members })
+    let runtime = service_runtime_store::default_runtime()?;
+    list_members_with_roster_store(runtime.roster_store.as_ref(), team)
 }
 
 /// Add one member record and inbox file to a team.
@@ -292,16 +222,64 @@ pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
 /// Returns [`AtmError`] when the team is missing, the member already exists, or
 /// inbox/config persistence fails.
 pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmError> {
+    let runtime = service_runtime_store::default_runtime()?;
+    add_member_with_roster_store(runtime.roster_store.as_ref(), request)
+}
+
+fn list_teams_with_roster_store(
+    roster_store: &dyn RosterStore,
+    current_team: TeamName,
+) -> Result<TeamsList, AtmError> {
+    let mut teams = roster_store
+        .list_teams(RosterStoreListTeamsRequest)
+        .map(|response| response.teams)?
+        .into_iter()
+        .map(|team| {
+            roster_store
+                .load_roster(RosterStoreLoadRosterRequest { team: team.clone() })
+                .map(|response| TeamSummary {
+                    name: team,
+                    member_count: response.members.len(),
+                })
+        })
+        .collect::<Result<Vec<_>, _>>()?;
+    teams.sort_by(|a, b| a.name.cmp(&b.name));
+    Ok(TeamsList {
+        action: "list".to_string(),
+        team: current_team,
+        teams,
+    })
+}
+
+fn list_members_with_roster_store(
+    roster_store: &dyn RosterStore,
+    team: TeamName,
+) -> Result<MembersList, AtmError> {
+    let roster = load_team_roster(roster_store, &team)?;
+    if roster.is_empty() {
+        return Err(AtmError::team_not_found(&team));
+    }
+
+    Ok(MembersList {
+        team,
+        members: ordered_roster_member_summaries(&roster),
+    })
+}
+
+fn add_member_with_roster_store(
+    roster_store: &dyn RosterStore,
+    request: AddMemberRequest,
+) -> Result<AddMemberOutcome, AtmError> {
     let team_dir = home::team_dir_from_home(&request.home_dir, &request.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&request.team));
     }
 
-    let mut config = load_claude_team_config_document(&team_dir)?;
-    if config
-        .members
+    let current_config = load_claude_team_config_document(&team_dir)?;
+    let mut existing_roster = load_team_roster(roster_store, &request.team)?;
+    if existing_roster
         .iter()
-        .any(|member| member.name == request.member.as_str())
+        .any(|member| member.agent_name == request.member)
     {
         return Err(AtmError::validation(format!(
             "member '{}' already exists in team '{}'",
@@ -318,24 +296,47 @@ pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmErro
         extra.insert("backendType".to_string(), json!("tmux"));
         extra.insert("isActive".to_string(), json!(true));
     }
+    extra.insert(
+        "agentId".to_string(),
+        json!(format!("{}@{}", request.member, request.team)),
+    );
+    extra.insert(
+        "joinedAt".to_string(),
+        json!(Utc::now().timestamp_millis() as u64),
+    );
+    extra.insert("cwd".to_string(), json!(request.cwd.display().to_string()));
 
-    config.members.push(AgentMember {
-        name: request.member.clone(),
-        agent_id: format!("{}@{}", request.member, request.team),
-        agent_type: request.agent_type.into(),
+    existing_roster.push(RosterMemberRecord {
+        team_name: request.team.clone(),
+        agent_name: request.member.clone(),
+        member_kind: RosterMemberKind::Permanent,
+        harness: RosterHarness::ClaudeCode,
+        agent_type: request.agent_type,
         model: request.model,
-        joined_at: Some(Utc::now().timestamp_millis() as u64),
-        tmux_pane_id: normalized_tmux_pane_id.unwrap_or_default(),
-        cwd: request.cwd.display().to_string(),
-        extra,
+        recipient_pane_id: normalized_tmux_pane_id,
+        metadata_json: extra,
     });
+    roster_store
+        .replace_roster(RosterStoreReplaceRosterRequest {
+            team: request.team.clone(),
+            members: existing_roster.clone(),
+            source: None,
+        })
+        .map_err(|error| {
+            error.with_recovery(
+                "Check ATM roster store availability and rerun `atm teams add-member`.",
+            )
+        })?;
+    let projected_config = project_team_config_from_roster(current_config.extra, &existing_roster);
 
-    if let Err(error) = write_team_config(&team_dir, &config) {
+    if let Err(error) = write_team_config(&team_dir, &projected_config) {
         if created_inbox {
             let _ = fs::remove_file(&inbox_path);
         }
         return Err(
-            error.with_recovery("Check team config permissions and rerun `atm teams add-member`.")
+            error.with_recovery(
+                "Check team config permissions and rerun `atm teams add-member`; ATM roster state may already include the new member.",
+            )
         );
     }
 
@@ -416,17 +417,105 @@ pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> 
     restore::restore_team(request)
 }
 
-fn member_summary(member: &AgentMember) -> MemberSummary {
-    MemberSummary {
-        name: AgentName::from_validated(member.name.clone()),
-        agent_id: member.agent_id.clone(),
-        agent_type: member.agent_type.to_string(),
-        model: member.model.clone(),
-        joined_at: member.joined_at,
-        tmux_pane_id: member.tmux_pane_id.clone(),
-        cwd: member.cwd.clone(),
-        extra: member.extra.clone(),
+fn ordered_roster_member_summaries(records: &[RosterMemberRecord]) -> Vec<MemberSummary> {
+    let mut members = Vec::with_capacity(records.len());
+    if let Some(team_lead) = records
+        .iter()
+        .find(|member| member.agent_name == ROLE_TEAM_LEAD)
+    {
+        members.push(member_summary_from_roster(team_lead));
     }
+    for member in records {
+        if member.agent_name == ROLE_TEAM_LEAD {
+            continue;
+        }
+        members.push(member_summary_from_roster(member));
+    }
+    members
+}
+
+fn member_summary_from_roster(record: &RosterMemberRecord) -> MemberSummary {
+    MemberSummary {
+        name: record.agent_name.clone(),
+        agent_id: metadata_string(&record.metadata_json, "agentId")
+            .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
+        agent_type: record.agent_type.clone(),
+        model: record.model.clone(),
+        joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
+        tmux_pane_id: record.recipient_pane_id.clone().unwrap_or_default(),
+        cwd: metadata_string(&record.metadata_json, "cwd").unwrap_or_default(),
+        extra: compatibility_extra_fields(&record.metadata_json),
+    }
+}
+
+fn load_team_roster(
+    roster_store: &dyn RosterStore,
+    team: &TeamName,
+) -> Result<Vec<RosterMemberRecord>, AtmError> {
+    roster_store
+        .load_roster(RosterStoreLoadRosterRequest { team: team.clone() })
+        .map(|response| response.members)
+}
+
+fn project_team_config_from_roster(
+    extra: serde_json::Map<String, Value>,
+    records: &[RosterMemberRecord],
+) -> TeamConfig {
+    let mut members = Vec::with_capacity(records.len());
+    if let Some(team_lead) = records
+        .iter()
+        .find(|member| member.agent_name == ROLE_TEAM_LEAD)
+    {
+        members.push(agent_member_from_roster_record(team_lead));
+    }
+    for record in records {
+        if record.agent_name == ROLE_TEAM_LEAD {
+            continue;
+        }
+        members.push(agent_member_from_roster_record(record));
+    }
+    TeamConfig { members, extra }
+}
+
+fn agent_member_from_roster_record(record: &RosterMemberRecord) -> AgentMember {
+    let mut extra = compatibility_extra_fields(&record.metadata_json);
+    AgentMember {
+        name: record.agent_name.clone(),
+        agent_id: metadata_string(&record.metadata_json, "agentId")
+            .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
+        agent_type: record.agent_type.clone().into(),
+        model: record.model.clone(),
+        joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
+        tmux_pane_id: record.recipient_pane_id.clone(),
+        cwd: metadata_string(&record.metadata_json, "cwd").unwrap_or_default(),
+        extra: {
+            extra.remove("agentId");
+            extra.remove("joinedAt");
+            extra.remove("cwd");
+            extra
+        },
+    }
+}
+
+fn compatibility_extra_fields(
+    metadata_json: &serde_json::Map<String, Value>,
+) -> serde_json::Map<String, Value> {
+    let mut extra = metadata_json.clone();
+    extra.remove("agentId");
+    extra.remove("joinedAt");
+    extra.remove("cwd");
+    extra
+}
+
+fn metadata_string(metadata_json: &serde_json::Map<String, Value>, key: &str) -> Option<String> {
+    metadata_json
+        .get(key)
+        .and_then(Value::as_str)
+        .map(ToOwned::to_owned)
+}
+
+fn metadata_u64(metadata_json: &serde_json::Map<String, Value>, key: &str) -> Option<u64> {
+    metadata_json.get(key).and_then(Value::as_u64)
 }
 
 fn teams_root_from_home(home_dir: &Path) -> PathBuf {
@@ -625,16 +714,151 @@ fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<String>, AtmEr
 
 #[cfg(test)]
 mod tests {
+    use std::collections::BTreeMap;
+    use std::sync::Mutex;
+
     use serial_test::serial;
     use tempfile::tempdir;
 
     use super::{
-        AddMemberRequest, BackupRequest, RestoreRequest, add_member, backup_root_from_home,
+        AddMemberRequest, BackupRequest, RestoreRequest, add_member_with_roster_store,
+        backup_root_from_home, list_members_with_roster_store, list_teams_with_roster_store,
         tasks_dir_from_home,
+    };
+    use crate::boundary::{
+        self, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
+        RosterStoreHealthSnapshot, RosterStoreHealthSnapshotRequest,
+        RosterStoreHealthSnapshotResponse, RosterStoreListTeamsRequest,
+        RosterStoreListTeamsResponse, RosterStoreLoadRosterRequest, RosterStoreLoadRosterResponse,
+        RosterStoreQueryMembershipRequest, RosterStoreQueryMembershipResponse,
+        RosterStoreReplaceRosterRequest, RosterStoreReplaceRosterResponse,
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::TeamConfig;
-    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{ROLE_TEAM_LEAD, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+    use crate::types::TeamName;
+
+    #[derive(Default)]
+    struct RecordingRosterStore {
+        teams: Mutex<BTreeMap<TeamName, Vec<RosterMemberRecord>>>,
+    }
+
+    impl RecordingRosterStore {
+        fn seed_team(&self, team: &str, members: Vec<RosterMemberRecord>) {
+            self.teams
+                .lock()
+                .expect("roster store lock")
+                .insert(team.parse().expect("team"), members);
+        }
+    }
+
+    impl boundary::sealed::Sealed for RecordingRosterStore {}
+
+    impl RosterStore for RecordingRosterStore {
+        fn replace_roster(
+            &self,
+            request: RosterStoreReplaceRosterRequest,
+        ) -> Result<RosterStoreReplaceRosterResponse, crate::error::AtmError> {
+            self.teams
+                .lock()
+                .expect("roster store lock")
+                .insert(request.team.clone(), request.members.clone());
+            let current_member_count = request.members.len() as u64;
+            Ok(RosterStoreReplaceRosterResponse {
+                team: request.team,
+                previous_member_count: 0,
+                current_member_count,
+                replaced: true,
+            })
+        }
+
+        fn load_roster(
+            &self,
+            request: RosterStoreLoadRosterRequest,
+        ) -> Result<RosterStoreLoadRosterResponse, crate::error::AtmError> {
+            let members = self
+                .teams
+                .lock()
+                .expect("roster store lock")
+                .get(&request.team)
+                .cloned()
+                .unwrap_or_default();
+            Ok(RosterStoreLoadRosterResponse {
+                team: request.team,
+                members,
+            })
+        }
+
+        fn query_membership(
+            &self,
+            request: RosterStoreQueryMembershipRequest,
+        ) -> Result<RosterStoreQueryMembershipResponse, crate::error::AtmError> {
+            let member = self
+                .teams
+                .lock()
+                .expect("roster store lock")
+                .get(&request.team)
+                .and_then(|members| {
+                    members
+                        .iter()
+                        .find(|member| member.agent_name == request.member)
+                        .cloned()
+                });
+            Ok(RosterStoreQueryMembershipResponse {
+                team: request.team,
+                is_member: member.is_some(),
+                member,
+            })
+        }
+
+        fn list_teams(
+            &self,
+            _request: RosterStoreListTeamsRequest,
+        ) -> Result<RosterStoreListTeamsResponse, crate::error::AtmError> {
+            let teams = self
+                .teams
+                .lock()
+                .expect("roster store lock")
+                .keys()
+                .cloned()
+                .collect();
+            Ok(RosterStoreListTeamsResponse { teams })
+        }
+
+        fn health_snapshot(
+            &self,
+            request: RosterStoreHealthSnapshotRequest,
+        ) -> Result<RosterStoreHealthSnapshotResponse, crate::error::AtmError> {
+            let member_count = self
+                .teams
+                .lock()
+                .expect("roster store lock")
+                .get(&request.team)
+                .map(|members| members.len() as u64)
+                .unwrap_or_default();
+            Ok(RosterStoreHealthSnapshotResponse {
+                snapshot: RosterStoreHealthSnapshot {
+                    team: request.team,
+                    member_count,
+                    stale: false,
+                    refreshed_at: None,
+                },
+            })
+        }
+    }
+
+    fn roster_member(team: &str, agent: &str) -> RosterMemberRecord {
+        RosterMemberRecord {
+            team_name: team.parse().expect("team"),
+            agent_name: agent.parse().expect("agent"),
+            member_kind: RosterMemberKind::Permanent,
+            harness: RosterHarness::ClaudeCode,
+            agent_type: "worker".to_string(),
+            model: "gpt-5".to_string(),
+            recipient_pane_id: None,
+            metadata_json: serde_json::Map::new(),
+        }
+    }
 
     fn write_team_config(home_dir: &std::path::Path, team: &str) {
         let team_dir = home_dir.join(".claude").join("teams").join(team);
@@ -685,16 +909,20 @@ mod tests {
     fn add_member_normalizes_tmux_shape_when_pane_is_provided() {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
 
-        add_member(AddMemberRequest {
-            home_dir: tempdir.path().to_path_buf(),
-            team: TEST_TEAM.parse().expect("team"),
-            member: TEST_SENDER.parse().expect("member"),
-            agent_type: "worker".to_string(),
-            model: "gpt-5".to_string(),
-            cwd: tempdir.path().to_path_buf(),
-            tmux_pane_id: Some("7".to_string()),
-        })
+        add_member_with_roster_store(
+            &roster_store,
+            AddMemberRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: TEST_TEAM.parse().expect("team"),
+                member: TEST_SENDER.parse().expect("member"),
+                agent_type: "worker".to_string(),
+                model: "gpt-5".to_string(),
+                cwd: tempdir.path().to_path_buf(),
+                tmux_pane_id: Some("7".to_string()),
+            },
+        )
         .expect("add member");
 
         let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
@@ -708,29 +936,139 @@ mod tests {
             .find(|member| member.name == TEST_SENDER)
             .expect("member");
 
-        assert_eq!(member.tmux_pane_id, "%7");
+        assert_eq!(member.tmux_pane_id.as_deref(), Some("%7"));
         assert_eq!(member.extra["backendType"], serde_json::json!("tmux"));
         assert_eq!(member.extra["isActive"], serde_json::json!(true));
+
+        let roster = roster_store
+            .load_roster(RosterStoreLoadRosterRequest {
+                team: TEST_TEAM.parse().expect("team"),
+            })
+            .expect("load roster")
+            .members;
+        assert_eq!(roster.len(), 1);
+        assert_eq!(roster[0].recipient_pane_id.as_deref(), Some("%7"));
     }
 
     #[test]
     fn add_member_rejects_non_canonical_tmux_target_syntax() {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
 
-        let error = add_member(AddMemberRequest {
-            home_dir: tempdir.path().to_path_buf(),
-            team: TEST_TEAM.parse().expect("team"),
-            member: TEST_SENDER.parse().expect("member"),
-            agent_type: "worker".to_string(),
-            model: "gpt-5".to_string(),
-            cwd: tempdir.path().to_path_buf(),
-            tmux_pane_id: Some("session:1.2".to_string()),
-        })
+        let error = add_member_with_roster_store(
+            &roster_store,
+            AddMemberRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: TEST_TEAM.parse().expect("team"),
+                member: TEST_SENDER.parse().expect("member"),
+                agent_type: "worker".to_string(),
+                model: "gpt-5".to_string(),
+                cwd: tempdir.path().to_path_buf(),
+                tmux_pane_id: Some("session:1.2".to_string()),
+            },
+        )
         .expect_err("invalid pane id");
 
         assert_eq!(error.code, AtmErrorCode::MessageValidationFailed);
         assert!(error.message.contains("tmux pane id"));
+    }
+
+    #[test]
+    fn list_members_reports_atm_roster_truth_without_file_members() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        let mut member = roster_member(TEST_TEAM, TEST_SENDER);
+        member.recipient_pane_id = Some("%9".to_string());
+        member
+            .metadata_json
+            .insert("cwd".to_string(), serde_json::json!("/tmp/worker"));
+        roster_store.seed_team(TEST_TEAM, vec![member]);
+
+        let members =
+            list_members_with_roster_store(&roster_store, TEST_TEAM.parse().expect("team"))
+                .expect("list members");
+
+        assert_eq!(members.team.as_str(), TEST_TEAM);
+        assert_eq!(members.members.len(), 1);
+        assert_eq!(members.members[0].name.as_str(), TEST_SENDER);
+        assert_eq!(members.members[0].tmux_pane_id, "%9");
+        assert_eq!(members.members[0].cwd, "/tmp/worker");
+    }
+
+    #[test]
+    fn list_teams_reports_atm_roster_truth() {
+        let roster_store = RecordingRosterStore::default();
+        roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_SENDER)]);
+        roster_store.seed_team(
+            "other-team",
+            vec![
+                roster_member("other-team", TEST_SENDER),
+                roster_member("other-team", TEST_RECIPIENT),
+            ],
+        );
+
+        let teams = list_teams_with_roster_store(&roster_store, TEST_TEAM.parse().expect("team"))
+            .expect("list teams");
+
+        assert_eq!(teams.team.as_str(), TEST_TEAM);
+        assert_eq!(teams.teams.len(), 2);
+        assert_eq!(teams.teams[0].name.as_str(), "other-team");
+        assert_eq!(teams.teams[0].member_count, 2);
+        assert_eq!(teams.teams[1].name.as_str(), TEST_TEAM);
+        assert_eq!(teams.teams[1].member_count, 1);
+    }
+
+    #[test]
+    #[serial]
+    fn add_member_projects_config_from_updated_atm_roster_truth() {
+        let tempdir = tempdir().expect("tempdir");
+        write_team_config(tempdir.path(), TEST_TEAM);
+        let roster_store = RecordingRosterStore::default();
+        let mut existing = roster_member(TEST_TEAM, ROLE_TEAM_LEAD);
+        existing.agent_type = "lead".to_string();
+        existing.model = "gpt-5".to_string();
+        existing
+            .metadata_json
+            .insert("cwd".to_string(), serde_json::json!("/tmp/team-lead"));
+        roster_store.seed_team(TEST_TEAM, vec![existing]);
+
+        add_member_with_roster_store(
+            &roster_store,
+            AddMemberRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: TEST_TEAM.parse().expect("team"),
+                member: TEST_SENDER.parse().expect("member"),
+                agent_type: "worker".to_string(),
+                model: "gpt-5".to_string(),
+                cwd: tempdir.path().to_path_buf(),
+                tmux_pane_id: Some("%12".to_string()),
+            },
+        )
+        .expect("add member");
+
+        let roster = roster_store
+            .load_roster(RosterStoreLoadRosterRequest {
+                team: TEST_TEAM.parse().expect("team"),
+            })
+            .expect("load roster")
+            .members;
+        assert_eq!(roster.len(), 2);
+        assert!(roster.iter().any(|member| member.agent_name == TEST_SENDER));
+
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        let config: TeamConfig = serde_json::from_slice(
+            &std::fs::read(team_dir.join("config.json")).expect("read config"),
+        )
+        .expect("parse config");
+        assert_eq!(config.members.len(), 2);
+        let member = config
+            .members
+            .iter()
+            .find(|member| member.name == TEST_SENDER)
+            .expect("member");
+        assert_eq!(member.tmux_pane_id.as_deref(), Some("%12"));
     }
 
     #[test]

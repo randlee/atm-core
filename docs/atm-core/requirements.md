@@ -565,9 +565,14 @@ Required service rules:
 - `add-member` must project the resulting approved member set into
   `config.json`; it must not treat local `config.json` as the durable source
   of truth
+- `atm teams` and `atm members` must source their displayed team/member state
+  from canonical ATM roster rows, not from raw Claude file membership
 - retained Claude compatibility member fields such as `tmux_pane_id` are
   canonical ATM roster-member metadata and must not be durably sourced from
   `.atm.toml`
+- ATM-owned member pane metadata is stored on the canonical roster row as
+  `recipient_pane_id` and projected back to Claude compatibility
+  `AgentMember.tmux_pane_id`
 - backup must snapshot:
   - `config.json`
   - team inbox files, excluding transient `*.lock` sentinels, dotfiles, and

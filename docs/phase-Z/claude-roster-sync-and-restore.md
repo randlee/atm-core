@@ -93,12 +93,26 @@ These views should report ATM roster truth. If Claude file state is missing or
 drifted, `doctor` reports that discrepancy rather than forcing members / teams
 commands to treat `config.json` as authoritative.
 
+`Z.9` closes the last file-truth team-admin views:
+
+- `atm teams` now enumerates canonical ATM roster teams and member counts
+- `atm members` now lists canonical ATM roster members and metadata even when
+  `config.json` does not yet carry matching member rows
+
 ### `atm team member add`
 
 The canonical mutation path is:
 
 1. mutate ATM roster truth
 2. project the resulting member set into `config.json`
+
+`Z.9` also makes per-member Claude compatibility metadata canonical in ATM
+roster truth first:
+
+- ATM roster `recipient_pane_id` is the owned member-routing field
+- projected Claude `AgentMember.tmux_pane_id` is the compatibility projection
+  of that ATM-owned field
+- `tmux_pane_id` is no longer treated as durable `.atm.toml` authority
 
 ### `atm teams backup`
 

@@ -44,8 +44,15 @@ mod tests {
     use std::fs;
     use std::path::PathBuf;
 
+    use atm_core::boundary::{
+        ReplaySource, RosterHarness, RosterMemberKind, RosterMemberRecord,
+        RosterStoreReplaceRosterRequest,
+    };
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
+    use atm_runtime_test_support::{
+        SqliteRuntimeGuard, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+    };
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -54,6 +61,7 @@ mod tests {
 
     struct Fixture {
         _tempdir: TempDir,
+        _runtime_guard: SqliteRuntimeGuard,
         home_dir: PathBuf,
         current_dir: PathBuf,
     }
@@ -78,8 +86,11 @@ mod tests {
 
     impl Fixture {
         fn new() -> Self {
+            install_sqlite_retained_runtime_factory();
             let tempdir = TempDir::new().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
+            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
+            let runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path.clone());
             let current_dir = tempdir.path().join("workspace");
             fs::create_dir_all(&current_dir).expect("workspace");
             fs::write(
@@ -101,8 +112,39 @@ mod tests {
                 serde_json::to_vec(&config).expect("team config"),
             )
             .expect("write config");
+            let assembly = open_sqlite_boundary(sqlite_db_path).expect("sqlite db");
+            assembly
+                .roster_store()
+                .replace_roster(RosterStoreReplaceRosterRequest {
+                    team: TEST_TEAM.parse().expect("team"),
+                    members: vec![
+                        RosterMemberRecord {
+                            team_name: TEST_TEAM.parse().expect("team"),
+                            agent_name: ROLE_TEAM_LEAD.parse().expect("lead"),
+                            member_kind: RosterMemberKind::Permanent,
+                            harness: RosterHarness::ClaudeCode,
+                            agent_type: String::new(),
+                            model: String::new(),
+                            recipient_pane_id: None,
+                            metadata_json: serde_json::Map::new(),
+                        },
+                        RosterMemberRecord {
+                            team_name: TEST_TEAM.parse().expect("team"),
+                            agent_name: TEST_SENDER.parse().expect("sender"),
+                            member_kind: RosterMemberKind::Permanent,
+                            harness: RosterHarness::ClaudeCode,
+                            agent_type: String::new(),
+                            model: String::new(),
+                            recipient_pane_id: None,
+                            metadata_json: serde_json::Map::new(),
+                        },
+                    ],
+                    source: Some(ReplaySource::new("members-test").expect("source")),
+                })
+                .expect("seed roster");
             Self {
                 _tempdir: tempdir,
+                _runtime_guard: runtime_guard,
                 home_dir,
                 current_dir,
             }
