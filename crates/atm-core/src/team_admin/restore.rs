@@ -623,7 +623,7 @@ mod tests {
     use std::collections::BTreeMap;
     use std::fs;
     use std::path::Path;
-    use std::sync::{Mutex, OnceLock};
+    use std::sync::Mutex;
 
     use chrono::Utc;
     use serde_json::json;
@@ -823,13 +823,7 @@ mod tests {
         );
     }
 
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
     fn with_env_var_serial<T>(key: &'static str, value: &str, body: impl FnOnce() -> T) -> T {
-        let _guard = env_lock().lock().expect("env lock");
         let _env_guard = EnvGuard::set_raw(key, value);
         body()
     }
