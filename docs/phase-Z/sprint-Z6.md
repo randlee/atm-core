@@ -129,6 +129,9 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
    - `ClaudeCodeTeamRoster` is `pub` and immutable by construction.
    - `Arc<[ClaudeCodeRosterMember]>` keeps member order frozen for the lifetime
      of the snapshot and preserves `Send + Sync` semantics by construction.
+   - `RosterMemberRecord.recipient_pane_id` maps one-to-one into
+     `ClaudeCodeRosterMember.tmux_pane_id`; the field rename is intentional and
+     the approved public Claude-facing name in this sprint is `tmux_pane_id`.
    - `from_roster_snapshot(...)` is the only approved builder in this sprint;
      runtime consumers do not build ad hoc file-backed projections.
    Required tests:

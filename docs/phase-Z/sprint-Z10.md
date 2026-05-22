@@ -130,8 +130,10 @@ ownership, stop and push that scope back into `Z.5` through `Z.9`.
 
 - `cargo test --workspace`
 - `git diff --check`
-- `rg -n "load_team_config\\(&backup_dir\\)" crates/atm-core/src/team_admin/restore.rs`
-  - expected: no production matches
+- `rg -n "load_team_config\\(" crates/atm-core/src/team_admin/restore.rs`
+  - expected: no production matches; if any surviving read is still narrowly
+    justified, the exact call site must be named explicitly in the sprint-close
+    evidence
 - `docs/phase-Z/readiness.md`
 
 ## Required Document Updates

@@ -105,13 +105,23 @@ This sprint owns team-admin views and member mutation, not restore automation.
    ```rust
    #[derive(Clone, Debug, Eq, PartialEq, Serialize, Deserialize)]
    pub struct AgentMember {
-       pub member_name: AgentName,
+       pub name: AgentName,
+       pub agent_id: AgentId,
+       pub agent_type: AgentType,
+       pub model: Option<String>,
+       pub joined_at: DateTime<Utc>,
+       pub cwd: Option<PathBuf>,
        pub harness: DeliveryHarness,
        #[serde(default)]
        pub tmux_pane_id: Option<String>,
+       #[serde(default)]
+       pub extra: BTreeMap<String, serde_json::Value>,
    }
    ```
    Migration contract:
+   - this is the existing `AgentMember` record with its current fields preserved;
+     `Z.9` does not replace it with a parallel type or rename `name` to
+     `member_name`
    - SQLite adds a nullable `tmux_pane_id` column to the canonical ATM roster
      member table.
    - preexisting rows default to `NULL` until ATM add, watcher ingest, or
