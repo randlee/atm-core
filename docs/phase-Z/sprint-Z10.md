@@ -140,6 +140,8 @@ ownership, stop and push that scope back into `Z.5` through `Z.9`.
   canonical member metadata such as `tmux_pane_id`
 - the automated restore path replaces manual file-edit steps before `Z.3`
   begins
+- `docs/phase-Z/readiness.md` is stamped with the `Z.10` accepted head and
+  closure verdict
 
 ## Non-Closure
 

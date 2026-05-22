@@ -195,6 +195,8 @@ or watcher/reconcile import ownership, stop and move that scope into `Z.7` or
   direct `config.json` reads
 - generic runtime `load_team_config(...)` helper use is removed from
   `send`-driven command/runtime behavior
+- `docs/phase-Z/readiness.md` is stamped with the `Z.6` accepted head and
+  closure verdict
 
 ## Non-Closure
 

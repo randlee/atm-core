@@ -168,6 +168,8 @@ If the work starts rebuilding teams from backup material or preserving recreated
   `.atm.toml` state
 - legacy `AgentMember` payloads remain backward-compatible under serde when
   `tmux_pane_id` is omitted or serialized in the current Claude-compatible form
+- `docs/phase-Z/readiness.md` is stamped with the `Z.9` accepted head and
+  closure verdict
 
 ## Non-Closure
 

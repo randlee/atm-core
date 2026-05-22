@@ -132,6 +132,8 @@ trait changes, or watcher/reconcile import logic, stop and move that scope into
   compare against `config.json`
 - the path inventory row for each deleted runtime read is marked closed in
   `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/phase-Z/readiness.md` is stamped with the `Z.5` accepted head and
+  closure verdict
 
 ## Non-Closure
 
