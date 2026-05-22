@@ -921,7 +921,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(restore_env)]
     fn restore_team_keeps_config_last_and_marker_on_config_write_failure() {
         let tempdir = tempdir().expect("tempdir");
         let roster_store = RecordingRosterStore::default();
@@ -994,7 +994,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(restore_env)]
     fn restore_team_treats_marker_cleanup_failure_as_warning_only() {
         let tempdir = tempdir().expect("tempdir");
         let roster_store = RecordingRosterStore::default();
@@ -1054,7 +1054,7 @@ mod tests {
     }
 
     #[test]
-    #[serial]
+    #[serial(restore_env)]
     fn restore_team_cleans_staging_and_preserves_live_config_on_inbox_stage_failure() {
         let tempdir = tempdir().expect("tempdir");
         let roster_store = RecordingRosterStore::default();

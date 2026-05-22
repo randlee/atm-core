@@ -7,7 +7,7 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
-pub(crate) const MAX_PROJECTION_JOURNAL_ENTRIES: usize = 1024;
+pub(crate) const MAX_PROJECTION_WRITE_JOURNAL_ENTRIES: usize = 256;
 
 #[derive(Clone, Default)]
 pub(crate) struct ProjectionWriteJournal {
@@ -171,7 +171,7 @@ fn canonical_projection_path(path: &Path) -> PathBuf {
 }
 
 fn evict_oldest_entry_if_full(state: &mut ProjectionWriteJournalState) {
-    while state.entries.len() >= MAX_PROJECTION_JOURNAL_ENTRIES {
+    while state.entries.len() >= MAX_PROJECTION_WRITE_JOURNAL_ENTRIES {
         let Some(oldest) = state.order.pop_front() else {
             return;
         };
@@ -196,45 +196,42 @@ fn stable_projection_digest(bytes: &[u8]) -> u64 {
 
 #[cfg(test)]
 mod tests {
-    use super::{MAX_PROJECTION_JOURNAL_ENTRIES, ProjectionWriteJournal};
+    use super::{MAX_PROJECTION_WRITE_JOURNAL_ENTRIES, ProjectionWriteJournal};
     use atm_core::error::AtmError;
     use std::path::PathBuf;
+
+    fn projection_test_path(suffix: usize) -> PathBuf {
+        std::env::temp_dir().join(format!("projection-{suffix}.json"))
+    }
 
     fn remember_with_suffix(
         journal: &ProjectionWriteJournal,
         suffix: usize,
     ) -> Result<(), AtmError> {
-        let path = PathBuf::from(format!("/tmp/projection-{suffix}.json"));
+        let path = projection_test_path(suffix);
         journal.remember_projected_config_write(&path, suffix as u64)
     }
 
     #[test]
     fn evicts_oldest_entry_at_capacity() {
         let journal = ProjectionWriteJournal::new();
-        for index in 0..MAX_PROJECTION_JOURNAL_ENTRIES {
+        for index in 0..MAX_PROJECTION_WRITE_JOURNAL_ENTRIES {
             remember_with_suffix(&journal, index).expect("seed journal");
         }
 
-        remember_with_suffix(&journal, MAX_PROJECTION_JOURNAL_ENTRIES).expect("evict oldest");
+        remember_with_suffix(&journal, MAX_PROJECTION_WRITE_JOURNAL_ENTRIES).expect("evict oldest");
 
         assert!(
             !journal
-                .consume_projected_config_write(
-                    PathBuf::from("/tmp/projection-0.json").as_path(),
-                    0
-                )
+                .consume_projected_config_write(projection_test_path(0).as_path(), 0)
                 .expect("consume oldest"),
             "oldest entry should have been evicted once the journal hit its max"
         );
         assert!(
             journal
                 .consume_projected_config_write(
-                    PathBuf::from(format!(
-                        "/tmp/projection-{}.json",
-                        MAX_PROJECTION_JOURNAL_ENTRIES
-                    ))
-                    .as_path(),
-                    MAX_PROJECTION_JOURNAL_ENTRIES as u64,
+                    projection_test_path(MAX_PROJECTION_WRITE_JOURNAL_ENTRIES).as_path(),
+                    MAX_PROJECTION_WRITE_JOURNAL_ENTRIES as u64,
                 )
                 .expect("consume newest"),
             "newest entry should remain present after eviction"

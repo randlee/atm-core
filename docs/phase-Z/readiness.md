@@ -70,6 +70,8 @@ The final release verdict must remain `PENDING` until:
   follow-up on the `Z.6` roster-view surface.
 - `RSH-009` deferred to `Z.11`: close the remaining runtime hardening follow-up
   after `Z.6`.
+- `ATM-QA-Z10-001` deferred to `Z.11`: complete the remaining `Z.8`
+  production wiring follow-up before final release closeout.
 
 Final release verdict:
 

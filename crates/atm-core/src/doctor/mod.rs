@@ -704,27 +704,31 @@ mod tests {
         }
     }
 
-    fn test_runtime_with_roster(members: &[&str]) -> LocalServiceRuntime {
+    fn test_runtime_with_roster(
+        members: &[&str],
+        notification_sink_path: PathBuf,
+    ) -> LocalServiceRuntime {
         LocalServiceRuntime::new_with_delivery_boundaries(
             Arc::new(UnusedMailStore),
             Arc::new(UnusedTaskStore),
             Arc::new(roster_store(members)),
             Arc::new(crate::LocalFileNonClaudeOutbound::new()),
             Arc::new(crate::LocalFileNotificationSink::at_path(
-                std::env::temp_dir().join("atm-core-doctor-notifications.jsonl"),
+                notification_sink_path,
             )),
         )
     }
 
-    fn test_runtime() -> LocalServiceRuntime {
-        test_runtime_with_roster(&[TEST_SENDER])
+    fn test_runtime(paths: &TestPaths) -> LocalServiceRuntime {
+        test_runtime_with_roster(&[TEST_SENDER], paths.notification_sink_path.clone())
     }
 
     fn run_doctor(
+        paths: &TestPaths,
         query: DoctorQuery,
         observability: &dyn ObservabilityPort,
     ) -> Result<DoctorReport, AtmError> {
-        let runtime = test_runtime();
+        let runtime = test_runtime(paths);
         run_doctor_with_runtime(query, observability, &runtime)
     }
 
@@ -733,6 +737,7 @@ mod tests {
         home_dir: PathBuf,
         current_dir: PathBuf,
         active_log_path: PathBuf,
+        notification_sink_path: PathBuf,
     }
 
     impl TestPaths {
@@ -748,6 +753,7 @@ mod tests {
                 home_dir,
                 current_dir,
                 active_log_path: root.join("atm.log.jsonl"),
+                notification_sink_path: root.join("atm-core-doctor-notifications.jsonl"),
             }
         }
 
@@ -792,6 +798,7 @@ mod tests {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
@@ -813,6 +820,7 @@ mod tests {
     fn run_doctor_reports_invalid_team_override_as_address_error() {
         let paths = TestPaths::new();
         let report = run_doctor(
+            &paths,
             DoctorQuery {
                 home_dir: paths.home_dir.clone(),
                 current_dir: paths.current_dir.clone(),
@@ -849,6 +857,7 @@ mod tests {
         )
         .expect("config");
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
@@ -877,6 +886,7 @@ mod tests {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
@@ -902,6 +912,7 @@ mod tests {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
@@ -927,6 +938,7 @@ mod tests {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Err(AtmError::observability_health(
@@ -957,6 +969,7 @@ mod tests {
     fn run_doctor_reports_missing_team_directory_as_error() {
         let paths = TestPaths::new();
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
@@ -984,6 +997,7 @@ mod tests {
         let paths = TestPaths::new();
         paths.write_raw_team_config("{\"members\":");
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
@@ -1011,6 +1025,7 @@ mod tests {
         let paths = TestPaths::new();
         paths.write_raw_team_config(&format!(r#"{{"members":[{{"name":"{TEST_SENDER}"}}]}}"#));
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
@@ -1037,7 +1052,10 @@ mod tests {
     fn run_doctor_reports_atm_roster_and_claude_roster_drift_as_warning() {
         let paths = TestPaths::new();
         paths.write_team_layout(&[TEST_SENDER]);
-        let runtime = test_runtime_with_roster(&[TEST_SENDER, ROLE_TEAM_LEAD]);
+        let runtime = test_runtime_with_roster(
+            &[TEST_SENDER, ROLE_TEAM_LEAD],
+            paths.notification_sink_path.clone(),
+        );
         let report = run_doctor_with_runtime(
             query(&paths),
             &StubObservability {
@@ -1074,6 +1092,7 @@ mod tests {
             .join(format!("{TEST_SENDER}.json.lock"));
         std::fs::write(&stale_lock, u32::MAX.to_string()).expect("stale lock");
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
