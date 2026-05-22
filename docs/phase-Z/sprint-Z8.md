@@ -93,9 +93,23 @@ suppression. It assumes the `ConfigIngress` contract is already narrowed by
    Development work:
    - ensure ATM-owned config projection does not re-trigger watcher import
      loops
+   - implement suppression as a daemon-owned in-memory projection-write journal
+     keyed by canonical `config.json` path plus the write's content digest or
+     projection epoch; the watcher consumes one matching journal entry and
+     suppresses only that matching event
+   - the suppression journal is intentionally process-local and does not
+     survive daemon restart
+   - if the daemon crashes mid-write, no durable suppression state is kept; a
+     later watcher event after restart is treated as external input and flows
+     through the same idempotent watcher / reconcile ingest path
    Required tests:
    - prove daemon-authored projection writes do not self-replay as external
      ingest
+   - prove the projection-write journal suppresses the matching write event
+     once and only once
+   - prove restart/crash behavior is correct:
+     restart clears suppression state, and a post-crash event is handled as an
+     ordinary external ingest candidate
    Required docs:
    - update `docs/phase-Z/claude-roster-sync-and-restore.md`
 
@@ -118,10 +132,16 @@ ownership, stop and move that scope into `Z.9` or `Z.10`.
   `config.json` roster changes
 - new-team ingest and external config changes update canonical ATM roster truth
 - daemon-owned projection writes do not re-trigger watcher import loops
+- daemon-write suppression is explicit, process-local, and restart-safe:
+  a matching projection event is suppressed once, restart drops suppression
+  state, and crash recovery falls back to idempotent external ingest
 
 ## Required Validation
 
 - `cargo test --workspace`
+- `cargo test --workspace z8_projection_write_suppression_is_process_local -- --nocapture`
+  - expected: matching projection write event is suppressed once; restart or
+    crash leaves no durable suppression residue
 - `git diff --check`
 - `rg -n "load_team_config\\(" crates/atm-core/src crates/atm-daemon/src`
   - expected: surviving production matches are restricted to

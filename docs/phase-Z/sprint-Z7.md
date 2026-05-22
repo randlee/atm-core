@@ -51,6 +51,7 @@ definition. It does not yet implement watcher/reconcile ingest behavior.
 
 ## Hard Dependencies
 
+- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
 - `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/readiness.md`
 
@@ -110,13 +111,31 @@ definition. It does not yet implement watcher/reconcile ingest behavior.
      - `SCB-CONFIG-001`
      - `SCB-CONFIG-002`
      - `SCB-CONFIG-003`
-   - define the explicit allowlist from
-     `docs/phase-Z/config-json-violation-inventory.md`
+   - implement the rule family in `.just/lint_boundaries.py` as deterministic
+     repository-local token / regex scans rather than prose-only review notes
+   - define the explicit allowlist in a checked-in machine-runnable file,
+     `.just/allowlists/scb_config_allowlist.toml`, with one entry per approved
+     survivor and fields at minimum:
+     - `rule`
+     - `path`
+     - `symbol`
+     - `why`
+     - `sunset_sprint`
+   - add a checked-in known-bad fixture, for example
+     `.just/fixtures/scb_config_known_bad.rs`, that intentionally violates all
+     three `SCB-CONFIG-*` rules
    Required tests:
    - add a machine-runnable boundary-lint fixture that contains one known-bad
      direct `config.json` roster lookup and proves the rule family rejects it
-   - wire that fixture into `just lint boundaries` so the rule family produces
-     a verifiable reject signal rather than prose-only documentation
+   - wire that fixture into `just lint boundaries` through
+     `.just/lint_boundaries.py` so the lint performs a fixture self-test:
+     the known-bad fixture must be rejected internally with rule ids and
+     `path:line` output, or the top-level lint fails
+   - define the reject signal explicitly:
+     - real repo violation: `just lint boundaries` exits non-zero and prints
+       `SCB-CONFIG-00X <path>:<line> <summary>`
+     - fixture self-test failure: `just lint boundaries` exits non-zero and
+       prints that the known-bad fixture was not rejected as expected
    Required docs:
    - update `docs/requirements.md`
    - update `docs/architecture.md`
@@ -144,14 +163,18 @@ suppression, or external roster change ingestion, stop and move that scope into
 - repo-local lint / `sc-lint`-candidate rule definitions exist for the
   `config.json` boundary violation family and produce a verifiable reject
   signal on a known-bad fixture
+- the machine-runnable allowlist file and known-bad fixture are checked in and
+  are the authoritative inputs to `just lint boundaries`
 
 ## Required Validation
 
 - `cargo test --workspace`
 - `git diff --check`
 - `just lint boundaries`
-  - expected: the `SCB-CONFIG-001` / `002` / `003` fixture path is exercised and
-    known-bad direct `config.json` boundary violations are rejected
+  - expected on a clean repo: exit `0` after the fixture self-test proves the
+    known-bad file is rejected internally
+  - expected on a real boundary violation or fixture false-negative: exit
+    non-zero and print `SCB-CONFIG-00X <path>:<line> <summary>`
 - `rg -n "load_team_config\\(" crates/atm-core/src/boundary_support.rs crates/atm-core/src/direct_boundaries.rs crates/atm-daemon/src/boundary_adapters.rs crates/atm-daemon/src/direct_boundaries.rs`
   - expected: surviving matches are explicitly ingress/comparison/preservation
     only

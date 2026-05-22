@@ -26,8 +26,9 @@ The final section of this document must record:
 - `integrate_phase_z_candidate`
 - `release_checklist_result`
 - `release_verdict`
-- `authorized_by` (explicit named authority such as `team-lead` or user
-  approval)
+- `authorized_by` (explicit named authority limited to `team-lead` by ATM
+  identity or explicit user approval recorded by name, plus the approving ATM
+  message id or equivalent named artifact)
 - `notes`
 
 The final release verdict must remain `PENDING` until:

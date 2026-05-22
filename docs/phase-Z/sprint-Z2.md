@@ -92,11 +92,15 @@ validation set on the fixed branch.
   - the accepted behavior remains: delivery harness resolution uses canonical
     SQLite roster state, not `config.json` directly
   - the approved pre-`Z.8` bootstrap mechanism is a daemon startup-time,
-    one-shot ATM roster hydration path that uses the existing `ConfigIngress`
-    ingest seam only when the canonical ATM roster is empty and a Claude
-    `config.json` is present
+    one-shot ATM roster hydration helper named
+    `hydrate_roster_from_team_config_if_empty(...)` that uses the existing
+    `ConfigIngress` ingest seam only when the canonical ATM roster is empty
+    and a Claude `config.json` is present
   - that startup-only hydration path is not watcher infrastructure and must not
     remain callable as a generic runtime membership lookup after bootstrap
+  - when the canonical ATM roster already contains at least one member, the
+    startup-only hydration helper must be a strict no-op: no
+    `load_team_config(...)` call occurs and no roster write is emitted
   - Claude Code harness send flow must not use `config.json` as a pre-write
     membership block; after the SQLite write succeeds and the post-write
     notification path selects a Claude Code inbox target, ATM may compare the
@@ -127,6 +131,9 @@ validation set on the fixed branch.
    Required tests:
    - prove a clean host with no preexisting SQLite DB hydrates ATM roster truth
      before the first daemon-backed communication depends on membership lookup
+   - prove `hydrate_roster_from_team_config_if_empty(...)` is a strict no-op
+     when the canonical ATM roster already contains at least one member:
+     no `load_team_config(...)` call occurs and no roster write is emitted
    Required docs:
    - update `docs/atm-daemon/boundaries.md`
    - update `docs/phase-Z/smoke-findings-ledger.md`
@@ -173,6 +180,9 @@ Once `Z.2` closes, execution continues with `Z.5`, `Z.6`, `Z.7`, `Z.8`,
 - the only permitted pre-`Z.8` roster ingress path is the startup-only
   one-shot ATM roster hydration call when the ATM roster is empty; no generic
   runtime config lookup is introduced
+- when canonical ATM roster state is already non-empty, the startup-only
+  `hydrate_roster_from_team_config_if_empty(...)` path is a verified no-op
+  with no config load and no roster write side effects
 - Claude Code harness send no longer blocks on `config.json` before the SQLite
   write; any config/roster mismatch is surfaced as a post-write warning while
   still writing an existing Claude inbox target
@@ -212,6 +222,10 @@ the `Z.1` handoff without silent carry-forward.
 - `docs/phase-Z/smoke-findings-ledger.md`
 - `docs/phase-Z/readiness.md`
 - `cargo test --workspace`
+- `cargo test --workspace z2_startup_hydration_skips_non_empty_roster -- --nocapture`
+  - expected: startup-only hydration helper exits without calling
+    `load_team_config(...)` and without emitting roster writes when canonical
+    ATM roster already contains at least one member
 - `git diff --check`
 - `rg -n "load_team_config\\(" crates/atm-core/src/send/mod.rs crates/atm-core/src/delivery_policy.rs`
   - expected: no production membership-gate matches

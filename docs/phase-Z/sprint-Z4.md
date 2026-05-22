@@ -74,6 +74,10 @@ and produce the final release-readiness verdict.
 - `docs/phase-Z/readiness.md` records the release-readiness verdict
 - `docs/phase-Z/readiness.md` `authorized_by` records an explicit named
   authority before the release verdict is considered final
+- eligible `authorized_by` authorities are limited to `team-lead` by ATM
+  identity or explicit user approval recorded by name, and the final
+  authorization record must cite the approving ATM message id or one
+  equivalent named approval artifact in `docs/phase-Z/readiness.md`
 - `docs/phase-Z/release-checklist.md` and `docs/phase-Z/readiness.md`
   identify one authoritative closeout result for the `integrate/phase-Z`
   candidate

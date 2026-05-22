@@ -103,6 +103,19 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
    - add the immutable public `ClaudeCodeTeamRoster` surface
    - use it as the approved runtime roster projection instead of generic
      `config.json` reads
+   - during the `Z.6` / `Z.7` window, do not introduce daemon-startup roster
+     caching for this view; the only approved caller is the post-write Claude
+     warning block in `crates/atm-core/src/send/mod.rs`
+   - that warning block must build the snapshot on demand after the durable ATM
+     write succeeds and after Claude inbox-target existence has been resolved,
+     but before the warning text is returned
+   - the snapshot source is canonical ATM SQLite roster state only: the send
+     path calls into a store-backed runtime helper in
+     `crates/atm-core/src/service_runtime.rs` that loads
+     `RosterMemberRecord` rows through `RosterStore` and immediately passes
+     them to `ClaudeCodeTeamRoster::from_roster_snapshot(...)`
+   - `ConfigIngress`, `config::load_team_config(...)`, and any direct
+     `config.json` read are forbidden in this snapshot-construction path
    Approved Rust shape:
    ```rust
    #[derive(Clone, Debug, Eq, PartialEq)]
@@ -139,6 +152,9 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
    - cover runtime consumers that need immutable roster inspection
    - prove the post-write Claude warning path consumes
      `ClaudeCodeTeamRoster`, not a direct send-path file read
+   - prove the store-backed snapshot builder reads canonical ATM roster rows
+     from `RosterStore` / SQLite rather than `ConfigIngress` or
+     `config::load_team_config(...)`
    Required docs:
    - update `docs/phase-Z/claude-roster-sync-and-restore.md`
 
@@ -161,12 +177,18 @@ or watcher/reconcile import ownership, stop and move that scope into `Z.7` or
 
 - `send` no longer uses `config.json` as a pre-write membership gate
 - `ClaudeCodeTeamRoster` exists as the approved immutable runtime roster view
+- the `ClaudeCodeTeamRoster` warning snapshot in the `Z.6` / `Z.7` window is
+  built from canonical ATM SQLite roster state through `RosterStore`, not from
+  direct `config.json` reads
 - generic runtime `load_team_config(...)` helper use is removed from
   `send`-driven command/runtime behavior
 
 ## Required Validation
 
 - `cargo test --workspace`
+- `cargo test --workspace z6_post_write_warning_uses_store_backed_claude_roster -- --nocapture`
+  - expected: the warning path builds `ClaudeCodeTeamRoster` from
+    `RosterStore` / SQLite state rather than from a direct `config.json` read
 - `git diff --check`
 - `rg -n "load_team_config\\(" crates/atm-core/src/send/mod.rs crates/atm-core/src/service_runtime.rs`
   - expected: no production matches

@@ -120,6 +120,47 @@ Costs:
 - the current violation inventory must be carried as an explicit per-path
   delete / narrow / keep plan rather than loose prose
 
+## Mechanical Enforcement
+
+The `SCB-CONFIG-*` rule family is a durable architectural enforcement
+mechanism, not a one-off review note.
+
+Mechanism:
+
+- repository-local implementation lives first in `.just/lint_boundaries.py`
+  and is exercised by `just lint boundaries`
+- the first implementation is deterministic token / regex scanning against the
+  checked-in source tree plus a checked-in known-bad fixture; it is not a
+  prose-only checklist
+- once the rule shape is stable, the same semantics may migrate into
+  standalone `sc-lint`, but the repo-local gate remains authoritative until
+  that migration is accepted
+
+Allowlist contract:
+
+- approved surviving callers are recorded in a checked-in machine-runnable
+  file, `.just/allowlists/scb_config_allowlist.toml`
+- each allowlist row must record at minimum:
+  - `rule`
+  - `path`
+  - `symbol`
+  - `why`
+  - `sunset_sprint`
+- the markdown planning inventory remains the human-readable source of intent,
+  but the TOML allowlist is the machine-readable gate input
+- any new allowlist row requires an explicit sprint/ADR justification and a
+  named sunset sprint unless the row is part of the final accepted survivor set
+
+Gate failure semantics:
+
+- a real repo violation of `SCB-CONFIG-001`, `SCB-CONFIG-002`, or
+  `SCB-CONFIG-003` must make `just lint boundaries` exit non-zero and print
+  `SCB-CONFIG-00X <path>:<line> <summary>`
+- the lint also runs a known-bad fixture self-test; if the fixture is not
+  rejected, the top-level lint must exit non-zero and report the false-negative
+- a clean repo passes only when the allowlisted survivors match, the live tree
+  has no unexpected violations, and the known-bad fixture is rejected
+
 ## Phase Z Implementation Split
 
 This ADR is implemented by `Phase Z` follow-on sprints:
