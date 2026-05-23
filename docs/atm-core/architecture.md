@@ -267,6 +267,15 @@ Config-ingress ownership rules:
 - repository-local lint / `sc-lint`-candidate gates should make direct
   production `config.json` roster reads and generic `load_team_config(...)`
   helper use mechanically detectable
+- later `Phase Z` boundary-cleanup gates should also make the following
+  mechanically detectable:
+  - `SCB-RETAINED-001`: direct command-entry
+    `service_runtime_store::default_runtime()` misuse in `atm teams`,
+    `atm members`, or `atm teams add-member`
+  - `SCB-WORKSPACE-001`: direct command/team-admin ambient `.atm.toml` /
+    `load_config(...)` reads outside the approved seam
+  - `SCB-SINGLETON-001`: public ambient singleton/runtime-factory exposure
+    such as broad crate-root re-exports
 
 Required frame direction:
 - transport framing must not depend on EOF or socket half-close semantics

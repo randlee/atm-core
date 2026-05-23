@@ -51,7 +51,11 @@ The final release verdict must remain `PENDING` until:
 | Z.8 | `PENDING` | `PENDING` | `not started` | awaits `Z.7` closure |
 | Z.9 | `PENDING` | `PENDING` | `not started` | awaits `Z.8` closure |
 | Z.10 | `PENDING` | `PENDING` | `not started` | awaits `Z.9` closure |
-| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.10` closure |
+| Z.11 | `PENDING` | `PENDING` | `not started` | replace the opaque clean-start first-send error with the exact actionable recovery contract; no hidden fallback allowed; close with updated `smoke-findings-ledger.md`, `readiness.md`, and `project-plan.md` |
+| Z.12 | `PENDING` | `PENDING` | `not started` | eliminate the retained-runtime path bug for `atm teams --json`, `atm members --json`, and `atm teams add-member`; close only when `SCB-RETAINED-001` gates the bad path and the smoke blocker record is updated |
+| Z.13 | `PENDING` | `PENDING` | `not started` | remove ambient workspace-config current-team reads from the command/team-admin path; close only when `SCB-WORKSPACE-001` gates new direct `load_config(...)` regressions |
+| Z.14 | `PENDING` | `PENDING` | `not started` | remove the public crate-root runtime-factory leak and keep only approved wrappers; close only when `SCB-SINGLETON-001` gates new ambient singleton exposure |
+| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.10` closure plus the accepted `Z.11` through `Z.14` follow-up line before canary entry |
 | Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure |
 
 Final release verdict:
