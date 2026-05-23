@@ -193,6 +193,66 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s10-team-backup-restore-automation-and-config-projection`
 
+### Z.11 First Send Recovery Contract And Setup Guidance
+
+Purpose:
+
+- replace the bad clean-start first-send failure with explicit operator
+  guidance
+- keep the empty-roster first-send path actionable without adding hidden
+  fallback behavior
+
+Execution branch:
+- `feature/pZ-s11-first-send-recovery-contract-and-setup-guidance`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s11-first-send-recovery-contract-and-setup-guidance`
+
+### Z.12 Retained Runtime Path Elimination And Boundary Lint Gate
+
+Purpose:
+
+- eliminate the incorrect retained-runtime acquisition path behind `Z2-F001`
+- make `atm teams add-member` use that same approved runtime-entry path
+- add a repository-local boundary lint gate so direct CLI-command
+  `default_runtime()` misuse cannot return
+
+Execution branch:
+- `feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate`
+
+### Z.13 Workspace Config Boundary Cleanup And Lint Gate
+
+Purpose:
+
+- remove ambient `.atm.toml` / `load_config(...)` reads from command/team-admin
+  paths
+- add a repository-local boundary lint gate so workspace-config access stays
+  behind the approved seam
+
+Execution branch:
+- `feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate`
+
+### Z.14 Ambient Singleton Surface Removal And Lint Gate
+
+Purpose:
+
+- remove the broad public ambient runtime-factory/singleton exposure
+- add a repository-local lint gate so that class of surface cannot leak back
+- keep only the approved bounded wrappers for daemon bootstrap and
+  runtime-test support
+
+Execution branch:
+- `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate`
+
 ### Z.3 `atm-dev` Canary And Dogfood
 
 Purpose:
@@ -269,6 +329,11 @@ Current execution state:
   - `Z2-F001` newly reopened the retained roster inspection row (`Z1-003`)
 - the broader roster/config/restore ownership redesign discovered while
   analyzing `Z1-F001` is split into `Z.5` through `Z.10`
+- the remaining boundary-cleanup line is now explicitly split into:
+  - `Z.11` first-send recovery contract
+  - `Z.12` retained runtime path cleanup
+  - `Z.13` workspace-config boundary cleanup
+  - `Z.14` ambient singleton surface cleanup
 - `Z.3` and `Z.4` remain the canary / release sprints, but execution does not
   resume there until the reopened `Z.2` blockers are closed and canary entry
   is explicitly re-authorized
