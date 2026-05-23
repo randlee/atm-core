@@ -33,6 +33,9 @@ This sprint owns the first-send recovery contract for the clean-start
 - ATM durable state and daemon startup succeed
 - canonical ATM roster is still empty
 - first `send` fails because no ATM roster member exists yet
+- `RSH-008` and `RSH-010` remain assigned here as the narrow send-path
+  hardening follow-up items that must close without widening into broader
+  roster-import or retained-runtime cleanup
 
 This sprint does not decide automatic roster hydration. It defines the
 operator-facing error/recovery contract and the closure proof for that path.
@@ -121,6 +124,18 @@ operator-facing error/recovery contract and the closure proof for that path.
    Required docs:
    - update `docs/project-plan.md`
 
+4. Close the `Z.11`-owned hardening follow-up items already assigned in
+   `docs/phase-Z/readiness.md`.
+   Development work:
+   - close `RSH-008` for the `deliver_payloads` payload-size gate without
+     widening into a broader send-path redesign
+   - close `RSH-010` as the remaining send-path hardening item tracked by QA
+   Required tests:
+   - prove the accepted `Z.11` branch includes the payload-size gate and the
+     remaining `RSH-010` hardening closure
+   Required docs:
+   - update `docs/phase-Z/readiness.md`
+
 ## Split Recommendation
 
 If the work expands into retained-runtime path cleanup, ambient workspace-config
@@ -137,6 +152,8 @@ scope into `Z.12`, `Z.13`, or `Z.14` instead of widening `Z.11`.
 - no `config.json` roster-truth fallback is introduced
 - `docs/phase-Z/readiness.md` records the accepted `Z.11` head and verdict
 - `docs/project-plan.md` includes the `Z.11` sprint ledger row
+- `RSH-008` and `RSH-010` close in `Z.11` exactly as assigned in
+  `docs/phase-Z/readiness.md`
 
 ## Non-Closure
 

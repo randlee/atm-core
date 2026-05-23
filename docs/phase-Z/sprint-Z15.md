@@ -133,6 +133,9 @@ before `Phase Z` can proceed into canary execution.
 
 ## Required Validation
 
+- `cargo test --workspace`
+- `cargo clippy --workspace --all-targets -- -D warnings`
+- `cargo fmt --all --check`
 - `git diff --check`
 
 ## Required Document Updates

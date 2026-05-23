@@ -21,15 +21,20 @@ estimated_scope: small
 
 ## Goal
 
-Eliminate the incorrect retained-runtime acquisition path behind `Z2-F001` and
-make that misuse mechanically impossible to reintroduce without tripping
-repository-local boundary lint.
+Eliminate the incorrect retained-runtime acquisition path exposed by direct
+`service_runtime_store::default_runtime()` use in
+`crates/atm-core/src/team_admin.rs`, `crates/atm/src/commands/teams.rs`, and
+`crates/atm/src/commands/members.rs`, and make that misuse mechanically
+impossible to reintroduce without tripping repository-local boundary lint.
 
 ## Scope Summary
 
 This sprint owns the `atm teams`, `atm members`, and `atm teams add-member`
-runtime-install-path bug and the lint gate that prevents direct
-`service_runtime_store::default_runtime()` access from command-entry paths.
+runtime-install-path bug exposed by direct
+`service_runtime_store::default_runtime()` access in
+`crates/atm-core/src/team_admin.rs`, `crates/atm/src/commands/teams.rs`, and
+`crates/atm/src/commands/members.rs`, plus the lint gate that prevents that
+misuse from command-entry paths.
 
 ## Governing Requirements
 

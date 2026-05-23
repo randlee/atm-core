@@ -212,7 +212,10 @@ Execution worktree:
 
 Purpose:
 
-- eliminate the incorrect retained-runtime acquisition path behind `Z2-F001`
+- eliminate the incorrect retained-runtime acquisition path exposed by direct
+  `service_runtime_store::default_runtime()` use in
+  `crates/atm-core/src/team_admin.rs`, `crates/atm/src/commands/teams.rs`, and
+  `crates/atm/src/commands/members.rs`
 - make `atm teams add-member` use that same approved runtime-entry path
 - add a repository-local boundary lint gate so direct CLI-command
   `default_runtime()` misuse cannot return
