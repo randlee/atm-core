@@ -3836,10 +3836,6 @@ Phase Z sprint ledger:
 | `Z.8` | `complete` | `feature/pZ-s8-watcher-owned-claude-config-ingest` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
 | `Z.9` | `complete` | `feature/pZ-s9-team-admin-roster-authority-and-member-metadata` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
 | `Z.10` | `complete` | `feature/pZ-s10-team-backup-restore-automation-and-config-projection` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
-| `Z.11` | `planned` | `feature/pZ-s11-first-send-recovery-contract-and-setup-guidance` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z11.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/config-json-violation-inventory.md` |
-| `Z.12` | `planned` | `feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z12.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md` |
-| `Z.13` | `planned` | `feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z13.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md` |
-| `Z.14` | `planned` | `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z14.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md` |
 | `Z.3` | `planned` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
 | `Z.4` | `planned` | `feature/pZ-s4-final-fixes-and-release-sign-off` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md` |
 
@@ -3863,10 +3859,6 @@ Immediate planning outputs:
 - `docs/phase-Z/sprint-Z8.md`
 - `docs/phase-Z/sprint-Z9.md`
 - `docs/phase-Z/sprint-Z10.md`
-- `docs/phase-Z/sprint-Z11.md`
-- `docs/phase-Z/sprint-Z12.md`
-- `docs/phase-Z/sprint-Z13.md`
-- `docs/phase-Z/sprint-Z14.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
 

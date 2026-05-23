@@ -4,8 +4,6 @@ required_variables:
   - summary
   - commentary
   - notes
-  - recovery_rules
-  - terminal_classes
   - tables_html
   - schema_dialogs_html
   - ssot_path
@@ -41,27 +39,6 @@ metadata:
         <li>{{ note }}</li>
 {% endfor %}
       </ul>
-    </div>
-{% endif %}
-{% if recovery_rules or terminal_classes %}
-    <div class="diagram-notes">
-      <h3>Recovery And Visibility</h3>
-{% if recovery_rules %}
-      <h4>Recovery Rules</h4>
-      <ul>
-{% for rule in recovery_rules %}
-        <li>{{ rule }}</li>
-{% endfor %}
-      </ul>
-{% endif %}
-{% if terminal_classes %}
-      <h4>Terminal Error Classes</h4>
-      <ul>
-{% for item in terminal_classes %}
-        <li>{{ item }}</li>
-{% endfor %}
-      </ul>
-{% endif %}
     </div>
 {% endif %}
 {{ tables_html | safe }}

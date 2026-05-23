@@ -1,34 +1,20 @@
-# Daemon Startup State Machines
+# Daemon Startup State Machine
 
 ## Purpose
 
-Define the executable startup and first-use state machines for same-host ATM
-commands and `atm-daemon` so every transition, failure, and operator-visible
-outcome can be communicated from one source of truth.
+Define the executable startup state machine for same-host ATM commands and
+`atm-daemon` so every startup transition, failure, and operator-visible outcome
+can be communicated from one source of truth.
 
-This document covers three separate machines:
+This document covers:
 
 - CLI-side daemon bootstrap and auto-start attempts
 - daemon runtime lifecycle transitions
-- reachable-daemon command and `doctor` outcomes
+- startup sub-steps that must complete before serving state
+- failure and rollback transitions
 
-Diagram source:
-
-- [cli-bootstrap-state-machine.mmd](./cli-bootstrap-state-machine.mmd)
-- [runtime-lifecycle-state-machine.mmd](./runtime-lifecycle-state-machine.mmd)
-- [reachable-daemon-request-outcome-state-machine.mmd](./reachable-daemon-request-outcome-state-machine.mmd)
-
-These machines do not define the delivery event-family state machines. Those
+This document does not define the delivery event-family state machines. Those
 remain in [`../phase-Y/delivery-state-machines.md`](../phase-Y/delivery-state-machines.md).
-
-## Testability Rule
-
-Each machine must satisfy:
-
-- every node is a code-owned state or terminal output
-- every edge is a real event or guard QA can force in a test
-- every terminal maps to a caller-visible result or `DoctorReport` result
-- no branch label may use prose like `may still` or `fails closed`
 
 ## Implementation Owners
 
@@ -37,52 +23,237 @@ Each machine must satisfy:
   - `crates/atm/src/composition.rs`
 - daemon runtime lifecycle root:
   - `crates/atm-daemon/src/composition.rs`
-- startup dependencies that may fail:
+- startup dependencies that may fail closed:
   - `crates/atm-daemon/src/composition.rs`
   - `crates/atm-rusqlite/src/shared_db.rs`
-## Machine 1: CLI Bootstrap
 
-Source:
+## Machine 1: CLI Bootstrap Trace
 
-- [cli-bootstrap-state-machine.mmd](./cli-bootstrap-state-machine.mmd)
+This is the client-visible same-host bootstrap machine used by commands like
+`doctor`, `send`, `read`, `list`, and `clear` when the daemon is not already
+connected.
 
-Code:
+The CLI reports three summarized outcome lanes:
 
-- `crates/atm/src/composition.rs::CliComposition::bootstrap`
-- `crates/atm-daemon-client/src/lib.rs::DaemonSupervisor`
+- `daemon_connect`
+- `daemon_launch_gate`
+- `daemon_auto_start`
 
-This machine ends before any request is sent. If it fails, the caller gets a
-typed bootstrap error and `doctor` does not return a report.
+These are surfaced in `BootstrapTraceReport`.
+
+### Connect Lane
+
+State space:
+
+- `NotFound`
+- `Connected`
+- `Timeout`
+- `Failed`
+
+Observed transition outcomes recorded by the client:
+
+- `initial_miss`
+  - first local IPC connect attempt failed
+  - summarized as `daemon_connect = NotFound`
+- `retry_attempt`
+  - another bounded connect attempt is being made
+  - summarized as `daemon_connect = NotFound` unless a later connect succeeds
+- `pending`
+  - the daemon is still being awaited after launch
+  - summarized as `daemon_connect = NotFound` unless a later connect succeeds
+- `connected`
+  - local IPC connect succeeded
+  - summarized as `daemon_connect = Connected`
+- `error`
+  - connect path failed with a typed error
+  - summarized as `daemon_connect = Failed`
+
+### Launch-Gate Lane
+
+State space:
+
+- `Skipped`
+- `Launched`
+- `Failed`
+
+Observed transition outcomes recorded by the client:
+
+- `acquired`
+  - the client acquired `launch.lock` and is the process allowed to request a
+    new daemon launch
+  - summarized as `daemon_launch_gate = Launched`
+- `contended`
+  - another launcher already owns the launch gate
+  - summarized as `daemon_launch_gate = Skipped`
+- `timeout_exhausted`
+  - bounded startup waiting expired
+  - summarized as `daemon_launch_gate = Failed`
+- `error`
+  - launch-gate path failed with a typed error
+  - summarized as `daemon_launch_gate = Failed`
+
+### Auto-Start Lane
+
+State space:
+
+- `Skipped`
+- `AutoStarted`
+- `Failed`
+
+Observed transition outcomes recorded by the client:
+
+- `spawn_requested`
+  - the client requested daemon launch
+- `publish_wait_started`
+  - bounded wait for same-host publish/readiness started
+- `publish_wait_continuing`
+  - bounded wait is still in progress
+- successful later `connected`
+  - summarized as `daemon_auto_start = AutoStarted`
+- `error`
+  - spawn or publish-wait path failed with a typed error
+  - summarized as `daemon_auto_start = Failed`
+- `timeout_exhausted`
+  - bounded publish/connect wait expired
+  - summarized as `daemon_auto_start = Failed`
+
+### Bootstrap Rules
+
+- CLI bootstrap does not itself mean the daemon has reached `Running`; it means
+  the client observed a successful same-host connect.
+- a later `connected` outcome after `spawn_requested` upgrades
+  `daemon_auto_start` to `AutoStarted`
+- launch-gate ownership and daemon serving-state ownership are different:
+  - launch gate serializes client launch attempts
+  - owner lock gates daemon serving-state admission
 
 ## Machine 2: Daemon Runtime Lifecycle
 
-Source:
+This is the daemon-owned lifecycle machine in
+`crates/atm-daemon/src/composition.rs`.
 
-- [runtime-lifecycle-state-machine.mmd](./runtime-lifecycle-state-machine.mmd)
+### States
 
-Code:
+- `Stopped`
+- `Starting`
+- `Running`
+- `Draining`
 
-- `crates/atm-daemon/src/composition.rs::RuntimeLifecycle`
-- `crates/atm-daemon/src/composition.rs::RuntimeComposition::start`
+### Legal Transitions
 
-This machine owns the legal daemon lifecycle transitions and fail-closed
-rollback to `Stopped`.
+- `Stopped -> Starting`
+- `Starting -> Running`
+- `Starting -> Stopped`
+- `Running -> Draining`
+- `Draining -> Stopped`
 
-## Machine 3: Reachable-Daemon Request Outcomes
+### Illegal Transitions
 
-Source:
+Examples explicitly rejected by the runtime:
 
-- [reachable-daemon-request-outcome-state-machine.mmd](./reachable-daemon-request-outcome-state-machine.mmd)
+- `Stopped -> Running`
+- `Running -> Starting`
+- `Stopped -> Draining`
+- `Running -> Stopped` without drain path
 
-Code:
+## Startup Sequence Inside `Stopped -> Starting`
 
-- `crates/atm-core/src/doctor/mod.rs`
-- `crates/atm-core/src/send/mod.rs`
-- `crates/atm-rusqlite/src/shared_db.rs`
+`RuntimeComposition::start()` is the only legal bootstrap entrypoint.
 
-This machine starts only after bootstrap has already reached a live daemon. It
-defines what the caller sees versus what `doctor` can explain when runtime,
-roster, or copied-state issues are encountered.
+The startup sequence is:
+
+1. emit `start_requested`
+2. transition `Stopped -> Starting`
+3. run startup replay resume
+4. start background lanes
+5. prepare the runtime server
+6. activate the runtime
+7. transition `Starting -> Running`
+8. enter serving state
+
+### Step 3: Startup Replay Resume
+
+`resume_startup_replay()` must complete before socket serving begins.
+
+Current rule:
+
+- pending replay work is resumed before the daemon binds/publishes serving
+  state
+- replay-store assembly is fail-closed
+
+### Step 4: Background Lane Startup
+
+The daemon starts these owned background lanes before serving:
+
+- notification runtime
+- reconcile coordinator
+- watch runtime
+- any other composition-owned runtime lanes required by the current build
+
+If any required lane fails to start:
+
+- startup fails
+- rollback attempts lane shutdown
+- lifecycle returns to `Stopped`
+
+### Step 5: Runtime Preparation
+
+Runtime preparation covers:
+
+- local IPC transport preparation
+- endpoint guard setup
+- listener/socket readiness setup
+
+If runtime preparation fails:
+
+- background lanes are shut down as rollback
+- lifecycle returns to `Stopped`
+
+### Step 6: Activation
+
+Activation transfers the prepared endpoint guard into runtime ownership.
+
+On success:
+
+- the runtime transitions `Starting -> Running`
+- `startup_completed` is emitted
+
+## Shutdown Sequence
+
+The runtime shutdown path is:
+
+1. `Running -> Draining`
+2. background lanes receive shutdown
+3. runtime serve loop exits
+4. lifecycle transitions `Draining -> Stopped`
+5. `shutdown_completed` or `shutdown_failed` is emitted
+
+There is no accepted direct `Running -> Stopped` success path.
+
+## Failure and Rollback Transitions
+
+### Startup Failure
+
+Any failure during:
+
+- replay-store assembly
+- config validation / peer transport config load
+- startup replay resume
+- background lane startup
+- runtime preparation
+- activation before `Running`
+
+must produce:
+
+- `startup_failed`
+- lifecycle rollback to `Stopped`
+
+### Serve-Time Failure
+
+Any failure after `Running` must produce:
+
+- `Running -> Draining`
+- drain / finalize path
 - `Draining -> Stopped`
 
 ## Important Current Behavior
@@ -141,3 +312,4 @@ the exact failing transition is still unknown.
 | daemon lifecycle | `Stopped` | runtime is fully stopped or rolled back |
 | startup dependency | SQLite ready | schema/init succeeded for the active lane |
 | startup dependency | roster hydrated | ATM roster truth exists for the target team |
+

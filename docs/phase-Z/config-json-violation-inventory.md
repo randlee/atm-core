@@ -1,9 +1,9 @@
-# Phase Z Config And Boundary Violation Inventory
+# Phase Z `config.json` Violation Inventory
 
 ## Purpose
 
-Record every current production config/boundary touch-point that violates, or
-risks violating, the accepted ownership model:
+Record every current production `config.json` roster touch-point that violates,
+or risks violating, the accepted ownership model:
 
 - ATM roster state in SQLite is canonical truth
 - runtime membership decisions use ATM roster only
@@ -14,7 +14,7 @@ risks violating, the accepted ownership model:
   - narrowly justified restore-shell preservation reads
 
 This inventory is the authoritative delete / narrow / keep map for `Z.5`
-through the current follow-on cleanup line.
+through `Z.10`.
 
 ## Reviewed Runtime Rule
 
@@ -72,18 +72,6 @@ violations when kept in their current narrow role:
 | `crates/atm-core/src/send/alert_state.rs` | path-based alert-state diagnostics; not a roster-truth source |
 | `crates/atm-core/src/error_codes.rs` | error-code documentation |
 
-## Post-Z.10 Boundary Violations
-
-The following are real follow-on boundary violations even when they are not
-Claude `config.json` roster-truth leaks:
-
-| Path | Current Behavior | Violation Status | Owning Sprint | Current Status | Required Resolution |
-| --- | --- | --- | --- | --- | --- |
-| `crates/atm-core/src/delivery_policy.rs` and send-path error surfaces | returns opaque first-send empty-roster failure text | rewrite | `Z.11` | `planned` | replace the bad recovery contract with explicit `atm teams add-member` guidance and prove no hidden fallback was added |
-| `crates/atm/src/commands/teams.rs` / `crates/atm/src/commands/members.rs` plus `crates/atm-core/src/team_admin.rs` | reaches `service_runtime_store::default_runtime()` through the wrong command-entry path for `teams`, `members`, and `add-member` | delete / rewrite | `Z.12` | `planned` | route roster access through the approved `RosterStore` seam only; `teams --json`, `members --json`, and `teams add-member` must stop failing on the uninstalled default-runtime path |
-| `crates/atm-core/src/team_admin.rs` `list_teams` / `list_members` | ambient `.atm.toml` / `load_config(...)` current-team reads outside the approved seam | delete / rewrite | `Z.13` | `planned` | move current-team resolution behind the approved `ConfigIngress` / runtime seam and forbid new ambient command/team-admin reads |
-| `crates/atm-core/src/lib.rs` | public crate-root re-export of `install_default_runtime_factory` leaks an ambient singleton/runtime-factory surface | delete / narrow | `Z.14` | `planned` | remove the broad re-export, keep only approved wrappers, and lint against new public singleton leaks |
-
 ## Static Gate Direction
 
 Repository-local lint / `sc-lint`-candidate gates should be defined so the
@@ -95,13 +83,6 @@ follow-on implementation is mechanically checkable:
   command/runtime paths
 - reject Claude send paths that consult `config.json` before the durable ATM
   write has succeeded
-- reject direct CLI-command `service_runtime_store::default_runtime()` use
-  outside the approved retained-runtime install path, including `atm teams`,
-  `atm members`, and `atm teams add-member`
-- reject direct command/team-admin `.atm.toml` / `load_config(...)` reads
-  outside the approved boundary seam
-- reject new public ambient singleton/runtime-factory exposure such as broad
-  crate-root re-exports of `install_default_runtime_factory`
 
 These rule families are documented in the requirements / architecture updates
 and become part of the `Z.7` implementation/validation contract.
