@@ -52,30 +52,40 @@ The final release verdict must remain `PENDING` until:
 | Z.9 | `903cbfe1` | `PASS` | `complete` | team-admin commands now use ATM roster truth; `add-member` mutates canonical ATM roster first and projects `config.json`; canonical pane metadata maps ATM `recipient_pane_id` to Claude `tmux_pane_id`; restore preserves canonical `tmux_pane_id`; `cargo test --workspace` PASS; `cargo fmt --all` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
 | Z.10 | `c32a0277` | `PASS` | `complete` | backup now writes `atm-roster.json` as an audit-only canonical ATM roster snapshot; restore rebuilds recreated `config.json` from ATM roster truth instead of replaying backup `config.json`; reconcile runtime helpers split into submodules; `cargo test --workspace` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
 | Z.11 | `PENDING` | `PENDING` | `not started` | replace the opaque clean-start first-send error with the exact actionable recovery contract; no hidden fallback allowed; close with updated `smoke-findings-ledger.md`, `readiness.md`, and `project-plan.md` |
-| Z.12 | `PENDING` | `PENDING` | `not started` | eliminate the retained-runtime path bug for `atm teams --json`, `atm members --json`, and `atm teams add-member`; close only when `SCB-RETAINED-001` gates the bad path and the smoke blocker record is updated |
-| Z.13 | `PENDING` | `PENDING` | `not started` | remove ambient workspace-config current-team reads from the command/team-admin path; close only when `SCB-WORKSPACE-001` gates new direct `load_config(...)` regressions |
-| Z.14 | `PENDING` | `PENDING` | `not started` | remove the public crate-root runtime-factory leak and keep only approved wrappers; close only when `SCB-SINGLETON-001` gates new ambient singleton exposure |
-| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.10` closure plus the accepted `Z.11` through `Z.14` follow-up line before canary entry |
+| Z.12 | `PENDING` | `PENDING` | `not started` | eliminate the retained-runtime path bug for `atm teams --json`, `atm members --json`, and `atm teams add-member`; close only when `SCB-RETAINED-001` gates the bad path, `.just/allowlists/scb_retained_allowlist.toml` has only owned/time-bounded survivors, and the smoke blocker record is updated |
+| Z.13 | `PENDING` | `PENDING` | `not started` | remove ambient workspace-config current-team reads from the command/team-admin path; close only when `SCB-WORKSPACE-001` gates new direct `load_config(...)` regressions and `.just/allowlists/scb_workspace_allowlist.toml` has only owned/time-bounded survivors |
+| Z.14 | `PENDING` | `PENDING` | `not started` | remove the public crate-root runtime-factory leak and keep only approved wrappers; close only when `SCB-SINGLETON-001` gates new ambient singleton exposure and `.just/allowlists/scb_singleton_allowlist.toml` has only owned/time-bounded survivors |
+| Z.15 | `PENDING` | `PENDING` | `not started` | close the remaining deferred hardening and type-safety findings that do not belong to the narrower `Z.11` through `Z.14` scopes |
+| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.2` closure plus the accepted `Z.11` through `Z.15` follow-up line before canary entry |
 | Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure |
 
 ## Deferred Follow-Up Findings
 
-- `RBP-F002` deferred to `Z.11`: introduce a dedicated `PaneId` newtype for
-  Claude pane metadata instead of the current `Option<String>` surface.
-- `RSH-008` deferred to `Z.11`: add the payload-size gate in
-  `deliver_payloads` rather than widening `Z.6` scope.
-- `RSH-010` deferred to `Z.11`: close the remaining send-path hardening item
-  tracked by QA after the `Z.6` runtime-roster-view cutover.
-- `RBP-F003` deferred to `Z.11`: tighten the remaining Rust best-practices
-  follow-up on the `Z.6` roster-view surface.
-- `RBP-F004` deferred to `Z.11`: tighten the remaining Rust best-practices
-  follow-up on the `Z.6` roster-view surface.
-- `RBP-F005` deferred to `Z.11`: tighten the remaining Rust best-practices
-  follow-up on the `Z.6` roster-view surface.
-- `RSH-009` deferred to `Z.11`: close the remaining runtime hardening follow-up
-  after `Z.6`.
-- `ATM-QA-Z10-001` deferred to `Z.11`: complete the remaining `Z.8`
-  production wiring follow-up before final release closeout.
+- `Z.11`
+  - `RSH-008`: add the payload-size gate in `deliver_payloads` without
+    widening `Z.6` scope
+  - `RSH-010`: close the remaining send-path hardening item tracked by QA
+    after the `Z.6` runtime-roster-view cutover
+- `Z.15`
+  - `RSH-001`: daemon join-handle tracking hardening
+  - `RSH-002`: daemon runtime shutdown-path hardening
+  - `RSH-003`: daemon lifecycle edge-case hardening
+  - `RSH-004`: daemon control-path hardening
+  - `RSH-005`: daemon signal-path hardening
+  - `RSH-006`: daemon worker coordination hardening
+  - `RSH-007`: daemon platform/runtime hardening
+  - `RSH-009`: local IPC timeout-path tracing hardening
+  - `RBP-F001`: typed newtypes for `RosterMemberRecord.agent_type` /
+    `.model`
+  - `RBP-F002`: dedicated `PaneId` newtype for Claude pane metadata instead
+    of the current `Option<String>` surface
+  - `RBP-F003`: typed `ResolvedTarget` hardening
+  - `RBP-F004`: structured error-diagnostics hardening
+  - `RBP-F005`: replayed local IPC path hardening
+  - `M-004`: stronger typed/length-constrained
+    `AddMemberRequest.agent_type` / `.model`
+  - `ATM-QA-Z10-001`: complete the remaining `Z.8` production wiring
+    follow-up before final release closeout
 
 Final release verdict:
 
@@ -84,19 +94,3 @@ Final release verdict:
 - release verdict: `PENDING`
 - authorized by: `PENDING`
 - notes: release sign-off not yet recorded
-
-Deferred follow-up findings:
-
-- `RSH-001` daemon join-handle tracking hardening deferred to `Z.11`
-- `RSH-002` daemon runtime shutdown-path hardening deferred to `Z.11`
-- `RSH-003` daemon lifecycle edge-case hardening deferred to `Z.11`
-- `RSH-004` daemon control-path hardening deferred to `Z.11`
-- `RSH-005` daemon signal-path hardening deferred to `Z.11`
-- `RSH-006` daemon worker coordination hardening deferred to `Z.11`
-- `RSH-007` daemon platform/runtime hardening deferred to `Z.11`
-- `RSH-009` local IPC timeout-path tracing hardening deferred to `Z.11`
-- `RBP-F001` typed newtypes for `RosterMemberRecord.agent_type` / `.model` deferred to `Z.11`
-- `RBP-F003` typed `ResolvedTarget` hardening deferred to `Z.11`
-- `RBP-F004` structured error-diagnostics hardening deferred to `Z.11`
-- `RBP-F005` replayed local IPC path hardening deferred to `Z.11`
-- `M-004` stronger typed/length-constrained `AddMemberRequest.agent_type` / `.model` deferred to `Z.11`

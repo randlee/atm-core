@@ -197,6 +197,10 @@ Notes:
     `load_config(...)` reads outside the approved seam
   - `SCB-SINGLETON-001`: public ambient singleton/runtime-factory exposure
     that bypasses approved wrappers
+- those rule families must distinguish:
+  - pre-existing survivors explicitly recorded in TOML allowlists with owner
+    and sunset-sprint metadata
+  - new violations, which fail lint immediately
 
 ## InboxIngress
 

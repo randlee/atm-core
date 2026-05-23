@@ -35,6 +35,7 @@ inconsistent with the architecture even though they are not Claude
 
 - `REQ-CORE-BOUNDARY-001`
 - `REQ-CORE-CONFIG-001`
+- `REQ-CORE-RUNTIME-001`
 - `REQ-CORE-TEAM-001`
 
 ## Governing ADRs
@@ -65,6 +66,7 @@ inconsistent with the architecture even though they are not Claude
 - `crates/atm/src/commands/members.rs`
 - `crates/atm-core/src/service_runtime.rs`
 - `crates/atm-core/src/boundary/store.rs`
+- `.just/allowlists/scb_workspace_allowlist.toml`
 - `.just/fixtures/scb_workspace_known_bad.rs`
 - `docs/phase-Z/readiness.md`
 - `docs/project-plan.md`
@@ -116,6 +118,9 @@ let config = load_config(&current_dir)?;
    - `SCB-WORKSPACE-001` must reject direct `load_config(...)` /
      `.atm.toml` access from command/team-admin paths that should use the
      approved seam
+   - any pre-existing temporary survivor must be listed in
+     `.just/allowlists/scb_workspace_allowlist.toml` with explicit owner and
+     sunset sprint metadata; any new violation must fail lint immediately
    Required tests:
    - prove the lint fails on a known-bad fixture
    - prove `just lint boundaries` passes on the fixed branch
@@ -147,6 +152,8 @@ cleanup, stop and move that scope into `Z.14` instead of widening `Z.13`.
   matches
 - `SCB-WORKSPACE-001` rejects new direct `.atm.toml` / `load_config(...)`
   command-path violations
+- `.just/allowlists/scb_workspace_allowlist.toml` contains no unowned or
+  open-ended survivor entry for this rule family
 
 ## Non-Closure
 

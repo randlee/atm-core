@@ -41,6 +41,7 @@ Approved surviving wrappers for this sprint are limited to:
 ## Governing Requirements
 
 - `REQ-CORE-BOUNDARY-001`
+- `REQ-CORE-DAEMON-001`
 - `REQ-CORE-TEAM-001`
 
 ## Governing ADRs
@@ -70,6 +71,7 @@ Approved surviving wrappers for this sprint are limited to:
 - `crates/atm-runtime-test-support/src/lib.rs`
 - `crates/atm-daemon/src/tests.rs`
 - `crates/atm-rusqlite/src/lib.rs`
+- `.just/allowlists/scb_singleton_allowlist.toml`
 - `.just/fixtures/scb_singleton_known_bad.rs`
 - `docs/phase-Z/readiness.md`
 - `docs/project-plan.md`
@@ -113,6 +115,9 @@ atm_runtime_test_support::install_sqlite_retained_runtime_factory();
    - add repository-local lint rule `SCB-SINGLETON-001`
    - `SCB-SINGLETON-001` must reject public ambient runtime-factory /
      singleton installation surfaces that bypass approved wrappers
+   - any pre-existing temporary survivor must be listed in
+     `.just/allowlists/scb_singleton_allowlist.toml` with explicit owner and
+     sunset sprint metadata; any new violation must fail lint immediately
    Required tests:
    - prove the lint fails on a known-bad fixture
    - prove `just lint boundaries` passes on the fixed branch
@@ -140,6 +145,8 @@ instead of widening `Z.14`.
 - production and test callers install retained runtime through approved
   wrappers only
 - `SCB-SINGLETON-001` rejects new ambient singleton/runtime-factory exposure
+- `.just/allowlists/scb_singleton_allowlist.toml` contains no unowned or
+  open-ended survivor entry for this rule family
 
 ## Non-Closure
 

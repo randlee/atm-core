@@ -253,6 +253,21 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate`
 
+### Z.15 Deferred Hardening Follow-Up Consolidation
+
+Purpose:
+
+- close the deferred hardening and type-safety findings that do not fit the
+  explicit `Z.11` through `Z.14` scopes
+- keep canary entry blocked until every deferred follow-up finding has an
+  accepted sprint home and closure proof
+
+Execution branch:
+- `feature/pZ-s15-deferred-hardening-follow-up-consolidation`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s15-deferred-hardening-follow-up-consolidation`
+
 ### Z.3 `atm-dev` Canary And Dogfood
 
 Purpose:
@@ -311,6 +326,8 @@ deliverables, acceptance criteria, and closure rules.
 - smoke findings feed only the immediately following fix sprint
 - the roster/config/restore follow-on line (`Z.5` through `Z.10`) must close
   before `atm-dev` canary use begins
+- the boundary / follow-up hardening line (`Z.11` through `Z.15`) must also
+  close before `atm-dev` canary use begins
 - dogfood findings feed only the final fix/sign-off sprint
 - release readiness is not declared until the documented executable flows and
   recovery behavior are revalidated after each fix round
@@ -331,8 +348,13 @@ Current execution state:
   - `Z.12` retained runtime path cleanup
   - `Z.13` workspace-config boundary cleanup
   - `Z.14` ambient singleton surface cleanup
+  - `Z.15` deferred hardening follow-up consolidation
+- planning status note:
+  - this planning branch continues to treat `Z.2` as `planned`; execution-line
+    pass/fail state lives on the accepted `integrate/phase-Z` line
 - `Z.3` and `Z.4` remain the canary / release sprints, but execution does not
-  resume there until `Z.10` closes
+  resume there until `Z.2` closes and the accepted `Z.11` through `Z.15`
+  follow-up line closes
 
 ## Initial Planning Outputs
 
@@ -355,5 +377,10 @@ Current execution state:
 - `docs/phase-Z/sprint-Z8.md`
 - `docs/phase-Z/sprint-Z9.md`
 - `docs/phase-Z/sprint-Z10.md`
+- `docs/phase-Z/sprint-Z11.md`
+- `docs/phase-Z/sprint-Z12.md`
+- `docs/phase-Z/sprint-Z13.md`
+- `docs/phase-Z/sprint-Z14.md`
+- `docs/phase-Z/sprint-Z15.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`

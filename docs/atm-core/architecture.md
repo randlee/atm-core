@@ -287,6 +287,9 @@ Config-ingress ownership rules:
     `load_config(...)` reads outside the approved seam
   - `SCB-SINGLETON-001`: public ambient singleton/runtime-factory exposure
     such as broad crate-root re-exports
+- any surviving pre-existing match for those rule families must live in an
+  explicit TOML allowlist with owner and sunset-sprint metadata; new matches
+  are lint failures rather than review-time warnings
 
 Required frame direction:
 - transport framing must not depend on EOF or socket half-close semantics

@@ -34,6 +34,9 @@ runtime-install-path bug and the lint gate that prevents direct
 ## Governing Requirements
 
 - `REQ-CORE-BOUNDARY-001`
+- `REQ-CORE-DAEMON-001`
+- `REQ-CORE-DAEMON-003`
+- `REQ-CORE-RUNTIME-001`
 - `REQ-CORE-TEAM-001`
 
 ## Governing ADRs
@@ -55,6 +58,7 @@ runtime-install-path bug and the lint gate that prevents direct
 ## Hard Dependencies
 
 - `docs/phase-Z/readiness.md`
+- `docs/phase-Z/smoke-findings-ledger.md`
 - `docs/atm-core/boundaries.md`
 
 ## Exact Targets
@@ -62,6 +66,7 @@ runtime-install-path bug and the lint gate that prevents direct
 - `crates/atm/src/commands/teams.rs`
 - `crates/atm/src/commands/members.rs`
 - `crates/atm-core/src/team_admin.rs`
+- `.just/allowlists/scb_retained_allowlist.toml`
 - `.just/fixtures/scb_runtime_known_bad.rs`
 - `docs/phase-Z/smoke-findings-ledger.md`
 - `docs/phase-Z/readiness.md`
@@ -130,6 +135,9 @@ fn add_member_with_roster_store(
    - `SCB-RETAINED-001` must reject direct
      `service_runtime_store::default_runtime()` use from command-entry and
      team-admin paths
+   - any pre-existing temporary survivor must be listed in
+     `.just/allowlists/scb_retained_allowlist.toml` with explicit owner and
+     sunset sprint metadata; any new violation must fail lint immediately
    Required tests:
    - prove the lint fails on a known-bad command-entry or team-admin call-site
      fixture
@@ -162,6 +170,8 @@ singleton/runtime-factory surface cleanup, stop and move that scope into
   install error once the target team shell exists
 - direct `service_runtime_store::default_runtime()` use from command-entry
   and team-admin paths is rejected by `SCB-RETAINED-001`
+- `.just/allowlists/scb_retained_allowlist.toml` contains no unowned or
+  open-ended survivor entry for this rule family
 - `atm teams`, `atm members`, and `atm teams add-member` obtain roster truth
   only through the approved `RosterStore` trait seam
 
