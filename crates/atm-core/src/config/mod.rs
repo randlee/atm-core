@@ -119,7 +119,12 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
     }))
 }
 
-/// Load and validate `config.json` for a team directory.
+/// Load and validate the Claude Code `config.json` document for one team
+/// directory.
+///
+/// This parser is intentionally narrower than generic runtime roster lookups:
+/// production callers should use it only from approved comparison, ingest, or
+/// shell-preservation seams.
 ///
 /// # Errors
 ///
@@ -128,7 +133,7 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
 /// document does not exist, or
 /// [`crate::error_codes::AtmErrorCode::ConfigTeamParseFailed`] when the JSON
 /// document is malformed or violates the required team-config shape.
-pub fn load_team_config(team_dir: &Path) -> Result<TeamConfig, AtmError> {
+pub fn load_claude_team_config_document(team_dir: &Path) -> Result<TeamConfig, AtmError> {
     let config_path = team_dir.join("config.json");
     let raw = fs::read_to_string(&config_path).map_err(|error| {
         if error.kind() == std::io::ErrorKind::NotFound {
@@ -959,7 +964,7 @@ post_send_hook_recipients = ["{ROLE_TEAM_LEAD}"]
         let team_dir = root.path().join("team");
         fs::create_dir_all(&team_dir).expect("team dir");
 
-        let error = super::load_team_config(&team_dir).expect_err("missing config");
+        let error = super::load_claude_team_config_document(&team_dir).expect_err("missing config");
 
         assert!(error.is_missing_document());
         assert!(error.message.contains("team config is missing"));

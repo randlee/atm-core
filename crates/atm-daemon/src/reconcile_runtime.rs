@@ -1,7 +1,9 @@
+mod notification_fingerprints;
+
 use arc_swap::ArcSwap;
 use atm_core::boundary::{
-    InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, WatchEventSource,
-    WatchSubscriptionRequest,
+    InboxIngress, NotificationSink, ReconcileRequest, ReconcileResult, RosterStore,
+    WatchEventSource, WatchSubscriptionRequest,
 };
 use atm_core::error::AtmError;
 use atm_core::protocol::{NotificationEvent, NotificationKind, ProtocolErrorEnvelope};
@@ -13,8 +15,14 @@ use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
+use crate::projection_write_journal::{
+    ProjectionWriteJournal, ingest_claude_team_config_from_watch_batch,
+};
 use crate::worker_support::{JoinHandleOwner, reap_retained_join_helpers, retain_join_helper};
 use crate::{DaemonSubsystem, SubsystemObservability};
+use notification_fingerprints::{
+    NotificationFingerprint, NotificationFingerprintRegistry, should_emit_reconcile_notification,
+};
 
 const DEFAULT_RECONCILE_QUEUE_CAPACITY: usize = 64;
 const DEFAULT_RECONCILE_DEBOUNCE: Duration = Duration::from_millis(25);
@@ -63,6 +71,10 @@ struct ReconcileRuntimeInner {
     command_tx: OnceLock<SyncSender<ReconcileCommand>>,
     status: Arc<ArcSwap<ReconcileRuntimeStatus>>,
     worker: Arc<JoinHandleOwner>,
+    // Production writes begin recording projection journal entries in Z.11 when
+    // the team-admin path becomes the canonical config projection writer.
+    #[allow(dead_code)]
+    projection_write_journal: ProjectionWriteJournal,
     queue_capacity: usize,
     debounce: Duration,
     executor: ReconcileExecutor,
@@ -122,25 +134,6 @@ impl ReconcileWorkerState {
     }
 }
 
-#[derive(Default)]
-struct NotificationFingerprintRegistry {
-    entries: HashMap<ReconcileKey, HashSet<NotificationFingerprint>>,
-    order: VecDeque<ReconcileKey>,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
-struct NotificationFingerprint(String);
-
-impl NotificationFingerprint {
-    fn new(value: String) -> Option<Self> {
-        if value.is_empty() {
-            None
-        } else {
-            Some(Self(value))
-        }
-    }
-}
-
 #[derive(Clone)]
 struct ReconcileReplyErrorSnapshot {
     code: atm_core::error_codes::AtmErrorCode,
@@ -184,11 +177,13 @@ impl ReconcileRuntime {
     pub(crate) fn new(
         watch_source: Arc<dyn WatchEventSource + Send + Sync>,
         inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
+        roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
     ) -> Self {
         Self::new_with_observability(
             watch_source,
             inbox_ingress,
+            roster_store,
             notification_sink,
             SubsystemObservability::disabled(DaemonSubsystem::ReconcileRuntime),
         )
@@ -197,9 +192,12 @@ impl ReconcileRuntime {
     pub(crate) fn new_with_observability(
         watch_source: Arc<dyn WatchEventSource + Send + Sync>,
         inbox_ingress: Arc<dyn InboxIngress + Send + Sync>,
+        roster_store: Arc<dyn RosterStore + Send + Sync>,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
         observability: SubsystemObservability,
     ) -> Self {
+        let projection_write_journal = ProjectionWriteJournal::new();
+        let projection_write_journal_for_executor = projection_write_journal.clone();
         Self::new_with_executor_and_sink(
             Arc::new(move |request| {
                 let batch = watch_source.poll(WatchSubscriptionRequest {
@@ -207,6 +205,12 @@ impl ReconcileRuntime {
                     team: request.team.clone(),
                     agent: request.agent.clone(),
                 })?;
+                ingest_claude_team_config_from_watch_batch(
+                    request,
+                    &batch,
+                    roster_store.as_ref(),
+                    &projection_write_journal_for_executor,
+                )?;
                 let import = inbox_ingress.import_inbox_source(
                     atm_core::boundary::InboxIngressImportRequest {
                         home_dir: request.home_dir.clone(),
@@ -225,6 +229,7 @@ impl ReconcileRuntime {
                     ),
                 })
             }),
+            projection_write_journal,
             notification_sink,
             DEFAULT_RECONCILE_QUEUE_CAPACITY,
             DEFAULT_RECONCILE_DEBOUNCE,
@@ -235,6 +240,7 @@ impl ReconcileRuntime {
 
     fn new_with_executor_and_sink(
         executor: ReconcileExecutor,
+        projection_write_journal: ProjectionWriteJournal,
         notification_sink: Arc<dyn NotificationSink + Send + Sync>,
         queue_capacity: usize,
         debounce: Duration,
@@ -254,6 +260,7 @@ impl ReconcileRuntime {
                 command_tx: OnceLock::new(),
                 status: Arc::new(ArcSwap::from_pointee(ReconcileRuntimeStatus::default())),
                 worker: Arc::new(JoinHandleOwner::default()),
+                projection_write_journal,
                 queue_capacity,
                 debounce,
                 executor,
@@ -596,12 +603,24 @@ impl ReconcileRuntime {
     pub(crate) fn new_for_test(executor: ReconcileExecutor, debounce: Duration) -> Self {
         Self::new_with_executor_and_sink(
             executor,
+            ProjectionWriteJournal::new(),
             Arc::new(TestNotificationSink),
             DEFAULT_RECONCILE_QUEUE_CAPACITY,
             debounce,
             RECONCILE_SHUTDOWN_DEADLINE,
             SubsystemObservability::disabled(DaemonSubsystem::ReconcileRuntime),
         )
+    }
+
+    #[cfg(test)]
+    pub(crate) fn record_projected_config_write_for_test(
+        &self,
+        path: &std::path::Path,
+    ) -> Result<(), AtmError> {
+        let digest = crate::projection_write_journal::config_document_digest(path)?;
+        self.inner
+            .projection_write_journal
+            .remember_projected_config_write(path, digest)
     }
 }
 
@@ -844,66 +863,6 @@ fn execute_reconcile_request(
         })?;
     }
     Ok(execution.result)
-}
-
-fn should_emit_reconcile_notification(
-    worker_state: &mut ReconcileWorkerState,
-    request: &ReconcileRequest,
-    current_fingerprints: Option<HashSet<NotificationFingerprint>>,
-) -> bool {
-    let Some(mut current_fingerprints) = current_fingerprints else {
-        return true;
-    };
-
-    let key = ReconcileKey::from_request(request);
-    if current_fingerprints.len() > MAX_RECONCILE_FINGERPRINTS_PER_KEY {
-        let mut ordered = current_fingerprints.drain().collect::<Vec<_>>();
-        ordered.sort();
-        let dropped = ordered
-            .len()
-            .saturating_sub(MAX_RECONCILE_FINGERPRINTS_PER_KEY);
-        ordered.truncate(MAX_RECONCILE_FINGERPRINTS_PER_KEY);
-        current_fingerprints.extend(ordered);
-        tracing::warn!(
-            subsystem = "reconcile",
-            action = "fingerprint_truncate",
-            outcome = "cap_exceeded",
-            team = %key.team,
-            agent = %key.agent,
-            retained = MAX_RECONCILE_FINGERPRINTS_PER_KEY,
-            dropped,
-            "reconcile notification fingerprint set exceeded the per-key bounded cap; truncating deterministically"
-        );
-    }
-
-    let fingerprints = &mut worker_state.notification_fingerprints;
-    let changed = fingerprints
-        .entries
-        .get(&key)
-        .map(|previous| previous != &current_fingerprints)
-        .unwrap_or(true);
-    let is_new_key = !fingerprints.entries.contains_key(&key);
-    if is_new_key && fingerprints.entries.len() >= MAX_RECONCILE_FINGERPRINT_KEYS {
-        while let Some(evicted_key) = fingerprints.order.pop_front() {
-            if fingerprints.entries.remove(&evicted_key).is_some() {
-                tracing::warn!(
-                    subsystem = "reconcile",
-                    action = "fingerprint_evict",
-                    outcome = "cap_exceeded",
-                    team = %evicted_key.team,
-                    agent = %evicted_key.agent,
-                    cap = MAX_RECONCILE_FINGERPRINT_KEYS,
-                    "evicted oldest reconcile notification fingerprint entry after reaching the bounded cap"
-                );
-                break;
-            }
-        }
-    }
-    if is_new_key {
-        fingerprints.order.push_back(key.clone());
-    }
-    fingerprints.entries.insert(key, current_fingerprints);
-    changed
 }
 
 fn record_reconcile_outcome(

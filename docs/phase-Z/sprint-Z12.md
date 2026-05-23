@@ -77,6 +77,29 @@ runtime-install-path bug and the lint gate that prevents direct
 - narrow `atm teams add-member` so it no longer fails on the same ambient
   retained-runtime acquisition path
 
+## Boundary Contract Sample
+
+```rust
+// Forbidden in command-entry and team-admin entrypoints:
+let runtime = service_runtime_store::default_runtime()?;
+
+// Required seam already present in team_admin.rs:
+fn list_teams_with_roster_store(
+    roster_store: &dyn RosterStore,
+    current_team: TeamName,
+) -> Result<TeamsList, AtmError>;
+
+fn list_members_with_roster_store(
+    roster_store: &dyn RosterStore,
+    team: TeamName,
+) -> Result<MembersList, AtmError>;
+
+fn add_member_with_roster_store(
+    roster_store: &dyn RosterStore,
+    request: AddMemberRequest,
+) -> Result<AddMemberOutcome, AtmError>;
+```
+
 ## Non-Goals
 
 - no workspace `.atm.toml` boundary cleanup
@@ -159,6 +182,8 @@ level for this exact command-wiring and boundary-enforcement scope.
 - `cargo clippy --workspace --all-targets -- -D warnings`
 - `cargo fmt --all --check`
 - `just lint boundaries`
+- `rg -n "service_runtime_store::default_runtime\\(" crates/atm/src/commands/teams.rs crates/atm/src/commands/members.rs crates/atm-core/src/team_admin.rs`
+  - expected: zero matches
 - `git diff --check`
 
 ## Required Document Updates

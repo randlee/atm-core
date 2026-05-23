@@ -1,7 +1,7 @@
 ---
 id: Z.6
 title: Claude Send Semantics And Immutable Runtime Roster View
-status: planned
+status: complete
 branch: feature/pZ-s6-claude-send-semantics-and-runtime-roster-view
 worktree: ../atm-core-worktrees/feature/pZ-s6-claude-send-semantics-and-runtime-roster-view
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.6
 worktree: ../atm-core-worktrees/feature/pZ-s6-claude-send-semantics-and-runtime-roster-view
 branch: feature/pZ-s6-claude-send-semantics-and-runtime-roster-view
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -60,6 +60,8 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
 - `crates/atm-core/src/send/mod.rs`
 - `crates/atm-core/src/service_runtime.rs`
 - `crates/atm-core/src/boundary/store.rs`
+- `crates/atm-rusqlite/src/lib.rs`
+- `crates/atm-rusqlite/Cargo.toml`
 - `docs/phase-Z/config-json-violation-inventory.md`
 - `docs/phase-Z/claude-roster-sync-and-restore.md`
 - `docs/phase-Z/readiness.md`
@@ -131,10 +133,10 @@ It does not yet narrow `ConfigIngress` or implement watcher/reconcile ingest.
 
    #[derive(Clone, Debug, Eq, PartialEq)]
    pub struct ClaudeCodeRosterMember {
-       member_name: AgentName,
-       harness: DeliveryHarness,
-       inbox_path: Option<PathBuf>,
-       tmux_pane_id: Option<String>,
+       pub member_name: AgentName,
+       pub harness: RosterHarness,
+       pub inbox_path: Option<PathBuf>,
+       pub tmux_pane_id: Option<String>,
    }
 
    impl ClaudeCodeTeamRoster {

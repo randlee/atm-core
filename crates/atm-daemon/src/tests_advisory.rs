@@ -15,6 +15,10 @@ use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
 
 const TEST_TEAM: &str = "test-team";
 
+fn replay_source_static(label: &'static str) -> ReplaySource {
+    ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
+}
+
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
     let assembly = assemble_boundary(db_path).expect("assemble boundary");
     let roster_store = assembly.roster_store();
@@ -30,7 +34,7 @@ fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
                     )
                 })
                 .collect(),
-            source: Some(ReplaySource::new("daemon-graft-test").expect("replay source")),
+            source: Some(replay_source_static("daemon-graft-test")),
         })
         .expect("replace roster");
 }

@@ -1,7 +1,7 @@
 ---
 id: Z.9
 title: Team Admin Roster Authority And Canonical Member Metadata
-status: planned
+status: complete
 branch: feature/pZ-s9-team-admin-roster-authority-and-member-metadata
 worktree: ../atm-core-worktrees/feature/pZ-s9-team-admin-roster-authority-and-member-metadata
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.9
 worktree: ../atm-core-worktrees/feature/pZ-s9-team-admin-roster-authority-and-member-metadata
 branch: feature/pZ-s9-team-admin-roster-authority-and-member-metadata
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -131,10 +131,10 @@ This sprint owns team-admin views and member mutation, not restore automation.
    - the only schema change this sprint owns is `tmux_pane_id` moving from the
      current default-empty `String` shape to an optional/nullable field with
      backward-compatible serde defaults
-   - SQLite adds a nullable `tmux_pane_id` column to the canonical ATM roster
-     member table.
-   - preexisting rows default to `NULL` until ATM add, watcher ingest, or
-     restore supplies a value.
+   - the canonical ATM roster already carries nullable pane metadata in
+     `recipient_pane_id`; `Z.9` standardizes that field as the canonical
+     owner of Claude pane-routing metadata and keeps preexisting rows
+     backward-compatible when no pane is present.
    - `config.json` projection writes the field back out only when
      `tmux_pane_id` is `Some(...)`.
    Required tests:

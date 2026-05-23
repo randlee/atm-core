@@ -80,6 +80,17 @@ Approved surviving wrappers for this sprint are limited to:
 - narrow all surviving callers to approved wrappers only
 - forbid new public ambient runtime-factory installation surfaces
 
+## Boundary Contract Sample
+
+```rust
+// Forbidden ambient root surface:
+atm_core::install_default_runtime_factory(...);
+
+// Approved bounded wrappers:
+atm_daemon_bootstrap::install_sqlite_retained_runtime_factory();
+atm_runtime_test_support::install_sqlite_retained_runtime_factory();
+```
+
 ## Non-Goals
 
 - no general daemon/test bootstrap redesign beyond the approved wrapper split

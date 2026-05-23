@@ -1,7 +1,7 @@
 ---
 id: Z.5
 title: Runtime Roster Truth Cutover
-status: planned
+status: complete
 branch: feature/pZ-s5-runtime-roster-truth-cutover
 worktree: ../atm-core-worktrees/feature/pZ-s5-runtime-roster-truth-cutover
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.5
 worktree: ../atm-core-worktrees/feature/pZ-s5-runtime-roster-truth-cutover
 branch: feature/pZ-s5-runtime-roster-truth-cutover
-status: planned
+status: complete
 estimated_scope: medium
 ```
 

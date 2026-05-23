@@ -36,7 +36,8 @@ Canonical roster truth:
 ### Doctor
 
 `doctor` may read `config.json` to compare it against canonical ATM roster
-truth and warn when Claude Code team membership is missing or drifted.
+truth and warn when Claude Code team membership is missing or drifted in
+either direction.
 
 ### Retained Runtime Commands
 
@@ -49,9 +50,15 @@ Claude harness `send` behavior is:
 
 1. write ATM durable state first
 2. attempt Claude compatibility inbox write when the target inbox exists
-3. after that path is selected, compare the member against `config.json`
-4. if the member is missing from `config.json`, return the warning:
+3. build the immutable `ClaudeCodeTeamRoster` warning snapshot from canonical
+   ATM roster truth after the durable write succeeds; do not read
+   `config.json` directly for normal member lookup
+4. if the member is missing from the Claude roster projection, return the
+   warning:
    - `'<member-name>' is not on claude code roster <atm-team>/config.json`
+5. if the team `config.json` document is missing entirely, the existing-inbox
+   fallback still raises the retained missing-config warning only after the
+   durable write path is complete
 
 That warning must not veto the inbox write once the inbox target exists.
 
@@ -62,6 +69,23 @@ When a new Claude Code team is ingested, or when the watcher sees a
 reconcile lane imports the resulting member state into canonical ATM roster
 truth.
 
+`Z.8` closes the temporary startup-only bridge:
+
+- `hydrate_roster_from_team_config_once_at_startup_if_empty(...)`
+
+That helper was the last pre-watcher one-shot roster hydration path. It was
+deleted once watcher / reconcile became the only production reader of external
+Claude roster changes.
+
+`Z.8` also adds daemon-owned write suppression:
+
+- ATM-owned `config.json` projection writes are recorded in one in-memory
+  journal keyed by canonical config path plus content digest
+- the watcher / reconcile lane consumes one matching entry and suppresses only
+  that one self-authored event
+- suppression is intentionally process-local; daemon restart clears it and a
+  post-crash event falls back to ordinary idempotent external ingest
+
 ## Accepted Team-Admin Behaviors
 
 ### `atm members` / `atm teams`
@@ -70,12 +94,26 @@ These views should report ATM roster truth. If Claude file state is missing or
 drifted, `doctor` reports that discrepancy rather than forcing members / teams
 commands to treat `config.json` as authoritative.
 
+`Z.9` closes the last file-truth team-admin views:
+
+- `atm teams` now enumerates canonical ATM roster teams and member counts
+- `atm members` now lists canonical ATM roster members and metadata even when
+  `config.json` does not yet carry matching member rows
+
 ### `atm team member add`
 
 The canonical mutation path is:
 
 1. mutate ATM roster truth
 2. project the resulting member set into `config.json`
+
+`Z.9` also makes per-member Claude compatibility metadata canonical in ATM
+roster truth first:
+
+- ATM roster `recipient_pane_id` is the owned member-routing field
+- projected Claude `AgentMember.tmux_pane_id` is the compatibility projection
+  of that ATM-owned field
+- `tmux_pane_id` is no longer treated as durable `.atm.toml` authority
 
 ### `atm teams backup`
 
@@ -84,6 +122,13 @@ Backup keeps raw Claude team files and ATM-owned state for:
 - audit
 - emergency inspection
 - manual fallback if needed
+
+`Z.10` adds an explicit ATM roster audit artifact to each backup:
+
+- `atm-roster.json` contains the canonical ATM roster snapshot for that team at
+  backup time
+- the snapshot is preserved for audit and inspection only; restore does not use
+  it as roster truth
 
 Backup does not make backup `config.json` the restore authority.
 
@@ -104,6 +149,8 @@ Restore must preserve:
 - member metadata such as `tmux_pane_id`
 
 Restore must not treat backup `config.json` as the roster source of truth.
+The only surviving `config.json` read in restore is the narrow recreated-shell
+preservation read for current `team-lead` and current `leadSessionId`.
 
 ## Member Metadata
 
@@ -130,7 +177,8 @@ path inventory, sprint ownership, and exact delete / rewrite expectations.
 
 - `Z.5` retained runtime command cutover to ATM roster truth
 - `Z.6` Claude send semantics and immutable `ClaudeCodeTeamRoster`
-- `Z.7` config-ingress boundary narrowing and static gate definition
-- `Z.8` watcher-owned config ingest
+- `Z.7` config-ingress boundary narrowing, startup-only allowlist, and static
+  gate definition
+- `Z.8` watcher-owned config ingest and projection-write suppression
 - `Z.9` team-admin roster authority and canonical member metadata
 - `Z.10` backup / restore automation and config projection

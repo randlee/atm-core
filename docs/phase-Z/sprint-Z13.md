@@ -78,6 +78,18 @@ inconsistent with the architecture even though they are not Claude
 - narrow any surviving workspace-config resolution behind the approved
   boundary seam only
 
+## Boundary Contract Sample
+
+```rust
+pub trait ConfigIngress: sealed::Sealed {
+    fn load_config(&self, request: ConfigLoadRequest)
+        -> Result<ConfigLoadResponse, AtmError>;
+}
+
+// Forbidden in command/team-admin paths:
+let config = load_config(&current_dir)?;
+```
+
 ## Non-Goals
 
 - no Claude `config.json` watcher/reconcile redesign
