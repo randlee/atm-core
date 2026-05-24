@@ -1070,6 +1070,7 @@ mod tests {
     }
 
     #[test]
+    #[serial(team_config_write_env)]
     fn add_member_preserves_session_scoped_tmux_target_syntax() {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
