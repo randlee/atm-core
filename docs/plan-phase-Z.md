@@ -301,6 +301,22 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s3-atm-dev-canary-and-dogfood`
 
+### Z.17 `atm-dev` Canary And Dogfood
+
+Purpose:
+
+- execute the accepted `Z.3` canary on the merged post-`Z.16` integration
+  baseline
+- freeze the active participant list and operator-report path in the
+  authoritative canary artifacts
+- stamp the truthful `Z.3` verdict before `Z.4` begins
+
+Execution branch:
+- `feature/pZ-s17-smoke-z3-rerun`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s17-smoke-z3-rerun`
+
 ### Z.4 Final Fixes And Release Sign-Off
 
 Purpose:

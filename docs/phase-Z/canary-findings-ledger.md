@@ -29,3 +29,10 @@ Each finding entry must record:
 - newly discovered issues found during `Z.4` that are out of scope for the
   frozen `Z.3` handoff must be recorded here using `status: out_of_scope`
   rather than fixed in the `Z.4` sprint
+
+## Validated Findings
+
+No validated `atm-dev` canary findings were promoted during `Z.17`.
+
+| finding_id | participant | linked_operator_flow | summary | severity | fix_owner | status | z4_disposition | revalidation_result | notes |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
