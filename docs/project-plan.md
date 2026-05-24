@@ -3819,6 +3819,16 @@ Execution shape:
   - branch: `feature/pZ-s9-team-admin-roster-authority-and-member-metadata`
 - `Z.10` team backup / restore automation and config projection
   - branch: `feature/pZ-s10-team-backup-restore-automation-and-config-projection`
+- `Z.16` smoke `Z.1` rerun
+  - branch: `feature/pZ-s16-smoke-z1-rerun`
+- `Z.17` smoke `Z.3` rerun
+  - branch: `feature/pZ-s17-smoke-z3-rerun`
+- `Z.18` smoke skill scaffold and fast/normal runner
+  - branch: `feature/pZ-s18-smoke-skill-and-fast-normal-runner`
+- `Z.19` complete smoke checklist automation and reporting
+  - branch: `feature/pZ-s19-complete-smoke-checklist-automation-and-reporting`
+- `Z.20` canary smoke integration and binary baseline tracking
+  - branch: `feature/pZ-s20-canary-smoke-integration-and-binary-baseline-tracking`
 - `Z.3` `atm-dev` canary and dogfood
   - branch: `feature/pZ-s3-atm-dev-canary-and-dogfood`
 - `Z.4` final fixes and release sign-off
@@ -3836,6 +3846,11 @@ Phase Z sprint ledger:
 | `Z.8` | `complete` | `feature/pZ-s8-watcher-owned-claude-config-ingest` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
 | `Z.9` | `complete` | `feature/pZ-s9-team-admin-roster-authority-and-member-metadata` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
 | `Z.10` | `complete` | `feature/pZ-s10-team-backup-restore-automation-and-config-projection` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.16` | `planned` | `feature/pZ-s16-smoke-z1-rerun` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.17` | `planned` | `feature/pZ-s17-smoke-z3-rerun` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.18` | `planned` | `feature/pZ-s18-smoke-skill-and-fast-normal-runner` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z18.md`, `.claude/skills/smoke-test/`, `.smoke-reports/`, `Justfile` |
+| `Z.19` | `planned` | `feature/pZ-s19-complete-smoke-checklist-automation-and-reporting` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z19.md`, `.claude/skills/smoke-test/`, `.smoke-reports/`, `Justfile` |
+| `Z.20` | `planned` | `feature/pZ-s20-canary-smoke-integration-and-binary-baseline-tracking` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z20.md`, `docs/phase-Z/readiness.md`, `.claude/skills/smoke-test/` |
 | `Z.3` | `planned` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
 | `Z.4` | `planned` | `feature/pZ-s4-final-fixes-and-release-sign-off` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md` |
 
@@ -3859,6 +3874,10 @@ Immediate planning outputs:
 - `docs/phase-Z/sprint-Z8.md`
 - `docs/phase-Z/sprint-Z9.md`
 - `docs/phase-Z/sprint-Z10.md`
+- `docs/phase-Z/smoke-skill-plan.md`
+- `docs/phase-Z/sprint-Z18.md`
+- `docs/phase-Z/sprint-Z19.md`
+- `docs/phase-Z/sprint-Z20.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
 

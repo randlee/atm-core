@@ -193,6 +193,75 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s10-team-backup-restore-automation-and-config-projection`
 
+### Z.16 Smoke Z.1 Rerun
+
+Purpose:
+
+- rerun the frozen `Z.1` smoke checklist after the accepted `Z.2` fix line
+- restamp the smoke ledger and readiness record from the rerun evidence
+
+Execution branch:
+- `feature/pZ-s16-smoke-z1-rerun`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s16-smoke-z1-rerun`
+
+### Z.17 Smoke Z.3 Rerun
+
+Purpose:
+
+- rerun the canary/dogfood line after the accepted smoke closure
+- refresh the `Z.3` baseline, participants, and readiness evidence
+
+Execution branch:
+- `feature/pZ-s17-smoke-z3-rerun`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s17-smoke-z3-rerun`
+
+### Z.18 Smoke Skill Scaffold And Fast/Normal Runner
+
+Purpose:
+
+- create the smoke-test skill scaffold
+- land report writing and summary output
+- land `just smoke-fast` and default `just smoke`
+
+Execution branch:
+- `feature/pZ-s18-smoke-skill-and-fast-normal-runner`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s18-smoke-skill-and-fast-normal-runner`
+
+### Z.19 Complete Smoke Checklist Automation And Reporting
+
+Purpose:
+
+- automate the full frozen smoke checklist
+- add `just smoke-complete`
+- make row-by-row smoke results explicit and machine-readable
+
+Execution branch:
+- `feature/pZ-s19-complete-smoke-checklist-automation-and-reporting`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s19-complete-smoke-checklist-automation-and-reporting`
+
+### Z.20 Canary Smoke Integration And Binary Baseline Tracking
+
+Purpose:
+
+- connect smoke reports to canary/release evidence
+- define binary-baseline tracking on the accepted executable under test
+- document how automated smoke augments, but does not replace, manual canary
+  runs
+
+Execution branch:
+- `feature/pZ-s20-canary-smoke-integration-and-binary-baseline-tracking`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s20-canary-smoke-integration-and-binary-baseline-tracking`
+
 ### Z.3 `atm-dev` Canary And Dogfood
 
 Purpose:
@@ -234,6 +303,11 @@ Execution worktree:
   - `docs/phase-Z/claude-roster-sync-and-restore.md`
   - `docs/phase-Z/config-json-violation-inventory.md`
   - `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
+- `Z.18` / `Z.19` / `Z.20`:
+  - `docs/phase-Z/smoke-skill-plan.md`
+  - `docs/phase-Z/sprint-Z18.md`
+  - `docs/phase-Z/sprint-Z19.md`
+  - `docs/phase-Z/sprint-Z20.md`
 - `Z.3`:
   - `docs/phase-Z/canary-dogfood-checklist.md`
   - `docs/phase-Z/canary-findings-ledger.md`
@@ -251,6 +325,8 @@ deliverables, acceptance criteria, and closure rules.
 - smoke findings feed only the immediately following fix sprint
 - the roster/config/restore follow-on line (`Z.5` through `Z.10`) must close
   before `atm-dev` canary use begins
+- the smoke-skill/reporting line (`Z.18` through `Z.20`) must close before the
+  final `Z.4` release sign-off evidence is considered complete
 - dogfood findings feed only the final fix/sign-off sprint
 - release readiness is not declared until the documented executable flows and
   recovery behavior are revalidated after each fix round
@@ -290,5 +366,9 @@ Current execution state:
 - `docs/phase-Z/sprint-Z8.md`
 - `docs/phase-Z/sprint-Z9.md`
 - `docs/phase-Z/sprint-Z10.md`
+- `docs/phase-Z/smoke-skill-plan.md`
+- `docs/phase-Z/sprint-Z18.md`
+- `docs/phase-Z/sprint-Z19.md`
+- `docs/phase-Z/sprint-Z20.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
