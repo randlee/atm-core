@@ -1076,7 +1076,7 @@ mod tests {
                 finding.code == AtmErrorCode::WarningRosterDrift
                     && finding
                         .message
-                        .contains("ATM roster member 'team-lead' is missing from team config.json")
+                        .contains(&format!("ATM roster member '{}' is missing from team config.json", ROLE_TEAM_LEAD))
             }),
             "{report:#?}"
         );
