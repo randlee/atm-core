@@ -5,7 +5,9 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
 import json
+import os
 import subprocess
+import tempfile
 
 
 @dataclass(frozen=True)
@@ -15,6 +17,19 @@ class SmokePaths:
     latest_markdown: Path
     timestamped_markdown: Path
     timestamped_json: Path
+
+
+@dataclass(frozen=True)
+class SmokeFixture:
+    root: Path
+    workspace_dir: Path
+    home_dir: Path
+    atm_home: Path
+    log_dir: Path
+    team_dir: Path
+    team_name: str
+    operator: str
+    recipient: str
 
 
 def repo_root() -> Path:
@@ -66,3 +81,53 @@ def current_binary_sha(root: Path | None = None) -> str:
 def write_json(path: Path, payload: object) -> None:
     ensure_parent(path)
     path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+
+
+def create_clean_room_fixture(
+    *,
+    prefix: str,
+    team_name: str,
+    operator: str,
+    recipient: str,
+) -> SmokeFixture:
+    root = Path(tempfile.mkdtemp(prefix=prefix))
+    workspace_dir = root / "workspace"
+    home_dir = root / "home"
+    atm_home = root / "atm"
+    log_dir = root / "logs"
+    team_dir = atm_home / ".claude" / "teams" / team_name
+    (team_dir / "inboxes").mkdir(parents=True, exist_ok=True)
+    workspace_dir.mkdir(parents=True, exist_ok=True)
+    (workspace_dir / ".atm.toml").write_text(
+        f'[atm]\ndefault_team = "{team_name}"\n',
+        encoding="utf-8",
+    )
+    (team_dir / "config.json").write_text('{"members":[]}\n', encoding="utf-8")
+    return SmokeFixture(
+        root=root,
+        workspace_dir=workspace_dir,
+        home_dir=home_dir,
+        atm_home=atm_home,
+        log_dir=log_dir,
+        team_dir=team_dir,
+        team_name=team_name,
+        operator=operator,
+        recipient=recipient,
+    )
+
+
+def smoke_env(fixture: SmokeFixture, *, identity: str, root: Path | None = None) -> dict[str, str]:
+    working_root = root or repo_root()
+    env = os.environ.copy()
+    env.update(
+        {
+            "HOME": str(fixture.home_dir),
+            "ATM_HOME": str(fixture.atm_home),
+            "ATM_TEAM": fixture.team_name,
+            "ATM_IDENTITY": identity,
+            "ATM_LOG": "debug",
+            "ATM_LOG_DIR": str(fixture.log_dir),
+            "ATM_DAEMON_BIN": str(working_root / "target" / "release" / "atm-daemon"),
+        }
+    )
+    return env

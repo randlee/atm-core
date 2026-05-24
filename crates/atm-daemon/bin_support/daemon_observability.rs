@@ -694,11 +694,14 @@ impl sc_observability::LogSink for RetainedJsonlFileSink {
         file.write_all(&line)
             .and_then(|()| file.flush())
             .map_err(|error| self.mark_failure(error))?;
+        // LOCK-ORDER: when write() needs both locks, update last_written_file
+        // before health so it matches the struct-level invariant.
         *self.last_written_file.lock().map_err(|_| {
             self.mark_failure(std::io::Error::other(
                 "retained sink file handle lock poisoned",
             ))
         })? = Some(file);
+        // LOCK-ORDER: acquire health only after last_written_file in write().
         let mut health = self.health.lock().map_err(|_| {
             self.mark_failure(std::io::Error::other("file sink health lock poisoned"))
         })?;
@@ -878,6 +881,10 @@ fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary)
 }
 
 fn level_for_outcome(outcome: &str) -> Level {
+    if outcome.starts_with("delivery_policy.") {
+        return Level::Debug;
+    }
+
     match outcome {
         "ok" | "sent" | "dry_run" => Level::Info,
         "timeout" => Level::Warn,
@@ -963,6 +970,18 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{DaemonObservability, observability_test_event};
+
+    #[test]
+    fn delivery_policy_outcomes_map_to_debug() {
+        assert_eq!(
+            super::level_for_outcome("delivery_policy.new_message.primary_nudge"),
+            sc_observability_types::Level::Debug
+        );
+        assert_eq!(
+            super::level_for_outcome("delivery_policy.ack_reply.delivered"),
+            sc_observability_types::Level::Debug
+        );
+    }
 
     #[test]
     #[serial]

@@ -428,6 +428,7 @@ Execution worktree:
 Primary deliverables:
 
 - `just smoke fast`
+- minimal clean-room team shell plus `atm teams add-member` setup contract
 - `reports/smoke/smoke-fast.md`
 - timestamped fast smoke artifacts
 - deterministic fast log-analysis gate

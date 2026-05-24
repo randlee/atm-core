@@ -142,6 +142,10 @@ clean:
 lint target='all':
     {{python_cmd}} .just/run_lint.py {{target}}
 
+# Run the Phase Z smoke harness.
+smoke level='normal':
+    {{python_cmd}} scripts/smoke/run.py {{level}} --write-artifacts
+
 # Generate architecture visualization artifacts.
 view target='all':
     {{python_cmd}} .just/run_view.py {{target}}
