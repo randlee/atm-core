@@ -301,7 +301,7 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s3-atm-dev-canary-and-dogfood`
 
-### Z.17 `atm-dev` Canary And Dogfood Execution
+### Z.17 `atm-dev` Canary And Dogfood
 
 Purpose:
 
