@@ -988,7 +988,7 @@ mod tests {
                 agent: AgentName::from_validated("recipient"),
                 team: TeamName::from_validated(TEST_TEAM),
             },
-            Some("pane-1".to_string()),
+            Some(crate::types::PaneId::new("pane-1").expect("pane")),
             vec![logical_message()],
             Vec::new(),
         );

@@ -574,8 +574,8 @@ mod tests {
                     agent_name: agent.parse().expect("agent"),
                     member_kind: boundary::RosterMemberKind::Permanent,
                     harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: String::new(),
-                    model: String::new(),
+                    agent_type: atm_core::schema::AgentType::default(),
+                    model: atm_core::types::ModelName::default(),
                     recipient_pane_id: None,
                     metadata_json: Map::new(),
                 })

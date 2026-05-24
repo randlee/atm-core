@@ -59,7 +59,7 @@ surfaces after `Z.10` closes:
 | `crates/atm-core/src/team_admin.rs` `.atm.toml` pane ownership assumptions | treated per-member pane routing as non-roster durable state | delete / rewrite | `Z.9` | `closed` | canonical pane metadata now lives on ATM roster-member rows and projects back to Claude `tmux_pane_id` |
 | `crates/atm-core/src/schema/agent_member.rs` | modeled retained Claude metadata as copied file state without explicit ATM ownership contract | tighten | `Z.9` | `closed` | `AgentMember.tmux_pane_id` is now optional/serde-compatible and maps to canonical ATM roster `recipient_pane_id` metadata |
 | `crates/atm-core/src/team_admin/restore.rs` | read current + backup `config.json` and replay backup-config roster state | delete / rewrite | `Z.10` | `closed` | restore now loads canonical ATM roster truth from the roster store, projects recreated `config.json` from ATM roster, and keeps only a narrow recreated-shell preservation read for current `team-lead` / `leadSessionId`; backup `config.json` is no longer consulted for membership |
-| `crates/atm-core/src/config/mod.rs` | parser/serializer used broadly today | keep, allowlist | `Z.10` | `open` | keep one parser implementation, but only approved callers may reach it after follow-on cleanup closes |
+| `crates/atm-core/src/config/mod.rs` | parser/serializer used broadly today | keep, allowlist | `Z.10` | `closed` | keep one parser implementation; approved-callers enforcement provided by `Z.12`–`Z.14` `SCB-RETAINED-001` / `SCB-WORKSPACE-001` / `SCB-SINGLETON-001` lint gates |
 
 ## Non-Violation References Reviewed
 
@@ -79,10 +79,10 @@ Claude `config.json` roster-truth leaks:
 
 | Path | Current Behavior | Violation Status | Owning Sprint | Current Status | Required Resolution |
 | --- | --- | --- | --- | --- | --- |
-| `crates/atm-core/src/delivery_policy.rs` and send-path error surfaces | returns opaque first-send empty-roster failure text | rewrite | `Z.11` | `planned` | replace the bad recovery contract with explicit `atm teams add-member` guidance and prove no hidden fallback was added |
-| `crates/atm/src/commands/teams.rs` / `crates/atm/src/commands/members.rs` plus `crates/atm-core/src/team_admin.rs` | reaches `service_runtime_store::default_runtime()` through the wrong command-entry path for `teams`, `members`, and `add-member` | delete / rewrite | `Z.12` | `planned` | route roster access through the approved `RosterStore` seam only; `teams --json`, `members --json`, and `teams add-member` must stop failing on the uninstalled default-runtime path |
-| `crates/atm-core/src/team_admin.rs` `list_teams` / `list_members` | ambient `.atm.toml` / `load_config(...)` current-team reads outside the approved seam | delete / rewrite | `Z.13` | `planned` | move current-team resolution behind the approved `ConfigIngress` / runtime seam and forbid new ambient command/team-admin reads |
-| `crates/atm-core/src/lib.rs` | public crate-root re-export of `install_default_runtime_factory` leaks an ambient singleton/runtime-factory surface | delete / narrow | `Z.14` | `planned` | remove the broad re-export, keep only approved wrappers, and lint against new public singleton leaks |
+| `crates/atm-core/src/delivery_policy.rs` and send-path error surfaces | returns opaque first-send empty-roster failure text | rewrite | `Z.11` | `closed` — Closed via Z.11 at 1bcf916e | replace the bad recovery contract with explicit `atm teams add-member` guidance and prove no hidden fallback was added |
+| `crates/atm/src/commands/teams.rs` / `crates/atm/src/commands/members.rs` plus `crates/atm-core/src/team_admin.rs` | reaches `service_runtime_store::default_runtime()` through the wrong command-entry path for `teams`, `members`, and `add-member` | delete / rewrite | `Z.12` | `closed` — Closed via Z.12 at 602292e3 | route roster access through the approved `RosterStore` seam only; `teams --json`, `members --json`, and `teams add-member` must stop failing on the uninstalled default-runtime path |
+| `crates/atm-core/src/team_admin.rs` `list_teams` / `list_members` | ambient `.atm.toml` / `load_config(...)` current-team reads outside the approved seam | delete / rewrite | `Z.13` | `closed` — Closed via Z.13 at 356af2dd | move current-team resolution behind the approved `ConfigIngress` / runtime seam and forbid new ambient command/team-admin reads |
+| `crates/atm-core/src/lib.rs` | public crate-root re-export of `install_default_runtime_factory` leaks an ambient singleton/runtime-factory surface | delete / narrow | `Z.14` | `closed` — Closed via Z.14 at 75ebe60c | remove the broad re-export, keep only approved wrappers, and lint against new public singleton leaks |
 
 ## Static Gate Direction
 

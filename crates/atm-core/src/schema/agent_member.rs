@@ -1,11 +1,10 @@
 use std::fmt;
-use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tracing::warn;
 
-use crate::types::AgentName;
+use crate::types::{AgentName, ModelName, PaneId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentType {
@@ -80,33 +79,6 @@ impl fmt::Display for AgentType {
     }
 }
 
-impl AgentType {
-    pub fn as_str(&self) -> &str {
-        match self {
-            Self::GeneralPurpose => "general-purpose",
-            Self::Plan => "plan",
-            Self::Lead => "lead",
-            Self::Qa => "qa",
-            Self::Worker => "worker",
-            Self::Unknown(value) => value.as_str(),
-        }
-    }
-}
-
-impl AsRef<str> for AgentType {
-    fn as_ref(&self) -> &str {
-        self.as_str()
-    }
-}
-
-impl Deref for AgentType {
-    type Target = str;
-
-    fn deref(&self) -> &Self::Target {
-        self.as_str()
-    }
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct AgentMember {
@@ -125,14 +97,14 @@ pub struct AgentMember {
 
     /// Retained provider/model label copied from `config.json` roster state.
     #[serde(default)]
-    pub model: String,
+    pub model: ModelName,
 
     #[serde(default)]
     pub joined_at: Option<u64>,
 
     /// Retained tmux pane identifier copied from `config.json` roster state.
     #[serde(default)]
-    pub tmux_pane_id: Option<String>,
+    pub tmux_pane_id: Option<PaneId>,
 
     /// Retained working directory path for the agent process, copied from `config.json` roster state.
     #[serde(default)]
@@ -148,7 +120,7 @@ impl AgentMember {
             name,
             agent_id: String::new(),
             agent_type: AgentType::default(),
-            model: String::new(),
+            model: ModelName::default(),
             joined_at: None,
             tmux_pane_id: None,
             cwd: String::new(),
@@ -197,7 +169,7 @@ mod tests {
         assert_eq!(member.agent_id, format!("{TEST_SENDER}@{TEST_TEAM}"));
         assert_eq!(member.name, AgentName::from_validated(TEST_SENDER));
         assert_eq!(member.agent_type, AgentType::GeneralPurpose);
-        assert_eq!(member.model, "claude-sonnet-4-5");
+        assert_eq!(member.model.as_str(), "claude-sonnet-4-5");
         assert_eq!(member.joined_at, Some(1770765919076));
         assert_eq!(member.tmux_pane_id.as_deref(), Some("%1"));
         assert_eq!(member.cwd, "/workspace");

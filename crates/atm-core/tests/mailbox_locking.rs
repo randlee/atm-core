@@ -1226,8 +1226,8 @@ fn seed_sqlite_roster(sqlite_db_path: &std::path::Path, team: &str, members: &[&
             agent_name: (*name).parse::<AgentName>().expect("agent"),
             member_kind: atm_core::boundary::RosterMemberKind::Permanent,
             harness: atm_core::boundary::RosterHarness::ClaudeCode,
-            agent_type: String::new(),
-            model: String::new(),
+            agent_type: atm_core::schema::AgentType::default(),
+            model: atm_core::types::ModelName::default(),
             recipient_pane_id: None,
             metadata_json: serde_json::Map::new(),
         })

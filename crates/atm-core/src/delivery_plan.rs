@@ -6,7 +6,7 @@ use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::send::{
     DeliveryPersistenceDisposition, DeliveryPersistenceResult, ResolvedRecipient, WarningEntry,
 };
-use crate::types::{AgentName, TaskId, TeamName};
+use crate::types::{AgentName, PaneId, TaskId, TeamName};
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum DeliveryPlanDisposition {
@@ -161,7 +161,7 @@ pub(crate) struct DeliveryPlan {
     pub(crate) disposition: DeliveryPlanDisposition,
     pub(crate) delivery_target: DeliveryTarget,
     pub(crate) recipient: ResolvedRecipient,
-    pub(crate) recipient_pane_id: Option<String>,
+    pub(crate) recipient_pane_id: Option<PaneId>,
     pub(crate) messages: Vec<LogicalMessage>,
     pub(crate) notifications: Vec<NotificationTarget>,
     pub(crate) warnings: Vec<WarningEntry>,
@@ -173,7 +173,7 @@ impl DeliveryPlan {
         disposition: DeliveryPlanDisposition,
         delivery_target: DeliveryTarget,
         recipient: ResolvedRecipient,
-        recipient_pane_id: Option<String>,
+        recipient_pane_id: Option<PaneId>,
         messages: Vec<LogicalMessage>,
         warnings: Vec<WarningEntry>,
     ) -> Self {

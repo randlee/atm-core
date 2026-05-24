@@ -2,7 +2,7 @@ use crate::boundary::{RosterHarness, RosterMemberRecord};
 use crate::error::AtmError;
 use crate::schema::{AtmMessageId, ThreadMode};
 use crate::service_runtime::RetainedServiceRuntime;
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentName, PaneId, TeamName};
 
 #[expect(
     dead_code,
@@ -51,7 +51,7 @@ pub(crate) struct DeliveryRecipientSnapshot {
     pub(crate) agent: AgentName,
     pub(crate) team: TeamName,
     pub(crate) harness: DeliveryHarnessPath,
-    pub(crate) recipient_pane_id: Option<String>,
+    pub(crate) recipient_pane_id: Option<PaneId>,
     pub(crate) roster_backed: bool,
 }
 

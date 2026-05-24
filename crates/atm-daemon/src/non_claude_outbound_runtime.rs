@@ -151,7 +151,7 @@ mod tests {
         NonClaudeOutboundDeliveryRequest {
             team: TEST_TEAM.parse().expect("team"),
             agent: "recipient".parse().expect("agent"),
-            recipient_pane_id: Some("pane-1".to_string()),
+            recipient_pane_id: Some(atm_core::types::PaneId::new("pane-1").expect("pane")),
             messages: vec![MessageEnvelope {
                 from: TEST_SENDER.parse().expect("sender"),
                 text: "hello".to_string(),
@@ -201,7 +201,7 @@ mod tests {
         let oversized = NonClaudeOutboundDeliveryRequest {
             team: TEST_TEAM.parse().expect("team"),
             agent: "recipient".parse().expect("agent"),
-            recipient_pane_id: Some("pane-1".to_string()),
+            recipient_pane_id: Some(atm_core::types::PaneId::new("pane-1").expect("pane")),
             messages: vec![MessageEnvelope {
                 from: TEST_SENDER.parse().expect("sender"),
                 text: "x".repeat(1024 * 1024),

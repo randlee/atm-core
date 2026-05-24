@@ -1161,8 +1161,8 @@ mod tests {
                 agent_name: agent.clone(),
                 member_kind: RosterMemberKind::Permanent,
                 harness: RosterHarness::ClaudeCode,
-                agent_type: String::new(),
-                model: String::new(),
+                agent_type: crate::schema::AgentType::default(),
+                model: crate::types::ModelName::default(),
                 recipient_pane_id: None,
                 metadata_json: Map::new(),
             }))

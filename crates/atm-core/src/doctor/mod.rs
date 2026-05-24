@@ -15,7 +15,7 @@ use crate::schema::AgentMember;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
 use crate::team_admin::{MemberSummary, MembersList};
-use crate::types::{AgentName, ModelName, PaneId, TeamName};
+use crate::types::{AgentName, TeamName};
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
@@ -433,10 +433,10 @@ fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.clone(),
-        agent_type: member.agent_type.clone(),
-        model: ModelName::from_validated(member.model.clone()),
+        agent_type: member.agent_type.to_string(),
+        model: member.model.clone(),
         joined_at: member.joined_at,
-        tmux_pane_id: member.tmux_pane_id.clone().map(PaneId::from_validated),
+        tmux_pane_id: member.tmux_pane_id.clone(),
         cwd: member.cwd.clone(),
         extra: member.extra.clone(),
     }
@@ -695,8 +695,8 @@ mod tests {
                     agent_name: AgentName::from_validated(*member),
                     member_kind: boundary::RosterMemberKind::Permanent,
                     harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: String::new(),
-                    model: String::new(),
+                    agent_type: crate::schema::AgentType::default(),
+                    model: crate::types::ModelName::default(),
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 })
