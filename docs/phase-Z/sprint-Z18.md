@@ -111,6 +111,7 @@ scripts/smoke/run.py <level>
   "timestamp": "2026-05-24T12:34:56Z",
   "binary_sha": "0123456789abcdef",
   "duration_secs": 123,
+  "status": "scaffold-only",
   "rows": [],
   "summary": {
     "pass": 0,
