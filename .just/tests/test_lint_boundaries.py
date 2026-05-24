@@ -209,6 +209,7 @@ class LintBoundariesTests(unittest.TestCase):
         self.write_scb_config_support(repo_root)
         self.write_scb_retained_support(repo_root)
         self.write_scb_workspace_support(repo_root)
+        self.write_scb_singleton_support(repo_root)
 
     def write_manifests(
         self,
@@ -416,6 +417,21 @@ fn run_bad() {
             "# no workspace-config allowlist survivors expected on accepted branches\n",
             encoding="utf-8",
         )
+
+    def write_scb_singleton_support(self, repo_root: Path) -> None:
+        (repo_root / ".just/allowlists").mkdir(parents=True, exist_ok=True)
+        (repo_root / ".just/fixtures").mkdir(parents=True, exist_ok=True)
+        (repo_root / "crates/atm-core/src").mkdir(parents=True, exist_ok=True)
+        (repo_root / ".just/allowlists/scb_singleton_allowlist.toml").write_text(
+            "# no singleton allowlist survivors expected on accepted branches\n",
+            encoding="utf-8",
+        )
+        (repo_root / ".just/fixtures/scb_singleton_known_bad.rs").write_text(
+            """\
+pub use crate::service_runtime_store::install_default_runtime_factory;
+""",
+            encoding="utf-8",
+        )
         (repo_root / ".just/fixtures/scb_workspace_known_bad.rs").write_text(
             """\
 use crate::config::load_config;
@@ -452,6 +468,7 @@ fn run_bad(current_dir: &std::path::Path) {
             self.write_scb_config_support(repo_root)
             self.write_scb_retained_support(repo_root)
             self.write_scb_workspace_support(repo_root)
+            self.write_scb_singleton_support(repo_root)
             (repo_root / "crates/atm-core/src/boundary_support.rs").write_text(
                 """\
 use crate::config;
@@ -475,6 +492,7 @@ fn hydrate_roster_from_team_config_once_at_startup_if_empty(team_dir: &std::path
             self.write_scb_config_support(repo_root)
             self.write_scb_retained_support(repo_root)
             self.write_scb_workspace_support(repo_root)
+            self.write_scb_singleton_support(repo_root)
             (repo_root / "crates/atm-core/src/boundary_support.rs").write_text(
                 "fn load_team_config(team_dir: &std::path::Path) { let _ = team_dir; }\n",
                 encoding="utf-8",
@@ -505,6 +523,7 @@ fn send_bad(team_dir: &std::path::Path) {
             self.write_doc(repo_root, "atm-rusqlite")
             self.write_scb_retained_support(repo_root)
             self.write_scb_workspace_support(repo_root)
+            self.write_scb_singleton_support(repo_root)
             (repo_root / "crates/atm/src/commands/teams.rs").write_text(
                 """\
 use crate::service_runtime_store;
@@ -539,6 +558,23 @@ fn run_bad(current_dir: &std::path::Path) {
 
             rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
             self.assertTrue(any(item.startswith("SCB-WORKSPACE-001 ") for item in rendered), rendered)
+
+    def test_collect_boundary_violations_rejects_scb_singleton_rule_family(self) -> None:
+        with tempfile.TemporaryDirectory() as tempdir:
+            repo_root = Path(tempdir)
+            self.write_repo(repo_root)
+            self.write_manifests(repo_root)
+            self.write_doc(repo_root, "atm-rusqlite")
+            self.write_scb_singleton_support(repo_root)
+            (repo_root / "crates/atm-core/src/lib.rs").write_text(
+                """\
+pub use crate::service_runtime_store::install_default_runtime_factory;
+""",
+                encoding="utf-8",
+            )
+
+            rendered = [violation.render() for violation in collect_boundary_violations(repo_root)]
+            self.assertTrue(any(item.startswith("SCB-SINGLETON-001 ") for item in rendered), rendered)
 
     def test_parse_boundary_records_accepts_planned_schema(self) -> None:
         with tempfile.TemporaryDirectory() as tempdir:

@@ -127,6 +127,7 @@ version = "1.2.0"
 dependencies = [
  "agent-team-mail-core",
  "arc-swap",
+ "atm-runtime-test-support",
  "atm-rusqlite",
  "chrono",
  "fs2",
@@ -186,6 +187,7 @@ name = "atm-rusqlite"
 version = "1.2.0"
 dependencies = [
  "agent-team-mail-core",
+ "atm-runtime-test-support",
  "chrono",
  "rusqlite",
  "serde",

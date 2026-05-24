@@ -96,10 +96,10 @@ fn dispatch_advisory_stream(
     request_id: RequestId,
     request: atm_core::AdvisoryStreamRequest,
 ) -> Result<(), AtmError> {
-    stream.set_send_timeout(None).map_err(|source| {
-        AtmError::daemon_unavailable("failed to clear daemon advisory-stream write deadline")
+    stream.set_send_timeout(Some(REQUEST_DEADLINE)).map_err(|source| {
+        AtmError::daemon_unavailable("failed to apply daemon advisory-stream write deadline")
             .with_recovery(
-                "Restart the daemon; the same-host advisory stream socket could not switch into long-lived streaming mode.",
+                "Restart the daemon; the same-host advisory stream socket could not apply its bounded write deadline.",
             )
             .with_source(source)
     })?;

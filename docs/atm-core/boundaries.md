@@ -197,7 +197,9 @@ Notes:
     `load_config(...)` reads outside the approved seam
 - later follow-on lint families should also gate:
   - `SCB-SINGLETON-001`: public ambient singleton/runtime-factory exposure
-    that bypasses approved wrappers
+    that bypasses approved wrappers; accepted branches must expose retained
+    runtime installation only through the bounded hidden hooks and approved
+    crate wrappers landed in `Z.14`
 - those rule families must distinguish:
   - pre-existing survivors explicitly recorded in TOML allowlists with owner
     and sunset-sprint metadata

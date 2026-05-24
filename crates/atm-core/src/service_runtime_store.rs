@@ -26,7 +26,7 @@ fn test_default_runtime_provider() -> &'static Mutex<Option<DefaultRuntimeProvid
     TEST_DEFAULT_RUNTIME_PROVIDER.get_or_init(|| Mutex::new(None))
 }
 
-pub fn install_default_runtime_factory(factory: DefaultRuntimeFactory) {
+pub(crate) fn install_default_runtime_factory(factory: DefaultRuntimeFactory) {
     #[cfg(any(test, feature = "test-utils"))]
     {
         *test_default_runtime_provider()
@@ -37,7 +37,7 @@ pub fn install_default_runtime_factory(factory: DefaultRuntimeFactory) {
     let _ = DEFAULT_RUNTIME_PROVIDER.set(DefaultRuntimeProvider::Factory(factory));
 }
 
-pub fn install_default_runtime_instance(runtime: LocalServiceRuntime) {
+pub(crate) fn install_default_runtime_instance(runtime: LocalServiceRuntime) {
     let _ = DEFAULT_RUNTIME_PROVIDER.set(DefaultRuntimeProvider::Instance(runtime));
 }
 

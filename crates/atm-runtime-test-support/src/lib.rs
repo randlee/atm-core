@@ -28,7 +28,9 @@ fn env_lock() -> &'static Mutex<()> {
 
 pub fn install_sqlite_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
-        atm_core::install_default_runtime_factory(sqlite_retained_runtime);
+        atm_core::runtime_install_hooks::install_retained_runtime_factory_for_test_support(
+            sqlite_retained_runtime,
+        );
     });
 }
 
