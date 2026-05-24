@@ -35,8 +35,9 @@ events with no warnings or errors.
 
 ## Governing Requirements
 
-- `REQ-CORE-ATM-JSON-001`
-- `REQ-CORE-CLI-001`
+- `REQ-P-SMOKE-001`
+- `REQ-P-SMOKE-002`
+- `REQ-P-SMOKE-003`
 
 ## Governing ADRs
 

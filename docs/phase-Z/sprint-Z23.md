@@ -34,7 +34,7 @@ collecting coverage.
 
 ## Governing Requirements
 
-- `REQ-CORE-CLI-001`
+- `REQ-P-COVERAGE-001`
 
 ## Governing ADRs
 

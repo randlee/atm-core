@@ -29,10 +29,12 @@ and produce the final release-readiness verdict.
 - `docs/plan-phase-Z.md`
 - `docs/phase-Yd/readiness.md`
 - `Z.3` canary findings are the only input finding source for this sprint
+- `Z.23` must have closed the coverage-report line first
 
 ## Prerequisites
 
 - `Z.3` complete
+- `Z.23` complete
 - the canary findings ledger is frozen
 
 ## Exact Targets

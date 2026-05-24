@@ -36,7 +36,9 @@ or cross-cutting rework.
 
 ## Governing Requirements
 
-- `REQ-CORE-CLI-001`
+- `REQ-P-SMOKE-001`
+- `REQ-P-SMOKE-002`
+- `REQ-P-SMOKE-003`
 
 ## Governing ADRs
 
