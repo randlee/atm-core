@@ -1157,7 +1157,7 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
-        let lead_cwd = tempdir.path().join("team-lead");
+        let lead_cwd = tempdir.path().join(ROLE_TEAM_LEAD);
         let mut existing = roster_member(TEST_TEAM, ROLE_TEAM_LEAD);
         existing.agent_type = "lead".to_string();
         existing.model = "gpt-5".to_string();
