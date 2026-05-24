@@ -46,8 +46,8 @@ Save the extracted fenced JSON to `/tmp/step-5.json`.
   being replayed, increment `round_index`, update `round_id`, refresh
   `replay_nonce` with the current UTC timestamp, and re-render before
   re-sending
-- if Step 5 returns `FAIL` three times without converging, escalate to the
-  user before continuing
+- if Step 5 returns `FAIL` three times without converging, stop and report
+  `cap-exhausted / not converged`; do not ask the user what to do mid-loop
 
 ## Hard stops
 
@@ -57,4 +57,4 @@ Save the extracted fenced JSON to `/tmp/step-5.json`.
 - fenced JSON is missing or malformed: do not advance; send a correction
   request immediately and identify the missing or malformed fields explicitly
 - Step 5 has returned `FAIL` three times without converging: do not advance;
-  escalate to the user before continuing
+  stop and report `cap-exhausted / not converged` without prompting the user

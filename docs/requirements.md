@@ -2183,6 +2183,57 @@ Required testing architecture:
 - a test that might hang is invalid even if it does not use
   `thread::sleep(...)`
 - tests must use bounded waits tied to observable predicates or handshakes
+
+- `REQ-P-SMOKE-001` The repository must expose one smoke command family:
+  - `just smoke`
+  - `just smoke fast`
+  - `just smoke thorough`
+
+  Required behavior:
+  - `just smoke fast` must prove the clean-room happy path on a new disposable
+    baseline:
+    - daemon bring-up
+    - team setup
+    - `doctor`
+    - `atm send` without `--requires-ack`
+    - `atm send` with `--requires-ack`
+    - `atm read`
+    - `atm ack`
+    - nudge-visible flow
+    - clean shutdown
+  - `just smoke` must include the `fast` lane plus broader retained/admin/
+    operator coverage and must provide root-cause notes for every deviation
+  - `just smoke thorough` must include the `normal` lane plus every CLI
+    interface on happy path and common error paths, with explicit PASS/FAIL/
+    SKIP row output and root-cause notes for every deviation
+
+- `REQ-P-SMOKE-002` Smoke reporting must write:
+  - tracked latest smoke reports:
+    - `reports/smoke/smoke-fast.md`
+    - `reports/smoke/smoke.md`
+    - `reports/smoke/smoke-thorough.md`
+  - gitignored timestamped smoke reports using the shared
+    `YYYY-MM-DD-HH-MM-SS-*` convention
+  - one canonical JSON payload per run that records row verdicts, binary SHA,
+    duration, and pass/fail/skip counts
+
+- `REQ-P-SMOKE-003` Smoke logging must support two modes:
+  - smoke/debug mode may enable detailed lifecycle/send/read/ack/nudge event
+    visibility for retained-log analysis
+  - ordinary runtime logging must remain quiet enough that routine send/read/
+    ack success does not clutter normal operator logs
+
+- `REQ-P-COVERAGE-001` Coverage reporting must remain separate from ordinary
+  test execution.
+
+  Required behavior:
+  - the repository must expose `just test coverage`
+  - plain `just test` must not implicitly collect coverage
+  - coverage reporting must write tracked latest reports:
+    - `reports/coverage/mac.md`
+    - `reports/coverage/win.md`
+  - coverage reporting must also write gitignored timestamped reports using
+    the same timestamp convention as smoke reporting
 - bare `join()`, `recv()`, `wait()`, or equivalent waits are prohibited in
   risky runtime/daemon test paths unless completion has already been proven by
   a bounded synchronization step

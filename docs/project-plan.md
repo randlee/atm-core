@@ -3831,6 +3831,22 @@ Execution shape:
   - branch: `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate`
 - `Z.15` deferred hardening follow-up consolidation
   - branch: `feature/pZ-s15-deferred-hardening-follow-up-consolidation`
+- `Z.16` smoke `Z.1` rerun
+  - branch: `feature/pZ-s16-smoke-z1-rerun`
+- `Z.17` smoke `Z.3` rerun
+  - branch: `feature/pZ-s17-smoke-z3-rerun`
+- `Z.18` smoke skill scaffold and report infrastructure
+  - branch: `feature/pZ-s18-smoke-skill-and-report-infrastructure`
+- `Z.19` fast smoke happy-path execution
+  - branch: `feature/pZ-s19-fast-smoke-happy-path-execution`
+- `Z.20` normal smoke systemic execution
+  - branch: `feature/pZ-s20-normal-smoke-systemic-execution`
+- `Z.21` thorough smoke CLI coverage and reporting
+  - branch: `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting`
+- `Z.22` smoke findings review and major rework triage
+  - branch: `feature/pZ-s22-smoke-findings-review-and-major-rework-triage`
+- `Z.23` cross-platform test coverage reporting
+  - branch: `feature/pZ-s23-cross-platform-test-coverage-reporting`
 - `Z.3` `atm-dev` canary and dogfood
   - branch: `feature/pZ-s3-atm-dev-canary-and-dogfood`
 - `Z.4` final fixes and release sign-off
@@ -3853,6 +3869,14 @@ Phase Z sprint ledger:
 | `Z.13` | `planned` | `feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z13.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_workspace_allowlist.toml`, `.just/fixtures/scb_workspace_known_bad.rs` |
 | `Z.14` | `planned` | `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z14.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_singleton_allowlist.toml`, `.just/fixtures/scb_singleton_known_bad.rs` |
 | `Z.15` | `planned` | `feature/pZ-s15-deferred-hardening-follow-up-consolidation` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z15.md`, `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md` |
+| `Z.16` | `planned` | `feature/pZ-s16-smoke-z1-rerun` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.17` | `planned` | `feature/pZ-s17-smoke-z3-rerun` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.18` | `planned` | `feature/pZ-s18-smoke-skill-and-report-infrastructure` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z18.md`, `.claude/skills/smoke-test/`, `templates/smoke-report/`, `reports/smoke/`, `.gitignore` |
+| `Z.19` | `planned` | `feature/pZ-s19-fast-smoke-happy-path-execution` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z19.md`, `.claude/skills/smoke-test/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
+| `Z.20` | `planned` | `feature/pZ-s20-normal-smoke-systemic-execution` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z20.md`, `.claude/skills/smoke-test/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
+| `Z.21` | `planned` | `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z21.md`, `.claude/skills/smoke-test/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
+| `Z.22` | `planned` | `feature/pZ-s22-smoke-findings-review-and-major-rework-triage` | `docs/phase-Z/smoke-findings-review.md`, `docs/phase-Z/sprint-Z22.md` |
+| `Z.23` | `planned` | `feature/pZ-s23-cross-platform-test-coverage-reporting` | `docs/phase-Z/sprint-Z23.md`, `templates/coverage-report/`, `reports/coverage/`, `Justfile` |
 | `Z.3` | `planned` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
 | `Z.4` | `planned` | `feature/pZ-s4-final-fixes-and-release-sign-off` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md` |
 
@@ -3881,6 +3905,14 @@ Immediate planning outputs:
 - `docs/phase-Z/sprint-Z13.md`
 - `docs/phase-Z/sprint-Z14.md`
 - `docs/phase-Z/sprint-Z15.md`
+- `docs/phase-Z/smoke-skill-plan.md`
+- `docs/phase-Z/sprint-Z18.md`
+- `docs/phase-Z/sprint-Z19.md`
+- `docs/phase-Z/sprint-Z20.md`
+- `docs/phase-Z/sprint-Z21.md`
+- `docs/phase-Z/sprint-Z22.md`
+- `docs/phase-Z/sprint-Z23.md`
+- `docs/phase-Z/smoke-findings-review.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
 
@@ -3895,3 +3927,7 @@ Acceptance / Phase Entry Gate:
   accepted `integrate/phase-Z` line
 - `Z.3` canary execution must not begin until `Z.11` through `Z.15` also close
   on the accepted `integrate/phase-Z` line
+- `Z.3` canary execution must not begin until `Z.18` through `Z.22` also close
+  on the accepted `integrate/phase-Z` line
+- the final `Z.4` release verdict must not close until `Z.23` also closes on
+  the accepted `integrate/phase-Z` line

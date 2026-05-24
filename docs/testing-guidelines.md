@@ -136,6 +136,50 @@ Phase S adds one mandatory coverage layer for daemon hosting:
 - Unix-only functional transport tests are insufficient once the parity line is
   active
 
+### 4.5 Smoke Automation
+
+Smoke automation is a distinct execution layer and does not replace the
+ordinary correctness test tiers above.
+
+Rules:
+
+- smoke runs validate the real built executables
+- smoke runs use disposable state and must not depend on live host state
+- smoke runs must report explicit PASS/FAIL/SKIP row results rather than vague
+  summary prose
+- `normal` and `thorough` smoke runs must include a root-cause note for every
+  deviation from expected behavior
+
+Required command tiers:
+
+- `just smoke fast`
+  - clean-room happy-path lane
+  - must prove daemon bring-up, team setup, `doctor`, both `atm send` modes,
+    `atm read`, `atm ack`, nudge-visible flow, and clean shutdown
+  - must analyze retained logs and fail on missing expected lifecycle/
+    send/read/ack/nudge events or any warning/error output
+- `just smoke`
+  - includes the fast lane and broadens coverage across the most important
+    retained/admin/operator surfaces
+- `just smoke thorough`
+  - includes the normal lane and extends to every CLI happy path plus common
+    error paths
+
+Minor local blockers discovered during an active smoke sprint may be fixed
+inside that sprint. Larger rework must be promoted into the smoke findings
+review artifact rather than silently widening the smoke sprint.
+
+### 4.6 Coverage Reporting
+
+Coverage reporting is a separate reporting surface.
+
+Rules:
+
+- invoke coverage only through `just test coverage`
+- plain `just test` must not implicitly collect coverage
+- coverage reports must use the tracked-latest plus timestamped artifact model
+  documented by the Phase Z smoke/coverage planning line
+
 ## 5. Environment And Timing Rules
 
 - Prefer explicit constructor parameters and injected test seams over shared

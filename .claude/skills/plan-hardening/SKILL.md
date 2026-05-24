@@ -1,6 +1,6 @@
 ---
 name: plan-hardening
-version: 1.4.0
+version: 1.5.0
 description: >
   Team-lead drives plan hardening after the current plan state already exists
   in repo docs.
@@ -25,6 +25,9 @@ Use this only for phase-plan hardening before implementation starts or resumes.
 - the user-discussed deliverable scope is authoritative
 - if no target phase worktree exists, create one from `develop` before
   starting
+- `team-lead` is a coordinator only and must not redirect hardening flow,
+  offer accept-and-proceed shortcuts, or stop to ask the user what to do when
+  an in-scope hardening loop is still mechanically actionable
 
 ## Expected Result
 
@@ -61,6 +64,30 @@ Minimum columns:
 Use the example in:
 - `.claude/skills/plan-hardening/examples/plan-hardening-rounds.example.md`
 
+## Reviewer Cycle Caps
+
+- `plan-scope-reviewer` and `critical-plan-reviewer` both default to a
+  3-cycle cap
+- these caps must be carried in JSON:
+  - `plan_scope_review_cycle_limit`
+  - `critical_review_cycle_limit`
+- reviewer launch payloads must also include:
+  - `review_cycle_limit`
+  - `review_cycle_index`
+- if the vars JSON omits the cap fields, `team-lead` must default them to `3`
+
+Cycle-cap behavior:
+
+- every `FAIL` from `plan-scope-reviewer` or `critical-plan-reviewer` must be
+  routed to `arch-ctm` immediately through the matching plan-editing step
+- no reviewer findings may be accepted as-is or bypass the plan-editing agent
+- if a reviewer returns `FAIL` on the final allowed reviewer cycle, `team-lead`
+  must still send those findings to `arch-ctm` for one final correction pass
+- after that final correction pass, if no reviewer cycles remain, stop the
+  hardening run as `cap-exhausted / not converged` and report status plainly
+- do not ask the user how to proceed, do not offer multiple-choice options,
+  and do not invent an "accept and proceed" path
+
 ## Hard Stops
 
 - `team-lead` only checks the top-level `status` and expected `mode` fields on
@@ -76,8 +103,10 @@ Use the example in:
 - remaining in-scope work without sprint ownership is a hard stop
 - if a sprint cannot credibly land its committed deliverables at a
   production-ready level, split it before implementation
-- if a reviewer loop returns `FAIL` three times without converging, escalate to
-  the user before continuing
+- if a reviewer loop reaches its configured cap without converging, stop after
+  routing the last findings to `arch-ctm` and report `cap-exhausted / not
+  converged`; do not continue launching background reviewers and do not ask
+  the user for a decision mid-loop
 
 ## Render
 
