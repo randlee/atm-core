@@ -92,7 +92,17 @@ silently dropped or partially deferred.
 - include everything from the normal lane
 - add the `thorough` level entrypoint
 - map every frozen smoke-checklist row to one report row
-- cover every CLI interface on happy path plus common error paths
+- cover every public CLI interface on happy path plus common error paths:
+  - `atm send`
+  - `atm read`
+  - `atm ack`
+  - `atm list`
+  - `atm clear`
+  - `atm log`
+  - `atm doctor`
+  - `atm teams`
+  - `atm members`
+  - `atm help`
 - carry copied-state lane setup where required by the checklist
 - keep skipped/manual-only situations explicit in the report output
 - add missing log messages at the appropriate level when that is the only
@@ -125,10 +135,12 @@ just smoke thorough
 ## Acceptance Criteria
 
 - `just smoke thorough` exists
+- the thorough run explicitly reports `Z1-001`, `Z1-002`, `Z1-003`, `Z1-004`,
+  `Z1-005`, `Z1-006`, `Z1-007`, `Z1-008`, and `Z1-009`
 - every row in `docs/phase-Z/smoke-checklist.md` maps to one report row
 - copied-state fixture coverage is part of the thorough lane where the
   checklist requires it
-- every CLI interface is covered on happy path plus common error paths
+- every listed CLI interface is covered on happy path plus common error paths
 - failures and skips are explicit in both JSON and stdout summary
 - every deviation includes observed behavior, expected behavior, likely root
   cause, and artifact pointer

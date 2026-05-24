@@ -32,11 +32,14 @@ release sign-off.
 - `Z.2` must have closed the executable smoke findings first
 - `Z.5` through `Z.10` must have closed the roster/config/restore follow-on
   line first
+- `Z.11` through `Z.15` must have closed the boundary/follow-up hardening line
+  first
 
 ## Prerequisites
 
 - `Z.2` complete
 - `Z.5` through `Z.10` complete
+- `Z.11` through `Z.15` complete
 - canary participants and reporting path are defined at sprint start and frozen
   before operator use begins
 - the canary participant list is approved by `team-lead` before the first

@@ -84,19 +84,24 @@ silently dropped or partially deferred.
   canary/release evidence
 - ensure promoted findings have an explicit recommended sprint or owner
 
-## Explicit Code Samples
+## Canonical Finding Record
 
-```text
-finding_id
-smoke_level
-flow_or_command
-observed_behavior
-expected_behavior
-root_cause
-disposition
-recommended_sprint
-owner
-notes
+Every promoted finding in `docs/phase-Z/smoke-findings-review.md` must use
+this canonical serialization format:
+
+```json
+{
+  "finding_id": "SMOKE-FIND-001",
+  "smoke_level": "fast",
+  "flow_or_command": "atm send --requires-ack z1-recipient \"hello\" --json",
+  "observed_behavior": "send succeeded but retained logs omitted delivery_policy.new_message.primary_nudge",
+  "expected_behavior": "successful ack-required send emits the primary_nudge event in retained logs",
+  "root_cause": "smoke-fast debug logging path does not emit the expected nudge event on the durable happy path",
+  "disposition": "promote-follow-on",
+  "recommended_sprint": "Z.22",
+  "owner": "atm-dev",
+  "notes": "capture retained log artifact path and follow-on logging fix recommendation"
+}
 ```
 
 ## This Sprint Does Not Close
@@ -109,6 +114,8 @@ notes
 
 - `docs/phase-Z/smoke-findings-review.md` exists as the single authoritative
   major-findings queue
+- the artifact includes the canonical concrete finding-record format shown in
+  this sprint plan
 - the artifact distinguishes minor in-sprint fixes from promoted major rework
 - readiness linkage for smoke findings and accepted binary notes is explicit
 - the project plan and phase plan both reference the findings-review artifact

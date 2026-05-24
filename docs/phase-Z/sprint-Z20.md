@@ -115,6 +115,8 @@ just smoke
 ## Acceptance Criteria
 
 - `just smoke` exists and defaults to the normal level
+- the normal run explicitly reports `Z1-001`, `Z1-002`, `Z1-003`, `Z1-004`,
+  `Z1-005`, and `Z1-007`
 - the normal lane includes everything required by the fast lane
 - the normal lane covers the broader retained/admin/operator surfaces claimed
   in the sprint

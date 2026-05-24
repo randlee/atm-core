@@ -11,20 +11,24 @@ This artifact exists to separate:
   `Z.21`
 - larger rework items that need explicit follow-on planning and review
 
-## Finding Schema
+## Canonical Finding Record
 
-Each finding entry must record:
+Each promoted finding entry must use this canonical serialization format:
 
-- `finding_id`
-- `smoke_level`
-- `flow_or_command`
-- `observed_behavior`
-- `expected_behavior`
-- `root_cause`
-- `disposition`
-- `recommended_sprint`
-- `owner`
-- `notes`
+```json
+{
+  "finding_id": "SMOKE-FIND-001",
+  "smoke_level": "fast",
+  "flow_or_command": "atm send --requires-ack z1-recipient \"hello\" --json",
+  "observed_behavior": "send succeeded but retained logs omitted delivery_policy.new_message.primary_nudge",
+  "expected_behavior": "successful ack-required send emits the primary_nudge event in retained logs",
+  "root_cause": "smoke-fast debug logging path does not emit the expected nudge event on the durable happy path",
+  "disposition": "promote-follow-on",
+  "recommended_sprint": "Z.22",
+  "owner": "atm-dev",
+  "notes": "capture retained log artifact path and follow-on logging fix recommendation"
+}
+```
 
 ## Disposition Rules
 

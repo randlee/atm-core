@@ -86,6 +86,7 @@ silently dropped or partially deferred.
 - tracked-latest smoke artifact policy under `reports/smoke/`
 - gitignored timestamped smoke artifact policy under `reports/smoke/`
 - shared smoke runner plumbing for later `just smoke*` entrypoints
+- shared fixture/setup helper support in `scripts/smoke/fixtures.py`
 
 ## Required Work
 
@@ -94,6 +95,7 @@ silently dropped or partially deferred.
 - implement report rendering from J2 templates
 - implement tracked-latest versus timestamped artifact writing
 - implement shared timestamp propagation for smoke artifacts
+- implement shared smoke fixture/setup helpers for later execution sprints
 - add ignore rules for timestamped artifacts only
 
 ## Explicit Code Samples

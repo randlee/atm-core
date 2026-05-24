@@ -170,6 +170,13 @@ Initial crate requirement IDs:
   store, protocol, transport, inbox ingress/export, config ingress,
   watcher/reconcile, notification sink, and status-source calls. Satisfies the subsystem-boundary aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
+  Phase-Z follow-on note: repository-local lint must also be able to reject
+  direct command-entry retained-runtime acquisition in `atm teams`,
+  `atm members`, and `atm teams add-member`; direct command/team-admin ambient
+  workspace-config reads; and public ambient singleton/runtime-factory
+  exposure that bypasses approved wrappers. A pre-existing survivor is allowed
+  only when an explicit TOML allowlist entry records its owner and sunset
+  sprint; any new violation must fail lint immediately.
 - `REQ-CORE-BOUNDARY-002` `atm-core` owns the typed error-model contracts used
   by service boundaries. Satisfies the structured-error aspects of:
   `REQ-P-ERROR-001`, `REQ-P-RELIABILITY-001`.

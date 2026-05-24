@@ -100,6 +100,33 @@ silently dropped or partially deferred.
 just test coverage
 ```
 
+```json
+{
+  "platform": "mac",
+  "coverage_level": "local-explicit",
+  "timestamp": "2026-05-24T12:34:56Z",
+  "commit": "0123456789abcdef",
+  "duration_secs": 245,
+  "collector": "cargo llvm-cov",
+  "summary": {
+    "line_percent": 82.4,
+    "function_percent": 79.1
+  },
+  "crates": [
+    {
+      "name": "atm-core",
+      "line_percent": 84.2,
+      "function_percent": 81.0
+    },
+    {
+      "name": "atm-daemon",
+      "line_percent": 78.6,
+      "function_percent": 75.4
+    }
+  ]
+}
+```
+
 ## This Sprint Does Not Close
 
 - adding coverage collection to ordinary `just test`
@@ -109,6 +136,8 @@ just test coverage
 ## Acceptance Criteria
 
 - `just test coverage` exists and is not run automatically by `just test`
+- the coverage run emits the canonical JSON payload with platform,
+  coverage-level, timestamp, commit, duration, and per-crate coverage fields
 - coverage reports render through J2 templates
 - `reports/coverage/mac.md` and `reports/coverage/win.md` are the tracked
   latest platform reports

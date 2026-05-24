@@ -91,7 +91,10 @@ silently dropped or partially deferred.
 - prove successful `atm send` with `--requires-ack`
 - prove successful `atm read`
 - prove successful `atm ack`
-- prove successful nudge-visible flow
+- prove successful nudge-visible flow triggered by the successful
+  `atm send --requires-ack` path
+- require the fast report to show that the ack-required send completed, the
+  recipient read the durable message, and the recipient ack was accepted
 - shut the daemon down cleanly
 - enable detailed debug/verbose logging for smoke-fast
 - analyze retained logs and fail the run if expected lifecycle/send/read/ack/
@@ -109,6 +112,24 @@ silently dropped or partially deferred.
 just smoke fast
 ```
 
+## Nudge-Visible Flow Definition
+
+- trigger:
+  - one successful `atm send --requires-ack ...`
+- caller-visible proof:
+  - the send command succeeds
+  - the recipient can `atm read` the message
+  - the recipient can `atm ack` the message successfully
+- retained-log proof:
+  - `FAST-LOG-001` must confirm the happy-path transition sequence contains
+    `delivery_policy.new_message.primary_nudge`
+  - the retained logs must also show the smoke-fast debug/verbose send/ack
+    trail needed to correlate the nudge with the durable send/read/ack cycle
+- failure rule:
+  - if the send/read/ack commands succeed but the expected nudge event is
+    missing from retained logs, the row fails and the missing log evidence is
+    treated as a smoke finding
+
 ## This Sprint Does Not Close
 
 - the default `just smoke` systemic lane
@@ -118,6 +139,8 @@ just smoke fast
 ## Acceptance Criteria
 
 - `just smoke fast` exists and executes the fast level
+- the fast run explicitly reports `Z1-001`, `Z1-002`, `Z1-003`, `Z1-004`,
+  `Z1-005`, `FAST-LOG-001`, and `FAST-LOG-002`
 - the fast lane proves clean-room daemon bring-up and clean shutdown
 - the fast lane proves `doctor`
 - the fast lane proves `atm send` without `--requires-ack`
