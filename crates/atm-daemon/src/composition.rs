@@ -240,7 +240,9 @@ impl RuntimeComposition {
         )
         .map_err(|error| replay_store_assembly_failed(error, &composition_observability))?;
         let reconcile_roster_store = production_boundary.roster_store_arc();
-        atm_core::install_default_runtime_instance(production_runtime.clone());
+        atm_core::runtime_install_hooks::install_retained_runtime_instance_for_daemon(
+            production_runtime.clone(),
+        );
         let server_transport = build_server_transport(&observability);
         let request_dispatcher = build_request_dispatcher(
             home_dir,

@@ -54,6 +54,10 @@ pub mod protocol;
 pub mod read;
 /// Reserved production role constants shared across runtime and tests.
 pub mod roles;
+/// Hidden bounded installation hooks for daemon composition/bootstrap and test
+/// support crates.
+#[doc(hidden)]
+pub mod runtime_install_hooks;
 /// Public mailbox and team schema types shared with CLI tests and adapters.
 pub mod schema;
 /// Mailbox send workflows and request/response models.
@@ -136,7 +140,3 @@ pub use protocol::{FramePayload, RequestEnvelope, ResponseEnvelope};
 pub use service_runtime::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
 };
-#[doc(hidden)]
-pub use service_runtime_store::install_default_runtime_factory;
-#[doc(hidden)]
-pub use service_runtime_store::install_default_runtime_instance;

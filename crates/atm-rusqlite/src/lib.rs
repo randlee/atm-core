@@ -803,7 +803,6 @@ mod tests {
     use atm_core::boundary::MailStore as _;
     use atm_core::doctor::DoctorQuery;
     use atm_core::home::team_dir_from_home;
-    use atm_core::install_default_runtime_factory;
     use atm_core::list::{ListQuery, list_mail, list_mail_with_runtime};
     use atm_core::observability::NullObservability;
     use atm_core::protocol::RequestEnvelope;
@@ -813,8 +812,8 @@ mod tests {
     use atm_core::types::{
         AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TaskId, TeamName,
     };
+    use atm_runtime_test_support::SqliteRuntimeGuard;
     use serial_test::serial;
-    use std::sync::OnceLock;
     use tempfile::TempDir;
 
     fn temp_disk_db() -> (TempDir, PathBuf) {
@@ -900,19 +899,6 @@ mod tests {
                 std::env::temp_dir().join("atm-rusqlite-notifications.jsonl"),
             )),
         )
-    }
-
-    fn entrypoint_assembly() -> &'static SqliteBoundaryAssembly {
-        static ASSEMBLY: OnceLock<SqliteBoundaryAssembly> = OnceLock::new();
-        ASSEMBLY.get_or_init(in_memory_assembly)
-    }
-
-    fn install_entrypoint_runtime() {
-        install_default_runtime_factory(entrypoint_runtime);
-    }
-
-    fn entrypoint_runtime() -> Result<LocalServiceRuntime, AtmError> {
-        Ok(sqlite_runtime(entrypoint_assembly()))
     }
 
     fn unique_suffix() -> u128 {
@@ -1106,8 +1092,10 @@ mod tests {
     #[test]
     #[serial]
     fn list_mail_entrypoint_uses_installed_sqlite_runtime_without_inbox_files() {
-        install_entrypoint_runtime();
-        let assembly = entrypoint_assembly();
+        let tempdir = TempDir::new().expect("tempdir");
+        let sqlite_db_path = tempdir.path().join("entrypoint-list.sqlite3");
+        let _runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path.clone());
+        let assembly = SqliteBoundaryAssembly::new(sqlite_db_path).expect("sqlite db");
         let team_name: TeamName = format!("entrypoint-list-{}", unique_suffix())
             .parse()
             .expect("team");
@@ -1149,9 +1137,8 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        seed_roster_member(assembly, &team_name, &agent_name);
+        seed_roster_member(&assembly, &team_name, &agent_name);
 
-        let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
             tempdir.path(),
             &team_name,
@@ -1181,8 +1168,10 @@ mod tests {
     #[test]
     #[serial]
     fn read_mail_entrypoint_uses_installed_sqlite_runtime_without_source_files() {
-        install_entrypoint_runtime();
-        let assembly = entrypoint_assembly();
+        let tempdir = TempDir::new().expect("tempdir");
+        let sqlite_db_path = tempdir.path().join("entrypoint-read.sqlite3");
+        let _runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path.clone());
+        let assembly = SqliteBoundaryAssembly::new(sqlite_db_path).expect("sqlite db");
         let team_name: TeamName = format!("entrypoint-read-{}", unique_suffix())
             .parse()
             .expect("team");
@@ -1225,9 +1214,8 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        seed_roster_member(assembly, &team_name, &agent_name);
+        seed_roster_member(&assembly, &team_name, &agent_name);
 
-        let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
             tempdir.path(),
             &team_name,

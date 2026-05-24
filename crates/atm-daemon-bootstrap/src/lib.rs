@@ -9,7 +9,9 @@ static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 
 pub fn install_sqlite_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
-        atm_core::install_default_runtime_factory(atm_rusqlite::default_local_runtime);
+        atm_core::runtime_install_hooks::install_retained_runtime_factory_for_daemon_bootstrap(
+            atm_rusqlite::default_local_runtime,
+        );
     });
 }
 
