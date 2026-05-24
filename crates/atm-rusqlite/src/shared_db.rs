@@ -476,6 +476,7 @@ pub(crate) fn ensure_schema(
     connection: &mut Connection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
+    ensure_mail_messages_message_id_compat(connection, target)?;
     connection
         .execute_batch(DB_MIGRATIONS)
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
@@ -552,6 +553,22 @@ pub(crate) fn ensure_schema(
     Ok(())
 }
 
+fn ensure_mail_messages_message_id_compat(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    if !table_exists(connection, target, "mail_messages")? {
+        return Ok(());
+    }
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "message_id",
+        "ALTER TABLE mail_messages ADD COLUMN message_id TEXT NULL;",
+    )
+}
+
 fn ensure_column(
     connection: &Connection,
     target: &SharedDbTarget,
@@ -599,6 +616,27 @@ fn ensure_column(
             error,
         )
     })
+}
+
+fn table_exists(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    table: &str,
+) -> Result<bool, AtmError> {
+    connection
+        .query_row(
+            "SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = ?1;",
+            [table],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count > 0)
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                format!("failed to inspect sqlite table existence for {table}"),
+                error,
+            )
+        })
 }
 
 fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {
