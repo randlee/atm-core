@@ -271,6 +271,21 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s15-deferred-hardening-follow-up-consolidation`
 
+### Z.16 Smoke Z.2 Revalidation
+
+Purpose:
+
+- close the final copied-state SQLite smoke blocker (`Z1-F002`)
+- rerun the frozen `Z.1` smoke matrix after the accepted `Z.11` through `Z.15`
+  fix line
+- record the truthful `Z.2` revalidation verdict before canary entry
+
+Execution branch:
+- `feature/pZ-s16-smoke-z1-rerun`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s16-smoke-z1-rerun`
+
 ### Z.3 `atm-dev` Canary And Dogfood
 
 Purpose:
@@ -385,5 +400,6 @@ Current execution state:
 - `docs/phase-Z/sprint-Z13.md`
 - `docs/phase-Z/sprint-Z14.md`
 - `docs/phase-Z/sprint-Z15.md`
+- `docs/phase-Z/sprint-Z16.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`

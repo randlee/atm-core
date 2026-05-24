@@ -476,9 +476,19 @@ pub(crate) fn ensure_schema(
     connection: &mut Connection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
+    ensure_mail_messages_message_id_compat(connection, target)?;
     connection
         .execute_batch(DB_MIGRATIONS)
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
+    ensure_mail_message_columns(connection, target)?;
+    ensure_team_roster_columns(connection, target)?;
+    Ok(())
+}
+
+fn ensure_mail_message_columns(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     ensure_column(
         connection,
         target,
@@ -513,7 +523,13 @@ pub(crate) fn ensure_schema(
         "mail_messages",
         "message_id",
         "ALTER TABLE mail_messages ADD COLUMN message_id TEXT NULL;",
-    )?;
+    )
+}
+
+fn ensure_team_roster_columns(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     ensure_column(
         connection,
         target,
@@ -548,8 +564,23 @@ pub(crate) fn ensure_schema(
         "team_roster",
         "metadata_json",
         "ALTER TABLE team_roster ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';",
-    )?;
-    Ok(())
+    )
+}
+
+fn ensure_mail_messages_message_id_compat(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
+    if !table_exists(connection, target, "mail_messages")? {
+        return Ok(());
+    }
+    ensure_column(
+        connection,
+        target,
+        "mail_messages",
+        "message_id",
+        "ALTER TABLE mail_messages ADD COLUMN message_id TEXT NULL;",
+    )
 }
 
 fn ensure_column(
@@ -599,6 +630,27 @@ fn ensure_column(
             error,
         )
     })
+}
+
+fn table_exists(
+    connection: &Connection,
+    target: &SharedDbTarget,
+    table: &str,
+) -> Result<bool, AtmError> {
+    connection
+        .query_row(
+            "SELECT COUNT(1) FROM sqlite_master WHERE type = 'table' AND name = ?1;",
+            [table],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|count| count > 0)
+        .map_err(|error| {
+            sqlite_error(
+                target,
+                format!("failed to inspect sqlite table existence for {table}"),
+                error,
+            )
+        })
 }
 
 fn sqlite_open_error(target: &SharedDbTarget, source: RusqliteError) -> AtmError {

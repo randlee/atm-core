@@ -1074,9 +1074,10 @@ mod tests {
         assert!(
             report.findings.iter().any(|finding| {
                 finding.code == AtmErrorCode::WarningRosterDrift
-                    && finding
-                        .message
-                        .contains(&format!("ATM roster member '{}' is missing from team config.json", ROLE_TEAM_LEAD))
+                    && finding.message.contains(&format!(
+                        "ATM roster member '{}' is missing from team config.json",
+                        ROLE_TEAM_LEAD
+                    ))
             }),
             "{report:#?}"
         );
