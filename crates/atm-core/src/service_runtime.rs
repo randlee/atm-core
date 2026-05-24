@@ -534,7 +534,6 @@ mod tests {
     use crate::error_codes::AtmErrorCode;
     use crate::protocol::{NotificationEvent, NotificationKind};
     use crate::schema::MessageEnvelope;
-    use crate::test_support::EnvGuard;
     use crate::types::{AgentName, IsoTimestamp, TeamName};
     use chrono::Utc;
     use serde_json::Value;
@@ -887,10 +886,8 @@ mod tests {
     }
 
     #[test]
-    #[serial_test::serial(env)]
     fn local_non_claude_outbound_rejects_oversized_payloads() {
         let tempdir = tempdir().expect("tempdir");
-        let _env = EnvGuard::set_raw("HOME", tempdir.path().to_str().expect("utf8 path"));
         let output_path = tempdir.path().join("non_claude_outbound.jsonl");
         let runtime = LocalFileNonClaudeOutbound::new_for_test_with_path(output_path.clone());
         let oversized_body = "a".repeat(MAX_NON_CLAUDE_PAYLOAD_BYTES + 1);
