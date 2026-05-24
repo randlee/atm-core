@@ -3927,3 +3927,7 @@ Acceptance / Phase Entry Gate:
   accepted `integrate/phase-Z` line
 - `Z.3` canary execution must not begin until `Z.11` through `Z.15` also close
   on the accepted `integrate/phase-Z` line
+- `Z.3` canary execution must not begin until `Z.18` through `Z.22` also close
+  on the accepted `integrate/phase-Z` line
+- the final `Z.4` release verdict must not close until `Z.23` also closes on
+  the accepted `integrate/phase-Z` line

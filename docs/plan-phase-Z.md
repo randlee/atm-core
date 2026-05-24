@@ -459,9 +459,11 @@ deliverables, acceptance criteria, and closure rules.
 - the roster/config/restore follow-on line (`Z.5` through `Z.10`) must close
   before `atm-dev` canary use begins
 - the smoke tooling and execution line (`Z.18` through `Z.22`) must close
-  before the final `Z.4` release sign-off evidence is considered complete
+  before `atm-dev` canary entry and before the final `Z.4` release sign-off
+  evidence is considered complete
 - the coverage-report line (`Z.23`) remains separate from ordinary smoke
-  execution and must not be implied by plain `just test`
+  execution, must not be implied by plain `just test`, and must close before
+  the final `Z.4` release verdict is considered complete
 - the boundary / follow-up hardening line (`Z.11` through `Z.15`) must also
   close before `atm-dev` canary use begins
 - dogfood findings feed only the final fix/sign-off sprint

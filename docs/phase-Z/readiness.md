@@ -56,8 +56,14 @@ The final release verdict must remain `PENDING` until:
 | Z.13 | `PENDING` | `PENDING` | `not started` | remove ambient workspace-config current-team reads from the command/team-admin path; close only when `SCB-WORKSPACE-001` gates new direct `load_config(...)` regressions and `.just/allowlists/scb_workspace_allowlist.toml` has only owned/time-bounded survivors |
 | Z.14 | `PENDING` | `PENDING` | `not started` | remove the public crate-root runtime-factory leak and keep only approved wrappers; close only when `SCB-SINGLETON-001` gates new ambient singleton exposure and `.just/allowlists/scb_singleton_allowlist.toml` has only owned/time-bounded survivors |
 | Z.15 | `PENDING` | `PENDING` | `not started` | close the remaining deferred hardening and type-safety findings that do not belong to the narrower `Z.11` through `Z.14` scopes |
-| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.2` closure plus the accepted `Z.11` through `Z.15` follow-up line before canary entry |
-| Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure |
+| Z.18 | `PENDING` | `PENDING` | `not started` | land the smoke skill scaffold, report contract, artifact layout, and shared smoke runner plumbing without claiming fast/normal/thorough execution closure yet |
+| Z.19 | `PENDING` | `PENDING` | `not started` | implement `just smoke fast`; close only when the clean-room happy path, both send modes, read/ack/nudge flow, and fast log-analysis gate are deterministic |
+| Z.20 | `PENDING` | `PENDING` | `not started` | implement the default `just smoke` lane; close only when the broader retained/admin/operator surface is covered and every deviation carries a root-cause note |
+| Z.21 | `PENDING` | `PENDING` | `not started` | implement `just smoke thorough`; close only when every frozen smoke row and every listed CLI happy/common-error-path contract is reported explicitly |
+| Z.22 | `PENDING` | `PENDING` | `not started` | establish `docs/phase-Z/smoke-findings-review.md` as the authoritative major-smoke-findings queue with explicit disposition and readiness linkage |
+| Z.23 | `PENDING` | `PENDING` | `not started` | add explicit `just test coverage` reporting and tracked latest `reports/coverage/mac.md` / `reports/coverage/win.md` without widening ordinary `just test` |
+| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.2` closure plus the accepted `Z.11` through `Z.15` and `Z.18` through `Z.22` follow-up lines before canary entry |
+| Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure plus the accepted `Z.23` coverage-report line before final release verdict |
 
 ## Deferred Follow-Up Findings
 
