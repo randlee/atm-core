@@ -15,7 +15,7 @@ use crate::schema::AgentMember;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::default_runtime;
 use crate::team_admin::{MemberSummary, MembersList};
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentName, ModelName, PaneId, TeamName};
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
@@ -433,10 +433,10 @@ fn member_summary(member: &AgentMember) -> MemberSummary {
     MemberSummary {
         name: AgentName::from_validated(member.name.clone()),
         agent_id: member.agent_id.clone(),
-        agent_type: member.agent_type.to_string(),
-        model: member.model.clone(),
+        agent_type: member.agent_type.clone(),
+        model: ModelName::from_validated(member.model.clone()),
         joined_at: member.joined_at,
-        tmux_pane_id: member.tmux_pane_id.clone(),
+        tmux_pane_id: member.tmux_pane_id.clone().map(PaneId::from_validated),
         cwd: member.cwd.clone(),
         extra: member.extra.clone(),
     }

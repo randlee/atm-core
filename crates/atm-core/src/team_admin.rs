@@ -17,8 +17,9 @@ use crate::error_codes::AtmErrorCode;
 use crate::home;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
+use crate::schema::agent_member::AgentType;
 use crate::schema::{AgentMember, TeamConfig};
-use crate::types::{AgentName, TeamName};
+use crate::types::{AgentName, ModelName, PaneId, TeamName};
 
 #[path = "team_admin/restore.rs"]
 mod restore;
@@ -43,10 +44,10 @@ pub struct TeamsList {
 pub struct MemberSummary {
     pub name: AgentName,
     pub agent_id: String,
-    pub agent_type: String,
-    pub model: String,
+    pub agent_type: AgentType,
+    pub model: ModelName,
     pub joined_at: Option<u64>,
-    pub tmux_pane_id: Option<String>,
+    pub tmux_pane_id: Option<PaneId>,
     pub cwd: String,
     pub extra: serde_json::Map<String, Value>,
 }
@@ -72,11 +73,10 @@ pub struct AddMemberRequest {
     pub home_dir: PathBuf,
     pub team: TeamName,
     pub member: AgentName,
-    // Stronger typed/length-constrained roster metadata remains deferred to Z.11.
-    pub agent_type: String,
-    pub model: String,
+    pub agent_type: AgentType,
+    pub model: ModelName,
     pub cwd: PathBuf,
-    pub tmux_pane_id: Option<String>,
+    pub tmux_pane_id: Option<PaneId>,
 }
 
 impl AddMemberRequest {
@@ -95,10 +95,10 @@ impl AddMemberRequest {
             home_dir,
             team: team.parse()?,
             member: member.parse()?,
-            agent_type,
-            model,
+            agent_type: AgentType::from(agent_type),
+            model: ModelName::from(model),
             cwd,
-            tmux_pane_id,
+            tmux_pane_id: normalize_tmux_pane_id(tmux_pane_id.as_deref())?,
         })
     }
 }
@@ -293,8 +293,8 @@ fn add_member_from_roster_store(
     roster_store: &dyn RosterStore,
     request: AddMemberRequest,
 ) -> Result<AddMemberOutcome, AtmError> {
-    validate_member_metadata_field("agent_type", &request.agent_type)?;
-    validate_member_metadata_field("model", &request.model)?;
+    validate_member_metadata_field("agent_type", request.agent_type.as_str())?;
+    validate_member_metadata_field("model", request.model.as_str())?;
 
     let MemberAddContext {
         team_dir,
@@ -370,7 +370,7 @@ fn ensure_member_absent(
 fn build_member_add_roster_record(
     request: &AddMemberRequest,
 ) -> Result<RosterMemberRecord, AtmError> {
-    let normalized_tmux_pane_id = normalize_tmux_pane_id(request.tmux_pane_id.as_deref())?;
+    let normalized_tmux_pane_id = request.tmux_pane_id.clone().map(PaneId::into_inner);
     let mut extra = serde_json::Map::new();
     if normalized_tmux_pane_id.is_some() {
         extra.insert("backendType".to_string(), json!("tmux"));
@@ -391,8 +391,8 @@ fn build_member_add_roster_record(
         agent_name: request.member.clone(),
         member_kind: RosterMemberKind::Permanent,
         harness: RosterHarness::ClaudeCode,
-        agent_type: request.agent_type.clone(),
-        model: request.model.clone(),
+        agent_type: request.agent_type.to_string(),
+        model: request.model.to_string(),
         recipient_pane_id: normalized_tmux_pane_id,
         metadata_json: extra,
     })
@@ -522,10 +522,10 @@ fn member_summary_from_roster(record: &RosterMemberRecord) -> MemberSummary {
         name: record.agent_name.clone(),
         agent_id: metadata_string(&record.metadata_json, "agentId")
             .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
-        agent_type: record.agent_type.clone(),
-        model: record.model.clone(),
+        agent_type: AgentType::from(record.agent_type.clone()),
+        model: ModelName::from_validated(record.model.clone()),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
-        tmux_pane_id: record.recipient_pane_id.clone(),
+        tmux_pane_id: record.recipient_pane_id.clone().map(PaneId::from_validated),
         cwd: metadata_string(&record.metadata_json, "cwd").unwrap_or_default(),
         extra: compatibility_extra_fields(&record.metadata_json),
     }
@@ -537,7 +537,8 @@ fn validate_member_metadata_field(field: &str, value: &str) -> Result<(), AtmErr
     if value.len() > MAX_MEMBER_METADATA_FIELD_LEN {
         return Err(AtmError::validation(format!(
             "{field} must be at most {MAX_MEMBER_METADATA_FIELD_LEN} bytes"
-        )));
+        ))
+        .with_recovery("Shorten the member metadata field and rerun `atm teams add-member`."));
     }
     Ok(())
 }
@@ -586,7 +587,7 @@ fn agent_member_from_roster_record(record: &RosterMemberRecord) -> AgentMember {
         agent_id: metadata_string(&record.metadata_json, "agentId")
             .unwrap_or_else(|| format!("{}@{}", record.agent_name, record.team_name)),
         agent_type: record.agent_type.clone().into(),
-        model: record.model.clone(),
+        model: ModelName::from_validated(record.model.clone()).into_inner(),
         joined_at: metadata_u64(&record.metadata_json, "joinedAt"),
         tmux_pane_id: record.recipient_pane_id.clone(),
         cwd: metadata_string(&record.metadata_json, "cwd").unwrap_or_default(),
@@ -813,25 +814,19 @@ where
     Ok(())
 }
 
-fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<String>, AtmError> {
+fn normalize_tmux_pane_id(pane_id: Option<&str>) -> Result<Option<PaneId>, AtmError> {
     let Some(raw) = pane_id.map(str::trim).filter(|value| !value.is_empty()) else {
         return Ok(None);
     };
 
-    if let Some(rest) = raw.strip_prefix('%') {
-        if !rest.is_empty() && rest.chars().all(|ch| ch.is_ascii_digit()) {
-            return Ok(Some(raw.to_string()));
-        }
-    } else if raw.chars().all(|ch| ch.is_ascii_digit()) {
-        return Ok(Some(format!("%{raw}")));
-    }
-
-    Err(AtmError::validation(format!(
-        "tmux pane id '{raw}' must use the tmux pane format '%<number>' or a bare numeric pane id",
-    ))
-    .with_recovery(
-        "Pass `--pane-id $(tmux display-message -p '#{pane_id}')` or a bare numeric pane id when registering a tmux-backed member.",
-    ))
+    raw.parse().map(Some).map_err(|_| {
+        AtmError::validation(format!(
+            "tmux pane id '{raw}' must use the tmux pane format '%<number>' or a bare numeric pane id",
+        ))
+        .with_recovery(
+            "Pass `--pane-id $(tmux display-message -p '#{pane_id}')` or a bare numeric pane id when registering a tmux-backed member.",
+        )
+    })
 }
 
 #[cfg(test)]
@@ -1037,15 +1032,16 @@ mod tests {
 
         add_member_with_roster_store(
             &roster_store,
-            AddMemberRequest {
-                home_dir: tempdir.path().to_path_buf(),
-                team: TEST_TEAM.parse().expect("team"),
-                member: TEST_SENDER.parse().expect("member"),
-                agent_type: "worker".to_string(),
-                model: "gpt-5".to_string(),
-                cwd: tempdir.path().to_path_buf(),
-                tmux_pane_id: Some("7".to_string()),
-            },
+            AddMemberRequest::new(
+                tempdir.path().to_path_buf(),
+                TEST_TEAM,
+                TEST_SENDER,
+                "worker".to_string(),
+                "gpt-5".to_string(),
+                tempdir.path().to_path_buf(),
+                Some("7".to_string()),
+            )
+            .expect("request"),
         )
         .expect("add member");
 
@@ -1078,19 +1074,14 @@ mod tests {
     fn add_member_rejects_non_canonical_tmux_target_syntax() {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
-        let roster_store = RecordingRosterStore::default();
-
-        let error = add_member_with_roster_store(
-            &roster_store,
-            AddMemberRequest {
-                home_dir: tempdir.path().to_path_buf(),
-                team: TEST_TEAM.parse().expect("team"),
-                member: TEST_SENDER.parse().expect("member"),
-                agent_type: "worker".to_string(),
-                model: "gpt-5".to_string(),
-                cwd: tempdir.path().to_path_buf(),
-                tmux_pane_id: Some("session:1.2".to_string()),
-            },
+        let error = AddMemberRequest::new(
+            tempdir.path().to_path_buf(),
+            TEST_TEAM,
+            TEST_SENDER,
+            "worker".to_string(),
+            "gpt-5".to_string(),
+            tempdir.path().to_path_buf(),
+            Some("session:1.2".to_string()),
         )
         .expect_err("invalid pane id");
 
@@ -1103,11 +1094,13 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
+        let worker_cwd = tempdir.path().join("worker");
         let mut member = roster_member(TEST_TEAM, TEST_SENDER);
         member.recipient_pane_id = Some("%9".to_string());
-        member
-            .metadata_json
-            .insert("cwd".to_string(), serde_json::json!("/tmp/worker"));
+        member.metadata_json.insert(
+            "cwd".to_string(),
+            serde_json::json!(worker_cwd.display().to_string()),
+        );
         roster_store.seed_team(TEST_TEAM, vec![member]);
 
         let members = list_members_with_roster_store(
@@ -1124,7 +1117,7 @@ mod tests {
         assert_eq!(members.members.len(), 1);
         assert_eq!(members.members[0].name.as_str(), TEST_SENDER);
         assert_eq!(members.members[0].tmux_pane_id.as_deref(), Some("%9"));
-        assert_eq!(members.members[0].cwd, "/tmp/worker");
+        assert_eq!(members.members[0].cwd, worker_cwd.display().to_string());
     }
 
     #[test]
@@ -1164,25 +1157,28 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         write_team_config(tempdir.path(), TEST_TEAM);
         let roster_store = RecordingRosterStore::default();
+        let lead_cwd = tempdir.path().join("team-lead");
         let mut existing = roster_member(TEST_TEAM, ROLE_TEAM_LEAD);
         existing.agent_type = "lead".to_string();
         existing.model = "gpt-5".to_string();
-        existing
-            .metadata_json
-            .insert("cwd".to_string(), serde_json::json!("/tmp/team-lead"));
+        existing.metadata_json.insert(
+            "cwd".to_string(),
+            serde_json::json!(lead_cwd.display().to_string()),
+        );
         roster_store.seed_team(TEST_TEAM, vec![existing]);
 
         add_member_with_roster_store(
             &roster_store,
-            AddMemberRequest {
-                home_dir: tempdir.path().to_path_buf(),
-                team: TEST_TEAM.parse().expect("team"),
-                member: TEST_SENDER.parse().expect("member"),
-                agent_type: "worker".to_string(),
-                model: "gpt-5".to_string(),
-                cwd: tempdir.path().to_path_buf(),
-                tmux_pane_id: Some("%12".to_string()),
-            },
+            AddMemberRequest::new(
+                tempdir.path().to_path_buf(),
+                TEST_TEAM,
+                TEST_SENDER,
+                "worker".to_string(),
+                "gpt-5".to_string(),
+                tempdir.path().to_path_buf(),
+                Some("%12".to_string()),
+            )
+            .expect("request"),
         )
         .expect("add member");
 

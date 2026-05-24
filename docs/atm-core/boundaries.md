@@ -195,6 +195,7 @@ Notes:
     `atm members`, or `atm teams add-member`
   - `SCB-WORKSPACE-001`: direct command/team-admin ambient `.atm.toml` /
     `load_config(...)` reads outside the approved seam
+- later follow-on lint families should also gate:
   - `SCB-SINGLETON-001`: public ambient singleton/runtime-factory exposure
     that bypasses approved wrappers; accepted branches must expose retained
     runtime installation only through the bounded hidden hooks and approved
