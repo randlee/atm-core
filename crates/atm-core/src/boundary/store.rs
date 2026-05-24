@@ -486,7 +486,8 @@ pub struct NonClaudeOutboundDeliveryRequest {
     pub agent: AgentName,
     pub recipient_pane_id: Option<String>,
     /// Payload serialized to JSONL must not exceed `MAX_NON_CLAUDE_PAYLOAD_BYTES` (1 MiB),
-    /// enforced by `DaemonNonClaudeOutbound::deliver_payloads`.
+    /// enforced by `DaemonNonClaudeOutbound::deliver_payloads` (daemon path) and
+    /// `LocalFileNonClaudeOutbound::deliver_payloads` (CLI path, see service_runtime.rs:218).
     pub messages: Vec<MessageEnvelope>,
 }
 
