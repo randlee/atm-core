@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-RuntimeFactory"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "RuntimeFactory"
+
+[public]
+trait = "RuntimeFactory"
+notes = "planning-line boundary for the owned retained-runtime construction seam used by CLI and smoke/coverage entrypoints"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["retained_runtime_construction", "runtime_dependency_assembly"]
+io_forbidden = ["ambient_singleton_lookup", "direct_socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm", "atm-daemon", "atm-runtime-test-support"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["runtime bootstrap/config inputs"]
+response_types = ["service/runtime composition handles"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["service_runtime_store::default_runtime"]
+
+[enforcement]
+lint_rules = ["SCB-RETAINED-001", "SCB-SINGLETON-001"]
+review_gates = ["no_ambient_runtime_factory_leakage"]
+
+[status]
+state = "planned"
+notes = ["canonical planning-line record for the retained-runtime construction seam referenced by the Phase Z smoke and coverage sprints", "ambient singleton access is explicitly outside this boundary and remains governed by the singleton lint line"]

@@ -57,7 +57,6 @@ be promoted into the findings review artifact.
 
 - `docs/phase-Z/smoke-skill-plan.md`
 - `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-review.md`
 
 ## Exact Targets
 

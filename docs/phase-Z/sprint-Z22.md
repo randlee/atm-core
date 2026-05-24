@@ -36,9 +36,7 @@ or cross-cutting rework.
 
 ## Governing Requirements
 
-- `REQ-P-SMOKE-001`
 - `REQ-P-SMOKE-002`
-- `REQ-P-SMOKE-003`
 
 ## Governing ADRs
 
@@ -100,7 +98,7 @@ this canonical serialization format:
   "expected_behavior": "successful ack-required send emits the primary_nudge event in retained logs",
   "root_cause": "smoke-fast debug logging path does not emit the expected nudge event on the durable happy path",
   "disposition": "promote-follow-on",
-  "recommended_sprint": "Z.22",
+  "recommended_sprint": "Z.19",
   "owner": "atm-dev",
   "notes": "capture retained log artifact path and follow-on logging fix recommendation"
 }

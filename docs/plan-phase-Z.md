@@ -428,6 +428,8 @@ Execution worktree:
   - `docs/phase-Z/sprint-Z18.md`
   - `docs/phase-Z/sprint-Z19.md`
   - `docs/phase-Z/sprint-Z20.md`
+  - `.claude/skills/smoke-test/`
+  - `scripts/smoke/`
   - `templates/smoke-report/`
   - `reports/smoke/`
 - `Z.21`:

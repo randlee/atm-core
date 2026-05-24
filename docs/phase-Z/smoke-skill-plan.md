@@ -543,11 +543,14 @@ Planned new files:
 - `scripts/smoke/render_report.py`
 - `scripts/smoke/fixtures.py`
 - `scripts/smoke/analyze_logs.py`
+- `scripts/coverage/run.py`
+- `scripts/coverage/render_report.py`
 - `templates/smoke-report/smoke-fast.md.j2`
 - `templates/smoke-report/smoke.md.j2`
 - `templates/smoke-report/smoke-thorough.md.j2`
 - `templates/coverage-report/mac.md.j2`
 - `templates/coverage-report/win.md.j2`
+- `docs/testing-guidelines.md`
 
 Planned Just interface:
 
