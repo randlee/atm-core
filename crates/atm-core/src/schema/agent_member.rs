@@ -1,4 +1,5 @@
 use std::fmt;
+use std::ops::Deref;
 
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -76,6 +77,33 @@ impl<'de> Deserialize<'de> for AgentType {
 impl fmt::Display for AgentType {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.write_str(&String::from(self.clone()))
+    }
+}
+
+impl AgentType {
+    pub fn as_str(&self) -> &str {
+        match self {
+            Self::GeneralPurpose => "general-purpose",
+            Self::Plan => "plan",
+            Self::Lead => "lead",
+            Self::Qa => "qa",
+            Self::Worker => "worker",
+            Self::Unknown(value) => value.as_str(),
+        }
+    }
+}
+
+impl AsRef<str> for AgentType {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for AgentType {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
     }
 }
 

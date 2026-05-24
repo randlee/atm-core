@@ -182,6 +182,140 @@ impl PartialEq<&str> for TeamName {
     }
 }
 
+/// Opaque Claude/ATM model label carried at public API boundaries.
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize, Deserialize)]
+#[serde(transparent)]
+pub struct ModelName(String);
+
+impl ModelName {
+    /// Borrow the wrapped model name as `&str`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the inner owned model name.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    pub(crate) fn from_validated(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+}
+
+impl From<String> for ModelName {
+    fn from(value: String) -> Self {
+        Self(value)
+    }
+}
+
+impl From<&str> for ModelName {
+    fn from(value: &str) -> Self {
+        Self(value.to_string())
+    }
+}
+
+impl AsRef<str> for ModelName {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for ModelName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for ModelName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Canonical tmux pane identifier copied into ATM roster metadata.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct PaneId(String);
+
+impl PaneId {
+    /// Borrow the wrapped pane identifier as `&str`.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    /// Consume the wrapper and return the inner owned pane identifier.
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+
+    pub(crate) fn from_validated(value: impl Into<String>) -> Self {
+        Self(value.into())
+    }
+}
+
+impl FromStr for PaneId {
+    type Err = AtmError;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        let trimmed = value.trim();
+        let normalized = if let Some(stripped) = trimmed.strip_prefix('%') {
+            if !stripped.is_empty() && stripped.chars().all(|ch| ch.is_ascii_digit()) {
+                trimmed.to_string()
+            } else {
+                return Err(AtmError::validation(
+                    "tmux pane id must be in '%<number>' form or a bare numeric pane id",
+                )
+                .with_recovery(
+                    "Provide a tmux pane id in '%<number>' form or a bare numeric pane id.",
+                ));
+            }
+        } else if !trimmed.is_empty() && trimmed.chars().all(|ch| ch.is_ascii_digit()) {
+            format!("%{trimmed}")
+        } else {
+            return Err(AtmError::validation(
+                "tmux pane id must be in '%<number>' form or a bare numeric pane id",
+            )
+            .with_recovery(
+                "Provide a tmux pane id in '%<number>' form or a bare numeric pane id.",
+            ));
+        };
+        Ok(Self(normalized))
+    }
+}
+
+impl<'de> Deserialize<'de> for PaneId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        value.parse().map_err(serde::de::Error::custom)
+    }
+}
+
+impl AsRef<str> for PaneId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for PaneId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for PaneId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 /// Validated ATM task id carried across command, schema, and hook boundaries.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
 #[serde(transparent)]
