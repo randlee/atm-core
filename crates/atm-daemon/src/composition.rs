@@ -12,9 +12,10 @@ use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
 use crate::sqlite_observability::DaemonSqliteObservability;
 use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    peer_transport::PeerTransportConfig, sqlite_remote_replay_store_from_path_with_observability,
+    RemoteReplayStore, peer_transport::PeerTransportConfig,
+    sqlite_remote_replay_store_from_path_with_observability,
 };
-use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RequestDispatcher};
+use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RequestDispatcher, RosterStore};
 use atm_core::error::AtmError;
 use atm_rusqlite::SqliteBoundaryAssembly;
 use std::fs::OpenOptions;
@@ -251,14 +252,19 @@ impl RuntimeComposition {
             production_boundary,
             notification_sink.runtime(),
         );
+        let host_ownership_adapter = build_host_ownership_adapter(&observability);
+        let reconcile_coordinator = build_reconcile_coordinator(
+            &watch_event_source,
+            &inbox_ingress,
+            reconcile_roster_store,
+            notification_sink.clone(),
+            &observability,
+        );
+        let peer_transport_runtime =
+            build_peer_transport_runtime(replay_store, peer_transport_config, observability);
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
-            _host_ownership_adapter: HostOwnershipAdapter::new_with_observability(
-                SubsystemObservability::new(
-                    DaemonSubsystem::HostOwnership,
-                    Arc::clone(&observability),
-                ),
-            ),
+            _host_ownership_adapter: host_ownership_adapter,
             endpoint_guard: Mutex::new(None),
             server_transport,
             request_dispatcher,
@@ -267,24 +273,11 @@ impl RuntimeComposition {
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
             _watch_event_source: watch_event_source.clone(),
-            _reconcile_coordinator: DaemonReconcileCoordinator::new_with_observability(
-                watch_event_source,
-                inbox_ingress.clone(),
-                reconcile_roster_store,
-                notification_sink,
-                SubsystemObservability::new(
-                    DaemonSubsystem::ReconcileRuntime,
-                    Arc::clone(&observability),
-                ),
-            ),
+            _reconcile_coordinator: reconcile_coordinator,
             _config_ingress: config_ingress,
             _inbox_ingress: inbox_ingress,
             _inbox_export: DaemonInboxExport::new(),
-            peer_transport_runtime: PeerTransportRuntime::new_with_observability(
-                Some(replay_store),
-                peer_transport_config,
-                SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
-            ),
+            peer_transport_runtime,
         })
     }
 
@@ -628,6 +621,43 @@ impl RuntimeComposition {
             None => Ok(()),
         }
     }
+}
+
+fn build_host_ownership_adapter(
+    observability: &Arc<dyn DaemonRuntimeObservability>,
+) -> HostOwnershipAdapter {
+    HostOwnershipAdapter::new_with_observability(SubsystemObservability::new(
+        DaemonSubsystem::HostOwnership,
+        Arc::clone(observability),
+    ))
+}
+
+fn build_reconcile_coordinator(
+    watch_event_source: &FileWatchEventSource,
+    inbox_ingress: &DaemonInboxIngress,
+    reconcile_roster_store: Arc<dyn RosterStore + Send + Sync>,
+    notification_sink: DaemonNotificationSink,
+    observability: &Arc<dyn DaemonRuntimeObservability>,
+) -> DaemonReconcileCoordinator {
+    DaemonReconcileCoordinator::new_with_observability(
+        watch_event_source.clone(),
+        inbox_ingress.clone(),
+        reconcile_roster_store,
+        notification_sink,
+        SubsystemObservability::new(DaemonSubsystem::ReconcileRuntime, Arc::clone(observability)),
+    )
+}
+
+fn build_peer_transport_runtime(
+    replay_store: Arc<dyn RemoteReplayStore>,
+    peer_transport_config: PeerTransportConfig,
+    observability: Arc<dyn DaemonRuntimeObservability>,
+) -> PeerTransportRuntime {
+    PeerTransportRuntime::new_with_observability(
+        Some(replay_store),
+        peer_transport_config,
+        SubsystemObservability::new(DaemonSubsystem::PeerTransport, observability),
+    )
 }
 
 pub(crate) fn build_production_runtime(
