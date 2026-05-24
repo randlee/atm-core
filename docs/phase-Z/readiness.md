@@ -44,7 +44,7 @@ The final release verdict must remain `PENDING` until:
 | Sprint | Accepted Commit | Verdict | Current Status | Notes |
 | --- | --- | --- | --- | --- |
 | Z.1 | `70f4fa7f` | `FAIL` | `complete` | smoke checklist frozen; two blocking findings promoted to `Z.2`; cargo test --workspace PASS (CI: macOS/Ubuntu/Windows); git diff --check PASS (CI: Format check) |
-| Z.2 | `6640a61b` | `FAIL` | `complete` | frozen `Z.1` smoke checklist rerun completed on `integrate/phase-Z`; `Z1-F001` and `Z1-F002` both reproduced, and new blocking regression `Z2-F001` reopened `Z1-003`; canary-entry decision is `stop` and `Z.3` may not begin until follow-on hardening line (`Z.5`–`Z.15`) closes |
+| Z.2 | `PENDING` | `PENDING` | `not started` | awaits `Z.1` closure |
 | Z.5 | `4531eaea` | `PASS` | `complete` | retained command membership checks now use ATM roster truth only; doctor drift warnings compare Claude file members against ATM roster truth; `cargo test --workspace` PASS; `cargo fmt --all --check` PASS; production grep gate leaves only doctor compare-only and test-only `load_team_config(...)` matches; `ack_mail_uses_atm_roster_truth_for_valid_actor` PASS |
 | Z.6 | `3cd6fb74` | `PASS` | `complete` | Claude send no longer uses pre-write `config.json` membership gating; immutable `ClaudeCodeTeamRoster` now drives the post-write warning path from store-backed ATM roster rows; `cargo test --workspace` PASS; targeted `z6_post_write_warning_uses_store_backed_claude_roster` PASS; production grep gate leaves no `load_team_config(...)` matches in `send` or `service_runtime`; `cargo fmt --all --check` PASS; `git diff --check` PASS |
 | Z.7 | `1fd6ee1e` | `PASS` | `complete` | `ConfigIngress` no longer exposes generic team-config lookup; daemon/core forwarding chain removed; startup-only `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` allowlisted through `Z.8` and proven to no-op when roster state is non-empty; `just lint boundaries` PASS with fixture self-test; `cargo test --workspace` PASS; `cargo fmt --all --check` PASS; `git diff --check` PASS |
@@ -53,8 +53,8 @@ The final release verdict must remain `PENDING` until:
 | Z.10 | `c32a0277` | `PASS` | `complete` | backup now writes `atm-roster.json` as an audit-only canonical ATM roster snapshot; restore rebuilds recreated `config.json` from ATM roster truth instead of replaying backup `config.json`; reconcile runtime helpers split into submodules; `cargo test --workspace` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
 | Z.11 | `1bcf916e` | `PASS` | `complete` | clean-start first-send failure now returns the exact actionable recovery contract with no hidden fallback; local non-Claude outbound fallback now enforces the documented payload-size gate; `RSH-008` and `RSH-010` closed; targeted `missing_roster_member_returns_actionable_recovery_contract`, `z11_empty_atm_roster_failure_is_actionable_without_fallback`, and `local_non_claude_outbound_rejects_oversized_payloads` PASS |
 | Z.12 | `602292e3` | `PASS` | `complete` | retained roster inspection and mutation commands now route only through the approved `RosterStore` seam; `SCB-RETAINED-001` rejects direct command-entry / team-admin `service_runtime_store::default_runtime()` misuse; clean-room proof shows `atm teams --json`, `atm teams add-member z12-team z12-operator --json`, and `atm members --team z12-team --json` succeed without an installed default runtime factory; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
-| Z.13 | `356af2dd` | `PASS` | `complete` | team-admin current-team resolution now reaches workspace config only through the approved `ConfigIngress` request/response seam; `SCB-WORKSPACE-001` rejects direct command/team-admin `load_config(...)` regressions; production grep leaves zero `load_config(...)` matches in `team_admin.rs`, `teams.rs`, and `members.rs`; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
-| Z.14 | `75ebe60c` | `PASS` | `complete` | public crate-root runtime-factory installation re-exports are gone; surviving installs are routed only through bounded hidden hooks and approved wrappers; `SCB-SINGLETON-001` now rejects new ambient singleton exposure with fixture self-test and `just lint boundaries` PASS; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `git diff --check` PASS |
+| Z.13 | `4b3c7506` | `PASS` | `complete` | team-admin current-team resolution now reaches workspace config only through the approved `ConfigIngress` request/response seam; `SCB-WORKSPACE-001` rejects direct command/team-admin `load_config(...)` regressions; production grep leaves zero `load_config(...)` matches in `team_admin.rs`, `teams.rs`, and `members.rs`; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
+| Z.14 | `ae13055b` | `PASS` | `complete` | public crate-root runtime-factory installation re-exports are gone; surviving installs are routed only through bounded hidden hooks and approved wrappers; `SCB-SINGLETON-001` now rejects new ambient singleton exposure with fixture self-test and `just lint boundaries` PASS; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `git diff --check` PASS |
 | Z.15 | `7b6f9491` | `PASS` | `complete` | typed `AgentType` / `ModelName` / `PaneId` surfaces now replace the remaining raw roster/config strings; `AddMemberRequest` metadata is typed and normalized; replayed local IPC and projection-write follow-up remains explicit and covered by the accepted runtime/daemon test line; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
 | Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.2` closure; the accepted `Z.11` through `Z.15` follow-up line is complete |
 | Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure |
@@ -62,49 +62,25 @@ The final release verdict must remain `PENDING` until:
 ## Deferred Follow-Up Findings
 
 - `Z.15`
-  - `RSH-001`: home: Z.15, closed: 7b6f9491; join-handle tracking and bounded
-    shutdown behavior proven by the accepted retained runtime / daemon test
-    line.
-  - `RSH-002`: home: Z.15, closed: 7b6f9491; lifecycle coordination proven by
-    the accepted retained runtime / daemon test line.
-  - `RSH-003`: home: Z.15, closed: 7b6f9491; control-path behavior proven by
-    the accepted retained runtime / daemon test line.
-  - `RSH-004`: home: Z.15, closed: 7b6f9491; signal-path behavior proven by
-    the accepted retained runtime / daemon test line.
-  - `RSH-005`: home: Z.15, closed: 7b6f9491; worker-coordination behavior
-    proven by the accepted retained runtime / daemon test line.
-  - `RSH-006`: home: Z.15, closed: 7b6f9491; platform compatibility proven by
-    the accepted retained runtime / daemon test line.
-  - `RSH-007`: home: Z.15, closed: 7b6f9491; local-IPC timeout behavior proven
-    by the accepted retained runtime / daemon test line.
-  - `RSH-009`: home: Z.15, closed: 7b6f9491; reassigned from prior deferred
-    home to Z.15; daemon shutdown and IPC cleanup behavior proven by the
-    accepted retained runtime / daemon test line.
-  - `RBP-F001`: home: Z.15, closed: 7b6f9491; typed `AgentType`, `ModelName`,
-    and `PaneId` surfaces on `RosterMemberRecord`, `AgentMember`, delivery
-    paths, SQLite hydration, and non-Claude outbound request plumbing.
-  - `RBP-F002`: home: Z.15, closed: 7b6f9491; reassigned from prior deferred
-    home to Z.15; typed `AgentType`, `ModelName`, and `PaneId` surfaces on
-    `RosterMemberRecord`, `AgentMember`, delivery paths, SQLite hydration, and
-    non-Claude outbound request plumbing.
-  - `RBP-F003`: home: Z.15, closed: 7b6f9491; reassigned from prior deferred
-    home to Z.15; `ResolvedTarget` remained typed and the accepted
-    delivery/runtime test line still passes with the narrower typed surfaces
-    around it.
-  - `RBP-F004`: home: Z.15, closed: 7b6f9491; reassigned from prior deferred
-    home to Z.15; structured malformed idle-notification diagnostics remain
-    explicit in the accepted `read` path.
-  - `RBP-F005`: home: Z.15, closed: 7b6f9491; reassigned from prior deferred
-    home to Z.15; replayed local IPC and daemon-authored projection-write
-    behavior remain explicit, typed, and covered by the accepted runtime /
-    daemon test line.
-  - `ATM-QA-Z10-001`: home: Z.15, closed: 7b6f9491; reassigned from prior
-    deferred home to Z.15; replayed local IPC and daemon-authored
-    projection-write behavior remain explicit, typed, and covered by the
-    accepted runtime / daemon test line.
-  - `M-004`: home: Z.15, closed: 7b6f9491; typed and length-constrained
-    `AddMemberRequest.agent_type` / `.model`, plus normalized `PaneId`
-    handling.
+  - `RSH-001`: daemon join-handle tracking hardening
+  - `RSH-002`: daemon runtime shutdown-path hardening
+  - `RSH-003`: daemon lifecycle edge-case hardening
+  - `RSH-004`: daemon control-path hardening
+  - `RSH-005`: daemon signal-path hardening
+  - `RSH-006`: daemon worker coordination hardening
+  - `RSH-007`: daemon platform/runtime hardening
+  - `RSH-009`: local IPC timeout-path tracing hardening
+  - `RBP-F001`: typed newtypes for `RosterMemberRecord.agent_type` /
+    `.model`
+  - `RBP-F002`: dedicated `PaneId` newtype for Claude pane metadata instead
+    of the current `Option<String>` surface
+  - `RBP-F003`: typed `ResolvedTarget` hardening
+  - `RBP-F004`: structured error-diagnostics hardening
+  - `RBP-F005`: replayed local IPC path hardening
+  - `M-004`: stronger typed/length-constrained
+    `AddMemberRequest.agent_type` / `.model`
+  - `ATM-QA-Z10-001`: complete the remaining `Z.8` production wiring
+    follow-up before final release closeout
 
 Final release verdict:
 

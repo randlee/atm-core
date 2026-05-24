@@ -190,6 +190,7 @@ mod tests {
         LOCK.get_or_init(|| Mutex::new(()))
     }
 
+    #[cfg(unix)]
     fn lock_env() -> std::sync::MutexGuard<'static, ()> {
         env_lock()
             .lock()
