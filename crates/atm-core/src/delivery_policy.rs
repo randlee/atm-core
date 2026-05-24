@@ -308,6 +308,7 @@ impl DeliveryPolicyCoordinator {
             .load_roster_member(team, agent)?
             .map(DeliveryRecipientSnapshot::from_roster)
             .ok_or_else(|| {
+                // Two steps joined as one string; callers must split on '\n' to present individually
                 AtmError::agent_not_found(agent, team).with_recovery(
                     "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members.",
                 )
