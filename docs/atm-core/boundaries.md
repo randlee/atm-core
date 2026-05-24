@@ -189,6 +189,18 @@ Notes:
 - generic retained command/runtime `load_team_config(...)` lookup behavior is a
   boundary violation and should be mechanically gated by repository-local lint
   / later `sc-lint` extraction
+- later follow-on lint families should also gate:
+  - `SCB-RETAINED-001`: direct command-entry
+    `service_runtime_store::default_runtime()` reachability in `atm teams`,
+    `atm members`, or `atm teams add-member`
+  - `SCB-WORKSPACE-001`: direct command/team-admin ambient `.atm.toml` /
+    `load_config(...)` reads outside the approved seam
+  - `SCB-SINGLETON-001`: public ambient singleton/runtime-factory exposure
+    that bypasses approved wrappers
+- those rule families must distinguish:
+  - pre-existing survivors explicitly recorded in TOML allowlists with owner
+    and sunset-sprint metadata
+  - new violations, which fail lint immediately
 
 ## InboxIngress
 

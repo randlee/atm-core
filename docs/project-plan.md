@@ -3787,6 +3787,8 @@ Status summary:
   truth, watcher-owned Claude config ingress, member metadata ownership, and
   backup / restore automation; that work is now split into `Z.5` through
   `Z.10` and must close before `Z.3` canary begins.
+- the remaining boundary / follow-up hardening line is now split into `Z.11`
+  through `Z.15`; that line must also close before `Z.3` canary begins.
 
 Planning branch:
 - `plan/phase-Z`
@@ -3819,6 +3821,16 @@ Execution shape:
   - branch: `feature/pZ-s9-team-admin-roster-authority-and-member-metadata`
 - `Z.10` team backup / restore automation and config projection
   - branch: `feature/pZ-s10-team-backup-restore-automation-and-config-projection`
+- `Z.11` first-send recovery contract and setup guidance
+  - branch: `feature/pZ-s11-first-send-recovery-contract-and-setup-guidance`
+- `Z.12` retained runtime path elimination and boundary lint gate
+  - branch: `feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate`
+- `Z.13` workspace config boundary cleanup and lint gate
+  - branch: `feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate`
+- `Z.14` ambient singleton surface removal and lint gate
+  - branch: `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate`
+- `Z.15` deferred hardening follow-up consolidation
+  - branch: `feature/pZ-s15-deferred-hardening-follow-up-consolidation`
 - `Z.3` `atm-dev` canary and dogfood
   - branch: `feature/pZ-s3-atm-dev-canary-and-dogfood`
 - `Z.4` final fixes and release sign-off
@@ -3836,6 +3848,11 @@ Phase Z sprint ledger:
 | `Z.8` | `complete` | `feature/pZ-s8-watcher-owned-claude-config-ingest` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
 | `Z.9` | `complete` | `feature/pZ-s9-team-admin-roster-authority-and-member-metadata` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
 | `Z.10` | `complete` | `feature/pZ-s10-team-backup-restore-automation-and-config-projection` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.11` | `planned` | `feature/pZ-s11-first-send-recovery-contract-and-setup-guidance` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z11.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/config-json-violation-inventory.md` |
+| `Z.12` | `planned` | `feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z12.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_retained_allowlist.toml`, `.just/fixtures/scb_runtime_known_bad.rs` |
+| `Z.13` | `planned` | `feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z13.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_workspace_allowlist.toml`, `.just/fixtures/scb_workspace_known_bad.rs` |
+| `Z.14` | `planned` | `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z14.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_singleton_allowlist.toml`, `.just/fixtures/scb_singleton_known_bad.rs` |
+| `Z.15` | `planned` | `feature/pZ-s15-deferred-hardening-follow-up-consolidation` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z15.md`, `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md` |
 | `Z.3` | `planned` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
 | `Z.4` | `planned` | `feature/pZ-s4-final-fixes-and-release-sign-off` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md` |
 
@@ -3859,6 +3876,11 @@ Immediate planning outputs:
 - `docs/phase-Z/sprint-Z8.md`
 - `docs/phase-Z/sprint-Z9.md`
 - `docs/phase-Z/sprint-Z10.md`
+- `docs/phase-Z/sprint-Z11.md`
+- `docs/phase-Z/sprint-Z12.md`
+- `docs/phase-Z/sprint-Z13.md`
+- `docs/phase-Z/sprint-Z14.md`
+- `docs/phase-Z/sprint-Z15.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
 
@@ -3871,3 +3893,5 @@ Acceptance / Phase Entry Gate:
   only unit or harness tests
 - `Z.3` canary execution must not begin until `Z.5` through `Z.10` close on the
   accepted `integrate/phase-Z` line
+- `Z.3` canary execution must not begin until `Z.11` through `Z.15` also close
+  on the accepted `integrate/phase-Z` line
