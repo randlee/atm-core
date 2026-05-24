@@ -85,6 +85,7 @@ struct TestRuntime {
     append_error_message: Option<&'static str>,
     recipient_harness: DeliveryHarnessPath,
     claude_roster_members: Vec<AgentName>,
+    roster_member_missing: bool,
     // Mutex required because concurrent send-path tests share the same runtime.
     appended_messages: Mutex<Vec<MessageEnvelope>>,
     // Mutex required because concurrent send-path tests share the same runtime.
@@ -104,6 +105,7 @@ impl TestRuntime {
             append_error_message,
             recipient_harness,
             claude_roster_members: vec![AgentName::from_validated("recipient")],
+            roster_member_missing: false,
             appended_messages: Mutex::new(Vec::new()),
             non_claude_deliveries: Mutex::new(Vec::new()),
             notification_events: Mutex::new(Vec::new()),
@@ -235,6 +237,9 @@ impl RetainedServiceRuntime for TestRuntime {
         team: &TeamName,
         agent: &AgentName,
     ) -> Result<Option<crate::boundary::RosterMemberRecord>, AtmError> {
+        if self.roster_member_missing {
+            return Ok(None);
+        }
         Ok(Some(RosterMemberRecord {
             team_name: team.clone(),
             agent_name: agent.clone(),
@@ -254,6 +259,9 @@ impl RetainedServiceRuntime for TestRuntime {
         &self,
         team: &TeamName,
     ) -> Result<Vec<crate::boundary::RosterMemberRecord>, AtmError> {
+        if self.roster_member_missing {
+            return Ok(Vec::new());
+        }
         Ok(vec![RosterMemberRecord {
             team_name: team.clone(),
             agent_name: AgentName::from_validated("recipient"),
@@ -395,6 +403,12 @@ fn send_request(home_dir: &Path) -> SendRequest {
 fn send_runtime_with_missing_claude_member() -> TestRuntime {
     let mut runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
     runtime.claude_roster_members.clear();
+    runtime
+}
+
+fn send_runtime_with_missing_atm_roster_member() -> TestRuntime {
+    let mut runtime = TestRuntime::new(None, None, DeliveryHarnessPath::ClaudeCode);
+    runtime.roster_member_missing = true;
     runtime
 }
 
@@ -834,6 +848,43 @@ fn z6_post_write_warning_uses_store_backed_claude_roster() {
         outcome.warnings[0]
             .message
             .contains("'recipient' is not on claude code roster")
+    );
+}
+
+#[test]
+fn z11_empty_atm_roster_failure_is_actionable_without_fallback() {
+    let runtime = send_runtime_with_missing_atm_roster_member();
+    let observability = RecordingObservability::default();
+    let tempdir = tempdir().expect("tempdir");
+
+    let error =
+        super::send_mail_with_runtime_impl(send_request(tempdir.path()), &observability, &runtime)
+            .expect_err("empty atm roster must fail");
+
+    assert!(error.is_agent_not_found());
+    assert_eq!(
+        error.message,
+        format!("agent 'recipient' was not found in team '{TEST_TEAM}'")
+    );
+    assert_eq!(
+        error.recovery.as_deref(),
+        Some(
+            "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members."
+        )
+    );
+    assert!(
+        runtime
+            .appended_messages
+            .lock()
+            .expect("append lock")
+            .is_empty()
+    );
+    assert!(
+        runtime
+            .non_claude_deliveries
+            .lock()
+            .expect("non-claude deliveries lock")
+            .is_empty()
     );
 }
 

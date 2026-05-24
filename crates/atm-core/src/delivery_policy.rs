@@ -308,12 +308,8 @@ impl DeliveryPolicyCoordinator {
             .load_roster_member(team, agent)?
             .map(DeliveryRecipientSnapshot::from_roster)
             .ok_or_else(|| {
-                AtmError::validation(format!(
-                    "failed to resolve roster-backed delivery harness for {}@{}",
-                    agent, team
-                ))
-                .with_recovery(
-                    "Repair or reload the team roster before retrying delivery; ATM does not fall back to Claude Code routing when roster harness data is missing.",
+                AtmError::agent_not_found(agent, team).with_recovery(
+                    "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members.",
                 )
             })
     }
@@ -573,12 +569,146 @@ pub(crate) fn restore_inbox_rebuild_transitions() -> &'static [RestoreInboxRebui
 mod tests {
     use super::{
         AckReplyStateMachine, DeliveryEventFamily, DeliveryHarnessPath, DeliveryPolicyCoordinator,
-        InboxRepairStateMachine, NewMessageCoordinatorState, RestoreInboxRebuildStateMachine,
-        ack_reply_transitions, append_failure_transitions, inbox_repair_transitions,
-        new_message_sqlite_failure_transitions, new_message_success_transitions,
-        restore_inbox_rebuild_transitions, thread_update_transitions,
+        DeliveryRecipientSnapshot, InboxRepairStateMachine, NewMessageCoordinatorState,
+        RestoreInboxRebuildStateMachine, ack_reply_transitions, append_failure_transitions,
+        inbox_repair_transitions, new_message_sqlite_failure_transitions,
+        new_message_success_transitions, restore_inbox_rebuild_transitions,
+        thread_update_transitions,
     };
+    use crate::boundary::NotificationSink;
+    use crate::error::AtmError;
+    use crate::protocol::NotificationEvent;
     use crate::schema::ThreadMode;
+    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::types::{AgentName, IsoTimestamp, TeamName};
+    use crate::workflow::WorkflowStateFile;
+    use crate::{boundary::RosterMemberRecord, config::AtmConfig, schema::TeamConfig};
+    use std::path::{Path, PathBuf};
+    use std::time::Duration;
+
+    struct MissingRosterRuntime;
+
+    impl crate::boundary::sealed::Sealed for MissingRosterRuntime {}
+
+    impl NotificationSink for MissingRosterRuntime {
+        fn deliver(&self, _event: NotificationEvent) -> Result<(), AtmError> {
+            Ok(())
+        }
+    }
+
+    impl RetainedServiceRuntime for MissingRosterRuntime {
+        fn load_config(&self, _current_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
+            Ok(None)
+        }
+
+        fn load_team_config_for_doctor_compare(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<TeamConfig, AtmError> {
+            Ok(TeamConfig::default())
+        }
+
+        fn team_dir(&self, home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
+            Ok(home_dir.to_path_buf())
+        }
+
+        fn inbox_path(
+            &self,
+            home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, AtmError> {
+            Ok(home_dir.join("inbox.jsonl"))
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<IsoTimestamp>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: IsoTimestamp,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_secs(1),
+            }
+        }
+
+        fn rebuild_compat_inbox_projection(
+            &self,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn append_compat_inbox_message(
+            &self,
+            _inbox_path: &Path,
+            _message: &crate::schema::MessageEnvelope,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn append_compat_inbox_message_set(
+            &self,
+            _inbox_path: &Path,
+            _mode: crate::boundary::ClaudeCompatibilityDeliveryMode,
+            _messages: &[crate::schema::MessageEnvelope],
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &DeliveryRecipientSnapshot,
+            _messages: &[crate::schema::MessageEnvelope],
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn load_roster_member(
+            &self,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<RosterMemberRecord>, AtmError> {
+            Ok(None)
+        }
+
+        fn load_team_roster(&self, _team: &TeamName) -> Result<Vec<RosterMemberRecord>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            body: F,
+        ) -> Result<T, AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
+        {
+            let mut workflow = WorkflowStateFile::default();
+            body(&mut workflow).map(|(value, _dirty)| value)
+        }
+    }
 
     #[test]
     fn send_family_defaults_to_new_message_without_thread_fields() {
@@ -732,6 +862,29 @@ mod tests {
         assert_eq!(
             NewMessageCoordinatorState::ResolveHarness,
             NewMessageCoordinatorState::ResolveHarness
+        );
+    }
+
+    #[test]
+    fn missing_roster_member_returns_actionable_recovery_contract() {
+        let error = DeliveryPolicyCoordinator::new()
+            .resolve_recipient_snapshot(
+                &MissingRosterRuntime,
+                &TeamName::from_validated("test-team"),
+                &AgentName::from_validated("recipient"),
+            )
+            .expect_err("missing roster member must fail");
+
+        assert!(error.is_agent_not_found());
+        assert_eq!(
+            error.message,
+            "agent 'recipient' was not found in team 'test-team'"
+        );
+        assert_eq!(
+            error.recovery.as_deref(),
+            Some(
+                "Repair or reload the team roster before retrying delivery.\nUse 'atm teams add-member' for all active team members."
+            )
         );
     }
 }
