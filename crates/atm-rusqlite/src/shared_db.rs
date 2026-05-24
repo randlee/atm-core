@@ -480,6 +480,15 @@ pub(crate) fn ensure_schema(
     connection
         .execute_batch(DB_MIGRATIONS)
         .map_err(|error| sqlite_error(target, "failed to initialize sqlite schema", error))?;
+    ensure_mail_message_columns(connection, target)?;
+    ensure_team_roster_columns(connection, target)?;
+    Ok(())
+}
+
+fn ensure_mail_message_columns(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     ensure_column(
         connection,
         target,
@@ -514,7 +523,13 @@ pub(crate) fn ensure_schema(
         "mail_messages",
         "message_id",
         "ALTER TABLE mail_messages ADD COLUMN message_id TEXT NULL;",
-    )?;
+    )
+}
+
+fn ensure_team_roster_columns(
+    connection: &Connection,
+    target: &SharedDbTarget,
+) -> Result<(), AtmError> {
     ensure_column(
         connection,
         target,
@@ -549,8 +564,7 @@ pub(crate) fn ensure_schema(
         "team_roster",
         "metadata_json",
         "ALTER TABLE team_roster ADD COLUMN metadata_json TEXT NOT NULL DEFAULT '{}';",
-    )?;
-    Ok(())
+    )
 }
 
 fn ensure_mail_messages_message_id_compat(
