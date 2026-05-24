@@ -1,7 +1,7 @@
 ---
 id: Z.13
 title: Workspace Config Boundary Cleanup And Lint Gate
-status: planned
+status: complete
 branch: feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate
 worktree: ../atm-core-worktrees/feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.13
 worktree: ../atm-core-worktrees/feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate
 branch: feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate
-status: planned
+status: complete
 estimated_scope: small
 ```
 

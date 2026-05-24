@@ -193,9 +193,9 @@ Notes:
   - `SCB-RETAINED-001`: direct command-entry or team-admin
     `service_runtime_store::default_runtime()` reachability in `atm teams`,
     `atm members`, or `atm teams add-member`
-- later follow-on lint families should also gate:
   - `SCB-WORKSPACE-001`: direct command/team-admin ambient `.atm.toml` /
     `load_config(...)` reads outside the approved seam
+- later follow-on lint families should also gate:
   - `SCB-SINGLETON-001`: public ambient singleton/runtime-factory exposure
     that bypasses approved wrappers
 - those rule families must distinguish:
