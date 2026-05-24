@@ -14,6 +14,7 @@ import tempfile
 
 ROOT = Path(__file__).resolve().parents[2]
 ATM_DOCS = ROOT / "docs" / "atm"
+ATM_DAEMON_DOCS = ROOT / "docs" / "atm-daemon"
 SQLITE_DOCS = ROOT / "docs" / "atm-rusqlite"
 PHASE_Y_DOCS = ROOT / "docs" / "phase-Y"
 REPORTS_DIR = ROOT / "docs" / "reports"
@@ -33,6 +34,8 @@ class Panel:
     summary: str
     commentary: str
     notes: tuple[str, ...]
+    recovery_rules: tuple[str, ...]
+    terminal_classes: tuple[str, ...]
     read_tables: tuple[str, ...]
     write_tables: tuple[str, ...]
     sets: tuple[str, ...]
@@ -83,6 +86,14 @@ PAGE_CONFIG = {
         "intro": "These panels visualize the Phase Y delivery-policy coordinator and the required event-family state machines so harness routing, companion-error behavior, and staged rebuild flows stay auditable.",
         "output_path": REPORTS_DIR / "delivery-state-diagrams.html",
         "json_output_path": REPORTS_DIR / "delivery-state-diagrams.json",
+        "stylesheet_href": "./assets/diagram-panels.css",
+        "script_href": "./assets/diagram-panels.js",
+    },
+    "daemon": {
+        "title": "Daemon State Machines",
+        "intro": "These panels visualize daemon-owned runtime lifecycle and startup sequencing so same-host bootstrap, fail-closed startup dependencies, and shutdown transitions stay auditable.",
+        "output_path": REPORTS_DIR / "daemon-state-diagrams.html",
+        "json_output_path": REPORTS_DIR / "daemon-state-diagrams.json",
         "stylesheet_href": "./assets/diagram-panels.css",
         "script_href": "./assets/diagram-panels.js",
     },
@@ -171,6 +182,10 @@ def parse_csv_metadata(raw: str) -> tuple[str, ...]:
     return tuple(item.strip() for item in raw.split(",") if item.strip())
 
 
+def parse_pipe_metadata(raw: str) -> tuple[str, ...]:
+    return tuple(item.strip() for item in raw.split("|") if item.strip())
+
+
 def schema_map() -> dict[str, str]:
     shared_db = (
         ROOT
@@ -191,6 +206,7 @@ def all_panels() -> tuple[Panel, ...]:
     panels = []
     source_paths = (
         sorted(ATM_DOCS.glob("*.mmd"))
+        + sorted(ATM_DAEMON_DOCS.glob("*.mmd"))
         + sorted(SQLITE_DOCS.glob("*.mmd"))
         + sorted(PHASE_Y_DOCS.glob("*.mmd"))
     )
@@ -204,9 +220,9 @@ def all_panels() -> tuple[Panel, ...]:
         sets = tuple(item.strip() for item in metadata["sets"].split(",") if item.strip())
         if not sets:
             raise ValueError(f"{source_path} has empty sets metadata")
-        notes = tuple(
-            item.strip() for item in metadata.get("notes", "").split("|") if item.strip()
-        )
+        notes = parse_pipe_metadata(metadata.get("notes", ""))
+        recovery_rules = parse_pipe_metadata(metadata.get("recovery_rules", ""))
+        terminal_classes = parse_pipe_metadata(metadata.get("terminal_classes", ""))
         read_tables = parse_csv_metadata(metadata.get("read_tables", ""))
         write_tables = parse_csv_metadata(metadata.get("write_tables", ""))
 
@@ -217,6 +233,8 @@ def all_panels() -> tuple[Panel, ...]:
                 summary=normalized_value(metadata["summary"]),
                 commentary=normalized_value(metadata["commentary"]),
                 notes=notes,
+                recovery_rules=recovery_rules,
+                terminal_classes=terminal_classes,
                 read_tables=read_tables,
                 write_tables=write_tables,
                 sets=sets,
@@ -359,6 +377,8 @@ def render_section_html(
             "summary": panel.summary,
             "commentary": panel.commentary,
             "notes": list(panel.notes),
+            "recovery_rules": list(panel.recovery_rules),
+            "terminal_classes": list(panel.terminal_classes),
             "tables_html": tables_html,
             "schema_dialogs_html": schema_dialogs_html,
             "ssot_path": panel.ssot_path,
