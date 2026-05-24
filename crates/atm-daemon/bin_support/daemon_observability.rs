@@ -694,11 +694,14 @@ impl sc_observability::LogSink for RetainedJsonlFileSink {
         file.write_all(&line)
             .and_then(|()| file.flush())
             .map_err(|error| self.mark_failure(error))?;
+        // LOCK-ORDER: when write() needs both locks, update last_written_file
+        // before health so it matches the struct-level invariant.
         *self.last_written_file.lock().map_err(|_| {
             self.mark_failure(std::io::Error::other(
                 "retained sink file handle lock poisoned",
             ))
         })? = Some(file);
+        // LOCK-ORDER: acquire health only after last_written_file in write().
         let mut health = self.health.lock().map_err(|_| {
             self.mark_failure(std::io::Error::other("file sink health lock poisoned"))
         })?;
