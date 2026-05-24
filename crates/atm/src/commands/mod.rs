@@ -9,6 +9,7 @@ pub mod list;
 pub mod log;
 pub mod members;
 pub mod read;
+pub(crate) mod retained_roster;
 pub mod send;
 pub mod teams;
 pub(crate) mod util;

@@ -1,0 +1,2 @@
+# Z.12 closes the retained-runtime acquisition leak directly. No surviving
+# SCB-RETAINED allowlist entries should remain on the accepted branch.

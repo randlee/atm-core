@@ -191,6 +191,13 @@ mod tests {
     }
 
     #[cfg(unix)]
+    fn lock_env() -> std::sync::MutexGuard<'static, ()> {
+        env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
+    #[cfg(unix)]
     thread_local! {
         static FORCE_PARENT_SYNC_FAILURE: Cell<bool> = const { Cell::new(false) };
     }
@@ -275,7 +282,7 @@ mod tests {
     #[test]
     #[serial_test::serial]
     fn atomic_write_bytes_reports_parent_sync_failure_via_deterministic_hook() {
-        let _env_lock = env_lock().lock().expect("env lock");
+        let _env_lock = lock_env();
         let _fault = ParentSyncFailureGuard::enable();
         let tempdir = tempdir().expect("tempdir");
         let path = tempdir.path().join("state.json");
