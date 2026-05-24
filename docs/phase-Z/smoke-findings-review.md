@@ -39,6 +39,21 @@ Each promoted finding entry must use this canonical serialization format:
   - use when the issue is larger rework and should not be silently absorbed by
     the active smoke sprint
 
-## Initial State
+## Current State
 
-No promoted smoke findings are recorded yet on the planning line.
+No promoted smoke findings are recorded on the accepted `Z.19` through `Z.21`
+execution line.
+
+Accepted smoke execution heads:
+
+- `Z.19 @ bd301ae7`
+- `Z.20 @ 63e9edc8`
+- `Z.21 @ e9e395b1`
+
+Disposition summary:
+
+- small logging, determinism, and report-surface gaps discovered while
+  implementing `just smoke fast`, `just smoke`, and `just smoke thorough` were
+  fixed inside the active execution sprints
+- no validated smoke discrepancy remained large enough to require promotion
+  into this major-rework queue

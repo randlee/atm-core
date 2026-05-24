@@ -1,7 +1,7 @@
 ---
 id: Z.22
 title: Smoke Findings Review And Major Rework Triage
-status: planned
+status: complete
 branch: feature/pZ-s22-smoke-findings-review-and-major-rework-triage
 worktree: ../atm-core-worktrees/feature/pZ-s22-smoke-findings-review-and-major-rework-triage
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.22
 worktree: ../atm-core-worktrees/feature/pZ-s22-smoke-findings-review-and-major-rework-triage
 branch: feature/pZ-s22-smoke-findings-review-and-major-rework-triage
-status: planned
+status: complete
 estimated_scope: small
 ```
 
@@ -148,3 +148,15 @@ level for findings triage and readiness linkage.
   plan
 - keep promoted findings explicit enough that ownership can be assigned
   without rereading smoke output
+
+## Execution Notes
+
+- accepted upstream smoke line:
+  - `Z.19 @ bd301ae7`
+  - `Z.20 @ 63e9edc8`
+  - `Z.21 @ e9e395b1`
+- the authoritative findings-review artifact is still empty after the accepted
+  `fast`, `normal`, and `thorough` smoke runs
+- no smoke discrepancy in the accepted execution line exceeded the
+  `fix-in-active-sprint` threshold, so no promoted `Z.22` follow-on record was
+  required for this batch

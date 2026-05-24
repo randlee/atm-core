@@ -357,6 +357,8 @@ Purpose:
 - provide the durable place to record smoke findings that are too large to fix
   inside active smoke sprints
 - separate minor in-sprint fixes from significant rework
+- record when the accepted smoke execution line promotes no larger rework
+  items and the authoritative queue remains empty
 
 Execution branch:
 - `feature/pZ-s22-smoke-findings-review-and-major-rework-triage`
