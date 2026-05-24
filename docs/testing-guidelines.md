@@ -179,6 +179,9 @@ Rules:
 - plain `just test` must not implicitly collect coverage
 - coverage reports must use the tracked-latest plus timestamped artifact model
   documented by the Phase Z smoke/coverage planning line
+- a host-local coverage run overwrites only that host platform's tracked latest
+  report; the other tracked platform report stays at its last real run or a
+  placeholder until executed on that platform
 
 ## 5. Environment And Timing Rules
 

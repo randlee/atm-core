@@ -1514,6 +1514,9 @@ Artifact architecture:
   the same timestamp convention
 - smoke execution produces one canonical JSON payload per run and renders the
   human-readable markdown reports from that payload
+- coverage execution produces one canonical JSON payload per host-platform run,
+  renders the matching tracked latest markdown report, and leaves the other
+  tracked platform report unchanged unless only a placeholder exists
 
 Logging architecture:
 

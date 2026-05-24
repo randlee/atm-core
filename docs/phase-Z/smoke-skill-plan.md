@@ -531,6 +531,9 @@ Primary deliverables:
 - `reports/coverage/mac.md`
 - `reports/coverage/win.md`
 - timestamped coverage artifacts
+- host-platform coverage runs overwrite only the matching tracked latest report
+  and leave the other tracked platform report at its last real result or a
+  placeholder
 
 ## Artifact List
 
@@ -554,6 +557,7 @@ Planned new files:
 - `scripts/smoke/analyze_logs.py`
 - `scripts/coverage/run.py`
 - `scripts/coverage/render_report.py`
+- `scripts/coverage/invoke_test_mode.py`
 - `templates/smoke-report/smoke-fast.md.j2`
 - `templates/smoke-report/smoke.md.j2`
 - `templates/smoke-report/smoke-thorough.md.j2`
