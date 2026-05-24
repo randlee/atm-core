@@ -5,6 +5,8 @@
   "worktree_path": "/absolute/path/to/worktree",
   "branch": "plan/phase-x",
   "pr_target": "develop",
+  "plan_scope_review_cycle_limit": 3,
+  "critical_review_cycle_limit": 3,
   "round_id": "STEP1-R1",
   "round_index": 1,
   "reviewer": "plan-scope-reviewer",
