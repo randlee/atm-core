@@ -14,8 +14,6 @@ import time
 
 from fixtures import current_binary_sha
 from fixtures import repo_root
-from fixtures import smoke_paths
-from fixtures import write_json
 
 
 ROW_MAP: dict[str, list[tuple[str, str]]] = {
@@ -112,13 +110,26 @@ def render_markdown(payload_path: Path, write_artifacts: bool) -> None:
     subprocess.run(command, check=True)
 
 
+def render_stdout_summary(payload: dict) -> str:
+    summary = payload["summary"]
+    lines = [
+        f"smoke level: {payload['level']}",
+        f"runner status: {payload['status']}",
+        f"binary sha: {payload['binary_sha']}",
+        f"duration secs: {payload['duration_secs']}",
+        f"summary: pass={summary['pass']} fail={summary['fail']} skip={summary['skip']}",
+    ]
+    for row in payload["rows"]:
+        if row["verdict"] != "PASS":
+            lines.append(f"{row['id']}: {row['verdict']} - {row['notes']}")
+    return "\n".join(lines)
+
+
 def main() -> int:
     args = parse_args()
     binary_sha = args.binary_sha or current_binary_sha()
     payload = build_payload(args.level, args.status, binary_sha)
     if args.write_artifacts:
-        paths = smoke_paths(args.level)
-        write_json(paths.timestamped_json, payload)
         with tempfile.NamedTemporaryFile("w", suffix=".json", delete=False, encoding="utf-8") as handle:
             json.dump(payload, handle, indent=2)
             handle.write("\n")
@@ -127,8 +138,10 @@ def main() -> int:
             render_markdown(temp_payload, write_artifacts=True)
         finally:
             temp_payload.unlink(missing_ok=True)
-    print(json.dumps(payload, indent=2))
-    return 0
+    else:
+        print(json.dumps(payload, indent=2))
+    print(render_stdout_summary(payload))
+    return 1 if payload["summary"]["fail"] > 0 else 0
 
 
 if __name__ == "__main__":

@@ -6,8 +6,8 @@
 - duration secs: `{{ report.duration_secs }}`
 - summary: `pass={{ report.summary.pass }}`, `fail={{ report.summary.fail }}`, `skip={{ report.summary.skip }}`
 
-| Row | Verdict | Notes |
-| --- | --- | --- |
+| Row | Flow | Verdict | Notes |
+| --- | --- | --- | --- |
 {% for row in report.rows -%}
-| `{{ row.id }}` | `{{ row.verdict }}` | {{ row.notes }} |
+| `{{ row.id }}` | {{ row.flow }} | `{{ row.verdict }}` | {{ row.notes }} |
 {% endfor %}
