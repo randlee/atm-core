@@ -1638,6 +1638,23 @@ def run(repo_root: Path) -> int:
         )
         if fixture_failure is not None:
             violations.append(fixture_failure)
+    violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
+    retained_fixture_path = repo_root / SCB_RETAINED_FIXTURE_PATH
+    if not retained_fixture_path.exists():
+        violations.append(
+            BoundaryViolation(
+                SCB_RETAINED_FIXTURE_PATH.as_posix(),
+                "missing required SCB-RETAINED known-bad fixture",
+            )
+        )
+    else:
+        fixture_violations = collect_scb_retained_rule_violations(repo_root, [retained_fixture_path])
+        fixture_failure = scb_retained_fixture_violation(
+            fixture_violations,
+            {"SCB-RETAINED-001"},
+        )
+        if fixture_failure is not None:
+            violations.append(fixture_failure)
     violations = dedupe_violations(violations)
 
     duration_seconds = monotonic_now() - started_monotonic
