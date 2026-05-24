@@ -3831,6 +3831,8 @@ Execution shape:
   - branch: `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate`
 - `Z.15` deferred hardening follow-up consolidation
   - branch: `feature/pZ-s15-deferred-hardening-follow-up-consolidation`
+- `Z.16` smoke `Z.2` revalidation
+  - branch: `feature/pZ-s16-smoke-z1-rerun`
 - `Z.3` `atm-dev` canary and dogfood
   - branch: `feature/pZ-s3-atm-dev-canary-and-dogfood`
 - `Z.4` final fixes and release sign-off
@@ -3853,6 +3855,7 @@ Phase Z sprint ledger:
 | `Z.13` | `complete` | `feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z13.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_workspace_allowlist.toml`, `.just/fixtures/scb_workspace_known_bad.rs` |
 | `Z.14` | `complete` | `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z14.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_singleton_allowlist.toml`, `.just/fixtures/scb_singleton_known_bad.rs` |
 | `Z.15` | `complete` | `feature/pZ-s15-deferred-hardening-follow-up-consolidation` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z15.md`, `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md` |
+| `Z.16` | `complete` | `feature/pZ-s16-smoke-z1-rerun` | `docs/phase-Z/sprint-Z16.md`, `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
 | `Z.3` | `planned` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
 | `Z.4` | `planned` | `feature/pZ-s4-final-fixes-and-release-sign-off` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md` |
 
@@ -3881,6 +3884,7 @@ Immediate planning outputs:
 - `docs/phase-Z/sprint-Z13.md`
 - `docs/phase-Z/sprint-Z14.md`
 - `docs/phase-Z/sprint-Z15.md`
+- `docs/phase-Z/sprint-Z16.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
 

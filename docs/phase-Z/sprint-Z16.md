@@ -1,7 +1,7 @@
 ---
 id: Z.16
 title: Smoke Z.2 Revalidation
-status: planned
+status: complete
 branch: feature/pZ-s16-smoke-z1-rerun
 worktree: ../atm-core-worktrees/feature/pZ-s16-smoke-z1-rerun
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.16
 worktree: ../atm-core-worktrees/feature/pZ-s16-smoke-z1-rerun
 branch: feature/pZ-s16-smoke-z1-rerun
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -177,3 +177,18 @@ and the retained command surface must be production-ready before canary begins.
 - do not treat a synthetic compatibility test as a substitute for the actual
   frozen smoke rerun
 - if a smoke row still fails, record it truthfully and stop before canary
+
+## Execution Notes
+
+- accepted code fix commit: `f412959d`
+- schema fix: add `message_id` compatibility preflight before the migration
+  batch creates the `uq_mail_messages_message_id` index
+- regression proof: legacy `mail_messages(legacy_message_id)` schema now
+  upgrades successfully through `ensure_schema(...)`
+- smoke summary:
+  - clean-room lane: `doctor`, `teams add-member`, `teams`, `members`,
+    `list`, `read`, `clear`, `log snapshot`, and first `send` all passed
+  - copied-state lane: copied `mail.db` now initializes cleanly; daemon-backed
+    `doctor`, `list`, `send`, and `read` all execute without SQLite init
+    failure; degraded compatibility append warning is surfaced visibly on the
+    copied-state send path
