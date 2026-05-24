@@ -59,7 +59,7 @@ surfaces after `Z.10` closes:
 | `crates/atm-core/src/team_admin.rs` `.atm.toml` pane ownership assumptions | treated per-member pane routing as non-roster durable state | delete / rewrite | `Z.9` | `closed` | canonical pane metadata now lives on ATM roster-member rows and projects back to Claude `tmux_pane_id` |
 | `crates/atm-core/src/schema/agent_member.rs` | modeled retained Claude metadata as copied file state without explicit ATM ownership contract | tighten | `Z.9` | `closed` | `AgentMember.tmux_pane_id` is now optional/serde-compatible and maps to canonical ATM roster `recipient_pane_id` metadata |
 | `crates/atm-core/src/team_admin/restore.rs` | read current + backup `config.json` and replay backup-config roster state | delete / rewrite | `Z.10` | `closed` | restore now loads canonical ATM roster truth from the roster store, projects recreated `config.json` from ATM roster, and keeps only a narrow recreated-shell preservation read for current `team-lead` / `leadSessionId`; backup `config.json` is no longer consulted for membership |
-| `crates/atm-core/src/config/mod.rs` | parser/serializer used broadly today | keep, allowlist | `Z.10` | `open` | keep one parser implementation, but only approved callers may reach it after follow-on cleanup closes |
+| `crates/atm-core/src/config/mod.rs` | parser/serializer used broadly today | keep, allowlist | `Z.10` | `closed` | keep one parser implementation; approved-callers enforcement provided by `Z.12`–`Z.14` `SCB-RETAINED-001` / `SCB-WORKSPACE-001` / `SCB-SINGLETON-001` lint gates |
 
 ## Non-Violation References Reviewed
 

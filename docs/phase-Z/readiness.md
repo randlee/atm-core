@@ -44,7 +44,7 @@ The final release verdict must remain `PENDING` until:
 | Sprint | Accepted Commit | Verdict | Current Status | Notes |
 | --- | --- | --- | --- | --- |
 | Z.1 | `70f4fa7f` | `FAIL` | `complete` | smoke checklist frozen; two blocking findings promoted to `Z.2`; cargo test --workspace PASS (CI: macOS/Ubuntu/Windows); git diff --check PASS (CI: Format check) |
-| Z.2 | `PENDING` | `PENDING` | `not started` | awaits `Z.1` closure |
+| Z.2 | `6640a61b` | `FAIL` | `complete` | frozen `Z.1` smoke checklist rerun completed on `integrate/phase-Z`; `Z1-F001` and `Z1-F002` both reproduced, and new blocking regression `Z2-F001` reopened `Z1-003`; canary-entry decision is `stop` and `Z.3` may not begin until follow-on hardening line (`Z.5`–`Z.15`) closes |
 | Z.5 | `4531eaea` | `PASS` | `complete` | retained command membership checks now use ATM roster truth only; doctor drift warnings compare Claude file members against ATM roster truth; `cargo test --workspace` PASS; `cargo fmt --all --check` PASS; production grep gate leaves only doctor compare-only and test-only `load_team_config(...)` matches; `ack_mail_uses_atm_roster_truth_for_valid_actor` PASS |
 | Z.6 | `3cd6fb74` | `PASS` | `complete` | Claude send no longer uses pre-write `config.json` membership gating; immutable `ClaudeCodeTeamRoster` now drives the post-write warning path from store-backed ATM roster rows; `cargo test --workspace` PASS; targeted `z6_post_write_warning_uses_store_backed_claude_roster` PASS; production grep gate leaves no `load_team_config(...)` matches in `send` or `service_runtime`; `cargo fmt --all --check` PASS; `git diff --check` PASS |
 | Z.7 | `1fd6ee1e` | `PASS` | `complete` | `ConfigIngress` no longer exposes generic team-config lookup; daemon/core forwarding chain removed; startup-only `hydrate_roster_from_team_config_once_at_startup_if_empty(...)` allowlisted through `Z.8` and proven to no-op when roster state is non-empty; `just lint boundaries` PASS with fixture self-test; `cargo test --workspace` PASS; `cargo fmt --all --check` PASS; `git diff --check` PASS |
@@ -62,22 +62,47 @@ The final release verdict must remain `PENDING` until:
 ## Deferred Follow-Up Findings
 
 - `Z.15`
-  - `RSH-001` through `RSH-007`, plus `RSH-009`: closed by accepted head
-    `7b6f9491`; the retained runtime / daemon test line passed with the
-    current join-handle tracking, bounded shutdown, lifecycle, control-path,
-    signal-path, worker-coordination, platform, and local-IPC timeout behavior.
-  - `RBP-F001` and `RBP-F002`: closed by typed `AgentType`, `ModelName`, and
-    `PaneId` surfaces on `RosterMemberRecord`, `AgentMember`, delivery paths,
-    SQLite hydration, and non-Claude outbound request plumbing.
-  - `RBP-F003`: closed; `ResolvedTarget` remained typed and the accepted
+  - `RSH-001`: home: Z.15, closed: 7b6f9491; join-handle tracking and bounded
+    shutdown behavior proven by the accepted retained runtime / daemon test
+    line.
+  - `RSH-002`: home: Z.15, closed: 7b6f9491; lifecycle coordination proven by
+    the accepted retained runtime / daemon test line.
+  - `RSH-003`: home: Z.15, closed: 7b6f9491; control-path behavior proven by
+    the accepted retained runtime / daemon test line.
+  - `RSH-004`: home: Z.15, closed: 7b6f9491; signal-path behavior proven by
+    the accepted retained runtime / daemon test line.
+  - `RSH-005`: home: Z.15, closed: 7b6f9491; worker-coordination behavior
+    proven by the accepted retained runtime / daemon test line.
+  - `RSH-006`: home: Z.15, closed: 7b6f9491; platform compatibility proven by
+    the accepted retained runtime / daemon test line.
+  - `RSH-007`: home: Z.15, closed: 7b6f9491; local-IPC timeout behavior proven
+    by the accepted retained runtime / daemon test line.
+  - `RSH-009`: home: Z.15, closed: 7b6f9491; reassigned from prior deferred
+    home to Z.15; daemon shutdown and IPC cleanup behavior proven by the
+    accepted retained runtime / daemon test line.
+  - `RBP-F001`: home: Z.15, closed: 7b6f9491; typed `AgentType`, `ModelName`,
+    and `PaneId` surfaces on `RosterMemberRecord`, `AgentMember`, delivery
+    paths, SQLite hydration, and non-Claude outbound request plumbing.
+  - `RBP-F002`: home: Z.15, closed: 7b6f9491; reassigned from prior deferred
+    home to Z.15; typed `AgentType`, `ModelName`, and `PaneId` surfaces on
+    `RosterMemberRecord`, `AgentMember`, delivery paths, SQLite hydration, and
+    non-Claude outbound request plumbing.
+  - `RBP-F003`: home: Z.15, closed: 7b6f9491; reassigned from prior deferred
+    home to Z.15; `ResolvedTarget` remained typed and the accepted
     delivery/runtime test line still passes with the narrower typed surfaces
     around it.
-  - `RBP-F004`: closed; structured malformed idle-notification diagnostics
-    remain explicit in the accepted `read` path.
-  - `RBP-F005` and `ATM-QA-Z10-001`: closed; replayed local IPC and
-    daemon-authored projection-write behavior remain explicit, typed, and
-    covered by the accepted runtime / daemon test line.
-  - `M-004`: closed by typed and length-constrained
+  - `RBP-F004`: home: Z.15, closed: 7b6f9491; reassigned from prior deferred
+    home to Z.15; structured malformed idle-notification diagnostics remain
+    explicit in the accepted `read` path.
+  - `RBP-F005`: home: Z.15, closed: 7b6f9491; reassigned from prior deferred
+    home to Z.15; replayed local IPC and daemon-authored projection-write
+    behavior remain explicit, typed, and covered by the accepted runtime /
+    daemon test line.
+  - `ATM-QA-Z10-001`: home: Z.15, closed: 7b6f9491; reassigned from prior
+    deferred home to Z.15; replayed local IPC and daemon-authored
+    projection-write behavior remain explicit, typed, and covered by the
+    accepted runtime / daemon test line.
+  - `M-004`: home: Z.15, closed: 7b6f9491; typed and length-constrained
     `AddMemberRequest.agent_type` / `.model`, plus normalized `PaneId`
     handling.
 
