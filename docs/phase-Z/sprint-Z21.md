@@ -56,7 +56,6 @@ be promoted into the findings review artifact.
 
 - `docs/phase-Z/smoke-skill-plan.md`
 - `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
 - `docs/phase-Z/smoke-findings-review.md`
 
 ## Exact Targets
@@ -137,10 +136,15 @@ just smoke thorough
 - `just smoke thorough` exists
 - the thorough run explicitly reports `Z1-001`, `Z1-002`, `Z1-003`, `Z1-004`,
   `Z1-005`, `Z1-006`, `Z1-007`, `Z1-008`, and `Z1-009`
+- the thorough run retains the fast-lane log-analysis gate:
+  `FAST-LOG-001` and `FAST-LOG-002` must still pass at the thorough level
 - every row in `docs/phase-Z/smoke-checklist.md` maps to one report row
 - copied-state fixture coverage is part of the thorough lane where the
   checklist requires it
-- every listed CLI interface is covered on happy path plus common error paths
+- every CLI interface listed in Required Work is covered on happy path plus
+  common error paths: `atm send`, `atm read`, `atm ack`, `atm list`,
+  `atm clear`, `atm log`, `atm doctor`, `atm teams`, `atm members`, and
+  `atm help`
 - failures and skips are explicit in both JSON and stdout summary
 - every deviation includes observed behavior, expected behavior, likely root
   cause, and artifact pointer
