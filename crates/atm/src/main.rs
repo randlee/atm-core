@@ -12,29 +12,37 @@ use std::{fs, fs::OpenOptions};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
+#[cfg(any(test, feature = "fault-injection"))]
+use atm_core::observability::RetainedSinkFaultMode;
 use atm_core::observability::{
     AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
     CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter, LogOrder, LogTailSession,
-    ObservabilityPort, RetainedSinkFaultMode,
+    ObservabilityPort,
 };
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use clap::error::ErrorKind;
-use sc_observability::{
-    ConsoleSink, JsonlFileSink, LogSink, Logger, LoggerBuilder, LoggerConfig, RetentionPolicy,
-    RotationPolicy, SinkRegistration,
-};
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability::LogSink;
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability::LoggerBuilder;
+use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability::{JsonlFileSink, RetentionPolicy, RotationPolicy};
 use sc_observability_types::{
     ActionName, CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent,
-    LogQuery, OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName, SinkHealth,
-    SinkHealthState, TargetCategory, Timestamp,
+    LogQuery, OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName,
+    TargetCategory, Timestamp,
 };
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability_types::{SinkHealth, SinkHealthState};
 use serde_json::Map;
 use time::OffsetDateTime;
 use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
 const ATM_COMMAND_TARGET: &str = "atm.command";
 const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
+#[cfg(any(test, feature = "fault-injection"))]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 const MAX_RETAINED_QUERY_RECORD_BYTES: usize = 64 * 1024;
 
@@ -206,6 +214,7 @@ pub(crate) fn build_logger(
     if console_log_route == ConsoleLogRoute::Stderr {
         builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
     }
+    #[cfg(any(test, feature = "fault-injection"))]
     if let Some(mode) = retained_sink_fault_mode()? {
         register_retained_sink_fault(&mut builder, log_dir, mode);
     }
@@ -234,6 +243,7 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
         })
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 fn fault_injection_log_path(log_dir: &Path) -> PathBuf {
     log_dir.join("atm-fault-injection.log.jsonl")
 }
@@ -291,10 +301,8 @@ fn tracing_level_filter(level: SharedLevelFilter) -> TracingLevelFilter {
     }
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
-    // This CLI intentionally preserves the retained-sink fault injection seam in
-    // release builds so smoke/degraded observability drills can exercise the
-    // same ATM-owned log path without recompiling test-only binaries.
     let Some(value) = std::env::var(ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV)
         .ok()
         .map(|value| value.trim().to_ascii_lowercase())
@@ -312,6 +320,7 @@ fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError>
     }
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 fn register_retained_sink_fault(
     builder: &mut LoggerBuilder,
     log_dir: &Path,
@@ -327,11 +336,13 @@ fn register_retained_sink_fault(
     )));
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 struct RetainedSinkHealthOverride {
     inner: Arc<dyn LogSink>,
     mode: RetainedSinkFaultMode,
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 impl RetainedSinkHealthOverride {
     fn new(inner: Arc<dyn LogSink>, mode: RetainedSinkFaultMode) -> Self {
         Self { inner, mode }
@@ -345,6 +356,7 @@ impl RetainedSinkHealthOverride {
     }
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 impl LogSink for RetainedSinkHealthOverride {
     fn write(
         &self,

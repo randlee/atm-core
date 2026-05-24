@@ -127,7 +127,7 @@ Purpose:
 
 Expected runtime:
 
-- approximately 5 to 10 minutes
+- approximately 1 to 5 minutes with cached release binaries; longer on cold builds
 
 Minimum coverage:
 
