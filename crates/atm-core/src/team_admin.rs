@@ -18,7 +18,6 @@ use crate::home;
 use crate::persistence;
 use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::{AgentMember, TeamConfig};
-use crate::service_runtime_store;
 use crate::types::{AgentName, TeamName};
 
 #[path = "team_admin/restore.rs"]
@@ -205,11 +204,13 @@ pub enum RestoreResult {
 ///
 /// Returns [`AtmError`] when `.atm.toml` cannot be loaded or the teams root
 /// cannot be enumerated.
-pub fn list_teams(_home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList, AtmError> {
+pub fn list_teams_with_roster_store(
+    roster_store: &(dyn RosterStore + Send + Sync),
+    current_dir: PathBuf,
+) -> Result<TeamsList, AtmError> {
     let config = load_config(&current_dir)?;
     let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
-    let runtime = service_runtime_store::default_runtime()?;
-    list_teams_with_roster_store(runtime.roster_store.as_ref(), current_team)
+    list_teams_from_roster_store(roster_store, current_team)
 }
 
 /// List the current member roster for one team.
@@ -218,12 +219,14 @@ pub fn list_teams(_home_dir: PathBuf, current_dir: PathBuf) -> Result<TeamsList,
 ///
 /// Returns [`AtmError`] when team resolution fails, the team directory is
 /// missing, or `config.json` cannot be loaded.
-pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
+pub fn list_members_with_roster_store(
+    roster_store: &(dyn RosterStore + Send + Sync),
+    query: MembersQuery,
+) -> Result<MembersList, AtmError> {
     let config = load_config(&query.current_dir)?;
     let team = resolve_team(query.team_override.as_deref(), config.as_ref())
         .ok_or_else(AtmError::team_unavailable)?;
-    let runtime = service_runtime_store::default_runtime()?;
-    list_members_with_roster_store(runtime.roster_store.as_ref(), team)
+    list_members_from_roster_store(roster_store, team)
 }
 
 /// Add one member record and inbox file to a team.
@@ -232,12 +235,14 @@ pub fn list_members(query: MembersQuery) -> Result<MembersList, AtmError> {
 ///
 /// Returns [`AtmError`] when the team is missing, the member already exists, or
 /// inbox/config persistence fails.
-pub fn add_member(request: AddMemberRequest) -> Result<AddMemberOutcome, AtmError> {
-    let runtime = service_runtime_store::default_runtime()?;
-    add_member_with_roster_store(runtime.roster_store.as_ref(), request)
+pub fn add_member_with_roster_store(
+    roster_store: &(dyn RosterStore + Send + Sync),
+    request: AddMemberRequest,
+) -> Result<AddMemberOutcome, AtmError> {
+    add_member_from_roster_store(roster_store, request)
 }
 
-fn list_teams_with_roster_store(
+fn list_teams_from_roster_store(
     roster_store: &dyn RosterStore,
     current_team: TeamName,
 ) -> Result<TeamsList, AtmError> {
@@ -262,7 +267,7 @@ fn list_teams_with_roster_store(
     })
 }
 
-fn list_members_with_roster_store(
+fn list_members_from_roster_store(
     roster_store: &dyn RosterStore,
     team: TeamName,
 ) -> Result<MembersList, AtmError> {
@@ -277,7 +282,7 @@ fn list_members_with_roster_store(
     })
 }
 
-fn add_member_with_roster_store(
+fn add_member_from_roster_store(
     roster_store: &dyn RosterStore,
     request: AddMemberRequest,
 ) -> Result<AddMemberOutcome, AtmError> {
@@ -411,12 +416,14 @@ fn replace_roster_for_member_add(
 ///
 /// Returns [`AtmError`] when the team/config is missing or backup directory/file
 /// creation fails.
-pub fn backup_team(request: BackupRequest) -> Result<BackupOutcome, AtmError> {
-    let runtime = service_runtime_store::default_runtime()?;
-    backup_team_with_roster_store(runtime.roster_store.as_ref(), request)
+pub fn backup_team_with_roster_store(
+    roster_store: &(dyn RosterStore + Send + Sync),
+    request: BackupRequest,
+) -> Result<BackupOutcome, AtmError> {
+    backup_team_from_roster_store(roster_store, request)
 }
 
-fn backup_team_with_roster_store(
+fn backup_team_from_roster_store(
     roster_store: &dyn RosterStore,
     request: BackupRequest,
 ) -> Result<BackupOutcome, AtmError> {
@@ -479,9 +486,11 @@ fn backup_team_with_roster_store(
 /// Returns [`AtmError`] when backup discovery, staging/live restore work, or
 /// config-last persistence fails. Failure to remove the restore marker after a
 /// successful restore is degraded to a warning-only follow-up path.
-pub fn restore_team(request: RestoreRequest) -> Result<RestoreResult, AtmError> {
-    let runtime = service_runtime_store::default_runtime()?;
-    restore::restore_team_with_roster_store(runtime.roster_store.as_ref(), request)
+pub fn restore_team_with_roster_store(
+    roster_store: &(dyn RosterStore + Send + Sync),
+    request: RestoreRequest,
+) -> Result<RestoreResult, AtmError> {
+    restore::restore_team_with_roster_store(roster_store, request)
 }
 
 fn ordered_roster_member_summaries(records: &[RosterMemberRecord]) -> Vec<MemberSummary> {
@@ -827,9 +836,10 @@ mod tests {
     use tempfile::tempdir;
 
     use super::{
-        AddMemberRequest, BackupRequest, MAX_MEMBER_METADATA_FIELD_LEN, RestoreRequest,
-        add_member_with_roster_store, backup_root_from_home, backup_team_with_roster_store,
-        list_members_with_roster_store, list_teams_with_roster_store, tasks_dir_from_home,
+        AddMemberRequest, BackupRequest, MAX_MEMBER_METADATA_FIELD_LEN, MembersQuery,
+        RestoreRequest, add_member_with_roster_store, backup_root_from_home,
+        backup_team_with_roster_store, list_members_with_roster_store,
+        list_teams_with_roster_store, tasks_dir_from_home,
     };
     use crate::boundary::{
         self, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
@@ -841,7 +851,7 @@ mod tests {
     };
     use crate::error_codes::AtmErrorCode;
     use crate::schema::TeamConfig;
-    use crate::test_support::{ROLE_TEAM_LEAD, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
+    use crate::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_RECIPIENT, TEST_SENDER, TEST_TEAM};
     use crate::types::TeamName;
 
     #[derive(Default)]
@@ -1093,9 +1103,15 @@ mod tests {
             .insert("cwd".to_string(), serde_json::json!("/tmp/worker"));
         roster_store.seed_team(TEST_TEAM, vec![member]);
 
-        let members =
-            list_members_with_roster_store(&roster_store, TEST_TEAM.parse().expect("team"))
-                .expect("list members");
+        let members = list_members_with_roster_store(
+            &roster_store,
+            MembersQuery {
+                home_dir: tempdir.path().to_path_buf(),
+                current_dir: tempdir.path().to_path_buf(),
+                team_override: Some(TEST_TEAM.parse().expect("team")),
+            },
+        )
+        .expect("list members");
 
         assert_eq!(members.team.as_str(), TEST_TEAM);
         assert_eq!(members.members.len(), 1);
@@ -1105,7 +1121,15 @@ mod tests {
     }
 
     #[test]
+    #[serial(team_config_write_env)]
     fn list_teams_reports_atm_roster_truth() {
+        let tempdir = tempdir().expect("tempdir");
+        std::fs::write(
+            tempdir.path().join(".atm.toml"),
+            format!("[atm]\ndefault_team = \"{TEST_TEAM}\"\n"),
+        )
+        .expect("workspace config");
+        let _atm_team = EnvGuard::unset_raw("ATM_TEAM");
         let roster_store = RecordingRosterStore::default();
         roster_store.seed_team(TEST_TEAM, vec![roster_member(TEST_TEAM, TEST_SENDER)]);
         roster_store.seed_team(
@@ -1116,7 +1140,7 @@ mod tests {
             ],
         );
 
-        let teams = list_teams_with_roster_store(&roster_store, TEST_TEAM.parse().expect("team"))
+        let teams = list_teams_with_roster_store(&roster_store, tempdir.path().to_path_buf())
             .expect("list teams");
 
         assert_eq!(teams.team.as_str(), TEST_TEAM);

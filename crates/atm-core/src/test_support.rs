@@ -23,6 +23,16 @@ pub fn env_lock() -> &'static Mutex<()> {
 }
 
 #[cfg(any(test, feature = "test-utils"))]
+fn lock_env() -> MutexGuard<'static, ()> {
+    // Some tests intentionally panic while the env guard is live to prove
+    // restoration behavior. Recover the guard so later serialized env tests do
+    // not fail due to lock poisoning.
+    env_lock()
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+#[cfg(any(test, feature = "test-utils"))]
 pub struct EnvGuard {
     restorations: Vec<EnvRestore>,
     _guard: MutexGuard<'static, ()>,
@@ -45,7 +55,7 @@ impl EnvGuard {
     }
 
     pub fn set_many<const N: usize>(changes: [(&'static str, Option<&str>); N]) -> Self {
-        let guard = env_lock().lock().expect("env lock");
+        let guard = lock_env();
         Self {
             restorations: changes
                 .into_iter()

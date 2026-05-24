@@ -252,6 +252,12 @@ mod tests {
         LOCK.get_or_init(|| Mutex::new(()))
     }
 
+    fn lock_env() -> MutexGuard<'static, ()> {
+        env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner())
+    }
+
     struct LocalEnvGuard {
         key: &'static str,
         original: Option<OsString>,
@@ -260,7 +266,7 @@ mod tests {
 
     impl LocalEnvGuard {
         fn set_raw(key: &'static str, value: &str) -> Self {
-            let guard = env_lock().lock().expect("env lock");
+            let guard = lock_env();
             let original = std::env::var_os(key);
             // SAFETY: this helper serializes all environment mutation with the
             // local process-wide mutex it holds for the full guard lifetime.
@@ -274,7 +280,7 @@ mod tests {
 
         #[cfg(unix)]
         fn set_many<const N: usize>(changes: [(&'static str, Option<&str>); N]) -> LocalEnvSet {
-            let guard = env_lock().lock().expect("env lock");
+            let guard = lock_env();
             let restorations = changes
                 .into_iter()
                 .map(|(key, value)| {

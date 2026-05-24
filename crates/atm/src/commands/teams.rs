@@ -5,6 +5,7 @@ use atm_core::home;
 use atm_core::team_admin::{self, AddMemberRequest, BackupRequest, RestoreRequest, RestoreResult};
 use clap::{Args, Subcommand};
 
+use crate::commands::retained_roster::with_retained_roster_store;
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -77,7 +78,10 @@ impl TeamsCommand {
         let home_dir = home::atm_home()?;
         match self.command {
             None => {
-                let outcome = team_admin::list_teams(home_dir, std::env::current_dir()?)?;
+                let current_dir = std::env::current_dir()?;
+                let outcome = with_retained_roster_store(|roster_store| {
+                    team_admin::list_teams_with_roster_store(roster_store, current_dir)
+                })?;
                 output::print_teams_result(&outcome, self.json)
             }
             Some(TeamsSubcommand::AddMember(command)) => command.run(home_dir),
@@ -95,7 +99,9 @@ impl AddMemberCommand {
             None => std::env::current_dir()?,
         };
         let request = self.build_request(home_dir, cwd)?;
-        let outcome = team_admin::add_member(request)?;
+        let outcome = with_retained_roster_store(|roster_store| {
+            team_admin::add_member_with_roster_store(roster_store, request)
+        })?;
         output::print_add_member_result(&outcome, json)
     }
 
@@ -116,7 +122,10 @@ impl AddMemberCommand {
 impl BackupCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
         let json = self.json;
-        let outcome = team_admin::backup_team(self.build_request(home_dir)?)?;
+        let request = self.build_request(home_dir)?;
+        let outcome = with_retained_roster_store(|roster_store| {
+            team_admin::backup_team_with_roster_store(roster_store, request)
+        })?;
         output::print_backup_result(&outcome, json)
     }
 
@@ -128,7 +137,10 @@ impl BackupCommand {
 impl RestoreCommand {
     fn run(self, home_dir: PathBuf) -> Result<()> {
         let json = self.json;
-        match team_admin::restore_team(self.build_request(home_dir)?)? {
+        let request = self.build_request(home_dir)?;
+        match with_retained_roster_store(|roster_store| {
+            team_admin::restore_team_with_roster_store(roster_store, request)
+        })? {
             RestoreResult::Applied(outcome) => output::print_restore_result(&outcome, json),
             RestoreResult::DryRun(plan) => output::print_restore_plan(&plan, json),
         }
@@ -151,9 +163,7 @@ mod tests {
     use atm_core::error::{AtmError, AtmErrorCode};
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
-    use atm_runtime_test_support::{
-        SqliteRuntimeGuard, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
-    };
+    use atm_runtime_test_support::open_sqlite_boundary;
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -163,7 +173,6 @@ mod tests {
 
     struct Fixture {
         _tempdir: TempDir,
-        _runtime_guard: SqliteRuntimeGuard,
         home_dir: PathBuf,
         current_dir: PathBuf,
     }
@@ -188,11 +197,9 @@ mod tests {
 
     impl Fixture {
         fn new() -> Self {
-            install_sqlite_retained_runtime_factory();
             let tempdir = TempDir::new().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
-            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
-            let runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path.clone());
+            let sqlite_db_path = atm_core::home::host_mail_db_path_from_home(&home_dir);
             let current_dir = tempdir.path().join("workspace");
             fs::create_dir_all(&current_dir).expect("workspace");
             fs::write(
@@ -255,14 +262,17 @@ mod tests {
 
             Self {
                 _tempdir: tempdir,
-                _runtime_guard: runtime_guard,
                 home_dir,
                 current_dir,
             }
         }
 
         fn with_env_and_cwd<T>(&self, f: impl FnOnce() -> T) -> T {
-            let _atm_home = EnvGuard::set_raw("ATM_HOME", self.home_dir.to_str().expect("utf8"));
+            let _env = EnvGuard::set_many([
+                ("ATM_HOME", Some(self.home_dir.to_str().expect("utf8"))),
+                ("ATM_TEAM", None),
+                ("HOME", Some(self.home_dir.to_str().expect("utf8"))),
+            ]);
             let _cwd = CwdGuard::change_to(&self.current_dir);
             f()
         }
@@ -395,6 +405,26 @@ mod tests {
             }
             .run(fixture.home_dir.clone())
             .expect("restore run");
+        });
+    }
+
+    #[test]
+    #[serial]
+    fn add_member_executes_without_default_runtime_factory() {
+        let fixture = Fixture::new();
+
+        fixture.with_env_and_cwd(|| {
+            AddMemberCommand {
+                team: TEST_TEAM.to_string(),
+                member: "new-member".to_string(),
+                agent_type: "general-purpose".to_string(),
+                model: "unknown".to_string(),
+                cwd: Some(fixture.current_dir.clone()),
+                pane_id: Some("%17".to_string()),
+                json: true,
+            }
+            .run(fixture.home_dir.clone())
+            .expect("add-member run");
         });
     }
 }

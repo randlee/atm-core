@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Once;
 
+use atm_core::boundary::RosterStore;
 use atm_core::error::AtmError;
 use atm_daemon_client::{DaemonBinaryPath, DaemonLocalIpcEndpoint};
 
@@ -10,6 +11,20 @@ pub fn install_sqlite_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
         atm_core::install_default_runtime_factory(atm_rusqlite::default_local_runtime);
     });
+}
+
+/// Open the default SQLite boundary and expose only the approved roster seam.
+///
+/// # Errors
+///
+/// Returns [`AtmError`] when the default SQLite-backed retained runtime cannot
+/// assemble its canonical boundary state.
+pub fn with_default_roster_store<T>(
+    f: impl FnOnce(&(dyn RosterStore + Send + Sync)) -> Result<T, AtmError>,
+) -> Result<T, AtmError> {
+    let assembly = atm_rusqlite::assemble_default_boundary()?;
+    let roster_store = assembly.roster_store_arc();
+    f(roster_store.as_ref())
 }
 
 /// # Errors
