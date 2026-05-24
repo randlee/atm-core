@@ -17,6 +17,7 @@ impl SqliteObservabilityOutcome {
     }
 }
 
+/// Structured SQLite subsystem event emitted through the observability port.
 #[derive(Debug, Clone)]
 pub struct SqliteObservabilityEvent {
     pub action: &'static str,
