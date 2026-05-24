@@ -1,20 +1,20 @@
 ---
 id: Z.18
-title: Smoke Skill Scaffold And Fast/Normal Runner
+title: Smoke Skill Scaffold And Report Infrastructure
 status: planned
-branch: feature/pZ-s18-smoke-skill-and-fast-normal-runner
-worktree: ../atm-core-worktrees/feature/pZ-s18-smoke-skill-and-fast-normal-runner
+branch: feature/pZ-s18-smoke-skill-and-report-infrastructure
+worktree: ../atm-core-worktrees/feature/pZ-s18-smoke-skill-and-report-infrastructure
 target: integrate/phase-Z
 ---
 
-# Sprint Z.18 — Smoke Skill Scaffold And Fast/Normal Runner
+# Sprint Z.18 — Smoke Skill Scaffold And Report Infrastructure
 
 ```yaml
 plan_type: sprint_plan
 phase: Z
 sprint: Z.18
-worktree: ../atm-core-worktrees/feature/pZ-s18-smoke-skill-and-fast-normal-runner
-branch: feature/pZ-s18-smoke-skill-and-fast-normal-runner
+worktree: ../atm-core-worktrees/feature/pZ-s18-smoke-skill-and-report-infrastructure
+branch: feature/pZ-s18-smoke-skill-and-report-infrastructure
 status: planned
 estimated_scope: medium
 ```
@@ -22,13 +22,16 @@ estimated_scope: medium
 ## Goal
 
 - create the smoke-test skill scaffold
-- land the report contract and `.smoke-reports` output path
-- land `just smoke-fast` and default `just smoke`
+- land the smoke report contract and `reports/smoke/` output layout
+- land the shared smoke runner plumbing and template/rendering contract
 
 ## Scope Summary
 
-This sprint creates the first reusable smoke runner and report format. It does
-not yet automate every frozen smoke row.
+This sprint creates the smoke infrastructure. It does not claim that `fast`,
+`normal`, or `thorough` are fully implemented yet. It closes only when the
+templates, artifact layout, shared runner, and ignore rules are
+production-ready enough for the execution sprints to build on without
+redefining the contract.
 
 ## Governing Requirements
 
@@ -59,40 +62,44 @@ not yet automate every frozen smoke row.
 - `.claude/skills/smoke-test/SKILL.md`
 - `.claude/skills/smoke-test/references/level-matrix.md`
 - `.claude/skills/smoke-test/references/report-schema.md`
+- `.claude/skills/smoke-test/references/phase-z-row-map.md`
 - `scripts/smoke/run.py`
-- `scripts/smoke/report.py`
-- `Justfile`
+- `scripts/smoke/render_report.py`
+- `scripts/smoke/analyze_logs.py`
+- `scripts/smoke/fixtures.py`
+- `templates/smoke-report/smoke-fast.md.j2`
+- `templates/smoke-report/smoke.md.j2`
+- `templates/smoke-report/smoke-thorough.md.j2`
+- `reports/smoke/`
+- `.gitignore`
 
 ## Deliverables
 
 Every listed deliverable is expected to land at a production-ready level for
-the scope this sprint claims. If that cannot be done cleanly in one sprint, the
-sprint must be split before implementation begins. No deliverable may be
+the scope this sprint claims. If that cannot be done cleanly in one sprint,
+the sprint must be split before implementation begins. No deliverable may be
 silently dropped or partially deferred.
 
 - smoke-test skill scaffold under `.claude/skills/smoke-test/`
-- `.smoke-reports/<timestamp>.json` report writing
-- human-readable stdout summary
-- `just smoke-fast`
-- `just smoke` defaulting to `normal`
+- canonical smoke JSON payload contract
+- J2 smoke report templates
+- tracked-latest smoke artifact policy under `reports/smoke/`
+- gitignored timestamped smoke artifact policy under `reports/smoke/`
+- shared smoke runner plumbing for later `just smoke*` entrypoints
 
 ## Required Work
 
-- define the smoke-level entrypoint contract in the skill
-- implement `fast` and `normal` runner dispatch
-- write the required JSON schema fields
-- print a human-readable summary suitable for ATM handoff
-- return exit `0` on all-pass and exit `1` on any fail
+- define the smoke skill and supporting reference documents
+- implement shared smoke runner plumbing for `fast`, `normal`, and `thorough`
+- implement report rendering from J2 templates
+- implement tracked-latest versus timestamped artifact writing
+- implement shared timestamp propagation for smoke artifacts
+- add ignore rules for timestamped artifacts only
 
 ## Explicit Code Samples
 
-If the sprint introduces or changes important traits, features, enums, protocol
-types, boundary contracts, or execution seams, this section must include
-explicit code samples or signatures showing the intended end state.
-
 ```text
-just smoke-fast
-just smoke
+scripts/smoke/run.py <level>
 ```
 
 ```json
@@ -112,18 +119,20 @@ just smoke
 
 ## This Sprint Does Not Close
 
-- full frozen smoke-checklist automation
-- canary-checklist integration
-- binary baseline readiness stamping
+- proving the `fast` smoke happy path
+- proving the `normal` smoke systemic lane
+- proving the `thorough` smoke CLI coverage lane
+- fixing smoke findings beyond what is required to land the infrastructure
 
 ## Acceptance Criteria
 
-- the smoke-test skill exists and documents `fast` and `normal`
-- `just smoke-fast` exists and runs the `fast` level
-- `just smoke` exists and defaults to the `normal` level
-- each run writes `.smoke-reports/<timestamp>.json`
-- each run prints a human-readable summary
-- exit `0` means all-pass, exit `1` means any fail
+- the smoke-test skill exists and documents `fast`, `normal`, and `thorough`
+- the smoke runner emits the canonical JSON payload shape
+- J2 smoke report templates exist for `fast`, `normal`, and `thorough`
+- tracked-latest and timestamped artifact rules are documented and enforced by
+  path layout and `.gitignore`
+- later execution sprints can consume the shared smoke runner plumbing without
+  redefining the schema or artifact layout
 
 ## Required Validation
 
@@ -133,22 +142,29 @@ just smoke
 
 ## Split Recommendation
 
-If the runner starts absorbing complete-level copied-state fixtures or
-canary/release wiring, stop and push that into `Z.19` or `Z.20`.
+If the sprint starts absorbing public `just smoke*` behavior, real happy-path
+execution, log-analysis semantics, or root-cause behavior from `Z.19` through
+`Z.21`, stop and keep that work in the later execution sprints.
 
 ## Production-Ready Expectation
 
 Every listed `Z.18` deliverable is expected to land at a production-ready
-level for the fast/normal smoke entrypoint contract this sprint claims.
+level for the infrastructure contract this sprint claims.
 
 ## Required Document Updates
 
+- `docs/requirements.md`
+- `docs/architecture.md`
+- `docs/testing-guidelines.md`
 - `docs/phase-Z/smoke-skill-plan.md`
 - `docs/phase-Z/readiness.md`
+- `docs/plan-phase-Z.md`
 - `docs/project-plan.md`
+- `.gitignore`
 
 ## Risks And Watchouts
 
-- do not let the default `just smoke` become too thin to be useful
-- keep the report format stable enough that `Z.19` only extends row coverage,
-  not rewrites the schema
+- do not let infrastructure work quietly redefine smoke semantics later
+- keep the smoke artifact layout deterministic from the first commit
+- do not let infrastructure-only closure quietly claim the smoke levels are
+  already implemented

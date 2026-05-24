@@ -1,34 +1,37 @@
 ---
 id: Z.19
-title: Complete Smoke Checklist Automation And Reporting
+title: Fast Smoke Happy-Path Execution
 status: planned
-branch: feature/pZ-s19-complete-smoke-checklist-automation-and-reporting
-worktree: ../atm-core-worktrees/feature/pZ-s19-complete-smoke-checklist-automation-and-reporting
+branch: feature/pZ-s19-fast-smoke-happy-path-execution
+worktree: ../atm-core-worktrees/feature/pZ-s19-fast-smoke-happy-path-execution
 target: integrate/phase-Z
 ---
 
-# Sprint Z.19 — Complete Smoke Checklist Automation And Reporting
+# Sprint Z.19 — Fast Smoke Happy-Path Execution
 
 ```yaml
 plan_type: sprint_plan
 phase: Z
 sprint: Z.19
-worktree: ../atm-core-worktrees/feature/pZ-s19-complete-smoke-checklist-automation-and-reporting
-branch: feature/pZ-s19-complete-smoke-checklist-automation-and-reporting
+worktree: ../atm-core-worktrees/feature/pZ-s19-fast-smoke-happy-path-execution
+branch: feature/pZ-s19-fast-smoke-happy-path-execution
 status: planned
 estimated_scope: medium
 ```
 
 ## Goal
 
-- automate the full frozen smoke checklist
-- add `just smoke-complete`
-- make row-by-row smoke results explicit and machine-readable
+- implement `just smoke fast`
+- prove the clean-room happy path quickly and reliably
+- make the fast retained-log evidence deterministic
+- fix minor smoke-blocking issues in-sprint when they are small and localized
 
 ## Scope Summary
 
-This sprint closes the gap between a useful default smoke runner and the full
-row-by-row evidence line that `Phase Z` needs for release gating.
+This sprint owns the quick end-to-end "everything basically works" lane. It
+must prove both send modes plus read/ack/nudge behavior on a new disposable
+baseline, then validate that the retained logs show the expected happy-path
+events with no warnings or errors.
 
 ## Governing Requirements
 
@@ -52,66 +55,81 @@ row-by-row evidence line that `Phase Z` needs for release gating.
 
 - `docs/phase-Z/smoke-skill-plan.md`
 - `docs/phase-Z/smoke-checklist.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/phase-Z/readiness.md`
 
 ## Exact Targets
 
 - `.claude/skills/smoke-test/SKILL.md`
-- `.claude/skills/smoke-test/references/phase-z-row-map.md`
 - `scripts/smoke/run.py`
-- `scripts/smoke/fixtures.py`
+- `scripts/smoke/analyze_logs.py`
+- `scripts/smoke/render_report.py`
+- `templates/smoke-report/smoke-fast.md.j2`
 - `Justfile`
+- `reports/smoke/smoke-fast.md`
 
 ## Deliverables
 
 Every listed deliverable is expected to land at a production-ready level for
-the scope this sprint claims. If that cannot be done cleanly in one sprint, the
-sprint must be split before implementation begins. No deliverable may be
+the scope this sprint claims. If that cannot be done cleanly in one sprint,
+the sprint must be split before implementation begins. No deliverable may be
 silently dropped or partially deferred.
 
-- `just smoke-complete`
-- row-by-row mapping to every smoke-checklist ID
-- complete-level copied-state fixture coverage
-- explicit PASS / FAIL / SKIP row output
+- `just smoke fast`
+- fast-level latest snapshot report at `reports/smoke/smoke-fast.md`
+- timestamped fast smoke markdown and JSON artifacts
+- deterministic fast log-analysis gate
+- clear fast-run root-cause output when the lane fails
+- minor in-sprint fixes required to make the fast lane predictable
 
 ## Required Work
 
-- add the `complete` level entrypoint
-- map every frozen smoke-checklist row to a report row
-- carry copied-state lane setup where required by the checklist
-- keep skipped/manual-only situations explicit in the report output
+- create a new disposable DB/runtime baseline
+- bring up the daemon
+- create/setup the clean-room team baseline
+- prove successful `doctor`
+- prove successful `atm send` without `--requires-ack`
+- prove successful `atm send` with `--requires-ack`
+- prove successful `atm read`
+- prove successful `atm ack`
+- prove successful nudge-visible flow
+- shut the daemon down cleanly
+- enable detailed debug/verbose logging for smoke-fast
+- analyze retained logs and fail the run if expected lifecycle/send/read/ack/
+  nudge events are missing
+- analyze retained logs and fail the run on any warning or error output
+- add missing log messages at the appropriate debug/verbose level when that is
+  the only local blocker
+- fix minor localized requirement or architecture violations when they are the
+  only local blocker to predictable fast execution
+- promote larger rework findings into `docs/phase-Z/smoke-findings-review.md`
 
 ## Explicit Code Samples
 
-If the sprint introduces or changes important traits, features, enums, protocol
-types, boundary contracts, or execution seams, this section must include
-explicit code samples or signatures showing the intended end state.
-
 ```text
-just smoke-complete
-```
-
-```json
-{
-  "id": "Z1-008",
-  "flow": "Bring up the current real-state durable baseline without touching live host data",
-  "verdict": "PASS",
-  "notes": "copied-state daemon-backed lane succeeded"
-}
+just smoke fast
 ```
 
 ## This Sprint Does Not Close
 
-- canary/dogfood checklist integration
-- final binary-baseline readiness wiring
+- the default `just smoke` systemic lane
+- the `just smoke thorough` full CLI lane
+- major rework findings discovered during fast smoke execution
 
 ## Acceptance Criteria
 
-- `just smoke-complete` exists
-- every row in `docs/phase-Z/smoke-checklist.md` maps to one report row
-- copied-state fixture coverage is part of the complete-level plan where the
-  checklist requires it
-- failures and skips are explicit in both JSON and stdout summary
+- `just smoke fast` exists and executes the fast level
+- the fast lane proves clean-room daemon bring-up and clean shutdown
+- the fast lane proves `doctor`
+- the fast lane proves `atm send` without `--requires-ack`
+- the fast lane proves `atm send` with `--requires-ack`
+- the fast lane proves `atm read`
+- the fast lane proves `atm ack`
+- the fast lane proves nudge-visible flow
+- retained logs are analyzed by script and the fast run fails on missing
+  expected events or any warning/error output
+- the fast report is rendered to the tracked-latest and timestamped artifacts
+- any remaining large issue is captured in
+  `docs/phase-Z/smoke-findings-review.md`
 
 ## Required Validation
 
@@ -121,21 +139,25 @@ just smoke-complete
 
 ## Split Recommendation
 
-If canary/report-readiness wiring starts changing `docs/phase-Z/readiness.md`
-semantics beyond smoke-row output, stop and push that into `Z.20`.
+If the sprint starts absorbing the broader retained/admin/operator surface from
+the normal lane or full CLI/error-path coverage from the thorough lane, stop
+and keep that work in `Z.20` or `Z.21`.
 
 ## Production-Ready Expectation
 
 Every listed `Z.19` deliverable is expected to land at a production-ready
-level for complete smoke execution and row-level reporting.
+level for deterministic fast smoke execution.
 
 ## Required Document Updates
 
 - `docs/phase-Z/smoke-skill-plan.md`
 - `docs/phase-Z/readiness.md`
+- `docs/plan-phase-Z.md`
 - `docs/project-plan.md`
+- `docs/phase-Z/smoke-findings-review.md`, when needed
 
 ## Risks And Watchouts
 
-- do not silently collapse multiple checklist rows into one report row
-- keep the copied-state lane disposable and non-destructive
+- do not let fast drift back into a startup-only check
+- do not hide missing log messages behind manual interpretation
+- keep detailed smoke logging out of the normal production log level defaults

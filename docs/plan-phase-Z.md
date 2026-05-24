@@ -219,48 +219,90 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s17-smoke-z3-rerun`
 
-### Z.18 Smoke Skill Scaffold And Fast/Normal Runner
+### Z.18 Smoke Skill Scaffold And Report Infrastructure
 
 Purpose:
 
 - create the smoke-test skill scaffold
-- land report writing and summary output
-- land `just smoke-fast` and default `just smoke`
+- land template rendering, report writing, summary output, and artifact layout
+- land the shared smoke runner infrastructure that later smoke entrypoints use
 
 Execution branch:
-- `feature/pZ-s18-smoke-skill-and-fast-normal-runner`
+- `feature/pZ-s18-smoke-skill-and-report-infrastructure`
 
 Execution worktree:
-- `../atm-core-worktrees/feature/pZ-s18-smoke-skill-and-fast-normal-runner`
+- `../atm-core-worktrees/feature/pZ-s18-smoke-skill-and-report-infrastructure`
 
-### Z.19 Complete Smoke Checklist Automation And Reporting
+### Z.19 Fast Smoke Happy-Path Execution
 
 Purpose:
 
-- automate the full frozen smoke checklist
-- add `just smoke-complete`
-- make row-by-row smoke results explicit and machine-readable
+- implement `just smoke fast`
+- prove the clean-room happy path quickly and reliably
+- fix minor smoke-blocking issues in-sprint when they are small and localized
 
 Execution branch:
-- `feature/pZ-s19-complete-smoke-checklist-automation-and-reporting`
+- `feature/pZ-s19-fast-smoke-happy-path-execution`
 
 Execution worktree:
-- `../atm-core-worktrees/feature/pZ-s19-complete-smoke-checklist-automation-and-reporting`
+- `../atm-core-worktrees/feature/pZ-s19-fast-smoke-happy-path-execution`
 
-### Z.20 Canary Smoke Integration And Binary Baseline Tracking
+### Z.20 Normal Smoke Systemic Execution
 
 Purpose:
 
-- connect smoke reports to canary/release evidence
-- define binary-baseline tracking on the accepted executable under test
-- document how automated smoke augments, but does not replace, manual canary
-  runs
+- implement the default `just smoke` run
+- exercise most important feature/system behavior beyond the fast happy path
+- root-cause every deviation from expected behavior
 
 Execution branch:
-- `feature/pZ-s20-canary-smoke-integration-and-binary-baseline-tracking`
+- `feature/pZ-s20-normal-smoke-systemic-execution`
 
 Execution worktree:
-- `../atm-core-worktrees/feature/pZ-s20-canary-smoke-integration-and-binary-baseline-tracking`
+- `../atm-core-worktrees/feature/pZ-s20-normal-smoke-systemic-execution`
+
+### Z.21 Thorough Smoke CLI Coverage And Reporting
+
+Purpose:
+
+- implement `just smoke thorough`
+- cover every CLI interface on happy path plus common error paths
+- root-cause discrepancies from expected behavior
+
+Execution branch:
+- `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting`
+
+### Z.22 Smoke Findings Review And Major Rework Triage
+
+Purpose:
+
+- provide the durable place to record smoke findings that are too large to fix
+  inside active smoke sprints
+- separate minor in-sprint fixes from significant rework
+
+Execution branch:
+- `feature/pZ-s22-smoke-findings-review-and-major-rework-triage`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s22-smoke-findings-review-and-major-rework-triage`
+
+### Z.23 Cross-Platform Test Coverage Reporting
+
+Purpose:
+
+- add explicit coverage-report generation as a separate command surface
+- keep coverage reporting out of ordinary `just test`
+- persist tracked latest and timestamped cross-platform coverage reports under
+  `reports/coverage/`
+
+Execution branch:
+- `feature/pZ-s23-cross-platform-test-coverage-reporting`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s23-cross-platform-test-coverage-reporting`
 
 ### Z.3 `atm-dev` Canary And Dogfood
 
@@ -308,6 +350,19 @@ Execution worktree:
   - `docs/phase-Z/sprint-Z18.md`
   - `docs/phase-Z/sprint-Z19.md`
   - `docs/phase-Z/sprint-Z20.md`
+  - `templates/smoke-report/`
+  - `reports/smoke/`
+- `Z.21`:
+  - `docs/phase-Z/sprint-Z21.md`
+  - `templates/smoke-report/`
+  - `reports/smoke/`
+- `Z.22`:
+  - `docs/phase-Z/sprint-Z22.md`
+  - `docs/phase-Z/smoke-findings-review.md`
+- `Z.23`:
+  - `docs/phase-Z/sprint-Z23.md`
+  - `templates/coverage-report/`
+  - `reports/coverage/`
 - `Z.3`:
   - `docs/phase-Z/canary-dogfood-checklist.md`
   - `docs/phase-Z/canary-findings-ledger.md`
@@ -325,8 +380,10 @@ deliverables, acceptance criteria, and closure rules.
 - smoke findings feed only the immediately following fix sprint
 - the roster/config/restore follow-on line (`Z.5` through `Z.10`) must close
   before `atm-dev` canary use begins
-- the smoke-skill/reporting line (`Z.18` through `Z.20`) must close before the
-  final `Z.4` release sign-off evidence is considered complete
+- the smoke tooling and execution line (`Z.18` through `Z.22`) must close
+  before the final `Z.4` release sign-off evidence is considered complete
+- the coverage-report line (`Z.23`) remains separate from ordinary smoke
+  execution and must not be implied by plain `just test`
 - dogfood findings feed only the final fix/sign-off sprint
 - release readiness is not declared until the documented executable flows and
   recovery behavior are revalidated after each fix round
@@ -370,5 +427,9 @@ Current execution state:
 - `docs/phase-Z/sprint-Z18.md`
 - `docs/phase-Z/sprint-Z19.md`
 - `docs/phase-Z/sprint-Z20.md`
+- `docs/phase-Z/sprint-Z21.md`
+- `docs/phase-Z/sprint-Z22.md`
+- `docs/phase-Z/sprint-Z23.md`
+- `docs/phase-Z/smoke-findings-review.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
