@@ -350,6 +350,7 @@ fn read_notification_output(path: &std::path::Path) -> String {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn production_runtime_installs_daemon_notification_sink() {
     let tempdir = TempDir::new().expect("tempdir");
     let workspace_dir = tempdir.path().join("workspace");
