@@ -26,6 +26,8 @@ scripts/__pycache__/
 .sc-compose/logs/
 .just/logs/
 artifacts/view/
+reports/smoke/[0-9][0-9][0-9][0-9]-*-smoke*.md
+reports/smoke/[0-9][0-9][0-9][0-9]-*-smoke*.json
 
 # Local prompt scratch, notes, and transient review payloads
 .prompts/

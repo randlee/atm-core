@@ -292,7 +292,8 @@ Purpose:
 
 - create the smoke-test skill scaffold
 - land template rendering, report writing, summary output, and artifact layout
-- land the shared smoke runner infrastructure that later smoke entrypoints use
+- land the shared smoke runner and fixture infrastructure that later smoke
+  entrypoints use
 
 Execution branch:
 - `feature/pZ-s18-smoke-skill-and-report-infrastructure`

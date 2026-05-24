@@ -398,11 +398,14 @@ Primary deliverables:
 - `scripts/smoke/run.py`
 - `scripts/smoke/analyze_logs.py`
 - `scripts/smoke/render_report.py`
+- `scripts/smoke/fixtures.py`
 - `templates/smoke-report/smoke-fast.md.j2`
 - `templates/smoke-report/smoke.md.j2`
 - `templates/smoke-report/smoke-thorough.md.j2`
 - `reports/smoke/` output contract
 - `.gitignore` report-ignore rules
+- tracked-latest scaffold snapshots in `reports/smoke/` that later smoke
+  execution sprints overwrite with real run results
 
 ### Z.19 Fast Smoke Happy-Path Execution
 
