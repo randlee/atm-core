@@ -1,7 +1,7 @@
 ---
 id: Z.11
 title: First Send Recovery Contract And Setup Guidance
-status: planned
+status: complete
 branch: feature/pZ-s11-first-send-recovery-contract-and-setup-guidance
 worktree: ../atm-core-worktrees/feature/pZ-s11-first-send-recovery-contract-and-setup-guidance
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.11
 worktree: ../atm-core-worktrees/feature/pZ-s11-first-send-recovery-contract-and-setup-guidance
 branch: feature/pZ-s11-first-send-recovery-contract-and-setup-guidance
-status: planned
+status: complete
 estimated_scope: small
 ```
 
