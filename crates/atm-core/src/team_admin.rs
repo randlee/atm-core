@@ -8,10 +8,10 @@ use tracing::warn;
 
 use crate::address::validate_path_segment;
 use crate::boundary::{
-    RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore, RosterStoreListTeamsRequest,
-    RosterStoreLoadRosterRequest, RosterStoreReplaceRosterRequest,
+    ConfigLoadRequest, RosterHarness, RosterMemberKind, RosterMemberRecord, RosterStore,
+    RosterStoreListTeamsRequest, RosterStoreLoadRosterRequest, RosterStoreReplaceRosterRequest,
 };
-use crate::config::{load_claude_team_config_document, load_config, resolve_team};
+use crate::config::{load_claude_team_config_document, resolve_team};
 use crate::error::{AtmError, AtmErrorKind};
 use crate::error_codes::AtmErrorCode;
 use crate::home;
@@ -208,7 +208,7 @@ pub fn list_teams_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     current_dir: PathBuf,
 ) -> Result<TeamsList, AtmError> {
-    let config = load_config(&current_dir)?;
+    let config = load_workspace_config_via_ingress(current_dir)?;
     let current_team = resolve_team(None, config.as_ref()).unwrap_or_default();
     list_teams_from_roster_store(roster_store, current_team)
 }
@@ -223,7 +223,7 @@ pub fn list_members_with_roster_store(
     roster_store: &(dyn RosterStore + Send + Sync),
     query: MembersQuery,
 ) -> Result<MembersList, AtmError> {
-    let config = load_config(&query.current_dir)?;
+    let config = load_workspace_config_via_ingress(query.current_dir)?;
     let team = resolve_team(query.team_override.as_deref(), config.as_ref())
         .ok_or_else(AtmError::team_unavailable)?;
     list_members_from_roster_store(roster_store, team)
@@ -240,6 +240,13 @@ pub fn add_member_with_roster_store(
     request: AddMemberRequest,
 ) -> Result<AddMemberOutcome, AtmError> {
     add_member_from_roster_store(roster_store, request)
+}
+
+fn load_workspace_config_via_ingress(
+    current_dir: PathBuf,
+) -> Result<Option<crate::config::AtmConfig>, AtmError> {
+    crate::direct_boundaries::load_workspace_config(ConfigLoadRequest { current_dir })
+        .map(|response| response.config)
 }
 
 fn list_teams_from_roster_store(

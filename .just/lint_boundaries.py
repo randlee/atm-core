@@ -66,6 +66,8 @@ SCB_CONFIG_ALLOWLIST_PATH = Path(".just/allowlists/scb_config_allowlist.toml")
 SCB_CONFIG_FIXTURE_PATH = Path(".just/fixtures/scb_config_known_bad.rs")
 SCB_RETAINED_ALLOWLIST_PATH = Path(".just/allowlists/scb_retained_allowlist.toml")
 SCB_RETAINED_FIXTURE_PATH = Path(".just/fixtures/scb_runtime_known_bad.rs")
+SCB_WORKSPACE_ALLOWLIST_PATH = Path(".just/allowlists/scb_workspace_allowlist.toml")
+SCB_WORKSPACE_FIXTURE_PATH = Path(".just/fixtures/scb_workspace_known_bad.rs")
 SCB_CONFIG_DIRECT_PATTERNS = ("config::load_team_config(", "load_claude_team_config_document(")
 SCB_CONFIG_GENERIC_HELPER_PATTERNS = (
     "fn load_team_config(",
@@ -86,6 +88,12 @@ SCB_CONFIG_BOUNDARY_FILES = (
 )
 SCB_RETAINED_DIRECT_PATTERNS = ("service_runtime_store::default_runtime()",)
 SCB_RETAINED_TARGET_FILES = (
+    Path("crates/atm/src/commands/teams.rs"),
+    Path("crates/atm/src/commands/members.rs"),
+    Path("crates/atm-core/src/team_admin.rs"),
+)
+SCB_WORKSPACE_DIRECT_PATTERNS = ("load_config(",)
+SCB_WORKSPACE_TARGET_FILES = (
     Path("crates/atm/src/commands/teams.rs"),
     Path("crates/atm/src/commands/members.rs"),
     Path("crates/atm-core/src/team_admin.rs"),
@@ -186,6 +194,15 @@ class ScbConfigAllowlistEntry:
 
 @dataclass(frozen=True)
 class ScbRetainedAllowlistEntry:
+    rule: str
+    path: Path
+    symbol: str
+    why: str
+    sunset_sprint: str
+
+
+@dataclass(frozen=True)
+class ScbWorkspaceAllowlistEntry:
     rule: str
     path: Path
     symbol: str
@@ -443,6 +460,40 @@ def scb_retained_allowlist(repo_root: Path) -> list[ScbRetainedAllowlistEntry]:
     return entries
 
 
+def scb_workspace_allowlist(repo_root: Path) -> list[ScbWorkspaceAllowlistEntry]:
+    allowlist_path = repo_root / SCB_WORKSPACE_ALLOWLIST_PATH
+    if not allowlist_path.exists():
+        raise SystemExit(
+            f"[boundaries] missing required allowlist: {SCB_WORKSPACE_ALLOWLIST_PATH.as_posix()}"
+        )
+    data = tomllib_load(allowlist_path)
+    raw_entries = data.get("allow", [])
+    if not isinstance(raw_entries, list):
+        raise SystemExit("[boundaries.allow] must be an array of tables")
+
+    entries: list[ScbWorkspaceAllowlistEntry] = []
+    for index, raw_entry in enumerate(raw_entries):
+        if not isinstance(raw_entry, dict):
+            raise SystemExit(f"[boundaries.allow][{index}] must be a TOML table")
+        required = ("rule", "path", "symbol", "why", "sunset_sprint")
+        for field in required:
+            value = raw_entry.get(field)
+            if not isinstance(value, str) or not value.strip():
+                raise SystemExit(
+                    f"[boundaries.allow][{index}].{field} must be a non-empty string"
+                )
+        entries.append(
+            ScbWorkspaceAllowlistEntry(
+                rule=raw_entry["rule"],
+                path=Path(raw_entry["path"]),
+                symbol=raw_entry["symbol"],
+                why=raw_entry["why"],
+                sunset_sprint=raw_entry["sunset_sprint"],
+            )
+        )
+    return entries
+
+
 def enclosing_function_name(lines: list[str], line_number: int) -> str | None:
     for index in range(line_number - 1, -1, -1):
         line = lines[index].strip()
@@ -473,6 +524,24 @@ def is_allowlisted_config_violation(
 def is_allowlisted_retained_violation(
     *,
     entries: list[ScbRetainedAllowlistEntry],
+    rule: str,
+    rel_path: Path,
+    symbol: str | None,
+) -> bool:
+    for entry in entries:
+        if entry.rule != rule:
+            continue
+        if entry.path != rel_path:
+            continue
+        if symbol is None or entry.symbol != symbol:
+            continue
+        return True
+    return False
+
+
+def is_allowlisted_workspace_violation(
+    *,
+    entries: list[ScbWorkspaceAllowlistEntry],
     rule: str,
     rel_path: Path,
     symbol: str | None,
@@ -520,6 +589,24 @@ def scb_retained_fixture_violation(
         return None
     return BoundaryViolation(
         f"{SCB_RETAINED_FIXTURE_PATH.as_posix()}: fixture self-test did not reject {', '.join(missing)}",
+        "",
+    )
+
+
+def scb_workspace_fixture_violation(
+    violations: list[BoundaryViolation],
+    expected_rules: set[str],
+) -> BoundaryViolation | None:
+    observed_rules = {
+        violation.location.split(" ", 1)[0]
+        for violation in violations
+        if violation.location.startswith("SCB-WORKSPACE-")
+    }
+    missing = sorted(expected_rules - observed_rules)
+    if not missing:
+        return None
+    return BoundaryViolation(
+        f"{SCB_WORKSPACE_FIXTURE_PATH.as_posix()}: fixture self-test did not reject {', '.join(missing)}",
         "",
     )
 
@@ -1484,6 +1571,44 @@ def collect_scb_retained_rule_violations(
     return violations
 
 
+def collect_scb_workspace_rule_violations(
+    repo_root: Path,
+    source_paths: list[Path],
+) -> list[BoundaryViolation]:
+    violations: list[BoundaryViolation] = []
+    allowlist = scb_workspace_allowlist(repo_root)
+
+    for source_path in source_paths:
+        rel_path = source_path.relative_to(repo_root)
+        if rel_path not in SCB_WORKSPACE_TARGET_FILES and rel_path != SCB_WORKSPACE_FIXTURE_PATH:
+            continue
+        rel_source = rel_path.as_posix()
+        lines = source_path.read_text(encoding="utf-8").splitlines()
+
+        for line_number, line in enumerate(lines, start=1):
+            if is_comment_line(line):
+                continue
+            stripped = line.strip()
+            if not any(pattern in stripped for pattern in SCB_WORKSPACE_DIRECT_PATTERNS):
+                continue
+            symbol = enclosing_function_name(lines, line_number)
+            if is_allowlisted_workspace_violation(
+                entries=allowlist,
+                rule="SCB-WORKSPACE-001",
+                rel_path=rel_path,
+                symbol=symbol,
+            ):
+                continue
+            violations.append(
+                BoundaryViolation(
+                    f"SCB-WORKSPACE-001 {rel_source}:{line_number} direct workspace-config lookup is forbidden outside the approved ConfigIngress seam",
+                    "",
+                )
+            )
+
+    return violations
+
+
 def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     records, parse_violations = parse_boundary_records(repo_root)
     violations: list[BoundaryViolation] = []
@@ -1498,6 +1623,7 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
     violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
     violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
+    violations.extend(collect_scb_workspace_rule_violations(repo_root, rust_sources(repo_root)))
     fixture_path = repo_root / SCB_CONFIG_FIXTURE_PATH
     if not fixture_path.exists():
         violations.append(
@@ -1527,6 +1653,22 @@ def collect_boundary_violations(repo_root: Path) -> list[BoundaryViolation]:
         fixture_failure = scb_retained_fixture_violation(
             fixture_violations,
             {"SCB-RETAINED-001"},
+        )
+        if fixture_failure is not None:
+            violations.append(fixture_failure)
+    workspace_fixture_path = repo_root / SCB_WORKSPACE_FIXTURE_PATH
+    if not workspace_fixture_path.exists():
+        violations.append(
+            BoundaryViolation(
+                SCB_WORKSPACE_FIXTURE_PATH.as_posix(),
+                "missing required SCB-WORKSPACE known-bad fixture",
+            )
+        )
+    else:
+        fixture_violations = collect_scb_workspace_rule_violations(repo_root, [workspace_fixture_path])
+        fixture_failure = scb_workspace_fixture_violation(
+            fixture_violations,
+            {"SCB-WORKSPACE-001"},
         )
         if fixture_failure is not None:
             violations.append(fixture_failure)
@@ -1622,6 +1764,8 @@ def run(repo_root: Path) -> int:
     violations.extend(collect_active_implementation_violations(repo_root, records))
     violations.extend(collect_special_case_violations(repo_root))
     violations.extend(collect_scb_config_rule_violations(repo_root, rust_sources(repo_root)))
+    violations.extend(collect_scb_retained_rule_violations(repo_root, rust_sources(repo_root)))
+    violations.extend(collect_scb_workspace_rule_violations(repo_root, rust_sources(repo_root)))
     fixture_path = repo_root / SCB_CONFIG_FIXTURE_PATH
     if not fixture_path.exists():
         violations.append(
@@ -1635,6 +1779,38 @@ def run(repo_root: Path) -> int:
         fixture_failure = scb_config_fixture_violation(
             fixture_violations,
             {"SCB-CONFIG-001", "SCB-CONFIG-002", "SCB-CONFIG-003"},
+        )
+        if fixture_failure is not None:
+            violations.append(fixture_failure)
+    retained_fixture_path = repo_root / SCB_RETAINED_FIXTURE_PATH
+    if not retained_fixture_path.exists():
+        violations.append(
+            BoundaryViolation(
+                SCB_RETAINED_FIXTURE_PATH.as_posix(),
+                "missing required SCB-RETAINED known-bad fixture",
+            )
+        )
+    else:
+        fixture_violations = collect_scb_retained_rule_violations(repo_root, [retained_fixture_path])
+        fixture_failure = scb_retained_fixture_violation(
+            fixture_violations,
+            {"SCB-RETAINED-001"},
+        )
+        if fixture_failure is not None:
+            violations.append(fixture_failure)
+    workspace_fixture_path = repo_root / SCB_WORKSPACE_FIXTURE_PATH
+    if not workspace_fixture_path.exists():
+        violations.append(
+            BoundaryViolation(
+                SCB_WORKSPACE_FIXTURE_PATH.as_posix(),
+                "missing required SCB-WORKSPACE known-bad fixture",
+            )
+        )
+    else:
+        fixture_violations = collect_scb_workspace_rule_violations(repo_root, [workspace_fixture_path])
+        fixture_failure = scb_workspace_fixture_violation(
+            fixture_violations,
+            {"SCB-WORKSPACE-001"},
         )
         if fixture_failure is not None:
             violations.append(fixture_failure)
