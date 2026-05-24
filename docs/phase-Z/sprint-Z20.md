@@ -1,7 +1,7 @@
 ---
 id: Z.20
 title: Normal Smoke Systemic Execution
-status: planned
+status: complete
 branch: feature/pZ-s20-normal-smoke-systemic-execution
 worktree: ../atm-core-worktrees/feature/pZ-s20-normal-smoke-systemic-execution
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.20
 worktree: ../atm-core-worktrees/feature/pZ-s20-normal-smoke-systemic-execution
 branch: feature/pZ-s20-normal-smoke-systemic-execution
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
