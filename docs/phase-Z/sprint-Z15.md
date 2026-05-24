@@ -1,7 +1,7 @@
 ---
 id: Z.15
 title: Deferred Hardening Follow-Up Consolidation
-status: planned
+status: complete
 branch: feature/pZ-s15-deferred-hardening-follow-up-consolidation
 worktree: ../atm-core-worktrees/feature/pZ-s15-deferred-hardening-follow-up-consolidation
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.15
 worktree: ../atm-core-worktrees/feature/pZ-s15-deferred-hardening-follow-up-consolidation
 branch: feature/pZ-s15-deferred-hardening-follow-up-consolidation
-status: planned
+status: complete
 estimated_scope: medium
 ```
 

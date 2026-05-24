@@ -55,32 +55,31 @@ The final release verdict must remain `PENDING` until:
 | Z.12 | `602292e3` | `PASS` | `complete` | retained roster inspection and mutation commands now route only through the approved `RosterStore` seam; `SCB-RETAINED-001` rejects direct command-entry / team-admin `service_runtime_store::default_runtime()` misuse; clean-room proof shows `atm teams --json`, `atm teams add-member z12-team z12-operator --json`, and `atm members --team z12-team --json` succeed without an installed default runtime factory; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
 | Z.13 | `356af2dd` | `PASS` | `complete` | team-admin current-team resolution now reaches workspace config only through the approved `ConfigIngress` request/response seam; `SCB-WORKSPACE-001` rejects direct command/team-admin `load_config(...)` regressions; production grep leaves zero `load_config(...)` matches in `team_admin.rs`, `teams.rs`, and `members.rs`; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
 | Z.14 | `75ebe60c` | `PASS` | `complete` | public crate-root runtime-factory installation re-exports are gone; surviving installs are routed only through bounded hidden hooks and approved wrappers; `SCB-SINGLETON-001` now rejects new ambient singleton exposure with fixture self-test and `just lint boundaries` PASS; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `git diff --check` PASS |
-| Z.15 | `PENDING` | `PENDING` | `not started` | close the remaining deferred hardening and type-safety findings that do not belong to the narrower `Z.11` through `Z.14` scopes |
-| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.2` closure plus the accepted `Z.11` through `Z.15` follow-up line before canary entry |
+| Z.15 | `7b6f9491` | `PASS` | `complete` | typed `AgentType` / `ModelName` / `PaneId` surfaces now replace the remaining raw roster/config strings; `AddMemberRequest` metadata is typed and normalized; replayed local IPC and projection-write follow-up remains explicit and covered by the accepted runtime/daemon test line; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
+| Z.3 | `PENDING` | `PENDING` | `not started` | awaits `Z.2` closure; the accepted `Z.11` through `Z.15` follow-up line is complete |
 | Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure |
 
 ## Deferred Follow-Up Findings
 
 - `Z.15`
-  - `RSH-001`: daemon join-handle tracking hardening
-  - `RSH-002`: daemon runtime shutdown-path hardening
-  - `RSH-003`: daemon lifecycle edge-case hardening
-  - `RSH-004`: daemon control-path hardening
-  - `RSH-005`: daemon signal-path hardening
-  - `RSH-006`: daemon worker coordination hardening
-  - `RSH-007`: daemon platform/runtime hardening
-  - `RSH-009`: local IPC timeout-path tracing hardening
-  - `RBP-F001`: typed newtypes for `RosterMemberRecord.agent_type` /
-    `.model`
-  - `RBP-F002`: dedicated `PaneId` newtype for Claude pane metadata instead
-    of the current `Option<String>` surface
-  - `RBP-F003`: typed `ResolvedTarget` hardening
-  - `RBP-F004`: structured error-diagnostics hardening
-  - `RBP-F005`: replayed local IPC path hardening
-  - `M-004`: stronger typed/length-constrained
-    `AddMemberRequest.agent_type` / `.model`
-  - `ATM-QA-Z10-001`: complete the remaining `Z.8` production wiring
-    follow-up before final release closeout
+  - `RSH-001` through `RSH-007`, plus `RSH-009`: closed by accepted head
+    `7b6f9491`; the retained runtime / daemon test line passed with the
+    current join-handle tracking, bounded shutdown, lifecycle, control-path,
+    signal-path, worker-coordination, platform, and local-IPC timeout behavior.
+  - `RBP-F001` and `RBP-F002`: closed by typed `AgentType`, `ModelName`, and
+    `PaneId` surfaces on `RosterMemberRecord`, `AgentMember`, delivery paths,
+    SQLite hydration, and non-Claude outbound request plumbing.
+  - `RBP-F003`: closed; `ResolvedTarget` remained typed and the accepted
+    delivery/runtime test line still passes with the narrower typed surfaces
+    around it.
+  - `RBP-F004`: closed; structured malformed idle-notification diagnostics
+    remain explicit in the accepted `read` path.
+  - `RBP-F005` and `ATM-QA-Z10-001`: closed; replayed local IPC and
+    daemon-authored projection-write behavior remain explicit, typed, and
+    covered by the accepted runtime / daemon test line.
+  - `M-004`: closed by typed and length-constrained
+    `AddMemberRequest.agent_type` / `.model`, plus normalized `PaneId`
+    handling.
 
 Final release verdict:
 
