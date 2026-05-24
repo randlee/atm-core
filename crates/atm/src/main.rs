@@ -49,10 +49,77 @@ fn main() {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("{error}");
-            1
+            exit_code_for_error(&error)
         }
     };
     std::process::exit(exit_code);
+}
+
+fn exit_code_for_error(error: &anyhow::Error) -> i32 {
+    error
+        .downcast_ref::<AtmError>()
+        .map_or(1, exit_code_for_atm_error)
+}
+
+fn exit_code_for_atm_error(error: &AtmError) -> i32 {
+    match error.code {
+        AtmErrorCode::ConfigHomeUnavailable
+        | AtmErrorCode::ConfigParseFailed
+        | AtmErrorCode::ConfigRetiredHookMembersKey
+        | AtmErrorCode::ConfigRetiredLegacyHookKeys
+        | AtmErrorCode::ConfigTeamParseFailed
+        | AtmErrorCode::ConfigTeamMissing => 2,
+        AtmErrorCode::IdentityUnavailable
+        | AtmErrorCode::IdentityConflict
+        | AtmErrorCode::AddressParseFailed
+        | AtmErrorCode::TeamUnavailable
+        | AtmErrorCode::TeamNotFound
+        | AtmErrorCode::AgentNotFound
+        | AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::AckInvalidState
+        | AtmErrorCode::ClearInvalidState
+        | AtmErrorCode::HelpTopicNotFound
+        | AtmErrorCode::TestFakeTransportInjectionFailed => 3,
+        AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::DaemonLifecycleWedge
+        | AtmErrorCode::DaemonLaunchGateRejected
+        | AtmErrorCode::DaemonServingStateRejected
+        | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
+        | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
+        | AtmErrorCode::DaemonAdvisorySessionNotRegistered
+        | AtmErrorCode::RemoteDeliveryOutcomeUnknown
+        | AtmErrorCode::WarningSqliteHealthDegraded => 4,
+        AtmErrorCode::MailboxReadFailed
+        | AtmErrorCode::MailboxWriteFailed
+        | AtmErrorCode::MailboxLockFailed
+        | AtmErrorCode::MailboxLockReadOnlyFilesystem
+        | AtmErrorCode::MailboxLockTimeout => 5,
+        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => 6,
+        AtmErrorCode::ObservabilityEmitFailed
+        | AtmErrorCode::ObservabilityQueryFailed
+        | AtmErrorCode::ObservabilityFollowFailed
+        | AtmErrorCode::ObservabilityHealthFailed
+        | AtmErrorCode::ObservabilityBootstrapFailed
+        | AtmErrorCode::ObservabilityHealthOk => 7,
+        AtmErrorCode::SerializationFailed => 8,
+        AtmErrorCode::WaitTimeout => 9,
+        AtmErrorCode::WarningInvalidTeamMemberSkipped
+        | AtmErrorCode::WarningMailboxRecordSkipped
+        | AtmErrorCode::WarningMalformedAtmFieldIgnored
+        | AtmErrorCode::WarningObservabilityHealthDegraded
+        | AtmErrorCode::WarningOriginInboxEntrySkipped
+        | AtmErrorCode::WarningMissingTeamConfigFallback
+        | AtmErrorCode::WarningSendAlertStateDegraded
+        | AtmErrorCode::WarningIdentityDrift
+        | AtmErrorCode::WarningRosterDrift
+        | AtmErrorCode::WarningBaselineMemberMissing
+        | AtmErrorCode::WarningRestoreInProgress
+        | AtmErrorCode::WarningStaleMailboxLock
+        | AtmErrorCode::WarningHookSkipped
+        | AtmErrorCode::WarningHookExecutionFailed
+        | AtmErrorCode::InternalError => 1,
+    }
 }
 
 fn run() -> anyhow::Result<()> {
@@ -140,7 +207,7 @@ pub(crate) fn build_logger(
         builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
     }
     if let Some(mode) = retained_sink_fault_mode()? {
-        register_retained_sink_fault(&mut builder, log_dir, mode)?;
+        register_retained_sink_fault(&mut builder, log_dir, mode);
     }
     Ok((builder.build(), active_log_path))
 }
@@ -225,6 +292,9 @@ fn tracing_level_filter(level: SharedLevelFilter) -> TracingLevelFilter {
 }
 
 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
+    // This CLI intentionally preserves the retained-sink fault injection seam in
+    // release builds so smoke/degraded observability drills can exercise the
+    // same ATM-owned log path without recompiling test-only binaries.
     let Some(value) = std::env::var(ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV)
         .ok()
         .map(|value| value.trim().to_ascii_lowercase())
@@ -246,7 +316,7 @@ fn register_retained_sink_fault(
     builder: &mut LoggerBuilder,
     log_dir: &Path,
     mode: RetainedSinkFaultMode,
-) -> Result<(), AtmError> {
+) {
     let sink = Arc::new(JsonlFileSink::new(
         fault_injection_log_path(log_dir),
         RotationPolicy::default(),
@@ -255,7 +325,6 @@ fn register_retained_sink_fault(
     builder.register_sink(SinkRegistration::new(Arc::new(
         RetainedSinkHealthOverride::new(sink, mode),
     )));
-    Ok(())
 }
 
 struct RetainedSinkHealthOverride {
@@ -740,6 +809,8 @@ fn resolve_adapter_log_dir(_home_dir: &Path) -> Result<PathBuf, AtmError> {
 
 #[cfg(test)]
 mod adapter_tests {
+    use anyhow::anyhow;
+    use atm_core::error::AtmError;
     use atm_core::test_support::EnvGuard;
     use sc_observability_types::LevelFilter as SharedLevelFilter;
     use serial_test::serial;
@@ -747,8 +818,8 @@ mod adapter_tests {
     use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
     use super::{
-        ATM_LOG_LEVEL_ENV, init_observability, level_for_outcome, logger_level_override,
-        tracing_level_filter,
+        ATM_LOG_LEVEL_ENV, exit_code_for_atm_error, exit_code_for_error, init_observability,
+        level_for_outcome, logger_level_override, tracing_level_filter,
     };
 
     fn with_env_var<R>(key: &'static str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
@@ -840,5 +911,39 @@ mod adapter_tests {
         let error = init_observability(false).expect_err("invalid ATM_LOG_DIR should fail closed");
         assert!(error.is_config());
         assert!(error.message.contains("absolute path"));
+    }
+
+    #[test]
+    fn exit_code_categories_map_to_distinct_values() {
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::home_directory_unavailable()),
+            2
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::validation("bad input")),
+            3
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::daemon_unavailable("daemon down")),
+            4
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::mailbox_lock("locked")),
+            5
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::file_policy("blocked")),
+            6
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::observability_emit("emit failed")),
+            7
+        );
+    }
+
+    #[test]
+    fn non_atm_errors_fall_back_to_exit_code_one() {
+        let error = anyhow!("plain anyhow failure");
+        assert_eq!(exit_code_for_error(&error), 1);
     }
 }
