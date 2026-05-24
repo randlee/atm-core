@@ -1,7 +1,7 @@
 ---
 id: phase-z-smoke-skill-plan
 title: Phase Z Smoke Skill And just smoke Plan
-status: complete
+status: active
 target: develop
 ---
 
@@ -456,6 +456,9 @@ Primary deliverables:
 - `reports/smoke/smoke.md`
 - timestamped normal smoke artifacts
 - root-cause reporting for every deviation
+- recipient-side pending-ack inspection, post-ack clear/re-read verification,
+  post-activity log snapshot coverage, and explicit invalid-ack recovery
+  guidance in the default lane
 - minor in-sprint fixes needed for normal predictability
 
 ### Z.21 Thorough Smoke CLI Coverage And Reporting

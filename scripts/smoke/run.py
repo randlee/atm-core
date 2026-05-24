@@ -60,6 +60,9 @@ ROW_MAP: dict[str, list[tuple[str, str]]] = {
 FAST_TEAM = "z19-team"
 FAST_OPERATOR = "z19-operator"
 FAST_RECIPIENT = "z19-recipient"
+NORMAL_TEAM = "z20-team"
+NORMAL_OPERATOR = "z20-operator"
+NORMAL_RECIPIENT = "z20-recipient"
 
 
 @dataclass
@@ -234,6 +237,8 @@ def stop_daemon(pid: int) -> None:
 
 
 def process_is_alive(pid: int) -> bool:
+    if os.name != "posix":
+        return False
     status = subprocess.run(
         ["ps", "-p", str(pid), "-o", "stat="],
         text=True,
@@ -246,26 +251,39 @@ def process_is_alive(pid: int) -> bool:
     return bool(state) and "Z" not in state
 
 
-def run_fast(binary_sha: str) -> dict[str, object]:
+def run_clean_room_lane(
+    *,
+    level: str,
+    binary_sha: str,
+    team: str,
+    operator: str,
+    recipient: str,
+    include_validation_check: bool,
+) -> dict[str, object]:
     root = repo_root()
     started = time.perf_counter()
     rows = {
         row_id: SmokeRow(id=row_id, flow=flow)
-        for row_id, flow in ROW_MAP["fast"]
+        for row_id, flow in ROW_MAP[level]
     }
     fixture = create_clean_room_fixture(
-        prefix="z19-smoke-fast.",
-        team_name=FAST_TEAM,
-        operator=FAST_OPERATOR,
-        recipient=FAST_RECIPIENT,
+        prefix=f"{team}-{level}.",
+        team_name=team,
+        operator=operator,
+        recipient=recipient,
     )
-    base_env = smoke_env(fixture, identity=FAST_OPERATOR, root=root)
+    base_env = smoke_env(fixture, identity=operator, root=root)
     log_path = fixture.log_dir / "atm.log.jsonl"
     doctor_payload: dict[str, object] | None = None
     send_no_ack_payload: dict[str, object] | None = None
     send_ack_payload: dict[str, object] | None = None
     read_payload: dict[str, object] | None = None
     ack_payload: dict[str, object] | None = None
+    pending_ack_list_payload: dict[str, object] | None = None
+    post_ack_list_payload: dict[str, object] | None = None
+    post_clear_read_payload: dict[str, object] | None = None
+    post_activity_log_snapshot: dict[str, object] | None = None
+    invalid_ack_result: CommandResult | None = None
     empty_log_snapshot: dict[str, object] | None = None
     daemon_pid: int | None = None
     status = "passed"
@@ -304,8 +322,8 @@ def run_fast(binary_sha: str) -> dict[str, object]:
             fixture.workspace_dir,
             "teams",
             "add-member",
-            FAST_TEAM,
-            FAST_OPERATOR,
+            team,
+            operator,
             "--json",
         )
         run_atm(
@@ -314,8 +332,8 @@ def run_fast(binary_sha: str) -> dict[str, object]:
             fixture.workspace_dir,
             "teams",
             "add-member",
-            FAST_TEAM,
-            FAST_RECIPIENT,
+            team,
+            recipient,
             "--json",
         )
         teams_payload = parse_json_output(
@@ -328,7 +346,7 @@ def run_fast(binary_sha: str) -> dict[str, object]:
                 fixture.workspace_dir,
                 "members",
                 "--team",
-                FAST_TEAM,
+                team,
                 "--json",
             )
         )
@@ -338,9 +356,9 @@ def run_fast(binary_sha: str) -> dict[str, object]:
             entry["name"] if isinstance(entry, dict) and "name" in entry else entry
             for entry in team_entries
         ]
-        if FAST_TEAM in team_names and member_names == [
-            FAST_OPERATOR,
-            FAST_RECIPIENT,
+        if team in team_names and member_names == [
+            operator,
+            recipient,
         ]:
             pass_row(
                 rows["Z1-003"],
@@ -353,9 +371,9 @@ def run_fast(binary_sha: str) -> dict[str, object]:
                     {"teams": teams_payload, "members": members_payload},
                     indent=2,
                 ),
-                expected="teams contains z19-team and members lists z19-operator and z19-recipient",
+                expected=f"teams contains {team} and members lists {operator} and {recipient}",
                 root_cause="retained roster inspection did not reflect the accepted clean-room setup path",
-                artifact="teams --json / members --team z19-team --json",
+                artifact=f"teams --json / members --team {team} --json",
                 notes="clean-room retained roster inspection failed",
             )
             status = "failed"
@@ -407,8 +425,8 @@ def run_fast(binary_sha: str) -> dict[str, object]:
                 base_env,
                 fixture.workspace_dir,
                 "send",
-                FAST_RECIPIENT,
-                "fast smoke no ack",
+                recipient,
+                f"{level} smoke no ack",
                 "--json",
             )
         )
@@ -418,22 +436,36 @@ def run_fast(binary_sha: str) -> dict[str, object]:
                 base_env,
                 fixture.workspace_dir,
                 "send",
-                FAST_RECIPIENT,
-                "fast smoke requires ack",
+                recipient,
+                f"{level} smoke requires ack",
                 "--requires-ack",
                 "--json",
             )
         )
         ack_required_message_id = str(send_ack_payload["message_id"])
+        if include_validation_check:
+            pending_ack_list_payload = parse_json_output(
+                run_atm(
+                    root,
+                    base_env,
+                    fixture.workspace_dir,
+                    "list",
+                    recipient,
+                    "--team",
+                    team,
+                    "--pending-ack",
+                    "--json",
+                )
+            )
         read_payload = parse_json_output(
             run_atm(
                 root,
                 base_env,
                 fixture.workspace_dir,
                 "read",
-                FAST_RECIPIENT,
+                recipient,
                 "--team",
-                FAST_TEAM,
+                team,
                 "--all",
                 "--message-id",
                 ack_required_message_id,
@@ -447,11 +479,11 @@ def run_fast(binary_sha: str) -> dict[str, object]:
                 fixture.workspace_dir,
                 "ack",
                 ack_required_message_id,
-                "fast smoke ack reply",
+                f"{level} smoke ack reply",
                 "--team",
-                FAST_TEAM,
+                team,
                 "--as",
-                FAST_RECIPIENT,
+                recipient,
                 "--json",
             )
         )
@@ -483,9 +515,111 @@ def run_fast(binary_sha: str) -> dict[str, object]:
                 expected="non-ack send succeeds; ack-required send succeeds; recipient can read and ack the durable message",
                 root_cause="the clean-room send/read/ack happy path did not complete end-to-end for both send modes",
                 artifact="send/read/ack JSON outputs",
-                notes="fast send/read/ack lane failed",
+                notes="core send/read/ack lane failed",
             )
             status = "failed"
+
+        if include_validation_check:
+            post_ack_list_payload = parse_json_output(
+                run_atm(
+                    root,
+                    base_env,
+                    fixture.workspace_dir,
+                    "list",
+                    recipient,
+                    "--team",
+                    team,
+                    "--all",
+                    "--json",
+                )
+            )
+            clear_payload = parse_json_output(
+                run_atm(
+                    root,
+                    base_env,
+                    fixture.workspace_dir,
+                    "clear",
+                    recipient,
+                    "--team",
+                    team,
+                    "--json",
+                )
+            )
+            post_clear_read_payload = parse_json_output(
+                run_atm(
+                    root,
+                    base_env,
+                    fixture.workspace_dir,
+                    "read",
+                    recipient,
+                    "--team",
+                    team,
+                    "--all",
+                    "--json",
+                )
+            )
+            post_activity_log_snapshot = parse_json_output(
+                run_atm(root, base_env, fixture.workspace_dir, "log", "snapshot", "--json")
+            )
+            invalid_ack_result = run_atm(
+                root,
+                smoke_env(fixture, identity=recipient, root=root),
+                fixture.workspace_dir,
+                "ack",
+                "",
+                "invalid ack from smoke normal",
+                "--json",
+                expect_success=False,
+            )
+
+            pending_rows = pending_ack_list_payload.get("rows", [])
+            pending_ok = (
+                pending_ack_list_payload.get("count") == 1
+                and pending_ack_list_payload.get("bucket_counts", {}).get("pending_ack", 0) >= 1
+                and any(
+                    row.get("message_id") == ack_required_message_id
+                    for row in pending_rows
+                    if isinstance(row, dict)
+                )
+            )
+            post_ack_ok = (
+                post_ack_list_payload.get("count", 0) >= 2
+                and clear_payload.get("removed_total") == 1
+                and clear_payload.get("remaining_total") == 1
+                and post_clear_read_payload.get("count") == 1
+                and isinstance(post_activity_log_snapshot.get("records"), list)
+                and invalid_ack_result.returncode != 0
+                and "invalid message id" in invalid_ack_result.stderr.lower()
+            )
+            if pending_ok and post_ack_ok:
+                pass_row(
+                    rows["Z1-007"],
+                    "pending-ack inspection, post-ack mailbox clear/re-read, log snapshot, and invalid-ack recovery guidance all behaved as expected",
+                )
+            else:
+                fail_row(
+                    rows["Z1-007"],
+                    observed=json.dumps(
+                        {
+                            "pending_ack_list": pending_ack_list_payload,
+                            "post_ack_list": post_ack_list_payload,
+                            "clear": clear_payload,
+                            "post_clear_read": post_clear_read_payload,
+                            "post_activity_log_snapshot": post_activity_log_snapshot,
+                            "invalid_ack": {
+                                "returncode": invalid_ack_result.returncode,
+                                "stdout": invalid_ack_result.stdout,
+                                "stderr": invalid_ack_result.stderr,
+                            },
+                        },
+                        indent=2,
+                    ),
+                    expected="pending-ack listing shows the durable ack-required message, post-ack clear removes exactly the acknowledged message, re-read leaves the non-ack message, log snapshot succeeds, and invalid ack fails with explicit recovery guidance",
+                    root_cause="one or more retained mailbox validation or recovery surfaces diverged from the accepted normal smoke contract",
+                    artifact="list/clear/read/log snapshot/invalid ack outputs",
+                    notes="normal validation and recovery guidance lane failed",
+                )
+                status = "failed"
 
         if daemon_pid is not None:
             stop_daemon(int(daemon_pid))
@@ -499,10 +633,10 @@ def run_fast(binary_sha: str) -> dict[str, object]:
             fail_row(
                 first_pending,
                 observed=str(exc),
-                expected="the active fast smoke step succeeds",
-                root_cause="runner-level failure interrupted the fast smoke lane",
+                expected="the active smoke step succeeds",
+                root_cause="runner-level failure interrupted the clean-room smoke lane",
                 artifact="runner exception",
-                notes="runner aborted during fast smoke execution",
+                notes="runner aborted during clean-room smoke execution",
             )
     finally:
         analysis: dict[str, object] | None = None
@@ -577,13 +711,13 @@ def run_fast(binary_sha: str) -> dict[str, object]:
         if status == "passed":
             shutil.rmtree(fixture.root, ignore_errors=True)
 
-    ordered_rows = [rows[row_id].to_payload() for row_id, _ in ROW_MAP["fast"]]
+    ordered_rows = [rows[row_id].to_payload() for row_id, _ in ROW_MAP[level]]
     summary = {"pass": 0, "fail": 0, "skip": 0}
     for row in ordered_rows:
         verdict = row["verdict"].lower()
         summary[verdict] += 1
     return {
-        "level": "fast",
+        "level": level,
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "binary_sha": binary_sha,
         "duration_secs": round(time.perf_counter() - started, 3),
@@ -595,7 +729,23 @@ def run_fast(binary_sha: str) -> dict[str, object]:
 
 def build_payload(level: str, status: str | None, binary_sha: str) -> dict[str, object]:
     if level == "fast":
-        return run_fast(binary_sha)
+        return run_clean_room_lane(
+            level="fast",
+            binary_sha=binary_sha,
+            team=FAST_TEAM,
+            operator=FAST_OPERATOR,
+            recipient=FAST_RECIPIENT,
+            include_validation_check=False,
+        )
+    if level == "normal":
+        return run_clean_room_lane(
+            level="normal",
+            binary_sha=binary_sha,
+            team=NORMAL_TEAM,
+            operator=NORMAL_OPERATOR,
+            recipient=NORMAL_RECIPIENT,
+            include_validation_check=True,
+        )
     scaffold_status = status or "scaffold-only"
     return scaffold_payload(level, scaffold_status, binary_sha)
 

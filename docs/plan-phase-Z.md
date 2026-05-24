@@ -324,6 +324,9 @@ Purpose:
 - implement the default `just smoke` run
 - exercise most important feature/system behavior beyond the fast happy path
 - root-cause every deviation from expected behavior
+- verify recipient-side pending-ack inspection, post-ack clear/re-read
+  behavior, post-activity log snapshot coverage, and invalid-ack recovery
+  guidance in the default lane
 
 Execution branch:
 - `feature/pZ-s20-normal-smoke-systemic-execution`
