@@ -878,6 +878,10 @@ fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary)
 }
 
 fn level_for_outcome(outcome: &str) -> Level {
+    if outcome.starts_with("delivery_policy.") {
+        return Level::Debug;
+    }
+
     match outcome {
         "ok" | "sent" | "dry_run" => Level::Info,
         "timeout" => Level::Warn,
@@ -963,6 +967,18 @@ mod tests {
     use tempfile::TempDir;
 
     use super::{DaemonObservability, observability_test_event};
+
+    #[test]
+    fn delivery_policy_outcomes_map_to_debug() {
+        assert_eq!(
+            super::level_for_outcome("delivery_policy.new_message.primary_nudge"),
+            sc_observability_types::Level::Debug
+        );
+        assert_eq!(
+            super::level_for_outcome("delivery_policy.ack_reply.delivered"),
+            sc_observability_types::Level::Debug
+        );
+    }
 
     #[test]
     #[serial]

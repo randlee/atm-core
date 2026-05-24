@@ -642,6 +642,22 @@ fn map_query_state(state: sc_observability_types::QueryHealthState) -> AtmObserv
 }
 
 fn level_for_outcome(outcome: &str) -> Level {
+    if matches!(
+        outcome,
+        "initial_miss"
+            | "retry_attempt"
+            | "pending"
+            | "connected"
+            | "acquired"
+            | "launched"
+            | "spawn_requested"
+            | "publish_wait_started"
+            | "publish_wait_continuing"
+            | "auto_started"
+    ) {
+        return Level::Debug;
+    }
+
     match outcome {
         "ok" | "sent" | "dry_run" => Level::Info,
         "timeout" => Level::Warn,
@@ -762,6 +778,12 @@ mod adapter_tests {
             ("ok", sc_observability_types::Level::Info),
             ("sent", sc_observability_types::Level::Info),
             ("dry_run", sc_observability_types::Level::Info),
+            ("connected", sc_observability_types::Level::Debug),
+            (
+                "publish_wait_continuing",
+                sc_observability_types::Level::Debug,
+            ),
+            ("auto_started", sc_observability_types::Level::Debug),
             ("timeout", sc_observability_types::Level::Warn),
             ("error", sc_observability_types::Level::Error),
             ("failed", sc_observability_types::Level::Error),

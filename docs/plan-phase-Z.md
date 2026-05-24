@@ -307,6 +307,8 @@ Purpose:
 
 - implement `just smoke fast`
 - prove the clean-room happy path quickly and reliably
+- create the clean-room team shell and repair roster truth through
+  `atm teams add-member`
 - fix minor smoke-blocking issues in-sprint when they are small and localized
 
 Execution branch:

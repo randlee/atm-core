@@ -11,24 +11,41 @@ import json
 class LogAnalysisResult:
     expected_events: list[str]
     missing_events: list[str]
-    warning_lines: list[str]
-    error_lines: list[str]
+    warning_records: list[str]
+    error_records: list[str]
 
     @property
     def passed(self) -> bool:
-        return not self.missing_events and not self.warning_lines and not self.error_lines
+        return not self.missing_events and not self.warning_records and not self.error_records
 
 
 def analyze_log_text(text: str, expected_events: list[str]) -> LogAnalysisResult:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     missing = [event for event in expected_events if event not in text]
-    warnings = [line for line in lines if " warn " in f" {line.lower()} " or line.lower().startswith("warn")]
-    errors = [line for line in lines if " error " in f" {line.lower()} " or line.lower().startswith("error")]
+    warnings: list[str] = []
+    errors: list[str] = []
+    for line in lines:
+        try:
+            payload = json.loads(line)
+        except json.JSONDecodeError:
+            lowered = line.lower()
+            if " error " in f" {lowered} " or lowered.startswith("error"):
+                errors.append(line)
+            elif " warn " in f" {lowered} " or lowered.startswith("warn"):
+                warnings.append(line)
+            continue
+
+        level = str(payload.get("level", "")).lower()
+        if level in {"error", "fatal"}:
+            errors.append(line)
+        elif level == "warn":
+            warnings.append(line)
+
     return LogAnalysisResult(
         expected_events=expected_events,
         missing_events=missing,
-        warning_lines=warnings,
-        error_lines=errors,
+        warning_records=warnings,
+        error_records=errors,
     )
 
 
@@ -49,8 +66,8 @@ def main() -> int:
                 "passed": result.passed,
                 "expected_events": result.expected_events,
                 "missing_events": result.missing_events,
-                "warning_lines": result.warning_lines,
-                "error_lines": result.error_lines,
+                "warning_records": result.warning_records,
+                "error_records": result.error_records,
             },
             indent=2,
         )
