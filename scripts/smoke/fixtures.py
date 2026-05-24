@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import json
 import os
+import shutil
 import subprocess
 import tempfile
 
@@ -113,6 +114,37 @@ def create_clean_room_fixture(
         team_name=team_name,
         operator=operator,
         recipient=recipient,
+    )
+
+
+def clone_fixture(source: SmokeFixture, *, prefix: str, clear_logs: bool = True) -> SmokeFixture:
+    root = Path(tempfile.mkdtemp(prefix=prefix))
+    workspace_dir = root / "workspace"
+    home_dir = root / "home"
+    atm_home = root / "atm"
+    log_dir = root / "logs"
+
+    ignore_runtime_sockets = shutil.ignore_patterns("*.sock")
+    shutil.copytree(source.workspace_dir, workspace_dir, dirs_exist_ok=True)
+    shutil.copytree(source.home_dir, home_dir, dirs_exist_ok=True, ignore=ignore_runtime_sockets)
+    shutil.copytree(source.atm_home, atm_home, dirs_exist_ok=True, ignore=ignore_runtime_sockets)
+
+    if clear_logs:
+        shutil.rmtree(log_dir, ignore_errors=True)
+    else:
+        shutil.copytree(source.log_dir, log_dir, dirs_exist_ok=True)
+
+    team_dir = atm_home / ".claude" / "teams" / source.team_name
+    return SmokeFixture(
+        root=root,
+        workspace_dir=workspace_dir,
+        home_dir=home_dir,
+        atm_home=atm_home,
+        log_dir=log_dir,
+        team_dir=team_dir,
+        team_name=source.team_name,
+        operator=source.operator,
+        recipient=source.recipient,
     )
 
 

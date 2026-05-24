@@ -481,6 +481,8 @@ Primary deliverables:
 - `reports/smoke/smoke-thorough.md`
 - timestamped thorough smoke artifacts
 - row-level PASS / FAIL / SKIP output
+- full top-level CLI happy/common-error-path coverage plus disposable
+  copied-state bring-up and degraded compatibility-append warning proof
 - root-cause notes for every deviation from expected behavior
 
 ### Z.22 Smoke Findings Review And Major Rework Triage

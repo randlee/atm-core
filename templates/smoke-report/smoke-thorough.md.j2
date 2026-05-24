@@ -11,3 +11,19 @@
 {% for row in report.rows -%}
 | `{{ row.id }}` | `{{ row.verdict }}` | {{ row.notes }} |
 {% endfor %}
+
+{% set deviations = report.rows | selectattr("verdict", "ne", "PASS") | list -%}
+{% if deviations %}
+
+## Deviations
+
+{% for row in deviations -%}
+### `{{ row.id }}`
+
+- observed: {{ row.get("observed_behavior", "n/a") }}
+- expected: {{ row.get("expected_behavior", "n/a") }}
+- likely root cause: {{ row.get("likely_root_cause", "n/a") }}
+- artifact: {{ row.get("artifact_pointer", "n/a") }}
+
+{% endfor -%}
+{% endif %}
