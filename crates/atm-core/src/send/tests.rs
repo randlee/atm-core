@@ -248,8 +248,8 @@ impl RetainedServiceRuntime for TestRuntime {
                 DeliveryHarnessPath::ClaudeCode => RosterHarness::ClaudeCode,
                 DeliveryHarnessPath::NonClaude => RosterHarness::CodexCli,
             },
-            agent_type: String::new(),
-            model: String::new(),
+            agent_type: crate::schema::AgentType::default(),
+            model: crate::types::ModelName::default(),
             recipient_pane_id: None,
             metadata_json: Map::new(),
         }))
@@ -270,8 +270,8 @@ impl RetainedServiceRuntime for TestRuntime {
                 DeliveryHarnessPath::ClaudeCode => RosterHarness::ClaudeCode,
                 DeliveryHarnessPath::NonClaude => RosterHarness::CodexCli,
             },
-            agent_type: String::new(),
-            model: String::new(),
+            agent_type: crate::schema::AgentType::default(),
+            model: crate::types::ModelName::default(),
             recipient_pane_id: None,
             metadata_json: Map::new(),
         }])
@@ -290,8 +290,8 @@ impl RetainedServiceRuntime for TestRuntime {
                 agent_name,
                 member_kind: RosterMemberKind::Permanent,
                 harness: RosterHarness::ClaudeCode,
-                agent_type: String::new(),
-                model: String::new(),
+                agent_type: crate::schema::AgentType::default(),
+                model: crate::types::ModelName::default(),
                 recipient_pane_id: None,
                 metadata_json: Map::new(),
             })

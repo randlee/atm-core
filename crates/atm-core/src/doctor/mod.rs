@@ -695,8 +695,8 @@ mod tests {
                     agent_name: AgentName::from_validated(*member),
                     member_kind: boundary::RosterMemberKind::Permanent,
                     harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: String::new(),
-                    model: String::new(),
+                    agent_type: crate::schema::AgentType::default(),
+                    model: crate::types::ModelName::default(),
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 })

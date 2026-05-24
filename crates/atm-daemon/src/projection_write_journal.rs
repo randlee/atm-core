@@ -31,8 +31,9 @@ impl ProjectionWriteJournal {
         Self::default()
     }
 
-    /// Production wiring is deferred to Z.11 when the team-admin write path
-    /// starts recording daemon-authored Claude config projections.
+    /// Records one daemon-authored Claude config projection write. External
+    /// CLI/team-admin writes are intentionally treated as ordinary idempotent
+    /// ingress events and do not record suppression entries here.
     #[allow(dead_code)]
     pub(crate) fn remember_projected_config_write(
         &self,

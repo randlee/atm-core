@@ -767,8 +767,8 @@ mod tests {
             agent_name: agent.parse().expect("agent"),
             member_kind: RosterMemberKind::Permanent,
             harness: RosterHarness::ClaudeCode,
-            agent_type: String::new(),
-            model: String::new(),
+            agent_type: crate::schema::AgentType::default(),
+            model: crate::types::ModelName::default(),
             recipient_pane_id: None,
             metadata_json: serde_json::Map::new(),
         }
@@ -1114,7 +1114,7 @@ mod tests {
         let tempdir = tempdir().expect("tempdir");
         let roster_store = RecordingRosterStore::default();
         let mut recipient = roster_member(TEST_TEAM, TEST_RECIPIENT);
-        recipient.recipient_pane_id = Some("%12".to_string());
+        recipient.recipient_pane_id = Some(crate::types::PaneId::from_cli("%12").expect("pane"));
         recipient
             .metadata_json
             .insert("cwd".to_string(), json!("/repo/recipient"));
