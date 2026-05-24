@@ -1,7 +1,7 @@
 ---
 id: phase-z-smoke-skill-plan
 title: Phase Z Smoke Skill And just smoke Plan
-status: planned
+status: complete
 target: develop
 ---
 
@@ -188,6 +188,7 @@ Required JSON schema:
   "timestamp": "2026-05-24T12:34:56Z",
   "binary_sha": "0123456789abcdef",
   "duration_secs": 123,
+  "status": "scaffold-only",
   "rows": [
     {
       "id": "Z1-005",
@@ -221,6 +222,7 @@ Required behavior:
 The stdout summary must be concise but complete enough for ATM handoff:
 
 - smoke level
+- runner status
 - binary SHA
 - total duration
 - pass/fail/skip counts
@@ -398,11 +400,14 @@ Primary deliverables:
 - `scripts/smoke/run.py`
 - `scripts/smoke/analyze_logs.py`
 - `scripts/smoke/render_report.py`
+- `scripts/smoke/fixtures.py`
 - `templates/smoke-report/smoke-fast.md.j2`
 - `templates/smoke-report/smoke.md.j2`
 - `templates/smoke-report/smoke-thorough.md.j2`
 - `reports/smoke/` output contract
 - `.gitignore` report-ignore rules
+- tracked-latest scaffold snapshots in `reports/smoke/` that later smoke
+  execution sprints overwrite with real run results
 
 ### Z.19 Fast Smoke Happy-Path Execution
 

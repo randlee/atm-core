@@ -1,0 +1,13 @@
+# Smoke Thorough
+
+- status: `{{ report.status }}`
+- timestamp: `{{ report.timestamp }}`
+- binary SHA: `{{ report.binary_sha }}`
+- duration secs: `{{ report.duration_secs }}`
+- summary: `pass={{ report.summary.pass }}`, `fail={{ report.summary.fail }}`, `skip={{ report.summary.skip }}`
+
+| Row | Flow | Verdict | Notes |
+| --- | --- | --- | --- |
+{% for row in report.rows -%}
+| `{{ row.id }}` | {{ row.flow }} | `{{ row.verdict }}` | {{ row.notes }} |
+{% endfor %}
