@@ -51,7 +51,7 @@ The final release verdict must remain `PENDING` until:
 | Z.8 | `84229892` | `PASS` | `complete` | watcher / reconcile now owns external Claude `config.json` ingest; startup-only bootstrap helper deleted; process-local projection-write suppression skips one matching daemon-authored event and clears on restart; `cargo test --workspace` PASS; targeted `z8_watcher_ingest_hydrates_atm_roster_truth_for_new_team` PASS; targeted `z8_projection_write_suppression_is_process_local` PASS; targeted `z8_deletes_startup_only_config_bootstrap_helper` PASS; `just lint boundaries` PASS; `cargo fmt --all --check` PASS; `git diff --check` PASS |
 | Z.9 | `903cbfe1` | `PASS` | `complete` | team-admin commands now use ATM roster truth; `add-member` mutates canonical ATM roster first and projects `config.json`; canonical pane metadata maps ATM `recipient_pane_id` to Claude `tmux_pane_id`; restore preserves canonical `tmux_pane_id`; `cargo test --workspace` PASS; `cargo fmt --all` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
 | Z.10 | `c32a0277` | `PASS` | `complete` | backup now writes `atm-roster.json` as an audit-only canonical ATM roster snapshot; restore rebuilds recreated `config.json` from ATM roster truth instead of replaying backup `config.json`; reconcile runtime helpers split into submodules; `cargo test --workspace` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
-| Z.11 | `PENDING` | `PENDING` | `not started` | replace the opaque clean-start first-send error with the exact actionable recovery contract; no hidden fallback allowed; close with updated `smoke-findings-ledger.md`, `readiness.md`, and `project-plan.md` |
+| Z.11 | `1bcf916e` | `PASS` | `complete` | clean-start first-send failure now returns the exact actionable recovery contract with no hidden fallback; local non-Claude outbound fallback now enforces the documented payload-size gate; `RSH-008` and `RSH-010` closed; targeted `missing_roster_member_returns_actionable_recovery_contract`, `z11_empty_atm_roster_failure_is_actionable_without_fallback`, and `local_non_claude_outbound_rejects_oversized_payloads` PASS |
 | Z.12 | `602292e3` | `PASS` | `complete` | retained roster inspection and mutation commands now route only through the approved `RosterStore` seam; `SCB-RETAINED-001` rejects direct command-entry / team-admin `service_runtime_store::default_runtime()` misuse; clean-room proof shows `atm teams --json`, `atm teams add-member z12-team z12-operator --json`, and `atm members --team z12-team --json` succeed without an installed default runtime factory; `cargo test --workspace` PASS; `cargo clippy --workspace --all-targets -- -D warnings` PASS; `cargo fmt --all --check` PASS; `just lint boundaries` PASS; `git diff --check` PASS |
 | Z.13 | `PENDING` | `PENDING` | `not started` | remove ambient workspace-config current-team reads from the command/team-admin path; close only when `SCB-WORKSPACE-001` gates new direct `load_config(...)` regressions and `.just/allowlists/scb_workspace_allowlist.toml` has only owned/time-bounded survivors |
 | Z.14 | `PENDING` | `PENDING` | `not started` | remove the public crate-root runtime-factory leak and keep only approved wrappers; close only when `SCB-SINGLETON-001` gates new ambient singleton exposure and `.just/allowlists/scb_singleton_allowlist.toml` has only owned/time-bounded survivors |
@@ -61,11 +61,6 @@ The final release verdict must remain `PENDING` until:
 
 ## Deferred Follow-Up Findings
 
-- `Z.11`
-  - `RSH-008`: add the payload-size gate in `deliver_payloads` without
-    widening `Z.6` scope
-  - `RSH-010`: close the remaining send-path hardening item tracked by QA
-    after the `Z.6` runtime-roster-view cutover
 - `Z.15`
   - `RSH-001`: daemon join-handle tracking hardening
   - `RSH-002`: daemon runtime shutdown-path hardening
