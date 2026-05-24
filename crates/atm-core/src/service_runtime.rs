@@ -18,6 +18,7 @@ use crate::types::{AgentName, IsoTimestamp, TeamName};
 use crate::workflow::{self, WorkflowStateFile};
 
 const WORKFLOW_LOCK_TIMEOUT: Duration = Duration::from_secs(5);
+const MAX_NON_CLAUDE_PAYLOAD_BYTES: usize = 1024 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct RetainedMailboxTimeoutPolicy {
@@ -163,14 +164,41 @@ impl crate::boundary::NotificationSink for LocalServiceRuntime {
     }
 }
 
-#[derive(Debug, Clone, Copy, Default)]
+type OutputPathFactory = std::sync::Arc<dyn Fn() -> Result<PathBuf, AtmError> + Send + Sync>;
+
+#[derive(Clone)]
 /// Production fallback boundary used when the daemon runtime is not composing
 /// a dedicated non-Claude outbound adapter. This is not a test double.
-pub struct LocalFileNonClaudeOutbound;
+pub struct LocalFileNonClaudeOutbound {
+    path_factory: OutputPathFactory,
+}
 
 impl LocalFileNonClaudeOutbound {
-    pub const fn new() -> Self {
-        Self
+    pub fn new() -> Self {
+        Self::new_with_path_factory(std::sync::Arc::new(|| {
+            Ok(crate::home::host_runtime_dir()?.join("non_claude_outbound.jsonl"))
+        }))
+    }
+
+    fn new_with_path_factory(path_factory: OutputPathFactory) -> Self {
+        Self { path_factory }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test_with_path(path: PathBuf) -> Self {
+        Self::new_with_path_factory(std::sync::Arc::new(move || Ok(path.clone())))
+    }
+}
+
+impl Default for LocalFileNonClaudeOutbound {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
+impl fmt::Debug for LocalFileNonClaudeOutbound {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("LocalFileNonClaudeOutbound(..)")
     }
 }
 
@@ -181,13 +209,21 @@ impl crate::boundary::NonClaudeOutbound for LocalFileNonClaudeOutbound {
         &self,
         request: crate::boundary::NonClaudeOutboundDeliveryRequest,
     ) -> Result<crate::boundary::NonClaudeOutboundDeliveryResponse, AtmError> {
-        let output_path = crate::home::host_runtime_dir()
-            .map_err(|e| {
-                e.with_recovery(
-                    "Set ATM_HOME to a writable directory or ensure the user home directory is accessible before retrying non-Claude outbound delivery.",
-                )
-            })?
-            .join("non_claude_outbound.jsonl");
+        let output_path = (self.path_factory)().map_err(|e| {
+            e.with_recovery(
+                "Set ATM_HOME to a writable directory or ensure the user home directory is accessible before retrying non-Claude outbound delivery.",
+            )
+        })?;
+        let bytes = serde_json::to_vec(&request)?;
+        if bytes.len() > MAX_NON_CLAUDE_PAYLOAD_BYTES {
+            return Err(AtmError::mailbox_write(format!(
+                "non-Claude outbound payload for {} exceeded {MAX_NON_CLAUDE_PAYLOAD_BYTES} bytes",
+                output_path.display()
+            ))
+            .with_recovery(
+                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink.",
+            ));
+        }
         let parent = output_path.parent().ok_or_else(|| {
             AtmError::mailbox_write(format!(
                 "non-Claude outbound path {} has no parent directory",
@@ -492,7 +528,7 @@ fn compat_inbox_uses_legacy_array_format(path: &Path) -> Result<bool, AtmError> 
 mod tests {
     use super::{
         LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-        RetainedServiceRuntime,
+        MAX_NON_CLAUDE_PAYLOAD_BYTES, RetainedServiceRuntime,
     };
     use crate::boundary;
     use crate::error_codes::AtmErrorCode;
@@ -847,5 +883,37 @@ mod tests {
             detail.get("recipient_pane_id").and_then(Value::as_str),
             Some("pane-1")
         );
+    }
+
+    #[test]
+    fn local_non_claude_outbound_rejects_oversized_payloads() {
+        let tempdir = tempdir().expect("tempdir");
+        let output_path = tempdir.path().join("non_claude_outbound.jsonl");
+        let runtime = LocalFileNonClaudeOutbound::new_for_test_with_path(output_path.clone());
+        let oversized_body = "a".repeat(MAX_NON_CLAUDE_PAYLOAD_BYTES + 1);
+
+        let error = crate::boundary::NonClaudeOutbound::deliver_payloads(
+            &runtime,
+            crate::boundary::NonClaudeOutboundDeliveryRequest {
+                team: TeamName::from_validated("test-team"),
+                agent: AgentName::from_validated("recipient"),
+                recipient_pane_id: None,
+                messages: vec![MessageEnvelope {
+                    text: oversized_body,
+                    ..message()
+                }],
+            },
+        )
+        .expect_err("oversized non-claude payload must fail");
+
+        assert_eq!(error.code, AtmErrorCode::MailboxWriteFailed);
+        assert!(error.message.contains("exceeded"));
+        assert_eq!(
+            error.recovery.as_deref(),
+            Some(
+                "Reduce message count or body size before retrying non-Claude delivery through the outbound payload sink."
+            )
+        );
+        assert!(!output_path.exists());
     }
 }
