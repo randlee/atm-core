@@ -34,12 +34,15 @@ release sign-off.
   line first
 - `Z.11` through `Z.15` must have closed the boundary/follow-up hardening line
   first
+- `Z.18` through `Z.22` must have closed the smoke tooling and execution line
+  first
 
 ## Prerequisites
 
 - `Z.2` complete
 - `Z.5` through `Z.10` complete
 - `Z.11` through `Z.15` complete
+- `Z.18` through `Z.22` complete
 - canary participants and reporting path are defined at sprint start and frozen
   before operator use begins
 - the canary participant list is approved by `team-lead` before the first

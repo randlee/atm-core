@@ -1473,6 +1473,55 @@ Required diagnostic behavior:
   error codes
 - command success-only logging is insufficient for the retained architecture
 
+### 14.4 Smoke And Coverage Reporting Architecture
+
+Smoke automation is a repo-owned execution/reporting surface, not an ad hoc
+operator script bundle.
+
+Ownership and layout:
+
+- operator skill surface:
+  - `.claude/skills/smoke-test/`
+- smoke implementation:
+  - `scripts/smoke/`
+- smoke report templates:
+  - `templates/smoke-report/`
+- smoke report artifacts:
+  - `reports/smoke/`
+- coverage implementation:
+  - `scripts/coverage/`
+- coverage report templates:
+  - `templates/coverage-report/`
+- coverage report artifacts:
+  - `reports/coverage/`
+
+Command architecture:
+
+- `just smoke`
+  - defaults to the normal smoke lane
+- `just smoke fast`
+  - runs the clean-room happy-path lane
+- `just smoke thorough`
+  - runs the full CLI/checklist lane
+- `just test coverage`
+  - runs coverage reporting only and must remain separate from plain
+    `just test`
+
+Artifact architecture:
+
+- smoke and coverage each keep tracked latest markdown reports
+- smoke and coverage each also write gitignored timestamped artifacts using
+  the same timestamp convention
+- smoke execution produces one canonical JSON payload per run and renders the
+  human-readable markdown reports from that payload
+
+Logging architecture:
+
+- smoke/debug mode may enable detailed lifecycle/send/read/ack/nudge event
+  visibility so retained-log analysis can prove the happy path explicitly
+- routine production logging remains on the normal retained baseline and must
+  not log every ordinary send/read/ack success at default operator verbosity
+
 ## 15. Error Model
 
 Root public error:
