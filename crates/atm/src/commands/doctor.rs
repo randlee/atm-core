@@ -43,10 +43,21 @@ impl DoctorCommand {
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     ) -> Result<DoctorQuery> {
+        let team_override = self
+            .team
+            .as_ref()
+            .map(|value| {
+                value.parse::<atm_core::types::TeamName>().map_err(|error| {
+                    error.with_recovery(
+                        "Use `--team <team>` with a valid ATM team name when running `atm doctor`.",
+                    )
+                })
+            })
+            .transpose()?;
         Ok(DoctorQuery {
             home_dir,
             current_dir,
-            team_override: self.team.as_ref().map(|value| value.parse()).transpose()?,
+            team_override,
         })
     }
 
@@ -130,6 +141,25 @@ mod tests {
         assert_eq!(
             query.team_override.as_ref().map(|value| value.as_str()),
             Some("test-team")
+        );
+    }
+
+    #[test]
+    fn build_query_adds_recovery_for_invalid_team_override() {
+        let command = DoctorCommand {
+            team: Some("bad team".to_string()),
+            json: false,
+        };
+
+        let (_tempdir, home_dir, current_dir) = test_paths();
+        let error = command
+            .build_query(home_dir, current_dir)
+            .expect_err("invalid team override should fail");
+        let atm_error = error.downcast_ref::<AtmError>().expect("atm error");
+
+        assert_eq!(
+            atm_error.recovery.as_deref(),
+            Some("Use `--team <team>` with a valid ATM team name when running `atm doctor`.")
         );
     }
 

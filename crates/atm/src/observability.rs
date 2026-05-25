@@ -177,7 +177,7 @@ mod tests {
         AtmLogQuery, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
         LogLevelFilter, LogMode, LogOrder, LogTailSession, ObservabilityPort,
     };
-    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -185,9 +185,6 @@ mod tests {
         CliObservability, CliObservabilityOptions, command_emit_failure_message,
         fatal_emit_failure_message,
     };
-
-    const TEST_TEAM: &str = "test-team";
-    const TEST_SENDER: &str = "sender-a";
 
     struct FailingEmitObservability;
 
@@ -302,7 +299,7 @@ mod tests {
             .query(query(LogOrder::OldestFirst))
             .expect("initial query");
         assert_eq!(initial.records.len(), 1);
-        assert_eq!(initial.records[0].service, "atm");
+        assert_eq!(initial.records[0].service.as_str(), "atm");
         assert_eq!(initial.records[0].action.as_deref(), Some("send"));
         assert_eq!(
             initial.records[0]

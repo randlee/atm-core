@@ -52,24 +52,9 @@ pub fn run_doctor_with_runtime(
     let config = runtime.load_config(&query.current_dir)?;
     let home_dir = query.home_dir.clone();
     let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
-    let resolved_team = query
-        .team_override
-        .clone()
-        .or_else(|| config::resolve_team(None, config.as_ref()));
-
+    let resolved_team = resolved_doctor_team(&query, config.as_ref());
     let environment = health::environment_visibility(query.home_dir, query.team_override);
-    let (observability_health, finding) = match observability.health() {
-        Ok(health) => {
-            let finding = health::observability_finding(&health);
-            (health, finding)
-        }
-        Err(error) => {
-            let snapshot = health::unavailable_snapshot(error.to_string());
-            let finding = health::observability_finding_from_error(&error);
-            (snapshot, finding)
-        }
-    };
-
+    let (observability_health, finding) = doctor_observability_status(observability);
     let mut findings = Vec::new();
     if config
         .as_ref()
@@ -94,34 +79,14 @@ pub fn run_doctor_with_runtime(
         &mut findings,
     );
     findings.push(finding);
+    let summary = summarize_doctor_findings(&findings);
     let recommendations = findings
         .iter()
         .filter_map(|finding| finding.remediation.clone())
         .collect::<Vec<_>>();
-    let status = health::status_from_findings(&findings);
-    let (info_count, warning_count, error_count) = findings.iter().fold(
-        (0usize, 0usize, 0usize),
-        |(info, warning, error), finding| match finding.severity {
-            DoctorSeverity::Info => (info + 1, warning, error),
-            DoctorSeverity::Warning => (info, warning + 1, error),
-            DoctorSeverity::Error => (info, warning, error + 1),
-        },
-    );
-
-    let message = match status {
-        DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
-        DoctorStatus::Warning => "ATM doctor completed with warnings",
-        DoctorStatus::Error => "ATM doctor found critical issues",
-    };
 
     Ok(DoctorReport {
-        summary: DoctorSummary {
-            status,
-            message: message.to_string(),
-            info_count,
-            warning_count,
-            error_count,
-        },
+        summary,
         findings,
         recommendations,
         environment,
@@ -130,6 +95,56 @@ pub fn run_doctor_with_runtime(
         runtime_status: None,
         bootstrap_trace: None,
     })
+}
+
+fn resolved_doctor_team(
+    query: &DoctorQuery,
+    config: Option<&config::AtmConfig>,
+) -> Option<TeamName> {
+    query
+        .team_override
+        .clone()
+        .or_else(|| config::resolve_team(None, config))
+}
+
+fn doctor_observability_status(
+    observability: &dyn ObservabilityPort,
+) -> (crate::observability::AtmObservabilityHealth, DoctorFinding) {
+    match observability.health() {
+        Ok(health) => {
+            let finding = health::observability_finding(&health);
+            (health, finding)
+        }
+        Err(error) => {
+            let snapshot = health::unavailable_snapshot(error.to_string());
+            let finding = health::observability_finding_from_error(&error);
+            (snapshot, finding)
+        }
+    }
+}
+
+fn summarize_doctor_findings(findings: &[DoctorFinding]) -> DoctorSummary {
+    let status = health::status_from_findings(findings);
+    let (info_count, warning_count, error_count) = findings.iter().fold(
+        (0usize, 0usize, 0usize),
+        |(info, warning, error), finding| match finding.severity {
+            DoctorSeverity::Info => (info + 1, warning, error),
+            DoctorSeverity::Warning => (info, warning + 1, error),
+            DoctorSeverity::Error => (info, warning, error + 1),
+        },
+    );
+    let message = match status {
+        DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
+        DoctorStatus::Warning => "ATM doctor completed with warnings",
+        DoctorStatus::Error => "ATM doctor found critical issues",
+    };
+    DoctorSummary {
+        status,
+        message: message.to_string(),
+        info_count,
+        warning_count,
+        error_count,
+    }
 }
 
 fn load_member_roster(

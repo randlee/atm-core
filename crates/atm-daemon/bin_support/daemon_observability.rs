@@ -37,7 +37,9 @@ const RETAINED_LOG_ROTATION_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const RETAINED_LOG_ROTATION_MAX_FILES: usize = 5;
 const RETAINED_LOG_RETENTION_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const RETAINED_LOG_MAINTENANCE_CADENCE: Duration = Duration::from_secs(60);
-const RETAINED_LOG_MAINTENANCE_JOIN_TIMEOUT: Duration = Duration::from_millis(250);
+// Allow one bounded maintenance join during shutdown without turning routine
+// daemon stop into a long blocking operation.
+const RETAINED_LOG_MAINTENANCE_JOIN_TIMEOUT: Duration = Duration::from_secs(1);
 #[cfg(test)]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 
@@ -56,6 +58,8 @@ impl LoggerLifecycle {
 }
 
 pub struct DaemonObservability {
+    // Keep one shared logger lifecycle behind a mutex so emit/health paths and
+    // shutdown can coordinate a single transition into the stopped state.
     logger: Arc<Mutex<Option<LoggerLifecycle>>>,
     active_log_path: PathBuf,
     service_name: ServiceName,
@@ -153,83 +157,20 @@ impl DaemonObservability {
     }
 
     pub(crate) fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
-        let mut fields = Map::new();
-        fields.insert(
-            "subsystem".to_string(),
-            serde_json::Value::String(event.subsystem.as_str().to_string()),
-        );
-        match &event.team {
-            TeamScope::Team(team) => {
-                fields.insert(
-                    "team".to_string(),
-                    serde_json::Value::String(team.to_string()),
-                );
-            }
-            TeamScope::None => {
-                fields.insert(
-                    "team_scope".to_string(),
-                    serde_json::Value::String("none".to_string()),
-                );
-            }
-        }
-        if let Some(agent) = event.agent.as_ref() {
-            fields.insert(
-                "agent".to_string(),
-                serde_json::Value::String(agent.to_string()),
-            );
-        }
-        if let Some(sender) = event.sender.as_ref() {
-            fields.insert(
-                "sender".to_string(),
-                serde_json::Value::String(sender.to_string()),
-            );
-        }
-        if let Some(recipient) = event.recipient.as_ref() {
-            fields.insert(
-                "recipient".to_string(),
-                serde_json::Value::String(recipient.to_string()),
-            );
-        }
-        if let Some(message_id) = event.message_id.as_ref() {
-            fields.insert(
-                "message_id".to_string(),
-                serde_json::Value::String(message_id.to_string()),
-            );
-        }
-        if let Some(task_id) = event.task_id.as_ref() {
-            fields.insert(
-                "task_id".to_string(),
-                serde_json::Value::String(task_id.to_string()),
-            );
-        }
-
+        let fields = daemon_event_fields(&event);
         self.emit_log_event(EmitLogEvent {
             scope: "lifecycle",
             action: event.action,
             outcome: event.outcome,
             message: Some(event.detail.into_owned()),
-            request_id: event
-                .message_id
-                .as_ref()
-                .map(|value| CorrelationId::new(value.to_string()))
-                .transpose()
-                .map_err(|source| {
-                    AtmError::observability_emit(
-                        "failed to validate ATM daemon lifecycle request id",
-                    )
-                    .with_source(source)
-                })?,
-            correlation_id: event
-                .task_id
-                .as_ref()
-                .map(|value| CorrelationId::new(value.as_str().to_string()))
-                .transpose()
-                .map_err(|source| {
-                    AtmError::observability_emit(
-                        "failed to validate ATM daemon lifecycle correlation id",
-                    )
-                    .with_source(source)
-                })?,
+            request_id: validated_correlation_id(
+                event.message_id.as_ref().map(ToString::to_string),
+                "ATM daemon lifecycle request id",
+            )?,
+            correlation_id: validated_correlation_id(
+                event.task_id.as_ref().map(|value| value.as_str().to_string()),
+                "ATM daemon lifecycle correlation id",
+            )?,
             fields,
         })
     }
@@ -256,10 +197,12 @@ impl DaemonObservability {
                 "shared daemon observability emit failed because the logger lock was poisoned",
             )
         })?;
-        match logger
-            .as_ref()
-            .expect("daemon observability logger lifecycle should always be present")
-        {
+        let Some(lifecycle) = logger.as_ref() else {
+            return Err(AtmError::observability_emit(
+                "shared daemon observability emit attempted after the retained logger shut down",
+            ));
+        };
+        match lifecycle {
             LoggerLifecycle::Running(logger_runtime) => logger_runtime.emit(event).map_err(|source| {
                 let code = sc_observability_types::DiagnosticInfo::diagnostic(&source)
                     .code
@@ -417,17 +360,28 @@ impl ObservabilityPort for DaemonObservability {
     }
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
-        let report = self
-            .logger
-            .lock()
-            .map_err(|_| {
-                AtmError::observability_health(
-                    "failed to read daemon observability health because the logger lock was poisoned",
-                )
-            })?
-            .as_ref()
-            .expect("daemon observability logger lifecycle should always be present")
-            .health();
+        let logger = self.logger.lock().map_err(|_| {
+            AtmError::observability_health(
+                "failed to read daemon observability health because the logger lock was poisoned",
+            )
+        })?;
+        let Some(lifecycle) = logger.as_ref() else {
+            return Ok(AtmObservabilityHealth {
+                active_log_path: Some(self.active_log_path.clone()),
+                logging_state: AtmObservabilityHealthState::Unavailable,
+                query_state: None,
+                maintenance: None,
+                diagnostic: Some(AtmObservabilityDiagnostic {
+                    code: None,
+                    message: "daemon observability logger has already shut down".to_string(),
+                }),
+                detail: Some(
+                    "daemon observability logger has already shut down; health is unavailable"
+                        .to_string(),
+                ),
+            });
+        };
+        let report = lifecycle.health();
         let diagnostic = report.last_error.map(map_diagnostic_summary);
         let detail = build_observability_detail(diagnostic.as_ref(), report.maintenance.as_ref());
         Ok(AtmObservabilityHealth {
@@ -488,7 +442,7 @@ impl DaemonObservability {
                 .with_source(source)
             })?,
             timestamp: Timestamp::now_utc(),
-            level: level_for_outcome(event.outcome.as_str()),
+            level: level_for_outcome(event.scope, &event.action, event.outcome.as_str()),
             service: self.service_name.clone(),
             target: self.target_category.clone(),
             action: event.action,
@@ -507,10 +461,12 @@ impl DaemonObservability {
                 "shared daemon observability emit failed because the logger lock was poisoned",
             )
         })?;
-        match logger
-            .as_ref()
-            .expect("daemon observability logger lifecycle should always be present")
-        {
+        let Some(lifecycle) = logger.as_ref() else {
+            return Err(AtmError::observability_emit(
+                "shared daemon observability emit attempted after the retained logger shut down",
+            ));
+        };
+        match lifecycle {
             LoggerLifecycle::Running(logger_runtime) => logger_runtime.emit(event).map_err(|source| {
                 let code = sc_observability_types::DiagnosticInfo::diagnostic(&source)
                     .code
@@ -526,6 +482,45 @@ impl DaemonObservability {
             )),
         }
     }
+}
+
+fn validated_correlation_id(
+    value: Option<String>,
+    label: &str,
+) -> Result<Option<CorrelationId>, AtmError> {
+    value.map(CorrelationId::new).transpose().map_err(|source| {
+        AtmError::observability_emit(format!("failed to validate {label}")).with_source(source)
+    })
+}
+
+fn daemon_event_fields(event: &DaemonEvent) -> Map<String, serde_json::Value> {
+    let mut fields = Map::from_iter([(
+        "subsystem".to_string(),
+        serde_json::Value::String(event.subsystem.as_str().to_string()),
+    )]);
+    match &event.team {
+        TeamScope::Team(team) => {
+            fields.insert("team".to_string(), serde_json::Value::String(team.to_string()));
+        }
+        TeamScope::None => {
+            fields.insert(
+                "team_scope".to_string(),
+                serde_json::Value::String("none".to_string()),
+            );
+        }
+    }
+    for (key, value) in [
+        ("agent", event.agent.as_ref().map(ToString::to_string)),
+        ("sender", event.sender.as_ref().map(ToString::to_string)),
+        ("recipient", event.recipient.as_ref().map(ToString::to_string)),
+        ("message_id", event.message_id.as_ref().map(ToString::to_string)),
+        ("task_id", event.task_id.as_ref().map(ToString::to_string)),
+    ] {
+        if let Some(value) = value {
+            fields.insert(key.to_string(), serde_json::Value::String(value));
+        }
+    }
+    fields
 }
 
 fn build_logger(
@@ -688,15 +683,16 @@ fn observability_test_event(
 }
 
 fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
-    let Some(value) = std::env::var(ATM_LOG_LEVEL_ENV)
+    let Some(raw_value) = std::env::var(ATM_LOG_LEVEL_ENV)
         .ok()
-        .map(|value| value.trim().to_ascii_lowercase())
+        .map(|value| value.trim().to_string())
         .filter(|value| !value.is_empty())
     else {
         return Ok(None);
     };
+    let normalized = raw_value.to_ascii_lowercase();
 
-    match value.as_str() {
+    match normalized.as_str() {
         "trace" => Ok(Some(SharedLevelFilter::Trace)),
         "debug" => Ok(Some(SharedLevelFilter::Debug)),
         "info" => Ok(Some(SharedLevelFilter::Info)),
@@ -704,7 +700,7 @@ fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
         "error" => Ok(Some(SharedLevelFilter::Error)),
         "off" => Ok(Some(SharedLevelFilter::Off)),
         _ => Err(AtmError::observability_bootstrap(format!(
-            "invalid {ATM_LOG_LEVEL_ENV} value `{value}`; use `trace`, `debug`, `info`, `warn`, `error`, or `off`"
+            "invalid {ATM_LOG_LEVEL_ENV} value `{raw_value}`; use `trace`, `debug`, `info`, `warn`, `error`, or `off`"
         ))),
     }
 }
@@ -765,7 +761,7 @@ fn map_subsystem_event(
     Ok(LogEvent {
         version: schema_version,
         timestamp: Timestamp::now_utc(),
-        level: level_for_outcome(outcome.as_str()),
+        level: level_for_outcome(subsystem.as_str(), action, outcome.as_str()),
         service: service_name.clone(),
         target: target_category.clone(),
         action: action.clone(),
@@ -798,12 +794,12 @@ fn map_diagnostic_summary(
     summary: sc_observability_types::DiagnosticSummary,
 ) -> AtmObservabilityDiagnostic {
     AtmObservabilityDiagnostic {
-        code: summary.code.map(|code| code.as_str().to_string()),
+        code: summary.code,
         message: summary.message,
     }
 }
 
-fn level_for_outcome(outcome: &str) -> Level {
+fn level_for_outcome(subsystem: &str, action: &ActionName, outcome: &str) -> Level {
     if outcome.starts_with("delivery_policy.") {
         return Level::Debug;
     }
@@ -813,10 +809,10 @@ fn level_for_outcome(outcome: &str) -> Level {
         "timeout" => Level::Warn,
         "error" | "failed" => Level::Error,
         other => {
-            // No global tracing subscriber is installed in production; daemon lifecycle records
-            // route through emit_daemon_event(), so this unknown-outcome warning is intentionally silent.
             tracing::warn!(
                 code = %AtmErrorCode::ObservabilityEmitFailed,
+                subsystem,
+                action = action.as_str(),
                 outcome = other,
                 "unknown ATM daemon outcome for observability level"
             );
@@ -892,16 +888,24 @@ mod tests {
     use serial_test::serial;
     use tempfile::TempDir;
 
-    use super::{DaemonObservability, observability_test_event};
+    use super::{ActionName, DaemonObservability, observability_test_event};
 
     #[test]
     fn delivery_policy_outcomes_map_to_debug() {
         assert_eq!(
-            super::level_for_outcome("delivery_policy.new_message.primary_nudge"),
+            super::level_for_outcome(
+                "delivery_policy",
+                &ActionName::new("test.action").expect("action"),
+                "delivery_policy.new_message.primary_nudge",
+            ),
             sc_observability_types::Level::Debug
         );
         assert_eq!(
-            super::level_for_outcome("delivery_policy.ack_reply.delivered"),
+            super::level_for_outcome(
+                "delivery_policy",
+                &ActionName::new("test.action").expect("action"),
+                "delivery_policy.ack_reply.delivered",
+            ),
             sc_observability_types::Level::Debug
         );
     }
@@ -917,7 +921,15 @@ mod tests {
             ("failed", sc_observability_types::Level::Error),
             ("future-outcome", sc_observability_types::Level::Warn),
         ] {
-            assert_eq!(super::level_for_outcome(outcome), expected, "outcome={outcome}");
+            assert_eq!(
+                super::level_for_outcome(
+                    "daemon_test",
+                    &ActionName::new("test.action").expect("action"),
+                    outcome,
+                ),
+                expected,
+                "outcome={outcome}"
+            );
         }
     }
 

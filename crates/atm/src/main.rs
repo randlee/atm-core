@@ -688,7 +688,7 @@ fn map_record(event: LogEvent) -> Result<Option<AtmLogRecord>, AtmError> {
     Ok(Some(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
         severity: map_level_back(event.level),
-        service: event.service.to_string(),
+        service: event.service,
         target: Some(event.target.to_string()),
         action: Some(event.action.to_string()),
         message: event.message,
@@ -802,7 +802,7 @@ fn map_diagnostic_summary(
     summary: sc_observability_types::DiagnosticSummary,
 ) -> AtmObservabilityDiagnostic {
     AtmObservabilityDiagnostic {
-        code: summary.code.map(|code| code.as_str().to_string()),
+        code: summary.code,
         message: summary.message,
     }
 }
