@@ -1,7 +1,7 @@
 ---
 id: phase-z-smoke-skill-plan
 title: Phase Z Smoke Skill And just smoke Plan
-status: planned
+status: complete
 target: develop
 ---
 
@@ -188,6 +188,7 @@ Required JSON schema:
   "timestamp": "2026-05-24T12:34:56Z",
   "binary_sha": "0123456789abcdef",
   "duration_secs": 123,
+  "status": "scaffold-only",
   "rows": [
     {
       "id": "Z1-005",
@@ -221,6 +222,7 @@ Required behavior:
 The stdout summary must be concise but complete enough for ATM handoff:
 
 - smoke level
+- runner status
 - binary SHA
 - total duration
 - pass/fail/skip counts

@@ -21,8 +21,6 @@ from fixtures import create_clean_room_fixture
 from fixtures import current_binary_sha
 from fixtures import repo_root
 from fixtures import smoke_env
-from fixtures import smoke_paths
-from fixtures import write_json
 
 
 ROW_MAP: dict[str, list[tuple[str, str]]] = {
@@ -234,6 +232,10 @@ def pass_row(row: SmokeRow, notes: str) -> None:
 
 
 def stop_daemon(pid: int) -> None:
+    if os.name != "posix":
+        raise RuntimeError(
+            "just smoke fast currently supports only POSIX daemon shutdown semantics"
+        )
     os.kill(pid, signal.SIGTERM)
     deadline = time.time() + 5.0
     while time.time() < deadline:
@@ -1530,14 +1532,26 @@ def build_payload(level: str, status: str | None, binary_sha: str) -> dict[str, 
     return scaffold_payload(level, scaffold_status, binary_sha)
 
 
+def render_stdout_summary(payload: dict) -> str:
+    summary = payload["summary"]
+    lines = [
+        f"smoke level: {payload['level']}",
+        f"runner status: {payload['status']}",
+        f"binary sha: {payload['binary_sha']}",
+        f"duration secs: {payload['duration_secs']}",
+        f"summary: pass={summary['pass']} fail={summary['fail']} skip={summary['skip']}",
+    ]
+    for row in payload["rows"]:
+        if row["verdict"] != "PASS":
+            lines.append(f"{row['id']}: {row['verdict']} - {row['notes']}")
+    return "\n".join(lines)
+
+
 def main() -> int:
     args = parse_args()
     binary_sha = args.binary_sha or current_binary_sha()
     payload = build_payload(args.level, args.status, binary_sha)
-    exit_code = 0 if payload.get("summary", {}).get("fail", 0) == 0 else 1
     if args.write_artifacts:
-        paths = smoke_paths(args.level)
-        write_json(paths.timestamped_json, payload)
         with tempfile.NamedTemporaryFile(
             "w", suffix=".json", delete=False, encoding="utf-8"
         ) as handle:
@@ -1548,8 +1562,10 @@ def main() -> int:
             render_markdown(temp_payload, write_artifacts=True)
         finally:
             temp_payload.unlink(missing_ok=True)
-    print(json.dumps(payload, indent=2))
-    return exit_code
+    else:
+        print(json.dumps(payload, indent=2))
+    print(render_stdout_summary(payload))
+    return 1 if payload["summary"]["fail"] > 0 else 0
 
 
 if __name__ == "__main__":
