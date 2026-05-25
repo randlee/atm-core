@@ -316,9 +316,10 @@ mod tests {
 
     #[test]
     fn request_execution_risk_classifies_clear_as_side_effecting() {
+        let tmp = std::env::temp_dir();
         let request = RequestEnvelope::Clear(ClearQuery {
-            home_dir: PathBuf::from("/tmp"),
-            current_dir: PathBuf::from("/tmp"),
+            home_dir: tmp.clone(),
+            current_dir: tmp,
             actor_override: None,
             target_address: None,
             team_override: None,
@@ -334,9 +335,10 @@ mod tests {
 
     #[test]
     fn request_execution_risk_classifies_doctor_as_read_only() {
+        let tmp = std::env::temp_dir();
         let request = RequestEnvelope::Doctor(DoctorQuery {
-            home_dir: PathBuf::from("/tmp"),
-            current_dir: PathBuf::from("/tmp"),
+            home_dir: tmp.clone(),
+            current_dir: tmp,
             team_override: None,
         });
         assert_eq!(

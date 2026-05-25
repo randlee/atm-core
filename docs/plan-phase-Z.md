@@ -529,6 +529,16 @@ Current execution state:
   - `feature/pZ-prodready-fix-r1` for the production-readiness hardening line
     documented above; implementation follow-up remains a later accepted
     execution line after this documentation gap closure
+- production-readiness documentation-hardening closure records on
+  `feature/pZ-prodready-fix-r1 @ 00b2d595`:
+  - `PRR-001` CLOSED: shared-host topology requirements and accepted evidence
+    now require one-host multi-workspace validation
+  - `PRR-002` CLOSED: same-host side-effecting timeout / safe-retry contract is
+    now explicitly documented
+  - `PRR-003` CLOSED: retained-log hot-path/background-maintenance performance
+    requirements are now explicitly documented
+  - `PRR-004` CLOSED: Linux coverage scope is now explicitly documented as
+    deferred / unsupported in the current `Phase Z` line
 - planning status note:
   - this planning branch continues to treat `Z.2` as `planned`; execution-line
     pass/fail state lives on the accepted `integrate/phase-Z` line

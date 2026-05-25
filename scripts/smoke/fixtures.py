@@ -219,4 +219,6 @@ def smoke_env(fixture: SmokeFixture, *, identity: str, root: Path | None = None)
             "ATM_DAEMON_BIN": str(working_root / "target" / "release" / daemon_name),
         }
     )
+    env["ATM_CONFIG_HOME"] = str(fixture.atm_home)
+    env.pop("ATM_TEAMS_DIR", None)
     return env
