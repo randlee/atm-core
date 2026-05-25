@@ -270,6 +270,22 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
             .map(render_doctor_state)
             .unwrap_or("unknown")
     );
+    if let Some(maintenance) = &report.observability.maintenance {
+        println!(
+            "Maintenance: {} | Rotated: {} | Pruned: {} | Last pass: {}",
+            match maintenance.state {
+                sc_observability_types::MaintenanceWorkerState::Running => "running",
+                sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
+                sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
+            },
+            maintenance.rotated_files_total,
+            maintenance.pruned_files_total,
+            maintenance
+                .last_pass_at
+                .map(|timestamp| timestamp.into_inner().to_string())
+                .unwrap_or_else(|| "never".to_string())
+        );
+    }
     if let Some(runtime_status) = &report.runtime_status {
         print_runtime_status(runtime_status);
     }

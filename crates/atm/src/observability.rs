@@ -214,6 +214,7 @@ mod tests {
                 active_log_path: None,
                 logging_state: AtmObservabilityHealthState::Unavailable,
                 query_state: Some(AtmObservabilityHealthState::Unavailable),
+                maintenance: None,
                 diagnostic: None,
                 detail: Some("synthetic".to_string()),
             })
@@ -318,7 +319,14 @@ mod tests {
             Some(AtmObservabilityHealthState::Healthy)
         );
         assert_eq!(health.active_log_path, Some(log_dir.join("atm.log.jsonl")));
-        assert!(health.detail.is_none());
+        let detail = health
+            .detail
+            .as_deref()
+            .expect("maintenance detail should be projected");
+        assert!(detail.contains("maintenance state="));
+        assert!(detail.contains("rotated_files_total="));
+        assert!(detail.contains("pruned_files_total="));
+        assert!(detail.contains("last_pass_at="));
 
         let mut follow = observability
             .follow(AtmLogQuery {

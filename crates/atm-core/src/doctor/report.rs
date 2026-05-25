@@ -87,7 +87,7 @@ pub struct BootstrapTraceReport {
     pub auto_start_detail: Option<String>,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
     pub findings: Vec<DoctorFinding>,

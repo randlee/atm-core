@@ -875,19 +875,21 @@ dependencies = [
 
 [[package]]
 name = "sc-observability"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f574cd3a66eb9d5a6780c747086617c58907e02729d258e771efb4d6f076e8df"
+checksum = "3e885e135bd6d6330b18528f3d25b812c354ffde1fc7bca49de56cf90dbbf61f"
 dependencies = [
  "sc-observability-types",
+ "serde",
  "serde_json",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]
 name = "sc-observability-types"
-version = "1.0.0"
+version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e42c54a18a4c86d92e4ebaee8d7f06620fd5c9908eb1946b47da24f9778753d"
+checksum = "60b43c59f93ca2bf8416d5e0c12b2fcb6de58913543aa4c0b62cddbb9e25b430"
 dependencies = [
  "serde",
  "serde_json",

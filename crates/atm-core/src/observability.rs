@@ -431,11 +431,12 @@ pub enum RetainedSinkFaultMode {
     Unavailable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AtmObservabilityHealth {
     pub active_log_path: Option<PathBuf>,
     pub logging_state: AtmObservabilityHealthState,
     pub query_state: Option<AtmObservabilityHealthState>,
+    pub maintenance: Option<sc_observability_types::MaintenanceHealthReport>,
     pub diagnostic: Option<AtmObservabilityDiagnostic>,
     pub detail: Option<String>,
 }
@@ -562,6 +563,7 @@ impl ObservabilityPort for NullObservability {
             active_log_path: None,
             logging_state: AtmObservabilityHealthState::Unavailable,
             query_state: Some(AtmObservabilityHealthState::Unavailable),
+            maintenance: None,
             diagnostic: None,
             detail: Some("observability adapter is not configured".to_string()),
         })
