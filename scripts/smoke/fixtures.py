@@ -33,6 +33,13 @@ class SmokeFixture:
     recipient: str
 
 
+@dataclass(frozen=True)
+class SharedHostFixturePair:
+    root: Path
+    workspace_a: SmokeFixture
+    workspace_b: SmokeFixture
+
+
 def repo_root() -> Path:
     return Path(__file__).resolve().parents[2]
 
@@ -111,10 +118,10 @@ def create_clean_room_fixture(
     recipient: str,
 ) -> SmokeFixture:
     root = Path(tempfile.mkdtemp(prefix=prefix))
-    workspace_dir = root / "workspace"
-    home_dir = root / "home"
-    atm_home = root / "atm"
-    log_dir = root / "logs"
+    workspace_dir = root / "w"
+    home_dir = root / "h"
+    atm_home = root / "a"
+    log_dir = root / "l"
     team_dir = atm_home / ".claude" / "teams" / team_name
     (team_dir / "inboxes").mkdir(parents=True, exist_ok=True)
     workspace_dir.mkdir(parents=True, exist_ok=True)
@@ -138,10 +145,10 @@ def create_clean_room_fixture(
 
 def clone_fixture(source: SmokeFixture, *, prefix: str, clear_logs: bool = True) -> SmokeFixture:
     root = Path(tempfile.mkdtemp(prefix=prefix))
-    workspace_dir = root / "workspace"
-    home_dir = root / "home"
-    atm_home = root / "atm"
-    log_dir = root / "logs"
+    workspace_dir = root / "w"
+    home_dir = root / "h"
+    atm_home = root / "a"
+    log_dir = root / "l"
 
     ignore_runtime_sockets = shutil.ignore_patterns("*.sock")
     shutil.copytree(source.workspace_dir, workspace_dir, dirs_exist_ok=True)
@@ -167,6 +174,55 @@ def clone_fixture(source: SmokeFixture, *, prefix: str, clear_logs: bool = True)
     )
 
 
+def create_shared_host_fixture_pair(
+    *,
+    prefix: str,
+    team_name_a: str,
+    team_name_b: str,
+    operator_a: str,
+    operator_b: str,
+    recipient_a: str,
+    recipient_b: str,
+) -> SharedHostFixturePair:
+    root = Path(tempfile.mkdtemp(prefix=prefix))
+    home_dir = root / "h"
+    atm_home = root / "a"
+    log_dir = root / "l"
+
+    def create_workspace(
+        slug: str,
+        team_name: str,
+        operator: str,
+        recipient: str,
+    ) -> SmokeFixture:
+        workspace_dir = root / slug / "w"
+        team_dir = atm_home / ".claude" / "teams" / team_name
+        (team_dir / "inboxes").mkdir(parents=True, exist_ok=True)
+        workspace_dir.mkdir(parents=True, exist_ok=True)
+        (workspace_dir / ".atm.toml").write_text(
+            f'[atm]\ndefault_team = "{team_name}"\n',
+            encoding="utf-8",
+        )
+        (team_dir / "config.json").write_text('{"members":[]}\n', encoding="utf-8")
+        return SmokeFixture(
+            root=root / slug,
+            workspace_dir=workspace_dir,
+            home_dir=home_dir,
+            atm_home=atm_home,
+            log_dir=log_dir,
+            team_dir=team_dir,
+            team_name=team_name,
+            operator=operator,
+            recipient=recipient,
+        )
+
+    return SharedHostFixturePair(
+        root=root,
+        workspace_a=create_workspace("atm-a", team_name_a, operator_a, recipient_a),
+        workspace_b=create_workspace("atm-b", team_name_b, operator_b, recipient_b),
+    )
+
+
 def smoke_env(fixture: SmokeFixture, *, identity: str, root: Path | None = None) -> dict[str, str]:
     working_root = root or repo_root()
     daemon_name = "atm-daemon.exe" if os.name == "nt" else "atm-daemon"
@@ -187,4 +243,6 @@ def smoke_env(fixture: SmokeFixture, *, identity: str, root: Path | None = None)
             "TEMP": str(temp_root),
         }
     )
+    env["ATM_CONFIG_HOME"] = str(fixture.atm_home)
+    env.pop("ATM_TEAMS_DIR", None)
     return env

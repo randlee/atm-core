@@ -89,6 +89,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
         | AtmErrorCode::HelpTopicNotFound
         | AtmErrorCode::TestFakeTransportInjectionFailed => 3,
         AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected
         | AtmErrorCode::DaemonServingStateRejected

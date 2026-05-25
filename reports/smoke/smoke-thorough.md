@@ -1,10 +1,10 @@
 # Smoke Thorough
 
 - status: `passed`
-- timestamp: `2026-05-24T23:49:29.395098+00:00`
-- binary SHA: `fcb79958da128f2ea58145315afbfe6cbd4b73f6`
-- duration secs: `2.789`
-- summary: `pass=11`, `fail=0`, `skip=0`
+- timestamp: `2026-05-25T04:28:04.424185+00:00`
+- binary SHA: `59f350cbb47eafd4f87aaa6b4b0e221b761c6657`
+- duration secs: `4.297`
+- summary: `pass=12`, `fail=0`, `skip=0`
 
 | Row | Flow | Verdict | Notes |
 | --- | --- | --- | --- |
@@ -17,5 +17,6 @@
 | `Z1-007` | retained CLI validation and recovery guidance | `PASS` | send/read/ack/list/clear/log/doctor/teams/members/help common error paths all failed closed with explicit actionable guidance |
 | `Z1-008` | copied-state durable baseline bring-up | `PASS` | disposable copied-state doctor/list/send/read all succeeded without touching live host ATM state |
 | `Z1-009` | reconcile/runtime retry-visible smoke coverage | `PASS` | copied-state log snapshot retained the expected retry-visible daemon lifecycle outcomes while the durable send/read path succeeded |
+| `PRR-001` | shared-host multi-workspace same-daemon smoke coverage | `PASS` | two workspaces with one shared ATM_HOME daemon/database/log root handled concurrent send/read/ack traffic without cross-workspace leakage |
 | `FAST-LOG-001` | expected happy-path retained events are present | `PASS` | retained log captured send/read/ack/shutdown plus nudge and ack-reply delivery-policy events before negative-path execution |
 | `FAST-LOG-002` | retained logs contain no warnings or errors | `PASS` | retained log contained no warning or error records during the healthy-path portion of the thorough run |

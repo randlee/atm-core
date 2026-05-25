@@ -324,7 +324,7 @@ impl RuntimeComposition {
     }
 
     fn finalize_shutdown(&self) {
-        self.request_dispatcher.finalize_shutdown();
+        self.request_dispatcher.finalize_storage_shutdown();
     }
 
     fn begin_startup(&self) -> Result<(), AtmError> {
@@ -512,6 +512,7 @@ impl RuntimeComposition {
                 );
             }
         }
+        self.request_dispatcher.finalize_observability_shutdown();
         result
     }
 

@@ -29,6 +29,8 @@ pub enum AtmErrorCode {
     IdentityConflict,
     /// The daemon transport could not be reached or started.
     DaemonUnavailable,
+    /// The same-host daemon deadline expired after side effects may have started.
+    DaemonMayHaveExecuted,
     /// The daemon lifecycle-control or shutdown handshake wedged.
     DaemonLifecycleWedge,
     /// The client-side daemon launch gate rejected a duplicate spawn.
@@ -139,6 +141,7 @@ impl AtmErrorCode {
             Self::IdentityUnavailable => "ATM_IDENTITY_UNAVAILABLE",
             Self::IdentityConflict => "ATM_IDENTITY_CONFLICT",
             Self::DaemonUnavailable => "ATM_DAEMON_UNAVAILABLE",
+            Self::DaemonMayHaveExecuted => "ATM_DAEMON_MAY_HAVE_EXECUTED",
             Self::DaemonLifecycleWedge => "ATM_DAEMON_LIFECYCLE_WEDGE",
             Self::DaemonLaunchGateRejected => "ATM_DAEMON_LAUNCH_GATE_REJECTED",
             Self::DaemonServingStateRejected => "ATM_DAEMON_SERVING_STATE_REJECTED",
@@ -209,6 +212,7 @@ impl FromStr for AtmErrorCode {
             "ATM_IDENTITY_UNAVAILABLE" => Ok(Self::IdentityUnavailable),
             "ATM_IDENTITY_CONFLICT" => Ok(Self::IdentityConflict),
             "ATM_DAEMON_UNAVAILABLE" => Ok(Self::DaemonUnavailable),
+            "ATM_DAEMON_MAY_HAVE_EXECUTED" => Ok(Self::DaemonMayHaveExecuted),
             "ATM_DAEMON_LIFECYCLE_WEDGE" => Ok(Self::DaemonLifecycleWedge),
             "ATM_DAEMON_LAUNCH_GATE_REJECTED" => Ok(Self::DaemonLaunchGateRejected),
             "ATM_DAEMON_SERVING_STATE_REJECTED" => Ok(Self::DaemonServingStateRejected),

@@ -173,6 +173,42 @@ Satisfied by:
   - every daemon launch path is subordinate to `REQ-P-RUNTIME-002` and
     `REQ-P-RUNTIME-003`
 
+- `REQ-P-RUNTIME-004` The supported same-host topology is one HOME-scoped
+  daemon, one host-scoped SQLite database, and one host-scoped retained log
+  root serving multiple ATM workspaces with different `ATM_HOME` values.
+
+  Required behavior:
+  - distinct workspaces on the same host may carry different `ATM_HOME`
+    values while still sharing:
+    - one daemon singleton
+    - one durable SQLite root
+    - one retained observability root
+  - concurrent same-host `send`, `read`, and `ack` traffic from different
+    workspaces must not leak mailbox, roster, or retained-log state across
+    team/workspace boundaries
+  - release evidence for this topology must include at least one shared-host
+    smoke lane that proves two or more workspaces share one daemon/database/log
+    root while concurrent `send` / `read` / `ack` traffic succeeds
+  - any release claim that ATM is production-ready for `10+` same-host
+    workspaces must cite explicit accepted evidence for that `10+` topology in
+    the readiness record; absent that evidence, the release must not claim the
+    broader `10+` same-host scale target
+
+- `REQ-P-RUNTIME-005` Same-host daemon timeout handling must preserve an
+  explicit retry-safety contract for side-effecting commands.
+
+  Required behavior:
+  - the daemon may continue running accepted request work after a caller-side
+    local IPC deadline expires
+  - read-only commands may continue to use retryable same-host timeout
+    failures
+  - side-effecting commands that exceed the caller-visible deadline after
+    dispatch begins must not return a generic retry-safe timeout surface
+  - same-host side-effecting timeout failures must return a distinct
+    machine-readable error code that means "the command may have executed"
+  - recovery guidance for that distinct timeout must tell callers to inspect
+    mailbox or service-side effects before retrying
+
 - `REQ-P-DAEMON-PARTITION-001` Phase R daemon cleanup work must use one
   explicit daemon-private partition map so ownership, review scope, and later
   lint enforcement do not depend on ad hoc file boundaries.
@@ -1942,6 +1978,8 @@ Product requirement ID:
 - `REQ-P-OBS-003` ATM retained logging must be non-silent by default for the
   daemon lifecycle baseline and for every warning/error emitted by ATM
   subsystems.
+- `REQ-P-OBS-004` ATM retained-log maintenance must keep daemon success-path
+  observability off the synchronous file-I/O hot path.
 
 Satisfied by:
 - `REQ-ATM-OBS-001` for CLI bootstrap/injection aspects
@@ -1970,6 +2008,18 @@ Required ATM event classes:
 Required ATM event fields:
 - command name
 - team when known
+
+Required retained-log maintenance behavior:
+- successful daemon event emission must spend at most one bounded in-memory
+  handoff on the synchronous path; it must not reopen, append, flush, rotate,
+  or prune retained files inline before returning control to the active daemon
+  request/lifecycle path
+- retained-log file append, rotation, and pruning must run on background
+  maintenance machinery instead
+- if retained-log maintenance falls behind, ATM must degrade explicitly with
+  structured diagnostics rather than silently blocking the daemon success path
+- retained-log pruning must use a bounded work budget per maintenance tick and
+  must not rely on an unbounded wall-clock scan
 - actor identity when known
 - target identity when known
 - task id when known
@@ -2206,6 +2256,14 @@ Required testing architecture:
   - `just smoke thorough` must include the `normal` lane plus every CLI
     interface on happy path and common error paths, with explicit PASS/FAIL/
     SKIP row output and root-cause notes for every deviation
+  - `just smoke thorough` must also include one shared-host multi-workspace
+    lane where two or more workspaces use different `ATM_HOME` values while
+    sharing the same host `HOME`, daemon, SQLite database root, and retained
+    log root; that lane must prove:
+    - concurrent `send` traffic from multiple workspaces succeeds
+    - concurrent `read` / `ack` traffic from multiple workspaces succeeds
+    - no cross-workspace message leakage occurs
+    - the shared daemon remains healthy until both workspaces finish
 
 - `REQ-P-SMOKE-002` Smoke reporting must write:
   - tracked latest smoke reports:
@@ -2238,6 +2296,9 @@ Required testing architecture:
     report for the host platform that executed the run
   - the other tracked platform report may remain at its last real result or an
     explicit placeholder until that platform executes its own coverage run
+  - Linux tracked-latest coverage artifacts are deferred/unsupported in the
+    current Phase Z line and the coverage runner must fail clearly on Linux
+    rather than silently pretending to produce supported tracked artifacts
 - bare `join()`, `recv()`, `wait()`, or equivalent waits are prohibited in
   risky runtime/daemon test paths unless completion has already been proven by
   a bounded synchronization step

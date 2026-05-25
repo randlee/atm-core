@@ -1135,6 +1135,7 @@ mod tests {
     fn panic_in_dispatch_still_cleans_up_socket_path_on_shutdown() {
         let tempdir = TempDir::new().expect("tempdir");
         let atm_home = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&atm_home).expect("atm home dir");
         let _env = EnvGuard::set_many([
             ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
             ("ATM_LOG_DIR", None),
