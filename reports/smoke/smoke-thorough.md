@@ -1,21 +1,21 @@
 # Smoke Thorough
 
-- status: `scaffold-only`
-- timestamp: `2026-05-24T21:02:38.951798+00:00`
-- binary SHA: `554a5b71b8675efb1763ba6a13cf2897ce8d50df`
-- duration secs: `0.0`
-- summary: `pass=0`, `fail=0`, `skip=11`
+- status: `passed`
+- timestamp: `2026-05-24T23:49:29.395098+00:00`
+- binary SHA: `fcb79958da128f2ea58145315afbfe6cbd4b73f6`
+- duration secs: `2.789`
+- summary: `pass=11`, `fail=0`, `skip=0`
 
-| Row | Verdict | Notes |
-| --- | --- | --- |
-| `Z1-001` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
-| `Z1-002` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
-| `Z1-003` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
-| `Z1-004` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
-| `Z1-005` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
-| `Z1-006` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
-| `Z1-007` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
-| `Z1-008` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
-| `Z1-009` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
-| `FAST-LOG-001` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
-| `FAST-LOG-002` | `SKIP` | scaffold-only runner contract; execution steps land in later smoke sprints |
+| Row | Flow | Verdict | Notes |
+| --- | --- | --- | --- |
+| `Z1-001` | build approved smoke baseline | `PASS` | release smoke binaries built successfully |
+| `Z1-002` | clean-room daemon/runtime bring-up | `PASS` | doctor auto-started the daemon and reported healthy readiness on the clean-room baseline |
+| `Z1-003` | retained team/member inspection on clean-room baseline | `PASS` | teams, members, backup, and restore dry-run all succeeded on the clean-room retained/admin baseline |
+| `Z1-004` | empty-mailbox retained CLI surface | `PASS` | list/read/clear/log snapshot plus ATM help overview/send guidance all succeeded on the clean-room baseline |
+| `Z1-005` | first clean-room send to config-defined recipient | `PASS` | both send modes, pending-ack inspection, recipient read/ack, and post-ack clear/re-read all succeeded on the clean-room baseline |
+| `Z1-006` | degraded notification after durable send | `PASS` | copied-state durable send succeeded and surfaced the compatibility append degraded warning after the legacy-array inbox projection failed |
+| `Z1-007` | retained CLI validation and recovery guidance | `PASS` | send/read/ack/list/clear/log/doctor/teams/members/help common error paths all failed closed with explicit actionable guidance |
+| `Z1-008` | copied-state durable baseline bring-up | `PASS` | disposable copied-state doctor/list/send/read all succeeded without touching live host ATM state |
+| `Z1-009` | reconcile/runtime retry-visible smoke coverage | `PASS` | copied-state log snapshot retained the expected retry-visible daemon lifecycle outcomes while the durable send/read path succeeded |
+| `FAST-LOG-001` | expected happy-path retained events are present | `PASS` | retained log captured send/read/ack/shutdown plus nudge and ack-reply delivery-policy events before negative-path execution |
+| `FAST-LOG-002` | retained logs contain no warnings or errors | `PASS` | retained log contained no warning or error records during the healthy-path portion of the thorough run |

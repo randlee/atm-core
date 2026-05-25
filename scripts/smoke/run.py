@@ -16,10 +16,13 @@ import tempfile
 import time
 
 from analyze_logs import analyze_log_text
+from fixtures import clone_fixture
 from fixtures import create_clean_room_fixture
 from fixtures import current_binary_sha
 from fixtures import repo_root
 from fixtures import smoke_env
+from run_thorough import ThoroughSmokeRuntime
+from run_thorough import run_thorough
 
 
 ROW_MAP: dict[str, list[tuple[str, str]]] = {
@@ -63,6 +66,9 @@ FAST_RECIPIENT = "z19-recipient"
 NORMAL_TEAM = "z20-team"
 NORMAL_OPERATOR = "z20-operator"
 NORMAL_RECIPIENT = "z20-recipient"
+THOROUGH_TEAM = "z21-team"
+THOROUGH_OPERATOR = "z21-operator"
+THOROUGH_RECIPIENT = "z21-recipient"
 
 
 @dataclass
@@ -200,6 +206,11 @@ def command_failure_message(result: CommandResult) -> str:
     )
 
 
+def failure_mentions(result: CommandResult, needle: str) -> bool:
+    lowered = needle.lower()
+    return lowered in result.stdout.lower() or lowered in result.stderr.lower()
+
+
 def fail_row(
     row: SmokeRow,
     *,
@@ -223,22 +234,32 @@ def pass_row(row: SmokeRow, notes: str) -> None:
 
 
 def stop_daemon(pid: int) -> None:
-    if os.name != "posix":
-        raise RuntimeError(
-            "just smoke fast currently supports only POSIX daemon shutdown semantics"
+    if os.name == "nt":
+        subprocess.run(
+            ["taskkill", "/PID", str(pid), "/F"],
+            text=True,
+            capture_output=True,
+            check=False,
         )
-    os.kill(pid, signal.SIGTERM)
+    else:
+        os.kill(pid, signal.SIGTERM)
     deadline = time.time() + 5.0
     while time.time() < deadline:
         if not process_is_alive(pid):
             return
         time.sleep(0.05)
-    raise RuntimeError(f"daemon pid {pid} did not exit after SIGTERM")
+    raise RuntimeError(f"daemon pid {pid} did not exit during shutdown")
 
 
 def process_is_alive(pid: int) -> bool:
-    if os.name != "posix":
-        return False
+    if os.name == "nt":
+        status = subprocess.run(
+            ["tasklist", "/FI", f"PID eq {pid}"],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+        return status.returncode == 0 and str(pid) in status.stdout
     status = subprocess.run(
         ["ps", "-p", str(pid), "-o", "stat="],
         text=True,
@@ -249,6 +270,29 @@ def process_is_alive(pid: int) -> bool:
         return False
     state = status.stdout.strip()
     return bool(state) and "Z" not in state
+
+
+def build_thorough_runtime(root: Path) -> ThoroughSmokeRuntime:
+    return ThoroughSmokeRuntime(
+        row_map=ROW_MAP,
+        smoke_row_cls=SmokeRow,
+        root=root,
+        create_clean_room_fixture=create_clean_room_fixture,
+        clone_fixture=clone_fixture,
+        smoke_env=smoke_env,
+        build_release_binaries=build_release_binaries,
+        parse_json_output=parse_json_output,
+        run_atm=run_atm,
+        pass_row=pass_row,
+        fail_row=fail_row,
+        failure_mentions=failure_mentions,
+        analyze_log_text=analyze_log_text,
+        stop_daemon=stop_daemon,
+        process_is_alive=process_is_alive,
+        team=THOROUGH_TEAM,
+        operator=THOROUGH_OPERATOR,
+        recipient=THOROUGH_RECIPIENT,
+    )
 
 
 def run_clean_room_lane(
@@ -728,6 +772,7 @@ def run_clean_room_lane(
 
 
 def build_payload(level: str, status: str | None, binary_sha: str) -> dict[str, object]:
+    root = repo_root()
     if level == "fast":
         return run_clean_room_lane(
             level="fast",
@@ -746,6 +791,8 @@ def build_payload(level: str, status: str | None, binary_sha: str) -> dict[str, 
             recipient=NORMAL_RECIPIENT,
             include_validation_check=True,
         )
+    if level == "thorough":
+        return run_thorough(binary_sha, build_thorough_runtime(root))
     scaffold_status = status or "scaffold-only"
     return scaffold_payload(level, scaffold_status, binary_sha)
 

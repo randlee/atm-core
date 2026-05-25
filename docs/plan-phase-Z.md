@@ -341,6 +341,8 @@ Purpose:
 - implement `just smoke thorough`
 - cover every CLI interface on happy path plus common error paths
 - root-cause discrepancies from expected behavior
+- prove disposable copied-state bring-up, degraded compatibility-append
+  warning visibility, and retry-visible daemon/runtime evidence
 
 Execution branch:
 - `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting`

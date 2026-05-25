@@ -1,7 +1,7 @@
 ---
 id: Z.21
 title: Thorough Smoke CLI Coverage And Reporting
-status: planned
+status: complete
 branch: feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting
 worktree: ../atm-core-worktrees/feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.21
 worktree: ../atm-core-worktrees/feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting
 branch: feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
