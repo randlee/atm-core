@@ -25,9 +25,10 @@ ERR_INVALID_STRUCTURE = _MOD.ERR_INVALID_STRUCTURE
 ERR_NOT_FOUND = _MOD.ERR_NOT_FOUND
 ERR_PARSE_ERROR = _MOD.ERR_PARSE_ERROR
 CODEX_DEFAULT_PANE = _MOD.CODEX_DEFAULT_PANE
-TEST_TEAM = "atm-dev"
-TEST_AGENT = "arch-ctm"
-TEST_TEAM_LEAD = "team-lead"
+TEST_TEAM = "test-team"
+TEST_AGENT = "test-agent"
+TEST_TEAM_LEAD = "test-lead"
+TEST_QM = "test-qm"
 
 
 def _parse_json(text: str) -> dict:
@@ -94,7 +95,7 @@ class TestNudgePane(unittest.TestCase):
 
     def test_tmux_calls_order(self):
         with patch("subprocess.run") as mock_run, patch.object(_MOD, "log"):
-            _MOD.nudge_pane("%2", "quality-mgr", "hello")
+            _MOD.nudge_pane("%2", TEST_QM, "hello")
         calls = mock_run.call_args_list
         self.assertIn("-l", calls[0][0][0])
         self.assertIn("Enter", calls[1][0][0])
@@ -103,7 +104,7 @@ class TestNudgePane(unittest.TestCase):
 class TestBuildNudgeCommand(unittest.TestCase):
     def test_build_nudge_command_round_trips_with_single_quote_message(self):
         message = "<atm><action>it's urgent</action></atm>"
-        command = _MOD.build_nudge_command("%7", "quality-mgr", message)
+        command = _MOD.build_nudge_command("%7", TEST_QM, message)
         argv = shlex.split(command)
         self.assertEqual(
             argv,
@@ -112,7 +113,7 @@ class TestBuildNudgeCommand(unittest.TestCase):
                 str(_SCRIPT.resolve()),
                 "--pane",
                 "%7",
-                "quality-mgr",
+                TEST_QM,
                 message,
             ],
         )
@@ -120,7 +121,15 @@ class TestBuildNudgeCommand(unittest.TestCase):
 
 class TestCandidateStartDirs(unittest.TestCase):
     def test_claude_project_dir_first(self):
-        with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/tmp/proj", "PWD": "/tmp/other"}):
+        with patch.dict(
+            os.environ,
+            {
+                "CLAUDE_PROJECT_DIR": "/tmp/proj",
+                "PWD": "/tmp/other",
+                "HOME": "/tmp/home",
+                "USERPROFILE": "/tmp/home",
+            },
+        ):
             with patch("os.getcwd", return_value="/tmp/cwd"):
                 dirs = _MOD.candidate_start_dirs()
         self.assertEqual(dirs[0], Path("/tmp/proj").resolve())
@@ -128,19 +137,37 @@ class TestCandidateStartDirs(unittest.TestCase):
     def test_pwd_used_when_no_claude_project_dir(self):
         env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
         env["PWD"] = "/tmp/other"
+        env["HOME"] = "/tmp/home"
+        env["USERPROFILE"] = "/tmp/home"
         with patch.dict(os.environ, env, clear=True):
             with patch("os.getcwd", return_value="/tmp/cwd"):
                 dirs = _MOD.candidate_start_dirs()
         self.assertIn(Path("/tmp/other").resolve(), dirs)
 
     def test_deduplication(self):
-        with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/tmp/same", "PWD": "/tmp/same"}):
+        with patch.dict(
+            os.environ,
+            {
+                "CLAUDE_PROJECT_DIR": "/tmp/same",
+                "PWD": "/tmp/same",
+                "HOME": "/tmp/home",
+                "USERPROFILE": "/tmp/home",
+            },
+        ):
             with patch("os.getcwd", return_value="/tmp/same"):
                 dirs = _MOD.candidate_start_dirs()
         self.assertEqual(dirs.count(Path("/tmp/same").resolve()), 1)
 
     def test_ignores_getcwd_failure(self):
-        with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/tmp/proj"}, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "CLAUDE_PROJECT_DIR": "/tmp/proj",
+                "HOME": "/tmp/home",
+                "USERPROFILE": "/tmp/home",
+            },
+            clear=True,
+        ):
             with patch("os.getcwd", side_effect=OSError("gone")):
                 dirs = _MOD.candidate_start_dirs()
         self.assertEqual(dirs, [Path("/tmp/proj").resolve()])
@@ -155,7 +182,12 @@ class TestReadPaneFromToml(unittest.TestCase):
             (root / "repo" / ".atm.toml").write_text(toml_text, encoding="utf-8")
             with patch.dict(
                 os.environ,
-                {"CLAUDE_PROJECT_DIR": str(project), "PWD": str(project)},
+                {
+                    "CLAUDE_PROJECT_DIR": str(project),
+                    "PWD": str(project),
+                    "HOME": str(root / "home"),
+                    "USERPROFILE": str(root / "home"),
+                },
                 clear=False,
             ):
                 with patch("os.getcwd", return_value=str(project)):
@@ -163,7 +195,7 @@ class TestReadPaneFromToml(unittest.TestCase):
 
     def test_reads_team_specific_match(self):
         def run(path: Path):
-            result = _MOD.read_pane_from_toml("quality-mgr", TEST_TEAM)
+            result = _MOD.read_pane_from_toml(TEST_QM, TEST_TEAM)
             self.assertEqual(result.pane_id, "%2")
             self.assertEqual(Path(result.source_path), path.resolve())
 
@@ -177,11 +209,11 @@ default_team = "{TEST_TEAM}"
 [[rmux.windows]]
 name = "agents"
 [[rmux.windows.panes]]
-name = "quality-mgr"
+name = "{TEST_QM}"
 tmux_pane_id = "%2"
 env = {{ ATM_TEAM = "{TEST_TEAM}" }}
 [[rmux.windows.panes]]
-name = "quality-mgr"
+name = "{TEST_QM}"
 tmux_pane_id = "%9"
 env = {{ ATM_TEAM = "schook" }}
 """,
@@ -211,7 +243,7 @@ tmux_pane_id = "%1"
 
     def test_reports_ambiguous_same_team_match(self):
         def run(_path: Path):
-            result = _MOD.read_pane_from_toml("quality-mgr", TEST_TEAM)
+            result = _MOD.read_pane_from_toml(TEST_QM, TEST_TEAM)
             self.assertEqual(result.error_code, ERR_AMBIGUOUS)
             self.assertIn("%2", result.error_msg)
             self.assertIn("%7", result.error_msg)
@@ -226,11 +258,11 @@ default_team = "{TEST_TEAM}"
 [[rmux.windows]]
 name = "agents"
 [[rmux.windows.panes]]
-name = "quality-mgr"
+name = "{TEST_QM}"
 tmux_pane_id = "%2"
 env = {{ ATM_TEAM = "{TEST_TEAM}" }}
 [[rmux.windows.panes]]
-name = "quality-mgr"
+name = "{TEST_QM}"
 tmux_pane_id = "%7"
 env = {{ ATM_TEAM = "{TEST_TEAM}" }}
 """,
@@ -248,7 +280,16 @@ env = {{ ATM_TEAM = "{TEST_TEAM}" }}
     def test_reports_file_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(root), "PWD": str(root)}, clear=False):
+            with patch.dict(
+                os.environ,
+                {
+                    "CLAUDE_PROJECT_DIR": str(root),
+                    "PWD": str(root),
+                    "HOME": str(root / "home"),
+                    "USERPROFILE": str(root / "home"),
+                },
+                clear=False,
+            ):
                 with patch("os.getcwd", return_value=str(root)):
                     result = _MOD.read_pane_from_toml(TEST_AGENT, TEST_TEAM)
         self.assertEqual(result.error_code, ERR_FILE_MISSING)
@@ -362,12 +403,12 @@ class TestMainBehavior(unittest.TestCase):
 
     def test_config_missing_still_nudges_and_warns(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
-            ["quality-mgr"],
+            [TEST_QM],
             PaneLookup("%2", None, None, "/repo/.atm.toml"),
             PaneLookup(None, ERR_FILE_MISSING, "missing", "/home/config.json"),
         )
         self.assertEqual(rc, 0)
-        mock_nudge.assert_called_once_with("%2", "quality-mgr", unittest.mock.ANY)
+        mock_nudge.assert_called_once_with("%2", TEST_QM, unittest.mock.ANY)
         self.assertEqual(stderr_json["status"], "warning")
         self.assertIn("already sent to pane %2", " ".join(stderr_json["call_to_action"]))
         self.assertTrue(any("Create /home/config.json" in item for item in stderr_json["fix"]))
@@ -375,7 +416,7 @@ class TestMainBehavior(unittest.TestCase):
 
     def test_toml_failure_emits_manual_nudge_and_fix_call_to_action(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
-            ["quality-mgr"],
+            [TEST_QM],
             PaneLookup(None, ERR_PARSE_ERROR, "bad toml", "/repo/.atm.toml"),
             PaneLookup("%2", None, None, "/home/config.json"),
         )

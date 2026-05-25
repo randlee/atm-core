@@ -12,6 +12,7 @@ from fixtures import level_slug
 from fixtures import repo_root
 from fixtures import smoke_paths
 from fixtures import write_json
+from fixtures import write_text_atomic
 
 
 def template_name(level: str) -> str:
@@ -45,8 +46,8 @@ def main() -> int:
     if args.write_artifacts:
         paths = smoke_paths(payload["level"])
         ensure_parent(paths.latest_markdown)
-        paths.latest_markdown.write_text(markdown, encoding="utf-8")
-        paths.timestamped_markdown.write_text(markdown, encoding="utf-8")
+        write_text_atomic(paths.latest_markdown, markdown)
+        write_text_atomic(paths.timestamped_markdown, markdown)
         write_json(paths.timestamped_json, payload)
     else:
         print(markdown, end="")

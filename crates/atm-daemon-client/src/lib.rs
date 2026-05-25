@@ -11,7 +11,7 @@ use atm_core::doctor::{
     BootstrapTraceReport,
 };
 use atm_core::error::AtmError;
-use atm_core::observability::{CommandEvent, ObservabilityPort};
+use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::types::{AgentName, TeamName};
 use fs2::FileExt;
@@ -134,8 +134,8 @@ impl<'a> BootstrapTraceability<'a> {
         self.record(action, outcome, error);
         let event = CommandEvent {
             command: self.command,
-            action,
-            outcome,
+            action: action_name(action),
+            outcome: outcome_label(outcome),
             team: self.team.clone(),
             agent: self.agent.clone(),
             sender: self.agent.clone(),
@@ -899,12 +899,12 @@ mod tests {
         let events = observability.events();
         assert_eq!(events.len(), 3);
         assert_eq!(events[0].command, "send");
-        assert_eq!(events[0].action, "daemon_connect");
-        assert_eq!(events[0].outcome, "initial_miss");
-        assert_eq!(events[1].action, "daemon_connect");
-        assert_eq!(events[1].outcome, "retry_attempt");
-        assert_eq!(events[2].action, "daemon_connect");
-        assert_eq!(events[2].outcome, "connected");
+        assert_eq!(events[0].action.as_str(), "daemon_connect");
+        assert_eq!(events[0].outcome.as_str(), "initial_miss");
+        assert_eq!(events[1].action.as_str(), "daemon_connect");
+        assert_eq!(events[1].outcome.as_str(), "retry_attempt");
+        assert_eq!(events[2].action.as_str(), "daemon_connect");
+        assert_eq!(events[2].outcome.as_str(), "connected");
         assert_eq!(events[2].team.as_str(), "trace-team");
         assert_eq!(events[2].agent.as_str(), "trace-agent");
         assert_eq!(
@@ -944,15 +944,15 @@ mod tests {
 
         assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
         let events = observability.events();
-        assert!(
-            events
-                .iter()
-                .any(|event| event.action == "daemon_auto_start"
-                    && event.outcome == "spawn_requested")
-        );
+        assert!(events.iter().any(|event| {
+            event.action.as_str() == "daemon_auto_start"
+                && event.outcome.as_str() == "spawn_requested"
+        }));
         let error_event = events
             .iter()
-            .find(|event| event.action == "daemon_auto_start" && event.outcome == "error")
+            .find(|event| {
+                event.action.as_str() == "daemon_auto_start" && event.outcome.as_str() == "error"
+            })
             .expect("error event");
         assert_eq!(error_event.command, "doctor");
         assert_eq!(

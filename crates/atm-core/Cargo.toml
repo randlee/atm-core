@@ -31,6 +31,7 @@ ulid = { version = "1.2.1", features = ["serde"] }
 uuid.workspace = true
 fs2 = "0.4"
 same-file = "1"
+sc-observability-types.workspace = true
 sc-lint-attributes = { path = "../sc-lint-attributes", version = "0.1.0" }
 
 [dev-dependencies]

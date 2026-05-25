@@ -521,6 +521,22 @@ Current execution state:
   - `Z.20 @ a26b5e99` normal smoke systemic execution
   - `Z.21 @ 5dbcd3c3` thorough smoke CLI coverage and reporting
   - `Z.22` findings-review linkage closes on this fix round
+- `PZ-PHASE-END-FIX-R2 @ b63b1899` closure records:
+  - `ARCH-001 CLOSED` synthetic `TEST_TEAM = "test-team"` replaced the
+    production `atm-dev` literal in `scripts/test_atm_nudge.py`
+  - `ARCH-002 CLOSED` synthetic `TEST_AGENT = "test-agent"` replaced the
+    production `arch-ctm` literal in `scripts/test_atm_nudge.py`
+  - `ARCH-003 CLOSED` synthetic `TEST_TEAM = "test-team"` replaced repeated
+    raw `atm-dev` literals in `tools/schema_models/test_schema_models.py`
+  - `ARCH-004 CLOSED` synthetic `TEST_SENDER = "test-agent"` replaced the raw
+    `arch-ctm` literals in `tools/schema_models/test_schema_models.py`
+  - `ARCH-005 CLOSED` schema-model tests now build the config path from
+    `cls._temp_home.name` and `TEST_TEAM` instead of using a hardcoded
+    `/Users/randlee/.claude/teams/atm-dev/config.json` path
+- `PZ-PHASE-END-FIX-R4 @ 819899cd` closure records:
+  - `ARCH-007 CLOSED` synthetic `TEST_QM = "test-qm"` was added to
+    `scripts/test_atm_nudge.py`, and all 12 raw `quality-mgr` literals were
+    replaced with `TEST_QM`
 - `Z.23` remains the only pending smoke/coverage follow-on before final
   `Z.4` release-signoff evidence is complete
 - phase-end hardening is now split across two fix branches on top of the

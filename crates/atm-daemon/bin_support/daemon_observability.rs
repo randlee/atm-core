@@ -319,14 +319,8 @@ impl ObservabilityPort for DaemonObservability {
 
         self.emit_log_event(EmitLogEvent {
             scope: "observability",
-            action: ActionName::new(event.action).map_err(|source| {
-                AtmError::observability_emit("failed to validate ATM daemon observability action")
-                    .with_source(source)
-            })?,
-            outcome: OutcomeLabel::new(event.outcome).map_err(|source| {
-                AtmError::observability_emit("failed to validate ATM daemon observability outcome")
-                    .with_source(source)
-            })?,
+            action: event.action.clone(),
+            outcome: event.outcome.clone(),
             message: Some(format!(
                 "ATM daemon handled {} with outcome {}",
                 event.command, event.outcome

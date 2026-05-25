@@ -17,7 +17,7 @@ use atm_core::observability::RetainedSinkFaultMode;
 use atm_core::observability::{
     AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityDiagnostic, AtmObservabilityHealth,
     AtmObservabilityHealthState, CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter,
-    LogOrder, LogTailSession, ObservabilityPort,
+    LogOrder, LogTailSession, ObservabilityPort, standard_level_for_outcome,
 };
 use chrono::{DateTime, Utc};
 use clap::Parser;
@@ -30,9 +30,8 @@ use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability::{JsonlFileSink, RetentionPolicy, RotationPolicy};
 use sc_observability_types::{
-    ActionName, CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent,
-    LogQuery, OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName,
-    TargetCategory, Timestamp,
+    CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent, LogQuery,
+    ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory, Timestamp,
 };
 #[cfg(any(test, feature = "fault-injection"))]
 use sc_observability_types::{SinkHealth, SinkHealthState};
@@ -478,43 +477,7 @@ impl ObservabilityPort for ScObservabilityAdapter {
     }
 }
 
-fn map_command_event(
-    service_name: &ServiceName,
-    target_category: &TargetCategory,
-    event: CommandEvent,
-) -> Result<LogEvent, AtmError> {
-    let schema_version =
-        SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
-            .map_err(|source| {
-                AtmError::observability_emit("failed to validate ATM observability schema version")
-                    .with_source(source)
-            })?;
-    let action = ActionName::new(event.action).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM observability action")
-            .with_source(source)
-    })?;
-    let request_id = event
-        .message_id
-        .map(|value| CorrelationId::new(value.to_string()))
-        .transpose()
-        .map_err(|source| {
-            AtmError::observability_emit("failed to validate ATM observability request id")
-                .with_source(source)
-        })?;
-    let correlation_id = event
-        .task_id
-        .as_deref()
-        .map(CorrelationId::new)
-        .transpose()
-        .map_err(|source| {
-            AtmError::observability_emit("failed to validate ATM observability correlation id")
-                .with_source(source)
-        })?;
-    let outcome = OutcomeLabel::new(event.outcome).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM observability outcome label")
-            .with_source(source)
-    })?;
-
+fn build_command_event_fields(event: &CommandEvent) -> Map<String, serde_json::Value> {
     let mut fields = Map::new();
     fields.insert(
         "command".to_string(),
@@ -564,14 +527,45 @@ fn map_command_event(
             serde_json::Value::String(error_message.clone()),
         );
     }
+    fields
+}
 
+fn map_command_event(
+    service_name: &ServiceName,
+    target_category: &TargetCategory,
+    event: CommandEvent,
+) -> Result<LogEvent, AtmError> {
+    let schema_version =
+        SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
+            .map_err(|source| {
+                AtmError::observability_emit("failed to validate ATM observability schema version")
+                    .with_source(source)
+            })?;
+    let request_id = event
+        .message_id
+        .map(|value| CorrelationId::new(value.to_string()))
+        .transpose()
+        .map_err(|source| {
+            AtmError::observability_emit("failed to validate ATM observability request id")
+                .with_source(source)
+        })?;
+    let correlation_id = event
+        .task_id
+        .as_deref()
+        .map(CorrelationId::new)
+        .transpose()
+        .map_err(|source| {
+            AtmError::observability_emit("failed to validate ATM observability correlation id")
+                .with_source(source)
+        })?;
+    let fields = build_command_event_fields(&event);
     Ok(LogEvent {
         version: schema_version,
         timestamp: Timestamp::now_utc(),
-        level: level_for_outcome(event.outcome),
+        level: level_for_outcome(event.outcome.as_str()),
         service: service_name.clone(),
         target: target_category.clone(),
-        action,
+        action: event.action,
         message: Some(format!(
             "ATM command {} completed with outcome {}",
             event.command, event.outcome
@@ -580,7 +574,7 @@ fn map_command_event(
         trace: None,
         request_id,
         correlation_id,
-        outcome: Some(outcome),
+        outcome: Some(event.outcome),
         diagnostic: None,
         state_transition: None,
         fields,
@@ -763,19 +757,7 @@ fn level_for_outcome(outcome: &str) -> Level {
     ) {
         return Level::Debug;
     }
-
-    match outcome {
-        "ok" | "sent" | "dry_run" => Level::Info,
-        "timeout" => Level::Warn,
-        "error" | "failed" => Level::Error,
-        other => {
-            tracing::warn!(code = %AtmErrorCode::ObservabilityEmitFailed,
-                outcome = other,
-                "unknown ATM command outcome for observability level"
-            );
-            Level::Warn
-        }
-    }
+    standard_level_for_outcome(outcome)
 }
 
 fn map_query_error(source: QueryError) -> AtmError {
