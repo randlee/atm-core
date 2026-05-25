@@ -481,7 +481,7 @@ impl DaemonRequestDispatcher {
         Ok(())
     }
 
-    pub(crate) fn finalize_shutdown(&self) {
+    pub(crate) fn finalize_storage_shutdown(&self) {
         if let Some(boundary) = self.sqlite_boundary.clone() {
             Self::run_bounded_shutdown_step(
                 "sqlite_wal_checkpoint",
@@ -489,6 +489,9 @@ impl DaemonRequestDispatcher {
                 move || boundary.checkpoint_wal(),
             );
         }
+    }
+
+    pub(crate) fn finalize_observability_shutdown(&self) {
         let observability = self.observability.clone();
         Self::run_bounded_shutdown_step(
             "observability_flush",

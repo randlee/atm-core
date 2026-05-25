@@ -46,7 +46,6 @@ const RETAINED_LOG_ROTATION_MAX_FILES: u32 = 5;
 const RETAINED_LOG_RETENTION_MAX_AGE_DAYS: u32 = 7;
 const RETAINED_LOG_PRUNE_INTERVAL: Duration = Duration::from_secs(60);
 const RETAINED_LOG_PRUNE_JOIN_TIMEOUT: Duration = Duration::from_millis(250);
-const RETAINED_LOG_PRUNE_JOIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(test)]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 

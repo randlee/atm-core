@@ -1459,6 +1459,16 @@ Implementation rules:
   - daemon lifecycle `info!` events
   - every subsystem `warn!` event
   - every subsystem `error!` event
+- the daemon event-emission hot path must not perform per-event retained file
+  reopen/append/flush work inline; retained JSONL persistence must cross one
+  bounded in-memory queue into a background maintenance worker instead
+- the synchronous daemon success path is budgeted for one bounded in-memory
+  handoff only; retained logging must not delay request/lifecycle completion on
+  file reopen, append, flush, rotate, or prune work
+- retained-log rotation and pruning may run only on that background
+  maintenance worker, not on the synchronous daemon event-emission path
+- retained-log pruning must use a bounded work budget per maintenance tick; it
+  must not rely on an unbounded "scan until wall-clock deadline" strategy
 
 ### 14.3 Failure Diagnostic Rules
 
@@ -1517,6 +1527,9 @@ Artifact architecture:
 - coverage execution produces one canonical JSON payload per host-platform run,
   renders the matching tracked latest markdown report, and leaves the other
   tracked platform report unchanged unless only a placeholder exists
+- Linux coverage reporting is an explicit deferred/unsupported platform in the
+  current Phase Z line; the coverage runner must fail clearly on Linux instead
+  of emitting misleading tracked-latest artifacts
 
 Logging architecture:
 
