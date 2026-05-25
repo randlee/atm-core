@@ -294,7 +294,6 @@ mod tests {
     use atm_core::doctor::DoctorQuery;
     use atm_core::error_codes::AtmErrorCode;
     use atm_core::protocol::{ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope};
-    use std::path::PathBuf;
 
     #[test]
     fn side_effecting_timeout_returns_may_have_executed_code() {
