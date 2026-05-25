@@ -483,6 +483,15 @@ deliverables, acceptance criteria, and closure rules.
 - the coverage-report line (`Z.23`) remains separate from ordinary smoke
   execution, must not be implied by plain `just test`, and must close before
   the final `Z.4` release verdict is considered complete
+- the phase-end hardening branches are:
+  - `feature/pZ-phase-end-fix-r1`
+  - `feature/pZ-prodready-fix-r1`
+- `feature/pZ-prodready-fix-r1` is the authorized production-readiness
+  phase-end documentation-hardening line for:
+  - the shared-host multi-workspace validation gap
+  - the same-host side-effect timeout/retry contract
+  - retained-log hot-path/background-maintenance requirements
+  - coverage platform scope and Linux deferred/unsupported reporting
 - the boundary / follow-up hardening line (`Z.11` through `Z.15`) must also
   close before `atm-dev` canary use begins
 - dogfood findings feed only the final fix/sign-off sprint
@@ -514,6 +523,12 @@ Current execution state:
   - `Z.22` findings-review linkage closes on this fix round
 - `Z.23` remains the only pending smoke/coverage follow-on before final
   `Z.4` release-signoff evidence is complete
+- phase-end hardening is now split across two fix branches on top of the
+  accepted integration line:
+  - `feature/pZ-phase-end-fix-r1` for the promoted phase-end review findings
+  - `feature/pZ-prodready-fix-r1` for the production-readiness hardening line
+    documented above; implementation follow-up remains a later accepted
+    execution line after this documentation gap closure
 - planning status note:
   - this planning branch continues to treat `Z.2` as `planned`; execution-line
     pass/fail state lives on the accepted `integrate/phase-Z` line
