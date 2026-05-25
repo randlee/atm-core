@@ -108,6 +108,7 @@ mod tests {
                 active_log_path: None,
                 logging_state: AtmObservabilityHealthState::Healthy,
                 query_state: Some(AtmObservabilityHealthState::Healthy),
+                diagnostic: None,
                 detail: None,
             },
             runtime_status: None,

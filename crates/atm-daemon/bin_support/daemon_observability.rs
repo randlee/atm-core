@@ -1,23 +1,23 @@
-use std::io::ErrorKind;
-use std::io::Write;
+mod retained_sink;
+
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, Mutex};
-use std::thread;
-use std::time::{Duration, SystemTime};
+use std::sync::Arc;
+use std::time::Duration;
 use std::{fs, fs::OpenOptions};
 
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
 use atm_core::observability::{
-    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
-    LogTailSession, ObservabilityPort, RetainedSinkFaultMode,
+    AtmLogQuery, AtmLogSnapshot, AtmObservabilityDiagnostic, AtmObservabilityHealth,
+    AtmObservabilityHealthState, CommandEvent, LogTailSession, ObservabilityPort,
+    RetainedSinkFaultMode,
 };
 use serde_json::Map;
 
 use atm_daemon::DaemonSubsystem;
 use atm_daemon::{DaemonEvent, TeamScope};
+use retained_sink::RetainedJsonlFileSink;
 
 type ActionName = sc_observability_types::ActionName;
 type CorrelationId = sc_observability_types::CorrelationId;
@@ -45,6 +45,8 @@ const RETAINED_LOG_ROTATION_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const RETAINED_LOG_ROTATION_MAX_FILES: u32 = 5;
 const RETAINED_LOG_RETENTION_MAX_AGE_DAYS: u32 = 7;
 const RETAINED_LOG_PRUNE_INTERVAL: Duration = Duration::from_secs(60);
+const RETAINED_LOG_PRUNE_JOIN_TIMEOUT: Duration = Duration::from_millis(250);
+const RETAINED_LOG_PRUNE_JOIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(test)]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 
@@ -179,11 +181,28 @@ impl DaemonObservability {
             action: event.action,
             outcome: event.outcome,
             message: Some(event.detail.into_owned()),
-            request_id: event.message_id.as_ref().map(|value| value.to_string()),
+            request_id: event
+                .message_id
+                .as_ref()
+                .map(|value| CorrelationId::new(value.to_string()))
+                .transpose()
+                .map_err(|source| {
+                    AtmError::observability_emit(
+                        "failed to validate ATM daemon lifecycle request id",
+                    )
+                    .with_source(source)
+                })?,
             correlation_id: event
                 .task_id
                 .as_ref()
-                .map(|value| value.as_str().to_string()),
+                .map(|value| CorrelationId::new(value.as_str().to_string()))
+                .transpose()
+                .map_err(|source| {
+                    AtmError::observability_emit(
+                        "failed to validate ATM daemon lifecycle correlation id",
+                    )
+                    .with_source(source)
+                })?,
             fields,
         })
     }
@@ -229,6 +248,15 @@ impl DaemonObservability {
             .map_err(|source| {
                 AtmError::observability_health(format!(
                     "failed to sync retained observability sink at {}",
+                    self.active_log_path.display()
+                ))
+                .with_source(source)
+            })?;
+        self.retained_sink
+            .join_prune_worker_with_timeout(RETAINED_LOG_PRUNE_JOIN_TIMEOUT)
+            .map_err(|source| {
+                AtmError::observability_health(format!(
+                    "failed to join retained observability prune worker for {}",
                     self.active_log_path.display()
                 ))
                 .with_source(source)
@@ -304,11 +332,23 @@ impl ObservabilityPort for DaemonObservability {
                 "ATM daemon handled {} with outcome {}",
                 event.command, event.outcome
             )),
-            request_id: event.message_id.map(|value| value.to_string()),
+            request_id: event
+                .message_id
+                .map(|value| CorrelationId::new(value.to_string()))
+                .transpose()
+                .map_err(|source| {
+                    AtmError::observability_emit("failed to validate ATM daemon request id")
+                        .with_source(source)
+                })?,
             correlation_id: event
                 .task_id
                 .as_ref()
-                .map(|value| value.as_str().to_string()),
+                .map(|value| CorrelationId::new(value.as_str().to_string()))
+                .transpose()
+                .map_err(|source| {
+                    AtmError::observability_emit("failed to validate ATM daemon correlation id")
+                        .with_source(source)
+                })?,
             fields,
         })
     }
@@ -337,11 +377,14 @@ impl ObservabilityPort for DaemonObservability {
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
         let report = self.logger.health();
+        let diagnostic = report.last_error.map(map_diagnostic_summary);
+        let detail = diagnostic.as_ref().map(|diagnostic| diagnostic.message.clone());
         Ok(AtmObservabilityHealth {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state: None,
-            detail: report.last_error.map(render_diagnostic_summary),
+            diagnostic,
+            detail,
         })
     }
 }
@@ -367,13 +410,15 @@ impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
     }
 }
 
+// Keep validated correlation identifiers typed at this internal boundary so
+// each emit path does not repeatedly round-trip through String parsing.
 struct EmitLogEvent {
     scope: &'static str,
     action: ActionName,
     outcome: OutcomeLabel,
     message: Option<String>,
-    request_id: Option<String>,
-    correlation_id: Option<String>,
+    request_id: Option<CorrelationId>,
+    correlation_id: Option<CorrelationId>,
     fields: Map<String, serde_json::Value>,
 }
 
@@ -398,24 +443,8 @@ impl DaemonObservability {
             message: event.message,
             identity: ProcessIdentity::default(),
             trace: None,
-            request_id: event
-                .request_id
-                .as_deref()
-                .map(CorrelationId::new)
-                .transpose()
-                .map_err(|source| {
-                    AtmError::observability_emit("failed to validate ATM daemon request id")
-                        .with_source(source)
-                })?,
-            correlation_id: event
-                .correlation_id
-                .as_deref()
-                .map(CorrelationId::new)
-                .transpose()
-                .map_err(|source| {
-                    AtmError::observability_emit("failed to validate ATM daemon correlation id")
-                        .with_source(source)
-                })?,
+            request_id: event.request_id,
+            correlation_id: event.correlation_id,
             outcome: Some(event.outcome),
             diagnostic: None,
             state_transition: None,
@@ -506,242 +535,6 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
             ))
             .with_source(source)
         })
-}
-
-#[derive(Debug)]
-// The retained sink keeps three separate mutexes because the health state is read and updated on
-// the hot path, while the last-written file handle and prune timestamp are touched far less often.
-// Keeping them independent avoids serializing unrelated reads/writes behind one coarse lock.
-// Lock order matters when more than one is needed: write() updates last_written_file before health.
-struct RetainedJsonlFileSink {
-    path: PathBuf,
-    rotation: sc_observability::RotationPolicy,
-    retention: sc_observability::RetentionPolicy,
-    health: Mutex<SinkHealth>,
-    last_written_file: Mutex<Option<std::fs::File>>,
-    prune_in_progress: Arc<AtomicBool>,
-    last_prune_request_at: Mutex<Option<SystemTime>>,
-}
-
-impl RetainedJsonlFileSink {
-    fn new(
-        path: PathBuf,
-        rotation: sc_observability::RotationPolicy,
-        retention: sc_observability::RetentionPolicy,
-    ) -> Self {
-        Self {
-            path,
-            rotation,
-            retention,
-            health: Mutex::new(SinkHealth {
-                name: SinkName::new("jsonl_file_sink").expect("jsonl sink constant is valid"),
-                state: SinkHealthState::Healthy,
-                last_error: None,
-            }),
-            last_written_file: Mutex::new(None),
-            prune_in_progress: Arc::new(AtomicBool::new(false)),
-            last_prune_request_at: Mutex::new(None),
-        }
-    }
-
-    fn sync_last_written_file(&self) -> std::io::Result<()> {
-        let last_written = self
-            .last_written_file
-            .lock()
-            .map_err(|_| std::io::Error::other("retained sink sync handle lock poisoned"))?;
-        if let Some(file) = last_written.as_ref() {
-            file.sync_all()?;
-        }
-        Ok(())
-    }
-
-    fn rotate_if_needed(&self, incoming_len: u64) {
-        if let Ok(metadata) = fs::metadata(&self.path)
-            && metadata.len().saturating_add(incoming_len) > self.rotation.max_bytes
-        {
-            for idx in (1..self.rotation.max_files).rev() {
-                let src = self.rotated_path(idx);
-                let dest = self.rotated_path(idx + 1);
-                let _ = rename_if_present(&src, &dest);
-            }
-            let rotated = self.rotated_path(1);
-            let _ = rename_if_present(&self.path, &rotated);
-        }
-        self.schedule_prune_old_files();
-    }
-
-    fn rotated_path(&self, index: u32) -> PathBuf {
-        let parent = self.path.parent().unwrap_or_else(|| Path::new("."));
-        let file_name = self
-            .path
-            .file_name()
-            .and_then(|value| value.to_str())
-            .unwrap_or("atm.log.jsonl");
-        parent.join(format!("{file_name}.{index}"))
-    }
-
-    fn schedule_prune_old_files(&self) {
-        let now = SystemTime::now();
-        {
-            let Ok(mut last_request_at) = self.last_prune_request_at.lock() else {
-                tracing::warn!(
-                    "retained sink prune request lock poisoned; skipping one prune scheduling attempt"
-                );
-                return;
-            };
-            if let Some(last_request_at) = *last_request_at
-                && now
-                    .duration_since(last_request_at)
-                    .is_ok_and(|elapsed| elapsed < RETAINED_LOG_PRUNE_INTERVAL)
-            {
-                return;
-            }
-            *last_request_at = Some(now);
-        }
-
-        if self
-            .prune_in_progress
-            .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
-            .is_err()
-        {
-            return;
-        }
-
-        let path = self.path.clone();
-        let retention = self.retention;
-        let prune_in_progress = Arc::clone(&self.prune_in_progress);
-        if thread::Builder::new()
-            .name("atm-log-prune".to_string())
-            .spawn(move || {
-                prune_old_files_at_path(&path, retention);
-                prune_in_progress.store(false, Ordering::Release);
-            })
-            .is_err()
-        {
-            self.prune_in_progress.store(false, Ordering::Release);
-        }
-    }
-
-    fn mark_failure<E>(&self, error: E) -> sc_observability_types::LogSinkError
-    where
-        E: std::error::Error + Send + Sync + 'static,
-    {
-        let message = error.to_string();
-        let diagnostic = ErrorContext::new(
-            ErrorCode::new_static("SC_LOGGER_SINK_WRITE_FAILED"),
-            "jsonl file sink write failed",
-            Remediation::not_recoverable(
-                "file sink write failure handling is owned by the logger runtime",
-            ),
-        )
-        .cause(message)
-        .source(Box::new(error));
-        if let Ok(mut health) = self.health.lock() {
-            health.state = SinkHealthState::DegradedDropping;
-            health.last_error = Some(DiagnosticSummary::from(diagnostic.diagnostic()));
-        } else {
-            tracing::warn!("file sink health lock poisoned while recording sink failure");
-        }
-        sc_observability_types::LogSinkError(Box::new(diagnostic))
-    }
-}
-
-fn prune_old_files_at_path(path: &Path, retention: sc_observability::RetentionPolicy) {
-    let Some(parent) = path.parent() else {
-        return;
-    };
-    let Ok(entries) = fs::read_dir(parent) else {
-        return;
-    };
-    let retention_cutoff =
-        SystemTime::now() - Duration::from_secs(u64::from(retention.max_age_days) * 86_400);
-    let active_name = path
-        .file_name()
-        .and_then(|value| value.to_str())
-        .unwrap_or_default();
-    for entry in entries.flatten() {
-        let candidate = entry.path();
-        let Some(file_name) = candidate.file_name().and_then(|value| value.to_str()) else {
-            continue;
-        };
-        if !file_name.starts_with(active_name) || file_name == active_name {
-            continue;
-        }
-        if let Ok(metadata) = entry.metadata()
-            && let Ok(modified) = metadata.modified()
-            && modified < retention_cutoff
-        {
-            let _ = fs::remove_file(candidate);
-        }
-    }
-}
-
-impl sc_observability::LogSink for RetainedJsonlFileSink {
-    fn write(&self, event: &LogEvent) -> Result<(), sc_observability_types::LogSinkError> {
-        if let Some(parent) = self.path.parent() {
-            fs::create_dir_all(parent).map_err(|error| self.mark_failure(error))?;
-        }
-        let mut line = serde_json::to_vec(event).map_err(|error| self.mark_failure(error))?;
-        line.push(b'\n');
-        self.rotate_if_needed(line.len() as u64);
-        // Reopen per append intentionally: retained daemon events prioritize append-safety across
-        // rotation/replacement over holding one long-lived write handle open on the hot path.
-        let mut file = OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(&self.path)
-            .map_err(|error| self.mark_failure(error))?;
-        file.write_all(&line)
-            .and_then(|()| file.flush())
-            .map_err(|error| self.mark_failure(error))?;
-        // LOCK-ORDER: when write() needs both locks, update last_written_file
-        // before health so it matches the struct-level invariant.
-        *self.last_written_file.lock().map_err(|_| {
-            self.mark_failure(std::io::Error::other(
-                "retained sink file handle lock poisoned",
-            ))
-        })? = Some(file);
-        // LOCK-ORDER: acquire health only after last_written_file in write().
-        let mut health = self.health.lock().map_err(|_| {
-            self.mark_failure(std::io::Error::other("file sink health lock poisoned"))
-        })?;
-        health.state = SinkHealthState::Healthy;
-        Ok(())
-    }
-
-    fn flush(&self) -> Result<(), sc_observability_types::LogSinkError> {
-        let mut last_written = self.last_written_file.lock().map_err(|_| {
-            self.mark_failure(std::io::Error::other(
-                "retained sink file handle lock poisoned",
-            ))
-        })?;
-        if let Some(file) = last_written.as_mut() {
-            file.flush().map_err(|error| self.mark_failure(error))?;
-        }
-        Ok(())
-    }
-
-    fn health(&self) -> SinkHealth {
-        match self.health.lock() {
-            Ok(health) => health.clone(),
-            Err(_) => {
-                tracing::warn!("file sink health lock poisoned; reporting unavailable sink health");
-                SinkHealth {
-                    name: SinkName::new("jsonl_file_sink").expect("jsonl sink constant is valid"),
-                    state: SinkHealthState::Unavailable,
-                    last_error: None,
-                }
-            }
-        }
-    }
-}
-
-fn rename_if_present(src: &Path, dest: &Path) -> std::io::Result<()> {
-    match fs::rename(src, dest) {
-        Ok(()) => Ok(()),
-        Err(error) if error.kind() == ErrorKind::NotFound => Ok(()),
-        Err(error) => Err(error),
-    }
 }
 
 #[cfg(test)]
@@ -873,10 +666,12 @@ fn map_logging_state(
     }
 }
 
-fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary) -> String {
-    match summary.code {
-        Some(code) => format!("{}: {}", code.as_str(), summary.message),
-        None => summary.message,
+fn map_diagnostic_summary(
+    summary: sc_observability_types::DiagnosticSummary,
+) -> AtmObservabilityDiagnostic {
+    AtmObservabilityDiagnostic {
+        code: summary.code.map(|code| code.as_str().to_string()),
+        message: summary.message,
     }
 }
 
@@ -981,6 +776,21 @@ mod tests {
             super::level_for_outcome("delivery_policy.ack_reply.delivered"),
             sc_observability_types::Level::Debug
         );
+    }
+
+    #[test]
+    fn daemon_outcomes_map_to_documented_levels() {
+        for (outcome, expected) in [
+            ("ok", sc_observability_types::Level::Info),
+            ("sent", sc_observability_types::Level::Info),
+            ("dry_run", sc_observability_types::Level::Info),
+            ("timeout", sc_observability_types::Level::Warn),
+            ("error", sc_observability_types::Level::Error),
+            ("failed", sc_observability_types::Level::Error),
+            ("future-outcome", sc_observability_types::Level::Warn),
+        ] {
+            assert_eq!(super::level_for_outcome(outcome), expected, "outcome={outcome}");
+        }
     }
 
     #[test]

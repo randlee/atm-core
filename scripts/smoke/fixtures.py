@@ -150,6 +150,7 @@ def clone_fixture(source: SmokeFixture, *, prefix: str, clear_logs: bool = True)
 
 def smoke_env(fixture: SmokeFixture, *, identity: str, root: Path | None = None) -> dict[str, str]:
     working_root = root or repo_root()
+    daemon_name = "atm-daemon.exe" if os.name == "nt" else "atm-daemon"
     env = os.environ.copy()
     env.update(
         {
@@ -159,7 +160,7 @@ def smoke_env(fixture: SmokeFixture, *, identity: str, root: Path | None = None)
             "ATM_IDENTITY": identity,
             "ATM_LOG": "debug",
             "ATM_LOG_DIR": str(fixture.log_dir),
-            "ATM_DAEMON_BIN": str(working_root / "target" / "release" / "atm-daemon"),
+            "ATM_DAEMON_BIN": str(working_root / "target" / "release" / daemon_name),
         }
     )
     return env

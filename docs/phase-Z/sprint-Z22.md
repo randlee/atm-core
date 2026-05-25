@@ -152,9 +152,9 @@ level for findings triage and readiness linkage.
 ## Execution Notes
 
 - accepted upstream smoke line:
-  - `Z.19 @ bd301ae7`
-  - `Z.20 @ 63e9edc8`
-  - `Z.21 @ e9e395b1`
+  - `Z.19 @ fa36120d`
+  - `Z.20 @ a26b5e99`
+  - `Z.21 @ 5dbcd3c3`
 - the authoritative findings-review artifact is still empty after the accepted
   `fast`, `normal`, and `thorough` smoke runs
 - no smoke discrepancy in the accepted execution line exceeded the

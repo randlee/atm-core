@@ -12,29 +12,37 @@ use std::{fs, fs::OpenOptions};
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
+#[cfg(any(test, feature = "fault-injection"))]
+use atm_core::observability::RetainedSinkFaultMode;
 use atm_core::observability::{
-    AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-    CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter, LogOrder, LogTailSession,
-    ObservabilityPort, RetainedSinkFaultMode,
+    AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityDiagnostic, AtmObservabilityHealth,
+    AtmObservabilityHealthState, CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter,
+    LogOrder, LogTailSession, ObservabilityPort,
 };
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use clap::error::ErrorKind;
-use sc_observability::{
-    ConsoleSink, JsonlFileSink, LogSink, Logger, LoggerBuilder, LoggerConfig, RetentionPolicy,
-    RotationPolicy, SinkRegistration,
-};
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability::LogSink;
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability::LoggerBuilder;
+use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability::{JsonlFileSink, RetentionPolicy, RotationPolicy};
 use sc_observability_types::{
     ActionName, CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent,
-    LogQuery, OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName, SinkHealth,
-    SinkHealthState, TargetCategory, Timestamp,
+    LogQuery, OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName,
+    TargetCategory, Timestamp,
 };
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability_types::{SinkHealth, SinkHealthState};
 use serde_json::Map;
 use time::OffsetDateTime;
 use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
 const ATM_COMMAND_TARGET: &str = "atm.command";
 const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
+#[cfg(any(test, feature = "fault-injection"))]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 const MAX_RETAINED_QUERY_RECORD_BYTES: usize = 64 * 1024;
 
@@ -49,12 +57,13 @@ fn main() {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("{error}");
-            exit_code_for_error(&error)
+            exit_code_for_atm_error(&error)
         }
     };
     std::process::exit(exit_code);
 }
 
+#[cfg(test)]
 fn exit_code_for_error(error: &anyhow::Error) -> i32 {
     error
         .downcast_ref::<AtmError>()
@@ -122,7 +131,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
     }
 }
 
-fn run() -> anyhow::Result<()> {
+fn run() -> Result<(), AtmError> {
     let cli = match commands::Cli::try_parse() {
         Ok(cli) => cli,
         Err(error) => {
@@ -130,20 +139,23 @@ fn run() -> anyhow::Result<()> {
                 error.kind(),
                 ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
             ) {
-                error.print()?;
+                error.print().map_err(|source| {
+                    AtmError::validation("failed to write ATM help/version output")
+                        .with_source(source)
+                })?;
                 return Ok(());
             }
             let validation_error = atm_core::error::AtmError::validation(error.to_string());
             observability::CliObservability::fallback()
                 .report_fatal_error("parse", &validation_error);
-            return Err(error.into());
+            return Err(validation_error);
         }
     };
 
     if let Err(error) = init_tracing(cli.stderr_logs()) {
         let fallback = observability::CliObservability::fallback();
         fallback.report_fatal_error("bootstrap", &error);
-        return Err(error.into());
+        return Err(error);
     }
 
     let observability = match init_observability(cli.stderr_logs()) {
@@ -151,15 +163,30 @@ fn run() -> anyhow::Result<()> {
         Err(error) => {
             let fallback = observability::CliObservability::fallback();
             fallback.report_fatal_error("bootstrap", &error);
-            return Err(error.into());
+            return Err(error);
         }
     };
 
     match cli.run(&observability) {
         Ok(()) => Ok(()),
+        Err(error) => Err(report_and_map_service_error(&observability, error)),
+    }
+}
+
+fn report_and_map_service_error(
+    observability: &observability::CliObservability,
+    error: anyhow::Error,
+) -> AtmError {
+    match error.downcast::<AtmError>() {
+        Ok(error) => {
+            observability.report_fatal_error("service", &error);
+            error
+        }
         Err(error) => {
-            observability.report_fatal_error("service", error.as_ref());
-            Err(error)
+            let mapped =
+                AtmError::validation(format!("ATM CLI command failed unexpectedly: {error}"));
+            observability.report_fatal_error("service", &mapped);
+            mapped
         }
     }
 }
@@ -206,6 +233,7 @@ pub(crate) fn build_logger(
     if console_log_route == ConsoleLogRoute::Stderr {
         builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
     }
+    #[cfg(any(test, feature = "fault-injection"))]
     if let Some(mode) = retained_sink_fault_mode()? {
         register_retained_sink_fault(&mut builder, log_dir, mode);
     }
@@ -234,6 +262,7 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
         })
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 fn fault_injection_log_path(log_dir: &Path) -> PathBuf {
     log_dir.join("atm-fault-injection.log.jsonl")
 }
@@ -291,10 +320,8 @@ fn tracing_level_filter(level: SharedLevelFilter) -> TracingLevelFilter {
     }
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
-    // This CLI intentionally preserves the retained-sink fault injection seam in
-    // release builds so smoke/degraded observability drills can exercise the
-    // same ATM-owned log path without recompiling test-only binaries.
     let Some(value) = std::env::var(ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV)
         .ok()
         .map(|value| value.trim().to_ascii_lowercase())
@@ -312,6 +339,7 @@ fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError>
     }
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 fn register_retained_sink_fault(
     builder: &mut LoggerBuilder,
     log_dir: &Path,
@@ -327,11 +355,13 @@ fn register_retained_sink_fault(
     )));
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 struct RetainedSinkHealthOverride {
     inner: Arc<dyn LogSink>,
     mode: RetainedSinkFaultMode,
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 impl RetainedSinkHealthOverride {
     fn new(inner: Arc<dyn LogSink>, mode: RetainedSinkFaultMode) -> Self {
         Self { inner, mode }
@@ -345,6 +375,7 @@ impl RetainedSinkHealthOverride {
     }
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 impl LogSink for RetainedSinkHealthOverride {
     fn write(
         &self,
@@ -425,18 +456,23 @@ impl ObservabilityPort for ScObservabilityAdapter {
             .query
             .as_ref()
             .map(|query| map_query_state(query.state));
-        let query_detail = report
+        let query_diagnostic = report
             .query
             .as_ref()
-            .and_then(|query| query.last_error.clone().map(render_diagnostic_summary));
+            .and_then(|query| query.last_error.clone().map(map_diagnostic_summary));
+        let diagnostic = report
+            .last_error
+            .map(map_diagnostic_summary)
+            .or(query_diagnostic);
+        let detail = diagnostic
+            .as_ref()
+            .map(|diagnostic| diagnostic.message.clone());
         Ok(AtmObservabilityHealth {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state,
-            detail: report
-                .last_error
-                .map(render_diagnostic_summary)
-                .or(query_detail),
+            diagnostic,
+            detail,
         })
     }
 }
@@ -742,23 +778,20 @@ fn level_for_outcome(outcome: &str) -> Level {
 }
 
 fn map_query_error(source: QueryError) -> AtmError {
-    let code = source.code().as_str().to_string();
-    AtmError::observability_query(format!("shared observability query failed ({code})"))
-        .with_source(source)
+    AtmError::observability_query("shared observability query failed").with_source(source)
 }
 
 fn map_follow_error(phase: &str, source: QueryError) -> AtmError {
-    let code = source.code().as_str().to_string();
-    AtmError::observability_follow(format!(
-        "shared observability follow {phase} failed ({code})"
-    ))
-    .with_source(source)
+    AtmError::observability_follow(format!("shared observability follow {phase} failed"))
+        .with_source(source)
 }
 
-fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary) -> String {
-    match summary.code {
-        Some(code) => format!("{}: {}", code.as_str(), summary.message),
-        None => summary.message,
+fn map_diagnostic_summary(
+    summary: sc_observability_types::DiagnosticSummary,
+) -> AtmObservabilityDiagnostic {
+    AtmObservabilityDiagnostic {
+        code: summary.code.map(|code| code.as_str().to_string()),
+        message: summary.message,
     }
 }
 
@@ -849,7 +882,14 @@ mod adapter_tests {
             ("ok", sc_observability_types::Level::Info),
             ("sent", sc_observability_types::Level::Info),
             ("dry_run", sc_observability_types::Level::Info),
+            ("initial_miss", sc_observability_types::Level::Debug),
+            ("retry_attempt", sc_observability_types::Level::Debug),
+            ("pending", sc_observability_types::Level::Debug),
             ("connected", sc_observability_types::Level::Debug),
+            ("acquired", sc_observability_types::Level::Debug),
+            ("launched", sc_observability_types::Level::Debug),
+            ("spawn_requested", sc_observability_types::Level::Debug),
+            ("publish_wait_started", sc_observability_types::Level::Debug),
             (
                 "publish_wait_continuing",
                 sc_observability_types::Level::Debug,

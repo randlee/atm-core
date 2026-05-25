@@ -137,6 +137,13 @@ fn spawn_dispatch_worker(
 ) -> Result<DispatchWorker, AtmError> {
     let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
     let (completion_tx, completion_rx) = std::sync::mpsc::sync_channel(1);
+    // The same-host dispatch worker is intentionally allowed to run to natural
+    // completion after a caller-side timeout. Requests may have already crossed
+    // durable or side-effecting boundaries, so forcing cancellation at
+    // REQUEST_DEADLINE would create a more ambiguous contract than the current
+    // "response timed out; work may still complete in the background" surface.
+    // The completion channel plus tracked join handle keep that bounded worker
+    // visible to shutdown/reap logic instead of leaking silently.
     let dispatch_handle = std::thread::Builder::new()
         .name("local-ipc-dispatch".to_string())
         .spawn(move || {

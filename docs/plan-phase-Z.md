@@ -506,6 +506,14 @@ Current execution state:
   - `Z.13` workspace-config boundary cleanup
   - `Z.14` ambient singleton surface cleanup
   - `Z.15` deferred hardening follow-up consolidation
+- the smoke-tooling and smoke-execution line is complete through `Z.22`:
+  - `Z.18 @ ae1b753c` smoke scaffold and report infrastructure
+  - `Z.19 @ fa36120d` fast smoke happy-path execution
+  - `Z.20 @ a26b5e99` normal smoke systemic execution
+  - `Z.21 @ 5dbcd3c3` thorough smoke CLI coverage and reporting
+  - `Z.22` findings-review linkage closes on this fix round
+- `Z.23` remains the only pending smoke/coverage follow-on before final
+  `Z.4` release-signoff evidence is complete
 - planning status note:
   - this planning branch continues to treat `Z.2` as `planned`; execution-line
     pass/fail state lives on the accepted `integrate/phase-Z` line
