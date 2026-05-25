@@ -28,6 +28,7 @@ CODEX_DEFAULT_PANE = _MOD.CODEX_DEFAULT_PANE
 TEST_TEAM = "test-team"
 TEST_AGENT = "test-agent"
 TEST_TEAM_LEAD = "test-lead"
+TEST_QM = "test-qm"
 
 
 def _parse_json(text: str) -> dict:
@@ -94,7 +95,7 @@ class TestNudgePane(unittest.TestCase):
 
     def test_tmux_calls_order(self):
         with patch("subprocess.run") as mock_run, patch.object(_MOD, "log"):
-            _MOD.nudge_pane("%2", "quality-mgr", "hello")
+            _MOD.nudge_pane("%2", TEST_QM, "hello")
         calls = mock_run.call_args_list
         self.assertIn("-l", calls[0][0][0])
         self.assertIn("Enter", calls[1][0][0])
@@ -103,7 +104,7 @@ class TestNudgePane(unittest.TestCase):
 class TestBuildNudgeCommand(unittest.TestCase):
     def test_build_nudge_command_round_trips_with_single_quote_message(self):
         message = "<atm><action>it's urgent</action></atm>"
-        command = _MOD.build_nudge_command("%7", "quality-mgr", message)
+        command = _MOD.build_nudge_command("%7", TEST_QM, message)
         argv = shlex.split(command)
         self.assertEqual(
             argv,
@@ -112,7 +113,7 @@ class TestBuildNudgeCommand(unittest.TestCase):
                 str(_SCRIPT.resolve()),
                 "--pane",
                 "%7",
-                "quality-mgr",
+                TEST_QM,
                 message,
             ],
         )
@@ -208,11 +209,11 @@ default_team = "{TEST_TEAM}"
 [[rmux.windows]]
 name = "agents"
 [[rmux.windows.panes]]
-name = "quality-mgr"
+name = "{TEST_QM}"
 tmux_pane_id = "%2"
 env = {{ ATM_TEAM = "{TEST_TEAM}" }}
 [[rmux.windows.panes]]
-name = "quality-mgr"
+name = "{TEST_QM}"
 tmux_pane_id = "%9"
 env = {{ ATM_TEAM = "schook" }}
 """,
@@ -257,11 +258,11 @@ default_team = "{TEST_TEAM}"
 [[rmux.windows]]
 name = "agents"
 [[rmux.windows.panes]]
-name = "quality-mgr"
+name = "{TEST_QM}"
 tmux_pane_id = "%2"
 env = {{ ATM_TEAM = "{TEST_TEAM}" }}
 [[rmux.windows.panes]]
-name = "quality-mgr"
+name = "{TEST_QM}"
 tmux_pane_id = "%7"
 env = {{ ATM_TEAM = "{TEST_TEAM}" }}
 """,
@@ -402,12 +403,12 @@ class TestMainBehavior(unittest.TestCase):
 
     def test_config_missing_still_nudges_and_warns(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
-            ["quality-mgr"],
+            [TEST_QM],
             PaneLookup("%2", None, None, "/repo/.atm.toml"),
             PaneLookup(None, ERR_FILE_MISSING, "missing", "/home/config.json"),
         )
         self.assertEqual(rc, 0)
-        mock_nudge.assert_called_once_with("%2", "quality-mgr", unittest.mock.ANY)
+        mock_nudge.assert_called_once_with("%2", TEST_QM, unittest.mock.ANY)
         self.assertEqual(stderr_json["status"], "warning")
         self.assertIn("already sent to pane %2", " ".join(stderr_json["call_to_action"]))
         self.assertTrue(any("Create /home/config.json" in item for item in stderr_json["fix"]))
@@ -415,7 +416,7 @@ class TestMainBehavior(unittest.TestCase):
 
     def test_toml_failure_emits_manual_nudge_and_fix_call_to_action(self):
         rc, stderr_json, stdout_json, mock_nudge = _run_with_mocked_lookups(
-            ["quality-mgr"],
+            [TEST_QM],
             PaneLookup(None, ERR_PARSE_ERROR, "bad toml", "/repo/.atm.toml"),
             PaneLookup("%2", None, None, "/home/config.json"),
         )
