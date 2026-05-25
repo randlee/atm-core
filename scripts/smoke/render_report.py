@@ -9,12 +9,9 @@ from jinja2 import Environment, FileSystemLoader, StrictUndefined
 
 from fixtures import ensure_parent
 from fixtures import level_slug
+from fixtures import repo_root
 from fixtures import smoke_paths
 from fixtures import write_json
-
-
-def repo_root() -> Path:
-    return Path(__file__).resolve().parents[2]
 
 
 def template_name(level: str) -> str:
