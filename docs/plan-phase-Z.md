@@ -533,6 +533,10 @@ Current execution state:
   - `ARCH-005 CLOSED` schema-model tests now build the config path from
     `cls._temp_home.name` and `TEST_TEAM` instead of using a hardcoded
     `/Users/randlee/.claude/teams/atm-dev/config.json` path
+- `PZ-PHASE-END-FIX-R4 @ 819899cd` closure records:
+  - `ARCH-007 CLOSED` synthetic `TEST_QM = "test-qm"` was added to
+    `scripts/test_atm_nudge.py`, and all 12 raw `quality-mgr` literals were
+    replaced with `TEST_QM`
 - `Z.23` remains the only pending smoke/coverage follow-on before final
   `Z.4` release-signoff evidence is complete
 - phase-end hardening is now split across two fix branches on top of the
