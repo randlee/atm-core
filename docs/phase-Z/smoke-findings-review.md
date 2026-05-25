@@ -24,7 +24,7 @@ Each promoted finding entry must use this canonical serialization format:
   "expected_behavior": "successful ack-required send emits the primary_nudge event in retained logs",
   "root_cause": "smoke-fast debug logging path does not emit the expected nudge event on the durable happy path",
   "disposition": "promote-follow-on",
-  "recommended_sprint": "Z.22",
+  "recommended_sprint": "Z.19",
   "owner": "atm-dev",
   "notes": "capture retained log artifact path and follow-on logging fix recommendation"
 }
@@ -46,9 +46,9 @@ execution line.
 
 Accepted smoke execution heads:
 
-- `Z.19 @ bd301ae7`
-- `Z.20 @ 63e9edc8`
-- `Z.21 @ e9e395b1`
+- `Z.19 @ fa36120d`
+- `Z.20 @ a26b5e99`
+- `Z.21 @ 5dbcd3c3`
 
 Disposition summary:
 
@@ -57,3 +57,20 @@ Disposition summary:
   fixed inside the active execution sprints
 - no validated smoke discrepancy remained large enough to require promotion
   into this major-rework queue
+
+## Readiness And Binary Baseline Linkage
+
+- `docs/phase-Z/readiness.md` is the authoritative release-signoff ledger for
+  accepted smoke execution heads and later canary/release verdicts.
+- this queue records only promoted major smoke findings; when it remains empty,
+  the corresponding readiness rows still carry the accepted smoke binary SHAs
+  that were validated on the execution line:
+  - `Z.19 @ fa36120d`
+  - `Z.20 @ a26b5e99`
+  - `Z.21 @ 5dbcd3c3`
+- if a future smoke sprint promotes a larger finding, the promoted record in
+  this queue must cite the originating smoke level and the accepted readiness
+  row for the binary under test.
+- canary (`Z.3`) and final release (`Z.4`) evidence must reference both:
+  - the accepted readiness rows for the smoke execution heads
+  - any promoted finding records in this queue that remain open or deferred

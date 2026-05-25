@@ -346,10 +346,13 @@ Minimum tracked fields:
 - smoke level
 - report timestamp
 
-Planned follow-on behavior:
+Accepted linkage behavior:
 
-- `Z.22` will define how accepted smoke findings, binary-baseline notes, and
-  canary/release evidence link back to `docs/phase-Z/readiness.md`
+- `docs/phase-Z/readiness.md` records the accepted `Z.19` through `Z.21`
+  smoke execution heads used for release gating
+- `docs/phase-Z/smoke-findings-review.md` records promoted major smoke
+  findings and defines how those findings map back to the accepted readiness
+  rows and later canary/release evidence
 
 ## Smoke Findings Handling
 

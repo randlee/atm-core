@@ -49,12 +49,13 @@ fn main() {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("{error}");
-            exit_code_for_error(&error)
+            exit_code_for_atm_error(&error)
         }
     };
     std::process::exit(exit_code);
 }
 
+#[cfg(test)]
 fn exit_code_for_error(error: &anyhow::Error) -> i32 {
     error
         .downcast_ref::<AtmError>()
@@ -122,7 +123,7 @@ fn exit_code_for_atm_error(error: &AtmError) -> i32 {
     }
 }
 
-fn run() -> anyhow::Result<()> {
+fn run() -> Result<(), AtmError> {
     let cli = match commands::Cli::try_parse() {
         Ok(cli) => cli,
         Err(error) => {
@@ -130,20 +131,23 @@ fn run() -> anyhow::Result<()> {
                 error.kind(),
                 ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
             ) {
-                error.print()?;
+                error.print().map_err(|source| {
+                    AtmError::validation("failed to write ATM help/version output")
+                        .with_source(source)
+                })?;
                 return Ok(());
             }
             let validation_error = atm_core::error::AtmError::validation(error.to_string());
             observability::CliObservability::fallback()
                 .report_fatal_error("parse", &validation_error);
-            return Err(error.into());
+            return Err(validation_error);
         }
     };
 
     if let Err(error) = init_tracing(cli.stderr_logs()) {
         let fallback = observability::CliObservability::fallback();
         fallback.report_fatal_error("bootstrap", &error);
-        return Err(error.into());
+        return Err(error);
     }
 
     let observability = match init_observability(cli.stderr_logs()) {
@@ -151,15 +155,30 @@ fn run() -> anyhow::Result<()> {
         Err(error) => {
             let fallback = observability::CliObservability::fallback();
             fallback.report_fatal_error("bootstrap", &error);
-            return Err(error.into());
+            return Err(error);
         }
     };
 
     match cli.run(&observability) {
         Ok(()) => Ok(()),
+        Err(error) => Err(report_and_map_service_error(&observability, error)),
+    }
+}
+
+fn report_and_map_service_error(
+    observability: &observability::CliObservability,
+    error: anyhow::Error,
+) -> AtmError {
+    match error.downcast::<AtmError>() {
+        Ok(error) => {
+            observability.report_fatal_error("service", &error);
+            error
+        }
         Err(error) => {
-            observability.report_fatal_error("service", error.as_ref());
-            Err(error)
+            let mapped =
+                AtmError::validation(format!("ATM CLI command failed unexpectedly: {error}"));
+            observability.report_fatal_error("service", &mapped);
+            mapped
         }
     }
 }
