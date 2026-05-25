@@ -3875,7 +3875,7 @@ Phase Z sprint ledger:
 | `Z.19` | `complete` | `feature/pZ-s19-fast-smoke-happy-path-execution` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z19.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
 | `Z.20` | `complete` | `feature/pZ-s20-normal-smoke-systemic-execution` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z20.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
 | `Z.21` | `complete` | `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z21.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
-| `Z.22` | `planned` | `feature/pZ-s22-smoke-findings-review-and-major-rework-triage` | `docs/phase-Z/smoke-findings-review.md`, `docs/phase-Z/sprint-Z22.md` |
+| `Z.22` | `complete` | `feature/pZ-s22-smoke-findings-review-and-major-rework-triage` | `docs/phase-Z/smoke-findings-review.md`, `docs/phase-Z/sprint-Z22.md` |
 | `Z.23` | `planned` | `feature/pZ-s23-cross-platform-test-coverage-reporting` | `docs/phase-Z/sprint-Z23.md`, `templates/coverage-report/`, `reports/coverage/`, `Justfile` |
 | `Z.3` | `planned` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
 | `Z.4` | `planned` | `feature/pZ-s4-final-fixes-and-release-sign-off` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md` |

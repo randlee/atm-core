@@ -180,11 +180,28 @@ impl DaemonObservability {
             action: event.action,
             outcome: event.outcome,
             message: Some(event.detail.into_owned()),
-            request_id: event.message_id.as_ref().map(|value| value.to_string()),
+            request_id: event
+                .message_id
+                .as_ref()
+                .map(|value| CorrelationId::new(value.to_string()))
+                .transpose()
+                .map_err(|source| {
+                    AtmError::observability_emit(
+                        "failed to validate ATM daemon lifecycle request id",
+                    )
+                    .with_source(source)
+                })?,
             correlation_id: event
                 .task_id
                 .as_ref()
-                .map(|value| value.as_str().to_string()),
+                .map(|value| CorrelationId::new(value.as_str().to_string()))
+                .transpose()
+                .map_err(|source| {
+                    AtmError::observability_emit(
+                        "failed to validate ATM daemon lifecycle correlation id",
+                    )
+                    .with_source(source)
+                })?,
             fields,
         })
     }
@@ -314,11 +331,23 @@ impl ObservabilityPort for DaemonObservability {
                 "ATM daemon handled {} with outcome {}",
                 event.command, event.outcome
             )),
-            request_id: event.message_id.map(|value| value.to_string()),
+            request_id: event
+                .message_id
+                .map(|value| CorrelationId::new(value.to_string()))
+                .transpose()
+                .map_err(|source| {
+                    AtmError::observability_emit("failed to validate ATM daemon request id")
+                        .with_source(source)
+                })?,
             correlation_id: event
                 .task_id
                 .as_ref()
-                .map(|value| value.as_str().to_string()),
+                .map(|value| CorrelationId::new(value.as_str().to_string()))
+                .transpose()
+                .map_err(|source| {
+                    AtmError::observability_emit("failed to validate ATM daemon correlation id")
+                        .with_source(source)
+                })?,
             fields,
         })
     }
@@ -377,13 +406,15 @@ impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
     }
 }
 
+// Keep validated correlation identifiers typed at this internal boundary so
+// each emit path does not repeatedly round-trip through String parsing.
 struct EmitLogEvent {
     scope: &'static str,
     action: ActionName,
     outcome: OutcomeLabel,
     message: Option<String>,
-    request_id: Option<String>,
-    correlation_id: Option<String>,
+    request_id: Option<CorrelationId>,
+    correlation_id: Option<CorrelationId>,
     fields: Map<String, serde_json::Value>,
 }
 
@@ -408,24 +439,8 @@ impl DaemonObservability {
             message: event.message,
             identity: ProcessIdentity::default(),
             trace: None,
-            request_id: event
-                .request_id
-                .as_deref()
-                .map(CorrelationId::new)
-                .transpose()
-                .map_err(|source| {
-                    AtmError::observability_emit("failed to validate ATM daemon request id")
-                        .with_source(source)
-                })?,
-            correlation_id: event
-                .correlation_id
-                .as_deref()
-                .map(CorrelationId::new)
-                .transpose()
-                .map_err(|source| {
-                    AtmError::observability_emit("failed to validate ATM daemon correlation id")
-                        .with_source(source)
-                })?,
+            request_id: event.request_id,
+            correlation_id: event.correlation_id,
             outcome: Some(event.outcome),
             diagnostic: None,
             state_transition: None,
