@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import json
+import os
+import tempfile
 import unittest
+from unittest.mock import patch
 
 from tools.schema_models.atm_message_schema import (
     AtmInboxMessage,
@@ -18,6 +21,29 @@ from tools.schema_models.legacy_atm_message_schema import LegacyAtmInboxMessage
 
 
 class SchemaModelTests(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        super().setUpClass()
+        cls._temp_home = tempfile.TemporaryDirectory()
+        cls._env_patch = patch.dict(
+            os.environ,
+            {
+                "HOME": cls._temp_home.name,
+                "USERPROFILE": cls._temp_home.name,
+                "TMPDIR": cls._temp_home.name,
+                "TMP": cls._temp_home.name,
+                "TEMP": cls._temp_home.name,
+            },
+            clear=False,
+        )
+        cls._env_patch.start()
+
+    @classmethod
+    def tearDownClass(cls) -> None:
+        cls._env_patch.stop()
+        cls._temp_home.cleanup()
+        super().tearDownClass()
+
     def test_claude_native_message_validates(self) -> None:
         """Write-path: validates docs/claude-code-message-schema.md native envelope rules."""
 

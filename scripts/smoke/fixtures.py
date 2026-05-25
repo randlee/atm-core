@@ -80,8 +80,27 @@ def current_binary_sha(root: Path | None = None) -> str:
 
 
 def write_json(path: Path, payload: object) -> None:
+    write_text_atomic(path, json.dumps(payload, indent=2) + "\n")
+
+
+def write_text_atomic(path: Path, text: str) -> None:
     ensure_parent(path)
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            handle.write(text)
+            temp_path = Path(handle.name)
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
 
 def create_clean_room_fixture(
@@ -151,6 +170,8 @@ def clone_fixture(source: SmokeFixture, *, prefix: str, clear_logs: bool = True)
 def smoke_env(fixture: SmokeFixture, *, identity: str, root: Path | None = None) -> dict[str, str]:
     working_root = root or repo_root()
     daemon_name = "atm-daemon.exe" if os.name == "nt" else "atm-daemon"
+    temp_root = fixture.root / "tmp"
+    temp_root.mkdir(parents=True, exist_ok=True)
     env = os.environ.copy()
     env.update(
         {
@@ -161,6 +182,9 @@ def smoke_env(fixture: SmokeFixture, *, identity: str, root: Path | None = None)
             "ATM_LOG": "debug",
             "ATM_LOG_DIR": str(fixture.log_dir),
             "ATM_DAEMON_BIN": str(working_root / "target" / "release" / daemon_name),
+            "TMPDIR": str(temp_root),
+            "TMP": str(temp_root),
+            "TEMP": str(temp_root),
         }
     )
     return env

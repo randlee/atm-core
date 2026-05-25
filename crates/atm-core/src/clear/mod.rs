@@ -12,7 +12,7 @@ use crate::error::AtmError;
 use crate::identity;
 use crate::mailbox::source::ResolvedTarget;
 use crate::mailbox::source::resolve_target;
-use crate::observability::{CommandEvent, ObservabilityPort};
+use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
 use crate::schema::MessageEnvelope;
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
@@ -118,8 +118,8 @@ fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRunti
 
     if let Err(error) = observability.emit(CommandEvent {
         command: "clear",
-        action: "clear",
-        outcome: if query.dry_run { "dry_run" } else { "ok" },
+        action: action_name("clear"),
+        outcome: outcome_label(if query.dry_run { "dry_run" } else { "ok" }),
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender: context.actor,

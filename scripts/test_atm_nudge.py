@@ -120,7 +120,15 @@ class TestBuildNudgeCommand(unittest.TestCase):
 
 class TestCandidateStartDirs(unittest.TestCase):
     def test_claude_project_dir_first(self):
-        with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/tmp/proj", "PWD": "/tmp/other"}):
+        with patch.dict(
+            os.environ,
+            {
+                "CLAUDE_PROJECT_DIR": "/tmp/proj",
+                "PWD": "/tmp/other",
+                "HOME": "/tmp/home",
+                "USERPROFILE": "/tmp/home",
+            },
+        ):
             with patch("os.getcwd", return_value="/tmp/cwd"):
                 dirs = _MOD.candidate_start_dirs()
         self.assertEqual(dirs[0], Path("/tmp/proj").resolve())
@@ -128,19 +136,37 @@ class TestCandidateStartDirs(unittest.TestCase):
     def test_pwd_used_when_no_claude_project_dir(self):
         env = {k: v for k, v in os.environ.items() if k != "CLAUDE_PROJECT_DIR"}
         env["PWD"] = "/tmp/other"
+        env["HOME"] = "/tmp/home"
+        env["USERPROFILE"] = "/tmp/home"
         with patch.dict(os.environ, env, clear=True):
             with patch("os.getcwd", return_value="/tmp/cwd"):
                 dirs = _MOD.candidate_start_dirs()
         self.assertIn(Path("/tmp/other").resolve(), dirs)
 
     def test_deduplication(self):
-        with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/tmp/same", "PWD": "/tmp/same"}):
+        with patch.dict(
+            os.environ,
+            {
+                "CLAUDE_PROJECT_DIR": "/tmp/same",
+                "PWD": "/tmp/same",
+                "HOME": "/tmp/home",
+                "USERPROFILE": "/tmp/home",
+            },
+        ):
             with patch("os.getcwd", return_value="/tmp/same"):
                 dirs = _MOD.candidate_start_dirs()
         self.assertEqual(dirs.count(Path("/tmp/same").resolve()), 1)
 
     def test_ignores_getcwd_failure(self):
-        with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": "/tmp/proj"}, clear=True):
+        with patch.dict(
+            os.environ,
+            {
+                "CLAUDE_PROJECT_DIR": "/tmp/proj",
+                "HOME": "/tmp/home",
+                "USERPROFILE": "/tmp/home",
+            },
+            clear=True,
+        ):
             with patch("os.getcwd", side_effect=OSError("gone")):
                 dirs = _MOD.candidate_start_dirs()
         self.assertEqual(dirs, [Path("/tmp/proj").resolve()])
@@ -155,7 +181,12 @@ class TestReadPaneFromToml(unittest.TestCase):
             (root / "repo" / ".atm.toml").write_text(toml_text, encoding="utf-8")
             with patch.dict(
                 os.environ,
-                {"CLAUDE_PROJECT_DIR": str(project), "PWD": str(project)},
+                {
+                    "CLAUDE_PROJECT_DIR": str(project),
+                    "PWD": str(project),
+                    "HOME": str(root / "home"),
+                    "USERPROFILE": str(root / "home"),
+                },
                 clear=False,
             ):
                 with patch("os.getcwd", return_value=str(project)):
@@ -248,7 +279,16 @@ env = {{ ATM_TEAM = "{TEST_TEAM}" }}
     def test_reports_file_missing(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            with patch.dict(os.environ, {"CLAUDE_PROJECT_DIR": str(root), "PWD": str(root)}, clear=False):
+            with patch.dict(
+                os.environ,
+                {
+                    "CLAUDE_PROJECT_DIR": str(root),
+                    "PWD": str(root),
+                    "HOME": str(root / "home"),
+                    "USERPROFILE": str(root / "home"),
+                },
+                clear=False,
+            ):
                 with patch("os.getcwd", return_value=str(root)):
                     result = _MOD.read_pane_from_toml(TEST_AGENT, TEST_TEAM)
         self.assertEqual(result.error_code, ERR_FILE_MISSING)

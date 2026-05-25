@@ -714,11 +714,11 @@ fn assert_non_claude_sqlite_failure_observability(observability: &RecordingObser
     let observability_events = observability.events.lock().expect("events lock");
     assert!(observability_events.iter().any(|event| {
         event.command == "delivery_policy"
-            && event.outcome == "delivery_policy.new_message.non_claude_original"
+            && event.outcome.as_str() == "delivery_policy.new_message.non_claude_original"
     }));
     assert!(observability_events.iter().any(|event| {
         event.command == "delivery_policy"
-            && event.outcome == "delivery_policy.new_message.non_claude_error"
+            && event.outcome.as_str() == "delivery_policy.new_message.non_claude_error"
     }));
 }
 
@@ -824,7 +824,7 @@ fn send_claude_success_appends_original_via_compat_inbox_writer() {
     let events = observability.events.lock().expect("events lock");
     assert!(events.iter().any(|event| {
         event.command == "delivery_policy"
-            && event.outcome == "delivery_policy.new_message.compat_append_original"
+            && event.outcome.as_str() == "delivery_policy.new_message.compat_append_original"
     }));
 }
 
@@ -918,7 +918,7 @@ fn send_append_failure_routes_to_post_send_hook_fallback() {
     let events = observability.events.lock().expect("events lock");
     assert!(events.iter().any(|event| {
         event.command == "delivery_policy"
-            && event.outcome == "delivery_policy.new_message.post_send_hook_fallback"
+            && event.outcome.as_str() == "delivery_policy.new_message.post_send_hook_fallback"
     }));
 }
 

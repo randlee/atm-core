@@ -665,8 +665,6 @@ def run_clean_room_lane(
                 )
                 status = "failed"
 
-        if daemon_pid is not None:
-            stop_daemon(int(daemon_pid))
     except Exception as exc:
         status = "failed"
         first_pending = next(
@@ -683,6 +681,12 @@ def run_clean_room_lane(
                 notes="runner aborted during clean-room smoke execution",
             )
     finally:
+        daemon_shutdown_error: RuntimeError | None = None
+        if daemon_pid is not None:
+            try:
+                stop_daemon(int(daemon_pid))
+            except RuntimeError as exc:
+                daemon_shutdown_error = exc
         analysis: dict[str, object] | None = None
         if log_path.exists():
             log_text = log_path.read_text(encoding="utf-8")
@@ -752,6 +756,20 @@ def run_clean_room_lane(
                 notes="retained log file was missing",
             )
             status = "failed"
+        if daemon_shutdown_error is not None:
+            status = "failed"
+            first_pending = next(
+                (row for row in rows.values() if row.verdict == "SKIP"),
+                rows["Z1-002"],
+            )
+            fail_row(
+                first_pending,
+                observed=str(daemon_shutdown_error),
+                expected="the smoke daemon stops cleanly during runner cleanup",
+                root_cause="runner cleanup could not stop the smoke daemon after executing the scenario",
+                artifact="runner cleanup",
+                notes="smoke runner leaked or could not stop the daemon during cleanup",
+            )
         if status == "passed":
             shutil.rmtree(fixture.root, ignore_errors=True)
 

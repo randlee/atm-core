@@ -12,7 +12,7 @@ use crate::delivery_plan::{
 use crate::delivery_policy::{DeliveryEventFamily, DeliveryPolicyCoordinator};
 use crate::error::AtmError;
 use crate::identity;
-use crate::observability::{CommandEvent, ObservabilityPort};
+use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::send::{ResolvedRecipient, input, persist_message_and_seed_workflow, summary};
@@ -581,8 +581,8 @@ fn record_ack_telemetry(
 ) {
     if let Err(error) = observability.emit(CommandEvent {
         command: "ack",
-        action: "ack",
-        outcome: "ok",
+        action: action_name("ack"),
+        outcome: outcome_label("ok"),
         team,
         agent: actor.clone(),
         sender: actor.clone(),

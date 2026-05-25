@@ -450,8 +450,8 @@ mod tests {
         observability
             .emit(CommandEvent {
                 command: "send",
-                action: "send",
-                outcome: "sent",
+                action: atm_core::observability::action_name("send"),
+                outcome: atm_core::observability::outcome_label("sent"),
                 team: TEST_TEAM.parse().expect("team"),
                 agent: TEST_RECIPIENT.parse().expect("agent"),
                 sender: TEST_SENDER.parse().expect("sender"),

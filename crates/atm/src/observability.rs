@@ -1,7 +1,7 @@
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
-    ObservabilityPort,
+    ObservabilityPort, action_name, outcome_label,
 };
 use atm_core::types::{AgentName, TeamName};
 
@@ -77,8 +77,8 @@ impl CliObservability {
         let agent = identity.parse().unwrap_or(fallback_agent);
         if let Err(emit_error) = self.emit(CommandEvent {
             command: ATM_SERVICE_NAME,
-            action: stage,
-            outcome: "error",
+            action: action_name(stage),
+            outcome: outcome_label("error"),
             team: team.parse().unwrap_or(fallback_team),
             agent: agent.clone(),
             sender: agent,
@@ -95,11 +95,11 @@ impl CliObservability {
 
     pub(crate) fn emit_command_event(&self, event: CommandEvent) {
         let command = event.command;
-        let action = event.action;
+        let action = event.action.as_str().to_string();
         if let Err(emit_error) = self.emit(event) {
             eprintln!(
                 "{}",
-                command_emit_failure_message(command, action, &emit_error)
+                command_emit_failure_message(command, &action, &emit_error)
             );
         }
     }
@@ -235,8 +235,8 @@ mod tests {
     fn event(message_id: Option<&str>) -> CommandEvent {
         CommandEvent {
             command: "send",
-            action: "send",
-            outcome: "sent",
+            action: atm_core::observability::action_name("send"),
+            outcome: atm_core::observability::outcome_label("sent"),
             team: TEST_TEAM.parse().expect("team"),
             agent: TEST_SENDER.parse().expect("agent"),
             sender: TEST_SENDER.parse().expect("agent"),

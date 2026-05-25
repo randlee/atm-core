@@ -318,8 +318,8 @@ fn emit_plan_transitions(
     for transition in transitions {
         observability.emit(crate::observability::CommandEvent {
             command: "delivery_policy",
-            action: context.family.action_name(),
-            outcome: transition,
+            action: crate::observability::action_name(context.family.action_name()),
+            outcome: crate::observability::outcome_label(transition),
             team: context.team.clone(),
             agent: context.agent.clone(),
             sender: context.sender.clone(),

@@ -1,6 +1,7 @@
 use std::io::ErrorKind;
 use std::io::Write;
 use std::path::{Path, PathBuf};
+use std::sync::mpsc::{self, Receiver};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::thread;
@@ -9,10 +10,17 @@ use std::{fs, fs::OpenOptions};
 
 use super::{
     DiagnosticSummary, ErrorCode, ErrorContext, LogEvent, RETAINED_LOG_PRUNE_INTERVAL,
-    RETAINED_LOG_PRUNE_JOIN_POLL_INTERVAL, Remediation, SinkHealth, SinkHealthState, SinkName,
+    Remediation, SinkHealth, SinkHealthState, SinkName,
 };
 
 const RETAINED_LOG_PRUNE_DEADLINE: Duration = Duration::from_secs(30);
+const JSONL_SINK_NAME: &str = "jsonl_file_sink";
+
+#[derive(Debug)]
+struct TrackedPruneWorker {
+    join_handle: thread::JoinHandle<()>,
+    completion_rx: Receiver<()>,
+}
 
 #[derive(Debug)]
 // The retained sink keeps three separate mutexes because the health state is read and updated on
@@ -23,10 +31,11 @@ pub(super) struct RetainedJsonlFileSink {
     path: PathBuf,
     rotation: sc_observability::RotationPolicy,
     retention: sc_observability::RetentionPolicy,
+    sink_name: SinkName,
     health: Mutex<SinkHealth>,
     last_written_file: Mutex<Option<std::fs::File>>,
     prune_in_progress: Arc<AtomicBool>,
-    prune_join_handle: Mutex<Option<thread::JoinHandle<()>>>,
+    prune_worker: Mutex<Option<TrackedPruneWorker>>,
     last_prune_request_at: Mutex<Option<SystemTime>>,
 }
 
@@ -40,14 +49,15 @@ impl RetainedJsonlFileSink {
             path,
             rotation,
             retention,
+            sink_name: SinkName::new(JSONL_SINK_NAME).expect("jsonl sink constant is valid"),
             health: Mutex::new(SinkHealth {
-                name: SinkName::new("jsonl_file_sink").expect("jsonl sink constant is valid"),
+                name: SinkName::new(JSONL_SINK_NAME).expect("jsonl sink constant is valid"),
                 state: SinkHealthState::Healthy,
                 last_error: None,
             }),
             last_written_file: Mutex::new(None),
             prune_in_progress: Arc::new(AtomicBool::new(false)),
-            prune_join_handle: Mutex::new(None),
+            prune_worker: Mutex::new(None),
             last_prune_request_at: Mutex::new(None),
         }
     }
@@ -64,19 +74,29 @@ impl RetainedJsonlFileSink {
     }
 
     pub(super) fn join_prune_worker_with_timeout(&self, timeout: Duration) -> std::io::Result<()> {
-        let mut join_handle = self
-            .prune_join_handle
+        let mut prune_worker = self
+            .prune_worker
             .lock()
             .map_err(|_| std::io::Error::other("retained sink prune join lock poisoned"))?;
-        let Some(handle) = join_handle.take() else {
+        let Some(worker) = prune_worker.take() else {
             return Ok(());
         };
-        if !wait_for_thread_completion(&handle, timeout) {
-            *join_handle = Some(handle);
-            return Ok(());
+        match worker.completion_rx.recv_timeout(timeout) {
+            Ok(()) | Err(mpsc::RecvTimeoutError::Disconnected) => {}
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                *prune_worker = Some(worker);
+                return Err(std::io::Error::new(
+                    ErrorKind::TimedOut,
+                    format!(
+                        "retained sink prune worker exceeded the {}ms join deadline",
+                        timeout.as_millis()
+                    ),
+                ));
+            }
         }
-        drop(join_handle);
-        handle
+        drop(prune_worker);
+        worker
+            .join_handle
             .join()
             .map_err(|_| std::io::Error::other("retained sink prune worker panicked"))
     }
@@ -112,16 +132,21 @@ impl RetainedJsonlFileSink {
         let path = self.path.clone();
         let retention = self.retention;
         let prune_in_progress = Arc::clone(&self.prune_in_progress);
+        let (completion_tx, completion_rx) = mpsc::channel();
         match thread::Builder::new()
             .name("atm-log-prune".to_string())
             .spawn(move || {
                 prune_old_files_at_path(&path, retention);
                 prune_in_progress.store(false, Ordering::Release);
+                let _ = completion_tx.send(());
             })
         {
             Ok(handle) => {
-                if let Ok(mut prune_join_handle) = self.prune_join_handle.lock() {
-                    *prune_join_handle = Some(handle);
+                if let Ok(mut prune_worker) = self.prune_worker.lock() {
+                    *prune_worker = Some(TrackedPruneWorker {
+                        join_handle: handle,
+                        completion_rx,
+                    });
                 } else {
                     self.prune_in_progress.store(false, Ordering::Release);
                 }
@@ -136,25 +161,58 @@ impl RetainedJsonlFileSink {
         if let Ok(metadata) = fs::metadata(&self.path)
             && metadata.len().saturating_add(incoming_len) > self.rotation.max_bytes
         {
+            let rotated_path = |index| match self.rotated_path(index) {
+                Ok(path) => Some(path),
+                Err(error) => {
+                    tracing::warn!(
+                        %error,
+                        active_log_path = %self.path.display(),
+                        rotation_index = index,
+                        "retained sink could not derive rotated log path; skipping this rotation step"
+                    );
+                    None
+                }
+            };
             for idx in (1..self.rotation.max_files).rev() {
-                let src = self.rotated_path(idx);
-                let dest = self.rotated_path(idx + 1);
+                let Some(src) = rotated_path(idx) else {
+                    continue;
+                };
+                let Some(dest) = rotated_path(idx + 1) else {
+                    continue;
+                };
                 let _ = rename_if_present(&src, &dest);
             }
-            let rotated = self.rotated_path(1);
-            let _ = rename_if_present(&self.path, &rotated);
+            if let Some(rotated) = rotated_path(1) {
+                let _ = rename_if_present(&self.path, &rotated);
+            }
         }
         self.schedule_prune_old_files();
     }
 
-    fn rotated_path(&self, index: u32) -> PathBuf {
-        let parent = self.path.parent().unwrap_or_else(|| Path::new("."));
+    fn rotated_path(&self, index: u32) -> std::io::Result<PathBuf> {
+        let parent = self.path.parent().ok_or_else(|| {
+            std::io::Error::new(
+                ErrorKind::InvalidInput,
+                format!(
+                    "retained sink path {} has no parent directory",
+                    self.path.display()
+                ),
+            )
+        })?;
         let file_name = self
             .path
             .file_name()
             .and_then(|value| value.to_str())
-            .unwrap_or("atm.log.jsonl");
-        parent.join(format!("{file_name}.{index}"))
+            .ok_or_else(|| {
+                std::io::Error::new(
+                    ErrorKind::InvalidInput,
+                    format!(
+                        "retained sink path {} has no valid UTF-8 file name",
+                        self.path.display()
+                    ),
+                )
+            })?;
+        Ok(parent.join(format!("{file_name}.{index}")))
     }
 
     fn mark_failure<E>(&self, error: E) -> sc_observability_types::LogSinkError
@@ -235,7 +293,7 @@ impl sc_observability::LogSink for RetainedJsonlFileSink {
             Err(_) => {
                 tracing::warn!("file sink health lock poisoned; reporting unavailable sink health");
                 SinkHealth {
-                    name: SinkName::new("jsonl_file_sink").expect("jsonl sink constant is valid"),
+                    name: self.sink_name.clone(),
                     state: SinkHealthState::Unavailable,
                     last_error: None,
                 }
@@ -275,19 +333,6 @@ fn prune_old_files_at_path(path: &Path, retention: sc_observability::RetentionPo
         {
             let _ = fs::remove_file(candidate);
         }
-    }
-}
-
-fn wait_for_thread_completion(handle: &thread::JoinHandle<()>, timeout: Duration) -> bool {
-    let deadline = SystemTime::now() + timeout;
-    loop {
-        if handle.is_finished() {
-            return true;
-        }
-        if SystemTime::now() >= deadline {
-            return false;
-        }
-        thread::sleep(RETAINED_LOG_PRUNE_JOIN_POLL_INTERVAL);
     }
 }
 

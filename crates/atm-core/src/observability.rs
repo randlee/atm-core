@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use sc_lint_attributes::sc_lint;
+use sc_observability_types::{ActionName, Level, OutcomeLabel};
 use serde::de::Error as DeError;
 use serde::ser::{Error as SerError, SerializeMap};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -16,8 +17,8 @@ use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CommandEvent {
     pub command: &'static str,
-    pub action: &'static str,
-    pub outcome: &'static str,
+    pub action: ActionName,
+    pub outcome: OutcomeLabel,
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
@@ -27,6 +28,32 @@ pub struct CommandEvent {
     pub task_id: Option<TaskId>,
     pub error_code: Option<AtmErrorCode>,
     pub error_message: Option<String>,
+}
+
+pub fn action_name(value: &'static str) -> ActionName {
+    ActionName::new(value)
+        .expect("ATM observability action literals must be valid ActionName values")
+}
+
+pub fn outcome_label(value: &'static str) -> OutcomeLabel {
+    OutcomeLabel::new(value)
+        .expect("ATM observability outcome literals must be valid OutcomeLabel values")
+}
+
+pub fn standard_level_for_outcome(outcome: &str) -> Level {
+    match outcome {
+        "ok" | "sent" | "dry_run" => Level::Info,
+        "timeout" => Level::Warn,
+        "error" | "failed" => Level::Error,
+        other => {
+            warn!(
+                code = %AtmErrorCode::ObservabilityEmitFailed,
+                outcome = other,
+                "unknown ATM command outcome for observability level"
+            );
+            Level::Warn
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]

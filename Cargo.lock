@@ -36,6 +36,7 @@ dependencies = [
  "libc",
  "same-file",
  "sc-lint-attributes",
+ "sc-observability-types",
  "serde",
  "serde_json",
  "serial_test",

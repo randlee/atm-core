@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import argparse
 import json
+import os
 import platform as host_platform_module
 import subprocess
 import sys
@@ -32,6 +33,26 @@ def repo_root() -> Path:
 
 def ensure_parent(path: Path) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
+
+
+def write_text_atomic(path: Path, text: str) -> None:
+    ensure_parent(path)
+    temp_path: Path | None = None
+    try:
+        with tempfile.NamedTemporaryFile(
+            "w",
+            encoding="utf-8",
+            dir=path.parent,
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as handle:
+            handle.write(text)
+            temp_path = Path(handle.name)
+        os.replace(temp_path, path)
+    finally:
+        if temp_path is not None:
+            temp_path.unlink(missing_ok=True)
 
 
 def timestamp_slug(now: datetime | None = None) -> str:
@@ -211,8 +232,7 @@ def render_markdown(payload: dict[str, object]) -> str:
 
 
 def write_json(path: Path, payload: object) -> None:
-    ensure_parent(path)
-    path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
+    write_text_atomic(path, json.dumps(payload, indent=2) + "\n")
 
 
 def should_refresh_placeholder(path: Path) -> bool:
@@ -249,8 +269,8 @@ def main() -> int:
     if args.write_artifacts:
         actual_paths = coverage_paths(platform_slug, stamp)
         ensure_parent(actual_paths.latest_markdown)
-        actual_paths.latest_markdown.write_text(markdown, encoding="utf-8")
-        actual_paths.timestamped_markdown.write_text(markdown, encoding="utf-8")
+        write_text_atomic(actual_paths.latest_markdown, markdown)
+        write_text_atomic(actual_paths.timestamped_markdown, markdown)
         write_json(actual_paths.timestamped_json, payload)
 
         commit = payload["commit"]
@@ -260,9 +280,9 @@ def main() -> int:
             other_paths = coverage_paths(other_platform, stamp)
             if not should_refresh_placeholder(other_paths.latest_markdown):
                 continue
-            other_paths.latest_markdown.write_text(
+            write_text_atomic(
+                other_paths.latest_markdown,
                 render_markdown(placeholder_payload(other_platform, commit)),
-                encoding="utf-8",
             )
     else:
         print(markdown, end="")

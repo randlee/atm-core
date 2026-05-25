@@ -1,9 +1,10 @@
 mod retained_sink;
 
 use std::path::{Path, PathBuf};
+use std::sync::mpsc;
 use std::sync::Arc;
 use std::time::Duration;
-use std::{fs, fs::OpenOptions};
+use std::{borrow::Cow, fs, fs::OpenOptions, thread};
 
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
@@ -11,7 +12,7 @@ use atm_core::home;
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityDiagnostic, AtmObservabilityHealth,
     AtmObservabilityHealthState, CommandEvent, LogTailSession, ObservabilityPort,
-    RetainedSinkFaultMode,
+    RetainedSinkFaultMode, standard_level_for_outcome,
 };
 use serde_json::Map;
 
@@ -46,7 +47,7 @@ const RETAINED_LOG_ROTATION_MAX_FILES: u32 = 5;
 const RETAINED_LOG_RETENTION_MAX_AGE_DAYS: u32 = 7;
 const RETAINED_LOG_PRUNE_INTERVAL: Duration = Duration::from_secs(60);
 const RETAINED_LOG_PRUNE_JOIN_TIMEOUT: Duration = Duration::from_millis(250);
-const RETAINED_LOG_PRUNE_JOIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
+const RETAINED_LOG_BOOTSTRAP_IO_TIMEOUT: Duration = Duration::from_secs(3);
 #[cfg(test)]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 
@@ -180,7 +181,7 @@ impl DaemonObservability {
             scope: "lifecycle",
             action: event.action,
             outcome: event.outcome,
-            message: Some(event.detail.into_owned()),
+            message: Some(event.detail.as_ref().into()),
             request_id: event
                 .message_id
                 .as_ref()
@@ -320,18 +321,15 @@ impl ObservabilityPort for DaemonObservability {
 
         self.emit_log_event(EmitLogEvent {
             scope: "observability",
-            action: ActionName::new(event.action).map_err(|source| {
-                AtmError::observability_emit("failed to validate ATM daemon observability action")
-                    .with_source(source)
-            })?,
-            outcome: OutcomeLabel::new(event.outcome).map_err(|source| {
-                AtmError::observability_emit("failed to validate ATM daemon observability outcome")
-                    .with_source(source)
-            })?,
-            message: Some(format!(
-                "ATM daemon handled {} with outcome {}",
-                event.command, event.outcome
-            )),
+            action: event.action,
+            outcome: event.outcome.clone(),
+            message: Some(
+                format!(
+                    "ATM daemon handled {} with outcome {}",
+                    event.command, event.outcome
+                )
+                .into(),
+            ),
             request_id: event
                 .message_id
                 .map(|value| CorrelationId::new(value.to_string()))
@@ -412,18 +410,18 @@ impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
 
 // Keep validated correlation identifiers typed at this internal boundary so
 // each emit path does not repeatedly round-trip through String parsing.
-struct EmitLogEvent {
+struct EmitLogEvent<'a> {
     scope: &'static str,
     action: ActionName,
     outcome: OutcomeLabel,
-    message: Option<String>,
+    message: Option<Cow<'a, str>>,
     request_id: Option<CorrelationId>,
     correlation_id: Option<CorrelationId>,
     fields: Map<String, serde_json::Value>,
 }
 
 impl DaemonObservability {
-    fn emit_log_event(&self, event: EmitLogEvent) -> Result<(), AtmError> {
+    fn emit_log_event(&self, event: EmitLogEvent<'_>) -> Result<(), AtmError> {
         let event = LogEvent {
             version: SchemaVersion::new(
                 sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION,
@@ -440,7 +438,7 @@ impl DaemonObservability {
             service: self.service_name.clone(),
             target: self.target_category.clone(),
             action: event.action,
-            message: event.message,
+            message: event.message.map(|message| message.into_owned()),
             identity: ProcessIdentity::default(),
             trace: None,
             request_id: event.request_id,
@@ -477,7 +475,7 @@ fn build_logger(
     AtmError,
 > {
     let active_log_path = log_dir.join("atm.log.jsonl");
-    ensure_retained_log_ready(log_dir, &active_log_path)?;
+    ensure_retained_log_ready_with_timeout(log_dir, &active_log_path)?;
     let mut config =
         sc_observability::LoggerConfig::default_for(service_name.clone(), PathBuf::new());
     config.level = logger_level_override()?.unwrap_or(SharedLevelFilter::Info);
@@ -535,6 +533,47 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
             ))
             .with_source(source)
         })
+}
+
+fn ensure_retained_log_ready_with_timeout(
+    log_dir: &Path,
+    active_log_path: &Path,
+) -> Result<(), AtmError> {
+    let (result_tx, result_rx) = mpsc::channel();
+    let log_dir = log_dir.to_path_buf();
+    let active_log_path = active_log_path.to_path_buf();
+    let worker_log_path = active_log_path.clone();
+    thread::Builder::new()
+        .name("atm-log-bootstrap".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(ensure_retained_log_ready(&log_dir, &worker_log_path));
+        })
+        .map_err(|source| {
+            AtmError::observability_bootstrap(
+                "failed to start retained observability bootstrap worker",
+            )
+            .with_source(source)
+        })?;
+
+    match result_rx.recv_timeout(RETAINED_LOG_BOOTSTRAP_IO_TIMEOUT) {
+        Ok(result) => result,
+        Err(mpsc::RecvTimeoutError::Timeout) => Err(
+            AtmError::observability_bootstrap(format!(
+                "timed out after {}ms while preparing retained log path {}",
+                RETAINED_LOG_BOOTSTRAP_IO_TIMEOUT.as_millis(),
+                active_log_path.display()
+            ))
+            .with_recovery(
+                "Check host filesystem health and retry daemon startup once the retained log directory becomes responsive.",
+            ),
+        ),
+        Err(mpsc::RecvTimeoutError::Disconnected) => Err(
+            AtmError::observability_bootstrap(format!(
+                "retained log bootstrap worker exited before reporting readiness for {}",
+                active_log_path.display()
+            )),
+        ),
+    }
 }
 
 #[cfg(test)]
@@ -679,22 +718,7 @@ fn level_for_outcome(outcome: &str) -> Level {
     if outcome.starts_with("delivery_policy.") {
         return Level::Debug;
     }
-
-    match outcome {
-        "ok" | "sent" | "dry_run" => Level::Info,
-        "timeout" => Level::Warn,
-        "error" | "failed" => Level::Error,
-        other => {
-            // No global tracing subscriber is installed in production; daemon lifecycle records
-            // route through emit_daemon_event(), so this unknown-outcome warning is intentionally silent.
-            tracing::warn!(
-                code = %AtmErrorCode::ObservabilityEmitFailed,
-                outcome = other,
-                "unknown ATM daemon outcome for observability level"
-            );
-            Level::Warn
-        }
-    }
+    standard_level_for_outcome(outcome)
 }
 
 #[cfg(test)]
@@ -757,7 +781,7 @@ impl sc_observability::LogSink for RetainedSinkHealthOverride {
 
 #[cfg(test)]
 mod tests {
-    use std::time::{Duration, Instant};
+    use std::time::Duration;
 
     use atm_core::observability::{AtmObservabilityHealthState, ObservabilityPort};
     use atm_core::test_support::EnvGuard;
@@ -911,10 +935,12 @@ mod tests {
     }
 
     #[test]
+    #[serial]
     fn best_effort_flush_syncs_the_last_written_handle_without_reopening_the_active_path() {
         let tempdir = TempDir::new().expect("tempdir");
         let log_dir = tempdir.path().join("logs");
         std::fs::create_dir_all(&log_dir).expect("log dir");
+        let _env = EnvGuard::set_many([("ATM_OBSERVABILITY_RETAINED_SINK_FAULT", None)]);
         let observability =
             super::DaemonObservability::bootstrap_at_log_dir_with_rotation_for_test(
                 log_dir.clone(),
@@ -956,11 +982,8 @@ mod tests {
             sc_observability::RetentionPolicy { max_age_days: 0 },
         );
         sink.schedule_prune_old_files();
-
-        let deadline = Instant::now() + Duration::from_secs(2);
-        while rotated_log_path.exists() && Instant::now() < deadline {
-            std::thread::yield_now();
-        }
+        sink.join_prune_worker_with_timeout(Duration::from_secs(2))
+            .expect("join prune worker");
 
         assert!(
             !rotated_log_path.exists(),
