@@ -45,6 +45,8 @@ const RETAINED_LOG_ROTATION_MAX_BYTES: u64 = 10 * 1024 * 1024;
 const RETAINED_LOG_ROTATION_MAX_FILES: u32 = 5;
 const RETAINED_LOG_RETENTION_MAX_AGE_DAYS: u32 = 7;
 const RETAINED_LOG_PRUNE_INTERVAL: Duration = Duration::from_secs(60);
+const RETAINED_LOG_PRUNE_JOIN_TIMEOUT: Duration = Duration::from_millis(250);
+const RETAINED_LOG_PRUNE_JOIN_POLL_INTERVAL: Duration = Duration::from_millis(10);
 #[cfg(test)]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
 
@@ -246,6 +248,15 @@ impl DaemonObservability {
             .map_err(|source| {
                 AtmError::observability_health(format!(
                     "failed to sync retained observability sink at {}",
+                    self.active_log_path.display()
+                ))
+                .with_source(source)
+            })?;
+        self.retained_sink
+            .join_prune_worker_with_timeout(RETAINED_LOG_PRUNE_JOIN_TIMEOUT)
+            .map_err(|source| {
+                AtmError::observability_health(format!(
+                    "failed to join retained observability prune worker for {}",
                     self.active_log_path.display()
                 ))
                 .with_source(source)
@@ -535,6 +546,7 @@ struct RetainedJsonlFileSink {
     health: Mutex<SinkHealth>,
     last_written_file: Mutex<Option<std::fs::File>>,
     prune_in_progress: Arc<AtomicBool>,
+    prune_join_handle: Mutex<Option<thread::JoinHandle<()>>>,
     last_prune_request_at: Mutex<Option<SystemTime>>,
 }
 
@@ -555,6 +567,7 @@ impl RetainedJsonlFileSink {
             }),
             last_written_file: Mutex::new(None),
             prune_in_progress: Arc::new(AtomicBool::new(false)),
+            prune_join_handle: Mutex::new(None),
             last_prune_request_at: Mutex::new(None),
         }
     }
@@ -568,6 +581,24 @@ impl RetainedJsonlFileSink {
             file.sync_all()?;
         }
         Ok(())
+    }
+
+    fn join_prune_worker_with_timeout(&self, timeout: Duration) -> std::io::Result<()> {
+        let mut join_handle = self
+            .prune_join_handle
+            .lock()
+            .map_err(|_| std::io::Error::other("retained sink prune join lock poisoned"))?;
+        let Some(handle) = join_handle.take() else {
+            return Ok(());
+        };
+        if !wait_for_thread_completion(&handle, timeout) {
+            *join_handle = Some(handle);
+            return Ok(());
+        }
+        drop(join_handle);
+        handle
+            .join()
+            .map_err(|_| std::io::Error::other("retained sink prune worker panicked"))
     }
 
     fn rotate_if_needed(&self, incoming_len: u64) {
@@ -596,6 +627,7 @@ impl RetainedJsonlFileSink {
     }
 
     fn schedule_prune_old_files(&self) {
+        let _ = self.join_prune_worker_with_timeout(Duration::ZERO);
         let now = SystemTime::now();
         {
             let Ok(mut last_request_at) = self.last_prune_request_at.lock() else {
@@ -625,15 +657,23 @@ impl RetainedJsonlFileSink {
         let path = self.path.clone();
         let retention = self.retention;
         let prune_in_progress = Arc::clone(&self.prune_in_progress);
-        if thread::Builder::new()
+        match thread::Builder::new()
             .name("atm-log-prune".to_string())
             .spawn(move || {
                 prune_old_files_at_path(&path, retention);
                 prune_in_progress.store(false, Ordering::Release);
             })
-            .is_err()
         {
-            self.prune_in_progress.store(false, Ordering::Release);
+            Ok(handle) => {
+                if let Ok(mut prune_join_handle) = self.prune_join_handle.lock() {
+                    *prune_join_handle = Some(handle);
+                } else {
+                    self.prune_in_progress.store(false, Ordering::Release);
+                }
+            }
+            Err(_) => {
+                self.prune_in_progress.store(false, Ordering::Release);
+            }
         }
     }
 
@@ -748,6 +788,19 @@ impl sc_observability::LogSink for RetainedJsonlFileSink {
                 }
             }
         }
+    }
+}
+
+fn wait_for_thread_completion(handle: &thread::JoinHandle<()>, timeout: Duration) -> bool {
+    let deadline = SystemTime::now() + timeout;
+    loop {
+        if handle.is_finished() {
+            return true;
+        }
+        if SystemTime::now() >= deadline {
+            return false;
+        }
+        thread::sleep(RETAINED_LOG_PRUNE_JOIN_POLL_INTERVAL);
     }
 }
 
@@ -996,6 +1049,21 @@ mod tests {
             super::level_for_outcome("delivery_policy.ack_reply.delivered"),
             sc_observability_types::Level::Debug
         );
+    }
+
+    #[test]
+    fn daemon_outcomes_map_to_documented_levels() {
+        for (outcome, expected) in [
+            ("ok", sc_observability_types::Level::Info),
+            ("sent", sc_observability_types::Level::Info),
+            ("dry_run", sc_observability_types::Level::Info),
+            ("timeout", sc_observability_types::Level::Warn),
+            ("error", sc_observability_types::Level::Error),
+            ("failed", sc_observability_types::Level::Error),
+            ("future-outcome", sc_observability_types::Level::Warn),
+        ] {
+            assert_eq!(super::level_for_outcome(outcome), expected, "outcome={outcome}");
+        }
     }
 
     #[test]

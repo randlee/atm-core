@@ -1,7 +1,7 @@
 ---
 id: phase-z-smoke-skill-plan
 title: Phase Z Smoke Skill And just smoke Plan
-status: complete
+status: active
 target: develop
 ---
 

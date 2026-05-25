@@ -246,6 +246,8 @@ def stop_daemon(pid: int) -> None:
 
 
 def process_is_alive(pid: int) -> bool:
+    if os.name != "posix":
+        return False
     status = subprocess.run(
         ["ps", "-p", str(pid), "-o", "stat="],
         text=True,

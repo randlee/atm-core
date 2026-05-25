@@ -42,6 +42,9 @@ Use this skill for the repo-native smoke harness and its report artifacts.
 - `fast` is the quick clean-room happy-path lane
 - `normal` is the default `just smoke` lane
 - `thorough` is the full CLI plus common-error-path lane
+- shared fixture labels are sprint-scoped on purpose:
+  - `fast` uses `z19-team`
+  - `normal` uses `z20-team`
 - current daemon shutdown handling in the smoke runner is POSIX-only; fail
   closed on non-POSIX hosts instead of pretending Windows support exists
 - major findings promote into `docs/phase-Z/smoke-findings-review.md`
