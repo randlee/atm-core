@@ -27,7 +27,7 @@ ERR_PARSE_ERROR = _MOD.ERR_PARSE_ERROR
 CODEX_DEFAULT_PANE = _MOD.CODEX_DEFAULT_PANE
 TEST_TEAM = "test-team"
 TEST_AGENT = "test-agent"
-TEST_TEAM_LEAD = "team-lead"
+TEST_TEAM_LEAD = "test-lead"
 
 
 def _parse_json(text: str) -> dict:

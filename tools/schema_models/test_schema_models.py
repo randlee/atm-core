@@ -21,6 +21,8 @@ from tools.schema_models.legacy_atm_message_schema import LegacyAtmInboxMessage
 
 TEST_TEAM = "test-team"
 TEST_SENDER = "test-agent"
+TEST_TEAM_LEAD = "test-lead"
+TEST_QM = "test-qm"
 
 
 class SchemaModelTests(unittest.TestCase):
@@ -52,7 +54,7 @@ class SchemaModelTests(unittest.TestCase):
 
         message = ClaudeCodeInboxMessage.model_validate(
             {
-                "from": "team-lead",
+                "from": TEST_TEAM_LEAD,
                 "text": "ping",
                 "timestamp": "2026-04-04T18:50:03.331Z",
                 "read": True,
@@ -60,7 +62,7 @@ class SchemaModelTests(unittest.TestCase):
                 "color": "#00ff88",
             }
         )
-        self.assertEqual(message.from_, "team-lead")
+        self.assertEqual(message.from_, TEST_TEAM_LEAD)
         self.assertEqual(message.color, "#00ff88")
 
     def test_claude_native_idle_payload_validates(self) -> None:
@@ -70,7 +72,7 @@ class SchemaModelTests(unittest.TestCase):
             json.dumps(
                 {
                     "type": "idle_notification",
-                    "from": "quality-mgr",
+                    "from": TEST_QM,
                     "timestamp": "2026-04-04T18:50:03.331Z",
                     "idleReason": "available",
                 }
@@ -83,7 +85,7 @@ class SchemaModelTests(unittest.TestCase):
 
         message = AtmInboxMessage.model_validate(
             {
-                "from": "team-lead",
+                "from": TEST_TEAM_LEAD,
                 "source_team": TEST_TEAM,
                 "text": "ping",
                 "timestamp": "2026-04-04T18:49:59.525805+00:00",
@@ -161,7 +163,7 @@ class SchemaModelTests(unittest.TestCase):
 
         envelope = AtmMetadataEnvelope.model_validate(
             {
-                "from": "team-lead",
+                "from": TEST_TEAM_LEAD,
                 "text": "ping",
                 "timestamp": "2026-04-04T18:49:59.525Z",
                 "read": True,
@@ -185,7 +187,7 @@ class SchemaModelTests(unittest.TestCase):
         with self.assertRaises(Exception):
             AtmMetadataEnvelope.model_validate(
                 {
-                    "from": "team-lead",
+                    "from": TEST_TEAM_LEAD,
                     "text": "ping",
                     "timestamp": "2026-04-04T18:49:59.525Z",
                     "read": True,
@@ -205,7 +207,7 @@ class SchemaModelTests(unittest.TestCase):
         with self.assertRaises(Exception):
             AtmInboxMessage.model_validate(
                 {
-                    "from": "team-lead",
+                    "from": TEST_TEAM_LEAD,
                     "text": "ping",
                     "timestamp": "2026-04-04T18:49:59.525805+00:00",
                     "read": True,
@@ -227,7 +229,7 @@ class SchemaModelTests(unittest.TestCase):
         """Read-path: malformed ATM-owned fields warn and degrade without dropping the message."""
 
         raw_message = {
-            "from": "team-lead",
+            "from": TEST_TEAM_LEAD,
             "text": "ping",
             "timestamp": "2026-04-04T18:49:59.525805+00:00",
             "read": True,
@@ -248,7 +250,7 @@ class SchemaModelTests(unittest.TestCase):
         recovered = ClaudeCodeInboxMessage.model_validate(degraded_message)
 
         self.assertTrue(warnings)
-        self.assertEqual(recovered.from_, "team-lead")
+        self.assertEqual(recovered.from_, TEST_TEAM_LEAD)
         self.assertEqual(recovered.text, "ping")
 
 
