@@ -195,7 +195,7 @@ class TestReadPaneFromToml(unittest.TestCase):
 
     def test_reads_team_specific_match(self):
         def run(path: Path):
-            result = _MOD.read_pane_from_toml("quality-mgr", TEST_TEAM)
+            result = _MOD.read_pane_from_toml(TEST_QM, TEST_TEAM)
             self.assertEqual(result.pane_id, "%2")
             self.assertEqual(Path(result.source_path), path.resolve())
 
@@ -243,7 +243,7 @@ tmux_pane_id = "%1"
 
     def test_reports_ambiguous_same_team_match(self):
         def run(_path: Path):
-            result = _MOD.read_pane_from_toml("quality-mgr", TEST_TEAM)
+            result = _MOD.read_pane_from_toml(TEST_QM, TEST_TEAM)
             self.assertEqual(result.error_code, ERR_AMBIGUOUS)
             self.assertIn("%2", result.error_msg)
             self.assertIn("%7", result.error_msg)
