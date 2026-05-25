@@ -20,6 +20,12 @@ type DispatchCompletionRx = std::sync::mpsc::Receiver<()>;
 type DispatchWorkerHandle = std::thread::JoinHandle<()>;
 type DispatchWorker = (DispatchResultRx, DispatchCompletionRx, DispatchWorkerHandle);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum RequestExecutionRisk {
+    ReadOnly,
+    SideEffecting,
+}
+
 pub(super) fn handle_connection(
     mut stream: LocalSocketStream,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
@@ -118,6 +124,7 @@ fn dispatch_request(
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
     registry: &Arc<ActiveConnectionRegistry>,
 ) -> Result<ResponseEnvelope, AtmError> {
+    let execution_risk = request_execution_risk(&request);
     let (result_rx, completion_rx, dispatch_handle) =
         spawn_dispatch_worker(request, dispatcher, Arc::clone(registry))?;
     registry.push_dispatch_handle(
@@ -127,7 +134,11 @@ fn dispatch_request(
         },
         MAX_CONCURRENT_CONNECTIONS,
     )?;
-    Ok(await_dispatch_response(request_id, result_rx))
+    Ok(await_dispatch_response(
+        request_id,
+        execution_risk,
+        result_rx,
+    ))
 }
 
 fn spawn_dispatch_worker(
@@ -163,6 +174,7 @@ fn spawn_dispatch_worker(
 
 fn await_dispatch_response(
     request_id: RequestId,
+    execution_risk: RequestExecutionRisk,
     result_rx: std::sync::mpsc::Receiver<Result<ResponseEnvelope, AtmError>>,
 ) -> ResponseEnvelope {
     match result_rx.recv_timeout(REQUEST_DEADLINE) {
@@ -177,14 +189,7 @@ fn await_dispatch_response(
                 deadline_ms = REQUEST_DEADLINE.as_millis(),
                 "daemon request dispatcher exceeded the runtime deadline"
             );
-            ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
-                &AtmError::daemon_unavailable(
-                    "daemon request exceeded the 3s runtime deadline; the operation may still complete in the background",
-                )
-                .with_recovery(
-                    "Check the destination mailbox or service-side effects before retrying this ATM command.",
-                ),
-            ))
+            dispatch_timeout_response(execution_risk)
         }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
             ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(
@@ -197,6 +202,34 @@ fn await_dispatch_response(
             ))
         }
     }
+}
+
+fn request_execution_risk(request: &RequestEnvelope) -> RequestExecutionRisk {
+    match request {
+        RequestEnvelope::List(_)
+        | RequestEnvelope::Receive(_)
+        | RequestEnvelope::Doctor(_)
+        | RequestEnvelope::AdvisoryFetch(_) => RequestExecutionRisk::ReadOnly,
+        RequestEnvelope::Send(_)
+        | RequestEnvelope::Heartbeat(_)
+        | RequestEnvelope::Clear(_)
+        | RequestEnvelope::AdvisoryRegister(_)
+        | RequestEnvelope::AdvisoryUnregister(_)
+        | RequestEnvelope::AdvisoryDrain(_)
+        | RequestEnvelope::AdvisoryStream(_) => RequestExecutionRisk::SideEffecting,
+    }
+}
+
+fn dispatch_timeout_response(execution_risk: RequestExecutionRisk) -> ResponseEnvelope {
+    let error = match execution_risk {
+        RequestExecutionRisk::ReadOnly => AtmError::daemon_unavailable(
+            "daemon request exceeded the 3s runtime deadline; retry the read-only ATM command after the same-host daemon catches up",
+        ),
+        RequestExecutionRisk::SideEffecting => AtmError::daemon_may_have_executed(
+            "daemon request exceeded the 3s runtime deadline after side-effecting work may have started",
+        ),
+    };
+    ResponseEnvelope::Error(ProtocolErrorEnvelope::from_error(&error))
 }
 
 fn write_response(
@@ -251,5 +284,64 @@ impl AdvisoryStreamSink for LocalIpcAdvisoryStreamSink<'_> {
 
     fn stop_requested(&self) -> bool {
         self.force_shutdown.load(Ordering::SeqCst)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{RequestExecutionRisk, dispatch_timeout_response, request_execution_risk};
+    use atm_core::clear::ClearQuery;
+    use atm_core::doctor::DoctorQuery;
+    use atm_core::error_codes::AtmErrorCode;
+    use atm_core::protocol::{ProtocolErrorEnvelope, RequestEnvelope, ResponseEnvelope};
+    use std::path::PathBuf;
+
+    #[test]
+    fn side_effecting_timeout_returns_may_have_executed_code() {
+        let response = dispatch_timeout_response(RequestExecutionRisk::SideEffecting);
+        let ResponseEnvelope::Error(ProtocolErrorEnvelope { code, .. }) = response else {
+            panic!("expected error envelope");
+        };
+        assert_eq!(code, AtmErrorCode::DaemonMayHaveExecuted);
+    }
+
+    #[test]
+    fn read_only_timeout_returns_retryable_daemon_unavailable_code() {
+        let response = dispatch_timeout_response(RequestExecutionRisk::ReadOnly);
+        let ResponseEnvelope::Error(ProtocolErrorEnvelope { code, .. }) = response else {
+            panic!("expected error envelope");
+        };
+        assert_eq!(code, AtmErrorCode::DaemonUnavailable);
+    }
+
+    #[test]
+    fn request_execution_risk_classifies_clear_as_side_effecting() {
+        let request = RequestEnvelope::Clear(ClearQuery {
+            home_dir: PathBuf::from("/tmp"),
+            current_dir: PathBuf::from("/tmp"),
+            actor_override: None,
+            target_address: None,
+            team_override: None,
+            older_than: None,
+            idle_only: false,
+            dry_run: false,
+        });
+        assert_eq!(
+            request_execution_risk(&request),
+            RequestExecutionRisk::SideEffecting
+        );
+    }
+
+    #[test]
+    fn request_execution_risk_classifies_doctor_as_read_only() {
+        let request = RequestEnvelope::Doctor(DoctorQuery {
+            home_dir: PathBuf::from("/tmp"),
+            current_dir: PathBuf::from("/tmp"),
+            team_override: None,
+        });
+        assert_eq!(
+            request_execution_risk(&request),
+            RequestExecutionRisk::ReadOnly
+        );
     }
 }

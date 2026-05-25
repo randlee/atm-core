@@ -10,6 +10,7 @@ import json
 import os
 import shutil
 import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -18,6 +19,7 @@ import time
 from analyze_logs import analyze_log_text
 from fixtures import clone_fixture
 from fixtures import create_clean_room_fixture
+from fixtures import create_shared_host_fixture_pair
 from fixtures import current_binary_sha
 from fixtures import repo_root
 from fixtures import smoke_env
@@ -55,6 +57,7 @@ ROW_MAP: dict[str, list[tuple[str, str]]] = {
         ("Z1-007", "retained CLI validation and recovery guidance"),
         ("Z1-008", "copied-state durable baseline bring-up"),
         ("Z1-009", "reconcile/runtime retry-visible smoke coverage"),
+        ("PRR-001", "shared-host multi-workspace same-daemon smoke coverage"),
         ("FAST-LOG-001", "expected happy-path retained events are present"),
         ("FAST-LOG-002", "retained logs contain no warnings or errors"),
     ],
@@ -233,7 +236,20 @@ def pass_row(row: SmokeRow, notes: str) -> None:
     row.notes = notes
 
 
-def stop_daemon(pid: int) -> None:
+def nudge_shutdown(endpoint_path: Path | None) -> None:
+    if endpoint_path is None or os.name == "nt" or not endpoint_path.exists():
+        return
+    wake = socket.socket(socket.AF_UNIX)
+    try:
+        wake.settimeout(0.2)
+        wake.connect(str(endpoint_path))
+    except OSError:
+        return
+    finally:
+        wake.close()
+
+
+def stop_daemon(pid: int, endpoint_path: Path | None = None) -> None:
     if os.name == "nt":
         subprocess.run(
             ["taskkill", "/PID", str(pid), "/F"],
@@ -243,10 +259,12 @@ def stop_daemon(pid: int) -> None:
         )
     else:
         os.kill(pid, signal.SIGTERM)
+        nudge_shutdown(endpoint_path)
     deadline = time.time() + 5.0
     while time.time() < deadline:
         if not process_is_alive(pid):
             return
+        nudge_shutdown(endpoint_path)
         time.sleep(0.05)
     raise RuntimeError(f"daemon pid {pid} did not exit during shutdown")
 
@@ -272,12 +290,17 @@ def process_is_alive(pid: int) -> bool:
     return bool(state) and "Z" not in state
 
 
+def daemon_endpoint_path_for_fixture(fixture: object) -> Path:
+    return Path(getattr(fixture, "home_dir")) / ".atm" / "daemon" / "atm-daemon.sock"
+
+
 def build_thorough_runtime(root: Path) -> ThoroughSmokeRuntime:
     return ThoroughSmokeRuntime(
         row_map=ROW_MAP,
         smoke_row_cls=SmokeRow,
         root=root,
         create_clean_room_fixture=create_clean_room_fixture,
+        create_shared_host_fixture_pair=create_shared_host_fixture_pair,
         clone_fixture=clone_fixture,
         smoke_env=smoke_env,
         build_release_binaries=build_release_binaries,
@@ -666,7 +689,7 @@ def run_clean_room_lane(
                 status = "failed"
 
         if daemon_pid is not None:
-            stop_daemon(int(daemon_pid))
+            stop_daemon(int(daemon_pid), daemon_endpoint_path_for_fixture(fixture))
     except Exception as exc:
         status = "failed"
         first_pending = next(

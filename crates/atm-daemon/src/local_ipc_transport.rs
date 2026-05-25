@@ -1134,6 +1134,14 @@ mod tests {
     #[serial_test::serial(env)]
     fn panic_in_dispatch_still_cleans_up_socket_path_on_shutdown() {
         let tempdir = TempDir::new().expect("tempdir");
+        let atm_home = tempdir.path().join("atm-home");
+        std::fs::create_dir_all(&atm_home).expect("atm home dir");
+        let _env = EnvGuard::set_many([
+            ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+            ("ATM_LOG_DIR", None),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+            ("USERPROFILE", None),
+        ]);
         let socket_path = tempdir.path().join("daemon.sock");
         let mut runtime =
             PreparedRuntimeServer::bind(socket_path.clone()).expect("prepare runtime");

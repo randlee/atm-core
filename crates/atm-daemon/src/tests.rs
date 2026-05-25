@@ -597,7 +597,7 @@ fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
 
-    dispatcher.finalize_shutdown();
+    dispatcher.finalize_storage_shutdown();
     DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
 }
 

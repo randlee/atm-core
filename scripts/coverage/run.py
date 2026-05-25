@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 import argparse
 import json
+import os
 import platform as host_platform_module
 import subprocess
 import sys
@@ -68,7 +69,7 @@ def detect_platform() -> str:
     if system == "Windows":
         return "win"
     raise RuntimeError(
-        "coverage reporting currently supports only macOS and Windows host runs for tracked latest artifacts"
+        "coverage reporting currently supports only macOS and Windows host runs for tracked latest artifacts; Linux tracked-latest coverage is deferred/unsupported in the current Phase Z line"
     )
 
 
@@ -79,7 +80,9 @@ def parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def run_coverage_export(root: Path, output_path: Path) -> None:
+def run_coverage_export(root: Path, output_path: Path, target_dir: Path) -> None:
+    env = os.environ.copy()
+    env["CARGO_TARGET_DIR"] = str(target_dir)
     subprocess.run(
         [
             "cargo",
@@ -91,6 +94,7 @@ def run_coverage_export(root: Path, output_path: Path) -> None:
             str(output_path),
         ],
         cwd=root,
+        env=env,
         check=True,
     )
 
@@ -230,13 +234,11 @@ def main() -> int:
     stamp = args.timestamp or timestamp_slug(started_at)
     started = time.perf_counter()
 
-    with tempfile.NamedTemporaryFile(suffix=".json", delete=False) as handle:
-        export_path = Path(handle.name)
-    try:
-        run_coverage_export(root, export_path)
+    with tempfile.TemporaryDirectory(prefix="atm-coverage-run.") as temp_dir:
+        temp_root = Path(temp_dir)
+        export_path = temp_root / "coverage.json"
+        run_coverage_export(root, export_path, temp_root / "target")
         export = json.loads(export_path.read_text(encoding="utf-8"))
-    finally:
-        export_path.unlink(missing_ok=True)
 
     payload = build_payload(
         export,
