@@ -374,6 +374,9 @@ Purpose:
 - keep coverage reporting out of ordinary `just test`
 - persist tracked latest and timestamped cross-platform coverage reports under
   `reports/coverage/`
+- overwrite only the tracked latest report for the host platform that actually
+  executed coverage while preserving the other tracked platform report or
+  placeholder
 
 Execution branch:
 - `feature/pZ-s23-cross-platform-test-coverage-reporting`

@@ -28,6 +28,10 @@ scripts/__pycache__/
 artifacts/view/
 reports/smoke/[0-9][0-9][0-9][0-9]-*-smoke*.md
 reports/smoke/[0-9][0-9][0-9][0-9]-*-smoke*.json
+reports/coverage/[0-9][0-9][0-9][0-9]-*-mac.md
+reports/coverage/[0-9][0-9][0-9][0-9]-*-mac.json
+reports/coverage/[0-9][0-9][0-9][0-9]-*-win.md
+reports/coverage/[0-9][0-9][0-9][0-9]-*-win.json
 
 # Local prompt scratch, notes, and transient review payloads
 .prompts/

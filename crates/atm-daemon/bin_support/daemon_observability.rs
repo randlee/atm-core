@@ -9,8 +9,9 @@ use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
 use atm_core::observability::{
-    AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
-    LogTailSession, ObservabilityPort, RetainedSinkFaultMode,
+    AtmLogQuery, AtmLogSnapshot, AtmObservabilityDiagnostic, AtmObservabilityHealth,
+    AtmObservabilityHealthState, CommandEvent, LogTailSession, ObservabilityPort,
+    RetainedSinkFaultMode,
 };
 use serde_json::Map;
 
@@ -376,11 +377,14 @@ impl ObservabilityPort for DaemonObservability {
 
     fn health(&self) -> Result<AtmObservabilityHealth, AtmError> {
         let report = self.logger.health();
+        let diagnostic = report.last_error.map(map_diagnostic_summary);
+        let detail = diagnostic.as_ref().map(|diagnostic| diagnostic.message.clone());
         Ok(AtmObservabilityHealth {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state: None,
-            detail: report.last_error.map(render_diagnostic_summary),
+            diagnostic,
+            detail,
         })
     }
 }
@@ -662,10 +666,12 @@ fn map_logging_state(
     }
 }
 
-fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary) -> String {
-    match summary.code {
-        Some(code) => format!("{}: {}", code.as_str(), summary.message),
-        None => summary.message,
+fn map_diagnostic_summary(
+    summary: sc_observability_types::DiagnosticSummary,
+) -> AtmObservabilityDiagnostic {
+    AtmObservabilityDiagnostic {
+        code: summary.code.map(|code| code.as_str().to_string()),
+        message: summary.message,
     }
 }
 

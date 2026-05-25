@@ -12,6 +12,8 @@ use super::{
     RETAINED_LOG_PRUNE_JOIN_POLL_INTERVAL, Remediation, SinkHealth, SinkHealthState, SinkName,
 };
 
+const RETAINED_LOG_PRUNE_DEADLINE: Duration = Duration::from_secs(30);
+
 #[derive(Debug)]
 // The retained sink keeps three separate mutexes because the health state is read and updated on
 // the hot path, while the last-written file handle and prune timestamp are touched far less often.
@@ -249,6 +251,7 @@ fn prune_old_files_at_path(path: &Path, retention: sc_observability::RetentionPo
     let Ok(entries) = fs::read_dir(parent) else {
         return;
     };
+    let prune_deadline = SystemTime::now() + RETAINED_LOG_PRUNE_DEADLINE;
     let retention_cutoff =
         SystemTime::now() - Duration::from_secs(u64::from(retention.max_age_days) * 86_400);
     let active_name = path
@@ -256,6 +259,9 @@ fn prune_old_files_at_path(path: &Path, retention: sc_observability::RetentionPo
         .and_then(|value| value.to_str())
         .unwrap_or_default();
     for entry in entries.flatten() {
+        if SystemTime::now() >= prune_deadline {
+            break;
+        }
         let candidate = entry.path();
         let Some(file_name) = candidate.file_name().and_then(|value| value.to_str()) else {
             continue;

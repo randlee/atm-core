@@ -15,9 +15,9 @@ use atm_core::home;
 #[cfg(any(test, feature = "fault-injection"))]
 use atm_core::observability::RetainedSinkFaultMode;
 use atm_core::observability::{
-    AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-    CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter, LogOrder, LogTailSession,
-    ObservabilityPort,
+    AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityDiagnostic, AtmObservabilityHealth,
+    AtmObservabilityHealthState, CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter,
+    LogOrder, LogTailSession, ObservabilityPort,
 };
 use chrono::{DateTime, Utc};
 use clap::Parser;
@@ -456,18 +456,23 @@ impl ObservabilityPort for ScObservabilityAdapter {
             .query
             .as_ref()
             .map(|query| map_query_state(query.state));
-        let query_detail = report
+        let query_diagnostic = report
             .query
             .as_ref()
-            .and_then(|query| query.last_error.clone().map(render_diagnostic_summary));
+            .and_then(|query| query.last_error.clone().map(map_diagnostic_summary));
+        let diagnostic = report
+            .last_error
+            .map(map_diagnostic_summary)
+            .or(query_diagnostic);
+        let detail = diagnostic
+            .as_ref()
+            .map(|diagnostic| diagnostic.message.clone());
         Ok(AtmObservabilityHealth {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state,
-            detail: report
-                .last_error
-                .map(render_diagnostic_summary)
-                .or(query_detail),
+            diagnostic,
+            detail,
         })
     }
 }
@@ -773,23 +778,20 @@ fn level_for_outcome(outcome: &str) -> Level {
 }
 
 fn map_query_error(source: QueryError) -> AtmError {
-    let code = source.code().as_str().to_string();
-    AtmError::observability_query(format!("shared observability query failed ({code})"))
-        .with_source(source)
+    AtmError::observability_query("shared observability query failed").with_source(source)
 }
 
 fn map_follow_error(phase: &str, source: QueryError) -> AtmError {
-    let code = source.code().as_str().to_string();
-    AtmError::observability_follow(format!(
-        "shared observability follow {phase} failed ({code})"
-    ))
-    .with_source(source)
+    AtmError::observability_follow(format!("shared observability follow {phase} failed"))
+        .with_source(source)
 }
 
-fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary) -> String {
-    match summary.code {
-        Some(code) => format!("{}: {}", code.as_str(), summary.message),
-        None => summary.message,
+fn map_diagnostic_summary(
+    summary: sc_observability_types::DiagnosticSummary,
+) -> AtmObservabilityDiagnostic {
+    AtmObservabilityDiagnostic {
+        code: summary.code.map(|code| code.as_str().to_string()),
+        message: summary.message,
     }
 }
 

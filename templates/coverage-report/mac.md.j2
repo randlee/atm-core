@@ -1,0 +1,33 @@
+# Coverage Report: mac
+
+- status: `{{ report.status }}`
+- coverage level: `{{ report.coverage_level }}`
+- timestamp: `{{ report.timestamp_display }}`
+- commit: `{{ report.commit }}`
+- duration: `{{ report.duration_secs }}` seconds
+- collector: `{{ report.collector }}`
+
+{% if report.summary %}
+## Summary
+
+- line coverage: `{{ report.summary.line_percent }}%` (`{{ report.summary.line_covered }}` / `{{ report.summary.line_count }}`)
+- function coverage: `{{ report.summary.function_percent }}%` (`{{ report.summary.function_covered }}` / `{{ report.summary.function_count }}`)
+
+## Per-Crate Coverage
+
+| Crate | Line % | Function % |
+| --- | ---: | ---: |
+{% for crate in report.crates -%}
+| `{{ crate.name }}` | `{{ crate.line_percent }}%` | `{{ crate.function_percent }}%` |
+{% endfor %}
+{% else %}
+## Summary
+
+No macOS coverage run has been recorded on this branch yet.
+{% endif %}
+
+## Notes
+
+{% for note in report.notes -%}
+- {{ note }}
+{% endfor %}

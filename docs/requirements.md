@@ -2234,6 +2234,10 @@ Required testing architecture:
     - `reports/coverage/win.md`
   - coverage reporting must also write gitignored timestamped reports using
     the same timestamp convention as smoke reporting
+  - an explicit local coverage run may overwrite only the tracked latest
+    report for the host platform that executed the run
+  - the other tracked platform report may remain at its last real result or an
+    explicit placeholder until that platform executes its own coverage run
 - bare `join()`, `recv()`, `wait()`, or equivalent waits are prohibited in
   risky runtime/daemon test paths unless completion has already been proven by
   a bounded synchronization step
