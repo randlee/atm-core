@@ -1,9 +1,9 @@
 # Smoke
 
 - status: `failed`
-- timestamp: `2026-05-26T02:11:27.372028+00:00`
-- binary SHA: `84051c1b278dd10b97a1e13b11f476cd4013fc97`
-- duration secs: `0.948`
+- timestamp: `2026-05-26T03:10:29.413716+00:00`
+- binary SHA: `244b69ead510475ea45c68b1fb1edf902755b502`
+- duration secs: `2.493`
 - summary: `pass=7`, `fail=1`, `skip=0`
 
 | Row | Flow | Verdict | Notes |
@@ -35,9 +35,9 @@
   "missing_events": [],
   "warning_records": [],
   "error_records": [
-    "{\"version\":\"v1\",\"timestamp\":\"2026-05-26T02:11:27.256891Z\",\"level\":\"Error\",\"service\":\"atm\",\"target\":\"atm.command\",\"action\":\"service\",\"message\":\"ATM command atm completed with outcome error\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":null,\"correlation_id\":null,\"outcome\":\"error\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"z20-recipient\",\"command\":\"atm\",\"dry_run\":false,\"error_code\":\"ATM_MESSAGE_VALIDATION_FAILED\",\"error_message\":\"ATM CLI command failed unexpectedly: invalid message id: \\n  Recovery: Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument.\",\"requires_ack\":false,\"sender\":\"z20-recipient\",\"team\":\"z20-team\"}}"
+    "{\"version\":\"v1\",\"timestamp\":\"2026-05-26T03:10:29.293184Z\",\"level\":\"Error\",\"service\":\"atm\",\"target\":\"atm.command\",\"action\":\"service\",\"message\":\"ATM command atm completed with outcome error\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":null,\"correlation_id\":null,\"outcome\":\"error\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"z20-recipient\",\"command\":\"atm\",\"dry_run\":false,\"error_code\":\"ATM_MESSAGE_VALIDATION_FAILED\",\"error_message\":\"ATM CLI command failed unexpectedly: invalid message id: \\n  Recovery: Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument.\",\"requires_ack\":false,\"sender\":\"z20-recipient\",\"team\":\"z20-team\"}}"
   ]
 }
 - expected: retained log contains no warning or error records on a healthy fast smoke run
 - likely root cause: one or more healthy-path events are still being emitted at warn/error severity
-- artifact: /var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/z20-team-normal.q8djhzw8/logs/atm.log.jsonl
+- artifact: /var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/z20-team-normal.1qfw8bkb/logs/atm.log.jsonl

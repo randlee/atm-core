@@ -36,3 +36,4 @@ No validated `atm-dev` canary findings were promoted during `Z.17`.
 
 | finding_id | participant | linked_operator_flow | summary | severity | fix_owner | status | z4_disposition | revalidation_result | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `Z4-OOS-001` | `arch-ctm` | `just smoke normal` retained-log severity gate | expected invalid-ack recovery emits `ATM_MESSAGE_VALIDATION_FAILED` at `Error` severity, so `FAST-LOG-002` fails even though the normal lane otherwise passes | `blocking` | `arch-ctm` | `out_of_scope` | `deferred` | `FAIL` | discovered during `Z.4` final release rerun on `feature/pZ-smoke-atm-graft @ 244b69ea`; this is a new release-harness contract defect, not a promoted `Z.3` canary finding; no `team-lead` deferral approval is recorded yet; artifact: `reports/smoke/smoke.md` |

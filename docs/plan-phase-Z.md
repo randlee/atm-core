@@ -442,10 +442,10 @@ Purpose:
   branch
 
 Execution branch:
-- `feature/pZ-s4-final-fixes-and-release-sign-off`
+- `feature/pZ-smoke-atm-graft`
 
 Execution worktree:
-- `../atm-core-worktrees/feature/pZ-s4-final-fixes-and-release-sign-off`
+- `../atm-core-worktrees/integrate/atm-core-worktrees/feature/pZ-smoke-atm-graft`
 
 ## Sprint Artifact Summary
 
@@ -484,6 +484,7 @@ Execution worktree:
 - `Z.4`:
   - `docs/phase-Z/release-checklist.md`
   - `docs/phase-Z/readiness.md`
+  - `docs/phase-Z/canary-findings-ledger.md`
 
 The sprint docs remain the only authoritative source for per-sprint
 deliverables, acceptance criteria, and closure rules.

@@ -1,9 +1,9 @@
 # Smoke Fast
 
 - status: `passed`
-- timestamp: `2026-05-26T02:13:48.634198+00:00`
-- binary SHA: `84051c1b278dd10b97a1e13b11f476cd4013fc97`
-- duration secs: `0.862`
+- timestamp: `2026-05-26T03:10:08.981449+00:00`
+- binary SHA: `244b69ead510475ea45c68b1fb1edf902755b502`
+- duration secs: `15.606`
 - summary: `pass=7`, `fail=0`, `skip=0`
 
 | Row | Flow | Verdict | Notes |
