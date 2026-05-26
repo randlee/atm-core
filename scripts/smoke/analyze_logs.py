@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 from __future__ import annotations
 
+from collections import Counter
 from dataclasses import dataclass
 from pathlib import Path
 import argparse
@@ -29,7 +30,8 @@ def analyze_log_text(
     missing = [event for event in expected_events if event not in text]
     warnings: list[str] = []
     errors: list[str] = []
-    allowed_codes = set(allowed_error_codes or [])
+    allowed_code_limits = {code: 1 for code in allowed_error_codes or []}
+    allowed_code_counts: Counter[str] = Counter()
     for line in lines:
         try:
             payload = json.loads(line)
@@ -47,7 +49,11 @@ def analyze_log_text(
         if isinstance(fields, dict):
             error_code = str(fields.get("error_code", ""))
         if level in {"error", "fatal"}:
-            if error_code and error_code in allowed_codes:
+            if error_code in allowed_code_limits:
+                allowed_code_counts[error_code] += 1
+                if allowed_code_counts[error_code] <= allowed_code_limits[error_code]:
+                    continue
+                errors.append(line)
                 continue
             errors.append(line)
         elif level == "warn":

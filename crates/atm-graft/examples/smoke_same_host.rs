@@ -37,11 +37,11 @@ impl HostNudgeInjector for RecordingInjector {
 
 struct Args {
     workspace_root: PathBuf,
-    team: String,
-    agent: String,
+    team: TeamName,
+    agent: AgentName,
     reply_target: String,
     expected_nudge_substring: String,
-    expected_sender: String,
+    expected_sender: AgentName,
     ready_file: PathBuf,
 }
 
@@ -54,12 +54,14 @@ impl Args {
                 "usage: smoke_same_host <workspace_root> <team> <agent> <reply_target> <expected_nudge_substring> <expected_sender> <ready_file>",
             )
         })?);
-        let team = args
+        let team: TeamName = args
             .next()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing team argument"))?;
-        let agent = args
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing team argument"))?
+            .parse()?;
+        let agent: AgentName = args
             .next()
-            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing agent argument"))?;
+            .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "missing agent argument"))?
+            .parse()?;
         let reply_target = args.next().ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidInput, "missing reply_target argument")
         })?;
@@ -69,12 +71,15 @@ impl Args {
                 "missing expected_nudge_substring argument",
             )
         })?;
-        let expected_sender = args.next().ok_or_else(|| {
-            io::Error::new(
-                io::ErrorKind::InvalidInput,
-                "missing expected_sender argument",
-            )
-        })?;
+        let expected_sender: AgentName = args
+            .next()
+            .ok_or_else(|| {
+                io::Error::new(
+                    io::ErrorKind::InvalidInput,
+                    "missing expected_sender argument",
+                )
+            })?
+            .parse()?;
         let ready_file = PathBuf::from(args.next().ok_or_else(|| {
             io::Error::new(io::ErrorKind::InvalidInput, "missing ready_file argument")
         })?);
@@ -99,8 +104,6 @@ impl Args {
 
 fn main() -> Result<(), Box<dyn Error>> {
     let args = Args::parse()?;
-    let team: TeamName = args.team.parse()?;
-    let agent: AgentName = args.agent.parse()?;
     let home_dir = PathBuf::from(
         std::env::var_os("ATM_HOME")
             .ok_or_else(|| io::Error::new(io::ErrorKind::NotFound, "ATM_HOME is not set"))?,
@@ -114,7 +117,11 @@ fn main() -> Result<(), Box<dyn Error>> {
     });
     let session = GraftSession::activate(
         client,
-        GraftSessionOptions::for_current_process(&args.workspace_root, team.clone(), agent.clone()),
+        GraftSessionOptions::for_current_process(
+            &args.workspace_root,
+            args.team.clone(),
+            args.agent.clone(),
+        ),
         Arc::clone(&injector) as Arc<dyn HostNudgeInjector>,
     )?;
 
@@ -129,15 +136,18 @@ fn main() -> Result<(), Box<dyn Error>> {
 
     std::fs::write(&args.ready_file, "ready\n")?;
 
+    let nudge_timeout_secs = std::env::var("ATM_SMOKE_GRAFT_NUDGE_TIMEOUT_SECS")
+        .unwrap_or_else(|_| "30".to_string())
+        .parse::<u64>()?;
     delivered_rx
-        .recv_timeout(Duration::from_secs(15))
+        .recv_timeout(Duration::from_secs(nudge_timeout_secs))
         .map_err(|_| {
             io::Error::new(io::ErrorKind::TimedOut, "timed out waiting for graft nudge")
         })?;
     let nudge = injector
         .first_nudge()
         .ok_or_else(|| io::Error::other("graft injector delivered no nudge payload"))?;
-    if nudge.from.to_string() != args.expected_sender {
+    if nudge.from != args.expected_sender {
         return Err(io::Error::other(format!(
             "expected nudge sender {}, found {}",
             args.expected_sender, nudge.from
@@ -190,8 +200,8 @@ fn main() -> Result<(), Box<dyn Error>> {
     let ack_outcome = session.ack(AckRequest {
         home_dir: home_dir.clone(),
         current_dir: args.workspace_root.clone(),
-        actor_override: Some(agent.clone()),
-        team_override: Some(team.clone()),
+        actor_override: Some(args.agent.clone()),
+        team_override: Some(args.team.clone()),
         message_id: nudge.message_id,
         reply_body: "graft smoke ack reply".to_string(),
     })?;

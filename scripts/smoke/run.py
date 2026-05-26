@@ -317,6 +317,7 @@ def build_thorough_runtime(root: Path) -> ThoroughSmokeRuntime:
         team=THOROUGH_TEAM,
         operator=THOROUGH_OPERATOR,
         recipient=THOROUGH_RECIPIENT,
+        allowed_error_codes=NORMAL_ALLOWED_LOG_ERROR_CODES,
     )
 
 
