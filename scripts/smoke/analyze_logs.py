@@ -19,11 +19,17 @@ class LogAnalysisResult:
         return not self.missing_events and not self.warning_records and not self.error_records
 
 
-def analyze_log_text(text: str, expected_events: list[str]) -> LogAnalysisResult:
+def analyze_log_text(
+    text: str,
+    expected_events: list[str],
+    *,
+    allowed_error_codes: list[str] | None = None,
+) -> LogAnalysisResult:
     lines = [line.strip() for line in text.splitlines() if line.strip()]
     missing = [event for event in expected_events if event not in text]
     warnings: list[str] = []
     errors: list[str] = []
+    allowed_codes = set(allowed_error_codes or [])
     for line in lines:
         try:
             payload = json.loads(line)
@@ -36,7 +42,13 @@ def analyze_log_text(text: str, expected_events: list[str]) -> LogAnalysisResult
             continue
 
         level = str(payload.get("level", "")).lower()
+        fields = payload.get("fields")
+        error_code = ""
+        if isinstance(fields, dict):
+            error_code = str(fields.get("error_code", ""))
         if level in {"error", "fatal"}:
+            if error_code and error_code in allowed_codes:
+                continue
             errors.append(line)
         elif level == "warn":
             warnings.append(line)
@@ -53,13 +65,18 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Analyze retained smoke log output.")
     parser.add_argument("log_file", type=Path)
     parser.add_argument("--expect", action="append", default=[])
+    parser.add_argument("--allow-error-code", action="append", default=[])
     return parser.parse_args()
 
 
 def main() -> int:
     args = parse_args()
     text = args.log_file.read_text(encoding="utf-8")
-    result = analyze_log_text(text, args.expect)
+    result = analyze_log_text(
+        text,
+        args.expect,
+        allowed_error_codes=args.allow_error_code,
+    )
     print(
         json.dumps(
             {
