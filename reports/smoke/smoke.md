@@ -1,10 +1,10 @@
 # Smoke
 
-- status: `failed`
-- timestamp: `2026-05-26T03:10:29.413716+00:00`
-- binary SHA: `244b69ead510475ea45c68b1fb1edf902755b502`
-- duration secs: `2.493`
-- summary: `pass=7`, `fail=1`, `skip=0`
+- status: `passed`
+- timestamp: `2026-05-26T16:17:52.512750+00:00`
+- binary SHA: `84935774c720e06a9e5ae36b9c6073f2231450c2`
+- duration secs: `1.352`
+- summary: `pass=8`, `fail=0`, `skip=0`
 
 | Row | Flow | Verdict | Notes |
 | --- | --- | --- | --- |
@@ -15,29 +15,4 @@
 | `Z1-005` | first clean-room send to config-defined recipient | `PASS` | both send modes succeeded; the ack-required message was read from the recipient mailbox and acknowledged successfully |
 | `Z1-007` | retained CLI validation and recovery guidance | `PASS` | pending-ack inspection, post-ack mailbox clear/re-read, log snapshot, and invalid-ack recovery guidance all behaved as expected |
 | `FAST-LOG-001` | expected happy-path retained events are present | `PASS` | retained log captured send/read/ack/shutdown plus nudge and ack-reply delivery-policy events |
-| `FAST-LOG-002` | retained logs contain no warnings or errors | `FAIL` | retained log severity gate failed |
-
-
-## Deviations
-
-### `FAST-LOG-002`
-
-- observed: {
-  "passed": false,
-  "expected_events": [
-    "\"action\":\"send\"",
-    "\"action\":\"read\"",
-    "\"action\":\"ack\"",
-    "\"outcome\":\"delivery_policy.new_message.primary_nudge\"",
-    "\"outcome\":\"delivery_policy.ack_reply.delivered\"",
-    "\"action\":\"shutdown_completed\""
-  ],
-  "missing_events": [],
-  "warning_records": [],
-  "error_records": [
-    "{\"version\":\"v1\",\"timestamp\":\"2026-05-26T03:10:29.293184Z\",\"level\":\"Error\",\"service\":\"atm\",\"target\":\"atm.command\",\"action\":\"service\",\"message\":\"ATM command atm completed with outcome error\",\"identity\":{\"hostname\":null,\"pid\":null},\"trace\":null,\"request_id\":null,\"correlation_id\":null,\"outcome\":\"error\",\"diagnostic\":null,\"state_transition\":null,\"fields\":{\"agent\":\"z20-recipient\",\"command\":\"atm\",\"dry_run\":false,\"error_code\":\"ATM_MESSAGE_VALIDATION_FAILED\",\"error_message\":\"ATM CLI command failed unexpectedly: invalid message id: \\n  Recovery: Correct the invalid ATM input or mailbox state, then retry the command with a valid target or argument.\",\"requires_ack\":false,\"sender\":\"z20-recipient\",\"team\":\"z20-team\"}}"
-  ]
-}
-- expected: retained log contains no warning or error records on a healthy fast smoke run
-- likely root cause: one or more healthy-path events are still being emitted at warn/error severity
-- artifact: /var/folders/zk/zklzmbr52q55r1y8zv_k84k80000gn/T/z20-team-normal.1qfw8bkb/logs/atm.log.jsonl
+| `FAST-LOG-002` | retained logs contain no warnings or errors | `PASS` | retained log contained no warning records and no unexpected error records during the healthy smoke path |

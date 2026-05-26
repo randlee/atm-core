@@ -1,9 +1,9 @@
 # Smoke Fast
 
 - status: `passed`
-- timestamp: `2026-05-26T03:10:08.981449+00:00`
-- binary SHA: `244b69ead510475ea45c68b1fb1edf902755b502`
-- duration secs: `15.606`
+- timestamp: `2026-05-26T16:17:52.338956+00:00`
+- binary SHA: `84935774c720e06a9e5ae36b9c6073f2231450c2`
+- duration secs: `1.179`
 - summary: `pass=7`, `fail=0`, `skip=0`
 
 | Row | Flow | Verdict | Notes |
@@ -14,4 +14,4 @@
 | `Z1-004` | empty-mailbox retained CLI surface | `PASS` | list/read/clear/log snapshot all succeeded on the clean-room empty-mailbox baseline |
 | `Z1-005` | first clean-room send to config-defined recipient | `PASS` | both send modes succeeded; the ack-required message was read from the recipient mailbox and acknowledged successfully |
 | `FAST-LOG-001` | expected happy-path retained events are present | `PASS` | retained log captured send/read/ack/shutdown plus nudge and ack-reply delivery-policy events |
-| `FAST-LOG-002` | retained logs contain no warnings or errors | `PASS` | retained log contained no warning or error records during the healthy fast smoke run |
+| `FAST-LOG-002` | retained logs contain no warnings or errors | `PASS` | retained log contained no warning records and no unexpected error records during the healthy smoke path |

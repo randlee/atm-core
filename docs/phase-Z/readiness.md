@@ -64,7 +64,7 @@ The final release verdict must remain `PENDING` until:
 | Z.23 | `562478ef` | `PASS` | `complete` | `just test coverage` now runs explicit local coverage reporting through `cargo llvm-cov`, writes canonical JSON plus tracked latest `reports/coverage/mac.md` / `reports/coverage/win.md`, keeps plain `just test` unchanged, and preserves the non-host tracked platform report as its last real run or an explicit placeholder. |
 | Z.24 | `a9704dd2` | `PASS` | `complete` | `sc-observability` / `sc-observability-types` `1.1.0` adoption moves retained-log rotation, pruning, and maintenance shutdown ownership onto `RetainedLogPolicy` and the logger-owned maintenance runtime; ATM keeps only policy selection, health projection, and doctor/report presentation. |
 | Z.3 | `97518da5` | `PASS` | `complete` | `Z.17` executed the `atm-dev` canary on the accepted post-`Z.16` integration baseline with the frozen participant minimum `team-lead + arch-ctm`; retained command, send, read, and log-reporting flows succeeded; no validated canary findings were promoted to `Z.4`. |
-| Z.4 | `244b69ea` | `NOT_READY` | `complete` | no validated `Z.3` findings were promoted, but the final release rerun on `feature/pZ-smoke-atm-graft` found `Z4-OOS-001`: `just smoke normal` still fails `FAST-LOG-002` because the expected invalid-ack recovery emits `ATM_MESSAGE_VALIDATION_FAILED` at `Error` severity; release remains blocked pending follow-up or explicit `team-lead` deferral approval |
+| Z.4 | `84935774` | `PASS` | `complete` | no validated `Z.3` findings were promoted; `Z4-OOS-001` was recorded and fixed in `Z.4`; final release rerun on `feature/pZ-smoke-atm-graft` now passes `fast`, `normal`, and `thorough` smoke along with workspace test and lint gates |
 
 ## Deferred Follow-Up Findings
 
@@ -91,8 +91,8 @@ The final release verdict must remain `PENDING` until:
 
 Final release verdict:
 
-- integrate/phase-Z candidate: `244b69ea` on `feature/pZ-smoke-atm-graft` (release candidate under final `Z.4` review)
-- release checklist result: `FAIL`
-- release verdict: `NOT_READY`
+- integrate/phase-Z candidate: `84935774` on `feature/pZ-smoke-atm-graft` (release candidate under final `Z.4` review)
+- release checklist result: `PASS`
+- release verdict: `READY`
 - authorized by: `team-lead` (approval_artifact: `user pre-authorization — conditional on quality-mgr PASS on atm-graft smoke test (PZ-Z4, feature/pZ-smoke-atm-graft)`)
-- notes: `Z.4` completed the final release rerun and recorded one new out-of-scope blocker, `Z4-OOS-001`, in `docs/phase-Z/canary-findings-ledger.md`; `just smoke fast` and `just smoke thorough` pass, but `python3 scripts/smoke/run.py normal --write-artifacts` still fails `FAST-LOG-002`, so release sign-off cannot close yet even though the release-decision authority is now recorded
+- notes: `Z.4` completed the final release rerun after fixing `Z4-OOS-001`; `python3 scripts/smoke/run.py fast --write-artifacts`, `python3 scripts/smoke/run.py normal --write-artifacts`, `python3 scripts/smoke/run.py thorough --write-artifacts`, `cargo test --workspace`, and `python3 .just/run_lint.py all` all pass on the accepted closeout candidate
