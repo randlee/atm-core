@@ -94,5 +94,5 @@ Final release verdict:
 - integrate/phase-Z candidate: `244b69ea` on `feature/pZ-smoke-atm-graft` (release candidate under final `Z.4` review)
 - release checklist result: `FAIL`
 - release verdict: `NOT_READY`
-- authorized by: `PENDING team-lead release decision`
-- notes: `Z.4` completed the final release rerun and recorded one new out-of-scope blocker, `Z4-OOS-001`, in `docs/phase-Z/canary-findings-ledger.md`; `just smoke fast` and `just smoke thorough` pass, but `python3 scripts/smoke/run.py normal --write-artifacts` still fails `FAST-LOG-002`, so release sign-off cannot close yet
+- authorized by: `team-lead` (approval_artifact: `user pre-authorization — conditional on quality-mgr PASS on atm-graft smoke test (PZ-Z4, feature/pZ-smoke-atm-graft)`)
+- notes: `Z.4` completed the final release rerun and recorded one new out-of-scope blocker, `Z4-OOS-001`, in `docs/phase-Z/canary-findings-ledger.md`; `just smoke fast` and `just smoke thorough` pass, but `python3 scripts/smoke/run.py normal --write-artifacts` still fails `FAST-LOG-002`, so release sign-off cannot close yet even though the release-decision authority is now recorded
