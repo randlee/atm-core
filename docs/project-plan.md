@@ -3877,6 +3877,7 @@ Phase Z sprint ledger:
 | `Z.21` | `complete` | `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z21.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
 | `Z.22` | `complete` | `feature/pZ-s22-smoke-findings-review-and-major-rework-triage` | `docs/phase-Z/smoke-findings-review.md`, `docs/phase-Z/sprint-Z22.md` |
 | `Z.23` | `complete` | `feature/pZ-s23-cross-platform-test-coverage-reporting` | `docs/phase-Z/sprint-Z23.md`, `templates/coverage-report/`, `reports/coverage/`, `scripts/coverage/`, `Justfile` |
+| `Z.24` | `complete` | `feature/pZ-obs-v1.1.0-log-maintenance` | `docs/phase-Z/sprint-Z24.md`, `docs/plan-phase-Z.md`, `crates/atm-daemon/bin_support/daemon_observability.rs`, `crates/atm/src/output.rs`, `crates/atm-core/src/observability.rs` |
 | `Z.3` | `complete` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
 | `Z.4` | `planned` | `feature/pZ-s4-final-fixes-and-release-sign-off` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md` |
 
@@ -3913,6 +3914,7 @@ Immediate planning outputs:
 - `docs/phase-Z/sprint-Z21.md`
 - `docs/phase-Z/sprint-Z22.md`
 - `docs/phase-Z/sprint-Z23.md`
+- `docs/phase-Z/sprint-Z24.md`
 - `docs/phase-Z/smoke-findings-review.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`
@@ -3930,5 +3932,5 @@ Acceptance / Phase Entry Gate:
   on the accepted `integrate/phase-Z` line
 - `Z.3` canary execution must not begin until `Z.18` through `Z.22` also close
   on the accepted `integrate/phase-Z` line
-- the final `Z.4` release verdict must not close until `Z.23` also closes on
-  the accepted `integrate/phase-Z` line
+- the final `Z.4` release verdict must not close until `Z.23` and `Z.24` also
+  close on the accepted `integrate/phase-Z` line

@@ -121,7 +121,7 @@ def create_clean_room_fixture(
     workspace_dir = root / "w"
     home_dir = root / "h"
     atm_home = root / "a"
-    log_dir = root / "l"
+    log_dir = root / "logs"
     team_dir = atm_home / ".claude" / "teams" / team_name
     (team_dir / "inboxes").mkdir(parents=True, exist_ok=True)
     workspace_dir.mkdir(parents=True, exist_ok=True)
@@ -148,7 +148,7 @@ def clone_fixture(source: SmokeFixture, *, prefix: str, clear_logs: bool = True)
     workspace_dir = root / "w"
     home_dir = root / "h"
     atm_home = root / "a"
-    log_dir = root / "l"
+    log_dir = root / "logs"
 
     ignore_runtime_sockets = shutil.ignore_patterns("*.sock")
     shutil.copytree(source.workspace_dir, workspace_dir, dirs_exist_ok=True)
@@ -187,7 +187,7 @@ def create_shared_host_fixture_pair(
     root = Path(tempfile.mkdtemp(prefix=prefix))
     home_dir = root / "h"
     atm_home = root / "a"
-    log_dir = root / "l"
+    log_dir = root / "logs"
 
     def create_workspace(
         slug: str,

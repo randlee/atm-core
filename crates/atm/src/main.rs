@@ -219,7 +219,8 @@ pub(crate) fn build_logger(
 ) -> Result<(Logger, PathBuf), AtmError> {
     let active_log_path = log_dir.join("atm.log.jsonl");
     ensure_retained_log_ready(log_dir, &active_log_path)?;
-    let mut config = LoggerConfig::default_for(service_name.clone(), log_dir.to_path_buf());
+    let mut config =
+        LoggerConfig::default_for(service_name.clone(), logger_root_for_log_dir(log_dir)?);
     config.level = logger_level_override()?.unwrap_or(SharedLevelFilter::Info);
     // Make the retained file threshold explicit so lifecycle info! events stay
     // in the default retained log unless ATM_LOG overrides the level.
@@ -260,6 +261,15 @@ fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(
             ))
             .with_source(source)
         })
+}
+
+fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> {
+    log_dir.parent().map(Path::to_path_buf).ok_or_else(|| {
+        AtmError::observability_bootstrap(format!(
+            "failed to determine the retained-log root parent for {}",
+            log_dir.display()
+        ))
+    })
 }
 
 #[cfg(any(test, feature = "fault-injection"))]
@@ -466,11 +476,30 @@ impl ObservabilityPort for ScObservabilityAdapter {
             .or(query_diagnostic);
         let detail = diagnostic
             .as_ref()
-            .map(|diagnostic| diagnostic.message.clone());
+            .map(|diagnostic| diagnostic.message.clone())
+            .or_else(|| {
+                report.maintenance.as_ref().map(|maintenance| {
+                    format!(
+                        "maintenance state={} rotated_files_total={} pruned_files_total={} last_pass_at={}",
+                        match maintenance.state {
+                            sc_observability_types::MaintenanceWorkerState::Running => "running",
+                            sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
+                            sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
+                        },
+                        maintenance.rotated_files_total,
+                        maintenance.pruned_files_total,
+                        maintenance
+                            .last_pass_at
+                            .map(|timestamp| timestamp.into_inner().to_string())
+                            .unwrap_or_else(|| "never".to_string())
+                    )
+                })
+            });
         Ok(AtmObservabilityHealth {
             active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state,
+            maintenance: report.maintenance,
             diagnostic,
             detail,
         })
@@ -659,7 +688,7 @@ fn map_record(event: LogEvent) -> Result<Option<AtmLogRecord>, AtmError> {
     Ok(Some(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
         severity: map_level_back(event.level),
-        service: event.service.to_string(),
+        service: event.service,
         target: Some(event.target.to_string()),
         action: Some(event.action.to_string()),
         message: event.message,
@@ -773,7 +802,7 @@ fn map_diagnostic_summary(
     summary: sc_observability_types::DiagnosticSummary,
 ) -> AtmObservabilityDiagnostic {
     AtmObservabilityDiagnostic {
-        code: summary.code.map(|code| code.as_str().to_string()),
+        code: summary.code,
         message: summary.message,
     }
 }

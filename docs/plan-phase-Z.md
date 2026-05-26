@@ -383,6 +383,23 @@ Execution branch:
 
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s23-cross-platform-test-coverage-reporting`
+
+### Z.24 sc-observability v1.1.0 Retained Log Maintenance Adoption
+
+Purpose:
+
+- update ATM to `sc-observability` / `sc-observability-types` `v1.1.0`
+- replace daemon-local retained-log rotation, pruning, and maintenance-worker
+  ownership with `RetainedLogPolicy` + logger-owned maintenance runtime
+- project retained-log maintenance health through `atm doctor`
+- revalidate the updated retained observability stack with the full smoke lane
+
+Execution branch:
+- `feature/pZ-obs-v1.1.0-log-maintenance`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-obs-v1.1.0-log-maintenance`
+
 ### Z.3 `atm-dev` Canary And Dogfood
 
 Purpose:
@@ -483,6 +500,8 @@ deliverables, acceptance criteria, and closure rules.
 - the coverage-report line (`Z.23`) remains separate from ordinary smoke
   execution, must not be implied by plain `just test`, and must close before
   the final `Z.4` release verdict is considered complete
+- the retained-log maintenance adoption line (`Z.24`) must close before the
+  final `Z.4` release verdict is considered complete
 - the phase-end hardening branches are:
   - `feature/pZ-phase-end-fix-r1`
   - `feature/pZ-prodready-fix-r1`
@@ -537,8 +556,9 @@ Current execution state:
   - `ARCH-007 CLOSED` synthetic `TEST_QM = "test-qm"` was added to
     `scripts/test_atm_nudge.py`, and all 12 raw `quality-mgr` literals were
     replaced with `TEST_QM`
-- `Z.23` remains the only pending smoke/coverage follow-on before final
-  `Z.4` release-signoff evidence is complete
+- `Z.23` is complete at `562478ef` and `Z.24` is the active retained-log
+  maintenance adoption line before final `Z.4` release-signoff evidence is
+  complete
 - phase-end hardening is now split across two fix branches on top of the
   accepted integration line:
   - `feature/pZ-phase-end-fix-r1` for the promoted phase-end review findings
@@ -596,6 +616,7 @@ Current execution state:
 - `docs/phase-Z/sprint-Z21.md`
 - `docs/phase-Z/sprint-Z22.md`
 - `docs/phase-Z/sprint-Z23.md`
+- `docs/phase-Z/sprint-Z24.md`
 - `docs/phase-Z/smoke-findings-review.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`

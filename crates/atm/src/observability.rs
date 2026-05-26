@@ -177,7 +177,7 @@ mod tests {
         AtmLogQuery, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
         LogLevelFilter, LogMode, LogOrder, LogTailSession, ObservabilityPort,
     };
-    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -185,9 +185,6 @@ mod tests {
         CliObservability, CliObservabilityOptions, command_emit_failure_message,
         fatal_emit_failure_message,
     };
-
-    const TEST_TEAM: &str = "test-team";
-    const TEST_SENDER: &str = "sender-a";
 
     struct FailingEmitObservability;
 
@@ -214,6 +211,7 @@ mod tests {
                 active_log_path: None,
                 logging_state: AtmObservabilityHealthState::Unavailable,
                 query_state: Some(AtmObservabilityHealthState::Unavailable),
+                maintenance: None,
                 diagnostic: None,
                 detail: Some("synthetic".to_string()),
             })
@@ -301,7 +299,7 @@ mod tests {
             .query(query(LogOrder::OldestFirst))
             .expect("initial query");
         assert_eq!(initial.records.len(), 1);
-        assert_eq!(initial.records[0].service, "atm");
+        assert_eq!(initial.records[0].service.as_str(), "atm");
         assert_eq!(initial.records[0].action.as_deref(), Some("send"));
         assert_eq!(
             initial.records[0]
@@ -318,7 +316,14 @@ mod tests {
             Some(AtmObservabilityHealthState::Healthy)
         );
         assert_eq!(health.active_log_path, Some(log_dir.join("atm.log.jsonl")));
-        assert!(health.detail.is_none());
+        let detail = health
+            .detail
+            .as_deref()
+            .expect("maintenance detail should be projected");
+        assert!(detail.contains("maintenance state="));
+        assert!(detail.contains("rotated_files_total="));
+        assert!(detail.contains("pruned_files_total="));
+        assert!(detail.contains("last_pass_at="));
 
         let mut follow = observability
             .follow(AtmLogQuery {

@@ -539,6 +539,7 @@ mod tests {
                 active_log_path: None,
                 logging_state: AtmObservabilityHealthState::Unavailable,
                 query_state: Some(AtmObservabilityHealthState::Unavailable),
+                maintenance: None,
                 diagnostic: None,
                 detail: Some("test observer".to_string()),
             })

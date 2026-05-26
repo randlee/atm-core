@@ -300,6 +300,7 @@ mod tests {
                 active_log_path: None,
                 logging_state: AtmObservabilityHealthState::Healthy,
                 query_state: Some(AtmObservabilityHealthState::Healthy),
+                maintenance: None,
                 diagnostic: None,
                 detail: None,
             })
@@ -401,7 +402,7 @@ mod tests {
                 records: vec![AtmLogRecord {
                     timestamp: chrono::Utc::now().into(),
                     severity: LogLevelFilter::Info,
-                    service: "atm".to_string(),
+                    service: sc_observability_types::ServiceName::new("atm").expect("service"),
                     target: None,
                     action: Some("send".to_string()),
                     message: Some("synthetic".to_string()),
