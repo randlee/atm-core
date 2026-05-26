@@ -812,10 +812,17 @@ def run_thorough(binary_sha: str, runtime: ThoroughSmokeRuntime) -> dict[str, ob
                 int(copied_daemon_pid),
                 copied_fixture.home_dir / ".atm" / "daemon" / "atm-daemon.sock",
             )
-        if shared_daemon_pid is not None and runtime.process_is_alive(shared_daemon_pid):
+        if (
+            shared_host_fixture_pair is not None
+            and shared_daemon_pid is not None
+            and runtime.process_is_alive(shared_daemon_pid)
+        ):
             runtime.stop_daemon(
                 shared_daemon_pid,
-                shared_a.home_dir / ".atm" / "daemon" / "atm-daemon.sock",
+                shared_host_fixture_pair.workspace_a.home_dir
+                / ".atm"
+                / "daemon"
+                / "atm-daemon.sock",
             )
         if status == "passed":
             shutil.rmtree(fixture.root, ignore_errors=True)

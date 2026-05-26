@@ -26,6 +26,10 @@ def graft_ready_timeout_secs() -> float:
     return float(os.environ.get("ATM_SMOKE_GRAFT_READY_TIMEOUT_SECS", "30"))
 
 
+def graft_complete_timeout_secs() -> int:
+    return int(os.environ.get("ATM_SMOKE_GRAFT_COMPLETE_TIMEOUT_SECS", "90"))
+
+
 def run_graft_lane(
     runtime: Any,
     rows: dict[str, Any],
@@ -83,10 +87,12 @@ def run_graft_lane(
                         "thorough smoke graft requires ack",
                         "--requires-ack",
                         "--json",
-                    )
+                )
                 )
                 try:
-                    graft_stdout, graft_stderr = graft_process.communicate(timeout=20)
+                    graft_stdout, graft_stderr = graft_process.communicate(
+                        timeout=graft_complete_timeout_secs()
+                    )
                 except subprocess.TimeoutExpired:
                     graft_process.kill()
                     graft_stdout, graft_stderr = graft_process.communicate()

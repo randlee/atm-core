@@ -66,13 +66,12 @@ produce the final release-readiness verdict.
 
 - `Z.17` promoted no validated `Z.3` findings, so no canary-fix code changes
   were required in `Z.4`
-- final release validation on `feature/pZ-smoke-atm-graft` found one new
-  out-of-scope release blocker:
-  - `Z4-OOS-001`: `just smoke normal` still fails `FAST-LOG-002` because the
-    harness treats the expected invalid-ack validation error as a retained-log
-    severity failure
-- `Z.4` therefore closes with a truthful `NOT_READY` release verdict rather
-  than a release sign-off
+- `Z4-OOS-001` was fixed on `feature/pZ-smoke-atm-graft @ 84935774`, so the
+  normal smoke lane now accepts the single expected invalid-ack validation
+  error without weakening the healthy-path log gate
+- final release validation then passed on `feature/pZ-smoke-atm-graft @ daabc8c3`
+  and the closeout candidate advanced to a truthful `READY` / `PASS` release
+  verdict
 
 ## Acceptance Criteria
 
