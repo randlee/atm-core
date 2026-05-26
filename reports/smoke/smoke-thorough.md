@@ -1,10 +1,10 @@
 # Smoke Thorough
 
 - status: `passed`
-- timestamp: `2026-05-26T02:14:58.877354+00:00`
-- binary SHA: `84051c1b278dd10b97a1e13b11f476cd4013fc97`
-- duration secs: `1.664`
-- summary: `pass=12`, `fail=0`, `skip=0`
+- timestamp: `2026-05-26T03:04:41.602814+00:00`
+- binary SHA: `f7f061972a7a2b384f1405bc7538ba1744c98845`
+- duration secs: `2.62`
+- summary: `pass=13`, `fail=0`, `skip=0`
 
 | Row | Flow | Verdict | Notes |
 | --- | --- | --- | --- |
@@ -13,6 +13,7 @@
 | `Z1-003` | retained team/member inspection on clean-room baseline | `PASS` | teams, members, backup, and restore dry-run all succeeded on the clean-room retained/admin baseline |
 | `Z1-004` | empty-mailbox retained CLI surface | `PASS` | list/read/clear/log snapshot plus ATM help overview/send guidance all succeeded on the clean-room baseline |
 | `Z1-005` | first clean-room send to config-defined recipient | `PASS` | both send modes, pending-ack inspection, recipient read/ack, and post-ack clear/re-read all succeeded on the clean-room baseline |
+| `GRAFT-001` | same-host atm-graft advisory and unary ICD coverage | `PASS` | a real atm-graft host registered, consumed the advisory nudge, read and acknowledged the nudged message, and sent a unary follow-up back to the CLI operator |
 | `Z1-006` | degraded notification after durable send | `PASS` | copied-state durable send succeeded and surfaced the compatibility append degraded warning after the legacy-array inbox projection failed |
 | `Z1-007` | retained CLI validation and recovery guidance | `PASS` | send/read/ack/list/clear/log/doctor/teams/members/help common error paths all failed closed with explicit actionable guidance |
 | `Z1-008` | copied-state durable baseline bring-up | `PASS` | disposable copied-state doctor/list/send/read all succeeded without touching live host ATM state |

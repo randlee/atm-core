@@ -340,6 +340,7 @@ Purpose:
 
 - implement `just smoke thorough`
 - cover every CLI interface on happy path plus common error paths
+- prove the same-host `atm-graft` advisory and unary ICD path
 - root-cause discrepancies from expected behavior
 - prove disposable copied-state bring-up, degraded compatibility-append
   warning visibility, and retry-visible daemon/runtime evidence

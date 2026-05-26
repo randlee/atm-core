@@ -53,6 +53,7 @@ ROW_MAP: dict[str, list[tuple[str, str]]] = {
         ("Z1-003", "retained team/member inspection on clean-room baseline"),
         ("Z1-004", "empty-mailbox retained CLI surface"),
         ("Z1-005", "first clean-room send to config-defined recipient"),
+        ("GRAFT-001", "same-host atm-graft advisory and unary ICD coverage"),
         ("Z1-006", "degraded notification after durable send"),
         ("Z1-007", "retained CLI validation and recovery guidance"),
         ("Z1-008", "copied-state durable baseline bring-up"),

@@ -3842,6 +3842,7 @@ Execution shape:
 - `Z.20` normal smoke systemic execution
   - branch: `feature/pZ-s20-normal-smoke-systemic-execution`
 - `Z.21` thorough smoke CLI coverage and reporting
+  - includes one real same-host `atm-graft` advisory plus unary ICD lane
   - branch: `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting`
 - `Z.22` smoke findings review and major rework triage
   - branch: `feature/pZ-s22-smoke-findings-review-and-major-rework-triage`

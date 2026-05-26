@@ -42,6 +42,8 @@ Use this skill for the repo-native smoke harness and its report artifacts.
 - `fast` is the quick clean-room happy-path lane
 - `normal` is the default `just smoke` lane
 - `thorough` is the full CLI plus common-error-path lane
+- `thorough` also includes one real same-host `atm-graft` advisory plus unary
+  ICD lane
 - shared fixture labels are sprint-scoped on purpose:
   - `fast` uses `z19-team`
   - `normal` uses `z20-team`

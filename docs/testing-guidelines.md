@@ -162,8 +162,9 @@ Required command tiers:
   - includes the fast lane and broadens coverage across the most important
     retained/admin/operator surfaces
 - `just smoke thorough`
-  - includes the normal lane and extends to every CLI happy path plus common
-    error paths
+  - includes the normal lane, extends to every CLI happy path plus common
+    error paths, and proves one real same-host `atm-graft` advisory plus unary
+    ICD lane against the same daemon contract
 
 Minor local blockers discovered during an active smoke sprint may be fixed
 inside that sprint. Larger rework must be promoted into the smoke findings

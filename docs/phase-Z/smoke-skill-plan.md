@@ -134,6 +134,8 @@ Minimum coverage:
 - everything in `normal`
 - every operator flow from `docs/phase-Z/smoke-checklist.md`
 - every CLI interface on happy path plus common error paths
+- one real same-host `atm-graft` lane proving advisory registration/nudge
+  delivery plus unary `read` / `ack` / `send` over the shared daemon contract
 - copied-state fixture lane when the checklist requires it
 - explicit PASS / FAIL / SKIP row verdict for every checklist row
 
@@ -166,6 +168,10 @@ Rules:
 
 Additional required smoke-runner checks outside the frozen row IDs:
 
+- `GRAFT-001`
+  - one real same-host `atm-graft` host must register, consume an advisory
+    nudge, read and acknowledge the nudged message, and send one unary
+    follow-up back to the retained CLI operator
 - `FAST-LOG-001`
   - retained logs contain the expected happy-path lifecycle/send/read/ack/nudge
     events for the run

@@ -18,4 +18,5 @@
 
 - includes `normal`
 - covers every frozen smoke row plus every CLI happy path and common error path
+- includes one real same-host `atm-graft` advisory plus unary ICD lane
 - row-by-row PASS / FAIL / SKIP output
