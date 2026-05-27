@@ -36,6 +36,14 @@ def run_graft_lane(
     fixture: Any,
     base_env: dict[str, str],
 ) -> bool:
+    nudge_timeout = float(os.environ.get("ATM_SMOKE_GRAFT_NUDGE_TIMEOUT_SECS", "30"))
+    graft_complete_timeout = graft_complete_timeout_secs()
+    if nudge_timeout >= graft_complete_timeout:
+        raise ValueError(
+            "ATM_SMOKE_GRAFT_NUDGE_TIMEOUT_SECS "
+            f"({nudge_timeout}s) must be < ATM_SMOKE_GRAFT_COMPLETE_TIMEOUT_SECS "
+            f"({graft_complete_timeout}s)"
+        )
     ready_path = fixture.root / "graft-ready"
     ready_path.unlink(missing_ok=True)
     graft_env = runtime.smoke_env(fixture, identity=runtime.recipient, root=runtime.root)
@@ -91,7 +99,7 @@ def run_graft_lane(
                 )
                 try:
                     graft_stdout, graft_stderr = graft_process.communicate(
-                        timeout=graft_complete_timeout_secs()
+                        timeout=graft_complete_timeout
                     )
                 except subprocess.TimeoutExpired:
                     graft_process.kill()

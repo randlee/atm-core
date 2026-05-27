@@ -94,5 +94,5 @@ Final release verdict:
 - integrate/phase-Z candidate: `84935774` on `feature/pZ-smoke-atm-graft` (release candidate under final `Z.4` review)
 - release checklist result: `PASS`
 - release verdict: `READY`
-- authorized by: `team-lead` (approval_artifact: `PZ-ATM-GRAFT-QA-2 PASS — PR #365`)
+- authorized by: `team-lead` (approval_artifact: `PZ-ATM-GRAFT-QA-3 PASS — PR #365`)
 - notes: `Z.4` completed the final release rerun after fixing `Z4-OOS-001`; `python3 scripts/smoke/run.py fast --write-artifacts`, `python3 scripts/smoke/run.py normal --write-artifacts`, `python3 scripts/smoke/run.py thorough --write-artifacts`, `cargo test --workspace`, and `python3 .just/run_lint.py all` all pass on the accepted closeout candidate
