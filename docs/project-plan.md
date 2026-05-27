@@ -3779,8 +3779,10 @@ Status summary:
   land on `develop` and `Phase Z` to begin.
 - `Phase Ye` is complete on the current `develop` baseline and does not reopen
   the `Phase Z` rollout gate.
-- `Phase Z` is the active execution line for real-binary smoke, `atm-dev`
-  canary/dogfood, and final release sign-off.
+- `Phase Z` is complete; release verdict `READY` on
+  `feature/pZ-smoke-atm-graft @ 84935774`, authorized in
+  `docs/phase-Z/readiness.md` by `team-lead`
+  (`PZ-ATM-GRAFT-QA-3 PASS — PR #365`).
 - `Z.1` smoke bring-up is complete at `70f4fa7f` with verdict `FAIL`; two
   blocking findings are promoted to `Z.2`, which is now the next-unused sprint.
 - the `Z1-F001` analysis also reopened a broader follow-on line for roster
