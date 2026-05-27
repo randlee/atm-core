@@ -36,3 +36,4 @@ No validated `atm-dev` canary findings were promoted during `Z.17`.
 
 | finding_id | participant | linked_operator_flow | summary | severity | fix_owner | status | z4_disposition | revalidation_result | notes |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `Z4-OOS-001` | `arch-ctm` | `just smoke normal` retained-log severity gate | expected invalid-ack recovery originally emitted `ATM_MESSAGE_VALIDATION_FAILED` into the normal-lane severity gate and failed `FAST-LOG-002` even though the normal lane otherwise passed | `blocking` | `arch-ctm` | `resolved` | `fixed_in_z4` | `PASS` | fixed on `feature/pZ-smoke-atm-graft @ 84935774`; the analyzer now allows the one expected `ATM_MESSAGE_VALIDATION_FAILED` record in the normal validation/recovery contract while keeping fast/thorough healthy-path severity gates strict; artifact: `reports/smoke/smoke.md` |

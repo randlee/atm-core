@@ -3842,6 +3842,7 @@ Execution shape:
 - `Z.20` normal smoke systemic execution
   - branch: `feature/pZ-s20-normal-smoke-systemic-execution`
 - `Z.21` thorough smoke CLI coverage and reporting
+  - includes one real same-host `atm-graft` advisory plus unary ICD lane
   - branch: `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting`
 - `Z.22` smoke findings review and major rework triage
   - branch: `feature/pZ-s22-smoke-findings-review-and-major-rework-triage`
@@ -3850,7 +3851,7 @@ Execution shape:
 - `Z.3` `atm-dev` canary and dogfood
   - branch: `feature/pZ-s3-atm-dev-canary-and-dogfood`
 - `Z.4` final fixes and release sign-off
-  - branch: `feature/pZ-s4-final-fixes-and-release-sign-off`
+  - branch: `feature/pZ-smoke-atm-graft`
 
 Phase Z sprint ledger:
 
@@ -3879,7 +3880,7 @@ Phase Z sprint ledger:
 | `Z.23` | `complete` | `feature/pZ-s23-cross-platform-test-coverage-reporting` | `docs/phase-Z/sprint-Z23.md`, `templates/coverage-report/`, `reports/coverage/`, `scripts/coverage/`, `Justfile` |
 | `Z.24` | `complete` | `feature/pZ-obs-v1.1.0-log-maintenance` | `docs/phase-Z/sprint-Z24.md`, `docs/plan-phase-Z.md`, `crates/atm-daemon/bin_support/daemon_observability.rs`, `crates/atm/src/output.rs`, `crates/atm-core/src/observability.rs` |
 | `Z.3` | `complete` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
-| `Z.4` | `planned` | `feature/pZ-s4-final-fixes-and-release-sign-off` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md` |
+| `Z.4` | `complete` | `feature/pZ-smoke-atm-graft` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md`, `docs/phase-Z/canary-findings-ledger.md` |
 
 Immediate planning outputs:
 - `docs/plan-phase-Z.md`

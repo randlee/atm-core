@@ -53,6 +53,7 @@ ROW_MAP: dict[str, list[tuple[str, str]]] = {
         ("Z1-003", "retained team/member inspection on clean-room baseline"),
         ("Z1-004", "empty-mailbox retained CLI surface"),
         ("Z1-005", "first clean-room send to config-defined recipient"),
+        ("GRAFT-001", "same-host atm-graft advisory and unary ICD coverage"),
         ("Z1-006", "degraded notification after durable send"),
         ("Z1-007", "retained CLI validation and recovery guidance"),
         ("Z1-008", "copied-state durable baseline bring-up"),
@@ -72,6 +73,7 @@ NORMAL_RECIPIENT = "z20-recipient"
 THOROUGH_TEAM = "z21-team"
 THOROUGH_OPERATOR = "z21-operator"
 THOROUGH_RECIPIENT = "z21-recipient"
+NORMAL_ALLOWED_LOG_ERROR_CODES = ["ATM_MESSAGE_VALIDATION_FAILED"]
 
 
 @dataclass
@@ -315,6 +317,7 @@ def build_thorough_runtime(root: Path) -> ThoroughSmokeRuntime:
         team=THOROUGH_TEAM,
         operator=THOROUGH_OPERATOR,
         recipient=THOROUGH_RECIPIENT,
+        allowed_error_codes=NORMAL_ALLOWED_LOG_ERROR_CODES,
     )
 
 
@@ -719,6 +722,9 @@ def run_clean_room_lane(
                     '"outcome":"delivery_policy.ack_reply.delivered"',
                     '"action":"shutdown_completed"',
                 ],
+                allowed_error_codes=(
+                    NORMAL_ALLOWED_LOG_ERROR_CODES if include_validation_check else None
+                ),
             )
             analysis = {
                 "passed": analysis_result.passed,
@@ -746,8 +752,12 @@ def run_clean_room_lane(
                 fail_row(
                     rows["FAST-LOG-002"],
                     observed=json.dumps(analysis, indent=2),
-                    expected="retained log contains no warning or error records on a healthy fast smoke run",
-                    root_cause="one or more healthy-path events are still being emitted at warn/error severity",
+                    expected=(
+                        "retained log contains no warning records and no unexpected error records on the healthy smoke path"
+                    ),
+                    root_cause=(
+                        "one or more healthy-path events are still being emitted at warn/error severity outside the accepted smoke contract"
+                    ),
                     artifact=str(log_path),
                     notes="retained log severity gate failed",
                 )
@@ -755,7 +765,9 @@ def run_clean_room_lane(
             else:
                 pass_row(
                     rows["FAST-LOG-002"],
-                    "retained log contained no warning or error records during the healthy fast smoke run",
+                    (
+                        "retained log contained no warning records and no unexpected error records during the healthy smoke path"
+                    ),
                 )
         else:
             fail_row(

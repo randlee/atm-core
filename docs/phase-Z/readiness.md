@@ -64,7 +64,7 @@ The final release verdict must remain `PENDING` until:
 | Z.23 | `562478ef` | `PASS` | `complete` | `just test coverage` now runs explicit local coverage reporting through `cargo llvm-cov`, writes canonical JSON plus tracked latest `reports/coverage/mac.md` / `reports/coverage/win.md`, keeps plain `just test` unchanged, and preserves the non-host tracked platform report as its last real run or an explicit placeholder. |
 | Z.24 | `a9704dd2` | `PASS` | `complete` | `sc-observability` / `sc-observability-types` `1.1.0` adoption moves retained-log rotation, pruning, and maintenance shutdown ownership onto `RetainedLogPolicy` and the logger-owned maintenance runtime; ATM keeps only policy selection, health projection, and doctor/report presentation. |
 | Z.3 | `97518da5` | `PASS` | `complete` | `Z.17` executed the `atm-dev` canary on the accepted post-`Z.16` integration baseline with the frozen participant minimum `team-lead + arch-ctm`; retained command, send, read, and log-reporting flows succeeded; no validated canary findings were promoted to `Z.4`. |
-| Z.4 | `PENDING` | `PENDING` | `not started` | awaits `Z.3` closure plus the accepted `Z.23` coverage-report line and `Z.24` retained-log-maintenance adoption line before final release verdict |
+| Z.4 | `84935774` | `PASS` | `complete` | no validated `Z.3` findings were promoted; `Z4-OOS-001` was recorded and fixed in `Z.4`; final release rerun on `feature/pZ-smoke-atm-graft` now passes `fast`, `normal`, and `thorough` smoke along with workspace test and lint gates |
 
 ## Deferred Follow-Up Findings
 
@@ -91,8 +91,8 @@ The final release verdict must remain `PENDING` until:
 
 Final release verdict:
 
-- integrate/phase-Z candidate: `PENDING`
-- release checklist result: `PENDING`
-- release verdict: `PENDING`
-- authorized by: `PENDING`
-- notes: release sign-off not yet recorded
+- integrate/phase-Z candidate: `84935774` on `feature/pZ-smoke-atm-graft` (release candidate under final `Z.4` review)
+- release checklist result: `PASS`
+- release verdict: `READY`
+- authorized by: `team-lead` (approval_artifact: `PZ-ATM-GRAFT-QA-3 PASS — PR #365`)
+- notes: `Z.4` completed the final release rerun after fixing `Z4-OOS-001`; `python3 scripts/smoke/run.py fast --write-artifacts`, `python3 scripts/smoke/run.py normal --write-artifacts`, `python3 scripts/smoke/run.py thorough --write-artifacts`, `cargo test --workspace`, and `python3 .just/run_lint.py all` all pass on the accepted closeout candidate

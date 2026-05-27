@@ -2256,6 +2256,14 @@ Required testing architecture:
   - `just smoke thorough` must include the `normal` lane plus every CLI
     interface on happy path and common error paths, with explicit PASS/FAIL/
     SKIP row output and root-cause notes for every deviation
+  - `just smoke thorough` must also include one real same-host `atm-graft`
+    lane that proves:
+    - one graft host session registers against the same daemon used by the CLI
+      lane
+    - advisory nudge delivery succeeds end-to-end
+    - unary graft `read`, `ack`, and `send` all succeed over the shared daemon
+      contract
+    - the CLI operator can observe the graft-host reply/follow-up effects
   - `just smoke thorough` must also include one shared-host multi-workspace
     lane where two or more workspaces use different `ATM_HOME` values while
     sharing the same host `HOME`, daemon, SQLite database root, and retained
