@@ -30,95 +30,115 @@ pub fn render_graph_export_json(graph: &GraphExport) -> String {
 }
 
 pub fn render_graph_export_turtle(graph: &GraphExport) -> String {
-    let mut lines = vec![
+    let mut lines = turtle_header(graph);
+    for node in &graph.nodes {
+        lines.extend(render_turtle_node(node));
+    }
+    for edge in &graph.edges {
+        lines.push(render_turtle_edge(edge));
+    }
+    lines.join("\n")
+}
+
+fn turtle_header(graph: &GraphExport) -> Vec<String> {
+    vec![
         "@prefix sc: <urn:sc-lint-boundary:predicate:> .".to_string(),
         "@prefix rdf: <http://www.w3.org/1999/02/22-rdf-syntax-ns#> .".to_string(),
         format!(
             "<urn:sc-lint-boundary:graph> sc:schemaVersion {} .",
             turtle_string_literal(graph.schema_version)
         ),
-        "".to_string(),
-    ];
+        String::new(),
+    ]
+}
 
-    for node in &graph.nodes {
-        let subject = node_iri(&node.id);
-        lines.push(format!("{subject} rdf:type sc:{} .", node.kind));
-        lines.push(format!(
+fn render_turtle_node(node: &GraphNode) -> Vec<String> {
+    let subject = node_iri(&node.id);
+    let mut lines = vec![
+        format!("{subject} rdf:type sc:{} .", node.kind),
+        format!(
             "{subject} sc:id {} .",
             turtle_string_literal(node.id.as_str())
-        ));
-        lines.push(format!(
+        ),
+        format!(
             "{subject} sc:label {} .",
             turtle_string_literal(&node.label)
-        ));
-        if let Some(visibility) = node.visibility {
-            lines.push(format!(
-                "{subject} sc:visibility {} .",
-                turtle_string_literal(visibility)
-            ));
-        }
-        lines.push(format!(
+        ),
+        format!(
             "{subject} sc:package {} .",
             turtle_string_literal(&node.package)
-        ));
-        if let Some(target) = &node.target {
-            lines.push(format!(
-                "{subject} sc:target {} .",
-                turtle_string_literal(target)
-            ));
-        }
-        lines.push(format!(
+        ),
+        format!(
             "{subject} sc:manifestPath {} .",
             turtle_string_literal(&node.manifest_path)
-        ));
-        if let Some(source_path) = &node.source_path {
-            lines.push(format!(
-                "{subject} sc:sourcePath {} .",
-                turtle_string_literal(source_path)
-            ));
-        }
-        if let Some(module_path) = &node.module_path {
-            lines.push(format!(
-                "{subject} sc:modulePath {} .",
-                turtle_string_literal(module_path)
-            ));
-        }
-        if let Some(impl_kind) = node.impl_kind {
-            lines.push(format!(
-                "{subject} sc:implKind {} .",
-                turtle_string_literal(impl_kind.as_str())
-            ));
-        }
-        if let Some(impl_trait) = &node.impl_trait {
-            lines.push(format!(
-                "{subject} sc:implTrait {} .",
-                turtle_string_literal(impl_trait)
-            ));
-        }
-        for attr in &node.attributes {
-            lines.push(format!(
-                "{subject} sc:attribute {} .",
-                turtle_string_literal(&format!(
-                    "{}.{}({})",
-                    attr.scope,
-                    attr.name,
-                    attr.values.join(",")
-                ))
-            ));
-        }
-        lines.push(String::new());
-    }
+        ),
+    ];
+    push_optional_node_fields(&mut lines, &subject, node);
+    push_attribute_lines(&mut lines, &subject, &node.attributes);
+    lines.push(String::new());
+    lines
+}
 
-    for edge in &graph.edges {
+fn push_optional_node_fields(lines: &mut Vec<String>, subject: &str, node: &GraphNode) {
+    if let Some(visibility) = node.visibility {
         lines.push(format!(
-            "{} sc:{} {} .",
-            node_iri(&edge.from),
-            edge.kind,
-            node_iri(&edge.to)
+            "{subject} sc:visibility {} .",
+            turtle_string_literal(visibility)
         ));
     }
+    if let Some(target) = &node.target {
+        lines.push(format!(
+            "{subject} sc:target {} .",
+            turtle_string_literal(target)
+        ));
+    }
+    if let Some(source_path) = &node.source_path {
+        lines.push(format!(
+            "{subject} sc:sourcePath {} .",
+            turtle_string_literal(source_path)
+        ));
+    }
+    if let Some(module_path) = &node.module_path {
+        lines.push(format!(
+            "{subject} sc:modulePath {} .",
+            turtle_string_literal(module_path)
+        ));
+    }
+    if let Some(impl_kind) = node.impl_kind {
+        lines.push(format!(
+            "{subject} sc:implKind {} .",
+            turtle_string_literal(impl_kind.as_str())
+        ));
+    }
+    if let Some(impl_trait) = &node.impl_trait {
+        lines.push(format!(
+            "{subject} sc:implTrait {} .",
+            turtle_string_literal(impl_trait)
+        ));
+    }
+}
 
-    lines.join("\n")
+fn push_attribute_lines(lines: &mut Vec<String>, subject: &str, attributes: &[LintAttribute]) {
+    for attr in attributes {
+        lines.push(format!(
+            "{subject} sc:attribute {} .",
+            turtle_string_literal(&format!(
+                "{}.{}({})",
+                attr.scope,
+                attr.name,
+                attr.values.join(",")
+            ))
+        ));
+    }
+}
+
+fn render_turtle_edge(edge: &GraphEdge) -> String {
+    format!(
+        "{} sc:{} {} .",
+        node_iri(&edge.from),
+        edge.kind,
+        node_iri(&edge.to)
+    )
 }
 
 fn node_iri(node_id: &NodeId) -> String {

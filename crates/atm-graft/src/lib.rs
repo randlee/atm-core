@@ -4,7 +4,7 @@
 
 use std::fmt;
 use std::path::PathBuf;
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::sync::{Arc, RwLock};
 use std::thread::JoinHandle;
 use std::time::Duration;
@@ -427,25 +427,10 @@ impl GraftSession {
         let snapshot = Arc::new(RwLock::new(initial_snapshot));
 
         let Some(graft_config) = graft_config else {
-            observability.session_state_changed(&read_snapshot(&snapshot)?);
-            return Ok(Self {
-                client,
-                snapshot,
-                observability,
-                stop_tx: None,
-                join_handle: None,
-            });
+            return inactive_session(client, snapshot, observability);
         };
-
         if !graft_config.enabled {
-            observability.session_state_changed(&read_snapshot(&snapshot)?);
-            return Ok(Self {
-                client,
-                snapshot,
-                observability,
-                stop_tx: None,
-                join_handle: None,
-            });
+            return inactive_session(client, snapshot, observability);
         }
 
         set_session_state(
@@ -454,11 +439,7 @@ impl GraftSession {
             observability.as_ref(),
         )?;
 
-        let register_response = client.register_session(options.registration_request())?;
-        validate_batch_limit_against_capacity(
-            options.batch_limit,
-            register_response.queue_capacity,
-        )?;
+        register_graft_session(client.as_ref(), &options)?;
         set_session_state(
             &snapshot,
             AdvisorySessionState::Registered,
@@ -478,53 +459,18 @@ impl GraftSession {
             limit: options.batch_limit,
         };
         let (stop_tx, stop_rx) = mpsc::channel();
-        let join_handle = if client.supports_live_advisory_stream() {
-            let stream = client.open_advisory_stream(advisory_stream_request)?;
-            std::thread::Builder::new()
-                .name(format!("atm-graft-{}", options.session_id))
-                .spawn(move || {
-                    run_live_receive_loop(LiveReceiveLoopContext {
-                        client: worker_client,
-                        registration_request,
-                        advisory_stream: stream,
-                        limit: options.batch_limit,
-                        reconnect_backoff: options.poll_interval,
-                        snapshot: worker_snapshot,
-                        injector,
-                        observability: worker_observability,
-                        stop_rx,
-                    })
-                })
-                .map_err(|source| {
-                    AtmError::daemon_unavailable("failed to spawn graft receive loop")
-                        .with_source(source)
-                        .with_recovery(
-                            "Retry graft activation after the embedding host allows one live receive thread for the active session.",
-                        )
-                })?
-        } else {
-            std::thread::Builder::new()
-                .name(format!("atm-graft-{}", options.session_id))
-                .spawn(move || {
-                    run_receive_loop(ReceiveLoopContext {
-                        client: worker_client,
-                        registration_request,
-                        drain_request,
-                        poll_interval: options.poll_interval,
-                        snapshot: worker_snapshot,
-                        injector,
-                        observability: worker_observability,
-                        stop_rx,
-                    })
-                })
-                .map_err(|source| {
-                    AtmError::daemon_unavailable("failed to spawn graft receive loop")
-                        .with_source(source)
-                        .with_recovery(
-                            "Retry graft activation after the embedding host allows one live receive thread for the active session.",
-                        )
-                })?
-        };
+        let join_handle = spawn_graft_receive_loop(
+            client.as_ref(),
+            &options,
+            worker_client,
+            registration_request,
+            advisory_stream_request,
+            drain_request,
+            worker_snapshot,
+            injector,
+            worker_observability,
+            stop_rx,
+        )?;
 
         Ok(Self {
             client,
@@ -580,6 +526,137 @@ impl GraftSession {
         )?;
         Ok(())
     }
+}
+
+fn inactive_session(
+    client: Arc<dyn GraftSessionClient>,
+    snapshot: Arc<RwLock<SessionSnapshot>>,
+    observability: Arc<dyn GraftObservability>,
+) -> Result<GraftSession, AtmError> {
+    observability.session_state_changed(&read_snapshot(&snapshot)?);
+    Ok(GraftSession {
+        client,
+        snapshot,
+        observability,
+        stop_tx: None,
+        join_handle: None,
+    })
+}
+
+fn register_graft_session(
+    client: &dyn GraftSessionClient,
+    options: &GraftSessionOptions,
+) -> Result<(), AtmError> {
+    let register_response = client.register_session(options.registration_request())?;
+    validate_batch_limit_against_capacity(options.batch_limit, register_response.queue_capacity)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_graft_receive_loop(
+    client: &dyn GraftSessionClient,
+    options: &GraftSessionOptions,
+    worker_client: Arc<dyn GraftSessionClient>,
+    registration_request: AdvisorySessionRegistrationRequest,
+    advisory_stream_request: AdvisoryStreamRequest,
+    drain_request: AdvisoryDrainRequest,
+    worker_snapshot: Arc<RwLock<SessionSnapshot>>,
+    injector: Arc<dyn HostNudgeInjector>,
+    worker_observability: Arc<dyn GraftObservability>,
+    stop_rx: Receiver<()>,
+) -> Result<std::thread::JoinHandle<Result<(), AtmError>>, AtmError> {
+    if client.supports_live_advisory_stream() {
+        return spawn_live_receive_loop(
+            options,
+            worker_client,
+            registration_request,
+            advisory_stream_request,
+            worker_snapshot,
+            injector,
+            worker_observability,
+            stop_rx,
+        );
+    }
+    spawn_polling_receive_loop(
+        options,
+        worker_client,
+        registration_request,
+        drain_request,
+        worker_snapshot,
+        injector,
+        worker_observability,
+        stop_rx,
+    )
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_live_receive_loop(
+    options: &GraftSessionOptions,
+    worker_client: Arc<dyn GraftSessionClient>,
+    registration_request: AdvisorySessionRegistrationRequest,
+    advisory_stream_request: AdvisoryStreamRequest,
+    worker_snapshot: Arc<RwLock<SessionSnapshot>>,
+    injector: Arc<dyn HostNudgeInjector>,
+    worker_observability: Arc<dyn GraftObservability>,
+    stop_rx: Receiver<()>,
+) -> Result<std::thread::JoinHandle<Result<(), AtmError>>, AtmError> {
+    let thread_name = format!("atm-graft-{}", options.session_id);
+    let limit = options.batch_limit;
+    let reconnect_backoff = options.poll_interval;
+    let stream = worker_client.open_advisory_stream(advisory_stream_request)?;
+    std::thread::Builder::new()
+        .name(thread_name)
+        .spawn(move || {
+            run_live_receive_loop(LiveReceiveLoopContext {
+                client: worker_client,
+                registration_request,
+                advisory_stream: stream,
+                limit,
+                reconnect_backoff,
+                snapshot: worker_snapshot,
+                injector,
+                observability: worker_observability,
+                stop_rx,
+            })
+        })
+        .map_err(spawn_receive_loop_error)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn spawn_polling_receive_loop(
+    options: &GraftSessionOptions,
+    worker_client: Arc<dyn GraftSessionClient>,
+    registration_request: AdvisorySessionRegistrationRequest,
+    drain_request: AdvisoryDrainRequest,
+    worker_snapshot: Arc<RwLock<SessionSnapshot>>,
+    injector: Arc<dyn HostNudgeInjector>,
+    worker_observability: Arc<dyn GraftObservability>,
+    stop_rx: Receiver<()>,
+) -> Result<std::thread::JoinHandle<Result<(), AtmError>>, AtmError> {
+    let thread_name = format!("atm-graft-{}", options.session_id);
+    let poll_interval = options.poll_interval;
+    std::thread::Builder::new()
+        .name(thread_name)
+        .spawn(move || {
+            run_receive_loop(ReceiveLoopContext {
+                client: worker_client,
+                registration_request,
+                drain_request,
+                poll_interval,
+                snapshot: worker_snapshot,
+                injector,
+                observability: worker_observability,
+                stop_rx,
+            })
+        })
+        .map_err(spawn_receive_loop_error)
+}
+
+fn spawn_receive_loop_error(source: std::io::Error) -> AtmError {
+    AtmError::daemon_unavailable("failed to spawn graft receive loop")
+        .with_source(source)
+        .with_recovery(
+            "Retry graft activation after the embedding host allows one live receive thread for the active session.",
+        )
 }
 
 impl Drop for GraftSession {

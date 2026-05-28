@@ -18,6 +18,7 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 #[cfg(test)]
 use crate::DaemonSubsystem;
 use crate::SubsystemObservability;
+use crate::daemon_runtime_observability::DaemonEvent;
 
 const MAX_ADVISORY_SESSIONS: usize = 128;
 const MAX_ADVISORY_EVENTS_PER_SESSION: usize = 256;
@@ -264,81 +265,20 @@ impl AdvisoryRuntime {
         outcome: &SendOutcome,
     ) -> Result<(), AtmError> {
         let mut state = self.lock_state_write()?;
-        let message = outcome
-            .message
-            .clone()
-            .or_else(|| outcome.summary.clone())
-            .unwrap_or_default();
-        let nudge = AdvisoryEvent {
-            message_id: outcome.message_id,
-            from: outcome.sender.clone(),
-            message: AdvisoryMessage::new(message)?,
-            received_at: IsoTimestamp::now(),
-            task_id: outcome.task_id.clone(),
-        };
+        let nudge = advisory_nudge_from_outcome(outcome)?;
         let mut matched = false;
         let mut overflowed = false;
         for (session_id, session) in state.sessions.iter_mut() {
             if session.team == outcome.team && session.agent == outcome.agent {
                 matched = true;
-                if session.nudges.len() >= self.max_nudges_per_session {
-                    session.dropped_count = session.dropped_count.saturating_add(1);
+                if let EnqueueSessionResult::Overflow =
+                    self.enqueue_nudge_for_session(session_id, session, outcome, &nudge)
+                {
                     overflowed = true;
-                    let mut event = self
-                        .observability
-                        .event(
-                            "enqueue_nudge",
-                            "degraded",
-                            "advisory queue rejected an event because the bounded session queue is full",
-                        )
-                        .with_team(outcome.team.clone())
-                        .with_agent(outcome.agent.clone());
-                    event = event.with_message_id(outcome.message_id);
-                    if let Some(task_id) = outcome.task_id.clone() {
-                        event = event.with_task_id(task_id);
-                    }
-                    self.observability.emit_event_or_warn(event);
-                    tracing::debug!(
-                        session_id = %session_id,
-                        team = %outcome.team,
-                        agent = %outcome.agent,
-                        cap = self.max_nudges_per_session,
-                        dropped_count = session.dropped_count,
-                        "advisory queue rejected an event because the bounded session queue is full"
-                    );
-                    continue;
                 }
-                session.nudges.push_back(nudge.clone());
             }
         }
-        if matched {
-            let mut event = self
-                .observability
-                .event(
-                    "enqueue_nudge",
-                    if overflowed { "degraded" } else { "ok" },
-                    if overflowed {
-                        "advisory runtime enqueued at least one nudge and dropped at least one due to queue pressure"
-                    } else {
-                        "advisory runtime queued a nudge for a registered session"
-                    },
-                )
-                .with_team(outcome.team.clone())
-                .with_agent(outcome.agent.clone())
-                .with_recipient(outcome.agent.clone())
-                .with_sender(outcome.sender.clone());
-            event = event.with_message_id(outcome.message_id);
-            if let Some(task_id) = outcome.task_id.clone() {
-                event = event.with_task_id(task_id);
-            }
-            self.observability.emit_event_or_warn(event);
-            tracing::debug!(
-                team = %outcome.team,
-                agent = %outcome.agent,
-                message_id = %outcome.message_id,
-                "queued advisory event for registered session"
-            );
-        }
+        self.emit_enqueue_outcome(matched, overflowed, outcome);
         if overflowed {
             return Err(
                 AtmError::daemon_unavailable(
@@ -350,6 +290,73 @@ impl AdvisoryRuntime {
             );
         }
         Ok(())
+    }
+
+    fn enqueue_nudge_for_session(
+        &self,
+        session_id: &atm_core::graft::AdvisorySessionId,
+        session: &mut RegisteredAdvisorySession,
+        outcome: &SendOutcome,
+        nudge: &AdvisoryEvent,
+    ) -> EnqueueSessionResult {
+        if session.nudges.len() < self.max_nudges_per_session {
+            session.nudges.push_back(nudge.clone());
+            return EnqueueSessionResult::Queued;
+        }
+        session.dropped_count = session.dropped_count.saturating_add(1);
+        self.emit_queue_overflow_event(session_id, session.dropped_count, outcome);
+        EnqueueSessionResult::Overflow
+    }
+
+    fn emit_queue_overflow_event(
+        &self,
+        session_id: &atm_core::graft::AdvisorySessionId,
+        dropped_count: usize,
+        outcome: &SendOutcome,
+    ) {
+        let event = advisory_runtime_event(
+            self.observability.event(
+                "enqueue_nudge",
+                "degraded",
+                "advisory queue rejected an event because the bounded session queue is full",
+            ),
+            outcome,
+        );
+        self.observability.emit_event_or_warn(event);
+        tracing::debug!(
+            session_id = %session_id,
+            team = %outcome.team,
+            agent = %outcome.agent,
+            cap = self.max_nudges_per_session,
+            dropped_count,
+            "advisory queue rejected an event because the bounded session queue is full"
+        );
+    }
+
+    fn emit_enqueue_outcome(&self, matched: bool, overflowed: bool, outcome: &SendOutcome) {
+        if !matched {
+            return;
+        }
+        let message = if overflowed {
+            "advisory runtime enqueued at least one nudge and dropped at least one due to queue pressure"
+        } else {
+            "advisory runtime queued a nudge for a registered session"
+        };
+        let outcome_label = if overflowed { "degraded" } else { "ok" };
+        let event = advisory_runtime_event(
+            self.observability
+                .event("enqueue_nudge", outcome_label, message)
+                .with_recipient(outcome.agent.clone())
+                .with_sender(outcome.sender.clone()),
+            outcome,
+        );
+        self.observability.emit_event_or_warn(event);
+        tracing::debug!(
+            team = %outcome.team,
+            agent = %outcome.agent,
+            message_id = %outcome.message_id,
+            "queued advisory event for registered session"
+        );
     }
 
     fn lock_state_read(&self) -> Result<RwLockReadGuard<'_, AdvisoryRuntimeState>, AtmError> {
@@ -373,6 +380,37 @@ impl AdvisoryRuntime {
                 )
             })
     }
+}
+
+enum EnqueueSessionResult {
+    Queued,
+    Overflow,
+}
+
+fn advisory_nudge_from_outcome(outcome: &SendOutcome) -> Result<AdvisoryEvent, AtmError> {
+    let message = outcome
+        .message
+        .clone()
+        .or_else(|| outcome.summary.clone())
+        .unwrap_or_default();
+    Ok(AdvisoryEvent {
+        message_id: outcome.message_id,
+        from: outcome.sender.clone(),
+        message: AdvisoryMessage::new(message)?,
+        received_at: IsoTimestamp::now(),
+        task_id: outcome.task_id.clone(),
+    })
+}
+
+fn advisory_runtime_event(event: DaemonEvent, outcome: &SendOutcome) -> DaemonEvent {
+    let mut event = event
+        .with_team(outcome.team.clone())
+        .with_agent(outcome.agent.clone())
+        .with_message_id(outcome.message_id);
+    if let Some(task_id) = outcome.task_id.clone() {
+        event = event.with_task_id(task_id);
+    }
+    event
 }
 
 #[cfg(test)]

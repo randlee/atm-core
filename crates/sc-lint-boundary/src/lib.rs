@@ -533,32 +533,7 @@ impl GraphBuilder {
 
 pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
     if options.rule == Some(RuleFilter::Portability) {
-        let findings = portability::analyze_portability(&options.root).with_context(|| {
-            format!(
-                "failed to analyze portability for root: {}",
-                options.root.display()
-            )
-        })?;
-        let scanned_crates =
-            portability::count_scanned_crates(&options.root).with_context(|| {
-                format!(
-                    "failed to count scanned crates for root: {}",
-                    options.root.display()
-                )
-            })?;
-        let status = if findings.iter().any(analysis::finding_is_failure) {
-            ReportStatus::Fail
-        } else {
-            ReportStatus::Pass
-        };
-        return Ok(FindingsReport {
-            tool: "sc-lint-boundary",
-            version: env!("CARGO_PKG_VERSION"),
-            schema_version: SC_LINT_SCHEMA_VERSION,
-            status,
-            scanned_crates,
-            findings,
-        });
+        return portability_findings_report(&options.root);
     }
 
     let graph = graph::build_workspace_graph(&options.root).with_context(|| {
@@ -567,33 +542,7 @@ pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
             options.root.display()
         )
     })?;
-    let mut findings = Vec::new();
-    let filter = options.rule;
-    if filter.is_none() || filter == Some(RuleFilter::Cycles) {
-        findings.extend(analysis::analyze_cycles(&graph));
-    }
-    if filter.is_none()
-        || filter == Some(RuleFilter::Boundaries)
-        || filter == Some(RuleFilter::InternalOnly)
-    {
-        findings.extend(analysis::analyze_internal_only(&graph));
-    }
-    if filter.is_none()
-        || filter == Some(RuleFilter::Boundaries)
-        || filter == Some(RuleFilter::ForbidExternalImpls)
-    {
-        findings.extend(analysis::analyze_forbid_external_impls(&graph));
-    }
-    if filter.is_none() || filter == Some(RuleFilter::Boundaries) {
-        findings.extend(
-            runtime::analyze_runtime_liveness(&options.root).with_context(|| {
-                format!(
-                    "failed to analyze runtime liveness for root: {}",
-                    options.root.display()
-                )
-            })?,
-        );
-    }
+    let mut findings = graph_findings(options, &graph)?;
     findings.sort_by(|left, right| {
         analysis::finding_sort_key(left)
             .cmp(&analysis::finding_sort_key(right))
@@ -618,6 +567,87 @@ pub fn analyze_workspace(options: &AnalyzeOptions) -> Result<FindingsReport> {
         scanned_crates,
         findings,
     })
+}
+
+fn portability_findings_report(root: &Path) -> Result<FindingsReport> {
+    let findings = portability::analyze_portability(root)
+        .with_context(|| format!("failed to analyze portability for root: {}", root.display()))?;
+    let scanned_crates = portability::count_scanned_crates(root).with_context(|| {
+        format!(
+            "failed to count scanned crates for root: {}",
+            root.display()
+        )
+    })?;
+    Ok(FindingsReport {
+        tool: "sc-lint-boundary",
+        version: env!("CARGO_PKG_VERSION"),
+        schema_version: SC_LINT_SCHEMA_VERSION,
+        status: findings_status(&findings),
+        scanned_crates,
+        findings,
+    })
+}
+
+fn graph_findings(options: &AnalyzeOptions, graph: &GraphExport) -> Result<Vec<Finding>> {
+    let mut findings = Vec::new();
+    extend_graph_cycle_findings(&mut findings, options.rule, graph);
+    extend_graph_boundary_findings(&mut findings, options.rule, graph);
+    extend_runtime_liveness_findings(&mut findings, options)?;
+    Ok(findings)
+}
+
+fn extend_graph_cycle_findings(
+    findings: &mut Vec<Finding>,
+    filter: Option<RuleFilter>,
+    graph: &GraphExport,
+) {
+    if filter.is_none() || filter == Some(RuleFilter::Cycles) {
+        findings.extend(analysis::analyze_cycles(graph));
+    }
+}
+
+fn extend_graph_boundary_findings(
+    findings: &mut Vec<Finding>,
+    filter: Option<RuleFilter>,
+    graph: &GraphExport,
+) {
+    if filter.is_none()
+        || filter == Some(RuleFilter::Boundaries)
+        || filter == Some(RuleFilter::InternalOnly)
+    {
+        findings.extend(analysis::analyze_internal_only(graph));
+    }
+    if filter.is_none()
+        || filter == Some(RuleFilter::Boundaries)
+        || filter == Some(RuleFilter::ForbidExternalImpls)
+    {
+        findings.extend(analysis::analyze_forbid_external_impls(graph));
+    }
+}
+
+fn extend_runtime_liveness_findings(
+    findings: &mut Vec<Finding>,
+    options: &AnalyzeOptions,
+) -> Result<()> {
+    if options.rule.is_none() || options.rule == Some(RuleFilter::Boundaries) {
+        findings.extend(
+            runtime::analyze_runtime_liveness(&options.root).with_context(|| {
+                format!(
+                    "failed to analyze runtime liveness for root: {}",
+                    options.root.display()
+                )
+            })?,
+        );
+    }
+    Ok(())
+}
+
+fn findings_status(findings: &[Finding]) -> ReportStatus {
+    if findings.iter().any(analysis::finding_is_failure) {
+        ReportStatus::Fail
+    } else {
+        ReportStatus::Pass
+    }
 }
 
 pub fn export_workspace_graph(options: &ExportGraphOptions) -> Result<GraphExport> {

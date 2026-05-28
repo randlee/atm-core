@@ -186,42 +186,8 @@ fn visit_item_for_unix_portability(
     let unix_gated = inherited_unix_gated || attrs.iter().any(attr_is_cfg_unix);
 
     if scope == ScopeKind::NonTest {
-        for attr in attrs {
-            if attr_is_cfg_attr_not_unix_allow_dead_code(attr) {
-                findings.push(PortabilityFinding {
-                    rule_id: RuleId::Port005,
-                    kind: "cfg_attr_not_unix_allow_dead_code",
-                    message: "PORT-005 #[cfg_attr(not(unix), allow(dead_code))] is not an approved portability suppressor in production code; gate the item with #[cfg(unix)] or provide a real cross-platform implementation".to_string(),
-                    source_path: file_context.source_path.clone(),
-                    line: span_start_line(attr.span()),
-                    package: file_context.package.clone(),
-                    target: file_context.target.clone(),
-                    node_label: format!(
-                        "crate::{}::{}::portability",
-                        file_context.package, file_context.target
-                    ),
-                });
-            }
-        }
-
-        if let Item::Use(item_use) = item
-            && use_tree_contains_std_os_unix(&item_use.tree)
-            && !unix_gated
-        {
-            findings.push(PortabilityFinding {
-                rule_id: RuleId::Port004,
-                kind: "ungated_std_os_unix_import",
-                message: "PORT-004 ungated std::os::unix import in production code; wrap the item with #[cfg(unix)] or move the import behind a Unix-only boundary".to_string(),
-                source_path: file_context.source_path.clone(),
-                line: span_start_line(item_use.span()),
-                package: file_context.package.clone(),
-                target: file_context.target.clone(),
-                node_label: format!(
-                    "crate::{}::{}::portability",
-                    file_context.package, file_context.target
-                ),
-            });
-        }
+        collect_cfg_attr_findings(attrs, file_context, findings);
+        collect_ungated_unix_import_finding(item, unix_gated, file_context, findings);
     }
 
     match item {
@@ -261,6 +227,66 @@ fn visit_item_for_unix_portability(
             }
         }
         _ => {}
+    }
+}
+
+fn collect_cfg_attr_findings(
+    attrs: &[Attribute],
+    file_context: &FileContext,
+    findings: &mut Vec<PortabilityFinding>,
+) {
+    for attr in attrs {
+        if attr_is_cfg_attr_not_unix_allow_dead_code(attr) {
+            findings.push(portability_finding(
+                RuleId::Port005,
+                "cfg_attr_not_unix_allow_dead_code",
+                "PORT-005 #[cfg_attr(not(unix), allow(dead_code))] is not an approved portability suppressor in production code; gate the item with #[cfg(unix)] or provide a real cross-platform implementation".to_string(),
+                span_start_line(attr.span()),
+                file_context,
+            ));
+        }
+    }
+}
+
+fn collect_ungated_unix_import_finding(
+    item: &Item,
+    unix_gated: bool,
+    file_context: &FileContext,
+    findings: &mut Vec<PortabilityFinding>,
+) {
+    if let Item::Use(item_use) = item
+        && use_tree_contains_std_os_unix(&item_use.tree)
+        && !unix_gated
+    {
+        findings.push(portability_finding(
+            RuleId::Port004,
+            "ungated_std_os_unix_import",
+            "PORT-004 ungated std::os::unix import in production code; wrap the item with #[cfg(unix)] or move the import behind a Unix-only boundary".to_string(),
+            span_start_line(item_use.span()),
+            file_context,
+        ));
+    }
+}
+
+fn portability_finding(
+    rule_id: RuleId,
+    kind: &'static str,
+    message: String,
+    line: usize,
+    file_context: &FileContext,
+) -> PortabilityFinding {
+    PortabilityFinding {
+        rule_id,
+        kind,
+        message,
+        source_path: file_context.source_path.clone(),
+        line,
+        package: file_context.package.clone(),
+        target: file_context.target.clone(),
+        node_label: format!(
+            "crate::{}::{}::portability",
+            file_context.package, file_context.target
+        ),
     }
 }
 
