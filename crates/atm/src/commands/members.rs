@@ -3,6 +3,7 @@ use atm_core::home;
 use atm_core::team_admin::{self, MembersQuery};
 use clap::Args;
 
+use crate::commands::retained_roster::with_retained_roster_store;
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -22,7 +23,10 @@ impl MembersCommand {
         let home_dir = home::atm_home()?;
         let current_dir = std::env::current_dir()?;
         let json = self.json;
-        let outcome = team_admin::list_members(self.build_query(home_dir, current_dir)?)?;
+        let query = self.build_query(home_dir, current_dir)?;
+        let outcome = with_retained_roster_store(|roster_store| {
+            team_admin::list_members_with_roster_store(roster_store, query)
+        })?;
         output::print_members_result(&outcome, json)
     }
 
@@ -50,9 +54,7 @@ mod tests {
     };
     use atm_core::schema::{AgentMember, TeamConfig};
     use atm_core::test_support::{EnvGuard, ROLE_TEAM_LEAD, TEST_SENDER, TEST_TEAM};
-    use atm_runtime_test_support::{
-        SqliteRuntimeGuard, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
-    };
+    use atm_runtime_test_support::open_sqlite_boundary;
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -61,7 +63,6 @@ mod tests {
 
     struct Fixture {
         _tempdir: TempDir,
-        _runtime_guard: SqliteRuntimeGuard,
         home_dir: PathBuf,
         current_dir: PathBuf,
     }
@@ -86,11 +87,9 @@ mod tests {
 
     impl Fixture {
         fn new() -> Self {
-            install_sqlite_retained_runtime_factory();
             let tempdir = TempDir::new().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
-            let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
-            let runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path.clone());
+            let sqlite_db_path = atm_core::home::host_mail_db_path_from_home(&home_dir);
             let current_dir = tempdir.path().join("workspace");
             fs::create_dir_all(&current_dir).expect("workspace");
             fs::write(
@@ -123,8 +122,8 @@ mod tests {
                             agent_name: ROLE_TEAM_LEAD.parse().expect("lead"),
                             member_kind: RosterMemberKind::Permanent,
                             harness: RosterHarness::ClaudeCode,
-                            agent_type: String::new(),
-                            model: String::new(),
+                            agent_type: atm_core::schema::AgentType::default(),
+                            model: atm_core::types::ModelName::default(),
                             recipient_pane_id: None,
                             metadata_json: serde_json::Map::new(),
                         },
@@ -133,8 +132,8 @@ mod tests {
                             agent_name: TEST_SENDER.parse().expect("sender"),
                             member_kind: RosterMemberKind::Permanent,
                             harness: RosterHarness::ClaudeCode,
-                            agent_type: String::new(),
-                            model: String::new(),
+                            agent_type: atm_core::schema::AgentType::default(),
+                            model: atm_core::types::ModelName::default(),
                             recipient_pane_id: None,
                             metadata_json: serde_json::Map::new(),
                         },
@@ -144,14 +143,17 @@ mod tests {
                 .expect("seed roster");
             Self {
                 _tempdir: tempdir,
-                _runtime_guard: runtime_guard,
                 home_dir,
                 current_dir,
             }
         }
 
         fn with_env_and_cwd<T>(&self, f: impl FnOnce() -> T) -> T {
-            let _atm_home = EnvGuard::set_raw("ATM_HOME", self.home_dir.to_str().expect("utf8"));
+            let _env = EnvGuard::set_many([
+                ("ATM_HOME", Some(self.home_dir.to_str().expect("utf8"))),
+                ("ATM_TEAM", None),
+                ("HOME", Some(self.home_dir.to_str().expect("utf8"))),
+            ]);
             let _cwd = CwdGuard::change_to(&self.current_dir);
             f()
         }

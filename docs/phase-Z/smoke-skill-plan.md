@@ -1,7 +1,7 @@
 ---
 id: phase-z-smoke-skill-plan
 title: Phase Z Smoke Skill And just smoke Plan
-status: planned
+status: active
 target: develop
 ---
 
@@ -127,13 +127,15 @@ Purpose:
 
 Expected runtime:
 
-- approximately 5 to 10 minutes
+- approximately 1 to 5 minutes with cached release binaries; longer on cold builds
 
 Minimum coverage:
 
 - everything in `normal`
 - every operator flow from `docs/phase-Z/smoke-checklist.md`
 - every CLI interface on happy path plus common error paths
+- one real same-host `atm-graft` lane proving advisory registration/nudge
+  delivery plus unary `read` / `ack` / `send` over the shared daemon contract
 - copied-state fixture lane when the checklist requires it
 - explicit PASS / FAIL / SKIP row verdict for every checklist row
 
@@ -166,6 +168,10 @@ Rules:
 
 Additional required smoke-runner checks outside the frozen row IDs:
 
+- `GRAFT-001`
+  - one real same-host `atm-graft` host must register, consume an advisory
+    nudge, read and acknowledge the nudged message, and send one unary
+    follow-up back to the retained CLI operator
 - `FAST-LOG-001`
   - retained logs contain the expected happy-path lifecycle/send/read/ack/nudge
     events for the run
@@ -188,6 +194,7 @@ Required JSON schema:
   "timestamp": "2026-05-24T12:34:56Z",
   "binary_sha": "0123456789abcdef",
   "duration_secs": 123,
+  "status": "scaffold-only",
   "rows": [
     {
       "id": "Z1-005",
@@ -221,6 +228,7 @@ Required behavior:
 The stdout summary must be concise but complete enough for ATM handoff:
 
 - smoke level
+- runner status
 - binary SHA
 - total duration
 - pass/fail/skip counts
@@ -344,10 +352,13 @@ Minimum tracked fields:
 - smoke level
 - report timestamp
 
-Planned follow-on behavior:
+Accepted linkage behavior:
 
-- `Z.22` will define how accepted smoke findings, binary-baseline notes, and
-  canary/release evidence link back to `docs/phase-Z/readiness.md`
+- `docs/phase-Z/readiness.md` records the accepted `Z.19` through `Z.21`
+  smoke execution heads used for release gating
+- `docs/phase-Z/smoke-findings-review.md` records promoted major smoke
+  findings and defines how those findings map back to the accepted readiness
+  rows and later canary/release evidence
 
 ## Smoke Findings Handling
 
@@ -398,11 +409,14 @@ Primary deliverables:
 - `scripts/smoke/run.py`
 - `scripts/smoke/analyze_logs.py`
 - `scripts/smoke/render_report.py`
+- `scripts/smoke/fixtures.py`
 - `templates/smoke-report/smoke-fast.md.j2`
 - `templates/smoke-report/smoke.md.j2`
 - `templates/smoke-report/smoke-thorough.md.j2`
 - `reports/smoke/` output contract
 - `.gitignore` report-ignore rules
+- tracked-latest scaffold snapshots in `reports/smoke/` that later smoke
+  execution sprints overwrite with real run results
 
 ### Z.19 Fast Smoke Happy-Path Execution
 
@@ -423,6 +437,7 @@ Execution worktree:
 Primary deliverables:
 
 - `just smoke fast`
+- minimal clean-room team shell plus `atm teams add-member` setup contract
 - `reports/smoke/smoke-fast.md`
 - timestamped fast smoke artifacts
 - deterministic fast log-analysis gate
@@ -450,6 +465,9 @@ Primary deliverables:
 - `reports/smoke/smoke.md`
 - timestamped normal smoke artifacts
 - root-cause reporting for every deviation
+- recipient-side pending-ack inspection, post-ack clear/re-read verification,
+  post-activity log snapshot coverage, and explicit invalid-ack recovery
+  guidance in the default lane
 - minor in-sprint fixes needed for normal predictability
 
 ### Z.21 Thorough Smoke CLI Coverage And Reporting
@@ -474,6 +492,8 @@ Primary deliverables:
 - `reports/smoke/smoke-thorough.md`
 - timestamped thorough smoke artifacts
 - row-level PASS / FAIL / SKIP output
+- full top-level CLI happy/common-error-path coverage plus disposable
+  copied-state bring-up and degraded compatibility-append warning proof
 - root-cause notes for every deviation from expected behavior
 
 ### Z.22 Smoke Findings Review And Major Rework Triage
@@ -522,6 +542,9 @@ Primary deliverables:
 - `reports/coverage/mac.md`
 - `reports/coverage/win.md`
 - timestamped coverage artifacts
+- host-platform coverage runs overwrite only the matching tracked latest report
+  and leave the other tracked platform report at its last real result or a
+  placeholder
 
 ## Artifact List
 
@@ -545,6 +568,7 @@ Planned new files:
 - `scripts/smoke/analyze_logs.py`
 - `scripts/coverage/run.py`
 - `scripts/coverage/render_report.py`
+- `scripts/coverage/invoke_test_mode.py`
 - `templates/smoke-report/smoke-fast.md.j2`
 - `templates/smoke-report/smoke.md.j2`
 - `templates/smoke-report/smoke-thorough.md.j2`

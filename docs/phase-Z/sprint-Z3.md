@@ -1,7 +1,7 @@
 ---
 id: Z.3
 title: `atm-dev` Canary And Dogfood
-status: planned
+status: complete
 branch: feature/pZ-s3-atm-dev-canary-and-dogfood
 worktree: ../atm-core-worktrees/feature/pZ-s3-atm-dev-canary-and-dogfood
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.3
 worktree: ../atm-core-worktrees/feature/pZ-s3-atm-dev-canary-and-dogfood
 branch: feature/pZ-s3-atm-dev-canary-and-dogfood
-status: planned
+status: complete
 estimated_scope: large
 ```
 

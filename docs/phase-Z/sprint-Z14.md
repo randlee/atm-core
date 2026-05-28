@@ -1,7 +1,7 @@
 ---
 id: Z.14
 title: Ambient Singleton Surface Removal And Lint Gate
-status: planned
+status: complete
 branch: feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate
 worktree: ../atm-core-worktrees/feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.14
 worktree: ../atm-core-worktrees/feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate
 branch: feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate
-status: planned
+status: complete
 estimated_scope: small
 ```
 

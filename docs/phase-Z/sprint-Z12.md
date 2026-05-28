@@ -1,7 +1,7 @@
 ---
 id: Z.12
 title: Retained Runtime Path Elimination And Boundary Lint Gate
-status: planned
+status: complete
 branch: feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate
 worktree: ../atm-core-worktrees/feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.12
 worktree: ../atm-core-worktrees/feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate
 branch: feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate
-status: planned
+status: complete
 estimated_scope: small
 ```
 

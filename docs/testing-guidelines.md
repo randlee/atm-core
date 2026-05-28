@@ -162,8 +162,9 @@ Required command tiers:
   - includes the fast lane and broadens coverage across the most important
     retained/admin/operator surfaces
 - `just smoke thorough`
-  - includes the normal lane and extends to every CLI happy path plus common
-    error paths
+  - includes the normal lane, extends to every CLI happy path plus common
+    error paths, and proves one real same-host `atm-graft` advisory plus unary
+    ICD lane against the same daemon contract
 
 Minor local blockers discovered during an active smoke sprint may be fixed
 inside that sprint. Larger rework must be promoted into the smoke findings
@@ -179,6 +180,13 @@ Rules:
 - plain `just test` must not implicitly collect coverage
 - coverage reports must use the tracked-latest plus timestamped artifact model
   documented by the Phase Z smoke/coverage planning line
+- `scripts/coverage/run.py --timestamp <YYYY-MM-DD-HH-MM-SS>` is the explicit
+  reuse seam when a smoke and coverage run belong to the same reporting
+  campaign; the operator chooses the shared timestamp slug once and passes it
+  to both runners
+- a host-local coverage run overwrites only that host platform's tracked latest
+  report; the other tracked platform report stays at its last real run or a
+  placeholder until executed on that platform
 
 ## 5. Environment And Timing Rules
 

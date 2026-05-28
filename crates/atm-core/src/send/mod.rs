@@ -19,7 +19,7 @@ use crate::delivery_policy::{
 };
 use crate::error::AtmError;
 use crate::identity;
-use crate::observability::{CommandEvent, ObservabilityPort};
+use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::schema::{AtmMessageId, MessageEnvelope, ThreadMode};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -545,8 +545,8 @@ fn emit_send_command_event(
 ) {
     if let Err(error) = observability.emit(CommandEvent {
         command: "send",
-        action: "send",
-        outcome: outcome_name,
+        action: action_name("send"),
+        outcome: outcome_label(outcome_name),
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender: canonical_sender.clone(),

@@ -16,6 +16,7 @@ import os
 import json
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -29,12 +30,12 @@ except ModuleNotFoundError:
         tomllib = None  # type: ignore[assignment]
 
 
-LOG_FILE = "/tmp/atm-nudge.log"
+LOG_FILE = str(Path(tempfile.gettempdir()) / "atm-nudge.log")
 
 
 def log(message: str) -> None:
     timestamp = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-    with open(LOG_FILE, "a") as f:
+    with open(LOG_FILE, "a", encoding="utf-8") as f:
         f.write(f"{timestamp} {message}\n")
 
 

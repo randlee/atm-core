@@ -2,7 +2,8 @@ use super::SqliteRosterStore;
 use crate::{deserialize_json, serialize_json};
 use atm_core::boundary;
 use atm_core::error::AtmError;
-use atm_core::types::{IsoTimestamp, TeamName};
+use atm_core::schema::AgentType;
+use atm_core::types::{IsoTimestamp, ModelName, PaneId, TeamName};
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Map, Value};
 
@@ -80,11 +81,11 @@ impl boundary::RosterStore for SqliteRosterStore {
                             member.agent_name.as_str(),
                             roster_member_kind_value(member.member_kind),
                             roster_harness_value(member.harness),
-                            member.agent_type.clone(),
-                            member.model.clone(),
+                            member.agent_type.to_string(),
+                            member.model.to_string(),
                             metadata_json,
                             request.source.as_ref().map(|source| source.as_str()),
-                            member.recipient_pane_id.clone(),
+                            member.recipient_pane_id.as_ref().map(ToString::to_string),
                             updated_at.clone(),
                         ],
                     ).map_err(|error| self.db.error("failed to replace canonical team-roster member", error))?;
@@ -384,25 +385,26 @@ fn build_roster_member(
         })?,
         member_kind,
         harness,
-        agent_type: validate_roster_text_field("agent_type", stored.agent_type, team, &agent_name)?,
-        model: validate_roster_text_field("model", stored.model, team, &agent_name)?,
-        recipient_pane_id: stored.recipient_pane_id,
+        agent_type: validate_roster_agent_type(stored.agent_type, team, &agent_name)?,
+        model: validate_roster_model(stored.model, team, &agent_name)?,
+        recipient_pane_id: validate_roster_pane_id(stored.recipient_pane_id, team, &agent_name)?,
         metadata_json,
     })
 }
 
-fn validate_roster_text_field(
-    field_name: &'static str,
+fn validate_roster_text_field_len(
+    field_name: &str,
+    value_len: usize,
     value: String,
     team: &atm_core::types::TeamName,
     agent_name: &str,
 ) -> Result<String, AtmError> {
-    if value.len() > MAX_ROSTER_TEXT_FIELD_BYTES {
+    if value_len > MAX_ROSTER_TEXT_FIELD_BYTES {
         return Err(AtmError::validation(format!(
             "failed to decode roster {field_name} for {}/{} because {} bytes exceeded the {} byte cap",
             team,
             agent_name,
-            value.len(),
+            value_len,
             MAX_ROSTER_TEXT_FIELD_BYTES
         ))
         .with_recovery(
@@ -410,6 +412,45 @@ fn validate_roster_text_field(
         ));
     }
     Ok(value)
+}
+
+fn validate_roster_agent_type(
+    value: String,
+    team: &atm_core::types::TeamName,
+    agent_name: &str,
+) -> Result<AgentType, AtmError> {
+    let value = validate_roster_text_field_len("agent_type", value.len(), value, team, agent_name)?;
+    Ok(AgentType::from(value))
+}
+
+fn validate_roster_model(
+    value: String,
+    team: &atm_core::types::TeamName,
+    agent_name: &str,
+) -> Result<ModelName, AtmError> {
+    let value = validate_roster_text_field_len("model", value.len(), value, team, agent_name)?;
+    ModelName::new(value).map_err(|error| {
+        error.with_recovery(
+            "Repair the canonical team_roster row or rewrite the roster through the owning boundary before retrying roster load.",
+        )
+    })
+}
+
+fn validate_roster_pane_id(
+    value: Option<String>,
+    team: &atm_core::types::TeamName,
+    agent_name: &str,
+) -> Result<Option<PaneId>, AtmError> {
+    let Some(value) = value else {
+        return Ok(None);
+    };
+    let value =
+        validate_roster_text_field_len("recipient_pane_id", value.len(), value, team, agent_name)?;
+    PaneId::new(value).map(Some).map_err(|error| {
+        error.with_recovery(
+            "Repair the canonical team_roster row or rewrite the roster through the owning boundary before retrying roster load.",
+        )
+    })
 }
 
 #[cfg(test)]

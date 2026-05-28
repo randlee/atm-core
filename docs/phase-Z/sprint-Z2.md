@@ -1,7 +1,7 @@
 ---
 id: Z.2
 title: Fix And Revalidate
-status: planned
+status: complete
 branch: feature/pZ-s2-fix-and-revalidate
 worktree: ../atm-core-worktrees/feature/pZ-s2-fix-and-revalidate
 target: integrate/phase-Z
@@ -15,14 +15,15 @@ phase: Z
 sprint: Z.2
 worktree: ../atm-core-worktrees/feature/pZ-s2-fix-and-revalidate
 branch: feature/pZ-s2-fix-and-revalidate
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
 ## Goal
 
 Close the verified smoke findings from `Z.1` and re-run the executable
-validation set on the fixed branch.
+validation set on the fixed branch, then decide whether `Phase Z` can advance
+into `Z.3` canary.
 
 ## Hard Dependencies
 
@@ -75,6 +76,8 @@ validation set on the fixed branch.
   for every carried `Z.1` finding
 - updated `docs/phase-Z/readiness.md` with the accepted `Z.2` verdict and head
 - smoke revalidation result on the fixed branch
+- explicit canary-entry decision for `Z.3`: either proceed immediately or stop
+  on a serious blocker
 
 ## Required Work
 
@@ -87,6 +90,12 @@ validation set on the fixed branch.
   machines
 - rerun the frozen `docs/phase-Z/smoke-checklist.md` checklist after fixes
   land
+- if the `Z.2` rerun clears `Z1-F001` and `Z1-F002`, or leaves only
+  non-serious follow-up items that do not block canary, record those outcomes
+  and proceed to `Z.3`
+- if the `Z.2` rerun still exposes a serious blocker in first-team bootstrap,
+  daemon startup, SQLite schema initialization, or retained-command bring-up,
+  stop and promote that blocker instead of beginning `Z.3`
 - close `Z1-F001` by making first-team roster ingress succeed before the first
   daemon-backed send path depends on SQLite roster membership:
   - the accepted behavior remains: delivery harness resolution uses canonical
@@ -157,16 +166,19 @@ validation set on the fixed branch.
    Required docs:
    - update `docs/phase-Z/readiness.md`
 
-## Follow-On Inventory For Z.5+
+## Follow-On Inventory After Z.2
 
 The broader `config.json` ownership cleanup identified during `Z.1` / `Z.2`
-analysis is intentionally deferred into `Z.5` through `Z.10`. Those later
+analysis was deferred into `Z.5` through `Z.10`. Those later
 sprints own the deletion inventory, immutable runtime roster view, boundary
 narrowing, watcher-owned ingress, team-admin/restore redesign, and canonical
 member-metadata migration.
 
-Once `Z.2` closes, execution continues with `Z.5`, `Z.6`, `Z.7`, `Z.8`,
-`Z.9`, and `Z.10` before `Z.3` canary begins.
+`Z.5` through `Z.10` are already complete on `integrate/phase-Z`. Once `Z.2`
+closes, the remaining planned execution line is:
+
+- `Z.3` `atm-dev` canary and dogfood
+- `Z.4` final fixes and release sign-off
 
 ## Acceptance Criteria
 
@@ -199,13 +211,17 @@ Once `Z.2` closes, execution continues with `Z.5`, `Z.6`, `Z.7`, `Z.8`,
 - `docs/phase-Z/smoke-findings-ledger.md` records final per-finding
   disposition and revalidation outcome
 - `docs/phase-Z/readiness.md` records the accepted `Z.2` head and verdict
+- the closeout notes make one explicit transition decision:
+  - proceed to `Z.3` immediately, or
+  - stop on a named serious blocker with the blocker recorded in
+    `docs/phase-Z/smoke-findings-ledger.md`
 
 ## Non-Closure
 
 - `Z.2` does not widen the smoke checklist
 - `Z.2` does not begin canary or release-signoff work
 - `Z.2` does not own the full `config.json` single-reader cleanup line; that
-  work is reserved for `Z.5` through `Z.10`
+  work is already closed in `Z.5` through `Z.10`
 
 ## Production-Ready Expectation
 

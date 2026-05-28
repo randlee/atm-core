@@ -15,7 +15,7 @@ use crate::config;
 use crate::error::AtmError;
 use crate::identity;
 use crate::mailbox::source::resolve_target;
-use crate::observability::{CommandEvent, ObservabilityPort};
+use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::schema::{AtmMessageId, MessageEnvelope};
 use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
 use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
@@ -293,8 +293,8 @@ fn read_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntim
 
     if let Err(error) = observability.emit(CommandEvent {
         command: "read",
-        action: "read",
-        outcome: if display.timed_out { "timeout" } else { "ok" },
+        action: action_name("read"),
+        outcome: outcome_label(if display.timed_out { "timeout" } else { "ok" }),
         team: outcome.team.clone(),
         agent: outcome.agent.clone(),
         sender: actor,
@@ -1161,8 +1161,8 @@ mod tests {
                 agent_name: agent.clone(),
                 member_kind: RosterMemberKind::Permanent,
                 harness: RosterHarness::ClaudeCode,
-                agent_type: String::new(),
-                model: String::new(),
+                agent_type: crate::schema::AgentType::default(),
+                model: crate::types::ModelName::default(),
                 recipient_pane_id: None,
                 metadata_json: Map::new(),
             }))

@@ -127,6 +127,8 @@ impl ObservabilityPort for HealthyObservability {
             active_log_path: None,
             logging_state: AtmObservabilityHealthState::Healthy,
             query_state: Some(AtmObservabilityHealthState::Healthy),
+            maintenance: None,
+            diagnostic: None,
             detail: None,
         })
     }

@@ -1,7 +1,8 @@
 use crate::config::AtmConfig;
 use crate::error::AtmError;
+use crate::schema::AgentType;
 use crate::schema::{AgentMember, MessageEnvelope};
-use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
+use crate::types::{AgentName, IsoTimestamp, ModelName, PaneId, TaskId, TeamName};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use std::collections::HashMap;
@@ -66,11 +67,11 @@ pub struct RosterMemberRecord {
     pub member_kind: RosterMemberKind,
     pub harness: RosterHarness,
     #[serde(default)]
-    pub agent_type: String,
+    pub agent_type: AgentType,
     #[serde(default)]
-    pub model: String,
+    pub model: ModelName,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub recipient_pane_id: Option<String>, // PaneId newtype deferred to post-Yb phase
+    pub recipient_pane_id: Option<PaneId>,
     #[serde(default)]
     pub metadata_json: Map<String, Value>,
 }
@@ -97,7 +98,7 @@ impl RosterMemberRecord {
             agent_name: member.name,
             member_kind: RosterMemberKind::Permanent,
             harness: RosterHarness::ClaudeCode,
-            agent_type: member.agent_type.to_string(),
+            agent_type: member.agent_type,
             model: member.model,
             recipient_pane_id,
             metadata_json,
@@ -110,7 +111,7 @@ pub struct ClaudeCodeRosterMember {
     pub member_name: AgentName,
     pub harness: RosterHarness,
     pub inbox_path: Option<PathBuf>,
-    pub tmux_pane_id: Option<String>,
+    pub tmux_pane_id: Option<PaneId>,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -484,9 +485,10 @@ pub struct InboxExportResponse;
 pub struct NonClaudeOutboundDeliveryRequest {
     pub team: TeamName,
     pub agent: AgentName,
-    pub recipient_pane_id: Option<String>,
+    pub recipient_pane_id: Option<PaneId>,
     /// Payload serialized to JSONL must not exceed `MAX_NON_CLAUDE_PAYLOAD_BYTES` (1 MiB),
-    /// enforced by `DaemonNonClaudeOutbound::deliver_payloads`.
+    /// enforced by `DaemonNonClaudeOutbound::deliver_payloads` (daemon path) and
+    /// `LocalFileNonClaudeOutbound::deliver_payloads` (CLI path, see service_runtime.rs:218).
     pub messages: Vec<MessageEnvelope>,
 }
 

@@ -117,6 +117,7 @@ const fn error_kind_for_code(code: AtmErrorCode) -> AtmErrorKind {
         }
         AtmErrorCode::IdentityConflict => AtmErrorKind::Identity,
         AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::DaemonMayHaveExecuted
         | AtmErrorCode::DaemonLifecycleWedge
         | AtmErrorCode::DaemonLaunchGateRejected
         | AtmErrorCode::DaemonServingStateRejected
@@ -603,13 +604,13 @@ pub fn read_bounded_stream(
 ///
 /// # Errors
 ///
-/// Returns [`AtmError`] when `ATM_HOME` cannot be resolved.
+/// Returns [`AtmError`] when the host-scoped ATM runtime root cannot be resolved.
 pub fn daemon_socket_path() -> Result<PathBuf, AtmError> {
     if let Some(path) = env::var_os("ATM_DAEMON_SOCKET").filter(|value| !value.is_empty()) {
         return Ok(platform_local_ipc_endpoint_path(PathBuf::from(path)));
     }
     Ok(platform_local_ipc_endpoint_path(
-        home::atm_home()?.join("atm-daemon.sock"),
+        home::host_runtime_dir()?.join("atm-daemon.sock"),
     ))
 }
 

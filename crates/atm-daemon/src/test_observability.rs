@@ -163,12 +163,16 @@ impl ObservabilityPort for TestDaemonObservability {
                 active_log_path: Some(self.active_log_path.clone()),
                 logging_state: AtmObservabilityHealthState::Healthy,
                 query_state: None,
+                maintenance: None,
+                diagnostic: None,
                 detail,
             }),
             Err(source) => Ok(AtmObservabilityHealth {
                 active_log_path: Some(self.active_log_path.clone()),
                 logging_state: AtmObservabilityHealthState::Unavailable,
                 query_state: None,
+                maintenance: None,
+                diagnostic: None,
                 detail: Some(format!("{source}")),
             }),
         }

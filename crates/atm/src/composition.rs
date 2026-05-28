@@ -13,7 +13,7 @@ use atm_core::graft::{
     AdvisorySessionUnregistrationRequest, AdvisorySessionUnregistrationResponse, AtmGraftClient,
 };
 use atm_core::list::{ListOutcome, ListQuery};
-use atm_core::observability::{CommandEvent, ObservabilityPort};
+use atm_core::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use atm_core::protocol::{
     RequestEnvelope, ResponseEnvelope, SendRequestEnvelope, SendResponseEnvelope,
 };
@@ -206,8 +206,8 @@ impl<'a> CliComposition<'a> {
             ResponseEnvelope::Send(SendResponseEnvelope::Sent(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "send",
-                    action: "send",
-                    outcome: if outcome.dry_run { "dry_run" } else { "sent" },
+                    action: action_name("send"),
+                    outcome: outcome_label(if outcome.dry_run { "dry_run" } else { "sent" }),
                     team: outcome.team.clone(),
                     agent: outcome.agent.clone(),
                     sender: outcome.sender.clone(),
@@ -231,8 +231,8 @@ impl<'a> CliComposition<'a> {
             ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(outcome)) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "ack",
-                    action: "ack",
-                    outcome: "ok",
+                    action: action_name("ack"),
+                    outcome: outcome_label("ok"),
                     team: outcome.team.clone(),
                     agent: outcome.agent.clone(),
                     sender: outcome.agent.clone(),
@@ -254,8 +254,8 @@ impl<'a> CliComposition<'a> {
             ResponseEnvelope::Receive(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "read",
-                    action: "read",
-                    outcome: "ok",
+                    action: action_name("read"),
+                    outcome: outcome_label("ok"),
                     team: outcome.team.clone(),
                     agent: outcome.agent.clone(),
                     sender: outcome.agent.clone(),
@@ -277,8 +277,8 @@ impl<'a> CliComposition<'a> {
             ResponseEnvelope::List(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "list",
-                    action: "list",
-                    outcome: "ok",
+                    action: action_name("list"),
+                    outcome: outcome_label("ok"),
                     team: outcome.team.clone(),
                     agent: outcome.agent.clone(),
                     sender: outcome.agent.clone(),
@@ -300,8 +300,8 @@ impl<'a> CliComposition<'a> {
             ResponseEnvelope::Clear(outcome) => {
                 self.observability_port.emit_command_event(CommandEvent {
                     command: "clear",
-                    action: "clear",
-                    outcome: "ok",
+                    action: action_name("clear"),
+                    outcome: outcome_label("ok"),
                     team: outcome.team.clone(),
                     agent: outcome.agent.clone(),
                     sender: outcome.agent.clone(),
@@ -574,8 +574,8 @@ mod tests {
                     agent_name: agent.parse().expect("agent"),
                     member_kind: boundary::RosterMemberKind::Permanent,
                     harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: String::new(),
-                    model: String::new(),
+                    agent_type: atm_core::schema::AgentType::default(),
+                    model: atm_core::types::ModelName::default(),
                     recipient_pane_id: None,
                     metadata_json: Map::new(),
                 })

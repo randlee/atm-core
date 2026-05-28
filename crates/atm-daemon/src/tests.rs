@@ -27,13 +27,14 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail_with_runtime};
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
+use atm_runtime_test_support::SQLITE_RUNTIME_PATH_ENV;
+use atm_runtime_test_support::install_sqlite_retained_runtime_factory;
 use atm_rusqlite::assemble_boundary;
 #[cfg(windows)]
 use interprocess::local_socket::Stream as LocalSocketStream;
 use interprocess::local_socket::traits::Stream as _;
 use std::io::Write;
 use std::sync::Arc;
-use std::sync::Once;
 use std::sync::OnceLock;
 use std::sync::mpsc;
 use std::time::Duration;
@@ -42,37 +43,13 @@ use tempfile::TempDir;
 use crate::test_support::connect_daemon_local_ipc_until_ready;
 
 const TEST_TEAM: &str = "test-team";
-const TEST_SQLITE_DB_PATH_ENV: &str = "ATM_TEST_SQLITE_DB_PATH";
-static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
-
 fn test_team() -> &'static TeamName {
     static TEST_TEAM_NAME: OnceLock<TeamName> = OnceLock::new();
     TEST_TEAM_NAME.get_or_init(|| TEST_TEAM.parse().expect("team"))
 }
 
 fn install_retained_runtime_factory() {
-    INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
-        atm_core::install_default_runtime_factory(test_local_runtime);
-    });
-}
-
-fn test_local_runtime() -> Result<atm_core::LocalServiceRuntime, AtmError> {
-    let path = std::env::var_os(TEST_SQLITE_DB_PATH_ENV).ok_or_else(|| {
-        AtmError::daemon_unavailable(
-            "daemon test retained runtime is unavailable because ATM_TEST_SQLITE_DB_PATH is unset",
-        )
-        .with_recovery("Set ATM_TEST_SQLITE_DB_PATH before running daemon doctor/runtime tests.")
-    })?;
-    let assembly = atm_rusqlite::SqliteBoundaryAssembly::new(std::path::PathBuf::from(path))?;
-    Ok(atm_core::LocalServiceRuntime::new_with_delivery_boundaries(
-        assembly.mail_store_arc(),
-        assembly.task_store_arc(),
-        assembly.roster_store_arc(),
-        Arc::new(atm_core::LocalFileNonClaudeOutbound::new()),
-        Arc::new(atm_core::LocalFileNotificationSink::at_path(
-            atm_core::home::host_runtime_dir()?.join("notifications.jsonl"),
-        )),
-    ))
+    install_sqlite_retained_runtime_factory();
 }
 
 struct ShutdownFinalizerDrainGuard;
@@ -96,7 +73,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
         (
-            TEST_SQLITE_DB_PATH_ENV,
+            SQLITE_RUNTIME_PATH_ENV,
             Some(db_path.to_str().expect("utf8 sqlite db path")),
         ),
         ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
@@ -193,7 +170,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
         (
-            TEST_SQLITE_DB_PATH_ENV,
+            SQLITE_RUNTIME_PATH_ENV,
             Some(db_path.to_str().expect("utf8 sqlite db path")),
         ),
         ("ATM_LOG_DIR", None),
@@ -373,6 +350,7 @@ fn read_notification_output(path: &std::path::Path) -> String {
 }
 
 #[test]
+#[serial_test::serial(env)]
 fn production_runtime_installs_daemon_notification_sink() {
     let tempdir = TempDir::new().expect("tempdir");
     let workspace_dir = tempdir.path().join("workspace");
@@ -439,7 +417,7 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
     let _env = EnvGuard::set_many([(
-        TEST_SQLITE_DB_PATH_ENV,
+        SQLITE_RUNTIME_PATH_ENV,
         Some(db_path.to_str().expect("utf8 sqlite db path")),
     )]);
 
@@ -619,7 +597,7 @@ fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
 
-    dispatcher.finalize_shutdown();
+    dispatcher.finalize_storage_shutdown();
     DaemonRequestDispatcher::drain_shutdown_finalizer_threads_for_test();
 }
 
@@ -876,7 +854,7 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
     let _env = EnvGuard::set_many([(
-        TEST_SQLITE_DB_PATH_ENV,
+        SQLITE_RUNTIME_PATH_ENV,
         Some(db_path.to_str().expect("utf8 sqlite db path")),
     )]);
 
@@ -923,7 +901,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
     let _env = EnvGuard::set_many([(
-        TEST_SQLITE_DB_PATH_ENV,
+        SQLITE_RUNTIME_PATH_ENV,
         Some(db_path.to_str().expect("utf8 sqlite db path")),
     )]);
 

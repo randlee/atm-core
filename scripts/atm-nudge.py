@@ -21,6 +21,7 @@ import os
 import shlex
 import subprocess
 import sys
+import tempfile
 import time
 from datetime import datetime, timezone
 from pathlib import Path
@@ -36,7 +37,7 @@ except ModuleNotFoundError:
 
 
 CODEX_DEFAULT_PANE = "%1"
-LOG_FILE = "/tmp/atm-nudge.log"
+LOG_FILE = str(Path(tempfile.gettempdir()) / "atm-nudge.log")
 
 ERR_FILE_MISSING = "file_missing"
 ERR_NOT_FOUND = "not_found"

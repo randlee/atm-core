@@ -1,9 +1,9 @@
 ---
 id: Z.4
 title: Final Fixes And Release Sign-Off
-status: planned
-branch: feature/pZ-s4-final-fixes-and-release-sign-off
-worktree: ../atm-core-worktrees/feature/pZ-s4-final-fixes-and-release-sign-off
+status: complete
+branch: feature/pZ-smoke-atm-graft
+worktree: ../atm-core-worktrees/integrate/atm-core-worktrees/feature/pZ-smoke-atm-graft
 target: integrate/phase-Z
 ---
 
@@ -13,16 +13,16 @@ target: integrate/phase-Z
 plan_type: sprint_plan
 phase: Z
 sprint: Z.4
-worktree: ../atm-core-worktrees/feature/pZ-s4-final-fixes-and-release-sign-off
-branch: feature/pZ-s4-final-fixes-and-release-sign-off
-status: planned
+worktree: ../atm-core-worktrees/integrate/atm-core-worktrees/feature/pZ-smoke-atm-graft
+branch: feature/pZ-smoke-atm-graft
+status: complete
 estimated_scope: medium
 ```
 
 ## Goal
 
-Close the findings from the `atm-dev` canary, rerun the final validation set,
-and produce the final release-readiness verdict.
+Close the `atm-dev` canary handoff, rerun the final validation set, and
+produce the final release-readiness verdict.
 
 ## Hard Dependencies
 
@@ -61,6 +61,17 @@ and produce the final release-readiness verdict.
 - rerun `docs/phase-Z/release-checklist.md`
 - produce the final release-ready / not-ready decision with evidence in
   `docs/phase-Z/readiness.md`
+
+## Outcome
+
+- `Z.17` promoted no validated `Z.3` findings, so no canary-fix code changes
+  were required in `Z.4`
+- `Z4-OOS-001` was fixed on `feature/pZ-smoke-atm-graft @ 84935774`, so the
+  normal smoke lane now accepts the single expected invalid-ack validation
+  error without weakening the healthy-path log gate
+- final release validation then passed on `feature/pZ-smoke-atm-graft @ daabc8c3`
+  and the closeout candidate advanced to a truthful `READY` / `PASS` release
+  verdict
 
 ## Acceptance Criteria
 

@@ -1,7 +1,7 @@
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::observability::{
     AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, CommandEvent, LogTailSession,
-    ObservabilityPort,
+    ObservabilityPort, action_name, outcome_label,
 };
 use atm_core::types::{AgentName, TeamName};
 
@@ -77,8 +77,8 @@ impl CliObservability {
         let agent = identity.parse().unwrap_or(fallback_agent);
         if let Err(emit_error) = self.emit(CommandEvent {
             command: ATM_SERVICE_NAME,
-            action: stage,
-            outcome: "error",
+            action: action_name(stage),
+            outcome: outcome_label("error"),
             team: team.parse().unwrap_or(fallback_team),
             agent: agent.clone(),
             sender: agent,
@@ -95,11 +95,11 @@ impl CliObservability {
 
     pub(crate) fn emit_command_event(&self, event: CommandEvent) {
         let command = event.command;
-        let action = event.action;
+        let action = event.action.as_str().to_string();
         if let Err(emit_error) = self.emit(event) {
             eprintln!(
                 "{}",
-                command_emit_failure_message(command, action, &emit_error)
+                command_emit_failure_message(command, &action, &emit_error)
             );
         }
     }
@@ -177,7 +177,7 @@ mod tests {
         AtmLogQuery, AtmObservabilityHealth, AtmObservabilityHealthState, CommandEvent,
         LogLevelFilter, LogMode, LogOrder, LogTailSession, ObservabilityPort,
     };
-    use atm_core::test_support::EnvGuard;
+    use atm_core::test_support::{EnvGuard, TEST_SENDER, TEST_TEAM};
     use serial_test::serial;
     use tempfile::TempDir;
 
@@ -185,9 +185,6 @@ mod tests {
         CliObservability, CliObservabilityOptions, command_emit_failure_message,
         fatal_emit_failure_message,
     };
-
-    const TEST_TEAM: &str = "test-team";
-    const TEST_SENDER: &str = "sender-a";
 
     struct FailingEmitObservability;
 
@@ -214,6 +211,8 @@ mod tests {
                 active_log_path: None,
                 logging_state: AtmObservabilityHealthState::Unavailable,
                 query_state: Some(AtmObservabilityHealthState::Unavailable),
+                maintenance: None,
+                diagnostic: None,
                 detail: Some("synthetic".to_string()),
             })
         }
@@ -234,8 +233,8 @@ mod tests {
     fn event(message_id: Option<&str>) -> CommandEvent {
         CommandEvent {
             command: "send",
-            action: "send",
-            outcome: "sent",
+            action: atm_core::observability::action_name("send"),
+            outcome: atm_core::observability::outcome_label("sent"),
             team: TEST_TEAM.parse().expect("team"),
             agent: TEST_SENDER.parse().expect("agent"),
             sender: TEST_SENDER.parse().expect("agent"),
@@ -300,7 +299,7 @@ mod tests {
             .query(query(LogOrder::OldestFirst))
             .expect("initial query");
         assert_eq!(initial.records.len(), 1);
-        assert_eq!(initial.records[0].service, "atm");
+        assert_eq!(initial.records[0].service.as_str(), "atm");
         assert_eq!(initial.records[0].action.as_deref(), Some("send"));
         assert_eq!(
             initial.records[0]
@@ -317,7 +316,14 @@ mod tests {
             Some(AtmObservabilityHealthState::Healthy)
         );
         assert_eq!(health.active_log_path, Some(log_dir.join("atm.log.jsonl")));
-        assert!(health.detail.is_none());
+        let detail = health
+            .detail
+            .as_deref()
+            .expect("maintenance detail should be projected");
+        assert!(detail.contains("maintenance state="));
+        assert!(detail.contains("rotated_files_total="));
+        assert!(detail.contains("pruned_files_total="));
+        assert!(detail.contains("last_pass_at="));
 
         let mut follow = observability
             .follow(AtmLogQuery {

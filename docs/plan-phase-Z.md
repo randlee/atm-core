@@ -271,12 +271,14 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s15-deferred-hardening-follow-up-consolidation`
 
-### Z.16 Smoke Z.1 Rerun
+### Z.16 Smoke Z.2 Revalidation
 
 Purpose:
 
-- rerun the frozen `Z.1` smoke checklist after the accepted `Z.2` fix line
-- restamp the smoke ledger and readiness record from the rerun evidence
+- close the final copied-state SQLite smoke blocker (`Z1-F002`)
+- rerun the frozen `Z.1` smoke matrix after the accepted `Z.11` through `Z.15`
+  fix line
+- record the truthful `Z.2` revalidation verdict before canary entry
 
 Execution branch:
 - `feature/pZ-s16-smoke-z1-rerun`
@@ -284,26 +286,14 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s16-smoke-z1-rerun`
 
-### Z.17 Smoke Z.3 Rerun
-
-Purpose:
-
-- rerun the canary/dogfood line after the accepted smoke closure
-- refresh the `Z.3` baseline, participants, and readiness evidence
-
-Execution branch:
-- `feature/pZ-s17-smoke-z3-rerun`
-
-Execution worktree:
-- `../atm-core-worktrees/feature/pZ-s17-smoke-z3-rerun`
-
 ### Z.18 Smoke Skill Scaffold And Report Infrastructure
 
 Purpose:
 
 - create the smoke-test skill scaffold
 - land template rendering, report writing, summary output, and artifact layout
-- land the shared smoke runner infrastructure that later smoke entrypoints use
+- land the shared smoke runner and fixture infrastructure that later smoke
+  entrypoints use
 
 Execution branch:
 - `feature/pZ-s18-smoke-skill-and-report-infrastructure`
@@ -317,6 +307,8 @@ Purpose:
 
 - implement `just smoke fast`
 - prove the clean-room happy path quickly and reliably
+- create the clean-room team shell and repair roster truth through
+  `atm teams add-member`
 - fix minor smoke-blocking issues in-sprint when they are small and localized
 
 Execution branch:
@@ -332,6 +324,9 @@ Purpose:
 - implement the default `just smoke` run
 - exercise most important feature/system behavior beyond the fast happy path
 - root-cause every deviation from expected behavior
+- verify recipient-side pending-ack inspection, post-ack clear/re-read
+  behavior, post-activity log snapshot coverage, and invalid-ack recovery
+  guidance in the default lane
 
 Execution branch:
 - `feature/pZ-s20-normal-smoke-systemic-execution`
@@ -345,7 +340,10 @@ Purpose:
 
 - implement `just smoke thorough`
 - cover every CLI interface on happy path plus common error paths
+- prove the same-host `atm-graft` advisory and unary ICD path
 - root-cause discrepancies from expected behavior
+- prove disposable copied-state bring-up, degraded compatibility-append
+  warning visibility, and retry-visible daemon/runtime evidence
 
 Execution branch:
 - `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting`
@@ -360,6 +358,8 @@ Purpose:
 - provide the durable place to record smoke findings that are too large to fix
   inside active smoke sprints
 - separate minor in-sprint fixes from significant rework
+- record when the accepted smoke execution line promotes no larger rework
+  items and the authoritative queue remains empty
 
 Execution branch:
 - `feature/pZ-s22-smoke-findings-review-and-major-rework-triage`
@@ -375,12 +375,31 @@ Purpose:
 - keep coverage reporting out of ordinary `just test`
 - persist tracked latest and timestamped cross-platform coverage reports under
   `reports/coverage/`
+- overwrite only the tracked latest report for the host platform that actually
+  executed coverage while preserving the other tracked platform report or
+  placeholder
 
 Execution branch:
 - `feature/pZ-s23-cross-platform-test-coverage-reporting`
 
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s23-cross-platform-test-coverage-reporting`
+
+### Z.24 sc-observability v1.1.0 Retained Log Maintenance Adoption
+
+Purpose:
+
+- update ATM to `sc-observability` / `sc-observability-types` `v1.1.0`
+- replace daemon-local retained-log rotation, pruning, and maintenance-worker
+  ownership with `RetainedLogPolicy` + logger-owned maintenance runtime
+- project retained-log maintenance health through `atm doctor`
+- revalidate the updated retained observability stack with the full smoke lane
+
+Execution branch:
+- `feature/pZ-obs-v1.1.0-log-maintenance`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-obs-v1.1.0-log-maintenance`
 
 ### Z.3 `atm-dev` Canary And Dogfood
 
@@ -397,6 +416,22 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pZ-s3-atm-dev-canary-and-dogfood`
 
+### Z.17 `atm-dev` Canary And Dogfood
+
+Purpose:
+
+- execute the accepted `Z.3` canary on the merged post-`Z.16` integration
+  baseline
+- freeze the active participant list and operator-report path in the
+  authoritative canary artifacts
+- stamp the truthful `Z.3` verdict before `Z.4` begins
+
+Execution branch:
+- `feature/pZ-s17-smoke-z3-rerun`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pZ-s17-smoke-z3-rerun`
+
 ### Z.4 Final Fixes And Release Sign-Off
 
 Purpose:
@@ -407,10 +442,10 @@ Purpose:
   branch
 
 Execution branch:
-- `feature/pZ-s4-final-fixes-and-release-sign-off`
+- `feature/pZ-smoke-atm-graft`
 
 Execution worktree:
-- `../atm-core-worktrees/feature/pZ-s4-final-fixes-and-release-sign-off`
+- `../atm-core-worktrees/integrate/atm-core-worktrees/feature/pZ-smoke-atm-graft`
 
 ## Sprint Artifact Summary
 
@@ -449,6 +484,7 @@ Execution worktree:
 - `Z.4`:
   - `docs/phase-Z/release-checklist.md`
   - `docs/phase-Z/readiness.md`
+  - `docs/phase-Z/canary-findings-ledger.md`
 
 The sprint docs remain the only authoritative source for per-sprint
 deliverables, acceptance criteria, and closure rules.
@@ -466,6 +502,17 @@ deliverables, acceptance criteria, and closure rules.
 - the coverage-report line (`Z.23`) remains separate from ordinary smoke
   execution, must not be implied by plain `just test`, and must close before
   the final `Z.4` release verdict is considered complete
+- the retained-log maintenance adoption line (`Z.24`) must close before the
+  final `Z.4` release verdict is considered complete
+- the phase-end hardening branches are:
+  - `feature/pZ-phase-end-fix-r1`
+  - `feature/pZ-prodready-fix-r1`
+- `feature/pZ-prodready-fix-r1` is the authorized production-readiness
+  phase-end documentation-hardening line for:
+  - the shared-host multi-workspace validation gap
+  - the same-host side-effect timeout/retry contract
+  - retained-log hot-path/background-maintenance requirements
+  - coverage platform scope and Linux deferred/unsupported reporting
 - the boundary / follow-up hardening line (`Z.11` through `Z.15`) must also
   close before `atm-dev` canary use begins
 - dogfood findings feed only the final fix/sign-off sprint
@@ -489,6 +536,47 @@ Current execution state:
   - `Z.13` workspace-config boundary cleanup
   - `Z.14` ambient singleton surface cleanup
   - `Z.15` deferred hardening follow-up consolidation
+- the smoke-tooling and smoke-execution line is complete through `Z.22`:
+  - `Z.18 @ ae1b753c` smoke scaffold and report infrastructure
+  - `Z.19 @ fa36120d` fast smoke happy-path execution
+  - `Z.20 @ a26b5e99` normal smoke systemic execution
+  - `Z.21 @ 5dbcd3c3` thorough smoke CLI coverage and reporting
+  - `Z.22` findings-review linkage closes on this fix round
+- `PZ-PHASE-END-FIX-R2 @ b63b1899` closure records:
+  - `ARCH-001 CLOSED` synthetic `TEST_TEAM = "test-team"` replaced the
+    production `atm-dev` literal in `scripts/test_atm_nudge.py`
+  - `ARCH-002 CLOSED` synthetic `TEST_AGENT = "test-agent"` replaced the
+    production `arch-ctm` literal in `scripts/test_atm_nudge.py`
+  - `ARCH-003 CLOSED` synthetic `TEST_TEAM = "test-team"` replaced repeated
+    raw `atm-dev` literals in `tools/schema_models/test_schema_models.py`
+  - `ARCH-004 CLOSED` synthetic `TEST_SENDER = "test-agent"` replaced the raw
+    `arch-ctm` literals in `tools/schema_models/test_schema_models.py`
+  - `ARCH-005 CLOSED` schema-model tests now build the config path from
+    `cls._temp_home.name` and `TEST_TEAM` instead of using a hardcoded
+    `/Users/randlee/.claude/teams/atm-dev/config.json` path
+- `PZ-PHASE-END-FIX-R4 @ 819899cd` closure records:
+  - `ARCH-007 CLOSED` synthetic `TEST_QM = "test-qm"` was added to
+    `scripts/test_atm_nudge.py`, and all 12 raw `quality-mgr` literals were
+    replaced with `TEST_QM`
+- `Z.23` is complete at `562478ef` and `Z.24` is the active retained-log
+  maintenance adoption line before final `Z.4` release-signoff evidence is
+  complete
+- phase-end hardening is now split across two fix branches on top of the
+  accepted integration line:
+  - `feature/pZ-phase-end-fix-r1` for the promoted phase-end review findings
+  - `feature/pZ-prodready-fix-r1` for the production-readiness hardening line
+    documented above; implementation follow-up remains a later accepted
+    execution line after this documentation gap closure
+- production-readiness documentation-hardening closure records on
+  `feature/pZ-prodready-fix-r1 @ 00b2d595`:
+  - `PRR-001` CLOSED: shared-host topology requirements and accepted evidence
+    now require one-host multi-workspace validation
+  - `PRR-002` CLOSED: same-host side-effecting timeout / safe-retry contract is
+    now explicitly documented
+  - `PRR-003` CLOSED: retained-log hot-path/background-maintenance performance
+    requirements are now explicitly documented
+  - `PRR-004` CLOSED: Linux coverage scope is now explicitly documented as
+    deferred / unsupported in the current `Phase Z` line
 - planning status note:
   - this planning branch continues to treat `Z.2` as `planned`; execution-line
     pass/fail state lives on the accepted `integrate/phase-Z` line
@@ -522,6 +610,7 @@ Current execution state:
 - `docs/phase-Z/sprint-Z13.md`
 - `docs/phase-Z/sprint-Z14.md`
 - `docs/phase-Z/sprint-Z15.md`
+- `docs/phase-Z/sprint-Z16.md`
 - `docs/phase-Z/smoke-skill-plan.md`
 - `docs/phase-Z/sprint-Z18.md`
 - `docs/phase-Z/sprint-Z19.md`
@@ -529,6 +618,7 @@ Current execution state:
 - `docs/phase-Z/sprint-Z21.md`
 - `docs/phase-Z/sprint-Z22.md`
 - `docs/phase-Z/sprint-Z23.md`
+- `docs/phase-Z/sprint-Z24.md`
 - `docs/phase-Z/smoke-findings-review.md`
 - `docs/phase-Z/sprint-Z3.md`
 - `docs/phase-Z/sprint-Z4.md`

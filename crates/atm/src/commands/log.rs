@@ -300,6 +300,8 @@ mod tests {
                 active_log_path: None,
                 logging_state: AtmObservabilityHealthState::Healthy,
                 query_state: Some(AtmObservabilityHealthState::Healthy),
+                maintenance: None,
+                diagnostic: None,
                 detail: None,
             })
         }
@@ -400,7 +402,7 @@ mod tests {
                 records: vec![AtmLogRecord {
                     timestamp: chrono::Utc::now().into(),
                     severity: LogLevelFilter::Info,
-                    service: "atm".to_string(),
+                    service: sc_observability_types::ServiceName::new("atm").expect("service"),
                     target: None,
                     action: Some("send".to_string()),
                     message: Some("synthetic".to_string()),
@@ -449,8 +451,8 @@ mod tests {
         observability
             .emit(CommandEvent {
                 command: "send",
-                action: "send",
-                outcome: "sent",
+                action: atm_core::observability::action_name("send"),
+                outcome: atm_core::observability::outcome_label("sent"),
                 team: TEST_TEAM.parse().expect("team"),
                 agent: TEST_RECIPIENT.parse().expect("agent"),
                 sender: TEST_SENDER.parse().expect("sender"),

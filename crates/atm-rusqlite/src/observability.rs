@@ -17,6 +17,7 @@ impl SqliteObservabilityOutcome {
     }
 }
 
+/// Structured SQLite subsystem event emitted through the observability port.
 #[derive(Debug, Clone)]
 pub struct SqliteObservabilityEvent {
     pub action: &'static str,
@@ -46,7 +47,8 @@ impl SqliteObservabilityEvent {
 /// This trait may capture SQLite subsystem events, but it must not depend on
 /// daemon subsystem types or reconstruct daemon-specific semantics. Callers
 /// provide already-shaped SQLite event content and the implementation decides
-/// only how to emit or project that event.
+/// only how to emit or project that event. This trait is intentionally open
+/// for extension by downstream observability backends.
 pub trait SqliteObservability: Send + Sync {
     fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError>;
 

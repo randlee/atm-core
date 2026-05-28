@@ -210,6 +210,17 @@ impl AtmError {
         )
     }
 
+    pub fn daemon_may_have_executed(message: impl Into<String>) -> Self {
+        Self::new_with_code(
+            AtmErrorCode::DaemonMayHaveExecuted,
+            AtmErrorKind::DaemonUnavailable,
+            message,
+        )
+        .with_recovery(
+            "Check the destination mailbox or other service-side effects before retrying this same-host ATM command.",
+        )
+    }
+
     pub fn daemon_lifecycle_wedge(message: impl Into<String>) -> Self {
         Self::new_with_code(
             AtmErrorCode::DaemonLifecycleWedge,

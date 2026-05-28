@@ -129,10 +129,9 @@ _lint-same-host-portability:
 build:
     cargo build --workspace
 
-# Run the full workspace test suite.
-test:
-    cargo build --workspace
-    cargo test --workspace
+# Run the full workspace test suite or explicit coverage reporting.
+test mode='default':
+    {{python_cmd}} scripts/coverage/invoke_test_mode.py {{mode}}
 
 # Remove workspace build artifacts.
 clean:
@@ -141,6 +140,10 @@ clean:
 # Run the repo lint suite.
 lint target='all':
     {{python_cmd}} .just/run_lint.py {{target}}
+
+# Run the Phase Z smoke harness.
+smoke level='normal':
+    {{python_cmd}} scripts/smoke/run.py {{level}} --write-artifacts
 
 # Generate architecture visualization artifacts.
 view target='all':

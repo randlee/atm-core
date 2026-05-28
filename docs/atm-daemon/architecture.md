@@ -366,6 +366,8 @@ Lifecycle state model:
   - `Running`
   - `Draining`
   - `Stopped`
+- the authoritative transition document is
+  [`./startup-state-machine.md`](./startup-state-machine.md)
 - the implementation may use typestate or one internal state enum, but the
   legal lifecycle transitions must remain explicit rather than inferred from
   loosely-coupled booleans

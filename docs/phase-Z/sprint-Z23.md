@@ -1,7 +1,7 @@
 ---
 id: Z.23
 title: Cross-Platform Test Coverage Reporting
-status: planned
+status: complete
 branch: feature/pZ-s23-cross-platform-test-coverage-reporting
 worktree: ../atm-core-worktrees/feature/pZ-s23-cross-platform-test-coverage-reporting
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.23
 worktree: ../atm-core-worktrees/feature/pZ-s23-cross-platform-test-coverage-reporting
 branch: feature/pZ-s23-cross-platform-test-coverage-reporting
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -59,6 +59,7 @@ collecting coverage.
 - `Justfile`
 - `templates/coverage-report/mac.md.j2`
 - `templates/coverage-report/win.md.j2`
+- `scripts/coverage/invoke_test_mode.py`
 - `scripts/coverage/run.py`
 - `scripts/coverage/render_report.py`
 - `reports/coverage/`
@@ -180,3 +181,11 @@ artifacts.
 - keep platform report naming deterministic
 - keep the shared timestamp model explicit so smoke and coverage artifacts are
   easy to correlate later
+
+## Execution Notes
+
+- `just test coverage` now routes through `scripts/coverage/invoke_test_mode.py`
+  and keeps plain `just test` on the existing build-and-test path
+- the accepted initial host-local execution surface writes a real tracked
+  latest report for the current host platform and preserves the other tracked
+  platform as either its last real report or an explicit placeholder

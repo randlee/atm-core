@@ -243,24 +243,8 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!(
-        "Doctor status: {}",
-        match report.summary.status {
-            DoctorStatus::Healthy => "healthy",
-            DoctorStatus::Warning => "warning",
-            DoctorStatus::Error => "error",
-        }
-    );
-    println!("{}", report.summary.message);
-    println!(
-        "Active log path: {}",
-        report
-            .observability
-            .active_log_path
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "<unavailable>".to_string())
-    );
+    print_doctor_summary(report);
+    print_doctor_observability(report);
     println!(
         "Logging health: {} | Query readiness: {}",
         render_doctor_state(report.observability.logging_state),
@@ -276,61 +260,112 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
     if let Some(bootstrap_trace) = &report.bootstrap_trace {
         print_bootstrap_trace(bootstrap_trace);
     }
-
-    if report.environment.atm_home.is_some()
-        || report.environment.atm_team.is_some()
-        || report.environment.atm_identity.is_some()
-        || report.environment.team_override.is_some()
-    {
-        println!();
-        println!("Environment:");
-        if let Some(path) = &report.environment.atm_home {
-            println!("  ATM_HOME={}", path.display());
-        }
-        if let Some(team) = &report.environment.atm_team {
-            println!("  ATM_TEAM={team}");
-        }
-        if let Some(identity) = &report.environment.atm_identity {
-            println!("  ATM_IDENTITY={identity}");
-        }
-        if let Some(team_override) = &report.environment.team_override {
-            println!("  --team={team_override}");
-        }
-    }
-
-    if !report.findings.is_empty() {
-        println!();
-        println!("Findings:");
-        for finding in &report.findings {
-            println!(
-                "  [{}] {} {}",
-                render_finding_severity(finding.severity),
-                finding.code,
-                finding.message
-            );
-            if let Some(remediation) = &finding.remediation {
-                println!("    remediation: {remediation}");
-            }
-        }
-    }
-
-    if let Some(roster) = &report.member_roster {
-        println!();
-        println!("Members: {}", roster.team);
-        for member in &roster.members {
-            println!("  - {}", member.name);
-        }
-    }
-
-    if !report.recommendations.is_empty() {
-        println!();
-        println!("Recommendations:");
-        for recommendation in &report.recommendations {
-            println!("  - {recommendation}");
-        }
-    }
+    print_doctor_environment(report);
+    print_doctor_findings(report);
+    print_doctor_roster(report);
+    print_doctor_recommendations(report);
 
     Ok(())
+}
+
+fn print_doctor_summary(report: &DoctorReport) {
+    println!(
+        "Doctor status: {}",
+        render_doctor_status(report.summary.status)
+    );
+    println!("{}", report.summary.message);
+}
+
+fn print_doctor_observability(report: &DoctorReport) {
+    println!(
+        "Active log path: {}",
+        report
+            .observability
+            .active_log_path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "<unavailable>".to_string())
+    );
+    if let Some(maintenance) = &report.observability.maintenance {
+        println!(
+            "Maintenance: {} | Rotated: {} | Pruned: {} | Last pass: {}",
+            render_maintenance_state(maintenance.state),
+            maintenance.rotated_files_total,
+            maintenance.pruned_files_total,
+            maintenance
+                .last_pass_at
+                .map(|timestamp| timestamp.into_inner().to_string())
+                .unwrap_or_else(|| "never".to_string())
+        );
+    }
+}
+
+fn print_doctor_environment(report: &DoctorReport) {
+    if report.environment.atm_home.is_none()
+        && report.environment.atm_team.is_none()
+        && report.environment.atm_identity.is_none()
+        && report.environment.team_override.is_none()
+    {
+        return;
+    }
+
+    println!();
+    println!("Environment:");
+    if let Some(path) = &report.environment.atm_home {
+        println!("  ATM_HOME={}", path.display());
+    }
+    if let Some(team) = &report.environment.atm_team {
+        println!("  ATM_TEAM={team}");
+    }
+    if let Some(identity) = &report.environment.atm_identity {
+        println!("  ATM_IDENTITY={identity}");
+    }
+    if let Some(team_override) = &report.environment.team_override {
+        println!("  --team={team_override}");
+    }
+}
+
+fn print_doctor_findings(report: &DoctorReport) {
+    if report.findings.is_empty() {
+        return;
+    }
+
+    println!();
+    println!("Findings:");
+    for finding in &report.findings {
+        println!(
+            "  [{}] {} {}",
+            render_finding_severity(finding.severity),
+            finding.code,
+            finding.message
+        );
+        if let Some(remediation) = &finding.remediation {
+            println!("    remediation: {remediation}");
+        }
+    }
+}
+
+fn print_doctor_roster(report: &DoctorReport) {
+    let Some(roster) = &report.member_roster else {
+        return;
+    };
+    println!();
+    println!("Members: {}", roster.team);
+    for member in &roster.members {
+        println!("  - {}", member.name);
+    }
+}
+
+fn print_doctor_recommendations(report: &DoctorReport) {
+    if report.recommendations.is_empty() {
+        return;
+    }
+
+    println!();
+    println!("Recommendations:");
+    for recommendation in &report.recommendations {
+        println!("  - {recommendation}");
+    }
 }
 
 /// Print one teams listing in human-readable or JSON form.
@@ -480,6 +515,22 @@ fn render_doctor_state(
         atm_core::observability::AtmObservabilityHealthState::Healthy => "healthy",
         atm_core::observability::AtmObservabilityHealthState::Degraded => "degraded",
         atm_core::observability::AtmObservabilityHealthState::Unavailable => "unavailable",
+    }
+}
+
+fn render_doctor_status(status: DoctorStatus) -> &'static str {
+    match status {
+        DoctorStatus::Healthy => "healthy",
+        DoctorStatus::Warning => "warning",
+        DoctorStatus::Error => "error",
+    }
+}
+
+fn render_maintenance_state(state: sc_observability_types::MaintenanceWorkerState) -> &'static str {
+    match state {
+        sc_observability_types::MaintenanceWorkerState::Running => "running",
+        sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
+        sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
     }
 }
 

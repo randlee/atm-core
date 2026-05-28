@@ -1,7 +1,7 @@
 ---
 id: Z.21
 title: Thorough Smoke CLI Coverage And Reporting
-status: planned
+status: complete
 branch: feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting
 worktree: ../atm-core-worktrees/feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.21
 worktree: ../atm-core-worktrees/feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting
 branch: feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -23,6 +23,7 @@ estimated_scope: medium
 
 - implement `just smoke thorough`
 - cover every CLI interface on happy path plus common error paths
+- cover the same-host `atm-graft` advisory and unary ICD path
 - produce row-by-row evidence for the frozen smoke checklist
 - root-cause every discrepancy from expected behavior
 
@@ -81,6 +82,7 @@ silently dropped or partially deferred.
 - row-by-row mapping to every frozen smoke-checklist ID
 - thorough-level copied-state fixture coverage where required by the checklist
 - happy-path plus common error-path coverage for every CLI interface
+- one real same-host `atm-graft` advisory plus unary ICD lane
 - explicit PASS / FAIL / SKIP row output
 - root-cause notes for every deviation
 - rendered `reports/smoke/smoke-thorough.md` plus timestamped artifacts
@@ -102,6 +104,10 @@ silently dropped or partially deferred.
   - `atm teams`
   - `atm members`
   - `atm help`
+- add one real same-host `atm-graft` host lane that:
+  - activates a session against the same daemon used by the CLI lane
+  - proves advisory registration and nudge delivery
+  - proves unary `read`, `ack`, and `send` over the shared daemon contract
 - carry copied-state lane setup where required by the checklist
 - keep skipped/manual-only situations explicit in the report output
 - add missing log messages at the appropriate level when that is the only
@@ -136,6 +142,8 @@ just smoke thorough
 - `just smoke thorough` exists
 - the thorough run explicitly reports `Z1-001`, `Z1-002`, `Z1-003`, `Z1-004`,
   `Z1-005`, `Z1-006`, `Z1-007`, `Z1-008`, and `Z1-009`
+- the thorough run also reports `GRAFT-001` for the same-host `atm-graft`
+  advisory plus unary ICD lane
 - the thorough run retains the fast-lane log-analysis gate:
   `FAST-LOG-001` and `FAST-LOG-002` must still pass at the thorough level
 - every row in `docs/phase-Z/smoke-checklist.md` maps to one report row
@@ -145,6 +153,9 @@ just smoke thorough
   common error paths: `atm send`, `atm read`, `atm ack`, `atm list`,
   `atm clear`, `atm log`, `atm doctor`, `atm teams`, `atm members`, and
   `atm help`
+- one real same-host `atm-graft` host proves advisory registration, nudge
+  delivery, unary `read`, unary `ack`, and unary `send` on the same daemon
+  contract used by the retained CLI lane
 - failures and skips are explicit in both JSON and stdout summary
 - every deviation includes observed behavior, expected behavior, likely root
   cause, and artifact pointer

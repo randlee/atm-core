@@ -318,8 +318,8 @@ fn emit_plan_transitions(
     for transition in transitions {
         observability.emit(crate::observability::CommandEvent {
             command: "delivery_policy",
-            action: context.family.action_name(),
-            outcome: transition,
+            action: crate::observability::action_name(context.family.action_name()),
+            outcome: crate::observability::outcome_label(transition),
             team: context.team.clone(),
             agent: context.agent.clone(),
             sender: context.sender.clone(),
@@ -539,6 +539,8 @@ mod tests {
                 active_log_path: None,
                 logging_state: AtmObservabilityHealthState::Unavailable,
                 query_state: Some(AtmObservabilityHealthState::Unavailable),
+                maintenance: None,
+                diagnostic: None,
                 detail: Some("test observer".to_string()),
             })
         }
@@ -988,7 +990,7 @@ mod tests {
                 agent: AgentName::from_validated("recipient"),
                 team: TeamName::from_validated(TEST_TEAM),
             },
-            Some("pane-1".to_string()),
+            Some(crate::types::PaneId::new("pane-1").expect("pane")),
             vec![logical_message()],
             Vec::new(),
         );

@@ -1,7 +1,7 @@
 ---
 id: Z.18
 title: Smoke Skill Scaffold And Report Infrastructure
-status: planned
+status: complete
 branch: feature/pZ-s18-smoke-skill-and-report-infrastructure
 worktree: ../atm-core-worktrees/feature/pZ-s18-smoke-skill-and-report-infrastructure
 target: integrate/phase-Z
@@ -15,7 +15,7 @@ phase: Z
 sprint: Z.18
 worktree: ../atm-core-worktrees/feature/pZ-s18-smoke-skill-and-report-infrastructure
 branch: feature/pZ-s18-smoke-skill-and-report-infrastructure
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -111,6 +111,7 @@ scripts/smoke/run.py <level>
   "timestamp": "2026-05-24T12:34:56Z",
   "binary_sha": "0123456789abcdef",
   "duration_secs": 123,
+  "status": "scaffold-only",
   "rows": [],
   "summary": {
     "pass": 0,

@@ -803,7 +803,6 @@ mod tests {
     use atm_core::boundary::MailStore as _;
     use atm_core::doctor::DoctorQuery;
     use atm_core::home::team_dir_from_home;
-    use atm_core::install_default_runtime_factory;
     use atm_core::list::{ListQuery, list_mail, list_mail_with_runtime};
     use atm_core::observability::NullObservability;
     use atm_core::protocol::RequestEnvelope;
@@ -813,8 +812,9 @@ mod tests {
     use atm_core::types::{
         AckActivationMode, AgentName, IsoTimestamp, ReadSelection, TaskId, TeamName,
     };
+    use atm_runtime_test_support::SqliteRuntimeGuard;
     use serial_test::serial;
-    use std::sync::OnceLock;
+    use shared_db::{ensure_schema, open_connection_for_target};
     use tempfile::TempDir;
 
     fn temp_disk_db() -> (TempDir, PathBuf) {
@@ -822,6 +822,29 @@ mod tests {
         let path = tempdir.path().join("phase-r.sqlite3");
         (tempdir, path)
     }
+
+    const LEGACY_MAIL_SCHEMA: &str = r#"
+CREATE TABLE mail_messages (
+    team TEXT NOT NULL,
+    agent TEXT NOT NULL,
+    message_key TEXT NOT NULL,
+    envelope_json TEXT NOT NULL,
+    from_agent TEXT NOT NULL,
+    message_text TEXT NOT NULL,
+    summary TEXT NULL,
+    message_at TEXT NOT NULL,
+    legacy_message_id TEXT NULL,
+    parent_message_id TEXT NULL,
+    thread_mode TEXT NULL,
+    stale_at TEXT NULL,
+    imported_from TEXT,
+    recorded_at TEXT,
+    PRIMARY KEY (team, agent, message_key)
+);
+CREATE UNIQUE INDEX uq_mail_messages_legacy_identity
+    ON mail_messages(team, agent, legacy_message_id)
+    WHERE legacy_message_id IS NOT NULL;
+"#;
 
     fn in_memory_assembly() -> SqliteBoundaryAssembly {
         SqliteBoundaryAssembly::in_memory_for_test().expect("in-memory assembly")
@@ -875,8 +898,8 @@ mod tests {
                     agent_name: agent_name.clone(),
                     member_kind: boundary::RosterMemberKind::Permanent,
                     harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: String::new(),
-                    model: String::new(),
+                    agent_type: atm_core::schema::AgentType::default(),
+                    model: atm_core::types::ModelName::default(),
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 }],
@@ -900,19 +923,6 @@ mod tests {
                 std::env::temp_dir().join("atm-rusqlite-notifications.jsonl"),
             )),
         )
-    }
-
-    fn entrypoint_assembly() -> &'static SqliteBoundaryAssembly {
-        static ASSEMBLY: OnceLock<SqliteBoundaryAssembly> = OnceLock::new();
-        ASSEMBLY.get_or_init(in_memory_assembly)
-    }
-
-    fn install_entrypoint_runtime() {
-        install_default_runtime_factory(entrypoint_runtime);
-    }
-
-    fn entrypoint_runtime() -> Result<LocalServiceRuntime, AtmError> {
-        Ok(sqlite_runtime(entrypoint_assembly()))
     }
 
     fn unique_suffix() -> u128 {
@@ -1106,8 +1116,10 @@ mod tests {
     #[test]
     #[serial]
     fn list_mail_entrypoint_uses_installed_sqlite_runtime_without_inbox_files() {
-        install_entrypoint_runtime();
-        let assembly = entrypoint_assembly();
+        let tempdir = TempDir::new().expect("tempdir");
+        let sqlite_db_path = tempdir.path().join("entrypoint-list.sqlite3");
+        let _runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path.clone());
+        let assembly = SqliteBoundaryAssembly::new(sqlite_db_path).expect("sqlite db");
         let team_name: TeamName = format!("entrypoint-list-{}", unique_suffix())
             .parse()
             .expect("team");
@@ -1149,9 +1161,8 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        seed_roster_member(assembly, &team_name, &agent_name);
+        seed_roster_member(&assembly, &team_name, &agent_name);
 
-        let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
             tempdir.path(),
             &team_name,
@@ -1181,8 +1192,10 @@ mod tests {
     #[test]
     #[serial]
     fn read_mail_entrypoint_uses_installed_sqlite_runtime_without_source_files() {
-        install_entrypoint_runtime();
-        let assembly = entrypoint_assembly();
+        let tempdir = TempDir::new().expect("tempdir");
+        let sqlite_db_path = tempdir.path().join("entrypoint-read.sqlite3");
+        let _runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path.clone());
+        let assembly = SqliteBoundaryAssembly::new(sqlite_db_path).expect("sqlite db");
         let team_name: TeamName = format!("entrypoint-read-{}", unique_suffix())
             .parse()
             .expect("team");
@@ -1225,9 +1238,8 @@ mod tests {
             .mail_store()
             .upsert_message(boundary::MailStoreUpsertMessageRequest { record })
             .expect("upsert message");
-        seed_roster_member(assembly, &team_name, &agent_name);
+        seed_roster_member(&assembly, &team_name, &agent_name);
 
-        let tempdir = TempDir::new().expect("tempdir");
         write_team_config(
             tempdir.path(),
             &team_name,
@@ -1886,6 +1898,42 @@ mod tests {
     }
 
     #[test]
+    fn ensure_schema_upgrades_legacy_mail_message_identity_shape() {
+        let (_tempdir, path) = temp_disk_db();
+        let target = SharedDbTarget::Path(path);
+        let connection =
+            open_connection_for_target(&target).expect("open legacy schema connection");
+        connection
+            .execute_batch(LEGACY_MAIL_SCHEMA)
+            .expect("seed legacy mail schema");
+        drop(connection);
+
+        let mut connection =
+            open_connection_for_target(&target).expect("reopen connection for migration");
+        ensure_schema(&mut connection, &target).expect("upgrade legacy schema");
+
+        let mut statement = connection
+            .prepare("PRAGMA table_info(mail_messages);")
+            .expect("prepare mail schema inspection");
+        let columns = statement
+            .query_map([], |row| row.get::<_, String>(1))
+            .expect("query mail schema inspection")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect mail schema columns");
+        assert!(columns.iter().any(|column| column == "legacy_message_id"));
+        assert!(columns.iter().any(|column| column == "message_id"));
+
+        let message_id_index_exists: i64 = connection
+            .query_row(
+                "SELECT COUNT(1) FROM sqlite_master WHERE type = 'index' AND name = 'uq_mail_messages_message_id';",
+                [],
+                |row| row.get(0),
+            )
+            .expect("query message_id index");
+        assert_eq!(message_id_index_exists, 1);
+    }
+
+    #[test]
     fn mail_store_enforces_message_key_prefix_and_single_successor() {
         let assembly = in_memory_assembly();
         let store = assembly.mail_store();
@@ -2131,9 +2179,9 @@ mod tests {
                 agent_name: "alpha".parse().expect("agent name"),
                 member_kind: boundary::RosterMemberKind::Permanent,
                 harness: boundary::RosterHarness::ClaudeCode,
-                agent_type: "planner".to_string(),
-                model: "claude-sonnet".to_string(),
-                recipient_pane_id: Some("%1".to_string()),
+                agent_type: atm_core::schema::AgentType::from("planner".to_string()),
+                model: atm_core::types::ModelName::new("claude-sonnet").expect("model"),
+                recipient_pane_id: Some(atm_core::types::PaneId::from_cli("%1").expect("pane")),
                 metadata_json: serde_json::Map::from_iter([(
                     "cwd".to_string(),
                     serde_json::Value::String(
@@ -2149,8 +2197,8 @@ mod tests {
                 agent_name: "bravo".parse().expect("agent name"),
                 member_kind: boundary::RosterMemberKind::Ephemeral,
                 harness: boundary::RosterHarness::CodexCli,
-                agent_type: "worker".to_string(),
-                model: "gpt-5-codex".to_string(),
+                agent_type: atm_core::schema::AgentType::from("worker".to_string()),
+                model: atm_core::types::ModelName::new("gpt-5-codex").expect("model"),
                 recipient_pane_id: None,
                 metadata_json: serde_json::Map::from_iter([(
                     "session".to_string(),
@@ -2162,8 +2210,8 @@ mod tests {
                 agent_name: "charlie".parse().expect("agent name"),
                 member_kind: boundary::RosterMemberKind::Permanent,
                 harness: boundary::RosterHarness::GeminiCli,
-                agent_type: "review".to_string(),
-                model: "gemini-2.5-pro".to_string(),
+                agent_type: atm_core::schema::AgentType::from("review".to_string()),
+                model: atm_core::types::ModelName::new("gemini-2.5-pro").expect("model"),
                 recipient_pane_id: None,
                 metadata_json: serde_json::Map::from_iter([(
                     "region".to_string(),
@@ -2175,8 +2223,8 @@ mod tests {
                 agent_name: "delta".parse().expect("agent name"),
                 member_kind: boundary::RosterMemberKind::Permanent,
                 harness: boundary::RosterHarness::Opencode,
-                agent_type: "ops".to_string(),
-                model: "open-router".to_string(),
+                agent_type: atm_core::schema::AgentType::from("ops".to_string()),
+                model: atm_core::types::ModelName::new("open-router").expect("model"),
                 recipient_pane_id: None,
                 metadata_json: serde_json::Map::from_iter([(
                     "provider".to_string(),
@@ -2240,8 +2288,8 @@ mod tests {
                     agent_name: "zulu".parse().expect("agent name"),
                     member_kind: boundary::RosterMemberKind::Permanent,
                     harness: boundary::RosterHarness::ClaudeCode,
-                    agent_type: "ops".to_string(),
-                    model: "claude".to_string(),
+                    agent_type: atm_core::schema::AgentType::from("ops".to_string()),
+                    model: atm_core::types::ModelName::new("claude").expect("model"),
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 }],
@@ -2256,8 +2304,8 @@ mod tests {
                     agent_name: "alpha-agent".parse().expect("agent name"),
                     member_kind: boundary::RosterMemberKind::Permanent,
                     harness: boundary::RosterHarness::CodexCli,
-                    agent_type: "dev".to_string(),
-                    model: "gpt-5".to_string(),
+                    agent_type: atm_core::schema::AgentType::from("dev".to_string()),
+                    model: atm_core::types::ModelName::new("gpt-5").expect("model"),
                     recipient_pane_id: None,
                     metadata_json: serde_json::Map::new(),
                 }],

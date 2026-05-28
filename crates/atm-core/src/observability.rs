@@ -3,6 +3,7 @@
 use std::path::PathBuf;
 
 use sc_lint_attributes::sc_lint;
+use sc_observability_types::{ActionName, ErrorCode, Level, OutcomeLabel, ServiceName};
 use serde::de::Error as DeError;
 use serde::ser::{Error as SerError, SerializeMap};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -16,8 +17,8 @@ use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CommandEvent {
     pub command: &'static str,
-    pub action: &'static str,
-    pub outcome: &'static str,
+    pub action: ActionName,
+    pub outcome: OutcomeLabel,
     pub team: TeamName,
     pub agent: AgentName,
     pub sender: AgentName,
@@ -27,6 +28,32 @@ pub struct CommandEvent {
     pub task_id: Option<TaskId>,
     pub error_code: Option<AtmErrorCode>,
     pub error_message: Option<String>,
+}
+
+pub fn action_name(value: &'static str) -> ActionName {
+    ActionName::new(value)
+        .expect("ATM observability action literals must be valid ActionName values")
+}
+
+pub fn outcome_label(value: &'static str) -> OutcomeLabel {
+    OutcomeLabel::new(value)
+        .expect("ATM observability outcome literals must be valid OutcomeLabel values")
+}
+
+pub fn standard_level_for_outcome(outcome: &str) -> Level {
+    match outcome {
+        "ok" | "sent" | "dry_run" => Level::Info,
+        "timeout" => Level::Warn,
+        "error" | "failed" => Level::Error,
+        other => {
+            warn!(
+                code = %AtmErrorCode::ObservabilityEmitFailed,
+                outcome = other,
+                "unknown ATM command outcome for observability level"
+            );
+            Level::Warn
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -371,7 +398,7 @@ pub struct AtmLogQuery {
 pub struct AtmLogRecord {
     pub timestamp: IsoTimestamp,
     pub severity: LogLevelFilter,
-    pub service: String,
+    pub service: ServiceName,
     pub target: Option<String>,
     pub action: Option<String>,
     pub message: Option<String>,
@@ -392,31 +419,30 @@ pub enum AtmObservabilityHealthState {
     Unavailable,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AtmObservabilityDiagnostic {
+    pub code: Option<ErrorCode>,
+    pub message: String,
+}
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum RetainedSinkFaultMode {
     Degraded,
     Unavailable,
 }
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AtmObservabilityHealth {
     pub active_log_path: Option<PathBuf>,
     pub logging_state: AtmObservabilityHealthState,
     pub query_state: Option<AtmObservabilityHealthState>,
+    pub maintenance: Option<sc_observability_types::MaintenanceHealthReport>,
+    pub diagnostic: Option<AtmObservabilityDiagnostic>,
     pub detail: Option<String>,
 }
 
 trait LogFollowPort: Send {
     fn poll(&mut self) -> Result<AtmLogSnapshot, AtmError>;
-}
-
-#[derive(Default)]
-struct EmptyFollowPort;
-
-impl LogFollowPort for EmptyFollowPort {
-    fn poll(&mut self) -> Result<AtmLogSnapshot, AtmError> {
-        Ok(AtmLogSnapshot::default())
-    }
 }
 
 struct ClosureFollowPort<F> {
@@ -444,9 +470,7 @@ pub struct LogTailSession {
 impl LogTailSession {
     /// Construct an empty follow session that never yields records.
     pub fn empty() -> Self {
-        Self {
-            inner: Box::<EmptyFollowPort>::default(),
-        }
+        Self::from_poller(|| Ok(AtmLogSnapshot::default()))
     }
 
     /// Construct one follow session from a polling closure.
@@ -528,6 +552,8 @@ impl ObservabilityPort for NullObservability {
             active_log_path: None,
             logging_state: AtmObservabilityHealthState::Unavailable,
             query_state: Some(AtmObservabilityHealthState::Unavailable),
+            maintenance: None,
+            diagnostic: None,
             detail: Some("observability adapter is not configured".to_string()),
         })
     }
