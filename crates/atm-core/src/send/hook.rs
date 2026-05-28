@@ -138,13 +138,15 @@ fn execute_post_send_hook(
             Err(error) => {
                 return handle_post_send_hook_status_error(
                     error,
-                    &mut child,
-                    stdout_reader.take(),
-                    &stdout_cancellation,
-                    &execution.command_path,
-                    warnings,
-                    context,
-                    rule,
+                    HookStatusFailureArgs {
+                        child: &mut child,
+                        stdout_reader: stdout_reader.take(),
+                        stdout_cancellation: &stdout_cancellation,
+                        command_path: &execution.command_path,
+                        warnings,
+                        context,
+                        rule,
+                    },
                 );
             }
         }
@@ -330,32 +332,37 @@ fn handle_post_send_hook_timeout(
     ));
 }
 
-fn handle_post_send_hook_status_error(
-    error: std::io::Error,
-    child: &mut std::process::Child,
+struct HookStatusFailureArgs<'a> {
+    child: &'a mut std::process::Child,
     stdout_reader: Option<thread::JoinHandle<std::io::Result<Vec<u8>>>>,
-    stdout_cancellation: &HookCancellationToken,
-    command_path: &Path,
-    warnings: &mut Vec<WarningEntry>,
-    context: &PostSendHookContext<'_>,
-    rule: &config::types::PostSendHookRule,
-) {
-    terminate_post_send_hook_process(child, command_path);
-    abandon_post_send_hook_stdout_capture(stdout_reader, stdout_cancellation, command_path);
+    stdout_cancellation: &'a HookCancellationToken,
+    command_path: &'a Path,
+    warnings: &'a mut Vec<WarningEntry>,
+    context: &'a PostSendHookContext<'a>,
+    rule: &'a config::types::PostSendHookRule,
+}
+
+fn handle_post_send_hook_status_error(error: std::io::Error, args: HookStatusFailureArgs<'_>) {
+    terminate_post_send_hook_process(args.child, args.command_path);
+    abandon_post_send_hook_stdout_capture(
+        args.stdout_reader,
+        args.stdout_cancellation,
+        args.command_path,
+    );
     warn!(
         code = %AtmErrorCode::WarningHookExecutionFailed,
-        sender = %context.sender,
-        recipient = %context.recipient.agent,
-        recipient_team = %context.recipient.team,
-        hook_recipient = %rule.recipient,
-        hook_path = %command_path.display(),
+        sender = %args.context.sender,
+        recipient = %args.context.recipient.agent,
+        recipient_team = %args.context.recipient.team,
+        hook_recipient = %args.rule.recipient,
+        hook_path = %args.command_path.display(),
         %error,
         "post-send hook status check failed"
     );
-    warnings.push(WarningEntry::new(
+    args.warnings.push(WarningEntry::new(
         format!(
             "warning: post-send hook status check failed for {}: {error}.",
-            command_path.display()
+            args.command_path.display()
         ),
         Some("This is an OS-level error; check that the hook process is not being killed externally."),
     ));

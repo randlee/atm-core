@@ -342,25 +342,14 @@ fn install_platform_hooks(
 
     let shutdown = Arc::new(AtomicBool::new(false));
     let (wake_read, wake_write) = create_lifecycle_wake_pair()?;
-    let mut signal_ids = Vec::new();
-    signal_ids.push(register_lifecycle_signal_flag(
-        SIGINT,
-        Arc::clone(terminate),
-    )?);
-    signal_ids.push(register_lifecycle_signal_flag(
-        SIGTERM,
-        Arc::clone(terminate),
-    )?);
-    signal_ids.push(register_lifecycle_signal_flag(SIGHUP, Arc::clone(reload))?);
-    signal_ids.push(register_lifecycle_signal_pipe(
-        SIGINT,
-        clone_lifecycle_wake_write(&wake_write)?,
-    )?);
-    signal_ids.push(register_lifecycle_signal_pipe(
-        SIGTERM,
-        clone_lifecycle_wake_write(&wake_write)?,
-    )?);
-    signal_ids.push(register_lifecycle_signal_pipe(SIGHUP, wake_write)?);
+    let signal_ids = vec![
+        register_lifecycle_signal_flag(SIGINT, Arc::clone(terminate))?,
+        register_lifecycle_signal_flag(SIGTERM, Arc::clone(terminate))?,
+        register_lifecycle_signal_flag(SIGHUP, Arc::clone(reload))?,
+        register_lifecycle_signal_pipe(SIGINT, clone_lifecycle_wake_write(&wake_write)?)?,
+        register_lifecycle_signal_pipe(SIGTERM, clone_lifecycle_wake_write(&wake_write)?)?,
+        register_lifecycle_signal_pipe(SIGHUP, wake_write)?,
+    ];
     let shutdown_for_worker = Arc::clone(&shutdown);
     let terminate = Arc::clone(terminate);
     let reload = Arc::clone(reload);
