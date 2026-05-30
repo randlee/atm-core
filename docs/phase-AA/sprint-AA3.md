@@ -84,9 +84,14 @@ The concrete simplification decisions are frozen now:
   pub struct DoctorReport {
       pub config: ConfigDoctorReport,
       pub mail_store: MailStoreDoctorReport,
+      pub task_store: TaskStoreDoctorReport,
       pub roster_store: RosterStoreDoctorReport,
       pub daemon_runtime: Option<DaemonRuntimeDoctorReport>,
       pub drift_findings: Vec<DoctorFinding>,
+  }
+
+  pub struct DaemonRuntimeDoctorReport {
+      pub findings: Vec<DoctorFinding>,
   }
   ```
 

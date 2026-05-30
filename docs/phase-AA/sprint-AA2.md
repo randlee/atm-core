@@ -81,6 +81,7 @@ The concrete transfer decisions are frozen now:
       pub task_store: Arc<dyn TaskStore>,
       pub roster_store: Arc<dyn RosterStore>,
       pub mail_store_doctor: Arc<dyn MailStoreDoctor>,
+      pub task_store_doctor: Arc<dyn TaskStoreDoctor>,
       pub roster_store_doctor: Arc<dyn RosterStoreDoctor>,
       pub config_doctor: Arc<dyn ConfigDoctor>,
       pub remote_replay_store: Arc<dyn RemoteReplayStore>,
@@ -151,6 +152,8 @@ about composition ownership transfer.
 - `docs/requirements.md`
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/boundaries.md`
+- `docs/atm-runtime/architecture.md`
+- `docs/atm-runtime/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-rusqlite/requirements.md`

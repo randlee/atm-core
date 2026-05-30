@@ -67,6 +67,7 @@ code and in review workflow.
   surface is frozen now:
   - `scripts/check-boundary-guard.py`
   - `scripts/test_boundary_guard.py`
+  - `.claude/agents/boundary-guard.md`
 
 - The second guard enforces both code-edge and policy-edge checks. The minimum
   machine-checked contract is frozen now:
@@ -105,6 +106,13 @@ code and in review workflow.
      plan branch that modifies a boundary TOML
   2. as a required reviewer in every phase-ending review packet
 
+- The `boundary-guard` blocking posture is frozen:
+  - any `Blocking` severity finding from `.claude/agents/boundary-guard.md`
+    stops merge on plan branches that modify boundary TOMLs
+  - any `Blocking` severity finding from `.claude/agents/boundary-guard.md`
+    stops merge on phase-ending review branches
+  - `Minor` findings remain advisory only
+
 - A synthetic boundary-relaxation fixture exists and is required self-test
   coverage for the second guard.
 
@@ -120,9 +128,10 @@ actually clean will either fail immediately or produce more policy cheating.
 - a second architecture-enforcement layer exists beyond the TOML lint
 - boundary-policy widening is treated as an architecture change, not routine
   config churn
-- `boundary-guard` exists, fires at the two named workflow trigger points, and
-  the sprint docs explicitly state whether blocking findings are required to
-  stop merge
+- `.claude/agents/boundary-guard.md` exists, `boundary-guard` fires at the two
+  named workflow trigger points, and `Blocking` findings are required to stop
+  merge on both plan branches touching boundary TOMLs and phase-ending review
+  branches
 - the sprint docs include the exact relaxation table and a machine-checkable
   output shape for the second guard
 - the daemon-to-SQLite edge fails both the TOML-based guard and the
@@ -131,7 +140,7 @@ actually clean will either fail immediately or produce more policy cheating.
 ## Required Validation
 
 - `just lint boundaries`
-- `python3 scripts/check-boundary-guard.py --base-ref <target>`
+- `python3 scripts/check-boundary-guard.py --base-ref origin/integrate/phase-AA`
 - `python3 -m unittest scripts.test_boundary_guard`
 - `cargo test --workspace`
 - `python3 .just/run_lint.py all`

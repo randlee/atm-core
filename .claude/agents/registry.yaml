@@ -17,6 +17,9 @@ agents:
   critical-plan-reviewer:
     version: 0.1.0
     path: .claude/agents/critical-plan-reviewer.md
+  boundary-guard:
+    version: 0.1.0
+    path: .claude/agents/boundary-guard.md
   flaky-test-qa:
     version: 0.1.0
     path: .claude/agents/flaky-test-qa.md

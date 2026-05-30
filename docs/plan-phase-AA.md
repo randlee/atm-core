@@ -286,20 +286,12 @@ Execution worktree:
 
 ## Exit Criteria
 
-`Phase AA` closes only when all of the following are true:
+Authoritative Phase `AA` exit criteria live only in
+`docs/phase-AA/readiness.md`.
 
-- `crates/atm-daemon` has no direct dependency on `atm-rusqlite`
-- daemon source contains no direct `atm_rusqlite::*` references
-- SQLite observability is injected into SQLite-owned code outside the daemon
-- local `atm doctor` can report direct config/store health without requiring
-  daemon routing
-- daemon health reporting aggregates injected subsystem reports plus
-  daemon-owned runtime state without backend-specific diagnosis logic
-- the boundary TOMLs forbid the daemon-to-SQLite edge again
-- a `boundary-guard` QA agent exists and is part of plan review plus
-  phase-ending review for boundary-widening detection
-- the daemon state-machine inventory is explicitly documented and stays within
-  the Phase AA simplicity contract
+This overview intentionally does not restate the closure checklist. Any
+Phase `AA` closeout review must use `readiness.md` as the sole source of truth
+for final branch/phase exit gates.
 
 ## Planning Consequences
 

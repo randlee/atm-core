@@ -75,6 +75,10 @@ peeking into SQLite internals.
       fn inspect_mail_store(&self) -> Result<MailStoreDoctorReport, AtmError>;
   }
 
+  pub trait TaskStoreDoctor: Send + Sync {
+      fn inspect_task_store(&self) -> Result<TaskStoreDoctorReport, AtmError>;
+  }
+
   pub trait RosterStoreDoctor: Send + Sync {
       fn inspect_roster_store(&self) -> Result<RosterStoreDoctorReport, AtmError>;
   }
@@ -95,6 +99,22 @@ peeking into SQLite internals.
       pub summary: String,
       pub detail: Option<String>,
   }
+
+  pub struct MailStoreDoctorReport {
+      pub findings: Vec<DoctorFinding>,
+  }
+
+  pub struct TaskStoreDoctorReport {
+      pub findings: Vec<DoctorFinding>,
+  }
+
+  pub struct RosterStoreDoctorReport {
+      pub findings: Vec<DoctorFinding>,
+  }
+
+  pub struct ConfigDoctorReport {
+      pub findings: Vec<DoctorFinding>,
+  }
   ```
 
 - `atm-rusqlite` owns store health through the doctor traits. The minimum
@@ -103,11 +123,13 @@ peeking into SQLite internals.
   - openability
   - schema/bootstrap/migration readiness
   - bounded store findings
+  - bounded task-store findings when `TaskStore` is backed by the same store
 
 - Daemon doctor aggregation is documented as aggregate-only. The minimum
   ownership rule is frozen:
-  - daemon doctor may aggregate `ConfigDoctor`, `MailStoreDoctor`, and
-    `RosterStoreDoctor` reports plus daemon-owned runtime state
+  - daemon doctor may aggregate `ConfigDoctor`, `MailStoreDoctor`,
+    `TaskStoreDoctor`, and `RosterStoreDoctor` reports plus daemon-owned
+    runtime state
   - daemon doctor may compare subsystem reports for drift
   - daemon doctor must not inspect SQLite internals directly
 
@@ -124,10 +146,11 @@ must settle the contracts before any crate starts moving code across them.
 
 - `MailStore`, `TaskStore`, and `RosterStore` are explicitly retained as the
   Phase AA storage-neutral capability surfaces
-- `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` are defined in
-  `atm-core`
+- `MailStoreDoctor`, `TaskStoreDoctor`, `RosterStoreDoctor`, and
+  `ConfigDoctor` are defined in `atm-core`
 - the sprint docs include explicit trait signatures and a minimum report DTO
-  shape, so implementation does not have to invent the contract later
+  shape, including the minimum subsystem report structs, so implementation
+  does not have to invent the contract later
 - `atm-rusqlite` has a documented store doctor contract
 - the docs explicitly allow both SQLite-backed and Claude-JSON-backed
   implementations behind the same behavior-named traits
