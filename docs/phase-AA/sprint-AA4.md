@@ -62,35 +62,44 @@ The concrete delete/move decisions are frozen now:
 - `atm-runtime` owns composition
 - store doctor trait owns store diagnostics
 
-## Non-Goals
+## Out Of Scope
 
 - final boundary relock
 - permanent enforcement guardrails
 
-## Sub-Tasks
+## Paths To Delete
 
-- Delete daemon-owned SQLite observability glue.
-  Development work: remove `sqlite_observability.rs` and route SQLite
-  observability injection entirely through `atm-runtime` / `atm-rusqlite`.
-  Required tests: retained observability regression coverage.
-  Required doc or boundary updates: daemon/rusqlite architecture docs.
+- `crates/atm-daemon/src/sqlite_observability.rs`
+- `crates/atm-daemon/src/runtime_health_test_support.rs`
+- `mod sqlite_observability;` from `crates/atm-daemon/src/lib.rs`
+- `SqliteRemoteReplayStore` from `crates/atm-daemon/src/lib.rs`
+- `use atm_rusqlite::SqliteBoundaryAssembly;` from
+  `crates/atm-daemon/src/lib.rs`
+- `RemoteReplayStateRecord` re-export from `crates/atm-daemon/src/lib.rs`
+- direct `atm_rusqlite::assemble_boundary*` test use from:
+  - `crates/atm-daemon/src/tests.rs`
+  - `crates/atm-daemon/src/tests_advisory.rs`
+- `mark_sqlite_unavailable(...)` from
+  `crates/atm-daemon/src/runtime_status_cache.rs`
+- `mark_sqlite_unavailable_with_detail(...)` from
+  `crates/atm-daemon/src/runtime_status_cache.rs`
 
-- Delete daemon-owned SQLite test support.
-  Development work: remove `runtime_health_test_support.rs` and any daemon test
-  setup that assembles SQLite directly. Replace daemon-local assembly with
-  runtime-owned or subsystem-owned fixtures.
-  Required tests: replace with subsystem or composition-level tests.
-  Required doc or boundary updates: testing docs if test ownership changes.
+## Deliverables
 
-- Remove replay/store type leakage from daemon public/internal seams.
-  Development work: eliminate `SqliteRemoteReplayStore`,
-  `RemoteReplayStateRecord` re-exports, and any daemon-local SQLite replay
-  wrappers. The exact destination decision is:
-  - storage-neutral replay DTO/trait live outside `atm-daemon` and
-    `atm-rusqlite`, under `atm-core`
-  - concrete SQLite replay implementation lives in `atm-runtime`
-  Required tests: peer transport / replay regression coverage.
-  Required doc or boundary updates: daemon boundaries if trait ownership moves.
+- All paths in `Paths To Delete` are removed.
+
+- SQLite observability injection is fully outside the daemon and lives only in
+  `atm-runtime` / `atm-rusqlite`.
+
+- Daemon test support no longer assembles SQLite directly. Any remaining test
+  fixture ownership is moved to subsystem or composition layers.
+
+- Replay/store leakage is removed from daemon seams. The frozen ownership
+  decision is:
+  - storage-neutral replay DTO/trait live under `atm-core`
+  - concrete SQLite replay implementation lives under `atm-runtime`
+  - `crates/atm-daemon/src/peer_transport.rs` remains, but consumes only the
+    storage-neutral replay seam
 
 ## Split Recommendation
 
@@ -103,6 +112,8 @@ simple router model, remove it instead of preserving compatibility for it.
 - daemon test support no longer assembles SQLite directly
 - daemon replay/store seams no longer expose SQLite-owned record types
 - `runtime_status_cache.rs` contains no SQLite-named degradation helpers
+- every path listed under `Paths To Delete` is either removed or replaced by a
+  storage-neutral seam explicitly frozen in earlier AA sprints
 - the remaining daemon code is materially smaller and simpler
 
 ## Required Validation

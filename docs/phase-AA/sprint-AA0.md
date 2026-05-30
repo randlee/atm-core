@@ -51,40 +51,39 @@ delete code instead of arguing about ownership.
 
 - none
 
-## Non-Goals
+## Out Of Scope
 
-- no code movement yet
-- no partial boundary rollback without the full inventory
+- code movement into `atm-runtime`
+- trait introduction beyond documenting the ownership rule
+- partial boundary rollback without a frozen leak ledger
 
-## Sub-Tasks
+## Deliverables
 
-- Restate the daemon role in requirements and architecture docs as:
-  transport, lifecycle, routing, bounded dispatch, and minor error handling
-  only.
-  Development work: update product and crate-local docs.
-  Required tests: none beyond document validation.
-  Required doc or boundary updates: requirements, architecture, daemon
-  architecture, and the new Phase AA readiness record.
+- A daemon-role restatement lands in the governing docs and says explicitly
+  that `atm-daemon` owns only:
+  - transport
+  - lifecycle
+  - request validation/routing
+  - bounded dispatch/reply
+  - minor runtime error handling
+  and does not own concrete SQLite semantics.
 
-- Record the subsystem-doctor pattern as a hard rule:
-  each subsystem diagnoses itself through a trait; top-level doctor code only
-  aggregates subsystem results.
-  Development work: document the trait/aggregation rule and where those traits
-  live.
-  Required tests: none yet.
-  Required doc or boundary updates: requirements and architecture docs.
+- A subsystem-doctor ownership rule lands in the governing docs and says
+  explicitly:
+  - each subsystem diagnoses itself through a trait it owns
+  - top-level doctor code aggregates subsystem reports
+  - top-level doctor code may compare subsystem reports for drift
+  - top-level doctor code must not reimplement backend-specific diagnosis
 
-- Produce the daemon state-machine inventory with a hard target of five or
-  fewer top-level machines.
-  Development work: write the inventory and flag every daemon function family
-  that violates it.
-  Required tests: none yet.
-  Required doc or boundary updates: `docs/phase-AA/*` and daemon architecture.
+- `docs/phase-AA/daemon-state-machines.md` exists and freezes the target
+  top-level daemon machine inventory at five or fewer machines.
 
-- Freeze the concrete leak ledger up front.
-  Development work: record the exact current daemon-side SQLite leak files and
-  classify them now as delete / move / keep-and-rewrite so later sprints are
-  mechanical. The initial frozen file set is:
+- `docs/phase-AA/daemon-sqlite-leak-ledger.md` exists and classifies every
+  current daemon-side SQLite leak as one of:
+  - `delete`
+  - `move`
+  - `keep-and-rewrite`
+  The minimum frozen file set is:
   - `crates/atm-daemon/src/lib.rs`
   - `crates/atm-daemon/src/composition.rs`
   - `crates/atm-daemon/src/runtime_health.rs`
@@ -93,10 +92,9 @@ delete code instead of arguing about ownership.
   - `crates/atm-daemon/src/runtime_health_test_support.rs`
   - `crates/atm-daemon/src/tests.rs`
   - `crates/atm-daemon/src/tests_advisory.rs`
-  Required tests: none yet.
-  Required doc or boundary updates:
-  - `docs/phase-AA/daemon-state-machines.md`
-  - `docs/phase-AA/daemon-sqlite-leak-ledger.md`
+
+- `docs/phase-AA/readiness.md` exists and records the AA sprint line plus
+  phase exit criteria.
 
 ## Split Recommendation
 
@@ -112,6 +110,8 @@ will reintroduce ambiguity.
 - the leak ledger exists and classifies every current daemon-side SQLite touch
   point as delete / move / keep-and-rewrite
 - the Phase AA readiness record exists
+- no implementation work is required to infer the intended daemon role or the
+  leak inventory after reading this sprint doc and its listed artifacts
 
 ## Required Validation
 

@@ -188,13 +188,15 @@ violation and should be deleted or moved out of the crate.
 
 ## Sprint Sequence
 
-### AA.0 Boundary Freeze And Audit Ledger
+### AA.0 Daemon Architecture Restatement And State-Machine Inventory
 
 Purpose:
 - freeze the exact daemon-side SQLite leak inventory
-- revert boundary TOMLs so `atm-daemon` is no longer an allowed dependent of
-  the SQLite assembly/store boundaries
+- restate the intended thin-daemon role in the governing docs before code
+  deletion begins
 - document the small allowed post-AA daemon state-machine inventory
+- freeze the delete / move / keep-and-rewrite classifications that later
+  sprints must follow
 
 Execution branch:
 - `feature/pAA-s0-daemon-architecture-restatement`
@@ -272,7 +274,7 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pAA-s5-boundary-relock-and-permanent-enforcement`
 
-## Non-Goals
+## Out Of Scope
 
 `Phase AA` does not:
 - redesign ATM business logic

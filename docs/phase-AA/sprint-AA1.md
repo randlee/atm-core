@@ -50,53 +50,70 @@ peeking into SQLite internals.
 
 - accepted shared diagnostic DTO shape
 
-## Non-Goals
+## Out Of Scope
 
-- no concrete runtime composition transfer yet
-- no boundary relock yet
+- concrete runtime composition transfer
+- daemon code deletion
+- boundary relock
 
-## Sub-Tasks
+## Deliverables
 
-- Freeze the capability-trait reuse decision.
-  Development work: keep `MailStore`, `TaskStore`, and `RosterStore` as the
-  storage-neutral read/write capability surfaces for Phase AA; do not add a
-  parallel `MessageReader` / `MessageWriter` / `RosterReader` / `RosterWriter`
-  hierarchy in this phase.
-  Required tests: compile/build validation for unchanged callers.
-  Required doc or boundary updates: `atm-core` requirements and architecture.
+- The Phase AA trait-family reuse decision is frozen in the docs:
+  - `MailStore`
+  - `TaskStore`
+  - `RosterStore`
+  remain the primary storage-neutral capability traits.
+  This sprint must not introduce a second parallel
+  `MessageReader` / `MessageWriter` / `RosterReader` / `RosterWriter`
+  hierarchy.
 
-- Add doctor traits beside the existing capability boundaries.
-  Development work: define `MailStoreDoctor` beside
-  `crates/atm-core/src/boundary/mail.rs`, define `RosterStoreDoctor` beside
-  `crates/atm-core/src/boundary/store.rs`, and define `ConfigDoctor` beside
-  the config ingress boundary so deep backend/config investigation logic lives
-  with the owning subsystem.
-  Required tests: trait/object-safety and DTO unit coverage.
-  Required doc or boundary updates: `atm-core` requirements, architecture, and
-  boundaries.
+- The doctor traits are defined beside the existing capability boundaries in
+  `atm-core`. The intended shape is frozen now:
 
-- Define the store doctor contract for `atm-rusqlite`.
-  Development work: document and implement the trait that reports store path,
-  openability, migration/bootstrap readiness, and bounded storage findings.
-  Required tests: in-process SQLite doctor tests.
-  Required doc or boundary updates: `atm-rusqlite` requirements/architecture.
+  ```rust
+  pub trait MailStoreDoctor: Send + Sync {
+      fn inspect_mail_store(&self) -> Result<MailStoreDoctorReport, AtmError>;
+  }
 
-- Define daemon-owned runtime doctor aggregation.
-  Development work: document that daemon doctor code aggregates injected
-  subsystem reports plus daemon-only runtime state, may compare subsystem
-  outputs for drift, and does not inspect SQLite directly.
-  Required tests: aggregation-only unit coverage.
-  Required doc or boundary updates: `atm-daemon` requirements/architecture.
+  pub trait RosterStoreDoctor: Send + Sync {
+      fn inspect_roster_store(&self) -> Result<RosterStoreDoctorReport, AtmError>;
+  }
 
-- Define the backend-agnostic implementation rule.
-  Development work: document that behavior traits are backend-neutral and may
-  be implemented by both SQLite-backed and Claude-JSON-backed subsystems,
-  without exposing one giant `Storage` god-interface. The Phase AA decision is
-  that Claude JSON may implement the same `MailStore` / `RosterStore` plus
-  doctor traits later; AA does not require that implementation to land now.
-  Required tests: none beyond doc and trait-surface validation.
-  Required doc or boundary updates: `requirements.md`, `architecture.md`, and
-  `atm-core` docs.
+  pub trait ConfigDoctor: Send + Sync {
+      fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError>;
+  }
+  ```
+
+- The shared report DTO direction is frozen now: subsystem reports are
+  normalized enough for aggregation but still allow backend-specific findings.
+  The minimum DTO shape is:
+
+  ```rust
+  pub struct DoctorFinding {
+      pub code: &'static str,
+      pub severity: DoctorSeverity,
+      pub summary: String,
+      pub detail: Option<String>,
+  }
+  ```
+
+- `atm-rusqlite` owns store health through the doctor traits. The minimum
+  store-doctor responsibilities are frozen:
+  - path resolution
+  - openability
+  - schema/bootstrap/migration readiness
+  - bounded store findings
+
+- Daemon doctor aggregation is documented as aggregate-only. The minimum
+  ownership rule is frozen:
+  - daemon doctor may aggregate `ConfigDoctor`, `MailStoreDoctor`, and
+    `RosterStoreDoctor` reports plus daemon-owned runtime state
+  - daemon doctor may compare subsystem reports for drift
+  - daemon doctor must not inspect SQLite internals directly
+
+- The backend-agnostic rule is frozen: SQLite-backed and Claude-JSON-backed
+  implementations may satisfy the same behavior-named trait family later, but
+  this sprint does not require the Claude JSON implementation to land.
 
 ## Split Recommendation
 
@@ -109,6 +126,8 @@ must settle the contracts before any crate starts moving code across them.
   Phase AA storage-neutral capability surfaces
 - `MailStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` are defined in
   `atm-core`
+- the sprint docs include explicit trait signatures and a minimum report DTO
+  shape, so implementation does not have to invent the contract later
 - `atm-rusqlite` has a documented store doctor contract
 - the docs explicitly allow both SQLite-backed and Claude-JSON-backed
   implementations behind the same behavior-named traits

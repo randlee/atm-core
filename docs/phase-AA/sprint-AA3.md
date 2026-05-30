@@ -62,43 +62,61 @@ The concrete simplification decisions are frozen now:
 
 - shared doctor traits from `AA.1`
 
-## Non-Goals
+## Out Of Scope
 
 - boundary relock
 - full replay leak cleanup
 
-## Sub-Tasks
+## Deliverables
 
-- Implement `atm-rusqlite` store-doctor logic.
-  Development work: move SQLite readiness/openability/migration health into
-  the store subsystem and expose it only through the doctor trait. This
-  includes the current direct SQLite readiness concerns presently projected
-  through daemon runtime status.
-  Required tests: in-process store doctor tests.
-  Required doc or boundary updates: `atm-rusqlite` docs.
+- `atm-rusqlite` owns store diagnostics through the doctor traits. The frozen
+  doctor responsibility list is:
+  - SQLite openability
+  - schema/bootstrap/migration readiness
+  - bounded store findings
+  - any SQLite-specific detail that does not belong in daemon runtime state
 
-- Restore a direct CLI doctor path for local diagnostics.
-  Development work: make CLI doctor query local config/store diagnostics
-  directly when daemon-owned runtime state is not required. The concrete core
-  target is `crates/atm-core/src/doctor/mod.rs`, which should become an
-  aggregator/orchestrator over `ConfigDoctor`, `MailStoreDoctor`, and
-  `RosterStoreDoctor` instead of burying backend-specific logic inline.
-  Required tests: doctor CLI regression coverage with and without a live
-  daemon.
-  Required doc or boundary updates: product requirements and architecture.
+- `atm-core/src/doctor/mod.rs` becomes an explicit aggregator/orchestrator over
+  subsystem doctors rather than a backend-specific implementation surface.
+  The minimum aggregate shape is frozen:
 
-- Simplify daemon runtime health to daemon-owned projection only.
-  Development work: remove direct SQLite roster/store health probing from
-  `runtime_health.rs`, convert `reload_runtime_view(...)` and
-  `record_heartbeat(...)` to injected `RosterStore`, and delete
-  `mark_sqlite_unavailable*`-style daemon cache semantics. The precise cache
-  decision is:
-  - `RuntimeStatusSnapshot` keeps daemon runtime liveness/readiness/member
-    counts
-  - `RuntimeStatusSnapshot` stops carrying `sqlite_ready` and `sqlite_detail`
-  - any store-specific detail appears only in subsystem doctor reports
-  Required tests: runtime-health projection tests.
-  Required doc or boundary updates: daemon requirements/architecture.
+  ```rust
+  pub struct DoctorReport {
+      pub config: ConfigDoctorReport,
+      pub mail_store: MailStoreDoctorReport,
+      pub roster_store: RosterStoreDoctorReport,
+      pub daemon_runtime: Option<DaemonRuntimeDoctorReport>,
+      pub drift_findings: Vec<DoctorFinding>,
+  }
+  ```
+
+- The direct CLI doctor path is restored for local diagnostics that do not
+  require daemon-owned runtime state.
+
+- `RuntimeStatusSnapshot` is simplified to daemon-owned runtime state only.
+  The frozen delete list is:
+  - remove `sqlite_boundary: Option<SqliteBoundaryAssembly>` from
+    `crates/atm-daemon/src/runtime_health.rs`
+  - remove direct roster-store hydration through SQLite from
+    `runtime_health.rs`
+  - remove daemon-owned WAL checkpoint calls from `runtime_health.rs`
+  - remove `sqlite_ready`
+  - remove `sqlite_detail`
+  - remove `mark_sqlite_unavailable(...)`
+  - remove `mark_sqlite_unavailable_with_detail(...)`
+
+- The minimum post-AA runtime snapshot direction is frozen:
+
+  ```rust
+  pub struct RuntimeStatusSnapshot {
+      pub daemon_ready: bool,
+      pub active_connections: u64,
+      pub active_advisory_sessions: u64,
+      pub live_member_count: u64,
+      // no sqlite_ready
+      // no sqlite_detail
+  }
+  ```
 
 ## Split Recommendation
 
@@ -111,6 +129,8 @@ same seam from opposite sides.
 - CLI doctor can answer direct local store/config checks without daemon routing
 - daemon runtime health no longer owns SQLite-specific probing or SQLite-named
   runtime cache fields
+- the sprint doc freezes the aggregate doctor DTO and the reduced runtime
+  snapshot shape so later code work is mechanical
 - daemon doctor aggregation may include injected store/config subsystem reports
   but does not deeply analyze SQLite internals and only performs
   cross-subsystem comparison at the report level

@@ -59,42 +59,63 @@ The concrete transfer decisions are frozen now:
 
 - accepted `atm-runtime` crate ownership model
 
-## Non-Goals
+## Out Of Scope
 
 - final boundary relock
 - final doctor split
 
-## Sub-Tasks
+## Deliverables
 
-- Add `crates/atm-runtime`.
-  Development work: introduce the crate, manifests, and composition entrypoints
-  that can build production runtime inputs from concrete adapters. The expected
-  new files are:
+- `crates/atm-runtime` exists and is the only legal Phase AA home for
+  concrete production runtime/store assembly. The expected minimum file set is:
   - `crates/atm-runtime/src/lib.rs`
   - `crates/atm-runtime/src/composition.rs`
   - `crates/atm-runtime/src/replay_store.rs`
-  Required tests: compile/build coverage and narrow integration coverage.
-  Required doc or boundary updates: project plan, crate docs, boundaries.
 
-- Move SQLite boundary assembly into `atm-runtime`.
-  Development work: relocate `SqliteBoundaryAssembly` construction and
-  observability injection out of daemon composition. The concrete daemon edits
-  are:
-  - delete `SqliteBoundaryAssembly` construction from
+- The minimum runtime bundle contract is frozen in this sprint doc so daemon
+  startup does not invent its own seam:
+
+  ```rust
+  pub struct RuntimeBundle {
+      pub mail_store: Arc<dyn MailStore>,
+      pub task_store: Arc<dyn TaskStore>,
+      pub roster_store: Arc<dyn RosterStore>,
+      pub mail_store_doctor: Arc<dyn MailStoreDoctor>,
+      pub roster_store_doctor: Arc<dyn RosterStoreDoctor>,
+      pub config_doctor: Arc<dyn ConfigDoctor>,
+      pub remote_replay_store: Arc<dyn RemoteReplayStore>,
+  }
+  ```
+
+- Concrete SQLite boundary assembly moves into `atm-runtime`. The frozen move
+  list is:
+  - move `SqliteBoundaryAssembly::new*` calls out of
     `crates/atm-daemon/src/composition.rs`
-  - replace the direct `sqlite_boundary` construction path with an injected
-    runtime bundle from `atm-runtime`
-  Required tests: runtime composition tests proving `atm-daemon` consumes
-  injected ports only.
-  Required doc or boundary updates: daemon/runtime/rusqlite architecture docs.
+  - move SQLite observability injection out of daemon composition
+  - replace the direct daemon `sqlite_boundary` construction path with an
+    injected `RuntimeBundle`
 
-- Change `atm-daemon` to consume storage-neutral runtime inputs.
-  Development work: delete direct construction from daemon composition and make
-  daemon startup take injected ports/factories only, expressed through
-  `MailStore`, `TaskStore`, `RosterStore`, and the new doctor traits from
-  `AA.1`.
-  Required tests: daemon startup and request-dispatch regression coverage.
-  Required doc or boundary updates: daemon boundaries and architecture docs.
+- Replay ownership is moved out of daemon-private and SQLite-private seams.
+  The frozen shape is:
+
+  ```rust
+  pub struct RemoteReplayStateRecord {
+      pub request_id: String,
+      pub created_at: DateTime<Utc>,
+      pub payload: Vec<u8>,
+  }
+
+  pub trait RemoteReplayStore: Send + Sync {
+      fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError>;
+      fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError>;
+      fn delete(&self, request_id: &str) -> Result<(), AtmError>;
+      fn purge_expired(&self) -> Result<(), AtmError>;
+  }
+  ```
+
+- `atm-daemon` startup consumes only injected storage-neutral runtime inputs
+  expressed through `MailStore`, `TaskStore`, `RosterStore`, the doctor
+  traits from `AA.1`, and `RemoteReplayStore`.
 
 ## Split Recommendation
 
@@ -107,6 +128,8 @@ about composition ownership transfer.
 - `atm-daemon` no longer constructs `SqliteBoundaryAssembly`
 - `RemoteReplayStateRecord` and `RemoteReplayStore` no longer originate in
   daemon-private or SQLite-private modules
+- the sprint doc contains the minimum `RuntimeBundle` and replay contract
+  shapes, so implementation does not have to invent them during the move
 - daemon composition consumes storage-neutral injected inputs
 - daemon composition depends on `MailStore` / `TaskStore` / `RosterStore` plus
   doctor traits rather than backend identity
