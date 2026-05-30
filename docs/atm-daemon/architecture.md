@@ -70,6 +70,13 @@ Follow-up work:
 - Keep adapter assembly in daemon-owned composition code only.
 - Revisit only if a later ADR extracts a dedicated composition crate.
 
+Phase-AA supersession note:
+- this ADR records the current merged ownership shape only
+- `Phase AA` intentionally supersedes it by moving concrete runtime/store
+  composition into a dedicated `atm-runtime` crate
+- after `Phase AA`, `atm-daemon` is no longer a legal home for SQLite adapter
+  construction
+
 ## 2. Responsibilities
 
 The `atm-daemon` crate is responsible for:
@@ -84,6 +91,12 @@ The `atm-daemon` crate is responsible for:
 - daemon health/status query surface for `atm doctor`
 
 The `atm-daemon` crate must remain thin.
+
+Phase-AA target direction:
+- the daemon remains transport/lifecycle-owned
+- SQLite-specific composition, observability, replay, and direct store-health
+  logic are removed from this crate
+- daemon health becomes daemon-owned runtime projection only
 
 Phase R redesign notes:
 - `atm-daemon` remains runtime-oriented, not business-logic-oriented
