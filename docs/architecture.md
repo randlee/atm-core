@@ -86,6 +86,15 @@ Phase-S portability note:
   contract
 - Phase S planning is tracked in [`docs/plan-phase-S.md`](./plan-phase-S.md)
 
+Phase-AA simplification note:
+- the current daemon composition root and daemon-routed doctor model are not
+  the intended steady-state architecture
+- Phase AA moves concrete SQLite construction into a dedicated `atm-runtime`
+  crate and removes adapter-specific health/observability ownership from
+  `atm-daemon`
+- the daemon remains in the product, but as a thin router rather than a
+  concrete storage/runtime host
+
 ## 2. Crate Boundaries
 
 The post-Q product runtime is implemented by four crates:
@@ -183,6 +192,11 @@ Current Phase R boundary direction:
   - `atm` is the CLI client composition root
   - `atm-daemon` is the runtime composition root
   - a separate composition crate remains out of scope unless an ADR opens it
+- Phase AA target ownership:
+  - `atm` remains the CLI composition root
+  - `atm-runtime` becomes the concrete runtime/store composition root
+  - `atm-daemon` consumes storage-neutral runtime inputs and stops
+    constructing SQLite-backed adapters directly
 
 Current Phase R lint partition direction:
 - extend the existing `sc-portability` analyzer for reusable platform-gating
@@ -2829,6 +2843,15 @@ Architectural rules:
   - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
+
+Phase AA target doctor split:
+- daemon health remains a separate explicit request/response boundary for
+  daemon-owned runtime state
+- direct local doctor checks that only require config or store access do not
+  need daemon routing
+- SQLite/store readiness is therefore expected to move out of daemon-owned
+  health collection and into the direct local diagnostics path or the
+  `atm-runtime` composition layer
 
 ### 21.6.4 Shutdown, Signals, Timeouts, And Resource Caps
 
