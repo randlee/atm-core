@@ -461,70 +461,24 @@ fn process_batch(
     cache: &mut stmt_cache::WriterStatementCache,
     batch: Vec<QueuedWrite>,
 ) {
-    let mut transaction: rusqlite::Transaction<'_> = match connection.transaction() {
+    let batch_len = batch.len();
+    let mut transaction = match connection.transaction() {
         Ok(transaction) => transaction,
         Err(error) => {
-            let error = sqlite_error(
-                target,
-                "failed to open sqlite writer batch transaction",
-                error,
-            );
-            for queued in batch {
-                let _ = queued.reply.send(Err(copy_error(target, &error)));
-            }
+            send_batch_transaction_open_error(target, batch, error);
             return;
         }
     };
 
-    let mut replies = Vec::with_capacity(batch.len());
+    let mut replies: Vec<(ReplyTx, Result<WriteOpResult, AtmError>)> =
+        Vec::with_capacity(batch_len);
     for queued in batch {
-        let savepoint = match transaction.savepoint() {
-            Ok(savepoint) => savepoint,
-            Err(error) => {
-                replies.push((
-                    queued.reply,
-                    Err(sqlite_error(
-                        target,
-                        "failed to open sqlite writer savepoint",
-                        error,
-                    )),
-                ));
-                continue;
-            }
-        };
-
-        let result = catch_unwind(AssertUnwindSafe(|| {
-            ops::execute(&queued.op, &savepoint, cache, target)
-        }));
-        match result {
-            Ok(Ok(op_result)) => match savepoint.commit() {
-                Ok(()) => replies.push((queued.reply, Ok(op_result))),
-                Err(error) => replies.push((
-                    queued.reply,
-                    Err(sqlite_error(
-                        target,
-                        "failed to commit sqlite writer savepoint",
-                        error,
-                    )),
-                )),
-            },
-            Ok(Err(error)) => {
-                drop(savepoint);
-                replies.push((queued.reply, Err(error)));
-            }
-            Err(_) => {
-                drop(savepoint);
-                replies.push((
-                    queued.reply,
-                    Err(
-                        AtmError::daemon_unavailable("sqlite writer operation panicked")
-                            .with_recovery(
-                                "Inspect the sqlite writer hot-path operation and retry after correcting the panic source.",
-                            ),
-                    ),
-                ));
-            }
-        }
+        replies.push(process_queued_write(
+            target,
+            &mut transaction,
+            cache,
+            queued,
+        ));
     }
 
     let commit_error = transaction.commit().err().map(|error| {
@@ -545,6 +499,79 @@ fn process_batch(
         };
         let _ = reply.send(final_result);
     }
+}
+
+fn send_batch_transaction_open_error(
+    target: &SharedDbTarget,
+    batch: Vec<QueuedWrite>,
+    error: rusqlite::Error,
+) {
+    let error = sqlite_error(
+        target,
+        "failed to open sqlite writer batch transaction",
+        error,
+    );
+    for queued in batch {
+        let _ = queued.reply.send(Err(copy_error(target, &error)));
+    }
+}
+
+fn process_queued_write(
+    target: &SharedDbTarget,
+    transaction: &mut rusqlite::Transaction<'_>,
+    cache: &mut stmt_cache::WriterStatementCache,
+    queued: QueuedWrite,
+) -> (ReplyTx, Result<WriteOpResult, AtmError>) {
+    let savepoint = match transaction.savepoint() {
+        Ok(savepoint) => savepoint,
+        Err(error) => {
+            return (
+                queued.reply,
+                Err(sqlite_error(
+                    target,
+                    "failed to open sqlite writer savepoint",
+                    error,
+                )),
+            );
+        }
+    };
+
+    let result = catch_unwind(AssertUnwindSafe(|| {
+        ops::execute(&queued.op, &savepoint, cache, target)
+    }));
+    let reply = queued.reply;
+    (reply, finalize_queued_write(target, savepoint, result))
+}
+
+fn finalize_queued_write(
+    target: &SharedDbTarget,
+    savepoint: rusqlite::Savepoint<'_>,
+    result: std::thread::Result<Result<WriteOpResult, AtmError>>,
+) -> Result<WriteOpResult, AtmError> {
+    match result {
+        Ok(Ok(op_result)) => commit_savepoint(target, savepoint, op_result),
+        Ok(Err(error)) => {
+            drop(savepoint);
+            Err(error)
+        }
+        Err(_) => {
+            drop(savepoint);
+            Err(AtmError::daemon_unavailable("sqlite writer operation panicked").with_recovery(
+                "Inspect the sqlite writer hot-path operation and retry after correcting the panic source.",
+            ))
+        }
+    }
+}
+
+fn commit_savepoint(
+    target: &SharedDbTarget,
+    savepoint: rusqlite::Savepoint<'_>,
+    op_result: WriteOpResult,
+) -> Result<WriteOpResult, AtmError> {
+    savepoint
+        .commit()
+        .map(|()| op_result)
+        .map_err(|error| sqlite_error(target, "failed to commit sqlite writer savepoint", error))
 }
 
 fn copy_error(target: &SharedDbTarget, error: &AtmError) -> AtmError {

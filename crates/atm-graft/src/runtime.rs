@@ -171,84 +171,13 @@ pub(crate) struct LiveReceiveLoopContext {
 pub(crate) fn run_receive_loop(ctx: ReceiveLoopContext) -> Result<(), AtmError> {
     let session_id = ctx.drain_request.session_id.clone();
     loop {
-        match ctx.stop_rx.recv_timeout(ctx.poll_interval) {
-            Ok(()) => {
-                return unregister_session_and_close(
-                    &*ctx.client,
-                    &session_id,
-                    &ctx.snapshot,
-                    ctx.observability.as_ref(),
-                );
-            }
-            Err(RecvTimeoutError::Timeout) => {}
-            Err(RecvTimeoutError::Disconnected) => {
-                set_session_state(
-                    &ctx.snapshot,
-                    AdvisorySessionState::Closed,
-                    ctx.observability.as_ref(),
-                )?;
-                return Ok(());
-            }
+        if should_stop_receive_loop(&ctx, &session_id)? {
+            return Ok(());
         }
 
         match ctx.client.drain_nudges(ctx.drain_request.clone()) {
-            Ok(response) => {
-                if read_snapshot(&ctx.snapshot)?.state != AdvisorySessionState::Registered {
-                    set_session_state(
-                        &ctx.snapshot,
-                        AdvisorySessionState::Registered,
-                        ctx.observability.as_ref(),
-                    )?;
-                }
-                for nudge in response.nudges {
-                    ctx.injector.inject_nudge(nudge.clone())?;
-                    ctx.observability.nudge_delivered(&session_id, &nudge);
-                }
-            }
-            Err(error) => {
-                set_session_state(
-                    &ctx.snapshot,
-                    AdvisorySessionState::Disconnected,
-                    ctx.observability.as_ref(),
-                )?;
-                ctx.observability
-                    .session_error(&session_id, "drain_nudges", &error);
-                tracing::debug!(session_id = %session_id, error = %error.message, "graft receive loop will retry after drain failure");
-
-                match ctx
-                    .client
-                    .register_session(ctx.registration_request.clone())
-                {
-                    Ok(response) => {
-                        validate_batch_limit_against_capacity(
-                            ctx.drain_request.limit,
-                            response.queue_capacity,
-                        )?;
-                        set_session_state(
-                            &ctx.snapshot,
-                            AdvisorySessionState::Registered,
-                            ctx.observability.as_ref(),
-                        )?;
-                    }
-                    Err(register_error) if is_duplicate_registration(&register_error) => {
-                        set_session_state(
-                            &ctx.snapshot,
-                            AdvisorySessionState::Registered,
-                            ctx.observability.as_ref(),
-                        )?;
-                    }
-                    Err(register_error) => {
-                        ctx.observability.session_error(
-                            &session_id,
-                            "register_session",
-                            &register_error,
-                        );
-                        ctx.observability
-                            .session_state_changed(&read_snapshot(&ctx.snapshot)?);
-                        tracing::debug!(session_id = %session_id, error = %register_error.message, "graft receive loop failed to re-register session");
-                    }
-                }
-            }
+            Ok(response) => handle_drain_response(&ctx, &session_id, response)?,
+            Err(error) => handle_drain_failure(&ctx, &session_id, error)?,
         }
     }
 }
@@ -257,12 +186,7 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
     let mut backoff = ctx.reconnect_backoff;
     loop {
         if stop_requested(&ctx.stop_rx) {
-            return unregister_session_and_close(
-                &*ctx.client,
-                &ctx.registration_request.session_id,
-                &ctx.snapshot,
-                ctx.observability.as_ref(),
-            );
+            return close_live_receive_loop(&ctx);
         }
 
         let frame = match protocol::read_frame(
@@ -276,43 +200,7 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
                 continue;
             }
             Err(error) => {
-                set_session_state(
-                    &ctx.snapshot,
-                    AdvisorySessionState::Disconnected,
-                    ctx.observability.as_ref(),
-                )?;
-                ctx.observability.session_error(
-                    &ctx.registration_request.session_id,
-                    "advisory_stream",
-                    &error,
-                );
-                let _ = ctx.stop_rx.recv_timeout(backoff);
-                if stop_requested(&ctx.stop_rx) {
-                    return unregister_session_and_close(
-                        &*ctx.client,
-                        &ctx.registration_request.session_id,
-                        &ctx.snapshot,
-                        ctx.observability.as_ref(),
-                    );
-                }
-                match ctx
-                    .client
-                    .register_session(ctx.registration_request.clone())
-                {
-                    Ok(_) => {}
-                    Err(register_error) if is_duplicate_registration(&register_error) => {}
-                    Err(register_error) => return Err(register_error),
-                }
-                ctx.advisory_stream = ctx.client.open_advisory_stream(AdvisoryStreamRequest {
-                    registration: ctx.registration_request.clone(),
-                    limit: ctx.limit,
-                })?;
-                backoff = std::cmp::min(backoff.saturating_mul(2), MAX_LIVE_RECONNECT_BACKOFF);
-                set_session_state(
-                    &ctx.snapshot,
-                    AdvisorySessionState::Registered,
-                    ctx.observability.as_ref(),
-                )?;
+                backoff = reconnect_live_receive_loop(&mut ctx, error, backoff)?;
                 continue;
             }
         };
@@ -328,19 +216,7 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
         }
         match response {
             ResponseEnvelope::AdvisoryStream(batch) => {
-                backoff = ctx.reconnect_backoff;
-                if read_snapshot(&ctx.snapshot)?.state != AdvisorySessionState::Registered {
-                    set_session_state(
-                        &ctx.snapshot,
-                        AdvisorySessionState::Registered,
-                        ctx.observability.as_ref(),
-                    )?;
-                }
-                for nudge in batch.nudges {
-                    ctx.injector.inject_nudge(nudge.clone())?;
-                    ctx.observability
-                        .nudge_delivered(&ctx.registration_request.session_id, &nudge);
-                }
+                backoff = handle_live_advisory_batch(&ctx, batch)?;
             }
             ResponseEnvelope::Error(error) => return Err(error.into_atm_error()),
             other => {
@@ -351,6 +227,165 @@ pub(crate) fn run_live_receive_loop(mut ctx: LiveReceiveLoopContext) -> Result<(
             }
         }
     }
+}
+
+fn should_stop_receive_loop(
+    ctx: &ReceiveLoopContext,
+    session_id: &atm_core::graft::AdvisorySessionId,
+) -> Result<bool, AtmError> {
+    match ctx.stop_rx.recv_timeout(ctx.poll_interval) {
+        Ok(()) => {
+            unregister_session_and_close(
+                &*ctx.client,
+                session_id,
+                &ctx.snapshot,
+                ctx.observability.as_ref(),
+            )?;
+            Ok(true)
+        }
+        Err(RecvTimeoutError::Timeout) => Ok(false),
+        Err(RecvTimeoutError::Disconnected) => {
+            set_session_state(
+                &ctx.snapshot,
+                AdvisorySessionState::Closed,
+                ctx.observability.as_ref(),
+            )?;
+            Ok(true)
+        }
+    }
+}
+
+fn handle_drain_response(
+    ctx: &ReceiveLoopContext,
+    session_id: &atm_core::graft::AdvisorySessionId,
+    response: atm_core::graft::AdvisoryDrainResponse,
+) -> Result<(), AtmError> {
+    ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())?;
+    for nudge in response.nudges {
+        ctx.injector.inject_nudge(nudge.clone())?;
+        ctx.observability.nudge_delivered(session_id, &nudge);
+    }
+    Ok(())
+}
+
+fn handle_drain_failure(
+    ctx: &ReceiveLoopContext,
+    session_id: &atm_core::graft::AdvisorySessionId,
+    error: AtmError,
+) -> Result<(), AtmError> {
+    set_session_state(
+        &ctx.snapshot,
+        AdvisorySessionState::Disconnected,
+        ctx.observability.as_ref(),
+    )?;
+    ctx.observability
+        .session_error(session_id, "drain_nudges", &error);
+    tracing::debug!(session_id = %session_id, error = %error.message, "graft receive loop will retry after drain failure");
+    attempt_receive_loop_reregistration(ctx, session_id)
+}
+
+fn attempt_receive_loop_reregistration(
+    ctx: &ReceiveLoopContext,
+    session_id: &atm_core::graft::AdvisorySessionId,
+) -> Result<(), AtmError> {
+    match ctx
+        .client
+        .register_session(ctx.registration_request.clone())
+    {
+        Ok(response) => {
+            validate_batch_limit_against_capacity(
+                ctx.drain_request.limit,
+                response.queue_capacity,
+            )?;
+            ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())
+        }
+        Err(register_error) if is_duplicate_registration(&register_error) => {
+            ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())
+        }
+        Err(register_error) => {
+            ctx.observability
+                .session_error(session_id, "register_session", &register_error);
+            ctx.observability
+                .session_state_changed(&read_snapshot(&ctx.snapshot)?);
+            tracing::debug!(session_id = %session_id, error = %register_error.message, "graft receive loop failed to re-register session");
+            Ok(())
+        }
+    }
+}
+
+fn ensure_registered_snapshot(
+    snapshot: &Arc<RwLock<SessionSnapshot>>,
+    observability: &dyn GraftObservability,
+) -> Result<(), AtmError> {
+    if read_snapshot(snapshot)?.state != AdvisorySessionState::Registered {
+        set_session_state(snapshot, AdvisorySessionState::Registered, observability)?;
+    }
+    Ok(())
+}
+
+fn close_live_receive_loop(ctx: &LiveReceiveLoopContext) -> Result<(), AtmError> {
+    unregister_session_and_close(
+        &*ctx.client,
+        &ctx.registration_request.session_id,
+        &ctx.snapshot,
+        ctx.observability.as_ref(),
+    )
+}
+
+fn reconnect_live_receive_loop(
+    ctx: &mut LiveReceiveLoopContext,
+    error: AtmError,
+    backoff: std::time::Duration,
+) -> Result<std::time::Duration, AtmError> {
+    set_session_state(
+        &ctx.snapshot,
+        AdvisorySessionState::Disconnected,
+        ctx.observability.as_ref(),
+    )?;
+    ctx.observability.session_error(
+        &ctx.registration_request.session_id,
+        "advisory_stream",
+        &error,
+    );
+    let _ = ctx.stop_rx.recv_timeout(backoff);
+    if stop_requested(&ctx.stop_rx) {
+        close_live_receive_loop(ctx)?;
+        return Ok(backoff);
+    }
+    reregister_live_receive_loop(ctx)?;
+    ctx.advisory_stream = ctx.client.open_advisory_stream(AdvisoryStreamRequest {
+        registration: ctx.registration_request.clone(),
+        limit: ctx.limit,
+    })?;
+    ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())?;
+    Ok(std::cmp::min(
+        backoff.saturating_mul(2),
+        MAX_LIVE_RECONNECT_BACKOFF,
+    ))
+}
+
+fn reregister_live_receive_loop(ctx: &LiveReceiveLoopContext) -> Result<(), AtmError> {
+    match ctx
+        .client
+        .register_session(ctx.registration_request.clone())
+    {
+        Ok(_) => Ok(()),
+        Err(register_error) if is_duplicate_registration(&register_error) => Ok(()),
+        Err(register_error) => Err(register_error),
+    }
+}
+
+fn handle_live_advisory_batch(
+    ctx: &LiveReceiveLoopContext,
+    batch: atm_core::graft::AdvisoryStreamResponse,
+) -> Result<std::time::Duration, AtmError> {
+    ensure_registered_snapshot(&ctx.snapshot, ctx.observability.as_ref())?;
+    for nudge in batch.nudges {
+        ctx.injector.inject_nudge(nudge.clone())?;
+        ctx.observability
+            .nudge_delivered(&ctx.registration_request.session_id, &nudge);
+    }
+    Ok(ctx.reconnect_backoff)
 }
 
 fn unregister_session_and_close(

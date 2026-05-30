@@ -42,8 +42,34 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
     let Some(path) = find_config_path(start_dir) else {
         return Ok(None);
     };
+    let parsed = parse_raw_config_file(&path)?;
+    let obsolete_identity_present = parsed.atm.identity.is_some() || parsed.identity.is_some();
+    let config_root = path
+        .parent()
+        .map(Path::to_path_buf)
+        .unwrap_or_else(|| PathBuf::from("."));
 
-    let contents = fs::read_to_string(&path).map_err(|error| {
+    validate_post_send_hook_count(&parsed.atm.post_send_hooks, &path)?;
+
+    Ok(Some(AtmConfig {
+        identity: parsed.atm.identity.or(parsed.identity),
+        default_team: parse_default_team(parsed.atm.default_team.or(parsed.default_team), &path)?,
+        team_members: normalize_team_members(parsed.atm.team_members, &path)?,
+        aliases: normalize_aliases(parsed.atm.aliases),
+        post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
+        claude_jsonl_body_export_max_bytes: normalize_claude_jsonl_body_export_max_bytes(
+            parsed.atm.claude_jsonl_body_export_max_bytes,
+            &path,
+        )?,
+        daemon: parse_daemon_config(&parsed.daemon, &path)?,
+        graft: normalize_graft_config(parsed.atm.graft),
+        config_root,
+        obsolete_identity_present,
+    }))
+}
+
+fn parse_raw_config_file(path: &Path) -> Result<RawConfigFile, AtmError> {
+    let contents = fs::read_to_string(path).map_err(|error| {
         AtmError::new(
             AtmErrorKind::Config,
             format!("failed to read config at {}: {error}", path.display()),
@@ -61,8 +87,8 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
         )
         .with_source(error)
     })?;
-    reject_legacy_post_send_hook_keys(&path, &raw_toml)?;
-    let parsed = raw_toml.try_into::<RawConfigFile>().map_err(|error| {
+    reject_legacy_post_send_hook_keys(path, &raw_toml)?;
+    raw_toml.try_into::<RawConfigFile>().map_err(|error| {
         AtmError::new(
             AtmErrorKind::Config,
             format!("failed to parse config at {}: {error}", path.display()),
@@ -71,52 +97,39 @@ pub fn load_config(start_dir: &Path) -> Result<Option<AtmConfig>, AtmError> {
             "Repair the .atm.toml syntax or remove malformed ATM config keys before retrying.",
         )
         .with_source(error)
-    })?;
-    let obsolete_identity_present = parsed.atm.identity.is_some() || parsed.identity.is_some();
-    let config_root = path
-        .parent()
-        .map(Path::to_path_buf)
-        .unwrap_or_else(|| PathBuf::from("."));
+    })
+}
 
-    validate_post_send_hook_count(&parsed.atm.post_send_hooks, &path)?;
-
-    Ok(Some(AtmConfig {
-        identity: parsed.atm.identity.or(parsed.identity),
-        default_team: parsed
-            .atm
-            .default_team
-            .or(parsed.default_team)
-            .map(|team| {
-                team.parse::<TeamName>().map_err(|error| {
-                    AtmError::new(
-                        AtmErrorKind::Config,
-                        format!("invalid default team in {}: {}", path.display(), error.message),
-                    )
-                    .with_recovery(
-                        "Use a valid ATM team name in [atm].default_team or default_team without path separators or surrounding whitespace.",
-                    )
-                })
+fn parse_default_team(raw_team: Option<String>, path: &Path) -> Result<Option<TeamName>, AtmError> {
+    raw_team
+        .map(|team| {
+            team.parse::<TeamName>().map_err(|error| {
+                AtmError::new(
+                    AtmErrorKind::Config,
+                    format!("invalid default team in {}: {}", path.display(), error.message),
+                )
+                .with_recovery(
+                    "Use a valid ATM team name in [atm].default_team or default_team without path separators or surrounding whitespace.",
+                )
             })
-            .transpose()?,
-        team_members: normalize_team_members(parsed.atm.team_members, &path)?,
-        aliases: normalize_aliases(parsed.atm.aliases),
-        post_send_hooks: normalize_post_send_hooks(parsed.atm.post_send_hooks, &config_root)?,
-        claude_jsonl_body_export_max_bytes: normalize_claude_jsonl_body_export_max_bytes(
-            parsed.atm.claude_jsonl_body_export_max_bytes,
-            &path,
-        )?,
-        daemon: parsed
-            .daemon
-            .remote_retry_budget
-            .as_deref()
-            .map(|value| parse_duration_literal(value, &path, "daemon.remote_retry_budget"))
-            .transpose()?
-            .map(|remote_retry_budget| types::DaemonConfig { remote_retry_budget })
-            .unwrap_or_default(),
-        graft: normalize_graft_config(parsed.atm.graft),
-        config_root,
-        obsolete_identity_present,
-    }))
+        })
+        .transpose()
+}
+
+fn parse_daemon_config(
+    daemon: &RawDaemonSection,
+    path: &Path,
+) -> Result<types::DaemonConfig, AtmError> {
+    let config = daemon
+        .remote_retry_budget
+        .as_deref()
+        .map(|value| parse_duration_literal(value, path, "daemon.remote_retry_budget"))
+        .transpose()?
+        .map(|remote_retry_budget| types::DaemonConfig {
+            remote_retry_budget,
+        })
+        .unwrap_or_default();
+    Ok(config)
 }
 
 /// Load and validate the Claude Code `config.json` document for one team
@@ -346,78 +359,98 @@ fn parse_duration_literal(
 ) -> Result<Duration, AtmError> {
     let trimmed = value.trim();
     if trimmed.is_empty() {
-        return Err(AtmError::new_with_code(
-            AtmErrorCode::ConfigParseFailed,
-            AtmErrorKind::Config,
-            format!(
-                "invalid duration for {} in {}: value must not be blank",
-                field_name,
-                path.display()
-            ),
-        )
-        .with_recovery(
+        return Err(duration_parse_error(
+            path,
+            field_name,
+            "value must not be blank".to_string(),
             "Use one positive duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
         ));
     }
 
-    let (number, unit) = if let Some(value) = trimmed.strip_suffix("ms") {
-        (value, "ms")
-    } else if let Some(value) = trimmed.strip_suffix('s') {
-        (value, "s")
-    } else if let Some(value) = trimmed.strip_suffix('m') {
-        (value, "m")
-    } else {
-        return Err(AtmError::new_with_code(
-            AtmErrorCode::ConfigParseFailed,
-            AtmErrorKind::Config,
-            format!(
-                "invalid duration for {} in {}: unsupported unit '{}'",
-                field_name,
-                path.display(),
-                trimmed
-            ),
-        )
-        .with_recovery(
-            "Use one positive duration literal ending in ms, s, or m for daemon timeout settings.",
-        ));
-    };
-
-    let amount = number.parse::<u64>().map_err(|error| {
-        AtmError::new_with_code(
-            AtmErrorCode::ConfigParseFailed,
-            AtmErrorKind::Config,
-            format!(
-                "invalid duration for {} in {}: {error}",
-                field_name,
-                path.display()
-            ),
-        )
-        .with_recovery(
-            "Use one positive integer duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
-        )
-        .with_source(error)
-    })?;
+    let (number, unit) = parse_duration_parts(trimmed, path, field_name)?;
+    let amount = parse_duration_amount(number, path, field_name)?;
     if amount == 0 {
-        return Err(AtmError::new_with_code(
-            AtmErrorCode::ConfigParseFailed,
-            AtmErrorKind::Config,
-            format!(
-                "invalid duration for {} in {}: zero is not allowed",
-                field_name,
-                path.display()
-            ),
-        )
-        .with_recovery(
+        return Err(duration_parse_error(
+            path,
+            field_name,
+            "zero is not allowed".to_string(),
             "Use one positive duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
         ));
     }
 
-    Ok(match unit {
+    Ok(duration_from_unit(amount, unit))
+}
+
+fn parse_duration_parts<'a>(
+    trimmed: &'a str,
+    path: &Path,
+    field_name: &str,
+) -> Result<(&'a str, &'static str), AtmError> {
+    if let Some(value) = trimmed.strip_suffix("ms") {
+        return Ok((value, "ms"));
+    }
+    if let Some(value) = trimmed.strip_suffix('s') {
+        return Ok((value, "s"));
+    }
+    if let Some(value) = trimmed.strip_suffix('m') {
+        return Ok((value, "m"));
+    }
+    Err(duration_parse_error(
+        path,
+        field_name,
+        format!("unsupported unit '{trimmed}'"),
+        "Use one positive duration literal ending in ms, s, or m for daemon timeout settings.",
+    ))
+}
+
+fn parse_duration_amount(number: &str, path: &Path, field_name: &str) -> Result<u64, AtmError> {
+    number.parse::<u64>().map_err(|error| {
+        duration_parse_error_with_source(
+            path,
+            field_name,
+            error.to_string(),
+            "Use one positive integer duration literal such as 30s, 500ms, or 2m for daemon timeout settings.",
+            error,
+        )
+    })
+}
+
+fn duration_from_unit(amount: u64, unit: &str) -> Duration {
+    match unit {
         "ms" => Duration::from_millis(amount),
         "s" => Duration::from_secs(amount),
         "m" => Duration::from_secs(amount.saturating_mul(60)),
         _ => unreachable!("duration unit filtered above"),
-    })
+    }
+}
+
+fn duration_parse_error(
+    path: &Path,
+    field_name: &str,
+    detail: String,
+    recovery: &'static str,
+) -> AtmError {
+    AtmError::new_with_code(
+        AtmErrorCode::ConfigParseFailed,
+        AtmErrorKind::Config,
+        format!(
+            "invalid duration for {} in {}: {}",
+            field_name,
+            path.display(),
+            detail
+        ),
+    )
+    .with_recovery(recovery)
+}
+
+fn duration_parse_error_with_source(
+    path: &Path,
+    field_name: &str,
+    detail: String,
+    recovery: &'static str,
+    source: impl std::error::Error + Send + Sync + 'static,
+) -> AtmError {
+    duration_parse_error(path, field_name, detail, recovery).with_source(source)
 }
 
 fn normalize_team_members(values: Vec<String>, path: &Path) -> Result<Vec<TeamName>, AtmError> {

@@ -19,83 +19,104 @@ pub(super) fn normalize_post_send_hooks(
     hooks: Vec<RawPostSendHookRule>,
     config_root: &Path,
 ) -> Result<Vec<PostSendHookRule>, AtmError> {
-    hooks.into_iter()
+    hooks
+        .into_iter()
         .map(|mut hook| {
-            let recipient = hook.recipient.trim();
-            if recipient.is_empty() {
-                return Err(AtmError::new(
-                    AtmErrorKind::Config,
-                    "post-send hook recipient must not be empty".to_string(),
-                )
-                .with_recovery(
-                    "Set [[atm.post_send_hooks]].recipient to one concrete recipient name or '*'.",
-                ));
-            }
-            let recipient = if recipient == "*" {
-                HookRecipient::Wildcard
-            } else {
-                validate_path_segment(recipient, "hook recipient").map_err(|error| {
-                    AtmError::new(AtmErrorKind::Config, error.message).with_recovery(
-                        "Use one concrete recipient name or '*' in [[atm.post_send_hooks]].recipient.",
-                    )
-                })?;
-                HookRecipient::Named(AgentName::from_validated(recipient))
-            };
-
-            let Some(program) = hook.command.first_mut() else {
-                return Err(AtmError::new(
-                    AtmErrorKind::Config,
-                    "post-send hook command must not be empty".to_string(),
-                )
-                .with_recovery(
-                    "Set [[atm.post_send_hooks]].command to a non-empty argv array beginning with the executable to run.",
-                ));
-            };
-            *program = program.trim().to_string();
-            if program.is_empty() {
-                return Err(AtmError::new(
-                    AtmErrorKind::Config,
-                    "post-send hook command program must not be empty".to_string(),
-                )
-                .with_recovery(
-                    "Set [[atm.post_send_hooks]].command[0] to a relative path, absolute path, or bare executable name.",
-                ));
-            }
-            let has_home_tilde_prefix =
-                matches!(program.as_str(), "~") || program.starts_with("~/") || program.starts_with("~\\");
-            let expanded_program = expand_home_tilde(program)?;
-            if command_looks_like_path(expanded_program.as_ref()) || has_home_tilde_prefix {
-                let resolved = if Path::new(expanded_program.as_ref()).is_absolute() {
-                    PathBuf::from(expanded_program.as_ref())
-                } else if let Some(expanded_home) = expand_tilde_to_home_path(&expanded_program)? {
-                    expanded_home
-                } else {
-                    config_root.join(expanded_program.as_ref())
-                };
-                let resolved = resolved.to_str().ok_or_else(|| {
-                        AtmError::new(
-                            AtmErrorKind::Config,
-                            format!(
-                                "hook command path is not valid UTF-8: {}",
-                                resolved.display()
-                            ),
-                        )
-                        .with_recovery(
-                            "Use a UTF-8 hook path or invoke the hook through a bare executable name so ATM can resolve it via PATH.",
-                        )
-                    })?;
-                validate_hook_command_path_length(resolved)?;
-                *program = resolved.to_string();
-            } else {
-                validate_hook_command_path_length(expanded_program.as_ref())?;
-                *program = expanded_program.into_owned();
-            }
+            let recipient = normalize_hook_recipient(&hook.recipient)?;
+            normalize_hook_program(&mut hook.command, config_root)?;
             Ok(PostSendHookRule {
                 recipient,
                 command: hook.command,
             })
         })
         .collect()
+}
+
+fn normalize_hook_recipient(recipient: &str) -> Result<HookRecipient, AtmError> {
+    let recipient = recipient.trim();
+    if recipient.is_empty() {
+        return Err(AtmError::new(
+            AtmErrorKind::Config,
+            "post-send hook recipient must not be empty".to_string(),
+        )
+        .with_recovery(
+            "Set [[atm.post_send_hooks]].recipient to one concrete recipient name or '*'.",
+        ));
+    }
+    if recipient == "*" {
+        return Ok(HookRecipient::Wildcard);
+    }
+    validate_path_segment(recipient, "hook recipient").map_err(|error| {
+        AtmError::new(AtmErrorKind::Config, error.message).with_recovery(
+            "Use one concrete recipient name or '*' in [[atm.post_send_hooks]].recipient.",
+        )
+    })?;
+    Ok(HookRecipient::Named(AgentName::from_validated(recipient)))
+}
+
+fn normalize_hook_program(command: &mut [String], config_root: &Path) -> Result<(), AtmError> {
+    let Some(program) = command.first_mut() else {
+        return Err(
+            AtmError::new(
+                AtmErrorKind::Config,
+                "post-send hook command must not be empty".to_string(),
+            )
+            .with_recovery(
+                "Set [[atm.post_send_hooks]].command to a non-empty argv array beginning with the executable to run.",
+            ),
+        );
+    };
+    *program = program.trim().to_string();
+    if program.is_empty() {
+        return Err(
+            AtmError::new(
+                AtmErrorKind::Config,
+                "post-send hook command program must not be empty".to_string(),
+            )
+            .with_recovery(
+                "Set [[atm.post_send_hooks]].command[0] to a relative path, absolute path, or bare executable name.",
+            ),
+        );
+    }
+    let normalized = resolve_hook_program(program, config_root)?;
+    *program = normalized;
+    Ok(())
+}
+
+fn resolve_hook_program(program: &str, config_root: &Path) -> Result<String, AtmError> {
+    let has_home_tilde_prefix =
+        matches!(program, "~") || program.starts_with("~/") || program.starts_with("~\\");
+    let expanded_program = expand_home_tilde(program)?;
+    if command_looks_like_path(expanded_program.as_ref()) || has_home_tilde_prefix {
+        let resolved = resolve_hook_path(expanded_program.as_ref(), config_root)?;
+        let resolved = hook_path_to_utf8(&resolved)?;
+        validate_hook_command_path_length(resolved)?;
+        return Ok(resolved.to_string());
+    }
+    validate_hook_command_path_length(expanded_program.as_ref())?;
+    Ok(expanded_program.into_owned())
+}
+
+fn resolve_hook_path(program: &str, config_root: &Path) -> Result<PathBuf, AtmError> {
+    if Path::new(program).is_absolute() {
+        return Ok(PathBuf::from(program));
+    }
+    if let Some(expanded_home) = expand_tilde_to_home_path(program)? {
+        return Ok(expanded_home);
+    }
+    Ok(config_root.join(program))
+}
+
+fn hook_path_to_utf8(path: &Path) -> Result<&str, AtmError> {
+    path.to_str().ok_or_else(|| {
+        AtmError::new(
+            AtmErrorKind::Config,
+            format!("hook command path is not valid UTF-8: {}", path.display()),
+        )
+        .with_recovery(
+            "Use a UTF-8 hook path or invoke the hook through a bare executable name so ATM can resolve it via PATH.",
+        )
+    })
 }
 
 pub(crate) fn command_looks_like_path(program: &str) -> bool {

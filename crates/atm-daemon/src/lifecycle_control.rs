@@ -239,100 +239,17 @@ impl LifecycleControlSourceAdapter {
     }
 
     pub(crate) fn shutdown_worker_with_timeout(&self) -> Result<(), AtmError> {
-        let worker = {
-            let _guard = INSTALL_LOCK.lock().map_err(|_| {
-                AtmError::daemon_unavailable("daemon lifecycle install lock poisoned")
-                    .with_recovery(
-                        "Restart the daemon; lifecycle hook installation cannot complete after the poisoned lock.",
-                    )
-            })?;
-            let mut shared = SHARED_LIFECYCLE.lock().map_err(|_| {
-                AtmError::daemon_unavailable("daemon lifecycle control state lock poisoned")
-                    .with_recovery(
-                        "Restart the daemon; shared lifecycle control state may be inconsistent.",
-                    )
-            })?;
-            let Some(shared) = shared.as_mut() else {
-                return Ok(());
-            };
-            shared.worker.take()
-        };
-        let Some(worker) = worker else {
+        let Some(worker) = take_lifecycle_worker()? else {
             return Ok(());
         };
-
         worker.shutdown.store(true, Ordering::SeqCst);
-        for signal_id in worker.signal_ids {
-            let _ = signal_hook::low_level::unregister(signal_id);
+        for signal_id in &worker.signal_ids {
+            let _ = signal_hook::low_level::unregister(*signal_id);
         }
         let _ = self.state_change.notify();
 
-        let (result_tx, result_rx) = std::sync::mpsc::channel();
-        let join_helper = std::thread::Builder::new()
-            .name("atm-daemon-lifecycle-join-helper".to_string())
-            .spawn(move || {
-                let _ = result_tx.send(worker.join_handle.join());
-            })
-            .map_err(|source| {
-                AtmError::daemon_unavailable("failed to spawn lifecycle join helper")
-                    .with_recovery(
-                        "Restart the daemon; the lifecycle worker could not create its bounded shutdown join helper.",
-                    )
-                    .with_source(source)
-            })?;
-        match result_rx.recv_timeout(LIFECYCLE_WORKER_JOIN_DEADLINE) {
-            Ok(Ok(())) => {
-                let _ = join_helper.join();
-                self.observability.emit_or_warn(
-                    "shutdown_worker",
-                    "ok",
-                    "daemon lifecycle-control worker shut down cleanly",
-                );
-                Ok(())
-            }
-            Ok(Err(_)) => {
-                let _ = join_helper.join();
-                self.observability.emit_or_warn(
-                    "shutdown_worker",
-                    "failed",
-                    "daemon lifecycle-control worker panicked during shutdown",
-                );
-                Err(AtmError::daemon_unavailable(
-                    "daemon lifecycle wake worker panicked during runtime teardown",
-                )
-                .with_recovery(
-                    "Restart the daemon; the lifecycle wake worker crashed while the runtime was shutting down.",
-                ))
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                let _ = join_helper.join();
-                self.observability.emit_or_warn(
-                    "shutdown_worker",
-                    "degraded",
-                    "daemon lifecycle-control worker exceeded its shutdown deadline",
-                );
-                Err(AtmError::daemon_unavailable(
-                    "daemon lifecycle wake worker exceeded the bounded shutdown deadline",
-                )
-                .with_recovery(
-                    "Restart the daemon; the lifecycle wake worker did not stop within the bounded teardown window.",
-                ))
-            }
-            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
-                let _ = join_helper.join();
-                self.observability.emit_or_warn(
-                    "shutdown_worker",
-                    "failed",
-                    "daemon lifecycle-control join coordination disconnected during shutdown",
-                );
-                Err(AtmError::daemon_unavailable(
-                    "daemon lifecycle wake worker join coordination disconnected during runtime teardown",
-                )
-                .with_recovery(
-                    "Restart the daemon; lifecycle helper ownership was lost while the runtime was shutting down.",
-                ))
-            }
-        }
+        let (join_helper, result_rx) = spawn_lifecycle_join_helper(worker)?;
+        finish_lifecycle_shutdown(&self.observability, join_helper, result_rx)
     }
 
     #[cfg(test)]
@@ -421,83 +338,18 @@ fn install_platform_hooks(
     reload: &Arc<AtomicBool>,
     state_change: &Arc<LifecycleStateChange>,
 ) -> Result<LifecycleWorkerRegistration, AtmError> {
-    use std::os::unix::net::UnixStream;
-
     use signal_hook::consts::signal::{SIGHUP, SIGINT, SIGTERM};
-    use signal_hook::flag as signal_flag;
-    use signal_hook::low_level::pipe as signal_pipe;
 
     let shutdown = Arc::new(AtomicBool::new(false));
-    let (wake_read, wake_write) = UnixStream::pair().map_err(|source| {
-        AtmError::daemon_unavailable("failed to create daemon lifecycle wake pipe")
-            .with_recovery(
-                "Restart the daemon after confirming the host can allocate a local lifecycle wake channel for atm-daemon.",
-            )
-            .with_source(source)
-    })?;
-    let mut signal_ids = Vec::new();
-    signal_ids.push(signal_flag::register(SIGINT, Arc::clone(terminate)).map_err(|source| {
-        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
-            .with_recovery(
-                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
-            )
-            .with_source(source)
-    })?);
-    signal_ids.push(signal_flag::register(SIGTERM, Arc::clone(terminate)).map_err(|source| {
-        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
-            .with_recovery(
-                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
-            )
-            .with_source(source)
-    })?);
-    signal_ids.push(signal_flag::register(SIGHUP, Arc::clone(reload)).map_err(|source| {
-        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
-            .with_recovery(
-                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
-            )
-            .with_source(source)
-    })?);
-    signal_ids.push(signal_pipe::register(
-        SIGINT,
-        wake_write.try_clone().map_err(|source| {
-            AtmError::daemon_unavailable("failed to clone daemon lifecycle wake pipe")
-                .with_recovery(
-                    "Restart the daemon after confirming the host can duplicate the lifecycle wake channel for signal delivery.",
-            )
-            .with_source(source)
-        })?,
-    )
-    .map_err(|source| {
-        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
-            .with_recovery(
-                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
-            )
-            .with_source(source)
-    })?);
-    signal_ids.push(signal_pipe::register(
-        SIGTERM,
-        wake_write.try_clone().map_err(|source| {
-            AtmError::daemon_unavailable("failed to clone daemon lifecycle wake pipe")
-                .with_recovery(
-                    "Restart the daemon after confirming the host can duplicate the lifecycle wake channel for signal delivery.",
-            )
-            .with_source(source)
-        })?,
-    )
-    .map_err(|source| {
-        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
-            .with_recovery(
-                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
-            )
-            .with_source(source)
-    })?);
-    signal_ids.push(signal_pipe::register(SIGHUP, wake_write).map_err(|source| {
-        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
-            .with_recovery(
-                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
-            )
-            .with_source(source)
-    })?);
+    let (wake_read, wake_write) = create_lifecycle_wake_pair()?;
+    let signal_ids = vec![
+        register_lifecycle_signal_flag(SIGINT, Arc::clone(terminate))?,
+        register_lifecycle_signal_flag(SIGTERM, Arc::clone(terminate))?,
+        register_lifecycle_signal_flag(SIGHUP, Arc::clone(reload))?,
+        register_lifecycle_signal_pipe(SIGINT, clone_lifecycle_wake_write(&wake_write)?)?,
+        register_lifecycle_signal_pipe(SIGTERM, clone_lifecycle_wake_write(&wake_write)?)?,
+        register_lifecycle_signal_pipe(SIGHUP, wake_write)?,
+    ];
     let shutdown_for_worker = Arc::clone(&shutdown);
     let terminate = Arc::clone(terminate);
     let reload = Arc::clone(reload);
@@ -524,6 +376,161 @@ fn install_platform_hooks(
         shutdown,
         signal_ids,
         join_handle,
+    })
+}
+
+fn take_lifecycle_worker() -> Result<Option<LifecycleWorkerRegistration>, AtmError> {
+    let _guard = INSTALL_LOCK.lock().map_err(|_| {
+        AtmError::daemon_unavailable("daemon lifecycle install lock poisoned").with_recovery(
+            "Restart the daemon; lifecycle hook installation cannot complete after the poisoned lock.",
+        )
+    })?;
+    let mut shared = SHARED_LIFECYCLE.lock().map_err(|_| {
+        AtmError::daemon_unavailable("daemon lifecycle control state lock poisoned").with_recovery(
+            "Restart the daemon; shared lifecycle control state may be inconsistent.",
+        )
+    })?;
+    Ok(shared.as_mut().and_then(|shared| shared.worker.take()))
+}
+
+fn spawn_lifecycle_join_helper(
+    worker: LifecycleWorkerRegistration,
+) -> Result<
+    (
+        std::thread::JoinHandle<()>,
+        std::sync::mpsc::Receiver<std::thread::Result<()>>,
+    ),
+    AtmError,
+> {
+    let (result_tx, result_rx) = std::sync::mpsc::channel();
+    let join_helper = std::thread::Builder::new()
+        .name("atm-daemon-lifecycle-join-helper".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(worker.join_handle.join());
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn lifecycle join helper")
+                .with_recovery(
+                    "Restart the daemon; the lifecycle worker could not create its bounded shutdown join helper.",
+                )
+                .with_source(source)
+        })?;
+    Ok((join_helper, result_rx))
+}
+
+fn finish_lifecycle_shutdown(
+    observability: &SubsystemObservability,
+    join_helper: std::thread::JoinHandle<()>,
+    result_rx: std::sync::mpsc::Receiver<std::thread::Result<()>>,
+) -> Result<(), AtmError> {
+    let result = result_rx.recv_timeout(LIFECYCLE_WORKER_JOIN_DEADLINE);
+    let _ = join_helper.join();
+    match result {
+        Ok(Ok(())) => {
+            observability.emit_or_warn(
+                "shutdown_worker",
+                "ok",
+                "daemon lifecycle-control worker shut down cleanly",
+            );
+            Ok(())
+        }
+        Ok(Err(_)) => {
+            observability.emit_or_warn(
+                "shutdown_worker",
+                "failed",
+                "daemon lifecycle-control worker panicked during shutdown",
+            );
+            Err(AtmError::daemon_unavailable(
+                "daemon lifecycle wake worker panicked during runtime teardown",
+            )
+            .with_recovery(
+                "Restart the daemon; the lifecycle wake worker crashed while the runtime was shutting down.",
+            ))
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            observability.emit_or_warn(
+                "shutdown_worker",
+                "degraded",
+                "daemon lifecycle-control worker exceeded its shutdown deadline",
+            );
+            Err(AtmError::daemon_unavailable(
+                "daemon lifecycle wake worker exceeded the bounded shutdown deadline",
+            )
+            .with_recovery(
+                "Restart the daemon; the lifecycle wake worker did not stop within the bounded teardown window.",
+            ))
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            observability.emit_or_warn(
+                "shutdown_worker",
+                "failed",
+                "daemon lifecycle-control join coordination disconnected during shutdown",
+            );
+            Err(AtmError::daemon_unavailable(
+                "daemon lifecycle wake worker join coordination disconnected during runtime teardown",
+            )
+            .with_recovery(
+                "Restart the daemon; lifecycle helper ownership was lost while the runtime was shutting down.",
+            ))
+        }
+    }
+}
+
+#[cfg(unix)]
+fn create_lifecycle_wake_pair() -> Result<
+    (
+        std::os::unix::net::UnixStream,
+        std::os::unix::net::UnixStream,
+    ),
+    AtmError,
+> {
+    std::os::unix::net::UnixStream::pair().map_err(|source| {
+        AtmError::daemon_unavailable("failed to create daemon lifecycle wake pipe")
+            .with_recovery(
+                "Restart the daemon after confirming the host can allocate a local lifecycle wake channel for atm-daemon.",
+            )
+            .with_source(source)
+    })
+}
+
+#[cfg(unix)]
+fn clone_lifecycle_wake_write(
+    wake_write: &std::os::unix::net::UnixStream,
+) -> Result<std::os::unix::net::UnixStream, AtmError> {
+    wake_write.try_clone().map_err(|source| {
+        AtmError::daemon_unavailable("failed to clone daemon lifecycle wake pipe")
+            .with_recovery(
+                "Restart the daemon after confirming the host can duplicate the lifecycle wake channel for signal delivery.",
+            )
+            .with_source(source)
+    })
+}
+
+#[cfg(unix)]
+fn register_lifecycle_signal_flag(
+    signal: i32,
+    flag: Arc<AtomicBool>,
+) -> Result<signal_hook::SigId, AtmError> {
+    signal_hook::flag::register(signal, flag).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
+            .with_source(source)
+    })
+}
+
+#[cfg(unix)]
+fn register_lifecycle_signal_pipe(
+    signal: i32,
+    wake_write: std::os::unix::net::UnixStream,
+) -> Result<signal_hook::SigId, AtmError> {
+    signal_hook::low_level::pipe::register(signal, wake_write).map_err(|source| {
+        AtmError::daemon_unavailable("failed to install daemon lifecycle signal handlers")
+            .with_recovery(
+                "Restart the daemon after confirming the host allows local signal-hook registration for atm-daemon.",
+            )
+            .with_source(source)
     })
 }
 

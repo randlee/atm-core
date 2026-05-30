@@ -356,57 +356,15 @@ impl WatchRuntime {
                 "Restart the daemon; watch lifecycle state can no longer be trusted.",
             )
         })?;
-        if !state.started {
-            return Err(AtmError::daemon_unavailable(
-                "watch runtime is unavailable before daemon startup",
-            ));
-        }
-        if state.shutdown {
-            return Err(AtmError::daemon_unavailable(
-                "watch runtime is unavailable during daemon shutdown",
-            ));
-        }
-        let requested_revision = match state.subscriptions.get_mut(&key) {
-            Some(entry) => {
-                entry.request = request;
-                entry.requested_revision = entry.requested_revision.saturating_add(1);
-                entry.requested_revision
-            }
-            None => {
-                if state.subscriptions.len() >= MAX_WATCH_SUBSCRIPTIONS {
-                    let event = self
-                        .inner
-                        .observability
-                        .event(
-                            "poll",
-                            "rejected",
-                            "watch runtime refused a new subscription at the bounded registry cap",
-                        )
-                        .with_team(request_team.clone())
-                        .with_agent(request_agent.clone());
-                    self.inner.observability.emit_event_or_warn(event);
-                    return Err(
-                        AtmError::daemon_unavailable(format!(
-                            "watch runtime refused a new subscription because the bounded registry capacity of {MAX_WATCH_SUBSCRIPTIONS} entries was reached"
-                        ))
-                        .with_recovery(
-                            "Reduce concurrent watch targets or restart atm-daemon so the bounded watch registry can be rebuilt from active callers.",
-                        ),
-                    );
-                }
-                state.subscriptions.insert(
-                    key.clone(),
-                    WatchSnapshot {
-                        request,
-                        requested_revision: 1,
-                        observed_revision: 0,
-                        batch: WatchEventBatch { paths: Vec::new() },
-                        error: None,
-                    },
-                );
-                1
-            }
-        };
+        ensure_poll_available(&state)?;
+        let requested_revision = register_or_refresh_subscription(
+            &self.inner.observability,
+            &mut state,
+            key.clone(),
+            request,
+            &request_team,
+            &request_agent,
+        )?;
         self.inner.wake.notify_one();
         loop {
             if let Some(entry) = state.subscriptions.get(&key)
@@ -426,37 +384,13 @@ impl WatchRuntime {
                 .inner
                 .poll_interval
                 .saturating_mul(WATCH_POLL_HEALTH_TIMEOUT_MULTIPLIER);
-            let wait = self
-                .inner
-                .wake
-                .wait_timeout(state, wait_timeout)
-                .map_err(|_| {
-                    AtmError::daemon_unavailable("watch runtime state lock poisoned").with_recovery(
-                        "Restart the daemon; watch lifecycle state can no longer be trusted.",
-                    )
-                })?;
-            state = wait.0;
-            if wait.1.timed_out() {
-                let event = self
-                    .inner
-                    .observability
-                    .event(
-                        "poll",
-                        "degraded",
-                        "watch runtime did not deliver an updated batch before the worker health timeout elapsed",
-                    )
-                    .with_team(request_team.clone())
-                    .with_agent(request_agent.clone());
-                self.inner.observability.emit_event_or_warn(event);
-                return Err(
-                    AtmError::daemon_unavailable(
-                        "watch runtime did not deliver an updated batch before the worker health timeout elapsed",
-                    )
-                    .with_recovery(
-                        "Restart atm-daemon if the watch worker is no longer making progress.",
-                    ),
-                );
-            }
+            state = wait_for_poll_progress(
+                &self.inner,
+                state,
+                wait_timeout,
+                &request_team,
+                &request_agent,
+            )?;
         }
     }
 
@@ -468,6 +402,119 @@ impl WatchRuntime {
             SubsystemObservability::disabled(DaemonSubsystem::WatchRuntime),
         )
     }
+}
+
+fn ensure_poll_available(state: &WatchState) -> Result<(), AtmError> {
+    if !state.started {
+        return Err(AtmError::daemon_unavailable(
+            "watch runtime is unavailable before daemon startup",
+        ));
+    }
+    if state.shutdown {
+        return Err(AtmError::daemon_unavailable(
+            "watch runtime is unavailable during daemon shutdown",
+        ));
+    }
+    Ok(())
+}
+
+fn register_or_refresh_subscription(
+    observability: &SubsystemObservability,
+    state: &mut WatchState,
+    key: WatchKey,
+    request: WatchSubscriptionRequest,
+    request_team: &atm_core::types::TeamName,
+    request_agent: &atm_core::types::AgentName,
+) -> Result<u64, AtmError> {
+    match state.subscriptions.get_mut(&key) {
+        Some(entry) => {
+            entry.request = request;
+            entry.requested_revision = entry.requested_revision.saturating_add(1);
+            Ok(entry.requested_revision)
+        }
+        None => insert_new_subscription(
+            observability,
+            state,
+            key,
+            request,
+            request_team,
+            request_agent,
+        ),
+    }
+}
+
+fn insert_new_subscription(
+    observability: &SubsystemObservability,
+    state: &mut WatchState,
+    key: WatchKey,
+    request: WatchSubscriptionRequest,
+    request_team: &atm_core::types::TeamName,
+    request_agent: &atm_core::types::AgentName,
+) -> Result<u64, AtmError> {
+    if state.subscriptions.len() >= MAX_WATCH_SUBSCRIPTIONS {
+        let event = observability
+            .event(
+                "poll",
+                "rejected",
+                "watch runtime refused a new subscription at the bounded registry cap",
+            )
+            .with_team(request_team.clone())
+            .with_agent(request_agent.clone());
+        observability.emit_event_or_warn(event);
+        return Err(
+            AtmError::daemon_unavailable(format!(
+                "watch runtime refused a new subscription because the bounded registry capacity of {MAX_WATCH_SUBSCRIPTIONS} entries was reached"
+            ))
+            .with_recovery(
+                "Reduce concurrent watch targets or restart atm-daemon so the bounded watch registry can be rebuilt from active callers.",
+            ),
+        );
+    }
+    state.subscriptions.insert(
+        key,
+        WatchSnapshot {
+            request,
+            requested_revision: 1,
+            observed_revision: 0,
+            batch: WatchEventBatch { paths: Vec::new() },
+            error: None,
+        },
+    );
+    Ok(1)
+}
+
+fn wait_for_poll_progress<'a>(
+    inner: &'a WatchRuntimeInner,
+    state: std::sync::MutexGuard<'a, WatchState>,
+    wait_timeout: Duration,
+    request_team: &atm_core::types::TeamName,
+    request_agent: &atm_core::types::AgentName,
+) -> Result<std::sync::MutexGuard<'a, WatchState>, AtmError> {
+    let wait = inner.wake.wait_timeout(state, wait_timeout).map_err(|_| {
+        AtmError::daemon_unavailable("watch runtime state lock poisoned")
+            .with_recovery("Restart the daemon; watch lifecycle state can no longer be trusted.")
+    })?;
+    if wait.1.timed_out() {
+        let event = inner
+            .observability
+            .event(
+                "poll",
+                "degraded",
+                "watch runtime did not deliver an updated batch before the worker health timeout elapsed",
+            )
+            .with_team(request_team.clone())
+            .with_agent(request_agent.clone());
+        inner.observability.emit_event_or_warn(event);
+        return Err(
+            AtmError::daemon_unavailable(
+                "watch runtime did not deliver an updated batch before the worker health timeout elapsed",
+            )
+            .with_recovery(
+                "Restart atm-daemon if the watch worker is no longer making progress.",
+            ),
+        );
+    }
+    Ok(wait.0)
 }
 
 impl Drop for WatchRuntime {
