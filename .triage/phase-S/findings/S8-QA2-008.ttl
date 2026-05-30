@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-QA2-008>
+  a triage:Finding ;
+  triage:findingId "S8-QA2-008" ;
+  triage:title "No-churn test only validates stub form; full-body idempotency path unverified" ;
+  triage:description "boundary_adapters.rs test inbox_projection_stub_reexport_preserves_logical_identity uses claude_jsonl_body_export_max_bytes = 0 (stub-only). The no-churn proof is missing for the default-cap path (128 KiB) where small messages receive full-body export. Add a second reexport-idempotency test using the default cap (large cap or omit .atm.toml), send small message, re-export twice, verify notification fingerprint is stable (no duplicate notifications / churn) when full body is the projection." ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-QA2-008/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:occurrence/S8-QA2-008/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/boundary_adapters.rs" ;
+  triage:line 264 ;
+  triage:snippet "inbox_projection_stub_reexport_preserves_logical_identity uses cap=0 (stub only); full-body re-export idempotency path has no test" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "237c0ce" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "237c0ce" ;
+  triage:orderIndex 1 .

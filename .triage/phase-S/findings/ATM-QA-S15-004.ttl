@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S15-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S15-004" ;
+  triage:title "sprint-S15-rusqlite-hardening.md Closeout Requirements missing REQ-P-RUNTIME-002 gate" ;
+  triage:description "The Closeout Requirements section of docs/phase-S/sprint-S15-rusqlite-hardening.md does not explicitly gate on the daemon-singleton-writer invariant (REQ-P-RUNTIME-002). sprint-S15-rusqlite-plan.md line 99 names REQ-P-RUNTIME-002 and ADR-002 as the correctness dependency for SqliteWriter's single-process write serialization. Add one line to Closeout Requirements referencing REQ-P-RUNTIME-002 to make the constraint visible at the sprint authority level." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:rule "REQ" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S15-004/pS-s15/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/7274598> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/7274598> .
+
+<urn:atm:triage:occurrence/ATM-QA-S15-004/pS-s15/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S15-rusqlite-hardening.md" ;
+  triage:line 32 ;
+  triage:snippet "## Closeout Requirements (REQ-P-RUNTIME-002 not listed)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/7274598> .
+
+<urn:atm:triage:worktree/pS-s14-impl/a103f0a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "a103f0a" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/7274598>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "7274598" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .

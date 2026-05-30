@@ -1,0 +1,74 @@
+boundary_id = "BOUNDARY-RosterStore-Sqlite"
+owner_package = "atm-rusqlite"
+owner_crate_path = "atm_rusqlite"
+name = "SqliteRosterStoreAdapter"
+
+[public]
+trait = "RosterStore"
+
+[implementation]
+type = "SqliteRosterStore"
+module = "atm_rusqlite"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_rusqlite::assemble_boundary"]
+
+[ownership]
+io_owns = [
+  "sqlite",
+  "durable_roster_persistence",
+]
+io_forbidden = [
+  "socket_io",
+  "process_spawn",
+]
+
+[dependencies]
+allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = [
+  "atm-core",
+  "rusqlite",
+]
+forbidden_edges = [
+  "atm -> atm-rusqlite",
+  "atm-graft -> atm-rusqlite",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "SqliteRosterStore",
+  "SqliteRosterStore::open",
+  "rusqlite::Connection",
+]
+
+[contracts]
+request_types = ["RosterStore method inputs"]
+response_types = ["atm-core roster DTOs"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["atm_core::test_support::InMemoryRosterStore"]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-ROSTERSTORE-SQLITE-EDGES",
+  "LINT-BOUNDARY-ROSTERSTORE-SQLITE-REFERENCES",
+]
+review_gates = [
+  "no_public_impl",
+  "no_public_constructor",
+  "no_public_reexport",
+]
+
+[status]
+state = "active"
+notes = [
+  "durable roster truth remains distinct from live status caches",
+  "the canonical table is explicit member rows; daemon-owned pid continuity is not persisted here",
+  "crate-root implementation remains temporary; module split is still deferred",
+  "assembled through atm_rusqlite::SqliteBoundaryAssembly",
+]

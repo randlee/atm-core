@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S4-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S4-002" ;
+  triage:title "Windows lifecycle install_platform_hooks uses thread::sleep(25ms) polling loop — production fixed-sleep (lifecycle_control.rs:260)" ;
+  triage:description "crates/atm-daemon/src/lifecycle_control.rs:260-280 — Windows install_platform_hooks implementation contains thread::sleep(Duration::from_millis(25)) inside a lifecycle state-change polling loop. plan-phase-S.md §4.1 Anti-Flake Contract prohibits fixed sleeps without documented justification. Unix path uses signal pipe with blocking read() (event-driven); Windows polls every 25ms with no observable state predicate. Fix: replace with event-driven approach using ctrlc crate set_handler callback, OR document explicitly in plan-phase-S.md §4.1 and inline code as an accepted production exception with rationale (if no OS alternative exists for this specific lifecycle signal surface on Windows)." ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S4-002/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:occurrence/ATM-QA-S4-002/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 260 ;
+  triage:snippet "Windows install_platform_hooks — thread::sleep(Duration::from_millis(25)) in lifecycle polling loop; production fixed-sleep violates Anti-Flake Contract §4.1; Unix path uses blocking read() on signal pipe" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "dd36874" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "dd36874" ;
+  triage:orderIndex 4 .

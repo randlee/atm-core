@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W4-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-W4-F001" ;
+  triage:title "heartbeat_message_key returns Result<MessageKey, AtmError> with structurally unreachable Err variant" ;
+  triage:description "crates/atm-daemon/src/peer_transport.rs:670: heartbeat_message_key returns Result<MessageKey, AtmError> but the Err variant is structurally unreachable. Invariant comment was added during W.4 fix but the return type was not simplified. Best practice (Infallible pattern): simplify to return MessageKey directly (or use Result<MessageKey, Infallible> as intermediate step), removing the misleading error path." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W4-F001/integrate-phase-W/8104e6a/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/8104e6a07562e6cbd23072c0c7f5675cb349137b> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/8104e6a07562e6cbd23072c0c7f5675cb349137b> ;
+  triage:resolutionNote "Verified fixed on the W.7 merge-forward head. heartbeat_message_key now returns MessageKey directly, eliminating the structurally unreachable AtmError path." ;
+  triage:fixedOn <urn:atm:triage:worktree/pW-s7/4540ef2> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-W/4540ef2> .
+
+<urn:atm:triage:occurrence/RBP-W4-F001/integrate-phase-W/8104e6a/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 670 ;
+  triage:snippet "fn heartbeat_message_key(request: &TeamMemberHeartbeatRequest) -> Result<MessageKey, AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8104e6a07562e6cbd23072c0c7f5675cb349137b" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8104e6a07562e6cbd23072c0c7f5675cb349137b> .
+
+<urn:atm:triage:worktree/integrate-phase-W/8104e6a07562e6cbd23072c0c7f5675cb349137b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "8104e6a07562e6cbd23072c0c7f5675cb349137b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pW-s7/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 3 .

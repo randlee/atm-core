@@ -1,0 +1,122 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-025>
+  a triage:Finding ;
+  triage:findingId "YB-025" ;
+  triage:title "Boundary TOML composition.roots claims DaemonNonClaudeOutbound wired but it is not" ;
+  triage:description "The daemon boundary TOML (boundaries/atm-daemon/daemon-non-claude-outbound.toml) composition.roots section claims DaemonNonClaudeOutbound is wired into the delivery path via compose_runtime, but crates/atm-daemon/src/composition.rs holds DaemonNonClaudeOutbound as a phantom field (_non_claude_outbound) for ownership clarity only. The actual delivery path uses LocalFileNonClaudeOutbound from crates/atm-core/src/service_runtime.rs via LocalServiceRuntime. The TOML document must reflect the actual composition wiring." ;
+  triage:phaseId "phase-Yb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "YB" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "boundaries/atm-daemon/ crates/atm-daemon/src/composition.rs" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "PYB-PHASE-END-QA-2" ;
+  triage:fixedOnBranch "integrate/phase-Y" ;
+  triage:fixedAtCommit "9d5b3474" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-17T14:42:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-025/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-025/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-025/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-025/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-025/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/s7> ;
+  triage:openOn <urn:atm:triage:worktree/s8> ;
+  triage:openOn <urn:atm:triage:worktree/s9> ;
+  triage:openOn <urn:atm:triage:worktree/s10> ;
+  triage:openOn <urn:atm:triage:worktree/s11> ;
+  triage:promoteTo <urn:atm:triage:worktree/s11> .
+
+<urn:atm:triage:occurrence/YB-025/s7/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/daemon-non-claude-outbound.toml" ;
+  triage:line 16 ;
+  triage:snippet "roots = [\"atm_daemon::composition::compose_runtime\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s7> .
+
+<urn:atm:triage:occurrence/YB-025/s8/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/daemon-non-claude-outbound.toml" ;
+  triage:line 16 ;
+  triage:snippet "roots = [\"atm_daemon::composition::compose_runtime\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:headSha "unknown" ;
+  triage:occursIn <urn:atm:triage:worktree/s8> .
+
+<urn:atm:triage:occurrence/YB-025/s9/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/daemon-non-claude-outbound.toml" ;
+  triage:line 16 ;
+  triage:snippet "roots = [\"atm_daemon::composition::compose_runtime\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "b0370c86" ;
+  triage:occursIn <urn:atm:triage:worktree/s9> .
+
+<urn:atm:triage:occurrence/YB-025/s10/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/daemon-non-claude-outbound.toml" ;
+  triage:line 16 ;
+  triage:snippet "roots = [\"atm_daemon::composition::compose_runtime\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "ed00c79c" ;
+  triage:occursIn <urn:atm:triage:worktree/s10> .
+
+<urn:atm:triage:occurrence/YB-025/s11/1>
+  a triage:Occurrence ;
+  triage:file "boundaries/atm-daemon/daemon-non-claude-outbound.toml" ;
+  triage:line 16 ;
+  triage:snippet "roots = [\"atm_daemon::composition::compose_runtime\"]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "d3497baf" ;
+  triage:occursIn <urn:atm:triage:worktree/s11> .
+
+<urn:atm:triage:worktree/s7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:headSha "unknown" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "b0370c86" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s10>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "ed00c79c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s11>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "d3497baf" ;
+  triage:orderIndex 5 .

@@ -1,0 +1,34 @@
+finding_id = "VQ2-002"
+title = "RuntimeComposition::begin_shutdown() and start() emit events via dispatcher proxy instead of owned SubsystemObservability"
+severity = "important"
+qa_round = 2
+source_file = "crates/atm-daemon/src/composition.rs"
+source_lines = "260-388"
+pattern = "subsystem-delegation-violation"
+ac_violated = "AC2"
+ac_text = "Daemon subsystems emit their own structured events through the injected trait"
+repeatable = true
+sweep_scope = "crates/atm-daemon/src/"
+description = """
+RuntimeComposition::begin_shutdown() (line 260) and start() (line 279 and
+throughout lines 260-388) call self.request_dispatcher.record_daemon_event(
+DaemonSubsystem::Composition, ...) repeatedly. RuntimeComposition has no
+SubsystemObservability field; it borrows the dispatcher as an event-construction
+proxy rather than emitting events through an owned trait instance.
+
+Fix: add a SubsystemObservability field to RuntimeComposition (wired at
+construction in RuntimeComposition::new()), replace all
+request_dispatcher.record_daemon_event(DaemonSubsystem::Composition, ...) calls
+in begin_shutdown() and start() with direct emit calls on the owned field.
+"""
+highest_open_branch = "feature/pV-s3-observability-cleanup"
+promote_to_branch = "feature/pV-s3-observability-cleanup"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/composition.rs", lines = "260-388", status = "open" },
+  { branch = "feature/pV-s3-observability-cleanup",   file = "crates/atm-daemon/src/composition.rs", lines = "260-388", status = "open" },
+]
+not_present_in = [
+  { branch = "feature/pV-s4-recovery-hardening", reason = "branch predates V.2 migration (SHA 8ecd999); does not contain record_daemon_event in composition.rs" },
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false

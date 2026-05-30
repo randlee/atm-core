@@ -193,10 +193,16 @@ Use JSON input containing:
 1. `scope.phase` and or `scope.sprint`
 2. `phase_or_sprint_docs` or `phase_sprint_documents`
 3. optional `review_targets`
-4. strict compliance against:
+4. optional `worktree_path`, `branch`, `commit`
+5. optional explicit `deliverables`, `acceptance_criteria`, and `expected_artifacts`
+6. strict compliance against:
    - `docs/requirements.md`
    - `docs/architecture.md`
    - `docs/project-plan.md`
+
+Use those explicit sprint fields whenever the assignment already names them.
+`req-qa` is responsible for proving that planned deliverables and acceptance
+criteria are present, not only for finding contradictions in code that exists.
 
 ## Worktree Discipline
 

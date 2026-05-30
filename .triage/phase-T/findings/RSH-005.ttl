@@ -1,0 +1,165 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-005>
+  a triage:Finding ;
+  triage:findingId "RSH-005" ;
+  triage:title "SharedDb::open() missing startup diagnostic for connection budget" ;
+  triage:description "crates/atm-rusqlite/src/shared_db.rs SharedDb::open() does not emit any tracing diagnostic for the connection budget. MAX_SQLITE_READER_CONNECTIONS = 3 is enforced but unobservable at startup. Fix: add tracing::debug!(writer_handles = 1, reader_budget = MAX_SQLITE_READER_CONNECTIONS, path = %target.display(), \"sqlite boundary assembly opened\") in SharedDb::open() after writer start (around line 208-230). T.3 partially fixed the issue by adding a doc-comment rationale on the const (lines 12-14 on T3, T4, T5) but the tracing::debug! in SharedDb::open() is still absent on all branches." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-005/pT-t5/2> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2/d6f89e3> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3/6668842> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4/d180818> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5/6450bb5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t2/d6f89e3> .
+
+# T2 occurrences — bare const (no doc-comment rationale), no tracing::debug! in open()
+<urn:atm:triage:occurrence/RSH-005/pT-t2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 12 ;
+  triage:snippet "const MAX_SQLITE_READER_CONNECTIONS: usize = 3;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6f89e3" ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/d6f89e3> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 208 ;
+  triage:snippet "pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> { /* no tracing::debug! emitted after writer start */ }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6f89e3" ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/d6f89e3> .
+
+# T3 occurrences — doc-comment rationale on const is FIXED (partial), but tracing::debug! in open() still missing
+<urn:atm:triage:occurrence/RSH-005/pT-t3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 15 ;
+  triage:snippet "const MAX_SQLITE_READER_CONNECTIONS: usize = 3; // doc-comment rationale added at lines 12-14, partial fix" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "6668842" ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/6668842> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 211 ;
+  triage:snippet "pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> { /* no tracing::debug! emitted after writer start */ }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "6668842" ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/6668842> .
+
+# T4 occurrences — doc-comment rationale present (merged from T3), no tracing::debug! in open()
+<urn:atm:triage:occurrence/RSH-005/pT-t4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 15 ;
+  triage:snippet "const MAX_SQLITE_READER_CONNECTIONS: usize = 3; // doc-comment rationale present at lines 12-14" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d180818" ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/d180818> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 211 ;
+  triage:snippet "pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> { /* no tracing::debug! emitted after writer start */ }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d180818" ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/d180818> .
+
+# T5 occurrences — doc-comment rationale present, no tracing::debug! in open()
+<urn:atm:triage:occurrence/RSH-005/pT-t5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 15 ;
+  triage:snippet "const MAX_SQLITE_READER_CONNECTIONS: usize = 3; // doc-comment rationale present at lines 12-14" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "6450bb5" ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/6450bb5> .
+
+<urn:atm:triage:occurrence/RSH-005/pT-t5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 211 ;
+  triage:snippet "pub(crate) fn open(path: impl AsRef<Path>) -> Result<Self, AtmError> { /* no tracing::debug! emitted after writer start */ }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "6450bb5" ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/6450bb5> .
+
+# WorktreeSnapshots — updated to current SHAs
+<urn:atm:triage:worktree/pT-t1/0e6b024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2/d6f89e3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "d6f89e3" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3/6668842>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "6668842" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4/d180818>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "d180818" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/6450bb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pT-integrate/fa92dc5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "fa92dc5" ;
+  triage:orderIndex 6 .

@@ -1,0 +1,122 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-006>
+  a triage:Finding ;
+  triage:findingId "YB-006" ;
+  triage:title "lintable-boundary-plan.md missing per-primitive caller allowlists" ;
+  triage:description "lintable-boundary-plan.md does not provide a positive named caller allowlist or specific enforcement point per primitive. Y.8 AC requires every approved low-level writer has an allowlist of legal callers with runnable verification commands per rule." ;
+  triage:phaseId "phase-Yb" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "PYB-PHASE-END-QA-2" ;
+  triage:fixedOnBranch "integrate/phase-Y" ;
+  triage:fixedAtCommit "9d5b3474" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-006/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-006/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-006/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-006/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-006/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s7/61e9dfd9> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s8/6b7725bc> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s9/c3426bb4> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s10/c531c3ab> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s11/e0ea1f07> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYb-s7/61e9dfd9> .
+
+<urn:atm:triage:occurrence/YB-006/s7/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Yb/lintable-boundary-plan.md" ;
+  triage:line 134 ;
+  triage:snippet "every approved low-level writer has an allowlist of legal callers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "61e9dfd9" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s7/61e9dfd9> .
+
+<urn:atm:triage:occurrence/YB-006/s8/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Yb/lintable-boundary-plan.md" ;
+  triage:line 134 ;
+  triage:snippet "every approved low-level writer has an allowlist of legal callers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:headSha "6b7725bc" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s8/6b7725bc> .
+
+<urn:atm:triage:occurrence/YB-006/s9/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Yb/lintable-boundary-plan.md" ;
+  triage:line 134 ;
+  triage:snippet "every approved low-level writer has an allowlist of legal callers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s9/c3426bb4> .
+
+<urn:atm:triage:occurrence/YB-006/s10/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Yb/lintable-boundary-plan.md" ;
+  triage:line 134 ;
+  triage:snippet "every approved low-level writer has an allowlist of legal callers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s10/c531c3ab> .
+
+<urn:atm:triage:occurrence/YB-006/s11/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-Yb/lintable-boundary-plan.md" ;
+  triage:line 134 ;
+  triage:snippet "every approved low-level writer has an allowlist of legal callers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "e0ea1f07" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s11/e0ea1f07> .
+
+<urn:atm:triage:worktree/pYb-s7/61e9dfd9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "61e9dfd9" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pYb-s8/6b7725bc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:headSha "6b7725bc" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pYb-s9/c3426bb4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pYb-s10/c531c3ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pYb-s11/e0ea1f07>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "e0ea1f07" ;
+  triage:orderIndex 5 .

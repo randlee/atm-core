@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA2-S6-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA2-S6-001" ;
+  triage:title "5ms probe sleep in tests.rs not listed in plan-phase-S.md §4.1 accepted exceptions" ;
+  triage:description "connect_daemon_local_ipc_until_ready in crates/atm-daemon/src/tests.rs:119-127 uses std::thread::sleep(Duration::from_millis(5)) inside a bounded retry loop to avoid CPU-spinning while the daemon listener enters accept. This is a legitimate, bounded sleep (3-second deadline guard), not a flaky timing dependency. However, plan-phase-S.md does not exist on this branch, so the §4.1 accepted-exceptions list referenced in the QA finding cannot be satisfied. The fix is a doc-only change: either create plan-phase-S.md with a §4.1 accepted-exceptions table listing this sleep, or add a code comment citing the rationale and exception explicitly. No code change to tests.rs is required — the sleep is intentional and bounded." ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "round_limit" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:dispatchNote "Phase S backlog — S.6 feature branch already merged; plan-phase-S.md absent from integrate/phase-S baseline. Doc-only fix deferred to Phase S close-out or Phase T." ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA2-S6-001/s6/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/4c0693c> .
+
+<urn:atm:triage:occurrence/ATM-QA2-S6-001/s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 122 ;
+  triage:snippet "std::thread::sleep(Duration::from_millis(5));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bbcae03" ;
+  triage:branch "feature/pS-s6-runtime-remediation" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s6-runtime-remediation/bbcae03> .
+
+<urn:atm:triage:worktree/feature-pS-s6-runtime-remediation/bbcae03>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s6-runtime-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s6-runtime-remediation" ;
+  triage:headSha "bbcae03" ;
+  triage:orderIndex 1 ;
+  triage:status "merged" ;
+  triage:note "S.6 feature branch merged to integrate/phase-S @ 2230656e." .
+
+<urn:atm:triage:worktree/integrate-phase-S/4c0693c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "4c0693c" ;
+  triage:orderIndex 2 .

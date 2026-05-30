@@ -19,10 +19,59 @@ restructured, product docs remain in `docs/` and crate-local detail moves into
 `docs/atm/`, `docs/atm-core/`, `docs/atm-daemon/`, and
 `docs/atm-rusqlite/`.
 
-Phase-Q supersession note:
+Phase-Q disposition note:
 - earlier daemon-free phases in this plan remain historical execution records
-- the current target line is Section 21 and the detailed design in
-  `docs/plan-phase-Q.md`
+- The former early SQLite/daemon line is abandoned as an implementation line
+- `docs/plan-phase-Q.md` and Section 21 are retained as minimal historical
+  execution records only
+- any retained value from that abandoned line must be brought forward manually after review
+
+Phase-R redesign note:
+- the next execution line is the Phase R redesign and enforcement pass tracked
+  in [`docs/plan-phase-R.md`](./plan-phase-R.md)
+- Phase R starts with boundary documents, ADR alignment, and lint/parser gates
+  before new implementation work
+- the active integration branch for this redesign line is `integrate/phase-R`
+
+Phase-S planning note:
+- Phase R is the merged daemon baseline, but it missed the requirement that the
+  full daemon feature set must work on Windows as well as Unix-like hosts
+- the active planning line for that correction is Phase S, tracked in
+  [`docs/plan-phase-S.md`](./plan-phase-S.md)
+- the canonical daemon wire contract, current daemon packet surface, and shared
+  local-IPC/host-host frame rules are tracked in
+  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
+- Phase S is not satisfied by Windows compilation or temporary unsupported-path
+  stubs; it closes only when daemon functionality is production-ready on every
+  supported operating system behind the documented portability boundaries
+- Phase S implementation details must come either from `docs/plan-phase-S.md`
+  or from the governing requirements, architecture, ADR, and ICD documents it
+  names; the project plan does not override those lower-level sources of truth
+- the planning baseline is `integrate/phase-R` at `6a072c1`
+- S.5 is the follow-on planning slice that tightens the no-flaky-test policy,
+  defines which anti-flake guardrails belong in the default lint path, and
+  documents the bounded queue-query split between `atm list` and
+  single-message `atm read`, including the ATM-authored Claude JSONL
+  compatibility envelope for oversized message bodies
+- the remaining Phase S implementation work continues in:
+  - `S.6` daemon post-mortem runtime remediation
+  - `S.7` bounded queue-query implementation
+  - `S.8` Claude JSONL compatibility-envelope implementation
+  - `S.9` host-scoped retained logging defaults, including watcher/reconcile
+    exclusion for `~/.atm/logs/`
+
+Phase R execution entry:
+- Wave 1 deliverable: the new Phase R skeleton
+  - new crates
+  - public boundary traits/facades
+  - major data structures
+- Wave 1 supporting sequence:
+  1. `R.0` lint foundation
+  2. `R.1` lint debt burn-down
+  3. `R.2` skeleton crates, boundary traits/facades, and major data structures
+  4. `R.2A` parallel lint hardening
+- `R.3` is a dedicated review/re-planning stage after the Wave 1 skeleton lands
+- Wave 2 executes implementations only against the enforced boundary skeleton
 
 Status:
 - Phases 0 through P have executed on the retained rewrite line.
@@ -41,11 +90,18 @@ Status:
 - Message schema ownership and metadata normalization are now implemented well
   enough for live shared-inbox adoption, while a separate ATM-native inbox
   remains deferred to a later version.
-- Phase Q planning is active on the SQLite source-of-truth and daemon-boundary
-  line; this phase supersedes mailbox-lock architecture as the target design.
-- The current workspace still contains `crates/atm-core` and `crates/atm`
-  only; `crates/atm-daemon` and `crates/atm-rusqlite` are introduced by the
-  Phase Q implementation line.
+- The former early SQLite/daemon line is retained only as an abandoned historical attempt at the SQLite
+  source-of-truth and daemon-boundary redesign.
+- Phase R is the merged daemon baseline.
+- Phase S is the active planning line for Windows-complete daemon parity.
+- the current merged workspace contains:
+  - `crates/atm-core`
+  - `crates/atm`
+  - `crates/atm-daemon`
+  - `crates/atm-daemon-client`
+  - `crates/atm-graft`
+  - `crates/atm-rusqlite`
+  - `crates/sc-lint-*` support crates
 
 ## 2. Deliverables
 
@@ -67,23 +123,41 @@ Status:
 
 ## 3. Crates
 
-The Phase Q target implementation is split across:
+The abandoned early SQLite/daemon target implementation was split across:
 
 - `crates/atm-core`
 - `crates/atm`
 - `crates/atm-daemon`
+- `crates/atm-daemon-client`
+- `crates/atm-graft`
 - `crates/atm-rusqlite`
 
 Crate-local scope detail is owned by:
 
 - [`docs/atm-core/requirements.md`](./atm-core/requirements.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+- [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
 - [`docs/atm/requirements.md`](./atm/requirements.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm/boundaries.md`](./atm/boundaries.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
+
+Phase R sequencing rule:
+- no new implementation sprint begins until:
+  - the relevant boundary records exist
+  - architecture/requirements/ADR docs agree with those records
+  - the parser/lint pass for those records is in place
+- Phase R implementation proceeds in this order:
+  - boundary design
+  - document alignment
+  - lint/parser gates
+  - skeleton implementation
+  - feature behavior
 
 ## 4. Work Sequence
 
@@ -331,7 +405,8 @@ Deliverables:
     payload in `text`
   - consolidation of ATM `message_id` surface canonicalization rules across
     read, ack, and clear
-  - migration plan for ATM-authored repair/alert dedup toward `metadata.atm`
+  - migration plan for ATM-authored repair/alert dedup toward SQLite-owned
+    state and typed diagnostics
 - next-version deferral note for a separate ATM-native inbox
 
 Completed sprints:
@@ -353,13 +428,13 @@ Completed sprints:
 - `J.3` Surface Canonicalization Consolidation
   - centralize `message_id` dedup logic used by read, ack, and clear
   - keep current legacy top-level `message_id` behavior read-compatible while
-    documenting the later move to `metadata.atm.messageId`
+    documenting the one-message-identity rule
   - acceptance: one shared dedup contract is used across operator-facing
     mailbox surfaces
 
 - `J.4` ATM Alert Metadata Migration Plan
   - migrate the design for ATM-authored repair notices from ad hoc top-level
-    fields toward `metadata.atm`
+    fields toward SQLite-owned state and typed diagnostics
   - explicitly preserve legacy top-level `atmAlertKind` and
     `missingConfigPath` as read-compatible until the runtime migration sprint
     lands
@@ -727,7 +802,7 @@ Planned sprints:
       - cross-team messages may project the sender alias in `from` for
         Claude-facing ergonomics
       - whenever alias-oriented `from` projection is used, canonical sender
-        identity must also be persisted in `metadata.atm.fromIdentity` and
+        identity must also be persisted in SQLite-owned state and
         must drive validation, self-send checks, routing, and audit behavior
     - define post-send-hook rules:
       - the hook runs only after a successful non-`dry-run` send
@@ -903,14 +978,14 @@ The rewrite is ready when:
 - `atm clear` works through the documented production runtime path
 - `atm log` works through shared observability APIs
 - `atm doctor` works as a local diagnostics command with daemon/runtime
-  visibility in the Phase Q target architecture
+  visibility in the current SQLite/daemon architecture
 - `atm teams` provides the retained local team recovery surface
 - `atm members` provides retained local roster verification
 - daemon auto-start-when-absent path is exercised in bounded integration
   testing
 - `ATM_POST_SEND.recipient_pane_id` is sourced from SQLite roster truth when
   known
-- retained command behavior is preserved, and any Phase Q runtime-shape changes
+- retained command behavior is preserved, and any current-runtime shape changes
   are intentionally documented
 - task-linked mail remains pending until acknowledged
 - the file-by-file migration plan is complete enough to implement directly
@@ -2433,249 +2508,1432 @@ Phase P completion gate:
 - the remaining external-writer limitations, if any, are documented as accepted
   compatibility boundaries rather than hidden assumptions
 
-## 21. Phase Q — SQLite Mail SSOT And Runtime Boundary [PLANNED]
+## 21. Former Phase Q [ABANDONED]
 
-Detailed design source:
-- [`docs/plan-phase-Q.md`](./plan-phase-Q.md)
+Historical note:
+- the former Phase Q SQLite/daemon execution line was abandoned
+- `docs/plan-phase-Q.md` is retained only as a one-line historical marker
+- any still-useful ideas must be brought forward manually into the active Phase R / Phase U documents after review
+
+## 22. Phase R — Boundary Establishment And Enforcement
+
+Detailed execution source:
+- [`docs/plan-phase-R.md`](./plan-phase-R.md)
+
+Summary:
+- Phase R is the active redesign line that replaces the abandoned earlier SQLite/daemon
+  implementation path.
+- Wave 1 establishes enforceable crate boundaries before substantive feature
+  work resumes:
+  - lint/parser foundation and debt burn-down
+  - the new crate skeleton
+  - public boundary traits/facades
+  - major shared data structures
+- Wave 2 implements behavior only against those enforced boundaries.
+- The next planning increment after the current boundary-lint implementation
+  branch merges adds:
+  - planning-aware inventory-parity warn/error enforcement
+  - TOML as the canonical machine-readable boundary source
+
+Cross-reference:
+- The authoritative sprint-by-sprint Phase R plan lives in
+  [`docs/plan-phase-R.md`](./plan-phase-R.md).
+
+## 23. Phase R.9 / R.10 — Daemon Singleton And Test Fidelity Hardening
 
 Goal:
-- replace filesystem JSON as ATM's mail source of truth with SQLite
-- reintroduce one tightly-bounded singleton daemon runtime
-- eliminate mailbox-lock dependence from ATM mail correctness
+- finish the design and execution plan needed to make daemon singleton the
+  first-class runtime invariant
+- remove daemon-spawn-driven test strategy from the ordinary correctness path
+- replace it with production-faithful in-process transport seams and narrow
+  daemon-runtime coverage
 
-Hard architectural constraints:
-- exactly one daemon per host
-- impossible for two active daemons to run at the same time
-- every subsystem is behind a strict trait boundary for all external I/O
-- daemon/runtime code stays thin and does not absorb business logic
-- daemon spawning is not the core test strategy
-- structured `sc-observability` remains first-class at both CLI and daemon
-  layers
-- production fallible paths use typed error unions / `Result` propagation
-  rather than panic/unwrap as the normal error strategy
+Authoritative design references:
+- [`docs/adr/ADR-002-host-wide-daemon-singleton.md`](./adr/ADR-002-host-wide-daemon-singleton.md)
+- [`docs/adr/ADR-003-test-fidelity-and-daemon-isolation.md`](./adr/ADR-003-test-fidelity-and-daemon-isolation.md)
+- [`docs/testing-guidelines.md`](./testing-guidelines.md)
+- [`docs/plan-phase-R.md`](./plan-phase-R.md)
 
-Core design decisions:
-- SQLite is the source of truth for:
-  - messages
-  - ack/task state
-  - read/clear visibility state
-  - team roster
-- daemon memory is the live truth for agent status
-- `atm doctor` remains a CLI command but must query daemon/runtime state in the
-  Phase Q target architecture
-- Claude inbox JSONL remains compatibility ingress/egress only
-- native agent/plugin traffic does not use JSONL
-- one daemon API, two production transport implementations:
-  - Unix domain socket for same-host
-  - TCP/TLS for cross-host daemon-to-daemon traffic
-- one in-process `test-socket` transport for transport-boundary tests
-- remote address model expands to `agent@team.host`
-- bounded transient retry is allowed for remote delivery, but there is no
-  durable long-lived remote outbox
-- successful remote delivery requires remote daemon acceptance inside the
-  bounded retry window
+Execution shape:
+- `R.9` is the planning, requirements, ADR, and lint-design sprint
+- `R.10` is the implementation and test-migration sprint
+- `R.13` through `R.18` are the remaining continuation sprints required to
+  turn the thin daemon line into the full production runtime still described by
+  the accepted Phase R requirements and architecture
+- `R.18` is the accepted closeout sprint for bounded `SIGHUP` reload,
+  singleton-held shutdown finalization, portability cleanup, and final
+  phase-doc reconciliation on the daemon line
+
+R.9 deliverables:
+- explicit requirement language that bans the current daemon-spawn test pattern
+- ADR for host-wide daemon singleton
+- ADR for test fidelity and daemon isolation
+- singleton lint gate design integrated into `just lint`
+- transport test-seam design:
+  - `FakeClientTransport`
+  - loopback/in-process transport
+  - narrow daemon-runtime harness
+- mapped resolution plan for:
+  - ARCH-SINGLETON
+  - CI-WIN-001
+  - singleton review findings `RBP-F001` through `RBP-F012`
+  - QA carry-forward items affecting singleton and test fidelity
+
+R.10 deliverables:
+- client-side pre-spawn launch gate
+- daemon-side serving gate and stale-owner recovery hardening
+- typed boundary/runtime fixes required by the singleton/test redesign
+- deletion of daemon-spawn helpers from ordinary tests
+- migration of CLI tests to fake or loopback transport seams
+
+Lint gate decision:
+- existing generic tools such as `clippy` are not sufficient to enforce the
+  singleton/test-fidelity architecture rule
+- Phase R therefore adds a dedicated repository lint gate, integrated into
+  `just lint`, with an initial planned entrypoint of
+  `scripts/lint_daemon_singleton.py`, that rejects banned daemon-spawn
+  patterns and related timing workarounds in ordinary tests
+
+Acceptance:
+- requirements, architecture, ADRs, and testing guidelines agree on the
+  singleton rule and approved test tiers
+- continuation sprint execution after `R.10` must follow the tracked sequence
+  in `docs/phase-R/sprint-R13.md` through `docs/phase-R/sprint-R18.md` for the
+  runtime/product closeout line, with `docs/phase-R/sprint-R19.md` reserved for
+  postmortem lint backfill after the closeout implementation settles
+- `sc-lint` inventory-parity / planning-metadata gates are treated as an
+  external prerequisite that must be ready before `R.13` implementation starts
+- there is no approved ordinary test-daemon launch path
+- the implementation plan explicitly prevents new daemon-spawn helpers from
+  proliferating
+
+## 24. Phase R Postmortem Linter Backfill
+
+Goal:
+- convert the recurring mechanically-detectable Phase R defect families into
+  normal repository lint or CI gates
+- prove the rules on `atm-core` first, then migrate only the reusable subset
+  into the standalone `sc-lint` repository
+
+Execution rule:
+- implementation happens on `atm-core` first even when the eventual home is
+  `sc-lint`
+- migration to standalone `sc-lint` is a follow-up extraction step after
+  local rule shape, allow-list policy, and false-positive behavior are proven
+
+Partition:
+- reusable/static-analysis rules that should graduate to `sc-lint` after
+  proving out:
+  - Unix platform-gating enforcement
+  - production `Condvar::wait(...)` liveness enforcement
+- ATM-local rules that should remain `atm-core`-owned unless later generalized:
+  - duplicate semantic string-literal enforcement in non-test Rust code
+  - fixed-sleep test-hygiene enforcement
+  - triage Turtle consistency enforcement
+
+Planned sequence:
+1. extend `sc-portability` on `atm-core` for:
+   - ungated `std::os::unix` imports
+   - `cfg_attr(not(unix), allow(dead_code))` portability suppressors
+2. extend the repository-local identity-literal gate into a duplicate semantic
+   string-literal gate for non-test Rust code, with raw `"team-lead"` as the
+   first mandatory case
+3. add a repository-local fixed-sleep test-hygiene lint and wire it into
+   `just lint`
+4. extend `sc-boundary` on `atm-core` for bare production
+   `Condvar::wait(...)`
+5. add a repository-local triage-record consistency validator and wire it into
+   `just lint` or the equivalent default CI lint surface
+6. after all five families are stable on `atm-core`, migrate the reusable
+   analyzers and any generic helper framework into standalone `sc-lint`
+
+Scope note:
+- the broader design guidance against duplicated raw strings and magic numbers
+  already exists; this sprint is about selecting the first hard-gated subset,
+  not restating that policy
+- this sprint raises that policy into a hard gate for duplicated semantic
+  string literals in non-test Rust code
+- raw `"team-lead"` is the first mandatory case because it is already
+  duplicated widely enough in the repo to justify enforcement now
+- the canonical Rust definition source for this literal is
+  `crates/atm-core/src/roles.rs` via `ROLE_TEAM_LEAD`
+- `TeamName` / `AgentName` structural newtype hardening remains the longer-term
+  direction, but the immediate lint still uses a grep-backed gate because the
+  postmortem problem is duplicated handwritten literals already spread through
+  non-test production code and the full newtype migration is broader than this
+  follow-up sprint
+- the lint contract still needs explicit exclusions only for narrow benign
+  repeated classes if they are discovered during implementation
+- those exclusions must stay narrow; the rule must not exempt ordinary
+  production code wholesale
+
+Required deliverables for this planning/implementation line:
+- one Phase R sprint plan covering the five families and their partitioning
+- updates to requirements and architecture that explain why some rules stay
+  repo-local while others graduate to `sc-lint`
+- update `docs/project-plan.md` itself to record:
+  - the ATM-first/prove-then-migrate rule
+  - the reusable-vs-ATM-local partition
+  - the implementation sequence for Families A/B/C/D/I
+  - the migration criteria for moving reusable rules into standalone `sc-lint`
+- a clear `just lint` integration decision for every family before coding
+
+Acceptance:
+- every postmortem family is assigned to one concrete implementation home
+- the sequencing explains what lands in Rust analyzer code versus repository
+  Python/CI glue
+- the migration boundary between `atm-core` and `sc-lint` is explicit rather
+  than implied
+
+## 25. Phase U Mailbox Simplification And Identity Cleanup
+
+Integration branch: `integrate/phase-U`
+
+Goal:
+- remove the remaining confusing mailbox/identity carry-forward design from the
+  current ATM line
+- make SQLite the only ATM-owned mailbox state/query authority outside the
+  private Claude-compat watcher/import/export boundary
+- replace ambiguous or duplicated message identity, state, and thread-update
+  behavior with smaller auditable contracts
+
+Execution shape:
+- Phase U is a sequential cleanup line; each sprint should leave the mailbox
+  model simpler than before and should not introduce new compatibility
+  side-channels
+- later sprints may assume earlier cleanup decisions are final; they should
+  delete redirected code rather than preserve fallback branches
+- `U.8` through `U.10` assume `U.0` is already complete
+- `U.11` assumes `U.10` is complete
 
 Planned sprint sequence:
 
-Integration branch:
-- `integrate/phase-Q`
+### U.0 — Remove Old `atm-graft` Implementation Line [COMPLETED]
 
-### Q.0 — Boundary Cleanup And Debt Retirement
+Status:
+- completed by `team-lead`
 
 Scope:
-- align the existing codebase with the Phase Q target shape before store and
-  daemon work begin
-- remove technical debt and duplicated compatibility helpers that would
-  otherwise slow or distort Q.1+
-- keep this sprint strictly about current retained-path cleanup, not
-  speculative pre-implementation of later architecture
-
-Implementation focus:
-- one shared inbox write boundary
-- one shared inbox hydration boundary
-- one owned message-id compatibility bridge
-- explicit roster/member construction instead of hidden defaults
-- centralized hook payload and hook trigger seams
-- config-ingest validation parity between shorthand and object forms
-
-Code-review evidence:
-- `mailbox::atomic::write_messages()` already serves as the real inbox write
-  seam and should remain the only ATM-owned writer
-- `schema::to_shared_inbox_value()` and
-  `hydrate_legacy_fields_from_metadata()` already serve as the real schema
-  compatibility seams and should absorb duplicated helper logic
-- recent context-injection fixes showed that drift around these boundaries
-  creates immediate product failures
-- recent `AgentName` / `AgentMember` cleanup showed that hidden defaults and
-  duplicated hydrators create migration friction rather than helping
+- remove the old graft implementation line before the restacked thin-client
+  graft work begins
 
 Acceptance:
-- one ATM-owned inbox write boundary and one ATM-owned metadata hydration
-  boundary are explicit and covered by tests
-- duplicated compatibility helpers are removed from retained command/test code
-- hidden default construction for externally meaningful identity fields is
-  removed from retained runtime/test paths
-- hook/event shaping is auditable from one service boundary
-- shorthand and object-form `config.json` member parsing follow the same
-  validation expectations where both remain supported
-- the codebase is simpler to migrate after Q.0 than before Q.0
+- later Phase U graft sprints assume no legacy graft implementation line
+  remains to preserve
 
-### Q.1 — Store And Boundary Foundation
+### U.1 — Delete `metadata.atm` Read-Path Dependence
 
 Scope:
-- add the SQLite store boundary family:
-  - `MailStore`
-  - `TaskStore`
-  - `RosterStore`
-- add the first concrete SQLite implementation crate: `atm-rusqlite`
-- add the strict I/O trait boundaries for store, inbox ingress/export, config
-  ingress, watcher/reconcile, transport, dispatcher, and notification
-- keep service logic fully testable in-process
-
-Parallelization rule:
-- Q.0 must be complete before Q.1 is treated as the contract lock-in point
-- Q.1 is the convergence point
-- Unix/TCP/test-socket transport work, watcher/reconcile work, and
-  command-handler migration must not branch into parallel implementation until
-  the core boundary traits, dispatcher/handler seams, and request/result
-  contracts are defined and reviewed
-- once those contracts are stable, follow-on sprints may execute in parallel
-  against the shared boundary set
+- remove ATM-owned read-path dependence on `metadata.atm.*`
+- treat any ATM-owned machine state currently read from Claude JSON as either:
+  - SQLite-owned state that must move into the store/query layer, or
+  - dead code that should be deleted
+- keep Claude JSON handling private to the watcher/import/export boundary
 
 Acceptance:
-- SQLite opens under `.claude/teams/<team>/.atm-state/mail.db`
-- `atm-rusqlite` is the only crate that owns direct SQLite calls in the first
-  implementation line
-- core logic is reachable without daemon process spawning
-- no direct SQLite or filesystem bypasses outside the owning boundaries
-- watcher/reconcile logic exists behind its own boundary and does not bypass
-  ingress/store/notifier ownership rules
-- transport-boundary tests can replace Unix/TCP with the in-process
-  `test-socket` transport
-- the core boundary traits and request/result contracts are explicit enough to
-  allow parallel follow-on implementation without transport/business-logic
-  drift
-- the dispatcher/handler contract is explicit enough that Unix, TCP/TLS, and
-  `test-socket` implementations can proceed without owning request-family
-  behavior
+- no normal ATM read/query/runtime path depends on `metadata.atm.*`
+- the active implementation exposes zero surviving `metadata.atm` fields
+- dead compatibility helpers and tests that only exist to preserve
+  `metadata.atm` reads are removed
 
-### Q.2 — Compatibility Ingress And Export
+### U.2 — ADR: One Message Identity
 
 Scope:
-- import Claude/legacy inbox JSONL into SQLite
-- import roster updates from `config.json` into SQLite
-- keep ATM export Claude-native at the top level with `metadata.atm`
-
-Parallel execution after Q.1:
-- inbox ingress/export can proceed in parallel with:
-  - transport adapter work
-  - watcher/reconcile implementation
-  - handler/service migration
-  once the Q.1 boundary contracts are locked
+- adopt one logical ATM message identity
+- remove duplicated ATM-owned message-id storage and plumbing
+- keep Claude inbox `message_id` only as the boundary wire encoding needed for
+  Claude interoperability
+- rename confusing `legacy_*` identity terms to names that describe the actual
+  surviving identifier role
 
 Acceptance:
-- external Claude writes become durable in SQLite through one owned ingress path
-- export compatibility remains intact
-- roster truth no longer depends on `config.json` as the durable source
+- `metadata.atm.messageId` is removed from the design and implementation line
+- duplicated UUID/ULID reinterpretation plumbing no longer persists two fields
+  for the same logical identity
+- if SQLite persists `message_id`, it persists only the compatibility UUID wire
+  form of that one logical identity
+- the project docs include an ADR-level statement that ATM owns one logical
+  message identity and Claude `message_id` is only the compatible boundary
+  encoding of that identity
 
-### Q.3 — Ack/Task Migration
+### U.3 — Thread / Update / Supersede Hardening
 
 Scope:
-- move ack-required state and task state to SQLite-owned semantics
-- keep reply export behind SQLite commit success
+- keep explicit support for the two thread-update modes:
+  - `add-details`
+  - `supersede`
+- make the intended behavioral differences between those modes explicit across
+  validation, selection, ack, and nudge behavior
+- remove any shortcut where generic successor-chain collapse hides missing
+  per-mode semantics
+- terminal `add-details` must preserve predecessor context in the effective
+  current body used for matching and display
+- terminal `supersede` must expose only the replacement body as the effective
+  current instruction
 
-Parallel execution after Q.1:
-- ack/task migration can proceed in parallel with Q.2/Q.4 transport and
-  watcher work so long as it stays within the locked service/store/export
+Acceptance:
+- mode-specific tests exist for both `add-details` and `supersede`
+- tests cover:
+  - send validation
+  - list/read current-vs-historical selection
+  - ack reopen behavior
+  - nudge behavior when a successor arrives after the predecessor was already
+    read
+- the resulting product behavior is documented clearly enough that the thread
+  mode is not just stored metadata with implied meaning
+
+### U.4 — Unified Mutable Message State
+
+Scope:
+- replace the split `mail_visibility_states` / `ack_state` model with one
+  mutable message-state owner
+- land the unified table as `mail_message_states`
+- move mailbox/runtime state into that unified state surface, including:
+  - read state
+  - ack state
+  - expiration
+  - delete/hide state
+- rename `expires_at` to `expires_at`
+
+Acceptance:
+- ATM no longer splits mutable per-message state across visibility JSON and a
+  separate ack table
+- `expires_at` is the canonical expiration field name
+- delete/close remain state mutations; hard deletion stays cleanup-policy-only
+- deleted rows remain hidden from normal queries and only surface through
+  admin-only diagnostics
+
+### U.5 — SQLite Query Cutover And Query Simplification
+
+Scope:
+- move `atm list`, `atm read`, and related normal mailbox queries fully onto
+  SQLite
+- start query planning from mutable message state and only read content rows
+  that are actually needed
+- remove any remaining JSON-backed summary/source read path outside the private
+  watcher/import/export boundary
+- keep `atm ack` and `atm clear` out of scope for this sprint; they stay on
+  their existing runtime path until a later dedicated rewrite
+
+Acceptance:
+- normal mailbox queries do not read Claude JSON directly
+- `atm list` and `atm read` are auditable as SQLite-backed query paths
+- `atm ack` and `atm clear` are not claimed as SQLite-cutover deliverables in
+  `U.5`
+- query diagrams and tests show the actual boundary methods, tables read, and
+  error exits for all non-trivial mailbox queries
+
+### U.6 — Provenance / Timing Field Reduction
+
+Scope:
+- justify or remove mailbox-row provenance/timing fields that are not clearly
+  part of the enduring contract
+- specifically review `imported_from` and `recorded_at`
+- remove weak round-trip provenance from the enduring message contract
+- if `recorded_at` survives, keep it only as store-owned ingest timing for
+  local health/reporting rather than caller-supplied message metadata
+
+Acceptance:
+- each surviving mailbox-row provenance/timing field has one clear product
+  reason to exist
+- fields that exist only for weak round-trip convenience are removed
+
+### U.7 — Roster Simplification And Explicit Member Model
+
+Scope:
+- replace the duplicated whole-roster JSON plus per-member projection design
+  with one canonical roster store
+- make member lifecycle and harness behavior explicit in first-class member
+  fields
+- sync Claude Code roster changes from `config.json` into the canonical roster
+  store behind the private watcher/import boundary instead of treating
+  `config.json` as general runtime truth
+- keep room for controlled extensibility through one metadata JSON field rather
+  than document-shaped roster duplication
+
+Target member fields:
+- `team_name`
+- `agent_name`
+- `member_kind` enum
+- `harness` enum:
+  - `claude-code`
+  - `codex-cli`
+  - `gemini-cli`
+  - `opencode`
+- `agent_type` string
+- `model` string
+- `metadata_json`
+- runtime/routing fields that remain justified after review (for example
+  `recipient_pane_id`, `updated_at`)
+- `pid` remains transient daemon-owned runtime state rather than part of the
+  canonical roster-member row or SQLite roster truth
+
+Acceptance:
+- ATM has one canonical roster truth, not both whole-team JSON and per-member
+  roster duplication
+- Claude Code `config.json` roster changes are ingested through the private
+  watcher/import boundary into the canonical roster store; normal runtime paths
+  do not read `config.json` directly for roster truth
+- `member_kind` is explicit and supports the distinct lifecycle logic for
+  permanent vs ephemeral members
+- `harness` is a first-class behavioral enum and is not treated as ad hoc
+  string metadata
+- `agent_type` and `model` remain plain strings for utility/informational use
+- custom harness/member extensions flow through `metadata_json` instead of
+  forcing new roster document shapes
+- `recipient_pane_id` remains an optional canonical member field because
+  Claude-code roster ingress may already know the authoritative pane mapping
+  needed by post-send hook routing
+
+### U.8 — Shared Thin-Client ICD For CLI And Graft
+
+Scope:
+- restack the abandoned earlier graft-client work as a thin-client sprint
+- require `atm-graft` to use the same shared ICD family as CLI traffic
+- forbid a graft-private daemon API line
+
+Acceptance:
+- `atm-graft` is modeled as a thin client using shared `atm-core` protocol
   contracts
+- any extra request/response shapes needed for graft remain part of the shared
+  ICD family rather than a daemon-private API
+- `U.8` lands the `atm-graft` crate on the existing shared unary
+  request/response family rather than on graft-private daemon packets
+- U.8 owns shared ICD family and naming/DTO planning only; the follow-on
+  runtime and advisory cutover ownership is fixed in
+  `docs/phase-U/removal-inventory.md`
 
-Acceptance:
-- ack/task state is authoritative in SQLite
-- reply export remains compatible for Claude recipients
-
-### Q.4 — Read/Clear Cutover + Thin Daemon Runtime
-
-Scope:
-- move `read` and `clear` to SQLite-owned mail semantics
-- add the singleton daemon runtime
-- implement one protocol with Unix socket and TCP/TLS adapters
-- add the in-process `test-socket` transport for transport-boundary tests
-- keep live agent status in daemon memory
-- add daemon-query support needed by `atm doctor`
-
-Parallel execution after Q.1:
-- Unix transport, TCP/TLS transport, `test-socket`, watcher/reconcile, and
-  daemon-query plumbing may proceed in parallel as separate slices once the
-  shared dispatcher/handler and boundary contracts are stable
-
-Acceptance:
-- `read` and `clear` no longer require mailbox JSON rewrite correctness
-- second daemon startup fails deterministically
-- remote traffic is daemon-to-daemon only
-- remote send success depends on remote daemon acceptance
-- daemon-unavailable CLI/runtime calls first attempt one documented auto-start
-  and then fail clearly with no hidden fallback if the daemon still cannot run
-- daemon code remains a thin runtime wrapper over the service boundaries
-- handler behavior is testable through the in-process `test-socket` transport
-
-### Q.5 — Lock Retirement And Ops Cleanup
+### U.9 — Client-Owned Graft Runtime
 
 Scope:
-- retire mailbox-lock dependence from ATM mail correctness
-- remove reliance on the 5-minute stale-lock sweep for normal mail flows
-- align doctor/restore/ops docs to SQLite ownership
+- restack the abandoned earlier graft-runtime work as an ownership sprint
+- move all client-specific graft runtime behavior into `atm-graft`
+- keep only generic request-serving/runtime composition in the daemon
+- status: complete
 
 Acceptance:
-- mailbox locks are no longer part of the normal mail correctness contract
-- stale lock artifacts can no longer wedge ATM mail flows
-- requirements, architecture, and project plan all match the final design
+- the daemon does not own client-specific graft runtime behavior; temporary
+  graft-named advisory substrate cleanup remains owned by `U.10`
+- client-specific receive/injection/runtime behavior is owned by `atm-graft`
+  or by generic shared interfaces in `atm-core`
+- the client runtime stays lean and production-complete:
+  one persistent receive thread, one open dedicated daemon advisory-stream
+  connection, one minimal pending queue, and one host wake/event path
+- U.9 owns client-runtime cutover only; daemon advisory-surface generification
+  stays in U.10
 
-### Q.6 — Production-Readiness Gate And Release
+### U.10 — Generic Daemon Advisory-Notification Surface
 
 Scope:
-- prove the Phase Q implementation is production ready rather than merely
-  architecturally aligned
-- run the release gate, packaging gate, and final QA/documentation alignment
-- publish only after all prior sprint gates are green
+- restack the abandoned earlier graft-notification work as a generic-boundary sprint
+- define the daemon-owned post-commit advisory surface generically
+- keep `atm-graft` as one consumer of that surface rather than a daemon-owned
+  subsystem
+
+Status:
+- completed on `feature/pU-u10-generic-advisory-notification`
 
 Acceptance:
-- version bump planning is complete
-- `cargo publish --dry-run` succeeds for the intended publish set
-- crates.io publish succeeds for the intended release line
-- GitHub release/tag/binary artifact steps are complete
-- `CHANGELOG.md` is updated
-- all Phase Q release-gate conditions pass on the release candidate
+- the daemon owns only a generic advisory-notification surface
+- any message family needed for advisory delivery remains part of the same
+  shared ICD used by CLI and thin clients
+- the daemon-side design stays lean and does not grow a client-specific
+  notifier framework
+- U.10 owns the daemon-side generic replacement for the remaining graft-named
+  advisory-session surfaces listed in `docs/phase-U/removal-inventory.md`
 
-Phase Q completion gate:
-- Q.0 through Q.6 are complete on `integrate/phase-Q`
-- SQLite is authoritative for messages, ack/task state, visibility state, and
-  roster truth
-- `send` and `ack` operate through the daemon production path
-- production CLI/runtime paths obey one-attempt daemon auto-start semantics
-  with typed failure on final daemon unavailability
-- `recipient_pane_id` is sourced from SQLite roster truth when known
-- mailbox-lock correctness dependence is retired from normal mail flows
-- release-gate and QA invariants for Phase Q are satisfied
+### U.11 — ATM-Graft API Cleanup
 
-QA invariants for every Phase Q pass:
-- impossible to run two active daemons on one host
-- daemon unavailability fails clearly without hidden fallback to direct store or
-  inbox access
-- every subsystem performs I/O only through its owning trait boundary
-- any observed SQL, watcher, notifier, or socket-boundary bypass is an
-  immediate QA failure
-- daemon/runtime code remains thin
-- socket receive loops remain tiny dispatcher loops only
-- any socket loop that performs SQL, watcher, notifier, or workflow logic is
-  an immediate QA failure
-- any watcher/reconcile implementation that performs SQL, socket, or notifier
-  logic inline is an immediate QA failure
-- daemon spawning is not the core test strategy
-- typed errors are preserved across CLI, daemon, and core boundaries for
-  fallible runtime paths
-- `AtmErrorCode` remains a centralized read-only registry with no subsystem
-  local alternatives
-- structured `sc-observability` remains present at both CLI and daemon layers
-- SQLite remains the source of truth for mail and roster
-- live status remains daemon-memory truth
-- Claude compatibility remains Claude-native top-level plus `metadata.atm`
+Scope:
+- tighten the post-`U.10` `atm-graft` API surface without adding product
+  capability
+- narrow `with_poll_interval()` and `from_transport()` to `#[cfg(test)]`
+  seams
+- remove redundant convenience aliases including
+  `fetch_pending_nudges` / `drain_pending_nudges`
+- consolidate daemon-binary and same-host endpoint resolution into the
+  `atm-daemon-bootstrap` workspace crate
+- harden timing-sensitive test waits without changing production behavior
+
+Status:
+- completed
+
+Acceptance:
+- the remaining `atm-graft` public surface matches the lean client/runtime
+  contract from `U.9` / `U.10`
+- daemon bootstrap resolution is shared through
+  `atm-daemon-bootstrap` rather than duplicated path helpers
+- timing-sensitive waits are reduced or explicitly justified in tests
+- no new boundary expansion or product behavior change is introduced
+
+Phase U inventory note:
+- the authoritative current file/line removal inventory for U.0 through U.11
+  lives in `docs/phase-U/removal-inventory.md`
+
+## 26. Phase V Daemon Hardening And Boundary Cleanup
+
+Planning branch:
+- `feature/daemon-hardening-plan`
+
+Goal:
+- close the daemon hardening follow-on work identified by the Phase U
+  post-mortem before daemon observability and runtime failure handling are
+  treated as settled enough for system testing
+- close the carried-forward daemon observability boundary issue and remove the
+  remaining central event-reconstruction shape
+- keep only testing-critical work on this line; defer the rest to backlog
+
+Execution shape:
+- `V.1` defines the observability boundary and event model
+- `V.2` migrates observability ownership into the daemon subsystems
+- `V.3` removes old central observability mapping code and streamlines the
+  final shape
+- `V.4` hardens daemon/client/runtime recovery guidance after the observability
+  line is in place
+- system testing should begin after `V.4`
+- `ARCH-PU-002` / `RULE-002` are owned end-to-end by `V.1` through `V.3`,
+  not deferred
+
+Phase V deliverables:
+- `SubsystemObservability` newtype and per-subsystem injection across the
+  daemon runtime line, including explicit ownership in
+  `RuntimeHealthMonitor` and `RuntimeComposition`
+- deletion of the old central observability delegation helpers:
+  `map_command_event`, `map_daemon_event`, `map_runtime_event`,
+  `emit_runtime_event`, and `record_daemon_event`
+- `.with_recovery()` hardening on the four required runtime error categories:
+  `ATM_DAEMON_UNAVAILABLE`, `ATM_SOCKET_CONNECT_FAILED`,
+  `ATM_DAEMON_START_FAILED`, and `ATM_IPC_RUNTIME_FAILED`
+- stable recovery/error-code namespace documented in
+  `docs/atm-daemon/recovery-text-rules.md`
+
+Planned sprint sequence:
+
+### V.1 — Observability Boundary And Event Model
+
+Scope:
+- define the final daemon observability boundary
+- keep observability at the bottom of the stack
+- define subsystem-owned event semantics and per-event context fields
+
+Acceptance:
+- the final observability boundary and event model are documented and ready to
+  implement
+
+### V.2 — Observability Migration Into Subsystems
+
+Scope:
+- move event construction into daemon subsystems
+- keep shared observability infrastructure thin
+
+Acceptance:
+- subsystem-owned event emission replaces central daemon event reconstruction
+
+### V.3 — Observability Removal And Streamlining
+
+Scope:
+- reduce `crates/atm-daemon/src/daemon_observability.rs` to thin sink and
+  bootstrap responsibilities
+- remove obsolete mapping helpers and wrappers
+
+Acceptance:
+- the old central mapping model is removed and the remaining code is lean
+
+### V.4 — Recovery Context Hardening
+
+Scope:
+- require explicit recovery guidance on daemon-unavailable and related runtime
+  failure paths
+- define checklist or lint coverage for required `.with_recovery()` usage
+
+Acceptance:
+- the daemon/runtime paths that require recovery guidance are explicitly listed
+- their coverage is no longer a review-memory-only rule
+
+Deferred backlog:
+- runtime test isolation lint
+  - create GH issue from `FTQ-U9-001`
+  - GH issue: `#259`
+- workspace `#[path]` lint
+  - create GH issue for production cross-crate `#[path]` enforcement
+  - GH issue: `#260`
+- sprint-close hygiene gate
+  - create GH issue from `ATM-QA-PU-001` through `ATM-QA-PU-005`
+  - GH issue: `#261`
+
+## 27. Phase W Production Readiness Follow-Up
+
+Planning branch:
+- `feature/observability-findings-planning`
+
+Base branch:
+- `origin/develop`
+
+Integration branch:
+- `integrate/phase-W`
+
+Predecessor gate:
+- all Phase `V` implementation work is merged and validated on
+  `integrate/phase-V` before `integrate/phase-W` begins implementation
+
+Goal:
+- close the remaining production-readiness gaps identified after Phase V before
+  implementation starts
+- preserve one shared operator/diagnostic contract across ATM CLI, `atm-graft`,
+  and cross-daemon peer transport
+- collapse duplicate interface-specific error/reporting paths when the same
+  failure class is currently implemented in parallel
+
+Status note:
+- `W.1` merged to `integrate/phase-W`
+  - branch: `feature/pW-s1-emit-fallback`
+  - PR: `#269`
+  - merge commit: `0a2084e`
+- `W.2` merged to `integrate/phase-W`
+  - branch: `feature/pW-s2-daemon-client-traceability`
+  - PR: `#270`
+  - merge commit: `82142b0`
+- `W.3` merged to `integrate/phase-W`
+  - branch: `feature/pW-s3-sqlite-observability`
+  - PR: `#272`
+  - merge commit: `ae52c63`
+- `W.4` merged to `integrate/phase-W`
+  - branch: `feature/pW-s4-peer-replay-recovery`
+  - PR: `#271`
+  - merge commit: `c9d3984`
+- `W.5` merged to `integrate/phase-W`
+  - branch: `feature/pW-s5-doctor-projection`
+  - PR: `#274`
+  - merge commit: `2d2d482`
+- `W.6` merged to `integrate/phase-W`
+  - branch: `feature/pW-s6-sqlite-error-contract`
+  - PR: `#275`
+  - merge commit: `c8af6e7`
+- `W.7` merged to `integrate/phase-W`
+  - branch: `feature/pW-s7-triage-closeout`
+  - PR: `#276`
+  - merge commit: `d655d45`
+- `W.8` merged to `integrate/phase-W`
+  - branch: `feature/pW-s8-phase-w-closeout`
+  - PR: `#277`
+  - merge commit: `f404238`
+
+Execution shape:
+- `W.1` daemon-side observability sink failure visibility
+- `W.2` same-host daemon traceability and interface parity
+- `W.3` SQLite subsystem observability and protocol parity
+- `W.4` peer replay recovery text and peer-side protocol parity
+- `W.5` doctor projection of same-host bootstrap traceability
+- `W.6` SQLite degradation/error-contract cleanup and typed daemon event labels
+- `W.7` Phase `W` carry-forward triage loop and phase closeout record
+- `W.8` phase closeout: typed SQLite subsystem identity and ATM error
+  inventory correction
+
+Execution rules:
+- `W.1` defines the daemon-side sink-failure behavior for later emitted events
+- `W.2` owns same-host parity across `atm`, `atm-daemon-client`, and
+  `atm-graft`
+- `W.3` owns SQLite-backed doctor projection and non-CLI protocol-envelope
+  parity
+- `W.4` is independently executable from `W.2` and `W.3`; it owns peer replay
+  recovery text and peer-side parity through the shared protocol envelope
+
+Acceptance:
+- every critical failure class named in `docs/plan-phase-W.md` is assigned to a
+  specific sprint
+- each sprint has explicit hard dependencies, required work, acceptance
+  criteria, and required validation
+
+## 28. Phase Xb SQLite SSOT And Daemon Boundary Simplification Restart
+
+Planning input:
+- legacy planning branch: `feature/pX-s0-planning`
+- restart execution branch: `integrate/phase-Xb`
+
+Base branch:
+- `develop`
+
+Integration branch:
+- `integrate/phase-Xb`
+
+Goal:
+- remove the dual mailbox/runtime implementation so ATM has one durable
+  mailbox path
+- make daemon runtime truth align with the SQLite SSOT claim
+- make replay persistence startup behavior explicit and enforceable
+- add the guardrails needed to catch legacy-path regressions and stale code
+  earlier in development
+
+Restart note:
+- the original `integrate/phase-X` line is abandoned as the authoritative phase
+  branch
+- `Xb` sprint branches replay audited prior Phase `X` work onto a clean
+  `develop`-based integration line
+- prior implementation completion exists for much of `X.1` through `X.5`, but
+  QA must still validate each restarted sprint end to end after any cherry-pick
+  or selective reapplication
+
+Status note:
+- `X.0` complete on `feature/pX-lint-gates`
+  - target: `develop`
+  - scope: silent-emit regression gate and RULE-002 function-length gate
+- `X.1` complete on `feature/pXb-s1-mailbox-runtime-cutover`
+  - target: `integrate/phase-Xb`
+  - scope: mailbox runtime cutover and dual-mode retained-runtime surface
+    deletion
+- `X.2` complete on `feature/pXb-s2-command-path-simplification`
+  - target: `integrate/phase-Xb`
+  - scope: command-path simplification and legacy mailbox path deletion
+- `X.3` complete on `feature/pXb-s3-runtime-truth-unification`
+  - target: `integrate/phase-Xb`
+  - scope: daemon runtime truth unification and runtime-status-cache refactor
+- `X.4` complete on `feature/pXb-s4-replay-and-ipc-consolidation`
+  - target: `integrate/phase-Xb`
+  - scope: replay-persistence startup contract, peer-transport decomposition,
+    same-host helper deduplication, and follow-up boundary/error-visibility
+    cleanup
+- `X.5` complete on `feature/pXb-s5-guardrails-and-closeout`
+  - target: `integrate/phase-Xb`
+  - scope: closeout guardrails, dependency-ownership validation, and replayed
+    sprint acceptance verification
+
+Pre-phase prerequisite:
+- already satisfied on `develop` before `integrate/phase-Xb` starts via
+  `feature/pX-lint-gates`:
+  - silent-emit regression gate
+  - RULE-002 function-length gate
+- those guards must already be live on every Phase `X` sprint branch from the
+  first push; they are not part of the `integrate/phase-Xb` sprint sequence
+
+Execution shape:
+- pre-phase prerequisite:
+  - inherited `X.0` lint-gate baseline already live before `integrate/phase-Xb`
+- `X.1` mailbox runtime cutover and dual-mode surface deletion on
+  `feature/pXb-s1-mailbox-runtime-cutover`
+- `X.2` command-path simplification and legacy mailbox path deletion on
+  `feature/pXb-s2-command-path-simplification`
+- `X.3` daemon runtime truth unification and runtime-status-cache refactor on
+  `feature/pXb-s3-runtime-truth-unification`
+- `X.4` replay-persistence startup contract, peer-transport decomposition, and
+  same-host helper deduplication on
+  `feature/pXb-s4-replay-and-ipc-consolidation`
+- `X.5` systemic guardrails, dependency-ownership validation, and closeout
+  verification on `feature/pXb-s5-guardrails-and-closeout`
+
+#### Sprint X.4 — Replay Persistence Contract, Peer Transport, And Same-Host IPC Helpers
+
+Branch:
+- `feature/pXb-s4-replay-and-ipc-consolidation`
+
+PR:
+- `#290`
+
+Status:
+- X.4 complete (PR #290 merged to integrate/phase-Xb)
+
+Deliverables:
+- fail-closed replay-store startup contract documented and enforced in daemon
+  composition
+- peer-transport helper decomposition with the shared ATM error and recovery
+  contract preserved
+- same-host helper ownership consolidated into `atm-daemon-client`
+- CLI and graft same-host wrappers aligned to the shared daemon-client helper
+  line
+- daemon ingress/export error visibility tightened around config load, source
+  import, and source/mailbox projection rewrites
+- machine-readable and prose daemon-client boundary records aligned with the
+  replayed helper ownership
+
+Acceptance criteria:
+- one replay-persistence startup contract is documented in product and
+  daemon-local docs
+- daemon startup behavior in `composition.rs` matches the documented contract
+- `send_to_endpoint(...)` is under `80` lines
+- `send_once(...)` is under `80` lines
+- `rg -n "fn try_connect\\(|fn exchange\\(|fn unexpected_response\\(" crates/atm crates/atm-graft crates/atm-daemon-client`
+  finds one shared helper definition per helper name
+- CLI and graft same-host paths share the same daemon-unavailable and
+  unexpected-response behavior
+- peer transport preserves the shared ATM error and recovery contract after the
+  `send_to_endpoint(...)` and `send_once(...)` refactor
+
+#### Sprint X.5 — Guardrails, Dependency Ownership, And Closeout Verification
+
+Branch:
+- `feature/pXb-s5-guardrails-and-closeout`
+
+PR:
+- `#291`
+
+Status:
+- X.5 complete (PR #291 merged to integrate/phase-Xb)
+
+Deliverables:
+- `ATM-QA-S4-001` closure by warning before peer-transport retry-budget fallback
+- `FTQ-006` closure by replacing composition test cwd restore pairs with
+  `CwdGuard`
+- `RBP-F005` closure by keeping the replayed local IPC and reconcile paths
+  inside the `RULE-002` function-length guardrail
+- `sprint-X5.md` aligned to the completed `pXb` branch state
+- closeout guardrails and dependency-ownership checks validated on the replayed
+  `X.5` line
+
+Acceptance criteria:
+- the legacy-mailbox-regression gate is runnable in CI
+- the replay-capability-degradation regression gate is runnable in CI
+- the local lint entrypoints include dependency-ownership validation
+- the `TASK-1515` baseline artifacts remain present and consistent at Phase `X`
+  closeout
+- the replayed `X.5` branch passes full sprint QA after any promoted finding
+  fix
+
+Execution rules:
+- no Phase `X` sprint may preserve or add a mailbox durability fallback path
+- SQLite/store is the only durable retained mailbox implementation after the
+  cutover line lands
+- file watchers may remain only as ingress/reconcile edges, not as a parallel
+  mailbox backend
+- CLI and graft same-host daemon helper behavior must collapse onto one shared
+  implementation line before Phase `X` closeout
+- when helper ownership moves across crate boundaries, the owning boundary docs
+  must be updated in the same sprint so plan and boundary rules do not
+  contradict each other
+- deletion sprints must include explicit whole-workspace searches for removed
+  legacy constructs, not only touched-file verification
+- sprint replay from prior Phase `X` commits is allowed only after audit and
+  does not reduce QA scope; QA runs on the full restarted sprint branch
+
+Acceptance:
+- every live legacy mailbox/runtime path named in `docs/phase-X/plan-phase-X.md`
+  maps to one explicit sprint deliverable and acceptance criterion
+- same-host helper duplication across `atm`, `atm-graft`, and
+  `atm-daemon-client` has explicit sprint ownership
+- Phase `X` includes CI or QA gates for:
+  - legacy mailbox-path regression
+  - replay-capability-degradation regression
+  - dependency-ownership validation via `cargo-shear`
+- the silent-emit and RULE-002 gates are treated as already-live pre-phase
+  develop prerequisites, not delayed `integrate/phase-Xb` sprint work
+- each sprint names the shared ATM error / protocol / doctor paths it must
+  reuse and the current `main` CLI baseline it must preserve
+- duplicate interface-specific error/reporting implementations for the same
+  touched failure class are marked for consolidation rather than preservation
+
+## 29. Phase Xb Planning And Pre-Phase Lint Prerequisite
+
+Planning input:
+- legacy planning branch: `feature/pX-s0-planning`
+
+Pre-phase prerequisite branch:
+- `feature/pX-lint-gates`
+
+Base branch:
+- `develop`
+
+Integration branch:
+- `integrate/phase-Xb`
+
+Goal:
+- remove the remaining legacy mailbox/runtime branches behind the retained
+  boundary
+- tighten daemon runtime truth around the SQLite SSOT claim
+- make replay persistence startup behavior explicit and enforceable
+- add guardrails that catch stale legacy paths and silent regressions earlier
+
+Status note:
+- `X.0` complete on `feature/pX-lint-gates`
+  - target: `develop`
+  - scope: silent-emit regression gate and RULE-002 function-length gate
+- `X.1` complete on `feature/pXb-s1-mailbox-runtime-cutover`
+  - target: `integrate/phase-Xb`
+  - scope: retained mailbox runtime cutover to a fail-closed SQLite/store-backed path
+- `X.2` complete on `feature/pXb-s2-command-path-simplification`
+  - target: `integrate/phase-Xb`
+  - scope: removed the remaining production legacy-key branches, moved send
+    threading/export to a store-backed projection load, and confined
+    compatibility inbox file helpers to the hidden daemon ingress/export seam
+- `X.3` complete on `feature/pXb-s3-runtime-truth-unification`
+  - target: `integrate/phase-Xb`
+  - scope: removed filesystem team discovery from daemon runtime hydration,
+    added explicit `RosterStore` team enumeration, and aligned core/daemon
+    boundary docs with store-owned team/member runtime truth
+- `X.4` complete on `feature/pXb-s4-replay-and-ipc-consolidation`
+  - target: `integrate/phase-Xb`
+  - scope: fail-closed replay startup, peer transport decomposition,
+    same-host helper deduplication, and follow-up boundary/error-visibility
+    cleanup
+- `X.5` complete on `feature/pXb-s5-guardrails-and-closeout` (`#291`)
+  - target: `integrate/phase-Xb`
+  - scope: closeout guardrails, dependency-ownership validation, and replayed
+    sprint acceptance verification
+
+Execution shape:
+- pre-phase prerequisite:
+  - `X.0` shared lint gates already live on `develop` before
+  `integrate/phase-Xb` starts
+- `X.1` mailbox runtime cutover and dual-mode surface deletion on
+  `feature/pXb-s1-mailbox-runtime-cutover`
+- `X.2` command-path simplification and legacy mailbox path deletion on
+  `feature/pXb-s2-command-path-simplification`
+- `X.3` daemon runtime truth unification and runtime-status-cache refactor on
+  `feature/pXb-s3-runtime-truth-unification`
+- `X.4` replay-persistence startup contract, peer-transport decomposition, and
+  same-host helper deduplication on
+  `feature/pXb-s4-replay-and-ipc-consolidation`
+- `X.5` systemic guardrails, dependency-ownership validation, and closeout
+  verification on `feature/pXb-s5-guardrails-and-closeout`
+
+Execution rules:
+- no Phase `X` sprint may preserve or add a mailbox durability fallback path
+- the silent-emit and RULE-002 gates are treated as already-live pre-phase
+  develop prerequisites, not delayed `integrate/phase-Xb` sprint work
+- file watchers may remain only as ingress/reconcile edges, not as a parallel
+  mailbox backend
+- no Phase `X` scope item relies on an implicit discovery sprint
+- Phase `X` closes only when the legacy mailbox/runtime deletion gates,
+  same-host helper deduplication, and daemon SQLite-runtime truth rules are
+  revalidated on `integrate/phase-Xb`
+- cherry-picked or selectively replayed prior Phase `X` work does not narrow
+  QA scope; each restarted sprint must pass QA as a full sprint
+- `docs/phase-X/plan-phase-X.md` remains the authoritative execution plan for
+  the Phase `X` sprint line
+
+## 30. Phase Y Pre-Smoke Trivial Fixes
+
+Branch:
+- `feature/pY-trivial-fixes`
+
+Target:
+- `develop`
+
+Status:
+- complete
+
+Scope:
+- small pre-Phase-`Y` cleanup items that should land before the dedicated
+  Phase `Y` planning and smoke-testing line starts
+
+Delivered:
+- shared `ATM_SERVICE_NAME` constant reuse in CLI observability fatal-event
+  emission
+- `atm ack` validation cleanup to remove redundant dual state derivation
+- architecture wording cleanup for the current clear-eligibility model
+- safe `GH #78` follow-up to preserve the working compatibility inbox contract
+  while adding regression coverage
+- design proposals for GitHub issues `#78` and `#83` sent to `team-lead`
+- trivial-fixes QA-1 follow-up landed on the same branch:
+  - generic internal fallback code for non-ATM fatal-error logging
+  - infallible `resolve_reply_target(...)` contract cleanup
+  - `atm ack` structured warn-field completion
+- `GH #83` implementation intentionally deferred to Phase `Y` Sprint `Y.1`
+
+## 31. Phase Y Daemon Release Readiness, Compatibility Write Simplification, And Smoke Rollout
+
+Planning branch:
+- `feature/pY-s0-planning`
+
+Pre-phase implementation branch:
+- `feature/pY-trivial-fixes`
+
+Future integration branch:
+- `integrate/phase-Y`
+
+Target:
+- `develop` for planning / pre-phase setup
+- `integrate/phase-Y` for the execution line
+
+Status:
+- complete
+
+Status note:
+- `Y.1` merged to `integrate/phase-Y`
+  - branch: `feature/pY-s1-pre-smoke-scaffolding`
+  - PR: `#296`
+  - merge commit: `c63574cb`
+
+Authoritative plans:
+- `docs/plan-phase-Y.md`
+- `docs/plan-phase-Z.md`
+
+Goal:
+- make the first daemon + SQLite mail-SSOT release safe for real operator use
+- minimize ATM-authored metadata on the shared inbox surface
+- move all ATM-authored compatibility inbox/config writes behind one hard
+  owner boundary
+- centralize delivery routing into one coordinator plus explicit event-family
+  state machines
+- remove mutable workflow-state projection from compatibility output
+- document every CLI/client-socket write path and every SQLite query state
+  machine so QA can verify simplification directly
+- close implementation cleanup before progressive smoke and dogfood validation
+  begin on the next phase line
+
+Execution shape:
+- `Y.0` pre-smoke trivial fixes on `feature/pY-trivial-fixes`
+- planning-branch audits and the shared-inbox field decision framework
+  complete before numbered sprint execution begins
+- `Y.1` `atm help` and UX improvements
+  - deliver `atm help`, `atm help --list`, typed concept-topic help, and
+    delegated clap subcommand help without broadening into general JSON-input work
+- `Y.2` pre-smoke easy fixes and validation
+  - close the deferred `Y.1` tier-2 help follow-ups for `hooks`, `identity`,
+    and `skills` without changing the compatibility inbox wire contract
+- `Y.3` hard write-boundary consolidation
+  - complete on `feature/pY-s3-hard-write-boundary-consolidation`
+  - normal retained compatibility rewrite now routes only through
+    `RetainedServiceRuntime::refresh_compat_inbox_projection(...)`
+- `Y.4` delivery coordinator and event-family state machines
+  - complete on `feature/pY-s4-delivery-coordinator-and-state-machines`
+  - retained send/ack harness routing now resolves a copied roster snapshot in
+    `crates/atm-core/src/delivery_policy.rs`
+  - retained compatibility export now stays on the `Claude Code` harness path
+    only; non-Claude harnesses skip ATM-authored JSONL export
+- `Y.5` mutable compatibility-field removal and hidden-dependency exposure
+  - complete on `feature/pY-s5-mutable-compatibility-field-removal`
+  - retained compatibility export now keeps only immutable correlation/context
+    fields: `message_id`, `parentMessageId`, `threadMode`, and `taskId`
+  - retained compatibility export now strips mutable/shared-projection fields:
+    `source_team`, `pendingAckAt`, `acknowledgedAt`,
+    `acknowledgesMessageId`, `expiresAt`, and `metadata.atm.*`
+  - retained compatibility export now reloads stored message records instead of
+    workflow-joined projected envelopes before writing Claude Code projection
+    files
+- `Y.6` append-only compatibility export cutover if the approved wire contract
+  allows it
+  - complete on `feature/pY-s6-append-only-compatibility-export`
+  - retained normal-runtime Claude Code compatibility writes now append one
+    JSONL record at a time after the durable SQLite/workflow step
+  - retained non-Claude harnesses still never receive ATM-authored JSONL
+    append output
+  - retained SQLite-failure recovery now emits the documented
+    original-plus-`atm-system@<team>` companion contract instead of silently
+    downgrading to a warning-only path
+
+Follow-on validation phase:
+- completed CLI JSON I/O audit recorded in
+  `docs/phase-Z/cli-json-io-audit.md`
+- retained-command JSON output already exists; structured JSON input is
+  deferred until after `Phase Z`
+- `Z.1` executable smoke bring-up
+- `Z.2` fix and revalidate
+- `Z.3` `atm-dev` canary and dogfood
+- `Z.4` final fixes and release sign-off
+
+Immediate planning outputs:
+- `docs/plan-phase-Y.md`
+- `docs/plan-phase-Z.md`
+- `docs/phase-Y/inbox-write-path-audit.md`
+- `docs/phase-Y/inbox-field-inventory.md`
+- `docs/phase-Y/help.md`
+- `docs/phase-Y/state-machine-coverage-audit.md`
+- `docs/phase-Y/delivery-state-machines.md`
+- `docs/phase-Y/sprint-Y1.md`
+- `docs/phase-Y/sprint-Y2.md`
+- `docs/phase-Y/sprint-Y3.md`
+- `docs/phase-Y/sprint-Y4.md`
+- `docs/phase-Y/sprint-Y5.md`
+- `docs/phase-Y/sprint-Y6.md`
+- `docs/phase-Z/cli-json-io-audit.md`
+- `docs/phase-Z/sprint-Z1.md`
+- `docs/phase-Z/sprint-Z2.md`
+- `docs/phase-Z/sprint-Z3.md`
+- `docs/phase-Z/sprint-Z4.md`
+- approved implementation scopes for `Y.1` and `Y.2`, with `Y.1` kept
+  strictly on `atm help` and adjacent UX wording
+
+## 32. Phase Yb Message-Path Consolidation Planning
+
+Status summary:
+- `integrate/phase-Y` is accepted enough to define the next path-consolidation
+  line, but the production-readiness review still found structural message-path
+  issues that must be planned and implemented before broad smoke/dogfood work
+  resumes.
+- Phase `Yb` is now fully implemented through `Y.11`.
+- the line closes with:
+  - shared delivery plans across Claude/non-Claude harness paths
+  - a dedicated `NonClaudeOutbound` payload boundary
+  - fail-closed handling for missing roster harness data
+  - repair/rebuild-only mailbox rewrite seams
+- an explicit Claude-only append seam that is never selected for
+  `DeliveryHarnessPath::NonClaude`
+- an explicit repair/rebuild projection seam that no longer accepts a generic
+  recipient snapshot with a non-Claude no-op branch
+- a later focused production-readiness review still reopened two final blockers:
+  - partial Claude recovered degraded delivery remained possible
+  - production notification execution still bypassed `NotificationSink`
+- those blockers are tracked in `Phase Yc`; smoke/dogfood work must not resume
+  until `Phase Yc` closes **and** the later `Phase Yd` develop-gate record
+  says `Phase Z` may begin.
+
+Goal:
+- lock down the exact message-path consolidation work needed after `Phase Y`
+- document the removal ledger, current call stacks, shared executor contract,
+  and lintable boundary rules before implementation restarts
+
+Execution shape:
+- planning-only branch: `message-path-consolidation-plan-Yb`
+- future implementation integration branch: `integrate/phase-Yb`
+- implementation sequence:
+  - `Y.7` degraded delivery contract hardening
+    - branch: `feature/pYb-s7-degraded-delivery-contract-hardening`
+  - `Y.8` policy cleanup and impossible-path removal
+    - branch: `feature/pYb-s8-policy-cleanup-and-impossible-path-removal`
+  - `Y.9` non-Claude outbound boundary formalization
+    - branch: `feature/pYb-s9-non-claude-outbound-boundary-formalization`
+  - `Y.10` boundary enforcement and smoke handoff
+    - branch: `feature/pYb-s10-boundary-enforcement-and-smoke-handoff`
+  - `Y.11` post-`Y.10` boundary gap closure
+    - branch: `feature/pYb-s11-y10-gap-closure`
+
+Immediate planning outputs:
+- `docs/phase-Yb/plan-phase-Yb.md`
+- `docs/phase-Yb/removal-ledger.md`
+- `docs/phase-Yb/message-path-call-stacks.md`
+- `docs/phase-Yb/lintable-boundary-plan.md`
+- `docs/phase-Yb/hardening-audit.md`
+- `docs/phase-Yb/qa-handoff.md`
+- `docs/phase-Yb/testing-and-validation.md`
+- `docs/phase-Yb/sprint-Y7.md`
+- `docs/phase-Yb/sprint-Y8.md`
+- `docs/phase-Yb/sprint-Y9.md`
+- `docs/phase-Yb/sprint-Y10.md`
+- `docs/phase-Yb/sprint-Y11.md`
+- `docs/adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md`
+
+## 33. Phase Yc Final Production-Readiness Closure
+
+Status summary:
+- `integrate/phase-Y` still had two final runtime production-readiness
+  blockers reopened by focused review.
+- `Phase Yc` is the dedicated follow-on for those blockers.
+- `Phase Yc` is intentionally split into two sprints so each deliverable lands
+  at a production-ready level without mixing behavioral and boundary closure.
+
+Goal:
+- close the final Claude recovered degraded-delivery contract gap
+- close the final `NotificationSink` boundary bypass
+- leave the focused readiness record that proves those two original runtime
+  blockers are closed before the broader `Phase Yd` develop-gate closeout
+  begins
+- keep `Y.12` and `Y.13` on their user-discussed runtime/code scope; later
+  post-mortem lint recommendations are separate follow-up work, not substitute
+  deliverables for these two sprints
+
+Execution shape:
+- planning-only branch: `plan/phase-Yc-y12-y13`
+- implementation target branch: `integrate/phase-Y`
+- implementation sequence:
+  - `Y.12` Claude degraded delivery set closure
+    - branch: `feature/pYc-s12-claude-degraded-delivery-set-closure`
+  - `Y.13` notification boundary closure and readiness gate
+    - branch: `feature/pYc-s13-notification-boundary-and-readiness-gate`
+
+Immediate planning outputs:
+- `docs/phase-Yc/plan-phase-Yc.md`
+- `docs/phase-Yc/issues.md`
+- `docs/phase-Yc/readiness.md`
+- `docs/phase-Yc/sprint-Y12.md`
+- `docs/phase-Yc/sprint-Y13.md`
+
+Acceptance / Phase Z Smoke Gate:
+- `Phase Z` smoke and dogfood work remain blocked while either `Y.12` or
+  `Y.13` is still open.
+- the `Yc` readiness record must explicitly state that:
+  - the recovered Claude SQLite-failure path cannot partially emit a logical
+    message set while still claiming success
+  - the production notification path executes through
+    `NotificationSink::deliver(...)` rather than direct hook helpers
+  - the focused `Yc` readiness validation has passed on the merged
+    `integrate/phase-Y` line
+- `Yc` closure alone is not sufficient to start `Phase Z`; the later
+  `Phase Yd` readiness record still controls whether `Phase Z` may begin
+
+## 34. Phase Yd Develop-Gate Closure
+
+Status summary:
+- `Phase Yc` captured the two original runtime blockers reopened by the focused
+  production-readiness review.
+- `Y.15` is now closed on
+  `feature/pYd-s15-production-notification-boundary-closure`; the surviving
+  notification boundary proof now lives on the final accepted `Phase Y`
+  candidate line instead of only on the focused `Yc` line.
+- `Y.16` retained-runtime composition closure is now present on the accepted
+  candidate line through merge commit `2fd404dc`.
+- `Y.17` candidate closure is now complete at `2fd404dc`; the accepted
+  candidate contains the required phase-end fix line and is validation-clean.
+- `Y.18` thin-liveness closure and final develop gate are now complete at
+  `19376e42`; the accepted candidate is authorized for `develop`, and
+  `Phase Z` may begin.
+- before `integrate/phase-Y` lands on `develop`, the broader `Phase Y`
+  blocker set must be documented explicitly and closed on a final
+  develop-gate line.
+- `Y.14` recovered Claude logical-message-set closure is complete on
+  `feature/pYd-s14-recovered-claude-logical-message-set-closure`; the
+  full `Y.14` through `Y.18` closeout line is now complete.
+- `Phase Z` is unblocked because the closeout line now says `Phase Y` is ready
+  for `develop`.
+
+Goal:
+- document the full `Phase Y` blocker set, not only the original two `Yc`
+  runtime gaps
+- close the remaining runtime, boundary, composition, accepted phase-end-fix,
+  and thin-liveness blockers before `develop`
+- leave one readiness record that explicitly authorizes `Phase Y` to land on
+  `develop` and `Phase Z` to begin
+
+Execution shape:
+- planning-only branch: `plan/phase-Yd-z-gate`
+- implementation target branch: `integrate/phase-Y`
+- implementation sequence:
+  - `Y.14` recovered Claude logical-message-set closure
+    - branch: `feature/pYd-s14-recovered-claude-logical-message-set-closure`
+  - `Y.15` production notification boundary closure
+    - branch: `feature/pYd-s15-production-notification-boundary-closure`
+  - `Y.16` retained-runtime composition closure
+    - branch: `feature/pYd-s16-retained-runtime-composition-closure`
+  - `Y.17` candidate closure
+    - branch: `feature/pYd-s17-candidate-closure`
+  - `Y.18` thin liveness closure and final develop gate
+    - branch: `feature/pYd-s18-thin-liveness-closure-and-final-develop-gate`
+
+Immediate planning outputs:
+- `docs/phase-Y/issues.md`
+- `docs/phase-Yd/plan-phase-Yd.md`
+- `docs/phase-Yd/readiness.md`
+- `docs/phase-Yd/sprint-Y14.md`
+- `docs/phase-Yd/sprint-Y15.md`
+- `docs/phase-Yd/sprint-Y16.md`
+- `docs/phase-Yd/sprint-Y17.md`
+- `docs/phase-Yd/sprint-Y18.md`
+
+Acceptance / Develop And Phase Z Gate:
+- `Phase Y` does not land on `develop` while any blocking item in
+  `docs/phase-Y/issues.md` remains open.
+- `Phase Z` remains blocked until `docs/phase-Yd/readiness.md` explicitly
+  states that:
+  - the `Phase Y` blocker set is closed
+  - `Phase Y` may land on `develop`
+  - `Phase Z` may begin
+
+## 35. Phase Ye Daemon Ownership Simplification
+
+Status summary:
+- `Phase Y` closes delivery-path and readiness blockers, but it still leaves
+  three daemon-runtime ownership surfaces whose implementation shape is more
+  lock-heavy than the intended design:
+  - `RuntimeStatusCache`
+  - `NotificationRuntime`
+  - `ReconcileRuntime`
+- `Phase Ye` is the follow-on design line that simplifies those surfaces after
+  `Phase Y` lands on `develop`.
+- implementation continues on the existing `integrate/phase-Y` line rather
+  than creating a second long-lived integration branch
+- `Phase Ye` closes on the accepted line once `Y.23` records the phase-end
+  architecture proof and `ADR-015` acceptance.
+- `Phase Ye: closed — Y.23 phase-end proof recorded and ADR-015 accepted.`
+
+Goal:
+- replace read-mostly daemon status locking with immutable snapshot publication
+- replace daemon worker-lane shared mutable queue/debounce state with bounded
+  channel / actor ownership where that is the real design
+- leave one explicit ADR and daemon-doc contract for those ownership rules
+
+Execution shape:
+- planning-only branch:
+  - `plan/phase-Y-lock-removal`
+- implementation target branch:
+  - `integrate/phase-Y`
+- implementation sequence:
+  - `Y.19` runtime status snapshot publication
+  - `Y.20` notification runtime channel ownership
+  - `Y.21` reconcile runtime actor foundation
+  - `Y.22` reconcile runtime cutover
+  - `Y.23` phase-end architecture proof
+  - closed on accepted line after `Y.23` phase-end architecture proof
+
+Immediate planning outputs:
+- `docs/adr/ADR-015-daemon-runtime-snapshot-and-worker-ownership.md`
+- `docs/phase-Ye/issues.md`
+- `docs/phase-Ye/plan-phase-Ye.md`
+- `docs/phase-Ye/readiness.md`
+- `docs/phase-Ye/sprint-Y19.md`
+- `docs/phase-Ye/sprint-Y20.md`
+- `docs/phase-Ye/sprint-Y21.md`
+- `docs/phase-Ye/sprint-Y22.md`
+- `docs/phase-Ye/sprint-Y23.md`
+
+Phase rules:
+- `Phase Ye` does not reopen `Phase Y` delivery correctness work
+- `Phase Ye` does not absorb `Phase Z` rollout or smoke work
+- `RuntimeStatusCache` must close in one sprint because it is one ownership
+  surface, not a broad daemon-health redesign
+- `ReconcileRuntime` is intentionally split into foundation and cutover sprints
+  so the actor contract lands before the old shared-state path is deleted
+- `Phase Ye` ends with one separate proof sprint so reconcile cutover does not
+  also have to carry whole-phase closure
+
+## 36. Phase Z Smoke, Dogfood, And Release Sign-Off
+
+Status summary:
+- `Phase Yd` is complete and the final readiness record authorizes `Phase Y` to
+  land on `develop` and `Phase Z` to begin.
+- `Phase Ye` is complete on the current `develop` baseline and does not reopen
+  the `Phase Z` rollout gate.
+- `Phase Z` is complete; release verdict `READY` on
+  `feature/pZ-smoke-atm-graft @ 84935774`, authorized in
+  `docs/phase-Z/readiness.md` by `team-lead`
+  (`PZ-ATM-GRAFT-QA-3 PASS — PR #365`).
+- `Z.1` smoke bring-up is complete at `70f4fa7f` with verdict `FAIL`; two
+  blocking findings are promoted to `Z.2`, which is now the next-unused sprint.
+- the `Z1-F001` analysis also reopened a broader follow-on line for roster
+  truth, watcher-owned Claude config ingress, member metadata ownership, and
+  backup / restore automation; that work is now split into `Z.5` through
+  `Z.10` and must close before `Z.3` canary begins.
+- the remaining boundary / follow-up hardening line is now split into `Z.11`
+  through `Z.15`; that line must also close before `Z.3` canary begins.
+
+Planning branch:
+- `plan/phase-Z`
+
+Future integration branch:
+- `integrate/phase-Z`
+
+Goal:
+- validate the first daemon + SQLite mail-SSOT release in real executable use
+- run the first real-binary smoke matrix on the accepted `Phase Y` line
+- close smoke findings before broader `atm-dev` dogfood begins
+- close the `config.json` / ATM roster / restore ownership gaps discovered
+  during smoke before broader dogfood begins
+- produce a final release-ready / not-ready verdict with evidence
+
+Execution shape:
+- `Z.1` smoke bring-up
+  - branch: `feature/pZ-s1-smoke-bring-up`
+- `Z.2` fix and revalidate
+  - branch: `feature/pZ-s2-fix-and-revalidate`
+- `Z.5` runtime roster truth cutover
+  - branch: `feature/pZ-s5-runtime-roster-truth-cutover`
+- `Z.6` Claude send semantics and immutable runtime roster view
+  - branch: `feature/pZ-s6-claude-send-semantics-and-runtime-roster-view`
+- `Z.7` config-ingress boundary narrowing and static gates
+  - branch: `feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates`
+- `Z.8` watcher-owned Claude config ingest
+  - branch: `feature/pZ-s8-watcher-owned-claude-config-ingest`
+- `Z.9` team-admin roster authority and member metadata
+  - branch: `feature/pZ-s9-team-admin-roster-authority-and-member-metadata`
+- `Z.10` team backup / restore automation and config projection
+  - branch: `feature/pZ-s10-team-backup-restore-automation-and-config-projection`
+- `Z.11` first-send recovery contract and setup guidance
+  - branch: `feature/pZ-s11-first-send-recovery-contract-and-setup-guidance`
+- `Z.12` retained runtime path elimination and boundary lint gate
+  - branch: `feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate`
+- `Z.13` workspace config boundary cleanup and lint gate
+  - branch: `feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate`
+- `Z.14` ambient singleton surface removal and lint gate
+  - branch: `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate`
+- `Z.15` deferred hardening follow-up consolidation
+  - branch: `feature/pZ-s15-deferred-hardening-follow-up-consolidation`
+- `Z.16` smoke `Z.2` revalidation
+  - branch: `feature/pZ-s16-smoke-z1-rerun`
+- `Z.17` `atm-dev` canary and dogfood
+  - branch: `feature/pZ-s17-smoke-z3-rerun`
+- `Z.18` smoke skill scaffold and report infrastructure
+  - branch: `feature/pZ-s18-smoke-skill-and-report-infrastructure`
+- `Z.19` fast smoke happy-path execution
+  - branch: `feature/pZ-s19-fast-smoke-happy-path-execution`
+- `Z.20` normal smoke systemic execution
+  - branch: `feature/pZ-s20-normal-smoke-systemic-execution`
+- `Z.21` thorough smoke CLI coverage and reporting
+  - includes one real same-host `atm-graft` advisory plus unary ICD lane
+  - branch: `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting`
+- `Z.22` smoke findings review and major rework triage
+  - branch: `feature/pZ-s22-smoke-findings-review-and-major-rework-triage`
+- `Z.23` cross-platform test coverage reporting
+  - branch: `feature/pZ-s23-cross-platform-test-coverage-reporting`
+- `Z.3` `atm-dev` canary and dogfood
+  - branch: `feature/pZ-s3-atm-dev-canary-and-dogfood`
+- `Z.4` final fixes and release sign-off
+  - branch: `feature/pZ-smoke-atm-graft`
+
+Phase Z sprint ledger:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `Z.1` | `complete` | `feature/pZ-s1-smoke-bring-up` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.2` | `complete` | `feature/pZ-s2-fix-and-revalidate` | `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.5` | `complete` | `feature/pZ-s5-runtime-roster-truth-cutover` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.6` | `complete` | `feature/pZ-s6-claude-send-semantics-and-runtime-roster-view` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md`, `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md` |
+| `Z.7` | `complete` | `feature/pZ-s7-config-ingress-boundary-narrowing-and-static-gates` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md`, `.just/allowlists/scb_config_allowlist.toml`, `.just/fixtures/scb_config_known_bad.rs` |
+| `Z.8` | `complete` | `feature/pZ-s8-watcher-owned-claude-config-ingest` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.9` | `complete` | `feature/pZ-s9-team-admin-roster-authority-and-member-metadata` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.10` | `complete` | `feature/pZ-s10-team-backup-restore-automation-and-config-projection` | `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md`, `docs/phase-Z/readiness.md` |
+| `Z.11` | `complete` | `feature/pZ-s11-first-send-recovery-contract-and-setup-guidance` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z11.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/config-json-violation-inventory.md` |
+| `Z.12` | `complete` | `feature/pZ-s12-retained-runtime-path-elimination-and-boundary-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z12.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_retained_allowlist.toml`, `.just/fixtures/scb_runtime_known_bad.rs` |
+| `Z.13` | `complete` | `feature/pZ-s13-workspace-config-boundary-cleanup-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z13.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_workspace_allowlist.toml`, `.just/fixtures/scb_workspace_known_bad.rs` |
+| `Z.14` | `complete` | `feature/pZ-s14-ambient-singleton-surface-removal-and-lint-gate` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z14.md`, `docs/atm-core/boundaries.md`, `docs/phase-Z/config-json-violation-inventory.md`, `.just/allowlists/scb_singleton_allowlist.toml`, `.just/fixtures/scb_singleton_known_bad.rs` |
+| `Z.15` | `complete` | `feature/pZ-s15-deferred-hardening-follow-up-consolidation` | `docs/phase-Z/readiness.md`, `docs/phase-Z/sprint-Z15.md`, `docs/phase-Z/claude-roster-sync-and-restore.md`, `docs/phase-Z/config-json-violation-inventory.md` |
+| `Z.16` | `complete` | `feature/pZ-s16-smoke-z1-rerun` | `docs/phase-Z/sprint-Z16.md`, `docs/phase-Z/smoke-checklist.md`, `docs/phase-Z/smoke-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.17` | `complete` | `feature/pZ-s17-smoke-z3-rerun` | `docs/phase-Z/sprint-Z17.md`, `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.18` | `complete` | `feature/pZ-s18-smoke-skill-and-report-infrastructure` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z18.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `.gitignore` |
+| `Z.19` | `complete` | `feature/pZ-s19-fast-smoke-happy-path-execution` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z19.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
+| `Z.20` | `complete` | `feature/pZ-s20-normal-smoke-systemic-execution` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z20.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
+| `Z.21` | `complete` | `feature/pZ-s21-thorough-smoke-cli-coverage-and-reporting` | `docs/phase-Z/smoke-skill-plan.md`, `docs/phase-Z/sprint-Z21.md`, `.claude/skills/smoke-test/`, `scripts/smoke/`, `templates/smoke-report/`, `reports/smoke/`, `Justfile` |
+| `Z.22` | `complete` | `feature/pZ-s22-smoke-findings-review-and-major-rework-triage` | `docs/phase-Z/smoke-findings-review.md`, `docs/phase-Z/sprint-Z22.md` |
+| `Z.23` | `complete` | `feature/pZ-s23-cross-platform-test-coverage-reporting` | `docs/phase-Z/sprint-Z23.md`, `templates/coverage-report/`, `reports/coverage/`, `scripts/coverage/`, `Justfile` |
+| `Z.24` | `complete` | `feature/pZ-obs-v1.1.0-log-maintenance` | `docs/phase-Z/sprint-Z24.md`, `docs/plan-phase-Z.md`, `crates/atm-daemon/bin_support/daemon_observability.rs`, `crates/atm/src/output.rs`, `crates/atm-core/src/observability.rs` |
+| `Z.3` | `complete` | `feature/pZ-s3-atm-dev-canary-and-dogfood` | `docs/phase-Z/canary-dogfood-checklist.md`, `docs/phase-Z/canary-findings-ledger.md`, `docs/phase-Z/readiness.md` |
+| `Z.4` | `complete` | `feature/pZ-smoke-atm-graft` | `docs/phase-Z/release-checklist.md`, `docs/phase-Z/readiness.md`, `docs/phase-Z/canary-findings-ledger.md` |
+
+Immediate planning outputs:
+- `docs/plan-phase-Z.md`
+- `docs/adr/ADR-016-claude-config-ingress-and-roster-projection-ownership.md`
+- `docs/phase-Z/cli-json-io-audit.md`
+- `docs/phase-Z/claude-roster-sync-and-restore.md`
+- `docs/phase-Z/config-json-violation-inventory.md`
+- `docs/phase-Z/smoke-checklist.md`
+- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/phase-Z/canary-dogfood-checklist.md`
+- `docs/phase-Z/canary-findings-ledger.md`
+- `docs/phase-Z/release-checklist.md`
+- `docs/phase-Z/readiness.md`
+- `docs/phase-Z/sprint-Z1.md`
+- `docs/phase-Z/sprint-Z2.md`
+- `docs/phase-Z/sprint-Z5.md`
+- `docs/phase-Z/sprint-Z6.md`
+- `docs/phase-Z/sprint-Z7.md`
+- `docs/phase-Z/sprint-Z8.md`
+- `docs/phase-Z/sprint-Z9.md`
+- `docs/phase-Z/sprint-Z10.md`
+- `docs/phase-Z/sprint-Z11.md`
+- `docs/phase-Z/sprint-Z12.md`
+- `docs/phase-Z/sprint-Z13.md`
+- `docs/phase-Z/sprint-Z14.md`
+- `docs/phase-Z/sprint-Z15.md`
+- `docs/phase-Z/sprint-Z16.md`
+- `docs/phase-Z/smoke-skill-plan.md`
+- `docs/phase-Z/sprint-Z18.md`
+- `docs/phase-Z/sprint-Z19.md`
+- `docs/phase-Z/sprint-Z20.md`
+- `docs/phase-Z/sprint-Z21.md`
+- `docs/phase-Z/sprint-Z22.md`
+- `docs/phase-Z/sprint-Z23.md`
+- `docs/phase-Z/sprint-Z24.md`
+- `docs/phase-Z/smoke-findings-review.md`
+- `docs/phase-Z/sprint-Z3.md`
+- `docs/phase-Z/sprint-Z4.md`
+
+Acceptance / Phase Entry Gate:
+- `docs/phase-Yd/readiness.md` must explicitly state:
+  - `Phase Y` may land on `develop`
+  - `Phase Z` may begin
+- `Phase Ye` must remain closed and must not be used to reopen rollout scope
+- `Phase Z` sprint execution must validate on the real built executables, not
+  only unit or harness tests
+- `Z.3` canary execution must not begin until `Z.5` through `Z.10` close on the
+  accepted `integrate/phase-Z` line
+- `Z.3` canary execution must not begin until `Z.11` through `Z.15` also close
+  on the accepted `integrate/phase-Z` line
+- `Z.3` canary execution must not begin until `Z.18` through `Z.22` also close
+  on the accepted `integrate/phase-Z` line
+- the final `Z.4` release verdict must not close until `Z.23` and `Z.24` also
+  close on the accepted `integrate/phase-Z` line

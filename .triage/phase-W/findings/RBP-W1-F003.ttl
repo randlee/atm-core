@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W1-F003>
+  a triage:Finding ;
+  triage:findingId "RBP-W1-F003" ;
+  triage:title "runtime_status_cache.rs mark_sqlite_unavailable silent-discard contract not documented" ;
+  triage:description "mark_sqlite_unavailable Err(_) arm at crates/atm-daemon/src/runtime_status_cache.rs has tracing::error! (added in fix-R1) but still lacks a comment explaining why the error cannot be propagated: function returns () — propagation is impossible, tracing::error! is max-severity available at this boundary. Fix: add inline comment explaining the silent-discard contract." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W1-F003/pW-s1-emit-fallback/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W1-F003/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s1-emit-fallback/c21ec05d13cf00b3643c423ae72babaed7c5cb4f> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/b2298e372f8f133fde430f4bf2ffa40a9f0fe1e7> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s1-emit-fallback/c21ec05d13cf00b3643c423ae72babaed7c5cb4f> .
+
+<urn:atm:triage:occurrence/RBP-W1-F003/pW-s1-emit-fallback/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 204 ;
+  triage:snippet "Err(_) => { tracing::error!(\"runtime status cache lock poisoned while marking sqlite unavailable\"); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05d13cf00b3643c423ae72babaed7c5cb4f" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1-emit-fallback/c21ec05d13cf00b3643c423ae72babaed7c5cb4f> .
+
+<urn:atm:triage:occurrence/RBP-W1-F003/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 169 ;
+  triage:snippet "Err(_) => { tracing::error!(\"runtime status cache lock poisoned while marking sqlite unavailable\"); }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "b2298e372f8f133fde430f4bf2ffa40a9f0fe1e7" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/b2298e372f8f133fde430f4bf2ffa40a9f0fe1e7> .
+
+<urn:atm:triage:worktree/pW-s1-emit-fallback/c21ec05d13cf00b3643c423ae72babaed7c5cb4f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05d13cf00b3643c423ae72babaed7c5cb4f" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/b2298e372f8f133fde430f4bf2ffa40a9f0fe1e7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "b2298e372f8f133fde430f4bf2ffa40a9f0fe1e7" ;
+  triage:orderIndex 2 .

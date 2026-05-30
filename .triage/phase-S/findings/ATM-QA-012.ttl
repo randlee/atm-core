@@ -1,0 +1,124 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-012>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-012" ;
+  triage:title "_host_ownership field name implies held singleton lock but acquisition happens in bind()" ;
+  triage:description "crates/atm-daemon/src/composition.rs:115-118 — _host_ownership field name implies the struct holds a singleton lock, but the actual acquisition happens in bind(). Fix: rename to _host_ownership_adapter to clarify the binding-time semantics." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-012/pS-s13-ipc-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-012/pS-s13-ipc-hardening/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-012/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-012/pS-s14-impl/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-012/pS-s15-rusqlite-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-012/pS-s15-rusqlite-hardening/2> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+# Occurrences — one per open branch per distinct match location
+
+# s13: field declaration (line 117)
+<urn:atm:triage:occurrence/ATM-QA-012/pS-s13-ipc-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 117 ;
+  triage:snippet "    _host_ownership: HostOwnershipAdapter," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> .
+
+# s13: struct initialisation (line 165)
+<urn:atm:triage:occurrence/ATM-QA-012/pS-s13-ipc-hardening/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "            _host_ownership: HostOwnershipAdapter::new()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c> .
+
+# s14: field declaration (line 117)
+<urn:atm:triage:occurrence/ATM-QA-012/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 117 ;
+  triage:snippet "    _host_ownership: HostOwnershipAdapter," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> .
+
+# s14: struct initialisation (line 165)
+<urn:atm:triage:occurrence/ATM-QA-012/pS-s14-impl/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "            _host_ownership: HostOwnershipAdapter::new()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/cf57c48> .
+
+# s15: field declaration (line 117)
+<urn:atm:triage:occurrence/ATM-QA-012/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 117 ;
+  triage:snippet "    _host_ownership: HostOwnershipAdapter," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+# s15: struct initialisation (line 165)
+<urn:atm:triage:occurrence/ATM-QA-012/pS-s15-rusqlite-hardening/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 165 ;
+  triage:snippet "            _host_ownership: HostOwnershipAdapter::new()," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9> .
+
+# WorktreeSnapshots
+
+<urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s14-impl/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 .

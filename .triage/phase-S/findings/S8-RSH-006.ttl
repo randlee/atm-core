@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-RSH-006>
+  a triage:Finding ;
+  triage:findingId "S8-RSH-006" ;
+  triage:title "post_send_hooks Vec has no max-count bound" ;
+  triage:description "crates/atm-core/src/config/mod.rs:220 — the RawAtmSection field post_send_hooks: Vec<RawPostSendHookRule> has no upper bound on the number of registered hooks. An .atm.toml with a large number of [[atm.post_send_hooks]] entries is accepted without error, causing all hooks to be spawned as subprocesses on every send operation. This can exhaust file descriptors and process table entries. The integrate/phase-S baseline has the same unbounded field at mod.rs:216. The fix is to introduce a MAX_POST_SEND_HOOKS constant (e.g. 32) in config/types.rs and add a validation check in the normalize path returning AtmError { kind: AtmErrorKind::Config } when the count is exceeded." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RSH-006/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-RSH-006/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/3450be4> .
+
+<urn:atm:triage:occurrence/S8-RSH-006/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 220 ;
+  triage:snippet "post_send_hooks: Vec<RawPostSendHookRule>, — no max-count bound; arbitrary number of hooks accepted; all spawned on every send" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-RSH-006/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/mod.rs" ;
+  triage:line 216 ;
+  triage:snippet "post_send_hooks: Vec<RawPostSendHookRule>, — same unbounded Vec present on integrate/phase-S baseline" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "3450be4" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3450be4> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 .

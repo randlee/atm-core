@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-017>
+  a triage:Finding ;
+  triage:findingId "FTQ-017" ;
+  triage:title "heartbeat_demotes_evicted_member_to_explicit_unknown uses IsoTimestamp::now() tight loop — min_by_key nondeterministic on timestamp ties (tests.rs:501)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:501 — heartbeat_demotes_evicted_member_to_explicit_unknown inserts 4097 members via IsoTimestamp::now() tight loop. min_by_key at runtime_health.rs:242 over HashMap is nondeterministic on timestamp ties when the loop runs faster than clock resolution. Fix: use synthetic monotonically-increasing timestamps in the insertion loop. Similar to FTQ-012 which was fixed in TASK-1148 on S.2; verify whether the S.2 merge-forward at 9698a17 already resolved this occurrence. (quality-mgr reported as FTQ-002 in S.3 QA-2 report.)" ;
+  triage:category "FTQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T09:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-017/s3/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> .
+
+<urn:atm:triage:occurrence/FTQ-017/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 501 ;
+  triage:snippet "IsoTimestamp::now() tight loop 4097 members — timestamp ties → min_by_key nondeterministic" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9698a17" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "9698a17" ;
+  triage:orderIndex 3 .

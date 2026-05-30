@@ -1,0 +1,178 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/X2-ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "X2-ATM-QA-003" ;
+  triage:title "boundary_support.rs exports 10 pub fn that should be pub(crate)" ;
+  triage:description "crates/atm-core/src/boundary_support.rs declares 10 functions as `pub fn` that are only used within the crate and should be `pub(crate)`. Over-broad pub visibility leaks crate-internal helpers into the public API surface." ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "X2-ATM-QA" ;
+  triage:severity "Important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/10> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s1/71511a4> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s2/f3bd5f5> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s3/d287149> ;
+  triage:openOn <urn:atm:triage:worktree/pXb-s4/f10c9ec> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-Xb/1acc5f0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pXb-s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 39 ;
+  triage:snippet "pub fn load_workspace_config" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/71511a4> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 45 ;
+  triage:snippet "pub fn load_team_config" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/71511a4> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 56 ;
+  triage:snippet "pub fn import_inbox_source" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/71511a4> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 72 ;
+  triage:snippet "pub fn compute_identity_fingerprint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/71511a4> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 89 ;
+  triage:snippet "pub fn report_inbox_diagnostics" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/71511a4> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 114 ;
+  triage:snippet "pub fn export_source_files" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/71511a4> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 127 ;
+  triage:snippet "pub fn reexport_messages" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/71511a4> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 135 ;
+  triage:snippet "pub fn deliver_notification" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/71511a4> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 142 ;
+  triage:snippet "pub fn poll_watch" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/71511a4> .
+
+<urn:atm:triage:occurrence/X2-ATM-QA-003/pXb-s1/10>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 151 ;
+  triage:snippet "pub fn reconcile" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pXb-s1/71511a4> .
+
+<urn:atm:triage:worktree/pXb-s1/71511a4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pXb-s2/f3bd5f5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "f3bd5f5" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pXb-s3/d287149>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "d287149" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pXb-s4/f10c9ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/integrate-Xb/1acc5f0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Xb" ;
+  triage:headSha "1acc5f0" ;
+  triage:orderIndex 6 .

@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S12-QA1-002>
+  a triage:Finding ;
+  triage:findingId "S12-QA1-002" ;
+  triage:title "WatchRuntimeInner Mutex fields lack RBP-006 justification comments (watch_runtime.rs:28,30)" ;
+  triage:description "watch_runtime.rs:28-30: WatchRuntimeInner.state (Mutex<WatchState>) and .worker (Mutex<Option<JoinHandle<()>>>) have no doc comment explaining why Mutex is required. The parallel Condvar field (wake) implies a deliberate Mutex+Condvar concurrency design but the rationale is unstated. Compare: runtime_health.rs:62 carries an explicit justification ('Request handlers and doctor/status readers update and snapshot the cache concurrently...'). Fix: add struct-level or field-level comment: 'Worker thread, poll callers, and shutdown path all access state concurrently; Mutex+Condvar guards the lifecycle and subscription registry.'" ;
+  triage:category "RBP" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:promoteToBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-002/s12/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-002/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 28 ;
+  triage:snippet "WatchRuntimeInner { state: Mutex<WatchState>, worker: Mutex<Option<JoinHandle<()>>>, wake: Condvar } — no justification comment on Mutex fields (RBP-006)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s12-intg-gate-findings" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

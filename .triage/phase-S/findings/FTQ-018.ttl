@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-018>
+  a triage:Finding ;
+  triage:findingId "FTQ-018" ;
+  triage:title "singleton_guard_rejects_stale_recovery_when_owner_token_changes uses 35ms fixed sleep before token rewrite — race condition on loaded CI (tests.rs:183)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:183 — singleton_guard_rejects_stale_recovery_when_owner_token_changes sleeps 35ms before rewriting the token, relying on a spawned thread entering the 25ms retry loop within that window. On loaded CI, the token rewrite can precede the first read, causing the assertion to never trigger or the test to hang. Fix: replace the fixed 35ms sleep with Arc<Barrier> or condvar synchronization to ensure the spawned thread has entered the retry loop before the token is rewritten. Note: quality-mgr reported this as FTQ-016 in S.2 QA-3 report; remapped to FTQ-018 to avoid collision with canonical FTQ-016 (composition.rs:517 missing #[serial] on S.3)." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T10:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-018/s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> .
+
+<urn:atm:triage:occurrence/FTQ-018/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 183 ;
+  triage:snippet "35ms fixed sleep before token rewrite — race on loaded CI; spawned thread may not yet be in retry loop" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bcb5aab" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/bcb5aab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "bcb5aab" ;
+  triage:orderIndex 2 .

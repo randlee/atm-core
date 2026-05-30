@@ -1,0 +1,46 @@
+boundary_id = "BOUNDARY-NonClaudeOutbound"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "NonClaudeOutbound"
+
+[public]
+trait = "NonClaudeOutbound"
+notes = "trait and typed non-Claude outbound delivery DTOs will live in atm_core::boundary"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["outbound_non_claude_payload_delivery"]
+io_forbidden = ["compatibility_jsonl_append", "sqlite", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = ["maybe_run_post_send_hook", "append_compat_inbox_message"]
+
+[contracts]
+request_types = ["logical message delivery requests"]
+response_types = ["typed non-Claude delivery results"]
+error_types = ["AtmError"]
+notes = ["this boundary must receive the same logical payload set as the Claude path; only transport target differs"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["send::hook", "std::process::Command"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-NON-CLAUDE-OUTBOUND-REFERENCES"]
+review_gates = ["no_notification_sink_substitution", "no_direct_outer_caller_use"]
+
+[status]
+state = "concrete_landed"
+notes = ["Implemented in Phase Yb Y.9 with shared delivery-plan execution and a dedicated non-Claude outbound payload boundary."]

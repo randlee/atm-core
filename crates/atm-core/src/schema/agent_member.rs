@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use tracing::warn;
 
-use crate::types::AgentName;
+use crate::types::{AgentName, ModelName, PaneId};
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum AgentType {
@@ -30,6 +30,7 @@ impl From<String> for AgentType {
             "lead" => Self::Lead,
             "qa" => Self::Qa,
             "worker" => Self::Worker,
+            _ if value.trim().is_empty() => Self::Unknown(value),
             _ => {
                 warn!(
                     raw_agent_type = %value,
@@ -96,14 +97,14 @@ pub struct AgentMember {
 
     /// Retained provider/model label copied from `config.json` roster state.
     #[serde(default)]
-    pub model: String,
+    pub model: ModelName,
 
     #[serde(default)]
     pub joined_at: Option<u64>,
 
     /// Retained tmux pane identifier copied from `config.json` roster state.
     #[serde(default)]
-    pub tmux_pane_id: String,
+    pub tmux_pane_id: Option<PaneId>,
 
     /// Retained working directory path for the agent process, copied from `config.json` roster state.
     #[serde(default)]
@@ -119,9 +120,9 @@ impl AgentMember {
             name,
             agent_id: String::new(),
             agent_type: AgentType::default(),
-            model: String::new(),
+            model: ModelName::default(),
             joined_at: None,
-            tmux_pane_id: String::new(),
+            tmux_pane_id: None,
             cwd: String::new(),
             extra: Map::new(),
         }
@@ -131,42 +132,46 @@ impl AgentMember {
 #[cfg(test)]
 mod tests {
     use super::{AgentMember, AgentType};
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
 
     #[test]
     fn parse_name_only_record_defaults_optional_fields() {
-        let member: AgentMember = serde_json::from_str(r#"{"name":"arch-ctm"}"#).expect("member");
+        let member: AgentMember =
+            serde_json::from_str(&format!(r#"{{"name":"{TEST_SENDER}"}}"#)).expect("member");
 
-        assert_eq!(member.name, AgentName::from_validated("arch-ctm"));
+        assert_eq!(member.name, AgentName::from_validated(TEST_SENDER));
         assert!(member.agent_id.is_empty());
         assert_eq!(member.agent_type, AgentType::Unknown(String::new()));
         assert!(member.model.is_empty());
         assert_eq!(member.joined_at, None);
-        assert!(member.tmux_pane_id.is_empty());
+        assert_eq!(member.tmux_pane_id, None);
         assert!(member.cwd.is_empty());
         assert!(member.extra.is_empty());
     }
 
     #[test]
     fn parse_full_claude_code_record_preserves_values_and_extra() {
-        let raw = r#"{
-            "agentId":"arch-ctm@atm-dev",
-            "name":"arch-ctm",
+        let raw = format!(
+            r#"{{
+            "agentId":"{TEST_SENDER}@{TEST_TEAM}",
+            "name":"{TEST_SENDER}",
             "agentType":"general-purpose",
             "model":"claude-sonnet-4-5",
             "joinedAt":1770765919076,
             "tmuxPaneId":"%1",
             "cwd":"/workspace",
             "color":"blue"
-        }"#;
+        }}"#
+        );
 
-        let member: AgentMember = serde_json::from_str(raw).expect("member");
-        assert_eq!(member.agent_id, "arch-ctm@atm-dev");
-        assert_eq!(member.name, AgentName::from_validated("arch-ctm"));
+        let member: AgentMember = serde_json::from_str(&raw).expect("member");
+        assert_eq!(member.agent_id, format!("{TEST_SENDER}@{TEST_TEAM}"));
+        assert_eq!(member.name, AgentName::from_validated(TEST_SENDER));
         assert_eq!(member.agent_type, AgentType::GeneralPurpose);
-        assert_eq!(member.model, "claude-sonnet-4-5");
+        assert_eq!(member.model.as_str(), "claude-sonnet-4-5");
         assert_eq!(member.joined_at, Some(1770765919076));
-        assert_eq!(member.tmux_pane_id, "%1");
+        assert_eq!(member.tmux_pane_id.as_deref(), Some("%1"));
         assert_eq!(member.cwd, "/workspace");
         assert_eq!(member.extra["color"], serde_json::json!("blue"));
 
@@ -178,14 +183,15 @@ mod tests {
     #[test]
     fn parse_name_and_agent_type_record_succeeds() {
         let member: AgentMember =
-            serde_json::from_str(r#"{"name":"arch-ctm","agentType":"plan"}"#).expect("member");
+            serde_json::from_str(&format!(r#"{{"name":"{TEST_SENDER}","agentType":"plan"}}"#))
+                .expect("member");
 
-        assert_eq!(member.name, AgentName::from_validated("arch-ctm"));
+        assert_eq!(member.name, AgentName::from_validated(TEST_SENDER));
         assert_eq!(member.agent_type, AgentType::Plan);
         assert!(member.agent_id.is_empty());
         assert!(member.model.is_empty());
         assert_eq!(member.joined_at, None);
-        assert!(member.tmux_pane_id.is_empty());
+        assert_eq!(member.tmux_pane_id, None);
         assert!(member.cwd.is_empty());
     }
 }

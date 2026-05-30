@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S12-QA1-008>
+  a triage:Finding ;
+  triage:findingId "S12-QA1-008" ;
+  triage:title "Triage records not updated to closed status; acceptance criteria missing closure requirement" ;
+  triage:description "docs/phase-S/sprint-S12.md:59-65 (acceptance criteria): The sprint acceptance criteria do not include a requirement to update triage record status fields to triage:status 'closed' and triage:closed true for each resolved INTG finding. The triage records (.triage/phase-S/findings/INTG-FTQ-001.ttl through INTG-RSH-004.ttl) all have status 'open' and closed false at bd9e0e8. The project's triage methodology requires triage records to be maintained as machine-readable truth. Fix: update the acceptance criteria in sprint-S12.md to include triage record closure. Then update each resolved INTG finding TTL file to triage:status 'closed' / triage:closed true / triage:headSha 'bd9e0e8' / triage:closedAt before merging to integrate/phase-S." ;
+  triage:category "DOC" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:promoteToBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-008/s12/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-008/s12/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S12.md" ;
+  triage:line 59 ;
+  triage:snippet "Acceptance criteria (lines 59-65) do not require triage records to be closed; all INTG-* triage records remain triage:status 'open' at bd9e0e8" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s12-intg-gate-findings" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,137 @@
+---
+name: crate-boundary-architecture
+version: 1.0.0
+description: Crate architecture template for strict trait boundaries, private implementations, and composition-root enforcement.
+format: markdown
+required_variables:
+  - crate_name
+  - crate_path
+  - crate_purpose
+  - allowed_inbound_dependencies
+  - allowed_outbound_dependencies
+  - forbidden_dependencies
+  - composition_roots
+  - boundary_summary_rows
+  - boundary_sections
+  - enforcement_checks
+  - open_questions
+---
+# {{ crate_name }} Architecture
+
+Crate path:
+- `{{ crate_path }}`
+
+Purpose:
+- {{ crate_purpose }}
+
+## Dependency Contract
+
+Allowed inbound dependencies:
+{{ allowed_inbound_dependencies }}
+
+Allowed outbound dependencies:
+{{ allowed_outbound_dependencies }}
+
+Forbidden dependencies and references:
+{{ forbidden_dependencies }}
+
+## Composition Roots
+
+Only these modules/crates may instantiate concrete implementations:
+{{ composition_roots }}
+
+## Boundary Inventory
+
+| Boundary | Public Trait/Facade | Concrete Implementation | Owner | Private | Composition Root |
+|---|---|---|---|---|---|
+{{ boundary_summary_rows }}
+
+## Boundary Details
+
+{{ boundary_sections }}
+
+## Enforcement
+
+The following checks must fail CI when violated:
+{{ enforcement_checks }}
+
+## Open Questions
+
+{{ open_questions }}
+
+---
+
+## Boundary Section Template
+
+Copy this section once per boundary if hand-editing the crate document:
+
+```md
+### <Boundary Name>
+
+Purpose:
+- <one sentence about what this boundary owns>
+
+Public boundary:
+- Trait/facade: `<TraitName>`
+
+Concrete implementation:
+- Type: `<ImplTypeName>`
+- Crate/module: `<crate>::<module>`
+- Visibility: `private` | `pub(crate)` by documented exception | `public by architectural exception`
+
+Construction:
+- Constructor path: `<fn/path>` or `private constructor only`
+- Instantiation allowed only in:
+  - `<composition root path>`
+- Instantiation forbidden in:
+  - `<caller crate/module>`
+  - `<caller crate/module>`
+
+Allowed dependencies:
+- may depend on:
+  - `<crate/module>`
+  - `<crate/module>`
+
+Forbidden dependencies:
+- must not depend on:
+  - `<crate/module>`
+  - `<crate/module>`
+
+Forbidden references:
+- callers must not reference:
+  - `<ImplTypeName>`
+  - `<constructor fn>`
+  - `<helper module path>`
+  - `<forbidden concrete crate/type>`
+
+I/O ownership:
+- owns:
+  - `<sqlite | config.json parsing | socket I/O | process spawning | inbox write | ...>`
+- does not own:
+  - `<business logic categories it must not absorb>`
+
+Input/output contract:
+- request types:
+  - `<TypeName>`
+- response types:
+  - `<TypeName>`
+- error types:
+  - `<TypeName>`
+
+Test seam:
+- tests use:
+  - `<fake impl | in-memory impl | test transport>`
+- tests must not bypass the boundary via:
+  - `<forbidden helper or concrete impl>`
+
+Enforcement:
+- compile-time:
+  - `<private impl>`
+  - `<private constructor>`
+  - `<crate visibility restriction>`
+- lint/CI:
+  - `<forbidden dependency edge rule>`
+  - `<forbidden import/symbol rule>`
+- review gate:
+  - `<what is an automatic blocker>`
+```

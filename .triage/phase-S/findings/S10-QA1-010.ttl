@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S10-QA1-010>
+  a triage:Finding ;
+  triage:findingId "S10-QA1-010" ;
+  triage:title "RetainedSinkHealthOverride wrapping at build_logger() not cfg-gated despite only reachable from cfg(test)" ;
+  triage:description "Sprint S.10 §2 states ATM_OBSERVABILITY_RETAINED_SINK_FAULT may remain for test-only fault injection but must not be the primary health source in production builds. retained_sink_fault_mode() is correctly #[cfg(test)]-gated (returns Ok(None) in production). However, the RetainedSinkHealthOverride struct and its SinkRegistration path at build_logger():205-209 are production code paths that accept Option<RetainedSinkFaultMode>. The Some(_) branch is dead in production builds. Either gate the override wrapping behind #[cfg(test)] or add a comment at lines 200-210 documenting that Some(_) is only reachable under #[cfg(test)]." ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:promoteToBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S10-QA1-010/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:occurrence/S10-QA1-010/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_observability.rs" ;
+  triage:line 205 ;
+  triage:snippet "RetainedSinkHealthOverride SinkRegistration wrapping path exists in production code; Some(_) branch only reachable via #[cfg(test)] retained_sink_fault_mode()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "320b658" ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658> .
+
+<urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/320b658>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s10-daemon-retained-logger" ;
+  triage:headSha "320b658" ;
+  triage:orderIndex 1 .

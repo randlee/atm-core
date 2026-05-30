@@ -1,0 +1,36 @@
+{
+  "phase_id": "phase-S",
+  "triage_root": "/Users/randlee/Documents/github/atm-core/.triage",
+  "worktrees": [
+    {
+      "branch": "feature/pS-s1-boundary-extraction",
+      "path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction",
+      "head_sha": "689a48f",
+      "order_index": 1
+    },
+    {
+      "branch": "feature/pS-s2-windows-ipc",
+      "path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc",
+      "head_sha": "689a48f",
+      "order_index": 2
+    },
+    {
+      "branch": "feature/pS-s3-runtime-control",
+      "path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control",
+      "head_sha": "689a48f",
+      "order_index": 3
+    },
+    {
+      "branch": "feature/pS-s4-hardening",
+      "path": "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening",
+      "head_sha": "689a48f",
+      "order_index": 4
+    },
+    {
+      "branch": "integrate/phase-S",
+      "path": "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S",
+      "head_sha": "689a48fec142d916a99d7d62dd841085731cb53c",
+      "order_index": 5
+    }
+  ]
+}

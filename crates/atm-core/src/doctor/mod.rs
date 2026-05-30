@@ -6,19 +6,24 @@ use std::fs::{self, OpenOptions};
 use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use crate::boundary::RosterMemberRecord;
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
+use crate::roles::ROLE_TEAM_LEAD;
 use crate::schema::AgentMember;
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::default_runtime;
 use crate::team_admin::{MemberSummary, MembersList};
 use crate::types::{AgentName, TeamName};
 
 pub use report::{
-    DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity, DoctorStatus,
-    DoctorSummary,
+    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+    BootstrapTraceReport, DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity,
+    DoctorStatus, DoctorSummary,
 };
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
 pub struct DoctorQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -35,27 +40,21 @@ pub fn run_doctor(
     query: DoctorQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<DoctorReport, crate::error::AtmError> {
-    let config = config::load_config(&query.current_dir)?;
+    let runtime = default_runtime()?;
+    run_doctor_with_runtime(query, observability, &runtime)
+}
+
+pub fn run_doctor_with_runtime(
+    query: DoctorQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<DoctorReport, crate::error::AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
     let home_dir = query.home_dir.clone();
     let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
-    let resolved_team = query
-        .team_override
-        .clone()
-        .or_else(|| config::resolve_team(None, config.as_ref()));
-
+    let resolved_team = resolved_doctor_team(&query, config.as_ref());
     let environment = health::environment_visibility(query.home_dir, query.team_override);
-    let (observability_health, finding) = match observability.health() {
-        Ok(health) => {
-            let finding = health::observability_finding(&health);
-            (health, finding)
-        }
-        Err(error) => {
-            let snapshot = health::unavailable_snapshot(error.to_string());
-            let finding = health::observability_finding_from_error(&error);
-            (snapshot, finding)
-        }
-    };
-
+    let (observability_health, finding) = doctor_observability_status(observability);
     let mut findings = Vec::new();
     if config
         .as_ref()
@@ -71,20 +70,61 @@ pub fn run_doctor(
             ),
         });
     }
-    let member_roster = resolved_team
-        .as_deref()
-        .and_then(|team| load_member_roster(&home_dir, team, config.as_ref(), &mut findings));
+    let member_roster = resolved_team.as_ref().and_then(|team| {
+        load_member_roster(runtime, &home_dir, team, config.as_ref(), &mut findings)
+    });
     push_stale_mailbox_lock_findings(
         &initial_lock_snapshot,
         &snapshot_mailbox_lock_paths(&home_dir),
         &mut findings,
     );
     findings.push(finding);
+    let summary = summarize_doctor_findings(&findings);
     let recommendations = findings
         .iter()
         .filter_map(|finding| finding.remediation.clone())
         .collect::<Vec<_>>();
-    let status = health::status_from_findings(&findings);
+
+    Ok(DoctorReport {
+        summary,
+        findings,
+        recommendations,
+        environment,
+        member_roster,
+        observability: observability_health,
+        runtime_status: None,
+        bootstrap_trace: None,
+    })
+}
+
+fn resolved_doctor_team(
+    query: &DoctorQuery,
+    config: Option<&config::AtmConfig>,
+) -> Option<TeamName> {
+    query
+        .team_override
+        .clone()
+        .or_else(|| config::resolve_team(None, config))
+}
+
+fn doctor_observability_status(
+    observability: &dyn ObservabilityPort,
+) -> (crate::observability::AtmObservabilityHealth, DoctorFinding) {
+    match observability.health() {
+        Ok(health) => {
+            let finding = health::observability_finding(&health);
+            (health, finding)
+        }
+        Err(error) => {
+            let snapshot = health::unavailable_snapshot(error.to_string());
+            let finding = health::observability_finding_from_error(&error);
+            (snapshot, finding)
+        }
+    }
+}
+
+fn summarize_doctor_findings(findings: &[DoctorFinding]) -> DoctorSummary {
+    let status = health::status_from_findings(findings);
     let (info_count, warning_count, error_count) = findings.iter().fold(
         (0usize, 0usize, 0usize),
         |(info, warning, error), finding| match finding.severity {
@@ -93,36 +133,50 @@ pub fn run_doctor(
             DoctorSeverity::Error => (info, warning, error + 1),
         },
     );
-
     let message = match status {
         DoctorStatus::Healthy => "ATM doctor completed with healthy findings only",
         DoctorStatus::Warning => "ATM doctor completed with warnings",
         DoctorStatus::Error => "ATM doctor found critical issues",
     };
-
-    Ok(DoctorReport {
-        summary: DoctorSummary {
-            status,
-            message: message.to_string(),
-            info_count,
-            warning_count,
-            error_count,
-        },
-        findings,
-        recommendations,
-        environment,
-        member_roster,
-        observability: observability_health,
-    })
+    DoctorSummary {
+        status,
+        message: message.to_string(),
+        info_count,
+        warning_count,
+        error_count,
+    }
 }
 
 fn load_member_roster(
+    runtime: &impl RetainedServiceRuntime,
     home_dir: &Path,
-    team: &str,
+    team: &TeamName,
     config: Option<&config::AtmConfig>,
     findings: &mut Vec<DoctorFinding>,
 ) -> Option<MembersList> {
-    let team_dir = match crate::home::team_dir_from_home(home_dir, team) {
+    let team_dir = resolve_doctor_team_dir(runtime, home_dir, team, findings)?;
+    check_restore_marker(team, &team_dir, findings);
+    let (team_config, atm_roster) =
+        load_doctor_roster_compare_inputs(runtime, team, &team_dir, findings)?;
+    let baseline = config
+        .map(|config| config.team_members.as_slice())
+        .unwrap_or(&[]);
+    check_inbox_directory(team, &team_dir.join("inboxes"), findings);
+    record_doctor_roster_drift(team, &team_config, atm_roster, findings);
+
+    Some(MembersList {
+        team: team.clone(),
+        members: ordered_member_summaries(&team_config.members, baseline),
+    })
+}
+
+fn resolve_doctor_team_dir(
+    runtime: &impl RetainedServiceRuntime,
+    home_dir: &Path,
+    team: &TeamName,
+    findings: &mut Vec<DoctorFinding>,
+) -> Option<PathBuf> {
+    let team_dir = match runtime.team_dir(home_dir, team) {
         Ok(team_dir) => team_dir,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
@@ -144,50 +198,76 @@ fn load_member_roster(
         });
         return None;
     }
+    Some(team_dir)
+}
 
-    check_restore_marker(team, &team_dir, findings);
-
-    let team_config = match config::load_team_config(&team_dir) {
+fn load_doctor_roster_compare_inputs(
+    runtime: &impl RetainedServiceRuntime,
+    team: &TeamName,
+    team_dir: &Path,
+    findings: &mut Vec<DoctorFinding>,
+) -> Option<(crate::schema::TeamConfig, Option<Vec<RosterMemberRecord>>)> {
+    let team_config = match runtime.load_team_config_for_doctor_compare(team_dir) {
         Ok(team_config) => team_config,
         Err(error) => {
             push_doctor_error(findings, DoctorSeverity::Error, error);
             return None;
         }
     };
-    let baseline = config
-        .map(|config| config.team_members.as_slice())
-        .unwrap_or(&[]);
+    let atm_roster = match runtime.load_team_roster(team) {
+        Ok(roster) => Some(roster),
+        Err(error) => {
+            push_doctor_error(findings, DoctorSeverity::Error, error);
+            None
+        }
+    };
+    Some((team_config, atm_roster))
+}
 
-    check_inbox_directory(team, &team_dir.join("inboxes"), findings);
-
+fn record_doctor_roster_drift(
+    team: &TeamName,
+    team_config: &crate::schema::TeamConfig,
+    atm_roster: Option<Vec<RosterMemberRecord>>,
+    findings: &mut Vec<DoctorFinding>,
+) {
     let present = team_config
         .members
         .iter()
         .map(|member| member.name.clone())
         .collect::<BTreeSet<_>>();
-    for member in baseline {
-        if present
-            .iter()
-            .any(|present_member| present_member == &member.as_str())
-        {
-            continue;
-        }
+    let Some(atm_roster) = atm_roster else {
+        return;
+    };
+    let atm_members = atm_roster
+        .into_iter()
+        .map(|member| member.agent_name)
+        .collect::<BTreeSet<_>>();
+
+    for member in atm_members.difference(&present) {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Warning,
-            code: AtmErrorCode::WarningBaselineMemberMissing,
+            code: AtmErrorCode::WarningRosterDrift,
             message: format!(
-                "baseline member '{member}' is missing from team config.json for '{team}'"
+                "ATM roster member '{member}' is missing from team config.json for '{team}'"
             ),
             remediation: Some(format!(
-                "Restore '{member}' in .claude/teams/{team}/config.json or remove it from [atm].team_members if it is no longer part of the baseline roster."
+                "Project the ATM roster back into .claude/teams/{team}/config.json or restore the missing Claude team member before rerunning `atm doctor`."
             )),
         });
     }
 
-    Some(MembersList {
-        team: TeamName::from_validated(team.to_string()),
-        members: ordered_member_summaries(&team_config.members, baseline),
-    })
+    for member in present.difference(&atm_members) {
+        findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningRosterDrift,
+            message: format!(
+                "Claude team member '{member}' is missing from ATM roster truth for '{team}'"
+            ),
+            remediation: Some(format!(
+                "Import the Claude team member into the ATM roster or remove it from .claude/teams/{team}/config.json before rerunning `atm doctor`."
+            )),
+        });
+    }
 }
 
 fn push_doctor_error(
@@ -203,7 +283,7 @@ fn push_doctor_error(
     });
 }
 
-fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+fn check_inbox_directory(team: &TeamName, inboxes_dir: &Path, findings: &mut Vec<DoctorFinding>) {
     if !inboxes_dir.is_dir() {
         findings.push(DoctorFinding {
             severity: DoctorSeverity::Error,
@@ -236,7 +316,7 @@ fn check_inbox_directory(team: &str, inboxes_dir: &Path, findings: &mut Vec<Doct
     }
 }
 
-fn check_restore_marker(team: &str, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
+fn check_restore_marker(team: &TeamName, team_dir: &Path, findings: &mut Vec<DoctorFinding>) {
     let marker = team_dir.join(".restore-in-progress");
     if !marker.is_file() {
         return;
@@ -271,7 +351,10 @@ fn snapshot_mailbox_lock_paths(home_dir: &Path) -> BTreeSet<PathBuf> {
         };
         for lock_entry in lock_entries.filter_map(Result::ok) {
             let path = lock_entry.path();
-            if path.extension().and_then(|ext| ext.to_str()) != Some("lock") {
+            let Some(file_name) = path.file_name().and_then(|name| name.to_str()) else {
+                continue;
+            };
+            if !(file_name.ends_with(".lock") || file_name.contains(".lock.")) {
                 continue;
             }
             if !lock_entry
@@ -330,15 +413,17 @@ fn ordered_member_summaries(members: &[AgentMember], baseline: &[TeamName]) -> V
     let mut ordered = Vec::new();
     let mut included = BTreeSet::new();
 
-    if baseline.iter().any(|member| member.as_str() == "team-lead")
-        && let Some(team_lead) = members.iter().find(|member| member.name == "team-lead")
+    if baseline
+        .iter()
+        .any(|member| member.as_str() == ROLE_TEAM_LEAD)
+        && let Some(team_lead) = members.iter().find(|member| member.name == ROLE_TEAM_LEAD)
     {
         ordered.push(member_summary(team_lead));
         included.insert(team_lead.name.clone());
     }
 
     for baseline_member in baseline {
-        if baseline_member.as_str() == "team-lead" {
+        if baseline_member.as_str() == ROLE_TEAM_LEAD {
             continue;
         }
         if let Some(member) = members
@@ -375,15 +460,22 @@ fn member_summary(member: &AgentMember) -> MemberSummary {
 #[cfg(test)]
 mod tests {
     use std::path::PathBuf;
+    use std::sync::Arc;
 
-    use crate::doctor::{DoctorQuery, DoctorSeverity, DoctorStatus, run_doctor};
+    use crate::boundary;
+    use crate::doctor::{
+        DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, run_doctor_with_runtime,
+    };
     use crate::error::AtmError;
     use crate::error_codes::AtmErrorCode;
     use crate::observability::{
         AtmLogQuery, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
         LogTailSession, ObservabilityPort,
     };
+    use crate::roles::ROLE_TEAM_LEAD;
     use crate::schema::{AgentMember, TeamConfig};
+    use crate::service_runtime::LocalServiceRuntime;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
     use crate::types::AgentName;
 
     enum StubHealth {
@@ -395,7 +487,7 @@ mod tests {
         health: StubHealth,
     }
 
-    impl crate::observability::sealed::Sealed for StubObservability {}
+    impl crate::boundary::sealed::Sealed for StubObservability {}
 
     impl ObservabilityPort for StubObservability {
         fn emit(&self, _event: crate::observability::CommandEvent) -> Result<(), AtmError> {
@@ -422,11 +514,245 @@ mod tests {
         }
     }
 
+    struct UnusedMailStore;
+    struct UnusedTaskStore;
+    struct TestRosterStore {
+        members: Vec<boundary::RosterMemberRecord>,
+    }
+
+    impl crate::boundary::sealed::Sealed for UnusedMailStore {}
+    impl crate::boundary::sealed::Sealed for UnusedTaskStore {}
+    impl crate::boundary::sealed::Sealed for TestRosterStore {}
+
+    impl boundary::MailStore for UnusedMailStore {
+        fn bootstrap(
+            &self,
+            _request: boundary::MailStoreBootstrapRequest,
+        ) -> Result<boundary::MailStoreBootstrapResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn run_transaction(
+            &self,
+            _request: boundary::MailStoreTransactionRequest,
+        ) -> Result<boundary::MailStoreTransactionResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn upsert_message(
+            &self,
+            _request: boundary::MailStoreUpsertMessageRequest,
+        ) -> Result<boundary::MailStoreUpsertMessageResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn load_message(
+            &self,
+            _request: boundary::MailStoreLoadMessageRequest,
+        ) -> Result<boundary::MailStoreLoadMessageResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn load_stored_message(
+            &self,
+            _request: boundary::MailStoreLoadStoredMessageRequest,
+        ) -> Result<boundary::MailStoreLoadStoredMessageResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn query_mailbox_metadata(
+            &self,
+            _request: boundary::MailStoreQueryMailboxMetadataRequest,
+        ) -> Result<boundary::MailStoreQueryMailboxMetadataResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn query_mailbox_metadata_counts(
+            &self,
+            _request: boundary::MailStoreQueryMailboxMetadataCountsRequest,
+        ) -> Result<boundary::MailStoreQueryMailboxMetadataCountsResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn upsert_message_state(
+            &self,
+            _request: boundary::UpsertMailMessageStateRequest,
+        ) -> Result<boundary::UpsertMailMessageStateResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn load_message_state(
+            &self,
+            _request: boundary::LoadMailMessageStateRequest,
+        ) -> Result<boundary::LoadMailMessageStateResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn record_ingest_replay_state(
+            &self,
+            _request: boundary::MailStoreRecordIngestReplayStateRequest,
+        ) -> Result<boundary::MailStoreRecordIngestReplayStateResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn load_ingest_replay_state(
+            &self,
+            _request: boundary::MailStoreLoadIngestReplayStateRequest,
+        ) -> Result<boundary::MailStoreLoadIngestReplayStateResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+
+        fn health_snapshot(
+            &self,
+            _request: boundary::MailStoreHealthSnapshotRequest,
+        ) -> Result<boundary::MailStoreHealthSnapshotResponse, AtmError> {
+            unreachable!("doctor tests do not touch the mail store boundary")
+        }
+    }
+
+    impl boundary::TaskStore for UnusedTaskStore {
+        fn create_task(
+            &self,
+            _request: boundary::TaskStoreCreateTaskRequest,
+        ) -> Result<boundary::TaskStoreCreateTaskResponse, AtmError> {
+            unreachable!("doctor tests do not touch the task store boundary")
+        }
+
+        fn load_task(
+            &self,
+            _request: boundary::TaskStoreLoadTaskRequest,
+        ) -> Result<boundary::TaskStoreLoadTaskResponse, AtmError> {
+            unreachable!("doctor tests do not touch the task store boundary")
+        }
+
+        fn update_task(
+            &self,
+            _request: boundary::TaskStoreUpdateTaskRequest,
+        ) -> Result<boundary::TaskStoreUpdateTaskResponse, AtmError> {
+            unreachable!("doctor tests do not touch the task store boundary")
+        }
+
+        fn attach_message_link(
+            &self,
+            _request: boundary::TaskStoreAttachMessageLinkRequest,
+        ) -> Result<boundary::TaskStoreAttachMessageLinkResponse, AtmError> {
+            unreachable!("doctor tests do not touch the task store boundary")
+        }
+
+        fn detach_message_link(
+            &self,
+            _request: boundary::TaskStoreDetachMessageLinkRequest,
+        ) -> Result<boundary::TaskStoreDetachMessageLinkResponse, AtmError> {
+            unreachable!("doctor tests do not touch the task store boundary")
+        }
+
+        fn record_ack_transition(
+            &self,
+            _request: boundary::TaskStoreRecordAckTransitionRequest,
+        ) -> Result<boundary::TaskStoreRecordAckTransitionResponse, AtmError> {
+            unreachable!("doctor tests do not touch the task store boundary")
+        }
+
+        fn query_task_metadata(
+            &self,
+            _request: boundary::TaskStoreQueryTaskMetadataRequest,
+        ) -> Result<boundary::TaskStoreQueryTaskMetadataResponse, AtmError> {
+            unreachable!("doctor tests do not touch the task store boundary")
+        }
+    }
+
+    impl boundary::RosterStore for TestRosterStore {
+        fn replace_roster(
+            &self,
+            _request: boundary::RosterStoreReplaceRosterRequest,
+        ) -> Result<boundary::RosterStoreReplaceRosterResponse, AtmError> {
+            unreachable!("doctor tests do not touch the roster store boundary")
+        }
+
+        fn load_roster(
+            &self,
+            request: boundary::RosterStoreLoadRosterRequest,
+        ) -> Result<boundary::RosterStoreLoadRosterResponse, AtmError> {
+            Ok(boundary::RosterStoreLoadRosterResponse {
+                team: request.team,
+                members: self.members.clone(),
+            })
+        }
+
+        fn query_membership(
+            &self,
+            _request: boundary::RosterStoreQueryMembershipRequest,
+        ) -> Result<boundary::RosterStoreQueryMembershipResponse, AtmError> {
+            unreachable!("doctor tests do not touch the roster store boundary")
+        }
+
+        fn list_teams(
+            &self,
+            _request: boundary::RosterStoreListTeamsRequest,
+        ) -> Result<boundary::RosterStoreListTeamsResponse, AtmError> {
+            unreachable!("doctor tests do not touch the roster store boundary")
+        }
+
+        fn health_snapshot(
+            &self,
+            _request: boundary::RosterStoreHealthSnapshotRequest,
+        ) -> Result<boundary::RosterStoreHealthSnapshotResponse, AtmError> {
+            unreachable!("doctor tests do not touch the roster store boundary")
+        }
+    }
+
+    fn roster_store(members: &[&str]) -> TestRosterStore {
+        TestRosterStore {
+            members: members
+                .iter()
+                .map(|member| boundary::RosterMemberRecord {
+                    team_name: TEST_TEAM.parse().expect("team"),
+                    agent_name: AgentName::from_validated(*member),
+                    member_kind: boundary::RosterMemberKind::Permanent,
+                    harness: boundary::RosterHarness::ClaudeCode,
+                    agent_type: crate::schema::AgentType::default(),
+                    model: crate::types::ModelName::default(),
+                    recipient_pane_id: None,
+                    metadata_json: serde_json::Map::new(),
+                })
+                .collect(),
+        }
+    }
+
+    fn test_runtime_with_roster(
+        members: &[&str],
+        notification_sink_path: PathBuf,
+    ) -> LocalServiceRuntime {
+        LocalServiceRuntime::new_with_delivery_boundaries(
+            Arc::new(UnusedMailStore),
+            Arc::new(UnusedTaskStore),
+            Arc::new(roster_store(members)),
+            Arc::new(crate::LocalFileNonClaudeOutbound::new()),
+            Arc::new(crate::LocalFileNotificationSink::at_path(
+                notification_sink_path,
+            )),
+        )
+    }
+
+    fn test_runtime(paths: &TestPaths) -> LocalServiceRuntime {
+        test_runtime_with_roster(&[TEST_SENDER], paths.notification_sink_path.clone())
+    }
+
+    fn run_doctor(
+        paths: &TestPaths,
+        query: DoctorQuery,
+        observability: &dyn ObservabilityPort,
+    ) -> Result<DoctorReport, AtmError> {
+        let runtime = test_runtime(paths);
+        run_doctor_with_runtime(query, observability, &runtime)
+    }
+
     struct TestPaths {
         _tempdir: tempfile::TempDir,
         home_dir: PathBuf,
         current_dir: PathBuf,
         active_log_path: PathBuf,
+        notification_sink_path: PathBuf,
     }
 
     impl TestPaths {
@@ -442,11 +768,12 @@ mod tests {
                 home_dir,
                 current_dir,
                 active_log_path: root.join("atm.log.jsonl"),
+                notification_sink_path: root.join("atm-core-doctor-notifications.jsonl"),
             }
         }
 
         fn team_dir(&self) -> PathBuf {
-            self.home_dir.join(".claude").join("teams").join("atm-dev")
+            self.home_dir.join(".claude").join("teams").join(TEST_TEAM)
         }
 
         fn write_team_layout(&self, members: &[&str]) {
@@ -477,21 +804,24 @@ mod tests {
         DoctorQuery {
             home_dir: paths.home_dir.clone(),
             current_dir: paths.current_dir.clone(),
-            team_override: Some("atm-dev".parse().expect("team")),
+            team_override: Some(TEST_TEAM.parse().expect("team")),
         }
     }
 
     #[test]
     fn run_doctor_reports_healthy_observability() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
                     active_log_path: Some(paths.active_log_path.clone()),
                     logging_state: AtmObservabilityHealthState::Healthy,
                     query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
                     detail: None,
                 }),
             },
@@ -507,6 +837,7 @@ mod tests {
     fn run_doctor_reports_invalid_team_override_as_address_error() {
         let paths = TestPaths::new();
         let report = run_doctor(
+            &paths,
             DoctorQuery {
                 home_dir: paths.home_dir.clone(),
                 current_dir: paths.current_dir.clone(),
@@ -517,6 +848,8 @@ mod tests {
                     active_log_path: Some(paths.active_log_path.clone()),
                     logging_state: AtmObservabilityHealthState::Healthy,
                     query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
                     detail: None,
                 }),
             },
@@ -536,19 +869,22 @@ mod tests {
     #[test]
     fn run_doctor_reports_obsolete_identity_drift_as_warning() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         std::fs::write(
             paths.current_dir.join(".atm.toml"),
-            "[atm]\nidentity = \"arch-ctm\"\n",
+            format!("[atm]\nidentity = \"{TEST_SENDER}\"\n"),
         )
         .expect("config");
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
                     active_log_path: Some(paths.active_log_path.clone()),
                     logging_state: AtmObservabilityHealthState::Healthy,
                     query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
                     detail: None,
                 }),
             },
@@ -569,14 +905,17 @@ mod tests {
     #[test]
     fn run_doctor_reports_degraded_observability_as_warning() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
                     active_log_path: Some(paths.active_log_path.clone()),
                     logging_state: AtmObservabilityHealthState::Degraded,
                     query_state: Some(AtmObservabilityHealthState::Degraded),
+                    maintenance: None,
+                    diagnostic: None,
                     detail: Some("query backlog".to_string()),
                 }),
             },
@@ -594,14 +933,17 @@ mod tests {
     #[test]
     fn run_doctor_reports_unavailable_observability_as_error() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
                     active_log_path: None,
                     logging_state: AtmObservabilityHealthState::Unavailable,
                     query_state: Some(AtmObservabilityHealthState::Unavailable),
+                    maintenance: None,
+                    diagnostic: None,
                     detail: Some("logger unavailable".to_string()),
                 }),
             },
@@ -619,8 +961,9 @@ mod tests {
     #[test]
     fn run_doctor_reports_observability_health_errors() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
+        paths.write_team_layout(&[TEST_SENDER]);
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Err(AtmError::observability_health(
@@ -651,12 +994,15 @@ mod tests {
     fn run_doctor_reports_missing_team_directory_as_error() {
         let paths = TestPaths::new();
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
                     active_log_path: Some(paths.active_log_path.clone()),
                     logging_state: AtmObservabilityHealthState::Healthy,
                     query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
                     detail: None,
                 }),
             },
@@ -678,12 +1024,15 @@ mod tests {
         let paths = TestPaths::new();
         paths.write_raw_team_config("{\"members\":");
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
                     active_log_path: Some(paths.active_log_path.clone()),
                     logging_state: AtmObservabilityHealthState::Healthy,
                     query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
                     detail: None,
                 }),
             },
@@ -703,14 +1052,17 @@ mod tests {
     #[test]
     fn run_doctor_reports_missing_inboxes_directory_as_error() {
         let paths = TestPaths::new();
-        paths.write_raw_team_config(r#"{"members":[{"name":"arch-ctm"}]}"#);
+        paths.write_raw_team_config(&format!(r#"{{"members":[{{"name":"{TEST_SENDER}"}}]}}"#));
         let report = run_doctor(
+            &paths,
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
                     active_log_path: Some(paths.active_log_path.clone()),
                     logging_state: AtmObservabilityHealthState::Healthy,
                     query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
                     detail: None,
                 }),
             },
@@ -728,18 +1080,61 @@ mod tests {
     }
 
     #[test]
-    fn run_doctor_reports_stale_mailbox_lock_as_warning() {
+    fn run_doctor_reports_atm_roster_and_claude_roster_drift_as_warning() {
         let paths = TestPaths::new();
-        paths.write_team_layout(&["arch-ctm"]);
-        let stale_lock = paths.team_dir().join("inboxes").join("arch-ctm.json.lock");
-        std::fs::write(&stale_lock, u32::MAX.to_string()).expect("stale lock");
-        let report = run_doctor(
+        paths.write_team_layout(&[TEST_SENDER]);
+        let runtime = test_runtime_with_roster(
+            &[TEST_SENDER, ROLE_TEAM_LEAD],
+            paths.notification_sink_path.clone(),
+        );
+        let report = run_doctor_with_runtime(
             query(&paths),
             &StubObservability {
                 health: StubHealth::Ok(AtmObservabilityHealth {
                     active_log_path: Some(paths.active_log_path.clone()),
                     logging_state: AtmObservabilityHealthState::Healthy,
                     query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
+                    detail: None,
+                }),
+            },
+            &runtime,
+        )
+        .expect("doctor report");
+
+        assert_eq!(report.summary.status, DoctorStatus::Warning);
+        assert!(
+            report.findings.iter().any(|finding| {
+                finding.code == AtmErrorCode::WarningRosterDrift
+                    && finding.message.contains(&format!(
+                        "ATM roster member '{}' is missing from team config.json",
+                        ROLE_TEAM_LEAD
+                    ))
+            }),
+            "{report:#?}"
+        );
+    }
+
+    #[test]
+    fn run_doctor_reports_stale_mailbox_lock_as_warning() {
+        let paths = TestPaths::new();
+        paths.write_team_layout(&[TEST_SENDER]);
+        let stale_lock = paths
+            .team_dir()
+            .join("inboxes")
+            .join(format!("{TEST_SENDER}.json.lock"));
+        std::fs::write(&stale_lock, u32::MAX.to_string()).expect("stale lock");
+        let report = run_doctor(
+            &paths,
+            query(&paths),
+            &StubObservability {
+                health: StubHealth::Ok(AtmObservabilityHealth {
+                    active_log_path: Some(paths.active_log_path.clone()),
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
                     detail: None,
                 }),
             },

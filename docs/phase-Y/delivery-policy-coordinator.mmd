@@ -1,0 +1,49 @@
+%% title: `Delivery Policy Coordinator`
+%% summary: Central dispatcher for write-affecting mail events.
+%% commentary: This coordinator resolves event family and canonical roster harness, then dispatches into the required event-family state machine without letting command-local conditionals own delivery policy.
+%% notes: dispatcher only | no event legality inside coordinator | observable transitions required
+%% sets: delivery
+flowchart TD
+    A["<b>Delivery Policy Coordinator</b><br/>receive write-affecting event"] --> B["Classify event family
+NewMessage
+ThreadUpdate
+AckReply
+InboxRepair
+RestoreInboxRebuild"]
+    B -->|unknown family| E1["Reject request
+validation error
+unsupported event family"]
+    B --> C["Resolve canonical roster harness
+ClaudeCode?
+NonClaude?"]
+    C -->|roster lookup failed| E2["Reject request
+roster lookup failure"]
+    C --> D["Dispatch to required machine
+family + harness determine next machine"]
+    D --> M1["NewMessageStateMachine
+ClaudeHarnessNewMessage
+NonClaudeHarnessNewMessage"]
+    D --> M2["ThreadUpdateStateMachine
+parent/root/sender/linearity gates"]
+    D --> M3["AckReplyStateMachine
+ack legality + delegated reply delivery"]
+    D --> M4["InboxRepairStateMachine
+explicit staged rebuild only"]
+    D --> M5["RestoreInboxRebuildStateMachine
+restore-marker staged publish only"]
+    M1 --> O["Terminal outcome
+Delivered
+Rejected
+Failed"]
+    M2 --> O
+    M3 --> O
+    M4 --> O
+    M5 --> O
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,O happy;
+    class E1,E2 error;
+    class B,C,D,M1,M2,M3,M4,M5 neutral;

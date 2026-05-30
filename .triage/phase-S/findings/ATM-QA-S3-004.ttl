@@ -1,0 +1,66 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S3-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S3-004" ;
+  triage:title "recover_stale_owner_lock uses 25ms × 3 fixed sleep without documented constraint (host_ownership.rs)" ;
+  triage:description "crates/atm-daemon/src/host_ownership.rs — recover_stale_owner_lock() retries with thread::sleep(OWNER_RECOVERY_RETRY_INTERVAL) × 3 = 75ms fixed sleep. plan-phase-S.md §4.1 Anti-Flake Contract prohibits fixed sleeps without documented justification. The OS file-lock APIs provide no release-notification surface, making polling necessary; this constraint is undocumented. Fix: add inline comment at the sleep call documenting (a) this is an error path only, (b) OS lock APIs have no release notification, (c) bounded at 75ms max. TASK-1158 added a comment at a different location; QA-4 confirms the sleep at :119 still has no inline comment. Confirmed STILL_OPEN at 8b17139. (quality-mgr reported as ATM-QA-NEW-002 in S.3 QA-2 report.)" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "closed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-09T13:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-09T14:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "TASK-1164" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S3-004/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S3-004/s3/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/8b17139> ;
+  triage:fixedOn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/f22b3cc> .
+
+<urn:atm:triage:occurrence/ATM-QA-S3-004/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 106 ;
+  triage:snippet "recover_stale_owner_lock — thread::sleep(OWNER_RECOVERY_RETRY_INTERVAL) undocumented" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9698a17" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17> .
+
+<urn:atm:triage:occurrence/ATM-QA-S3-004/s3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/host_ownership.rs" ;
+  triage:line 119 ;
+  triage:snippet "QA-4 confirmation: thread::sleep(OWNER_RECOVERY_RETRY_INTERVAL) at :119 still has no inline comment — STILL_OPEN at 8b17139" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "8b17139" ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s3-runtime-control/8b17139> .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/9698a17>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "9698a17" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/8b17139>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "8b17139" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/feature-pS-s3-runtime-control/f22b3cc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s3-runtime-control" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s3-runtime-control" ;
+  triage:headSha "f22b3cc" ;
+  triage:orderIndex 4 .

@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S14-RSH-001>
+  a triage:Finding ;
+  triage:findingId "S14-RSH-001" ;
+  triage:title "_wake_handle intentional-drop pattern missing doc comment (local_ipc_transport.rs:682)" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs — schedule_delayed_listener_wake() uses _wake_handle to signal intentional detach of the JoinHandle. A function-level fire-and-forget comment at line 680-681 documents the general intent but does not annotate the _wake_handle binding itself. The underscore prefix convention warrants an inline comment on the binding explaining that the detach is deliberate and safe here (wake thread has no return value, timeout or failure of wake_listener is silently ignored). Sprint-scoped as S14-RSH-001 to avoid collision with existing RSH-002 triage record (which covers runtime_health.rs drop(shutdown_handle) pattern)." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S14-RSH-001/pS-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S14-RSH-001/pS-s15/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14/571fa1c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15/493f2b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15/493f2b1> .
+
+<urn:atm:triage:occurrence/S14-RSH-001/pS-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 682 ;
+  triage:snippet "let _wake_handle = thread::Builder::new()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/571fa1c> .
+
+<urn:atm:triage:occurrence/S14-RSH-001/pS-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 682 ;
+  triage:snippet "let _wake_handle = thread::Builder::new()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/493f2b1> .
+
+<urn:atm:triage:worktree/pS-s14/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .

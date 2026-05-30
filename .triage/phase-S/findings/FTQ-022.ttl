@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-022>
+  a triage:Finding ;
+  triage:findingId "FTQ-022" ;
+  triage:title "IPC smoke test join.join() on serve thread has no timeout — can hang indefinitely (tests.rs:189)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:189 — join.join() on the serve thread has no timeout. If serve_with_runtime_hooks hangs for any reason, the test hangs indefinitely with no CI timeout shorter than the job default limit. Convergent finding from flaky-test-qa (FTQ-003) and rust-service-hardening-agent (RSH-001). Fix: use a channel-based completion notification with recv_timeout(Duration::from_secs(5)) on the serve result, or spawn a background watchdog thread that panics if the join exceeds a deadline." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-022/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:occurrence/FTQ-022/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 189 ;
+  triage:snippet "join.join().expect(\"join serve thread\").expect(\"serve runtime result\") — no timeout; convergent finding (FTQ-003 + RSH-001); test hangs indefinitely if serve_with_runtime_hooks stalls" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "dd36874" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "dd36874" ;
+  triage:orderIndex 4 .

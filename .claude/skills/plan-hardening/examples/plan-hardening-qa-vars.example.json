@@ -1,0 +1,23 @@
+{
+  "task_id": "phase-x-plan-qa",
+  "sprint": "phase-X",
+  "sprint_doc": "docs/phase-X/plan-phase-X.md",
+  "review_mode": "plan",
+  "description": "Focused plan QA for phase-X after consistency hardening",
+  "pr_number": "",
+  "branch": "plan/phase-x",
+  "worktree_path": "/absolute/path/to/worktree",
+  "commits": "HEAD",
+  "review_targets": [
+    "docs/phase-X/plan-phase-X.md",
+    "docs/phase-X/sprint-X1.md",
+    "docs/phase-X/sprint-X2.md"
+  ],
+  "references": [
+    "docs/project-plan.md",
+    "docs/requirements.md",
+    "docs/architecture.md"
+  ],
+  "changed_files": "",
+  "triage_records": ""
+}

@@ -1,0 +1,107 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/DESIGN-004-W>
+  a triage:Finding ;
+  triage:findingId "DESIGN-004-W" ;
+  triage:title "W.1 partial typed fallback: DaemonEvent.action/outcome still raw &'static str" ;
+  triage:description """RBP-W3-F001 improved emit_subsystem_event to use typed ActionName/OutcomeLabel newtypes (daemon_runtime_observability.rs:140-141), but DaemonEvent struct fields action and outcome remain raw &'static str (lines 59-60). DaemonEvent::new() (lines 73-74), SubsystemLogger::event() (lines 189-190), and SubsystemLogger::emit_or_warn() (lines 225-226) all carry the untyped signature through. Downstream: bin_support/daemon_observability.rs EmitLogEvent private struct (lines 367-368) and #[cfg(test)] observability_test_event helper (lines 749-750) construct DaemonEvent with bare &'static str. ActionName/OutcomeLabel are available via sc_observability_types type aliases already imported in daemon_runtime_observability.rs. The type improvement from RBP-W3-F001 is incomplete at the DaemonEvent boundary.""" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "DESIGN" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:references "arch-ctm design review follow-up 2026-05-13" ;
+  triage:references "docs/phase-W/sprint-W1.md" ;
+  triage:references "integrate/phase-W:.triage/phase-W/findings/RBP-W3-F001.ttl" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/6> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
+  triage:line 59 ;
+  triage:snippet "pub action: &'static str," ;
+  triage:note "DaemonEvent struct field: action is raw &'static str; ActionName newtype already imported in this file" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
+  triage:line 60 ;
+  triage:snippet "pub outcome: &'static str," ;
+  triage:note "DaemonEvent struct field: outcome is raw &'static str; OutcomeLabel newtype already imported in this file" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
+  triage:line 73 ;
+  triage:snippet "action: &'static str," ;
+  triage:note "DaemonEvent::new() constructor param: action bare &'static str" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
+  triage:line 74 ;
+  triage:snippet "outcome: &'static str," ;
+  triage:note "DaemonEvent::new() constructor param: outcome bare &'static str" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
+  triage:line 189 ;
+  triage:snippet "action: &'static str," ;
+  triage:note "SubsystemLogger::event() helper param: action bare &'static str; cascades from DaemonEvent::new() signature" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:occurrence/DESIGN-004-W/integrate-phase-W/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/daemon_runtime_observability.rs" ;
+  triage:line 225 ;
+  triage:snippet "action: &'static str," ;
+  triage:note "SubsystemLogger::emit_or_warn() helper param: action bare &'static str; cascades from DaemonEvent::new() signature" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/f6a6b19> .
+
+<urn:atm:triage:worktree/integrate-phase-W/f6a6b19>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "f6a6b19" ;
+  triage:orderIndex 1 .

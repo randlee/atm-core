@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "S8-ATM-QA-004" ;
+  triage:title "reconcile_runtime tests use fake ingress — no no-churn proof at reconcile-runtime level" ;
+  triage:description "All reconcile_runtime tests (reconcile_runtime.rs lines 482-688+) wire a FakeInboxIngress whose import_inbox_source always returns source_files: Vec::new(). This fully decouples the reconcile-runtime test harness from any real ingress behaviour. ADR-010-claude-jsonl-compatibility-envelope.md establishes the no-churn rule: re-observing a retrieval-stub projection for the same message must not create a new-mail churn loop. The existing tests prove coalescing, shutdown, executor-failure propagation, trigger ordering, and notification routing — all at the runtime dispatch layer — but none construct a scenario in which the ingress returns a retrieval-stub projection for a previously-seen message ID and then verify that no churn notification is emitted. The no-churn invariant is therefore proven only at the store layer (store.rs identity fingerprint / idempotent commit tests). It is unproven at the reconcile-runtime integration boundary where the watcher, ingress, and runtime interact end-to-end." ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteTo "feature/pS-s8-jsonl-compat" ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-ATM-QA-004/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-ATM-QA-004/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 641 ;
+  triage:snippet "struct FakeInboxIngress; — import_inbox_source returns source_files: Vec::new(); no test exercises retrieval-stub re-observation path through reconcile runtime" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 ;
+  triage:status "present" ;
+  triage:note "reconcile_runtime.rs exists on integrate/phase-S; FakeInboxIngress and no-churn gap are specific to the S.8 feature branch additions." .

@@ -1,0 +1,117 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-027>
+  a triage:Finding ;
+  triage:findingId "YB-027" ;
+  triage:title "RSH-Y9-002: no max message size check on delivery path before write" ;
+  triage:description "crates/atm-daemon/src/non_claude_outbound_runtime.rs delivery_payloads() method does not enforce input size limits on the NonClaudeOutboundDeliveryRequest before performing FS write. The serialize-then-write sequence (serde_json::to_vec + file.write_all) has no maximum size validation, creating a potential DoS vector via unbounded message count or size." ;
+  triage:category "RSH" ;
+  triage:phaseId "phase-Yb" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "Minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:status "deferred" ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "PYB-PHASE-END-QA-2" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:followupAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:followupNote "QA-2 re-run disputes Important severity: MAX_DAEMON_FRAME_BYTES (1 MiB) at protocol.rs:180 caps IPC frame upstream before deserialization, bounding NonClaudeOutboundDeliveryRequest before it reaches deliver_payloads. Resolution: add comment documenting upstream cap rather than adding new guard. Severity downgraded to Minor (no code gap; comment-only fix to address documentation of existing bounds)." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-027/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/s7> ;
+  triage:openOn <urn:atm:triage:worktree/s8> ;
+  triage:openOn <urn:atm:triage:worktree/s9> ;
+  triage:openOn <urn:atm:triage:worktree/s10> ;
+  triage:openOn <urn:atm:triage:worktree/s11> ;
+  triage:promoteTo <urn:atm:triage:worktree/s11> ;
+  triage:scopeExceedsPhaseDeliverables true ;
+  triage:notes "QA-2 re-run disputes original Important severity. MAX_DAEMON_FRAME_BYTES (1 MiB) in protocol.rs:180 already caps IPC frame size before deserialization; NonClaudeOutboundDeliveryRequest is bounded upstream before reaching deliver_payloads. No new size guard needed. Resolution: comment-only — document upstream cap reference and MAX_CONCURRENT_CONNECTIONS ceiling as accepted FS-stall defense. Severity downgraded to Minor." .
+
+<urn:atm:triage:occurrence/YB-027/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 69 ;
+  triage:snippet "let mut bytes = serde_json::to_vec(&request)?; ... file.write_all(&bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/s7> .
+
+<urn:atm:triage:occurrence/YB-027/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 69 ;
+  triage:snippet "let mut bytes = serde_json::to_vec(&request)?; ... file.write_all(&bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:occursIn <urn:atm:triage:worktree/s8> .
+
+<urn:atm:triage:occurrence/YB-027/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 69 ;
+  triage:snippet "let mut bytes = serde_json::to_vec(&request)?; ... file.write_all(&bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:occursIn <urn:atm:triage:worktree/s9> .
+
+<urn:atm:triage:occurrence/YB-027/s10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 69 ;
+  triage:snippet "let mut bytes = serde_json::to_vec(&request)?; ... file.write_all(&bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:occursIn <urn:atm:triage:worktree/s10> .
+
+<urn:atm:triage:occurrence/YB-027/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/non_claude_outbound_runtime.rs" ;
+  triage:line 69 ;
+  triage:snippet "let mut bytes = serde_json::to_vec(&request)?; ... file.write_all(&bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:occursIn <urn:atm:triage:worktree/s11> .
+
+<urn:atm:triage:worktree/s7>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "b0370c86" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s10>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "ed00c79c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s11>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "d3497baf" ;
+  triage:orderIndex 5 .

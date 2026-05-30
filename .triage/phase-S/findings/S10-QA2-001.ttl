@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S10-QA2-001>
+  a triage:Finding ;
+  triage:findingId "S10-QA2-001" ;
+  triage:title "sprint-S10.md References cites requirements.md:171-178 but query/follow deferral text is at lines 179-181" ;
+  triage:description "docs/phase-S/sprint-S10.md References section cites 'docs/atm-daemon/requirements.md:171-178'. The S.10 query/follow deferral text added to satisfy S10-QA1-011 is at lines 179-181, outside the cited range. Fix: update the line reference to ':171-184' (or broader) to cover the full REQ-DAEMON-OBS-002 section including the deferral text." ;
+  triage:category "DOC" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:promoteToBranch "feature/pS-s10-daemon-retained-logger" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S10-QA2-001/s10/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/953dee2> .
+
+<urn:atm:triage:occurrence/S10-QA2-001/s10/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S10.md" ;
+  triage:line 57 ;
+  triage:snippet "References cites 'docs/atm-daemon/requirements.md:171-178' but query/follow deferral text added for S10-QA1-011 is at lines 179-181" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "953dee2" ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/953dee2> .
+
+<urn:atm:triage:worktree/feature-pS-s10-daemon-retained-logger/953dee2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s10-daemon-retained-logger" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s10-daemon-retained-logger" ;
+  triage:headSha "953dee2" ;
+  triage:orderIndex 2 .

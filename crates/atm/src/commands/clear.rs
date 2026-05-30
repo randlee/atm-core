@@ -2,10 +2,11 @@ use std::time::Duration;
 
 use anyhow::{Context, Result};
 use atm_core::address::AgentAddress;
-use atm_core::clear::{self, ClearQuery};
+use atm_core::clear::ClearQuery;
 use atm_core::home;
 use clap::Args;
 
+use crate::composition::CliComposition;
 use crate::observability::CliObservability;
 use crate::output;
 
@@ -40,8 +41,9 @@ impl ClearCommand {
         let home_dir = home::atm_home()?;
         let dry_run = self.dry_run;
         let json = self.json;
+        let composition = CliComposition::bootstrap("clear", observability)?;
         let query = self.build_query(home_dir, current_dir)?;
-        let outcome = clear::clear_mail(query, observability)?;
+        let outcome = composition.clear(query)?;
         output::print_clear_result(&outcome, dry_run, json)
     }
 

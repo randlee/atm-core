@@ -1,0 +1,11 @@
+%% title: `drain nudges`
+%% summary: FIFO advisory-nudge drain for one registered consumer.
+%% commentary: This drain path should preserve FIFO ordering and keep the daemon queue generic rather than client-specific.
+%% sets: client
+flowchart TD
+    A[registered-consumer drain request] --> B[Daemon drain handler]
+    B --> C1[Locate consumer session]
+    C1 -->|not found| E1[ValidationFailed or NotFound]
+    C1 --> C2[Drain bounded advisory-nudge queue in FIFO order]
+    C2 -->|runtime error| E2[DaemonUnavailable]
+    C2 --> O1[Return drained nudges]

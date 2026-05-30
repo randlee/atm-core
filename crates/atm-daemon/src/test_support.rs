@@ -1,0 +1,124 @@
+use atm_core::boundary::RequestDispatcher;
+use atm_core::doctor::{DoctorEnvironmentVisibility, DoctorReport, DoctorStatus, DoctorSummary};
+use atm_core::observability::{AtmObservabilityHealth, AtmObservabilityHealthState};
+use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
+
+use interprocess::local_socket::Stream as LocalSocketStream;
+use interprocess::local_socket::traits::Stream as _;
+
+use crate::lifecycle_control::LifecycleControlSourceAdapter;
+
+pub(crate) struct LifecycleFlagResetGuard {
+    lifecycle: LifecycleControlSourceAdapter,
+}
+
+impl LifecycleFlagResetGuard {
+    pub(crate) fn install(lifecycle: LifecycleControlSourceAdapter) -> Self {
+        lifecycle.set_terminate_for_test(false);
+        lifecycle.set_reload_for_test(false);
+        Self { lifecycle }
+    }
+}
+
+impl Drop for LifecycleFlagResetGuard {
+    fn drop(&mut self) {
+        self.lifecycle.set_terminate_for_test(false);
+        self.lifecycle.set_reload_for_test(false);
+        if let Err(error) = self.lifecycle.reset_shared_state_for_test() {
+            tracing::warn!(
+                %error,
+                "failed to drain shared lifecycle worker during test reset"
+            );
+        }
+    }
+}
+
+#[derive(Debug, Default)]
+pub(crate) struct DoctorOnlyDispatcher;
+
+impl atm_core::boundary::sealed::Sealed for DoctorOnlyDispatcher {}
+
+impl RequestDispatcher for DoctorOnlyDispatcher {
+    fn dispatch(
+        &self,
+        request: RequestEnvelope,
+    ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
+        match request {
+            RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(DoctorReport {
+                summary: DoctorSummary {
+                    status: DoctorStatus::Healthy,
+                    message: "ok".to_string(),
+                    info_count: 0,
+                    warning_count: 0,
+                    error_count: 0,
+                },
+                findings: Vec::new(),
+                recommendations: Vec::new(),
+                environment: DoctorEnvironmentVisibility {
+                    atm_home: None,
+                    atm_team: None,
+                    atm_identity: None,
+                    team_override: None,
+                },
+                member_roster: None,
+                observability: AtmObservabilityHealth {
+                    active_log_path: None,
+                    logging_state: AtmObservabilityHealthState::Healthy,
+                    query_state: Some(AtmObservabilityHealthState::Healthy),
+                    maintenance: None,
+                    diagnostic: None,
+                    detail: None,
+                },
+                runtime_status: None,
+                bootstrap_trace: None,
+            })),
+            other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
+        }
+    }
+
+    fn dispatch_advisory_stream(
+        &self,
+        _request: atm_core::graft::AdvisoryStreamRequest,
+        _sink: &mut dyn atm_core::boundary::AdvisoryStreamSink,
+    ) -> Result<(), atm_core::error::AtmError> {
+        panic!("unexpected advisory stream request in DoctorOnlyDispatcher");
+    }
+}
+
+pub(crate) fn connect_daemon_local_ipc_until_ready(
+    endpoint_path: &std::path::Path,
+    ready_rx: std::sync::mpsc::Receiver<()>,
+) -> LocalSocketStream {
+    match ready_rx.recv_timeout(std::time::Duration::from_secs(10)) {
+        Ok(()) => {}
+        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            panic!("timed out waiting for daemon local ipc ready signal")
+        }
+        Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+            panic!("daemon local ipc ready signal sender dropped before readiness")
+        }
+    }
+    let ipc_name =
+        atm_core::protocol::daemon_local_ipc_name_from_path(endpoint_path).expect("ipc name");
+    let deadline = std::time::Instant::now() + std::time::Duration::from_secs(10);
+    let mut attempts = 0usize;
+    let mut last_error = None;
+    while std::time::Instant::now() < deadline {
+        match LocalSocketStream::connect(ipc_name.clone()) {
+            Ok(stream) => return stream,
+            Err(error) => {
+                attempts += 1;
+                last_error = Some(error);
+                // The ready signal is the structural synchronization point; this retry only
+                // covers the residual OS socket publication race after readiness.
+                std::thread::sleep(std::time::Duration::from_millis(1));
+            }
+        }
+    }
+    panic!(
+        "connect daemon local ipc after ready signal failed after {attempts} attempts: {}",
+        last_error
+            .map(|error| error.to_string())
+            .unwrap_or_else(|| "unknown connect error".to_string())
+    )
+}

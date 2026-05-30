@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-006>
+  a triage:Finding ;
+  triage:findingId "FTQ-006" ;
+  triage:title "Static SHARED state not reset between tests — test isolation violation" ;
+  triage:description "crates/atm-daemon/src/tests.rs:57-58 — static SHARED (and related lifecycle signal flag at line 20 in lifecycle_control.rs) is not reset between test runs. Tests that mutate shared static state can contaminate sibling tests when run in the same process. Requires OnceLock/atomic reset or Drop guard pattern to ensure isolation. (quality-mgr reported as FTQ-001; remapped FTQ-006 to avoid ID collision with existing phase-S FTQ-001.)" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-08T23:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-006/s1/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:occurrence/FTQ-006/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 57 ;
+  triage:snippet "static SHARED — no reset between tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "661f0fb" ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb> .
+
+<urn:atm:triage:worktree/feature-pS-s1-boundary-extraction/661f0fb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s1-boundary-extraction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s1-boundary-extraction" ;
+  triage:headSha "661f0fb" ;
+  triage:orderIndex 1 .

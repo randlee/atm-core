@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-026>
+  a triage:Finding ;
+  triage:findingId "FTQ-026" ;
+  triage:title "install_stale_recovery_barrier_for_test has no RAII guard — panic between install and clear leaves global barrier orphaned (tests.rs:324)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:324 — singleton_guard_rejects_stale_recovery_when_owner_token_changes calls install_stale_recovery_barrier_for_test() at line 324 and clear_stale_recovery_barrier_for_test() at line 333, with no RAII guard protecting the interval. If the test panics between those two calls (e.g., the spawned thread panics, or file operations at lines 328-331 fail), the global barrier remains installed. The next #[serial] test that exercises the stale-recovery code path will block on the orphaned barrier indefinitely, producing an apparent deadlock in an unrelated test that is extremely difficult to diagnose. NOTE: This defect is pre-existing; it was not introduced by the FTQ-024 fix in S.4-FIX-R2, but was exposed in scope during round-limit QA-3 review of tests.rs. Fix: wrap the barrier installation in a RAII guard that calls clear_stale_recovery_barrier_for_test in its Drop implementation, or use scopeguard::defer! to ensure cleanup regardless of panic path." ;
+  triage:category "FTQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T20:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-026/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/e3f4b88> .
+
+<urn:atm:triage:occurrence/FTQ-026/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 324 ;
+  triage:snippet "install_stale_recovery_barrier_for_test(Arc::clone(&barrier)) — no RAII guard; panic between line 324 (install) and line 333 (clear) leaves global barrier set; subsequent serial tests deadlock on orphaned barrier; pre-existing defect" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "e3f4b88" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/e3f4b88> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/e3f4b88>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "e3f4b88" ;
+  triage:orderIndex 6 .

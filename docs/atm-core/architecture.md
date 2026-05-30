@@ -8,6 +8,124 @@ It complements the product architecture in
 [`../architecture.md`](../architecture.md) and owns crate-local structure and
 service boundaries.
 
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
+
+## 1.1 ADRs
+
+## Shared ATM protocol lives in atm-core
+
+```yaml
+adr_id: ADR-ATM-CORE-001
+crate: atm-core
+title: Shared ATM protocol lives in atm-core
+status: accepted
+date: 2026-05-03
+deciders:
+  - team-lead
+  - arch-ctm
+tags:
+  - protocol
+  - contracts
+related_boundaries:
+  - BOUNDARY-AtmProtocol
+  - BOUNDARY-ClientTransport
+  - BOUNDARY-ServerTransport
+  - BOUNDARY-RequestDispatcher
+code_references:
+  - docs/atm-core/boundaries.md
+  - docs/atm-daemon/boundaries.md
+  - docs/atm/boundaries.md
+```
+
+Context:
+- The protocol is shared by CLI clients, daemon server/runtime, in-process
+  transport tests, and thin extension crates.
+
+Decision:
+- `AtmProtocol` is owned by `atm-core`, not by `atm-daemon`.
+- `atm-core` also owns the public transport and dispatcher contracts that
+  operate over that protocol.
+
+Consequences:
+- Thin callers do not need daemon-shaped API types.
+- Client and server transports share one contract family.
+- The `atm-graft` crate is allowed only as a thin consumer of that shared
+  contract family; it must not introduce a second daemon-specific client API.
+- Thin plugin crates must stay on the shared contract family; if advisory
+  registration or notification streaming is added later, it must extend this
+  shared line rather than introducing a graft-private daemon API.
+
+Alternatives considered:
+- Keep the protocol modeled as daemon API types.
+- Move the protocol into a dedicated transport crate first.
+
+Follow-up work:
+- Keep crate-local boundary records aligned with this ownership rule.
+- Enforce daemon-shaped protocol naming as a lint failure.
+
+Convention note:
+- crate-local `atm-core` ADRs may remain embedded in this architecture document
+  until they are extracted into standalone `docs/adr/` files
+
+## Ack is folded into send-shaped thin-client requests
+
+```yaml
+adr_id: ADR-ATM-CORE-002
+crate: atm-core
+title: Ack is folded into send-shaped thin-client requests
+status: accepted
+date: 2026-05-03
+deciders:
+  - team-lead
+  - arch-ctm
+tags:
+  - workflow
+  - protocol
+related_boundaries:
+  - BOUNDARY-AtmProtocol
+  - BOUNDARY-TaskStore
+code_references:
+  - docs/atm-core/boundaries.md
+  - docs/requirements.md
+```
+
+Context:
+- Thin client surfaces should expose as few methods as possible while still
+  preserving ATM workflow semantics.
+
+Decision:
+- `ack` remains a retained user workflow, but thin-client protocol surfaces
+  carry acknowledgement through send-shaped request data rather than a separate
+  top-level protocol family.
+
+Consequences:
+- Thin extensions expose a smaller public surface.
+- Task-state rules still remain explicit in store and workflow boundaries.
+- The reply emitted by that workflow must hardcode `requires_ack = false`.
+- Shared core request and query surfaces must resolve both ULID text and UUID
+  wire text to the same `AtmMessageId`.
+- Send-shaped request data may carry `parentMessageId` and `threadMode` when
+  the caller is creating a successor-thread message.
+- Update/correction threads are modeled as one linear successor chain whose
+  terminal node is the effective current instruction.
+- The effective current instruction is mode-aware:
+  - terminal `add-details` keeps the terminal id but composes the still-valid
+    predecessor context into the current body
+  - terminal `supersede` exposes only the replacement body
+- Only the original sender may append chain successors.
+- Ack is evaluated at the chain level rather than per-node toggle churn, with
+  the root message establishing whether the thread is ack-required.
+
+Alternatives considered:
+- Preserve a first-class top-level `ack` protocol method family.
+
+Follow-up work:
+- Keep task-state ownership explicit in `TaskStore`.
+- Align thin-client docs with the `send` / `receive` shape.
+- Align successor-chain and ephemeral-retention rules with the retained
+  product requirements before the SQLite sprint closes.
+
 ## 2. Architectural Rules
 
 - `atm-core` exposes request/result/service boundaries, not clap surfaces.
@@ -23,6 +141,14 @@ service boundaries.
   façade interfaces with hidden implementations.
 - `atm-core` must keep production failure handling structured with typed
   `Result`/error-enum boundaries rather than routine panic/unwrap paths.
+- retained mailbox runtime selection must be fail-closed and store-backed only;
+  `atm-core` must not preserve a file-backed mailbox fallback once the Phase X
+  cutover line lands
+- compatibility inbox files may survive only as ingress/export edges; retained
+  command/runtime logic must not treat them as a second durable mailbox backend
+- if compatibility inbox import/export helpers remain, they must stay behind
+  the hidden daemon-side ingress/export seam rather than leaking back into the
+  retained command runtime surface
 
 Observability release boundary rules:
 - raw `serde_json::Value` / `serde_json::Map` remain internal translation types
@@ -35,20 +161,26 @@ Observability release boundary rules:
 - CLI JSON output remains wire-compatible with the current retained-log output
   shape after the boundary cleanup
 
-## 2.1 Phase Q Boundary Model
+## 2.1 Phase R Boundary Model
 
-Phase Q makes `atm-core` the owner of the service-layer boundaries while the
+Phase R makes `atm-core` the owner of the service-layer boundaries while the
 daemon remains a runtime wrapper only.
 
 Required subsystem boundaries:
+- `AtmProtocol` boundary
+- `ClientTransport` boundary
+- `ServerTransport` boundary
+- `RequestDispatcher` boundary
 - `MailStore` boundary
 - `TaskStore` boundary
 - `RosterStore` boundary
 - inbox-ingress boundary
 - inbox-export boundary
 - config-ingress boundary
-- watcher/reconcile boundary
-- notifier-facing service boundary
+- `WatchEventSource` boundary
+- `ReconcileCoordinator` boundary
+- `NotificationSink` boundary
+- `StatusSource` boundary
 
 Required architectural rules:
 - business logic must live in service modules, not in concrete adapters
@@ -90,9 +222,88 @@ Privacy rule:
 
 Those belong to the `atm-daemon` crate.
 
-## 2.2 Phase Q Semantic Wrapper Policy
+Phase R redesign notes:
+- `atm-core` owns the shared `AtmProtocol` contract
+- `atm-core` owns the public boundary contracts for transport, dispatch,
+  store, ingress/export, watch/reconcile, and notification/status surfaces
+- `atm-core` owns the ATM frame schema used by both same-host local IPC and
+  cross-host daemon transport
+- `atm-core` owns the immutable public runtime roster projection
+  `ClaudeCodeTeamRoster`; that surface is derived from canonical ATM roster
+  truth rather than from direct `config.json` reads
+- `atm-core` team-admin surfaces must treat ATM roster rows as canonical team
+  and member truth; retained Claude `config.json` remains projection/output
+  state plus explicit `doctor` comparison input, not a second team-admin
+  authority
+- the `Z.6` Claude send warning path must build `ClaudeCodeTeamRoster` from
+  store-backed ATM roster rows after the durable write succeeds; it must not
+  reopen a direct `config.json` membership lookup seam
+- `atm-core` owns the queue-query semantics shared by `atm list` and
+  single-message `atm read`
+- selector-driven queue inspection operates on logical terminal-node messages,
+  not raw superseded predecessors
+- the canonical ICD owns the exact frame constants, packet-kind assignments,
+  and payload DTO mapping that `atm-core` must encode and decode
+- `atm-core` owns the current daemon packet family for:
+  - send compose
+  - send acknowledge
+  - receive
+  - clear
+  - doctor
+  - heartbeat
+  - advisory register
+  - advisory unregister
+  - advisory fetch
+  - advisory drain
+  - advisory stream
+- thin-client workflow surfaces should center on `send` and `receive`
+- `ack` remains a workflow/state concern, but thin-client protocol shape
+  should carry it inside send-shaped requests rather than a separate top-level
+  method family
+- queue inspection must not remain one "read many full messages" surface once
+  SQLite-backed mailbox history becomes the ordinary durable source of truth
 
-Phase Q should keep durable identifiers and runtime-cap settings typed across
+Config-ingress ownership rules:
+- `ConfigIngress` must not remain a generic retained-command/runtime roster
+  lookup surface
+- normal retained runtime membership decisions belong to ATM roster truth and
+  `ClaudeCodeTeamRoster`
+- the only approved retained send-path file-state exception before `Z.8`
+  watcher ownership is the post-write missing-config existing-inbox fallback
+  warning; that exception does not restore generic file-backed membership
+  checks
+- `ConfigIngress` is reserved for watcher-owned external ingest plus approved
+  comparison/preservation callers such as `doctor` and recreated-shell restore
+  preservation
+- repository-local lint / `sc-lint`-candidate gates should make direct
+  production `config.json` roster reads and generic `load_team_config(...)`
+  helper use mechanically detectable
+- later `Phase Z` boundary-cleanup gates should also make the following
+  mechanically detectable:
+  - `SCB-RETAINED-001`: direct command-entry
+    `service_runtime_store::default_runtime()` misuse in `atm teams`,
+    `atm members`, or `atm teams add-member`
+  - `SCB-WORKSPACE-001`: direct command/team-admin ambient `.atm.toml` /
+    `load_config(...)` reads outside the approved seam
+  - `SCB-SINGLETON-001`: public ambient singleton/runtime-factory exposure
+    such as broad crate-root re-exports
+- any surviving pre-existing match for those rule families must live in an
+  explicit TOML allowlist with owner and sunset-sprint metadata; new matches
+  are lint failures rather than review-time warnings
+
+Required frame direction:
+- transport framing must not depend on EOF or socket half-close semantics
+- receivers must validate the ATM frame header before payload decode
+- transport implementations may vary, but they must share one ATM packet
+  family and one framed helper layer
+- the canonical ATM daemon wire contract is documented in
+  [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- the same protocol ICD governs same-host local IPC and cross-host
+  daemon-to-daemon transport
+
+## 2.2 Phase R Semantic Wrapper Policy
+
+Phase R should keep durable identifiers and runtime-cap settings typed across
 the service boundary.
 
 Required wrappers:
@@ -105,13 +316,17 @@ Required wrappers:
 
 Architectural rule:
 - these values must not flow through the service/store boundary as raw
-  `String`, `usize`, or integer timeout primitives once the Phase Q
-  implementation lands
+  `String`, `usize`, or integer timeout primitives in the current SQLite/daemon
+  implementation line
 
 Store-family rule:
 - `MailStore` owns message lifecycle state
 - `TaskStore` owns task-domain state and task metadata
-- `RosterStore` owns durable roster membership state
+- `RosterStore` owns durable team/member roster state only
+- daemon-owned live `pid` state and other session-transient runtime data stay
+  outside `RosterStore`
+- `TeamConfig` / `config.json` stays a config-ingress document, not the durable
+  roster contract or the daemon runtime team-discovery surface
 - `MailStore` must not become the catch-all owner for unrelated future domains
   such as orchestration or daemon-live-status state
 
@@ -147,7 +362,7 @@ ATM-owned `.atm.toml` semantics for the retained multi-agent model:
 - launcher-owned sections such as `[rmux]` and future `[scmux]` are outside the
   `atm-core` runtime boundary and are intentionally ignored
 - `config.json` remains an ingress surface for roster updates, but it is not
-  the durable source of truth for roster state in the Phase Q target model
+  the durable source of truth for roster state in the current architecture
 
 Send-specific policy remains layered above the loader:
 - send may use a narrowly defined missing-document fallback when the product
@@ -164,9 +379,11 @@ Identity-specific policy:
   config in the shared multi-agent checkout model
 - aliases must resolve to canonical member names before membership validation,
   self-send checks, and mailbox lookup
+- client-specific runtime logic is owned by the client crate, not by
+  `atm-core` adapters or the daemon composition layer
 - same-team messages keep current canonical sender projection behavior
-- cross-team messages may project an alias-oriented `from` field only when
-  canonical sender identity is also persisted in `metadata.atm.fromIdentity` for
+- cross-team messages may project an alias-oriented `from` field only when the
+  canonical sender identity is also persisted in SQLite-owned state for
   validation, routing, and audit use
 - post-send-hook execution is outside the atomic mailbox mutation boundary
 - the hook runs only after a successful non-`dry-run` send
@@ -188,8 +405,8 @@ Identity-specific policy:
 - `requires_ack`
 - `is_ack`
 - optional `task_id` when present
-- optional `recipient_pane_id` when ATM already knows the authoritative pane
-  mapping for the recipient
+- optional `recipient_pane_id` when authoritative roster truth includes a
+  pane mapping for the recipient
 - hook stdout may optionally carry one structured result object that ATM parses
   on a best-effort basis for post-send diagnostics
 - supported structured hook-result levels are `debug`, `info`, `warn`, and
@@ -201,28 +418,35 @@ Identity-specific policy:
   successful send into a command failure
 - the hook fires for successful outbound mailbox writes from `atm send` and
   `atm ack`; `is_ack = false` for send and `is_ack = true` for ack
-- after Phase Q roster migration, the send path should populate
+- after roster migration, the send path should populate
   `ATM_POST_SEND.recipient_pane_id` from the authoritative roster/store record
   so hook scripts do not need to rediscover pane mappings from file state
 - the reserved diagnostic sender `atm-identity-missing@<team>` is for
   ATM-generated repair/diagnostic notices only
-- doctor should project the live `config.json` roster in a deterministic order:
-  baseline `[atm].team_members` first, `team-lead` first among that baseline,
-  then extra runtime members
+- doctor should compare the live `config.json` roster against canonical ATM
+  roster truth and surface drift in both directions
+- doctor may still project the live `config.json` roster in a deterministic
+  order: baseline `[atm].team_members` first, `team-lead` first among that
+  baseline, then extra runtime members
 - doctor should snapshot `~/.claude/teams/*/inboxes/*.lock` at start and end;
   any lock path present in both snapshots is stale and should surface as
   `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
 
-Current `AgentMember` persisted schema:
-- `name: String` required for roster membership checks
-- `agent_id: String` stored as `agentId`, default empty string
-- `agent_type: String` stored as `agentType`, default empty string
-- `model: String`, default empty string
-- `joined_at: Option<u64>` stored as `joinedAt`
-- `tmux_pane_id: String` stored as `tmuxPaneId`, default empty string
-- `cwd: String`, default empty string
-- `extra: serde_json::Map<String, serde_json::Value>` via `#[serde(flatten)]`
-  for forward-compatible Claude Code fields
+Approved canonical roster-member schema direction:
+- `team_name`
+- `agent_name`
+- `member_kind` — `permanent` or `ephemeral`
+- `harness` — behavioral enum; approved values: `claude-code`, `codex-cli`, `gemini-cli`, `opencode`
+- `agent_type`
+- `model`
+- `metadata_json`
+- `recipient_pane_id` when known, only if the U.7 roster review keeps a
+  runtime/routing field on canonical member rows
+
+`pid` is not part of the canonical roster-member schema. It is transient
+daemon-owned runtime state and must not be treated as a roster-member identity,
+harness field, or durable SQLite roster field in the U.7 canonical member
+model.
 
 Observability boundary note:
 - `AgentMember.extra` is intentionally out of scope for the L.4 observability
@@ -245,13 +469,10 @@ Sealed-trait note:
 ATM-authored alert metadata belongs to the send/schema boundary in `atm-core`.
 
 Architectural rule:
-- forward ATM-authored alert metadata lives under `metadata.atm`
+- ATM-owned repair/alert machine state belongs in SQLite-owned state and typed
+  diagnostics, not in shared inbox metadata namespaces
 - legacy top-level alert fields such as `atmAlertKind` and
-  `missingConfigPath` remain read-compatible only
-- the current runtime send path may continue emitting the legacy top-level
-  fields until the migration implementation sprint lands
-- this compatibility-period carve-out is the bounded exception referenced by
-  [`requirements.md` `REQ-CORE-SEND-002`](./requirements.md#6-send-alert-metadata)
+  `missingConfigPath` remain read-compatible only until removed
 
 ## 3.2 Retained Team Recovery Boundary
 
@@ -280,7 +501,7 @@ Architectural rules:
 - the local `members` view is config-first; richer hook/session state may be
   layered later without changing the base recovery contract
 
-## 3.3 Phase Q Mail And Roster Ownership
+## 3.3 Current Mail And Roster Ownership
 
 `atm-core` must structure the mail system around these ownership rules:
 
@@ -291,6 +512,26 @@ Architectural rules:
   - team roster
 - daemon memory is the live source of truth for agent status
 - Claude inbox JSONL is ingress/egress compatibility only
+- ATM-authored JSONL export is a bounded compatibility projection over the full
+  durable message body
+- canonical roster `harness` is the behavior gate for compatibility export
+  versus native delivery; model strings are not
+- write-affecting mail events must route through one central delivery-policy
+  coordinator plus dedicated event-family state machines
+- `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate machines
+  by design; shared helpers may share side effects but not event legality
+- Phase `Yb` adds the exact typed seam:
+  - `atm_core::delivery_plan::DeliveryPlan`
+  - `atm_core::delivery_plan::ReplyDeliveryPlan`
+  - `atm_core::delivery_execution::execute_delivery_plan(...)`
+  - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+- Phase `Yb` also adds the shared non-Claude execution handoff:
+  - `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
+  - `atm_core::service_runtime::RetainedServiceRuntime::deliver_non_claude_payloads(...)`
+  - `atm_core::boundary::NonClaudeOutbound`
+- `atm-core` owns the plan types and machine outputs; it must not allow outer
+  send/ack/persistence modules to reintroduce harness policy after plan
+  creation
 
 Migration implication:
 - current mailbox/workflow-sidecar logic is transitional and must converge onto
@@ -298,7 +539,7 @@ Migration implication:
 
 ## 4. ADR Namespace
 
-The `atm-core` crate uses the `ADR-CORE-*` namespace.
+The `atm-core` crate uses the `ADR-ATM-CORE-*` namespace.
 
 Initial use cases:
 

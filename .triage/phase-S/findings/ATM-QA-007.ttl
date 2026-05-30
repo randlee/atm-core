@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-007>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-007" ;
+  triage:title "rollback_partially_started_lanes() swallows rollback errors" ;
+  triage:description "crates/atm-daemon/src/composition.rs:457-488 — rollback_partially_started_lanes() ignores/swallows errors returned during rollback; partial rollback failures are invisible to caller. Fix: propagate or log rollback errors so failures surface to the caller." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:notes "Defect described in finding does not exist on any supplied branch. The function body at lines 457-487 uses tracing::warn! to surface rollback errors on both watch_event_source and notification_sink shutdown paths. Errors are not swallowed. Finding is absent across all three branches (s13, s14, s15). No dispatch required." .
+
+<urn:atm:triage:worktree/pS-s13-ipc-hardening/4c03c2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s14-impl/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 .

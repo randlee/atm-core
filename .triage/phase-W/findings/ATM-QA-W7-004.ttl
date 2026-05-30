@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W7-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W7-004" ;
+  triage:title "build_runtime_status_cache_state missing sqlite_ready reset comment" ;
+  triage:description "runtime_status_cache.rs always initializes sqlite_ready: true in next_state inside build_runtime_status_cache_state. No comment documents that callers (DaemonRequestDispatcher::reload_runtime_view, DaemonRequestDispatcher::new) are responsible for re-calling mark_sqlite_unavailable() if assembly fails. Fix: Add inline comment at the sqlite_ready: true field documenting that this function always initializes sqlite_ready=true and callers own the re-application of unavailability marks." ;
+  triage:phaseId "phase-W" ;
+  triage:category "missing-invariant-comment" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W7-004/pW-s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W7-004/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s7/7a3927d> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/15267c0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s7/7a3927d> .
+
+<urn:atm:triage:occurrence/ATM-QA-W7-004/pW-s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 400 ;
+  triage:snippet "sqlite_ready: true," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:headSha "7a3927d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s7/7a3927d> .
+
+<urn:atm:triage:occurrence/ATM-QA-W7-004/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_status_cache.rs" ;
+  triage:line 396 ;
+  triage:snippet "sqlite_ready: true," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "15267c0" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/15267c0> .
+
+<urn:atm:triage:worktree/pW-s7/7a3927d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "7a3927d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/15267c0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "15267c0" ;
+  triage:orderIndex 2 .

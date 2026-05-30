@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA2-S6-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA2-S6-002" ;
+  triage:title "Double-mutex pattern in lifecycle_control.rs:93-95 has no rationale comment" ;
+  triage:description "The install() function in crates/atm-daemon/src/lifecycle_control.rs uses two static Mutexes (SHARED at line 73, INSTALL_LOCK at line 74) without a rationale comment explaining why two mutexes are required instead of one. INSTALL_LOCK serializes callers while SHARED guards the initialized state, but this double-lock invariant is not documented inline. Quality-mgr confirmed this equals existing backlog item RBP-F-003 (Phase-S RBP backlog). Deferred to Phase S backlog; no new fix action required." ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:triageMode "round_limit" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:source "S.6 QA-2 round-limit finding" ;
+  triage:disposition "Phase S backlog — equals RBP-F-003; deferred, no new dispatch" ;
+  triage:relatedFinding <urn:atm:triage:finding/RBP-F-003> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA2-S6-002/integrate-phase-S/1> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/4c0693c> .
+
+<urn:atm:triage:occurrence/ATM-QA2-S6-002/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+  triage:line 73 ;
+  triage:snippet "static SHARED: Mutex<Option<SharedLifecycleControlState>> = Mutex::new(None);\n        static INSTALL_LOCK: Mutex<()> = Mutex::new(());" ;
+  triage:note "Double-mutex pattern: INSTALL_LOCK (line 74) serializes concurrent callers; SHARED (line 73) guards initialized state. Usage at lines 93-95 (shared.as_ref().ok_or_else) is within the SHARED lock. No rationale comment documenting the two-mutex invariant." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bbcae03" ;
+  triage:branch "feature/pS-s6-runtime-remediation" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/4c0693c> .
+
+<urn:atm:triage:worktree/integrate-phase-S/4c0693c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "4c0693c" ;
+  triage:orderIndex 1 ;
+  triage:note "S.6 code merged to integrate/phase-S at 2230656e; current HEAD 4c0693c. Double-mutex pattern confirmed present at lines 73-74 with no rationale comment." .

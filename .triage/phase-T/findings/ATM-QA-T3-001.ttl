@@ -1,0 +1,135 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Finding: ATM-QA-T3-001
+# Missing duplicate-key payload preservation test in writer/mod.rs
+# Triage mode: initial_pass  Phase: phase-T
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/ATM-QA-T3-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T3-001" ;
+  triage:title "Missing duplicate-key payload preservation test" ;
+  triage:description "REQ-RUSQLITE-IMMUT-001 acceptance criterion requires a test that duplicate writes preserve the first payload. crates/atm-rusqlite/src/writer/stmt_cache.rs:16 has ON CONFLICT DO NOTHING (correct) but no test in writer/mod.rs verifies that after a second insert of the same key with a different payload, the stored payload is unchanged and WriteOpResult::UpsertMessage { inserted: false } is returned." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "missing_test" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-001/pT-t2-sqlite-writer/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-001/pT-t3-immutable-rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-001/pT-t4-windows-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-001/pT-t5-hardening/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Occurrences — one per open branch (missing test = absent test node)
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ATM-QA-T3-001/pT-t2-sqlite-writer/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 0 ;
+  triage:snippet "No test in writer/mod.rs asserts inserted: false + first-payload preserved on duplicate key write; lib.rs test uses identical clone() for both inserts (same payload) rather than a distinct replacement payload" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-001/pT-t3-immutable-rows/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 0 ;
+  triage:snippet "writer/mod.rs introduces stmt_cache.rs DO NOTHING constraint (line 16) but adds no test verifying that a duplicate key write returns WriteOpResult::UpsertMessage { inserted: false } with first payload preserved" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-001/pT-t4-windows-runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 0 ;
+  triage:snippet "lib.rs gains duplicate_upsert_reports_inserted_false_and_keeps_record_loadable with distinct replacement payload (correct), but writer/mod.rs still has no duplicate-key payload-preservation test at the writer boundary" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-001/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/mod.rs" ;
+  triage:line 0 ;
+  triage:snippet "writer/mod.rs tests unchanged from pT-t4; no duplicate-key payload-preservation test present; inserted: false never asserted in writer/mod.rs test suite" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
+
+# ─────────────────────────────────────────────────────────────────────────────
+# WorktreeSnapshots
+# ─────────────────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t5-hardening/6450bb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/integrate-phase-T/47a3681>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "47a3681" ;
+  triage:orderIndex 6 ;
+  triage:branchState "absent" .

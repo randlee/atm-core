@@ -1,0 +1,72 @@
+boundary_id = "BOUNDARY-MailStore-Sqlite"
+owner_package = "atm-rusqlite"
+owner_crate_path = "atm_rusqlite"
+name = "SqliteMailStoreAdapter"
+
+[public]
+trait = "MailStore"
+
+[implementation]
+type = "SqliteMailStore"
+module = "atm_rusqlite"
+visibility = "private"
+constructor = "private"
+
+[composition]
+roots = ["atm_rusqlite::assemble_boundary"]
+
+[ownership]
+io_owns = [
+  "sqlite",
+  "mailbox_state_persistence",
+]
+io_forbidden = [
+  "socket_io",
+  "process_spawn",
+]
+
+[dependencies]
+allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependencies = [
+  "atm-core",
+  "rusqlite",
+]
+forbidden_edges = [
+  "atm -> atm-rusqlite",
+  "atm-graft -> atm-rusqlite",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "SqliteMailStore",
+  "SqliteMailStore::open",
+  "rusqlite::Connection",
+]
+
+[contracts]
+request_types = ["MailStore method inputs"]
+response_types = ["atm-core mailbox DTOs"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["atm_core::test_support::InMemoryMailStore"]
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-MAILSTORE-SQLITE-EDGES",
+  "LINT-BOUNDARY-MAILSTORE-SQLITE-REFERENCES",
+]
+review_gates = [
+  "no_public_impl",
+  "no_public_constructor",
+  "no_public_reexport",
+]
+
+[status]
+state = "active"
+notes = [
+  "crate-root implementation remains temporary; module split is still deferred",
+  "assembled through atm_rusqlite::SqliteBoundaryAssembly",
+]

@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-QA-S5-001>
+  a triage:Finding ;
+  triage:findingId "RBP-QA-S5-001" ;
+  triage:title "MailStoreIngestReplayState.last_fingerprint bare Option<String> — RBP-001 newtype discipline" ;
+  triage:description "crates/atm-core/src/boundary/mail.rs last_fingerprint field was Option<String>. RBP-001 requires domain newtypes for crate-boundary struct fields. Fix: introduce MessageFingerprint newtype and update last_fingerprint to Option<MessageFingerprint>." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/boundary/mail.rs" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed in Y.5 fix-r1 commit e55b0c89: MessageFingerprint newtype defined at boundary/mail.rs:82-100 with impl Display, From<String>, AsRef<str>. last_fingerprint field is now Option<MessageFingerprint>. QA-2 rust-qa recheck PASS." ;
+  triage:closedOn <urn:atm:triage:worktree/pY-s5/e55b0c89> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-QA-S5-001/pY-s5/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/1dd78933> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/RBP-QA-S5-001/pY-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 86 ;
+  triage:snippet "last_fingerprint: Option<String>," ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/RBP-QA-S5-001/pY-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary/mail.rs" ;
+  triage:line 82 ;
+  triage:snippet "pub struct MessageFingerprint(String); ... last_fingerprint: Option<MessageFingerprint> — COMPLIANT" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "e55b0c89" ;
+  triage:closureNote "MessageFingerprint newtype at lines 82-100. last_fingerprint at line 111 now Option<MessageFingerprint>." ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/e55b0c89> .
+
+<urn:atm:triage:worktree/pY-s5/1dd78933>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pY-s5/e55b0c89>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "e55b0c89" ;
+  triage:orderIndex 2 ;
+  triage:status "closed" .

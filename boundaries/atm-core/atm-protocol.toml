@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-AtmProtocol"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "AtmProtocol"
+
+[public]
+trait = "AtmProtocol"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["protocol_request_types", "protocol_response_types", "frame_payload_contract"]
+io_forbidden = ["socket_io", "sqlite", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm", "atm-daemon", "atm-daemon-bootstrap", "atm-rusqlite", "atm-runtime-test-support"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "global"
+forbidden = ["daemon_api", "DaemonRequestEnvelope", "DaemonResponseEnvelope"]
+
+[contracts]
+request_types = ["RequestEnvelope"]
+response_types = ["ResponseEnvelope"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-ATM-PROTOCOL-NAMING"]
+review_gates = ["no_daemon_shaped_protocol_types"]
+
+[status]
+state = "active"
+notes = ["trait plus protocol request/response/frame DTOs landed in atm_core::protocol", "ack is represented inside send-shape request data, not as a top-level protocol family", "heartbeat request/response DTOs and runtime-health snapshot payloads are part of the canonical protocol surface"]

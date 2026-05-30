@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-QA2-007>
+  a triage:Finding ;
+  triage:findingId "S8-QA2-007" ;
+  triage:title "sprint-S8.md §Required Code Targets omits reconcile_runtime.rs despite changes" ;
+  triage:description "sprint-S8.md §Required Code Targets lists only boundary_adapters.rs for daemon-side no-churn proof, but reconcile_runtime.rs was also changed (contains should_emit_reconcile_notification fingerprint logic and new test reconcile_runtime_suppresses_duplicate_notifications_for_same_message_snapshot). The plan doc is out of sync with actual change surface. Fix: add crates/atm-daemon/src/reconcile_runtime.rs to sprint-S8.md §Required Code Targets." ;
+  triage:category "DOC" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-QA2-007/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:occurrence/S8-QA2-007/s8/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-S/sprint-S8.md" ;
+  triage:line 83 ;
+  triage:snippet "§Required Code Targets lists boundary_adapters.rs but not reconcile_runtime.rs — plan out of sync with actual change surface" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "237c0ce" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "237c0ce" ;
+  triage:orderIndex 1 .

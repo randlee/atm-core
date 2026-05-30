@@ -1,0 +1,28 @@
+@prefix atm: <https://atm-core.dev/triage#> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+atm:ATM-QA-W3-006 a atm:Finding ;
+    atm:finding_id "ATM-QA-W3-006" ;
+    atm:title "SqliteBoundaryAssembly::new() assembly failure and checkpoint_wal() missing structured event emission" ;
+    atm:severity "important" ;
+    atm:status "open" ;
+    atm:highest_open_branch "feature/pW-s3-sqlite-observability" ;
+    atm:promote_to_branch "feature/pW-s3-sqlite-observability" ;
+    atm:dispatch_ready "true"^^xsd:boolean ;
+    atm:occurrences (
+        [
+            atm:branch "feature/pW-s3-sqlite-observability" ;
+            atm:file "crates/atm-rusqlite/src/lib.rs" ;
+            atm:lines "132-146" ;
+            atm:description "SqliteBoundaryAssembly::new() delegates to new_with_observability but uses NullSqliteObservability; assembly failure errors are not emitted via emit_sqlite_event_or_warn" ;
+            atm:status "open"
+        ]
+        [
+            atm:branch "feature/pW-s3-sqlite-observability" ;
+            atm:file "crates/atm-rusqlite/src/lib.rs" ;
+            atm:lines "320-329" ;
+            atm:description "SqliteBoundaryAssembly::checkpoint_wal() and assemble_boundary/assemble_default_boundary free functions also lack emit calls on failure paths" ;
+            atm:status "open"
+        ]
+    ) ;
+    atm:notes """Confirmed on feature branch at 2f245dc. SqliteBoundaryAssembly::new() at lines 132-134 wraps new_with_observability with Arc::new(NullSqliteObservability); any failure from SharedDb::open_with_observability propagates via ? without event emission. Sprint-W3.md lines 87-92 lists SqliteBoundaryAssembly::new() boundary open/assemble failure and SqliteBoundaryAssembly::checkpoint_wal() top-level WAL checkpoint propagation as required insertion points. The checkpoint_wal() implementation at lines 320-329 (feature branch) delegates to mail_store.db.checkpoint_wal() and returns the result without emitting on failure. integrate/phase-W at 6df690b does not contain W.3 observability code; these findings are absent on that branch.""" .

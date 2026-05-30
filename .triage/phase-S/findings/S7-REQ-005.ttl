@@ -1,0 +1,49 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-REQ-005>
+  a triage:Finding ;
+  triage:findingId "S7-REQ-005" ;
+  triage:title "wait.rs and workflow.rs missing from QA review targets" ;
+  triage:description "Sprint S.7 Required Code Targets (sprint-S7.md) lists crates/atm-core/src/read/wait.rs and crates/atm-core/src/workflow.rs as required targets. Neither file appears in the sprint commit diff (git show 9c01bca --stat). The files were not changed in this sprint so they were absent from QA review targets as a consequence of the scope-narrowing that occurs when files are unchanged. However, the sprint plan listed them as required targets, implying they should have been touched (e.g. to align workflow.rs with REQ-CORE-WORKFLOW-001 or to update wait.rs for the new single-message read path). The absence requires investigation: either the sprint spec over-specified required targets and these files were correctly left untouched, or the work items touching those files were inadvertently skipped. This should be resolved before merge." ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-REQ-005/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-REQ-005/s7/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-REQ-005/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/wait.rs" ;
+  triage:line 1 ;
+  triage:snippet "file listed as Required Code Target in sprint-S7.md but absent from sprint commit diff 9c01bca" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-REQ-005/s7/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 1 ;
+  triage:snippet "file listed as Required Code Target in sprint-S7.md but absent from sprint commit diff 9c01bca" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .

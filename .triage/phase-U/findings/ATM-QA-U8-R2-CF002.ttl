@@ -1,0 +1,78 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U8-R2-CF002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U8-R2-CF002" ;
+  triage:title "docs/project-plan.md Section 3 crate list not updated to match Status block" ;
+  triage:description "docs/project-plan.md Section 3 canonical crate list still shows 4 crates. Status block was updated in ATM-QA-U8-001 fix but Section 3 was not. Fix: update Section 3 to add atm-daemon-client and atm-graft to match the Status block." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-R2-CF002/pU-u8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-R2-CF002/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-R2-CF002/pU-u10/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u8/b82ecf9> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/3a36435> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u10/7bc28ff> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u8/b82ecf9> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-R2-CF002/pU-u8/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 128 ;
+  triage:snippet "## 3. Crates\\n\\nThe abandoned early SQLite/daemon target implementation was split across:\\n\\n- `crates/atm-core`\\n- `crates/atm`\\n- `crates/atm-daemon`\\n- `crates/atm-rusqlite`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "b82ecf9" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/b82ecf9> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-R2-CF002/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 128 ;
+  triage:snippet "## 3. Crates\\n\\nThe abandoned early SQLite/daemon target implementation was split across:\\n\\n- `crates/atm-core`\\n- `crates/atm`\\n- `crates/atm-daemon`\\n- `crates/atm-rusqlite`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "3a36435" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/3a36435> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-R2-CF002/pU-u10/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 128 ;
+  triage:snippet "## 3. Crates\\n\\nThe abandoned early SQLite/daemon target implementation was split across:\\n\\n- `crates/atm-core`\\n- `crates/atm`\\n- `crates/atm-daemon`\\n- `crates/atm-rusqlite`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "7bc28ff" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/7bc28ff> .
+
+<urn:atm:triage:worktree/pU-u8/b82ecf9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "b82ecf9" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pU-u9/3a36435>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "3a36435" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/7bc28ff>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "7bc28ff" ;
+  triage:orderIndex 10 .

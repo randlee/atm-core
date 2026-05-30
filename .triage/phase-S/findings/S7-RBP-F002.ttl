@@ -1,0 +1,63 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-RBP-F002>
+  a triage:Finding ;
+  triage:findingId "S7-RBP-F002" ;
+  triage:title "Duplicate parse_timestamp in commands/list.rs and commands/read.rs" ;
+  triage:description "parse_timestamp helper is defined identically in crates/atm/src/commands/list.rs:98 and crates/atm/src/commands/read.rs:163. Fix: extract to a shared module (e.g. crates/atm/src/commands/util.rs or crates/atm-core) and import from both callers." ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "sprint" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RBP-F002/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RBP-F002/s7/2> ;
+
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+# --- Occurrences on feature/pS-s7-queue-query (9c01bca) ---
+
+<urn:atm:triage:occurrence/S7-RBP-F002/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/list.rs" ;
+  triage:line 98 ;
+  triage:snippet "fn parse_timestamp(value: &str) -> Result<IsoTimestamp> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-RBP-F002/s7/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/read.rs" ;
+  triage:line 163 ;
+  triage:snippet "fn parse_timestamp(value: &str) -> Result<IsoTimestamp> {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+# --- WorktreeSnapshot nodes ---
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/76a646c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "76a646c" ;
+  triage:orderIndex 2 .

@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W8-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W8-005" ;
+  triage:title "sprint-W8.md must document DaemonSubsystem::Sqlite and typed emit_subsystem_event as W.1 gap closure" ;
+  triage:description """Code investigation confirms:
+(1) DaemonSubsystem::Sqlite variant was absent before commit a2358bd ('fix: close W.8 phase W closeout gaps').
+(2) emit_subsystem_event signature used &'static str subsystem parameter from its W.3 introduction (2f245dc) through TASK-1506 follow-ups (2e83846). The typed DaemonSubsystem parameter was introduced in a2358bd.
+(3) sprint-W1.md lines 75-78 were amended in a2358bd to add 'including the SQLite subsystem observability path' — expanding the original AC to explicitly cover the SQLite path.
+(4) sprint-W8.md does not exist (see ATM-QA-W8-001).
+
+Conclusion: sprint-W1.md AC 75-78 was retroactively updated on the W.8 branch to cover the Sqlite typing gap; the implementation closing that gap is correctly on the W.8 branch. The ownership ambiguity is real: sprint-W8.md must record that it closes the W.1 AC 75-78 gap for DaemonSubsystem::Sqlite and typed emit_subsystem_event. This finding is a content requirement for sprint-W8.md and is subsumed by ATM-QA-W8-001: fixing ATM-QA-W8-001 (creating sprint-W8.md) must include this gap closure reference to be complete. No standalone fix is needed beyond ATM-QA-W8-001 fix scope.""" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:subsumes <urn:atm:triage:finding/ATM-QA-W8-001> ;
+  triage:fixNote "When creating sprint-W8.md to close ATM-QA-W8-001: include Implementation Notes stating that DaemonSubsystem::Sqlite variant was added and emit_subsystem_event was changed from &'static str to typed DaemonSubsystem on this branch, closing the W.1 AC 75-78 requirement for typed subsystem identifiers on the SQLite observability path. Reference sprint-W1.md:75-78 explicitly." ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W8-005/pW-s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W8-005/pW-s8/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s8/a2358bd> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s8/a2358bd> .
+
+<urn:atm:triage:occurrence/ATM-QA-W8-005/pW-s8/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-W/sprint-W8.md" ;
+  triage:line 0 ;
+  triage:snippet "File absent; when created must reference W.1 gap closure for DaemonSubsystem::Sqlite and typed emit_subsystem_event (sprint-W1.md:75-78)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s8-phase-w-closeout" ;
+  triage:headSha "a2358bd" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s8/a2358bd> .
+
+<urn:atm:triage:occurrence/ATM-QA-W8-005/pW-s8/2>
+  a triage:Occurrence ;
+  triage:file "docs/phase-W/sprint-W1.md" ;
+  triage:line 75 ;
+  triage:snippet "AC lines 75-78 amended in a2358bd to cover SQLite path; implementation (DaemonSubsystem::Sqlite variant, typed emit_subsystem_event) is on W.8 branch not W.1 branch — sprint-W8.md must record ownership" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s8-phase-w-closeout" ;
+  triage:headSha "a2358bd" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s8/a2358bd> .
+
+<urn:atm:triage:worktree/pW-s8/a2358bd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s8-phase-w-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s8-phase-w-closeout" ;
+  triage:headSha "a2358bd" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-pW/a5aa8c4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "a5aa8c4" ;
+  triage:orderIndex 1 .

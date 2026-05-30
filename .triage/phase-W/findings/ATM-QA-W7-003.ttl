@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W7-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W7-003" ;
+  triage:title "Phase W closeout gate cannot be certified" ;
+  triage:description "plan-phase-W.md:328-333 phase closeout gate requires sprint docs and project-plan.md reflect merged state. Neither condition is met (blocked by ATM-QA-W7-001 + ATM-QA-W7-002). Gate cannot pass until both blocking findings resolved. This finding is satisfied when ATM-QA-W7-001 and ATM-QA-W7-002 are fixed." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "dependent-gate" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T05:13:57Z"^^xsd:dateTime ;
+  triage:blockedBy "ATM-QA-W7-001" ;
+  triage:blockedBy "ATM-QA-W7-002" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W7-003/pW-s7-triage-closeout/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s7-triage-closeout/7a3927d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s7-triage-closeout/7a3927d> .
+
+<urn:atm:triage:occurrence/ATM-QA-W7-003/pW-s7-triage-closeout/1>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-W.md" ;
+  triage:line 330 ;
+  triage:snippet "Phase closeout gate: Phase W is not complete until: ... the final Phase W sprint docs and docs/project-plan.md status reflect the merged implementation state" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s7-triage-closeout/7a3927d> .
+
+<urn:atm:triage:worktree/pW-s7-triage-closeout/7a3927d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "7a3927d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/15267c08>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "15267c08" ;
+  triage:orderIndex 2 .

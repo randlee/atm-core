@@ -1,6 +1,6 @@
 # Team Member State
 
-This document is the authoritative Phase Q reference for how every team-member
+This document is the authoritative current reference for how every team-member
 field is populated and updated.
 
 Goals:
@@ -71,12 +71,13 @@ Rule:
 
 ```rust
 pub struct TeamMateRuntime {
-    pub last_active_at: Option<DateTime<Utc>>,
+    pub last_active_at: Option<IsoTimestamp>,
     pub state: AgentState,
 }
 
 pub enum AgentState {
     Unknown,
+    IdentityConflict,
     Offline,
     Idle,
     Active,
@@ -92,7 +93,7 @@ pub struct TeamMateView {
     pub tmux: Option<TmuxLocator>,
     pub recipient_pane_id: Option<PaneId>,
     pub pid: Option<u32>,
-    pub last_active_at: Option<DateTime<Utc>>,
+    pub last_active_at: Option<IsoTimestamp>,
     pub state: AgentState,
 }
 ```
@@ -103,11 +104,11 @@ All daemon-managed team-member fields must update through one daemon socket
 handler:
 
 ```rust
-pub struct TeamMateHeartbeat {
+pub struct TeamMemberHeartbeatRequest {
     pub team: TeamName,
-    pub name: AgentName,
+    pub member: AgentName,
     pub pid: u32,
-    pub observed_at: DateTime<Utc>,
+    pub observed_at: IsoTimestamp,
     pub activity: HeartbeatActivity,
 }
 
@@ -128,9 +129,22 @@ Forbidden producers:
 - transport adapters performing inline state mutation outside the heartbeat
   handler
 
+The documented response DTO is:
+
+```rust
+pub struct TeamMemberHeartbeatResponse {
+    pub team: TeamName,
+    pub member: AgentName,
+    pub pid: u32,
+    pub pid_changed: bool,
+    pub state: RuntimeMemberState,
+    pub last_active_at: Option<IsoTimestamp>,
+}
+```
+
 ## Required State Machines
 
-These state machines are the complete Phase Q transition model for team-member
+These state machines are the complete current transition model for team-member
 runtime state. No additional state machines or hidden fallback transitions are
 permitted unless this document is updated first.
 
@@ -241,6 +255,7 @@ Owner:
 
 Authoritative update path:
 1. `TeamMateHeartbeat` accepted by `atm-daemon`.
+   (`TeamMemberHeartbeatRequest` in the shared protocol)
    - Claude-compatible hook producer supplies the stable parent session pid
    - Codex/native producer supplies the agent process pid itself
 
@@ -261,6 +276,9 @@ Rules:
   unless the explicit admin takeover path below is active
 - a live-old-pid plus new-pid conflict is a security event, not a normal
   respawn path
+- daemon startup hydrates configured roster members as `Unknown` and consults
+  durable SQLite pid continuity only as startup fallback; after the first live
+  heartbeat, cache-first pid checks become the primary conflict detector
 
 ### `last_active_at`
 
@@ -290,11 +308,15 @@ Authoritative update paths:
 1. `Unknown`
    - daemon startup before the member has emitted any authoritative runtime
      event in the current daemon lifetime
-2. `Active`
+   - bounded status-cache eviction demotes the member back to `Unknown`
+2. `IdentityConflict`
+   - daemon records a live-old-pid/new-pid collision without rewriting the
+     durable pid until an admin takeover or dead-pid retry clears the conflict
+3. `Active`
    - `TeamMateHeartbeat { activity: ActiveToolUse }`
-3. `Idle`
+4. `Idle`
    - `TeamMateHeartbeat { activity: Idle }`
-4. `Offline`
+5. `Offline`
    - liveness check proves tracked `pid` is dead
    - `TeamMateHeartbeat { activity: SessionEnded }`
 
@@ -304,7 +326,7 @@ Forbidden update paths:
 - inferred from stale `last_active_at` without the documented idle/offline rule
 
 Rules:
-- `state` changes only from one of the four update classes above
+- `state` changes only from one of the five update classes above
 - no undocumented fallback chain may map missing data directly to `Offline`
 - missing runtime data yields `Unknown`, not `Offline`
 
@@ -315,7 +337,7 @@ Rules:
 - the hook/runtime layer must capture the stable parent session pid
 - the hook subprocess pid is never valid as the member `pid`
 - the hook/runtime layer must send that pid to the daemon through the
-  `TeamMateHeartbeat` socket path
+  `TeamMemberHeartbeatRequest` socket path
 
 Current interim source:
 - the already-installed Python hooks from `../agent-team-mail`
@@ -327,7 +349,7 @@ Future source:
 
 - Codex does not rely on Claude hook semantics
 - the ATM CLI/runtime must send the Codex process pid to the daemon through the
-  same `TeamMateHeartbeat` socket path
+  same `TeamMemberHeartbeatRequest` socket path
 - that pid is the authoritative runtime pid until superseded by a new explicit
   heartbeat/session event
 

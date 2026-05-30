@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-EG-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-EG-002" ;
+  triage:title "sprint-V2.md missing Implementation Record section" ;
+  triage:description "docs/phase-V/sprint-V2.md has no Implementation Record section. Must document: VQ2-001 closure (SubsystemObservability injection into RuntimeHealthMonitor), VQ2-002 closure (SubsystemObservability injection into RuntimeComposition), scope of deleted helpers (map_command_event, map_daemon_event, map_runtime_event, emit_runtime_event, record_daemon_event), and confirmation that record_daemon_event delegation path was removed." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-V" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T14:28:37Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-EG-002/integrate-phase-V/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> .
+
+<urn:atm:triage:occurrence/ATM-QA-EG-002/integrate-phase-V/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-V/sprint-V2.md" ;
+  triage:line 1 ;
+  triage:snippet "# Sprint V.2 — Observability Migration Into Subsystems [no Implementation Record section present]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-V" ;
+  triage:headSha "ec24c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> .
+
+<urn:atm:triage:worktree/integrate-phase-V/ec24c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-V" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-V" ;
+  triage:headSha "ec24c3e" ;
+  triage:orderIndex 5 .

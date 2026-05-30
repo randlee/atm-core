@@ -1,0 +1,84 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-004>
+  a triage:Finding ;
+  triage:findingId "RSH-004" ;
+  triage:title "Timeout-set failure on cap-exceeded connection silently discarded" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs:353 — When a connection capacity cap is exceeded, set_recv_timeout/set_send_timeout failures are silently discarded via let _ = ... rather than dropping the stream. The stream continues to write_frame/flush/continue even if timeout setup failed. Fix: drop the stream explicitly on timeout-set failure." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-004/pS-s15/1> ;
+
+  triage:openOn <urn:atm:triage:worktree/pS-s13/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s13/4c03c2c> .
+
+# ── Occurrences ─────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/RSH-004/pS-s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 353 ;
+  triage:snippet "let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE)); let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
+
+<urn:atm:triage:occurrence/RSH-004/pS-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 353 ;
+  triage:snippet "let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE)); let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/RSH-004/pS-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 353 ;
+  triage:snippet "let _ = stream.set_recv_timeout(Some(REQUEST_DEADLINE)); let _ = stream.set_send_timeout(Some(REQUEST_DEADLINE));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+# ── WorktreeSnapshot nodes ───────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pS-s13/4c03c2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s14/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s15/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 .

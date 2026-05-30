@@ -1,0 +1,94 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U6-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U6-003" ;
+  triage:title "Schema test missing imported_from absent and recorded_at present assertions" ;
+  triage:description "crates/atm-rusqlite/src/lib.rs — the schema test sqlite_schema_tracks_unified_message_state_and_roster_runtime_columns does not assert that imported_from is absent from mail_messages, nor that recorded_at is present. Sprint-U6 requires adding both assertions." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U6-003/u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U6-003/u5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U6-003/u6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U6-003/u7/1> ;
+  triage:openOn <urn:atm:triage:worktree/u4/039a552> ;
+  triage:openOn <urn:atm:triage:worktree/u5/9bae271> ;
+  triage:openOn <urn:atm:triage:worktree/u6/22dfffa> ;
+  triage:openOn <urn:atm:triage:worktree/u7/af056ae> ;
+  triage:promoteTo <urn:atm:triage:worktree/u7/af056ae> .
+
+<urn:atm:triage:occurrence/ATM-QA-U6-003/u4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1542 ;
+  triage:snippet "assert!(!collected.iter().any(|column| column == \"expires_at\")); /* missing: imported_from absent + recorded_at present assertions */" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:occursIn <urn:atm:triage:worktree/u4/039a552> .
+
+<urn:atm:triage:occurrence/ATM-QA-U6-003/u5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1574 ;
+  triage:snippet "assert!(!collected.iter().any(|column| column == \"expires_at\")); /* missing: imported_from absent + recorded_at present assertions */" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:occursIn <urn:atm:triage:worktree/u5/9bae271> .
+
+<urn:atm:triage:occurrence/ATM-QA-U6-003/u6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1551 ;
+  triage:snippet "assert!(!collected.iter().any(|column| column == \"expires_at\")); /* missing: imported_from absent + recorded_at present assertions */" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:occursIn <urn:atm:triage:worktree/u6/22dfffa> .
+
+<urn:atm:triage:occurrence/ATM-QA-U6-003/u7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1551 ;
+  triage:snippet "assert!(!collected.iter().any(|column| column == \"expires_at\")); /* missing: imported_from absent + recorded_at present assertions */" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:occursIn <urn:atm:triage:worktree/u7/af056ae> .
+
+<urn:atm:triage:worktree/u4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/u5/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/u6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/u7/af056ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "af056ae" ;
+  triage:orderIndex 7 .

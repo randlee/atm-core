@@ -1,0 +1,239 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# FTQ-U10-003 — 1-second timing assertion in local_ipc_transport.rs is wall-clock fragile
+# triage_mode: initial_pass
+# triaged_at: 2026-05-12T00:00:00Z
+
+<urn:atm:triage:finding/FTQ-U10-003>
+  a triage:Finding ;
+  triage:findingId "FTQ-U10-003" ;
+  triage:title "1-second timing assertion in local_ipc_transport.rs:1110 is wall-clock fragile" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs:1110 — 1-second timing assertion is wall-clock fragile under load. Replace with event-driven synchronization." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:pattern "Duration::from_secs\\\\(1\\\\)|assert.*elapsed|elapsed.*assert" ;
+  triage:fileFilter "local_ipc_transport\\\\.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/integrate-phase-U/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/integrate-phase-U/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/integrate-phase-U/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/pU-u9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/pU-u9/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/pU-u9/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/pU-u9/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/pU-u10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/pU-u10/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/pU-u10/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/pU-u10/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U10-003/pU-u10/5> ;
+
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u10/3730257> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/pU-u10/3730257> .
+
+# ── integrate/phase-U occurrences (head_sha: 54fabfa) ──────────────────────
+
+<urn:atm:triage:occurrence/FTQ-U10-003/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1051 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1055 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/integrate-phase-U/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1059 ;
+  triage:snippet "shutdown_started.elapsed() <= Duration::from_secs(1)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/integrate-phase-U/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1275 ;
+  triage:snippet "shutdown_started.elapsed() < Duration::from_secs(1)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/integrate-phase-U/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1330 ;
+  triage:snippet ".join_tracked_dispatches(Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/54fabfa> .
+
+# ── feature/pU-u9-client-owned-graft-runtime occurrences (head_sha: 4ba0e00) ──
+
+<urn:atm:triage:occurrence/FTQ-U10-003/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1102 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/pU-u9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1106 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/pU-u9/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1110 ;
+  triage:snippet "shutdown_started.elapsed() <= Duration::from_secs(1)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/pU-u9/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1326 ;
+  triage:snippet "shutdown_started.elapsed() < Duration::from_secs(1)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/pU-u9/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1381 ;
+  triage:snippet ".join_tracked_dispatches(Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+# ── feature/pU-u10-generic-advisory-notification occurrences (head_sha: 3730257) ──
+
+<urn:atm:triage:occurrence/FTQ-U10-003/pU-u10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1102 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/pU-u10/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1106 ;
+  triage:snippet ".recv_timeout(Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/pU-u10/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1110 ;
+  triage:snippet "shutdown_started.elapsed() <= Duration::from_secs(1)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/pU-u10/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1326 ;
+  triage:snippet "shutdown_started.elapsed() < Duration::from_secs(1)," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/FTQ-U10-003/pU-u10/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1381 ;
+  triage:snippet ".join_tracked_dispatches(Duration::from_secs(1))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+# ── WorktreeSnapshot nodes ────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/3730257>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:orderIndex 10 .

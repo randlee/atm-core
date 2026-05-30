@@ -1,0 +1,432 @@
+# Phase Y Inbox Write Path Audit
+
+Baseline:
+
+- planning branch: `feature/pY-s0-planning`
+- implementation branch sampled: `feature/pY-s3-hard-write-boundary-consolidation`
+
+## 1. Current Production ATM-Authored Claude-Inbox Write Paths
+
+### Path A — Command Send Path
+
+Code:
+
+- `crates/atm-core/src/send/mod.rs::persist_message_and_seed_workflow(...)`
+- callers:
+  - normal send path
+  - missing-config notice path
+
+Behavior:
+
+- load the current mailbox projection from SQLite metadata/records
+- prepare threading/supersede state against that projected mailbox
+- mirror the new message into the SQLite store
+- persist workflow state in the same coordinated write block
+- trigger a post-commit runtime-owned compatibility refresh through
+  `crates/atm-core/src/service_runtime.rs::refresh_compat_inbox_projection(...)`
+
+Current assessment:
+
+- this is no longer a direct command-layer compatibility rewrite path
+- command code now owns SQLite/workflow persistence only and reaches the
+  compatibility writer through the retained runtime refresh owner
+
+### Path B — Command Ack Reply Path
+
+Code:
+
+- `crates/atm-core/src/ack/mod.rs`
+- reply emission calls `persist_message_and_seed_workflow(...)`
+
+Behavior:
+
+- update the acked message state in SQLite
+- emit the reply message through the same narrowed persistence helper used by
+  send
+- do not rewrite the original source inbox merely because ack state changed
+
+Current assessment:
+
+- this is not a separate low-level writer
+- the surviving behavior is the send-shaped reply append, not a source-inbox
+  state rewrite path
+
+### Path C — Compatibility Export / Source Projection Path
+
+Code:
+
+- `crates/atm-core/src/service_runtime.rs::refresh_compat_inbox_projection(...)`
+- `crates/atm-core/src/direct_boundaries.rs::reexport_messages(...)`
+- `crates/atm-core/src/boundary_support.rs::reexport_messages(...)`
+- `crates/atm-core/src/mailbox/mod.rs::export_compat_mailbox_projection(...)`
+- `crates/atm-core/src/mailbox/store.rs::write_compat_mailbox_projection(...)`
+- repair/rebuild path retained separately:
+  - `crates/atm-core/src/boundary_support.rs::export_source_files(...)`
+  - `crates/atm-core/src/mailbox/mod.rs::export_compat_source_projections(...)`
+  - `crates/atm-core/src/mailbox/store.rs::write_compat_source_projections(...)`
+
+Behavior:
+
+- normal runtime flow:
+  - reload immutable stored envelopes from SQLite
+  - rewrite one compatibility inbox projection through the mailbox owner layer
+- repair/rebuild flow:
+  - accept already-loaded source projections
+  - write compatibility projections through the same mailbox owner layer
+
+Current assessment:
+
+- `refresh_compat_inbox_projection(...) -> reexport_messages(...)` is the sole
+  normal runtime compatibility writer shape after `Y.3`
+- `export_source_files(...)` survives only as the explicit repair/rebuild owner
+
+### Path D — Team-Admin Inbox Creation Path
+
+Code:
+
+- `crates/atm-core/src/team_admin.rs::add_member(...)`
+- `crates/atm-core/src/team_admin.rs::ensure_inbox_exists(...)`
+
+Behavior:
+
+- create a new inbox file for a newly added member
+- use `OpenOptions::new().write(true).create_new(true)` to create the inbox
+  without rewriting an existing mailbox
+- used by admin/recovery flows, not by normal `send` / `read` / `ack` /
+  `clear` runtime flow
+
+Current assessment:
+
+- this is an approved exceptional inbox-write path
+- it belongs to the retained admin boundary, not to the normal runtime
+  compatibility export owner
+- the original Phase `Y` framing focused on normal runtime writes; this audit
+  expands scope deliberately so approved admin inbox creation is documented and
+  auditable too
+
+### Path E — Team Config Write Paths
+
+Code:
+
+- `crates/atm-core/src/team_admin.rs::write_team_config(...)`
+- `crates/atm-core/src/team_admin/restore.rs`
+
+Behavior:
+
+- rewrite `.claude/teams/<team>/config.json` atomically
+- used by team-admin membership mutation and restore/recovery paths
+- not used by normal `send` / `read` / `ack` / `clear` runtime flow
+
+Current assessment:
+
+- `config.json` writes are not watcher-owned today
+- these are admin/recovery write paths and should stay explicitly separate from
+  normal runtime inbox export ownership in Phase `Y`
+
+## 2. Current Write Semantics
+
+- before `Y.6`, ATM-authored compatibility inbox writes were full-file atomic
+  rewrites, not append-only writes
+- after `Y.6`, normal retained Claude Code compatibility output appends one
+  JSONL record at a time through `mailbox::atomic::append_message(...)`
+- explicit repair/rebuild flows and first-write legacy-array migration still
+  use the staged rewrite/re-export path
+- workflow + mailbox writes no longer keep normal runtime compatibility output
+  on the hot rewrite path; the durable SQLite/workflow step happens first and
+  the compatibility append follows afterward
+- the low-level Claude-surface rewrite helper `mailbox::atomic::write_messages(...)`
+  now survives only for explicit repair/rebuild and legacy-array migration
+
+## 3. Agreed Phase Y Runtime Rules
+
+- JSONL append is a `Claude Code` harness output only; harness type, not model,
+  decides whether a compatibility append is allowed
+- harness routing must be resolved from canonical roster `harness` truth, not
+  from ad hoc command inputs or model strings
+- non-`Claude Code` harnesses must never receive ATM-authored JSONL appends
+- multiple command/daemon flows may persist messages into SQLite, but only one
+  Claude-compatible append path is allowed after that write flow completes
+- the compatibility append is a Claude-facing notification/output path and must
+  not become the mutable source of truth
+- the final normal runtime write owner must sit behind one hard boundary and
+  must not be directly callable from arbitrary command code
+- the branch between Claude and non-Claude behavior must live in one central
+  delivery-policy coordinator plus explicit event-family state machines
+- `NewMessageStateMachine` and `ThreadUpdateStateMachine` are separate by
+  design; they must not be collapsed into one generic send machine
+- normal runtime append behavior is:
+  - SQLite inbox write completes
+  - one owned Claude-Code-only append path runs
+  - one nudge path runs
+- SQLite failure behavior is intentionally stricter than a normal degradation:
+  - for `Claude Code` harnesses:
+    - the original message is still appended to the Claude inbox
+    - ATM also appends a second error message from `atm-system@<team>`
+  - for non-Claude harnesses:
+    - the original message still proceeds through the non-Claude delivery path
+    - ATM also emits a second error message through that same path
+  - the nudge/notification path mirrors that two-message behavior
+  - no alternate fallback path is allowed in place of that companion error
+    message
+- if the Claude Code append itself fails, the fallback notification path is the
+  configured post-send-hook path, not a second ad hoc notification mechanism
+
+## 4. Final Allowed Write Classes
+
+Phase `Y` converges on only these approved ATM-authored Claude-inbox
+write classes:
+
+1. append one message to a Claude Code inbox
+   - daemon-private or tightly watcher-owned
+   - synchronized inside the owned writer subsystem
+   - must skip non-Claude harnesses for normal runtime compatibility writes
+   - append-only if and only if the approved compatibility wire contract
+     supports it
+
+2. bulk mailbox creation / rebuild for a new or repaired inbox
+   - explicit admin / restore / repair path
+   - may project a bounded historical message set such as the last 24 hours of
+     non-deleted messages into a newly created inbox
+   - not part of normal runtime command flow
+   - staged and atomic by design
+
+## 5. Line-Numbered Runtime Write Ledger
+
+### Remove Or Move From Normal Command Ownership
+
+1. Send command compatibility rewrite stack
+   - caller: `crates/atm-core/src/send/mod.rs:280`
+     - `persist_message_and_seed_workflow(...)`
+     - status: direct compatibility rewrite removed in `Y.3`
+   - missing-config caller: `crates/atm-core/src/send/mod.rs:464`
+     - `persist_message_and_seed_workflow(...)`
+     - status: direct compatibility rewrite removed in `Y.3`
+   - shared helper: `crates/atm-core/src/send/mod.rs:483`
+     - `persist_message_and_seed_workflow(...)`
+     - status: narrowed to SQLite/workflow persistence plus post-commit runtime refresh in `Y.3`
+   - projection loader: `crates/atm-core/src/send/mod.rs:517`
+     - `load_store_backed_mailbox_projection(...)`
+     - status: retained only as send-side read/projection input for thread preparation
+   - SQLite mirror helper: `crates/atm-core/src/send/mod.rs:549`
+     - `mirror_message_to_store(...)`
+     - status: retained as SQLite-only persistence helper after inbox rewrite
+       ownership removal
+   - lock owner: `crates/atm-core/src/workflow.rs:166`
+     - `commit_workflow_state(...)`
+     - status: remove inbox-file ownership from this stack in `Y.3`
+   - runtime refresh owner: `crates/atm-core/src/service_runtime.rs:51`
+     - `refresh_compat_inbox_projection(...)`
+     - status: retained as the sole normal runtime compatibility rewrite owner
+   - runtime projection loader: `crates/atm-core/src/service_runtime.rs:192`
+     - `load_store_backed_mailbox_projection(...)`
+     - status: retained behind runtime refresh owner; loads immutable stored envelopes
+   - mailbox projection writer: `crates/atm-core/src/mailbox/store.rs:19`
+     - `write_compat_mailbox_projection(...)`
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
+   - mailbox projection policy helper: `crates/atm-core/src/mailbox/store.rs:27`
+     - `write_compat_mailbox_projection_with_policy(...)`
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
+   - low-level serializer: `crates/atm-core/src/mailbox/atomic.rs:28`
+     - `write_messages(...)`
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
+
+2. Ack reply compatibility rewrite stack
+   - caller: `crates/atm-core/src/ack/mod.rs:347`
+     - `persist_message_and_seed_workflow(...)`
+     - status: retained only for send-shaped reply append in `Y.3`
+   - shared helper: `crates/atm-core/src/send/mod.rs:483`
+     - `persist_message_and_seed_workflow(...)`
+     - status: same narrowed helper as send path
+   - projection loader: `crates/atm-core/src/send/mod.rs:517`
+     - `load_store_backed_mailbox_projection(...)`
+     - status: same retained send-side read/projection input as send path
+   - SQLite mirror helper: `crates/atm-core/src/send/mod.rs:549`
+     - `mirror_message_to_store(...)`
+     - status: same retention/move target as send path
+   - lock owner: `crates/atm-core/src/workflow.rs:166`
+     - `commit_workflow_state(...)`
+     - status: ack reply path no longer gives this stack inbox-file ownership in `Y.3`
+   - mailbox projection writer: `crates/atm-core/src/mailbox/store.rs:19`
+     - `write_compat_mailbox_projection(...)`
+     - status: ack stack no longer reaches this directly in `Y.3`; retained in
+       `Y.6` for repair/rebuild use only
+   - mailbox projection policy helper: `crates/atm-core/src/mailbox/store.rs:27`
+     - `write_compat_mailbox_projection_with_policy(...)`
+     - status: ack stack no longer reaches this directly in `Y.3`; retained in
+       `Y.6` for repair/rebuild use only
+   - low-level serializer: `crates/atm-core/src/mailbox/atomic.rs:28`
+     - `write_messages(...)`
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
+
+### Retain Behind One Owned Boundary
+
+1. Daemon/runtime export path
+   - public bridge: `crates/atm-core/src/direct_boundaries.rs:38`
+     - `export_source_files(...)`
+     - status: move/retain as the sole normal runtime owner entrypoint
+   - private bridge: `crates/atm-core/src/boundary_support.rs:147`
+     - `export_source_files(...)`
+     - status: retain only if daemon-private and harness-gated
+   - projection wrapper: `crates/atm-core/src/mailbox/mod.rs:137`
+     - `export_compat_source_projections(...)`
+     - status: retain as owned export helper or fold into new owner
+   - source projection writer: `crates/atm-core/src/mailbox/store.rs:36`
+     - `write_compat_source_projections(...)`
+     - status: retain behind one owner in `Y.3`; reevaluate in `Y.6`
+   - mailbox projection policy helper: `crates/atm-core/src/mailbox/store.rs:27`
+     - `write_compat_mailbox_projection_with_policy(...)`
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
+   - low-level serializer: `crates/atm-core/src/mailbox/atomic.rs:28`
+     - `write_messages(...)`
+     - status: retained in `Y.6` for repair/rebuild use only; not reachable
+       from normal runtime send or ack paths
+
+### Retain As Notification / Fallback Side-Effect Stack
+
+1. Notification sink stack
+   - runtime trait entrypoint: `crates/atm-core/src/service_runtime.rs:44`
+     - `maybe_run_post_send_hook(...)`
+     - status: retain as side-effect interface only; do not let it own event
+       legality
+   - runtime implementation: `crates/atm-core/src/service_runtime.rs:143`
+     - `maybe_run_post_send_hook(...)`
+     - status: retain as runtime bridge only
+   - send façade: `crates/atm-core/src/send/mod.rs:705`
+     - `maybe_run_post_send_hook(...)`
+     - status: retain only as thin façade or inline into the eventual
+       notification sink boundary
+   - hook executor: `crates/atm-core/src/send/hook.rs:57`
+     - `hook::maybe_run_post_send_hook(...)`
+     - status: retain as notification fallback executor only; do not let it
+       decide harness routing or SQLite failure policy
+   - hook child-process supervisor: `crates/atm-core/src/send/hook.rs:90`
+     - `execute_post_send_hook(...)`
+     - status: retain under NotificationSink side-effect ownership only
+
+2. Explicit re-export / repair path
+   - public bridge: `crates/atm-core/src/direct_boundaries.rs:44`
+     - `reexport_messages(...)`
+     - status: retain as explicit repair/admin path only
+   - private bridge: `crates/atm-core/src/boundary_support.rs:169`
+     - `reexport_messages(...)`
+     - status: retain as repair/rebuild owner only
+   - projection wrapper: `crates/atm-core/src/mailbox/mod.rs:143`
+     - `export_compat_mailbox_projection(...)`
+     - status: retain for repair/rebuild only, not normal send/ack
+   - mailbox projection writer: `crates/atm-core/src/mailbox/store.rs:19`
+     - `write_compat_mailbox_projection(...)`
+     - status: after `Y.3`, reachable only from repair/rebuild owner
+   - mailbox projection policy helper: `crates/atm-core/src/mailbox/store.rs:27`
+     - `write_compat_mailbox_projection_with_policy(...)`
+     - status: after `Y.3`, reachable only from repair/rebuild owner
+
+### Retain As Admin / Repair Exceptions
+
+1. New inbox creation
+   - caller: `crates/atm-core/src/team_admin.rs:313`
+     - `ensure_inbox_exists(...)`
+     - status: retain as explicit admin/create path
+   - creator: `crates/atm-core/src/team_admin.rs:455`
+     - `ensure_inbox_exists(...)`
+     - status: retain; do not route normal runtime send/ack here
+
+2. Team config writes
+   - add-member caller: `crates/atm-core/src/team_admin.rs:333`
+     - `write_team_config(...)`
+     - status: retain as admin boundary
+   - restore caller: `crates/atm-core/src/team_admin/restore.rs:97`
+     - `super::write_team_config(...)`
+     - status: retain as restore boundary
+   - writer: `crates/atm-core/src/team_admin.rs:486`
+     - `write_team_config(...)`
+     - status: retain as sole `config.json` write owner unless a later sprint
+       moves all config writes under a narrower admin subsystem
+   - atomic config helper: `crates/atm-core/src/team_admin.rs:492`
+     - `atomic_write(...)`
+     - status: retain behind `write_team_config(...)`
+
+### Adjacent Restore-State Writers That Are Not Inbox Paths
+
+- `crates/atm-core/src/team_admin/restore.rs:339`
+  - `recompute_highwatermark(...)`
+  - status: retain under restore/task-state boundary
+- `crates/atm-core/src/team_admin/restore.rs:426`
+  - `prepare_restore_workspace(...)`
+  - status: retain under restore boundary
+
+## 6. Mechanical Completeness Checks
+
+The line-numbered ledger above is only acceptable if these source queries stay
+consistent with the sampled implementation branch.
+
+Production caller census used for this audit:
+
+```bash
+rg -n "persist_message_and_seed_workflow|refresh_compat_inbox_projection|write_compat_mailbox_projection\\(|write_compat_mailbox_projection_with_policy\\(|write_compat_source_projections\\(|export_source_files\\(|reexport_messages\\(|ensure_inbox_exists\\(|write_team_config\\(|maybe_run_post_send_hook\\(|execute_post_send_hook\\(" \
+  crates/atm-core/src
+```
+
+Required review rule:
+
+- if this query returns a new production call site not already classified in
+  Sections 5.1 through 5.4, that is a planning miss and must be treated as a
+  blocking finding before the corresponding sprint starts
+
+Known non-production exclusions:
+
+- `crates/atm-core/src/mailbox/mod.rs:76`
+  - `store::write_compat_mailbox_projection(...)`
+  - classification: `#[cfg(test)]` helper only; not part of the production
+    write/removal ledger
+- `crates/atm-core/src/team_admin.rs:639`
+  - local `write_team_config(...)` test helper
+  - classification: unit-test helper only
+- `crates/atm-core/src/team_admin/restore.rs:577`
+  - local `write_team_config(...)` test helper
+  - classification: unit-test helper only
+
+Normal runtime completion rule for `Y.3`:
+
+- after command-owned rewrite removal, the same caller census must show no
+  `send` or `ack` production path reaching:
+  - `write_compat_mailbox_projection(...)` except through
+    `refresh_compat_inbox_projection(...)`
+  - `write_compat_mailbox_projection_with_policy(...)` except through
+    `refresh_compat_inbox_projection(...)`
+- `crates/atm-core/src/team_admin/restore.rs:450`
+  - `apply_restored_inboxes(...)`
+  - status: retain as bulk inbox rebuild/install owner
+- `crates/atm-core/src/team_admin/restore.rs:506`
+  - `restore_task_state_from_backup(...)`
+  - status: retain under restore boundary
+- `crates/atm-core/src/team_admin/restore.rs:514`
+  - `write_restore_marker(...)`
+  - status: retain under restore boundary
+- `crates/atm-core/src/team_admin/restore.rs:531`
+  - `clear_restore_marker(...)`
+  - status: retain under restore boundary
+
+## 7. Write Paths To Eliminate
+
+- direct command-path compatibility inbox rewrites from `send`
+- direct command-path compatibility inbox rewrites from `ack`
+- any future mailbox rewrite helper reachable from arbitrary command code
+- any normal-runtime `config.json` write path outside an explicit admin /
+  restore / repair boundary
+
+## 8. Open Phase Y Questions
+
+- whether `source_team` and the ack/thread/task fields are still justified on
+  the shared inbox surface once SQLite is the sole mutable truth
+- whether the current array-shaped ATM-authored compatibility output remains an
+  approved contract or should be retired in favor of append-only JSONL
+- whether the watcher/import/export subsystem itself should own both approved
+  inbox-write classes, or whether the bulk-mailbox-creation path should remain
+  a separately owned admin/repair boundary
+- whether any shared-inbox mutable ATM field still has a legitimate
+  compatibility role

@@ -1,0 +1,114 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-010>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-010" ;
+  triage:title "Dispatch reaping comment missing — DispatchFinished-driven reap contract undocumented" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs — Dispatch reaping comment is missing; no note explaining that DispatchFinished-driven reaping satisfies plan §1 incremental-reap contract. Fix: add a comment documenting the reap contract." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-010/pS-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-010/pS-s13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-010/pS-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-010/pS-s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-010/pS-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-010/pS-s15/2> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s13/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:occurrence/ATM-QA-010/pS-s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 868 ;
+  triage:snippet "let dispatch_handle = std::thread::spawn(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
+
+<urn:atm:triage:occurrence/ATM-QA-010/pS-s13/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 872 ;
+  triage:snippet "let _ = dispatch_event_tx.send(ServeEvent::DispatchFinished);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
+
+<urn:atm:triage:occurrence/ATM-QA-010/pS-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 879 ;
+  triage:snippet "let dispatch_handle = std::thread::spawn(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/ATM-QA-010/pS-s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 883 ;
+  triage:snippet "let _ = dispatch_event_tx.send(ServeEvent::DispatchFinished);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/ATM-QA-010/pS-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 868 ;
+  triage:snippet "let dispatch_handle = std::thread::spawn(move || {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:occurrence/ATM-QA-010/pS-s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 872 ;
+  triage:snippet "let _ = dispatch_event_tx.send(ServeEvent::DispatchFinished);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:worktree/pS-s13/4c03c2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s14/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s15/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 .

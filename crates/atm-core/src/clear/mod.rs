@@ -1,28 +1,26 @@
-use std::collections::HashSet;
 use std::path::PathBuf;
 use std::time::Duration;
 
 use chrono::{DateTime, TimeDelta, Utc};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use tracing::debug;
 
 use crate::address::AgentAddress;
-use crate::config;
+use crate::boundary;
 use crate::error::AtmError;
-use crate::home;
 use crate::identity;
-use crate::mailbox;
-use crate::mailbox::source::{SourceFile, SourcedMessage, resolve_target};
-use crate::mailbox::surface::dedupe_legacy_message_id_surface;
-use crate::observability::{CommandEvent, ObservabilityPort};
+use crate::mailbox::source::ResolvedTarget;
+use crate::mailbox::source::resolve_target;
+use crate::observability::{CommandEvent, ObservabilityPort, action_name, outcome_label};
 use crate::read::state;
 use crate::schema::MessageEnvelope;
-use crate::types::{AgentName, MessageClass, SourceIndex, TeamName};
-use crate::workflow;
+use crate::service_runtime::{LocalServiceRuntime, RetainedServiceRuntime};
+use crate::service_runtime_store::{RetainedMailboxRuntime, default_runtime};
+use crate::types::{AgentName, CommandAction, IsoTimestamp, MessageClass, TeamName};
 
 /// Parameters for clearing read or acknowledged mailbox messages.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearQuery {
     pub home_dir: PathBuf,
     pub current_dir: PathBuf,
@@ -35,16 +33,16 @@ pub struct ClearQuery {
 }
 
 /// Counts of removed mailbox messages by ATM display class.
-#[derive(Debug, Clone, Default, Serialize)]
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct RemovedByClass {
     pub acknowledged: usize,
     pub read: usize,
 }
 
 /// Result of one mailbox cleanup command.
-#[derive(Debug, Clone, Serialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClearOutcome {
-    pub action: &'static str,
+    pub action: CommandAction,
     pub team: TeamName,
     pub agent: AgentName,
     pub removed_total: usize,
@@ -74,7 +72,75 @@ pub fn clear_mail(
     query: ClearQuery,
     observability: &dyn ObservabilityPort,
 ) -> Result<ClearOutcome, AtmError> {
-    let config = config::load_config(&query.current_dir)?;
+    let runtime = default_runtime()?;
+    clear_mail_with_runtime(query, observability, &runtime)
+}
+
+pub fn clear_mail_with_runtime(
+    query: ClearQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+) -> Result<ClearOutcome, AtmError> {
+    clear_mail_with_runtime_impl(query, observability, runtime)
+}
+
+struct ClearRuntimeContext {
+    actor: AgentName,
+    target: ResolvedTarget,
+    metadata_rows: Vec<boundary::MailStoreMailboxMetadataRow>,
+    removable: Vec<(boundary::MessageKey, MessageEnvelope, MessageClass)>,
+}
+
+fn clear_mail_with_runtime_impl<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    query: ClearQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &R,
+) -> Result<ClearOutcome, AtmError> {
+    let context = load_clear_runtime_context(runtime, &query)?;
+    if !query.dry_run {
+        persist_deleted_messages(runtime, &context.target, &context.removable)?;
+    }
+    let mut removed_by_class = RemovedByClass::default();
+    for (_, _, class) in &context.removable {
+        count_removed(&mut removed_by_class, *class);
+    }
+    let removed_total = context.removable.len();
+    let remaining_total = context.metadata_rows.len().saturating_sub(removed_total);
+
+    let outcome = ClearOutcome {
+        action: CommandAction::Clear,
+        team: context.target.team.clone(),
+        agent: context.target.agent.clone(),
+        removed_total,
+        remaining_total,
+        removed_by_class,
+    };
+
+    if let Err(error) = observability.emit(CommandEvent {
+        command: "clear",
+        action: action_name("clear"),
+        outcome: outcome_label(if query.dry_run { "dry_run" } else { "ok" }),
+        team: outcome.team.clone(),
+        agent: outcome.agent.clone(),
+        sender: context.actor,
+        message_id: None,
+        requires_ack: false,
+        dry_run: query.dry_run,
+        task_id: None,
+        error_code: None,
+        error_message: None,
+    }) {
+        tracing::warn!(%error, command = "clear", action = "clear", "failed to emit clear command event");
+    }
+
+    Ok(outcome)
+}
+
+fn load_clear_runtime_context<R: RetainedServiceRuntime + RetainedMailboxRuntime>(
+    runtime: &R,
+    query: &ClearQuery,
+) -> Result<ClearRuntimeContext, AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
     let actor = identity::resolve_actor_identity(query.actor_override.as_deref(), config.as_ref())?;
     let target = resolve_target(
         query.target_address.as_ref(),
@@ -83,129 +149,131 @@ pub fn clear_mail(
         config.as_ref(),
     )?;
 
-    let team_dir = home::team_dir_from_home(&query.home_dir, &target.team)?;
+    validate_clear_target(runtime, &query.home_dir, &target)?;
+
+    let cutoff = cutoff_timestamp(query.older_than)?;
+    let metadata_rows =
+        runtime.query_mailbox_metadata_rows(&query.home_dir, &target.team, &target.agent, None)?;
+    let removable = sqlite_removable_messages(
+        runtime,
+        &query.home_dir,
+        &target.team,
+        &target.agent,
+        &metadata_rows,
+        cutoff,
+        query.idle_only,
+    )?;
+    Ok(ClearRuntimeContext {
+        actor,
+        target,
+        metadata_rows,
+        removable,
+    })
+}
+
+fn validate_clear_target<R: RetainedServiceRuntime>(
+    runtime: &R,
+    home_dir: &std::path::Path,
+    target: &ResolvedTarget,
+) -> Result<(), AtmError> {
+    let team_dir = runtime.team_dir(home_dir, &target.team)?;
     if !team_dir.exists() {
         return Err(AtmError::team_not_found(&target.team).with_recovery(
             "Create the team config for the requested team or target a different team before retrying `atm clear`.",
         ));
     }
 
-    let team_config = config::load_team_config(&team_dir)?;
-    if target.explicit
-        && !team_config
-            .members
-            .iter()
-            .any(|member| member.name == target.agent.as_str())
+    validate_clear_target_member_in_roster(runtime, target)?;
+
+    Ok(())
+}
+
+fn validate_clear_target_member_in_roster<R: RetainedServiceRuntime>(
+    runtime: &R,
+    target: &ResolvedTarget,
+) -> Result<(), AtmError> {
+    if !target.explicit {
+        return Ok(());
+    }
+
+    if runtime
+        .load_roster_member(&target.team, &target.agent)?
+        .is_none()
     {
         return Err(
             AtmError::agent_not_found(&target.agent, &target.team).with_recovery(
-                "Update the team membership in config.json or clear a different mailbox target.",
+                "Repair or reload the ATM roster, or clear a different mailbox target.",
             ),
         );
     }
 
-    let cutoff = cutoff_timestamp(query.older_than)?;
-    let workflow_path =
-        home::workflow_state_path_from_home(&query.home_dir, &target.team, &target.agent)?;
-
-    let (removed_total, remaining_total, removed_by_class) = if query.dry_run {
-        let workflow_state =
-            workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
-        let source_files =
-            mailbox::store::observe_source_files(&query.home_dir, &target.team, &target.agent)?;
-        // Clear intentionally does not apply read-surface idle-notification dedup.
-        // Cleanup decisions must inspect the raw merged surface after legacy
-        // message_id canonicalization only.
-        let (removable, removed_by_class, merged_len) =
-            removable_messages(&source_files, &workflow_state, cutoff, query.idle_only);
-        (
-            removable.len(),
-            merged_len.saturating_sub(removable.len()),
-            removed_by_class,
-        )
-    } else {
-        mailbox::store::with_locked_source_files(
-            &query.home_dir,
-            &target.team,
-            &target.agent,
-            [workflow_path],
-            mailbox::lock::default_lock_timeout(),
-            |_source_paths, source_files| {
-                let mut workflow_state =
-                    workflow::load_workflow_state(&query.home_dir, &target.team, &target.agent)?;
-                let (removable, removed_by_class, _) =
-                    removable_messages(source_files, &workflow_state, cutoff, query.idle_only);
-                let workflow_changed =
-                    remove_workflow_state_entries(&mut workflow_state, source_files, &removable);
-                apply_removals(source_files, &removable);
-                if !removable.is_empty() {
-                    mailbox::store::commit_source_files(source_files)?;
-                }
-                if workflow_changed {
-                    workflow::save_workflow_state(
-                        &query.home_dir,
-                        &target.team,
-                        &target.agent,
-                        &workflow_state,
-                    )?;
-                }
-                let remaining_total = dedupe_legacy_message_id_surface(
-                    merged_surface(source_files, &workflow_state),
-                    |message: &SourcedMessage| message.envelope.message_id,
-                    |message: &SourcedMessage| message.envelope.timestamp,
-                )
-                .len();
-                Ok((removable.len(), remaining_total, removed_by_class))
-            },
-        )?
-    };
-
-    let outcome = ClearOutcome {
-        action: "clear",
-        team: target.team.clone(),
-        agent: target.agent.clone(),
-        removed_total,
-        remaining_total,
-        removed_by_class,
-    };
-
-    let _ = observability.emit(CommandEvent {
-        command: "clear",
-        action: "clear",
-        outcome: if query.dry_run { "dry_run" } else { "ok" },
-        team: outcome.team.clone(),
-        agent: outcome.agent.clone(),
-        sender: actor.to_string(),
-        message_id: None,
-        requires_ack: false,
-        dry_run: query.dry_run,
-        task_id: None,
-        error_code: None,
-        error_message: None,
-    });
-
-    Ok(outcome)
+    Ok(())
 }
 
-fn merged_surface(
-    source_files: &[SourceFile],
-    workflow_state: &workflow::WorkflowStateFile,
-) -> Vec<SourcedMessage> {
-    source_files
-        .iter()
-        .flat_map(|source| {
-            source
-                .messages
-                .iter()
-                .cloned()
-                .enumerate()
-                .map(|(source_index, envelope)| SourcedMessage {
-                    envelope: workflow::project_envelope(&envelope, workflow_state),
-                    source_path: source.path.clone(),
-                    source_index: source_index.into(),
-                })
-        })
-        .collect()
+fn persist_deleted_messages<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    target: &ResolvedTarget,
+    removable: &[(boundary::MessageKey, MessageEnvelope, MessageClass)],
+) -> Result<(), AtmError> {
+    let deleted_at = IsoTimestamp::now();
+    for (message_key, envelope, _) in removable {
+        runtime.persist_message_state(boundary::MailMessageState {
+            team: target.team.clone(),
+            agent: target.agent.clone(),
+            actor: target.agent.clone(),
+            message_key: message_key.clone(),
+            read: envelope.read,
+            pending_ack_at: envelope.pending_ack_at,
+            acknowledged_at: envelope.acknowledged_at,
+            expires_at: envelope.expires_at,
+            deleted_at: Some(deleted_at),
+            updated_at: Some(deleted_at),
+        })?;
+    }
+    Ok(())
+}
+
+fn sqlite_removable_messages<R: RetainedMailboxRuntime>(
+    runtime: &R,
+    home_dir: &std::path::Path,
+    team: &TeamName,
+    agent: &AgentName,
+    metadata_rows: &[boundary::MailStoreMailboxMetadataRow],
+    cutoff: Option<DateTime<Utc>>,
+    idle_only: bool,
+) -> Result<Vec<(boundary::MessageKey, MessageEnvelope, MessageClass)>, AtmError> {
+    let mut removable = Vec::new();
+
+    for row in metadata_rows {
+        if cutoff
+            .map(|cutoff| row.message_at.into_inner() > cutoff)
+            .unwrap_or(false)
+        {
+            continue;
+        }
+
+        let Some(record) = runtime.load_message_record(home_dir, team, agent, &row.message_key)?
+        else {
+            return Err(AtmError::validation(format!(
+                "sqlite mailbox metadata row {} could not be reloaded for clear",
+                row.message_key
+            ))
+            .with_recovery(
+                "Repair or remove the malformed sqlite mailbox row before retrying `atm clear`.",
+            ));
+        };
+
+        let class = state::classify_message(&record.envelope);
+        if !matches!(class, MessageClass::Read | MessageClass::Acknowledged) {
+            continue;
+        }
+        if idle_only && !is_idle_notification(&record.envelope) {
+            continue;
+        }
+        removable.push((row.message_key.clone(), record.envelope, class));
+    }
+
+    Ok(removable)
 }
 
 fn cutoff_timestamp(
@@ -221,58 +289,6 @@ fn cutoff_timestamp(
         })
         .transpose()
         .map(|delta| delta.map(|delta| Utc::now() - delta))
-}
-
-fn is_clearable(message: &SourcedMessage, cutoff: Option<DateTime<Utc>>, idle_only: bool) -> bool {
-    let class = state::classify_message(&message.envelope);
-    matches!(class, MessageClass::Read | MessageClass::Acknowledged)
-        && cutoff
-            .map(|cutoff| message.envelope.timestamp.into_inner() <= cutoff)
-            .unwrap_or(true)
-        && (!idle_only || is_idle_notification(&message.envelope))
-}
-
-fn removable_messages(
-    source_files: &[SourceFile],
-    workflow_state: &workflow::WorkflowStateFile,
-    cutoff: Option<DateTime<Utc>>,
-    idle_only: bool,
-) -> (HashSet<(PathBuf, SourceIndex)>, RemovedByClass, usize) {
-    let merged = dedupe_legacy_message_id_surface(
-        merged_surface(source_files, workflow_state),
-        |message: &SourcedMessage| message.envelope.message_id,
-        |message: &SourcedMessage| message.envelope.timestamp,
-    );
-    let mut removed_by_class = RemovedByClass::default();
-    let removable = merged
-        .iter()
-        .filter(|message| is_clearable(message, cutoff, idle_only))
-        .inspect(|message| {
-            count_removed(
-                &mut removed_by_class,
-                state::classify_message(&message.envelope),
-            )
-        })
-        .map(|message| (message.source_path.clone(), message.source_index))
-        .collect::<HashSet<_>>();
-
-    (removable, removed_by_class, merged.len())
-}
-
-fn remove_workflow_state_entries(
-    workflow_state: &mut workflow::WorkflowStateFile,
-    source_files: &[SourceFile],
-    removable: &HashSet<(PathBuf, SourceIndex)>,
-) -> bool {
-    let mut changed = false;
-    for source in source_files {
-        for (index, message) in source.messages.iter().enumerate() {
-            if removable.contains(&(source.path.clone(), index.into())) {
-                changed |= workflow::remove_message_state(workflow_state, message);
-            }
-        }
-    }
-    changed
 }
 
 fn is_idle_notification(message: &MessageEnvelope) -> bool {
@@ -304,31 +320,34 @@ fn count_removed(counts: &mut RemovedByClass, class: MessageClass) {
     }
 }
 
-fn apply_removals(source_files: &mut [SourceFile], removable: &HashSet<(PathBuf, SourceIndex)>) {
-    for source in source_files {
-        source.messages = source
-            .messages
-            .iter()
-            .cloned()
-            .enumerate()
-            .filter_map(|(index, message)| {
-                (!removable.contains(&(source.path.clone(), index.into()))).then_some(message)
-            })
-            .collect();
-    }
-}
-
 #[cfg(test)]
 mod tests {
-    use std::ffi::{OsStr, OsString};
-    use std::sync::{Mutex, OnceLock};
-    use std::{panic, panic::AssertUnwindSafe};
+    use std::{
+        ffi::OsString,
+        panic,
+        panic::AssertUnwindSafe,
+        path::{Path, PathBuf},
+        time::Duration,
+    };
 
+    use crate::test_support::{EnvGuard, remove_env_var, set_env_var};
+    use serde_json::Map;
+    use tempfile::tempdir;
+
+    use super::{ClearQuery, clear_mail_with_runtime_impl};
+    use crate::boundary::{self, ClaudeCompatibilityDeliveryMode, RosterHarness, RosterMemberKind};
+    use crate::error::AtmError;
+    use crate::observability::NullObservability;
+    use crate::schema::MessageEnvelope;
+    use crate::service_runtime::{RetainedMailboxTimeoutPolicy, RetainedServiceRuntime};
+    use crate::service_runtime_store::RetainedMailboxRuntime;
+    use crate::test_support::{TEST_SENDER, TEST_TEAM};
+    use crate::types::{AgentName, TeamName};
+    use crate::workflow::WorkflowStateFile;
     use serial_test::serial;
     #[test]
     #[serial]
     fn env_guard_restores_original_value_after_panic() {
-        let _env_lock = env_lock().lock().expect("env lock");
         set_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD", "original");
 
         let result = panic::catch_unwind(AssertUnwindSafe(|| {
@@ -347,42 +366,236 @@ mod tests {
         remove_env_var("ATM_TEST_REMOVE_LOCKED_INBOX_BEFORE_LOAD");
     }
 
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
+    struct ClearRuntime {
+        team_dir: PathBuf,
+        roster_present: bool,
     }
 
-    struct EnvGuard {
-        key: &'static str,
-        original: Option<OsString>,
-    }
+    impl crate::boundary::sealed::Sealed for ClearRuntime {}
 
-    impl EnvGuard {
-        fn set_raw(key: &'static str, value: &str) -> Self {
-            let original = std::env::var_os(key);
-            set_env_var(key, value);
-            Self { key, original }
+    impl crate::boundary::NotificationSink for ClearRuntime {
+        fn deliver(&self, _event: crate::protocol::NotificationEvent) -> Result<(), AtmError> {
+            Ok(())
         }
     }
 
-    impl Drop for EnvGuard {
-        fn drop(&mut self) {
-            match self.original.take() {
-                Some(value) => set_env_var(self.key, value),
-                None => remove_env_var(self.key),
+    impl RetainedServiceRuntime for ClearRuntime {
+        fn load_config(
+            &self,
+            _current_dir: &Path,
+        ) -> Result<Option<crate::config::AtmConfig>, AtmError> {
+            Ok(None)
+        }
+
+        fn load_team_config_for_doctor_compare(
+            &self,
+            _team_dir: &Path,
+        ) -> Result<crate::schema::TeamConfig, AtmError> {
+            unreachable!("clear roster-truth tests must not load team config")
+        }
+
+        fn team_dir(&self, _home_dir: &Path, _team: &TeamName) -> Result<PathBuf, AtmError> {
+            Ok(self.team_dir.clone())
+        }
+
+        fn inbox_path(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<PathBuf, AtmError> {
+            unreachable!("clear roster-truth tests do not resolve inbox paths")
+        }
+
+        fn load_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<Option<crate::types::IsoTimestamp>, AtmError> {
+            Ok(None)
+        }
+
+        fn save_seen_watermark(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _timestamp: crate::types::IsoTimestamp,
+        ) -> Result<(), AtmError> {
+            Ok(())
+        }
+
+        fn mailbox_timeout_policy(&self) -> RetainedMailboxTimeoutPolicy {
+            RetainedMailboxTimeoutPolicy {
+                workflow_lock_timeout: Duration::from_millis(1),
             }
         }
+
+        fn rebuild_compat_inbox_projection(
+            &self,
+            _inbox_path: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+        ) -> Result<(), AtmError> {
+            unreachable!("clear roster-truth tests do not rebuild projections")
+        }
+
+        fn append_compat_inbox_message(
+            &self,
+            _inbox_path: &Path,
+            _message: &MessageEnvelope,
+        ) -> Result<(), AtmError> {
+            unreachable!("clear roster-truth tests do not append compat inbox messages")
+        }
+
+        fn append_compat_inbox_message_set(
+            &self,
+            _inbox_path: &Path,
+            _mode: ClaudeCompatibilityDeliveryMode,
+            _messages: &[MessageEnvelope],
+        ) -> Result<(), AtmError> {
+            unreachable!("clear roster-truth tests do not append compat inbox message sets")
+        }
+
+        fn deliver_non_claude_payloads(
+            &self,
+            _recipient: &crate::delivery_policy::DeliveryRecipientSnapshot,
+            _messages: &[MessageEnvelope],
+        ) -> Result<(), AtmError> {
+            unreachable!("clear roster-truth tests do not route outbound payloads")
+        }
+
+        fn load_roster_member(
+            &self,
+            team: &TeamName,
+            agent: &AgentName,
+        ) -> Result<Option<boundary::RosterMemberRecord>, AtmError> {
+            Ok(self.roster_present.then(|| boundary::RosterMemberRecord {
+                team_name: team.clone(),
+                agent_name: agent.clone(),
+                member_kind: RosterMemberKind::Permanent,
+                harness: RosterHarness::ClaudeCode,
+                agent_type: crate::schema::AgentType::default(),
+                model: crate::types::ModelName::default(),
+                recipient_pane_id: None,
+                metadata_json: Map::new(),
+            }))
+        }
+
+        fn load_team_roster(
+            &self,
+            _team: &TeamName,
+        ) -> Result<Vec<boundary::RosterMemberRecord>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn commit_workflow_state<T, I, F>(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _extra_write_paths: I,
+            _timeout: Duration,
+            _body: F,
+        ) -> Result<T, AtmError>
+        where
+            I: IntoIterator<Item = PathBuf>,
+            F: FnOnce(&mut WorkflowStateFile) -> Result<(T, bool), AtmError>,
+        {
+            unreachable!("clear roster-truth tests do not commit workflow state")
+        }
     }
 
-    fn set_env_var<K: AsRef<OsStr>, V: AsRef<OsStr>>(key: K, value: V) {
-        // SAFETY: this test module uses #[serial] before mutating the process
-        // environment, so these mutations are serialized within this process.
-        unsafe { std::env::set_var(key, value) }
+    impl RetainedMailboxRuntime for ClearRuntime {
+        fn query_mailbox_metadata_rows(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _limit: Option<usize>,
+        ) -> Result<Vec<boundary::MailStoreMailboxMetadataRow>, AtmError> {
+            Ok(Vec::new())
+        }
+
+        fn load_message_record(
+            &self,
+            _home_dir: &Path,
+            _team: &TeamName,
+            _agent: &AgentName,
+            _message_key: &boundary::MessageKey,
+        ) -> Result<Option<boundary::MailStoreMessageRecord>, AtmError> {
+            unreachable!("clear roster-truth tests do not load message records")
+        }
+
+        fn persist_message_record(
+            &self,
+            _record: boundary::MailStoreMessageRecord,
+        ) -> Result<(), AtmError> {
+            unreachable!("clear roster-truth tests do not persist message records")
+        }
+
+        fn persist_message_state(
+            &self,
+            _state: boundary::MailMessageState,
+        ) -> Result<(), AtmError> {
+            unreachable!("clear roster-truth tests do not persist message state")
+        }
     }
 
-    fn remove_env_var<K: AsRef<OsStr>>(key: K) {
-        // SAFETY: this test module uses #[serial] before mutating the process
-        // environment, so these mutations are serialized within this process.
-        unsafe { std::env::remove_var(key) }
+    fn clear_query(home_dir: PathBuf, current_dir: PathBuf) -> ClearQuery {
+        let target = format!("recipient@{TEST_TEAM}");
+        ClearQuery {
+            home_dir,
+            current_dir,
+            actor_override: Some(AgentName::from_validated(TEST_SENDER)),
+            target_address: Some(target.parse().expect("target")),
+            team_override: None,
+            older_than: None,
+            idle_only: false,
+            dry_run: true,
+        }
+    }
+
+    #[test]
+    fn clear_mail_uses_atm_roster_truth_for_explicit_targets() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let runtime = ClearRuntime {
+            team_dir,
+            roster_present: true,
+        };
+
+        let outcome = clear_mail_with_runtime_impl(
+            clear_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
+            &NullObservability,
+            &runtime,
+        )
+        .expect("clear outcome");
+
+        assert_eq!(outcome.team, TeamName::from_validated(TEST_TEAM));
+        assert_eq!(outcome.agent, AgentName::from_validated("recipient"));
+        assert_eq!(outcome.removed_total, 0);
+    }
+
+    #[test]
+    fn clear_mail_rejects_explicit_targets_missing_from_atm_roster() {
+        let tempdir = tempdir().expect("tempdir");
+        let team_dir = tempdir.path().join(".claude").join("teams").join(TEST_TEAM);
+        std::fs::create_dir_all(&team_dir).expect("team dir");
+        let runtime = ClearRuntime {
+            team_dir,
+            roster_present: false,
+        };
+
+        let error = clear_mail_with_runtime_impl(
+            clear_query(tempdir.path().to_path_buf(), tempdir.path().to_path_buf()),
+            &NullObservability,
+            &runtime,
+        )
+        .expect_err("missing ATM roster member should fail");
+
+        assert!(error.is_agent_not_found(), "{error:?}");
     }
 }

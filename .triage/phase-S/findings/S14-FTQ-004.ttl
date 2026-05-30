@@ -1,0 +1,100 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ─────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/S14-FTQ-004>
+  a triage:Finding ;
+  triage:findingId "S14-FTQ-004" ;
+  triage:title "SHUTDOWN_FINALIZER_THREADS not drained after compose_runtime_start tests" ;
+  triage:description "runtime_health.rs:44 SHUTDOWN_FINALIZER_THREADS static Vec is populated during compose_runtime_start tests but not drained when those tests complete. Stale JoinHandles accumulate across test runs causing inter-test interference. QA report ID: FTQ-006 (sprint-scoped to S14-FTQ-004 to avoid collision with prior FTQ-006 triage record)." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+
+  # Occurrences on feature/pS-s14-impl
+  triage:hasOccurrence <urn:atm:triage:occurrence/S14-FTQ-004/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S14-FTQ-004/pS-s14-impl/2> ;
+
+  # Occurrences on feature/pS-s15-rusqlite-hardening
+  triage:hasOccurrence <urn:atm:triage:occurrence/S14-FTQ-004/pS-s15-rusqlite-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S14-FTQ-004/pS-s15-rusqlite-hardening/2> ;
+
+  # Branch-level state links
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+# ── Occurrences on feature/pS-s14-impl ────────────────────────────────────
+
+# Static declaration — process-wide registry without test cleanup
+<urn:atm:triage:occurrence/S14-FTQ-004/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 44 ;
+  triage:snippet "static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+# compose_runtime_start test does not call drain_shutdown_finalizer_threads_for_test
+<urn:atm:triage:occurrence/S14-FTQ-004/pS-s14-impl/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 187 ;
+  triage:snippet "fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/571fa1c> .
+
+# ── Occurrences on feature/pS-s15-rusqlite-hardening ─────────────────────
+
+# Static declaration — identical to s14; not fixed in s15
+<urn:atm:triage:occurrence/S14-FTQ-004/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 44 ;
+  triage:snippet "static SHUTDOWN_FINALIZER_THREADS: std::sync::Mutex<Vec<std::thread::JoinHandle<()>>> =" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+# compose_runtime_start test missing drain call — same gap present on s15
+<urn:atm:triage:occurrence/S14-FTQ-004/pS-s15-rusqlite-hardening/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 187 ;
+  triage:snippet "fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability() {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pS-s14-impl/571fa1c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "571fa1c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/493f2b1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "493f2b1" ;
+  triage:orderIndex 2 .

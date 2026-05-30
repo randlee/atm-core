@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RUST-QA-002>
+  a triage:Finding ;
+  triage:findingId "RUST-QA-002" ;
+  triage:title "help.rs:444 brittle test asserts contains(\"Usage: send\") — clap format coupling" ;
+  triage:description "crates/atm/src/commands/help.rs:444 test asserts contains(\"Usage: send\") which is brittle clap format coupling. Fix: assert HelpResultKind::CommandHelp + !body.is_empty() instead." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RUST-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-16T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-002/pY-s1/445> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s1/b4735abf> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s1/b4735abf> .
+
+<urn:atm:triage:occurrence/RUST-QA-002/pY-s1/445>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/commands/help.rs" ;
+  triage:line 445 ;
+  triage:snippet "assert!(result.body.contains(\"Usage: send\"));" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s1-atm-help-and-ux" ;
+  triage:headSha "b4735abf" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s1/b4735abf> .
+
+<urn:atm:triage:worktree/pY-s1/b4735abf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s1-atm-help-and-ux" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s1-atm-help-and-ux" ;
+  triage:headSha "b4735abf" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/integrate/292b8e38>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "292b8e38" ;
+  triage:orderIndex 2 ;
+  triage:status "absent" .

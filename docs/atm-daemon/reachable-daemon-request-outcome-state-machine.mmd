@@ -1,0 +1,34 @@
+%% title: `Reachable Daemon Request Outcome State Machine`
+%% summary: Command and doctor outcomes after bootstrap has already reached a live daemon.
+%% commentary: This machine models the current post-bootstrap split on `integrate/phase-Z`: doctor compares config and ATM roster when it can run, send requires an ATM roster member before harness resolution, and copied preexisting SQLite state may still fail schema initialization. These are reachable-daemon outcomes, not bootstrap outcomes.
+%% notes: daemon already reachable | state splits are command-visible | doctor visibility is explicit at each terminal
+%% recovery_rules: If a reachable-daemon command can identify the fix, return a typed caller error with recovery text. | If the issue is config or roster drift, doctor should report the mismatch and remediation. | If SQLite state cannot initialize, caller gets a typed SQLite error and doctor does not return a report.
+%% terminal_classes: DoctorHealthy and DoctorWarning are doctor report terminals. | SetupGuidanceError is a caller-facing roster/setup error that doctor should also explain. | SqliteStateError is a caller-facing SQLite/runtime error and doctor does not return a report.
+%% sets: daemon
+flowchart TD
+    A["<b>ReachableDaemon</b><br/>bootstrap already succeeded"] -->|doctor command| B["DoctorCheck"]
+    A -->|send command| C["SendHarnessResolution"]
+    A -->|command opens copied preexisting mail.db| D["SqliteOpen"]
+    B -->|config and ATM roster aligned| E["DoctorHealthy
+caller: DoctorReport healthy
+doctor: report returned"]
+    B -->|config and ATM roster drift detected| F["DoctorWarning
+caller: DoctorReport warning
+doctor: remediation visible"]
+    B -->|runtime or sqlite init error| X["SqliteStateError
+caller: typed sqlite/runtime error
+doctor: no report"]
+    C -->|ATM roster member present| G["CommandCanProceed"]
+    C -->|ATM roster member missing| Y["SetupGuidanceError
+caller: setup guidance error
+doctor: drift/remediation visible"]
+    D -->|schema valid| G
+    D -->|schema invalid| X
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,E,F,G happy;
+    class X,Y error;
+    class B,C,D neutral;

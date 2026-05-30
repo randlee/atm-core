@@ -1,0 +1,33 @@
+%% title: `Thread Update`
+%% summary: Add-details and supersede legality plus harness-dispatched delivery.
+%% commentary: This machine is distinct from new-message delivery because it must prove parent existence, root existence, original-sender identity, and one-successor linearity before persisting or dispatching any outward effect.
+%% notes: modes: add-details, supersede | legality first | dispatch after sqlite commit
+%% sets: delivery
+flowchart TD
+    A["<b>ThreadUpdateStateMachine</b><br/>Received"] --> B["ValidateParentExists"]
+    B -->|parent_missing| E1["Rejected
+validation error"]
+    B -->|parent_found| C["ValidateRootExists"]
+    C -->|root_missing| E2["Rejected
+validation error"]
+    C -->|root_found| D["ValidateOriginalSender"]
+    D -->|sender_mismatch| E3["Rejected
+validation error"]
+    D -->|sender_matches| F["ValidateLinearSuccessor"]
+    F -->|successor_exists| E4["Rejected
+validation error"]
+    F -->|successor_clear| G["PersistSqlite
+thread-update row/state write"]
+    G -->|sqlite_err| X["Failed
+persistence failure"]
+    G -->|sqlite_ok| H["DispatchByHarness
+Claude or NonClaude effects"]
+    H --> O["Delivered"]
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,O happy;
+    class E1,E2,E3,E4,X error;
+    class B,C,D,F,G,H neutral;

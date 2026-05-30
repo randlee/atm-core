@@ -1,0 +1,52 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U10-012>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U10-012" ;
+  triage:title "boundaries.md BOUNDARY-AtmProtocol section missing advisory variants in envelope listing" ;
+  triage:description "docs/atm-core/boundaries.md BOUNDARY-AtmProtocol section does not include advisory envelope variants in the envelope listing. Sprint contract requires this boundary doc to reflect the new advisory protocol additions." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U10-012/u10/1> ;
+  triage:openOn <urn:atm:triage:worktree/u10/3730257> ;
+  triage:promoteTo <urn:atm:triage:worktree/u10/3730257> .
+
+<urn:atm:triage:occurrence/ATM-QA-U10-012/u10/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/boundaries.md" ;
+  triage:line 34 ;
+  triage:snippet "  - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/u10/3730257> .
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/u10/3730257>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:orderIndex 10 .

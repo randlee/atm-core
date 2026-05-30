@@ -1,0 +1,35 @@
+[package]
+name = "atm-daemon"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+authors.workspace = true
+license.workspace = true
+description = "ATM daemon runtime crate scaffold."
+repository.workspace = true
+homepage.workspace = true
+
+[dependencies]
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.2.0" }
+atm-rusqlite = { path = "../atm-rusqlite", version = "1.2.0" }
+arc-swap.workspace = true
+chrono = { version = "0.4", features = ["serde"] }
+fs2 = "0.4"
+interprocess = "2.4.2"
+sc-observability.workspace = true
+sc-observability-types.workspace = true
+serde_json.workspace = true
+tracing.workspace = true
+
+[target.'cfg(unix)'.dependencies]
+signal-hook = "0.3"
+
+[target.'cfg(windows)'.dependencies]
+signal-hook = "0.3"
+
+[dev-dependencies]
+atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.2.0", features = ["test-utils"] }
+atm-runtime-test-support = { path = "../atm-runtime-test-support", version = "1.2.0" }
+sc-observability = { workspace = true, features = ["fault-injection"] }
+serial_test = "3"
+tempfile = "3"

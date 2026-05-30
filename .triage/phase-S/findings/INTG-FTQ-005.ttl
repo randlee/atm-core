@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-FTQ-005>
+  a triage:Finding ;
+  triage:findingId "INTG-FTQ-005" ;
+  triage:title "Shared static SHUTDOWN_FINALIZER_THREADS accumulates across parallel tests" ;
+  triage:description "runtime_health.rs:44 — SHUTDOWN_FINALIZER_THREADS is module-level static Mutex<Vec<JoinHandle>> shared by all tests in the atm-daemon binary. Concurrent tests accumulate handles in the same Vec; drain_shutdown_finalizer_threads_for_test drains handles belonging to other tests. Fix: replace shared static with per-test registry passed explicitly, or use #[serial_test::serial] on all tests that touch this state." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "integration_gate" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-10T15:50:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-FTQ-005/intg/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:occurrence/INTG-FTQ-005/intg/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 44 ;
+  triage:snippet "static SHUTDOWN_FINALIZER_THREADS: Mutex<Vec<JoinHandle<()>>> shared across all parallel tests" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:worktree/integrate-phase-S/ade96f2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

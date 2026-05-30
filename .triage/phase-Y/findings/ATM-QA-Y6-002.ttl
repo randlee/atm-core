@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-Y6-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-Y6-002" ;
+  triage:title "No test for SQLite-success + append-failure → post-send-hook fallback" ;
+  triage:description "Sprint Y.6 requires explicit acceptance tests for each approved failure branch including 'append failure -> post-send-hook fallback for notification degradation'. When SQLite succeeds but JSONL append fails, persist_message_and_seed_workflow returns DeliveryPersistenceResult::append_degraded. No test in the reviewed codebase directly proves this disposition triggers post-send-hook execution (RunPostSendHookFallback in ClaudeHarnessNewMessageState). The hook fallback is only exercised via finalize_send_outcome/run_send_post_send_hooks but no test connects these two steps explicitly for the append-degraded case." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/send/persistence.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-Y6-002/pY-s6/1> .
+
+<urn:atm:triage:occurrence/ATM-QA-Y6-002/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/persistence.rs" ;
+  triage:line 50 ;
+  triage:snippet "persist_message_and_seed_workflow — append_degraded path has no end-to-end test confirming post-send-hook fires" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/2b808428> .
+
+<urn:atm:triage:worktree/pY-s6/2b808428>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

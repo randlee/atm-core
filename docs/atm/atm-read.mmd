@@ -1,0 +1,34 @@
+%% title: `atm read`
+%% summary: Single-message read with status-first selection.
+%% commentary: This read path selects a candidate row from SQLite mailbox metadata, loads full content only for the chosen message, and writes back read/ack state through unified message-state persistence when display mutations are required.
+%% sets: cli,client
+flowchart TD
+    A[atm read request] --> B["SQL: query_mailbox_metadata_rows
+LEFT JOIN mail_messages + mail_message_states
+filter team/agent
+exclude deleted_at
+exclude expired expires_at
+return bounded metadata rows"]
+    B -->|sql error| E1[Typed MailboxReadFailed or MailboxLockTimeout]
+    B --> C["ATM selection
+match message-id or newest eligible row
+collapse logical-current thread view
+apply sender/task/since/contains filters"]
+    C -->|no match and no timeout| O0[Return no match]
+    C -->|no match with timeout| W1[Wait and re-query metadata rows]
+    W1 -->|timeout| E2[ReadTimeout]
+    W1 -->|match found| D
+    C -->|match found| D["SQL: load_message
+read mail_messages row
+LEFT JOIN mail_message_states
+apply loaded state to envelope"]
+    D -->|sql error| E3[Typed MailboxReadFailed]
+    D --> M{display mutation needed?}
+    M -->|no| O1[Return full message]
+    M -->|yes| U["SQL: upsert_message_state
+set read / ack state only"]
+    U -->|sql error| E4[Typed MailboxWriteFailed or MailboxLockTimeout]
+    U --> R[Re-query metadata rows and reload selected message]
+    R -->|sql error| E5[Typed MailboxReadFailed]
+    R --> O1
+    A -. forbidden .-> F1[inbox JSON or summary file read]

@@ -27,6 +27,7 @@ Every QA update, both ATM and PR, must include:
 - sprint or task identifier
 - branch, commit, PR number
 - verdict (`PASS | FAIL | IN-FLIGHT`)
+- deliverable completion (`complete`, `total`, `percent`)
 - finding counts by severity (`blocking`, `important`, `minor`)
 - blocking ids with concise summaries
 - next required action plus owner
@@ -42,6 +43,11 @@ Use fenced JSON for machine-readable status payloads:
   "commit": "abc1234",
   "pr": 123,
   "verdict": "FAIL",
+  "deliverables": {
+    "complete": 9,
+    "total": 11,
+    "percent": 82
+  },
   "findings": {
     "blocking": 1,
     "important": 2,
@@ -58,7 +64,12 @@ Use fenced JSON for machine-readable status payloads:
 ## QA Lifecycle (Multi-Pass)
 
 1. Initial pass: usually `FAIL` with findings.
+   - If Rust best-practices review is in scope, run it in QA-1 only.
 2. Fix passes: `IN-FLIGHT` or `FAIL` while fixes are in progress.
+   - QA-2 and later rounds must not re-run Rust best-practices review on the
+     same sprint branch.
+   - Unresolved QA-1 RBP findings that are not fixed in the first fix round
+     carry to the next phase backlog instead of being re-raised in later rounds.
 3. Final pass: `PASS` with final quality report and merge recommendation.
 
 Do not treat QA as single-shot.
@@ -85,7 +96,9 @@ Template:
 Recommended flow:
 1. Gather findings from QA agents.
 2. Render markdown from the template with required variables.
-3. Post to the PR as a blocking review or status comment.
+3. When rechecking prior findings, include a resolved-findings section for
+   items closed since the previous pass.
+4. Post to the PR as a blocking review or status comment.
 
 Suggested commands:
 - blocking review:
@@ -97,6 +110,11 @@ Fallback when render fails:
 - post plain markdown preserving the same machine-status fields
 
 `<vars.json>` must be a flat JSON map of strings for `sc-compose`.
+Use raw JSON strings for array-valued machine-status fields, for example:
+- `blocking_ids_json: "[\"QA-001\"]"`
+
+Use numeric strings for count fields so the templates can render them as JSON
+numbers without quotes.
 
 ## Final Quality Report to PR (Closeout)
 
@@ -120,6 +138,8 @@ Use the final template only for `PASS` closeout.
 - Fix-pass updates revise status and open findings.
 - Final pass posts `PASS` closeout with residual risk and readiness and should
   use `--approve`.
+- Do not keep QA results ATM-only when a PR exists; append every completed QA
+  update to the PR.
 - Rendered reports must include a fenced JSON block for machine parsing.
 
 ## ATM Coordination Protocol

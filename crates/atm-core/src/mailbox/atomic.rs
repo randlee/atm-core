@@ -1,3 +1,5 @@
+use std::fs::OpenOptions;
+use std::io::Write;
 use std::path::Path;
 
 use serde_json::Value;
@@ -5,7 +7,7 @@ use serde_json::Value;
 use crate::error::{AtmError, AtmErrorKind};
 use crate::persistence;
 use crate::schema::MessageEnvelope;
-use crate::schema::inbox_message::to_shared_inbox_value;
+use crate::schema::inbox_message::{SharedInboxExportPolicy, to_shared_inbox_value_with_policy};
 
 /// Atomically replace one shared inbox file from fully serialized records.
 ///
@@ -25,12 +27,18 @@ use crate::schema::inbox_message::to_shared_inbox_value;
 /// [`crate::error_codes::AtmErrorCode::MailboxWriteFailed`] when message
 /// serialization fails or the mailbox temp-file write, fsync, rename, or
 /// parent-directory durability step cannot be completed.
-pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), AtmError> {
+///
+/// Repair/rebuild only — not reachable from normal runtime send or ack paths.
+pub fn write_messages(
+    path: &Path,
+    messages: &[MessageEnvelope],
+    export_policy: SharedInboxExportPolicy,
+) -> Result<(), AtmError> {
     let mut encoded = Vec::<Value>::with_capacity(messages.len());
     for message in messages {
-        encoded.push(to_shared_inbox_value(message)?);
+        encoded.push(to_shared_inbox_value_with_policy(message, export_policy)?);
     }
-    let mut bytes = serde_json::to_vec_pretty(&encoded)?;
+    let mut bytes = serde_json::to_vec(&encoded)?;
     bytes.push(b'\n');
 
     persistence::atomic_write_bytes(
@@ -40,4 +48,53 @@ pub fn write_messages(path: &Path, messages: &[MessageEnvelope]) -> Result<(), A
         "mailbox file",
         "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
     )
+}
+
+pub fn append_message(
+    path: &Path,
+    message: &MessageEnvelope,
+    export_policy: SharedInboxExportPolicy,
+) -> Result<(), AtmError> {
+    let encoded = to_shared_inbox_value_with_policy(message, export_policy)?;
+    append_jsonl_record(path, &encoded)
+}
+
+pub fn append_jsonl_record<T: serde::Serialize>(path: &Path, record: &T) -> Result<(), AtmError> {
+    let mut bytes = serde_json::to_vec(record)?;
+    bytes.push(b'\n');
+
+    let mut file = OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+        .map_err(|error| {
+            AtmError::new(
+                AtmErrorKind::MailboxWrite,
+                format!("failed to open mailbox file {} for append: {error}", path.display()),
+            )
+            .with_recovery(
+                "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
+            )
+            .with_source(error)
+        })?;
+    file.write_all(&bytes).map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxWrite,
+            format!("failed to append mailbox record {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
+        )
+        .with_source(error)
+    })?;
+    file.sync_data().map_err(|error| {
+        AtmError::new(
+            AtmErrorKind::MailboxWrite,
+            format!("failed to sync appended mailbox record {}: {error}", path.display()),
+        )
+        .with_recovery(
+            "Check that the mailbox directory is writable, has available disk space, and resides on a healthy filesystem before retrying the ATM command.",
+        )
+        .with_source(error)
+    })
 }

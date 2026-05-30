@@ -1,0 +1,48 @@
+finding_id: NEW-004
+title: Sprint doc frontmatter status values inconsistent (complete vs completed)
+severity: minor
+pattern: doc-inconsistency
+phase: phase-W
+triage_mode: initial_pass
+status: open
+promote_to_branch: integrate/phase-W
+highest_open_branch: integrate/phase-W
+dispatch_ready: true
+repeatable: true
+canonical_value: "complete"
+sweep_scope: docs/phase-W/sprint-W1.md through sprint-W8.md
+occurrences:
+  - branch: integrate/phase-W
+    file: docs/phase-W/sprint-W1.md
+    detail: "status: complete"
+    state: closed
+  - branch: integrate/phase-W
+    file: docs/phase-W/sprint-W2.md
+    detail: "status: planned (tracked separately in NEW-001)"
+    state: closed
+  - branch: integrate/phase-W
+    file: docs/phase-W/sprint-W3.md
+    detail: "status: complete"
+    state: closed
+  - branch: integrate/phase-W
+    file: docs/phase-W/sprint-W4.md
+    detail: "status: complete"
+    state: closed
+  - branch: integrate/phase-W
+    file: docs/phase-W/sprint-W5.md
+    detail: "status: completed — should be status: complete"
+    state: open
+  - branch: integrate/phase-W
+    file: docs/phase-W/sprint-W6.md
+    detail: "status: completed — should be status: complete"
+    state: open
+  - branch: integrate/phase-W
+    file: docs/phase-W/sprint-W7.md
+    detail: "status: completed — should be status: complete"
+    state: open
+  - branch: integrate/phase-W
+    file: docs/phase-W/sprint-W8.md
+    detail: "status: completed — should be status: complete"
+    state: open
+fix_description: "Normalize sprint-W5.md, sprint-W6.md, sprint-W7.md, and sprint-W8.md frontmatter status fields from 'completed' to 'complete'. Canonical form 'complete' is established by W.1/W.3/W.4 (already correct), by the main-repo earlier-phase sprint docs, and by the fix target in NEW-001 for W.2."
+dispatch_blocked_pending_triage_commit: false

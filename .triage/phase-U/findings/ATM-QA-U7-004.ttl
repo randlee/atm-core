@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U7-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U7-004" ;
+  triage:title "No ephemeral member lifecycle behavioral test through SqliteRosterStore" ;
+  triage:description "RosterMemberKind::Ephemeral has no test verifying it round-trips correctly and that its lifecycle behavior is distinguishable from Persistent member kinds. roster_store.rs on U.7 has no test module at all. The roster_member_kind_value and build_roster_member functions encode and decode Ephemeral at lines 260 and 280, but no test exercises this path. This is a U.7 sprint deliverable requirement: tests must cover all member_kind variants." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U7-004/pU-u7/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u7/8e37dd1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u7/8e37dd1> .
+
+# --- Branches U.4, U.5, U.6: absent (RosterMemberKind::Ephemeral not present) ---
+
+# --- Occurrence on feature/pU-u7-roster-simplification (highest open, promote target) ---
+
+<urn:atm:triage:occurrence/ATM-QA-U7-004/pU-u7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/roster_store.rs" ;
+  triage:line 257 ;
+  triage:snippet "fn roster_member_kind_value(value: boundary::RosterMemberKind) -> &'static str { match value { boundary::RosterMemberKind::Ephemeral => \"ephemeral\", ... } } — no test module exists in this file" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u7/8e37dd1> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/pU-u4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u5/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u7/8e37dd1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:orderIndex 4 .

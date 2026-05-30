@@ -1,0 +1,184 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-001-U2>
+  a triage:Finding ;
+  triage:findingId "ARCH-001-U2" ;
+  triage:title "workflow_key() produces legacy:{message_id} sidecar prefix not documented in ADR-012" ;
+  triage:description "crates/atm-core/src/workflow.rs — workflow_key() produces 'legacy:{message_id}' keys for the workflow sidecar map. The 'legacy:' prefix is a surviving legacy_* symbol. Sprint U.2 AC requires any surviving legacy_* symbol documented in ADR-012 as the one justified role. ADR-012 does not mention this sidecar key namespace. Fix options: (a) rename prefix to 'atm:' or 'msg:' + update test literals, OR (b) add ADR-012 paragraph explicitly naming the 'legacy:' workflow sidecar key as the one justified compatibility role with rationale." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/pU-u1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/pU-u1/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/pU-u1/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/pU-u1/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/pU-u2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/pU-u2/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-001-U2/pU-u2/4> ;
+
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/d6390795> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/a4285c7f> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1fb49d02> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u2/1fb49d02> .
+
+# --- integrate/phase-U occurrences ---
+
+<urn:atm:triage:occurrence/ARCH-001-U2/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 194 ;
+  triage:snippet ".map(|message_id| format!(\"legacy:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/d6390795> .
+
+<urn:atm:triage:occurrence/ARCH-001-U2/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 306 ;
+  triage:snippet "\"legacy:test\".to_string()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/d6390795> .
+
+# --- feature/pU-u1-metadata-atm-read-cleanup occurrences ---
+
+<urn:atm:triage:occurrence/ARCH-001-U2/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 189 ;
+  triage:snippet ".map(|message_id| format!(\"legacy:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/a4285c7f> .
+
+<urn:atm:triage:occurrence/ARCH-001-U2/pU-u1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 261 ;
+  triage:snippet "\"legacy:test\".to_string()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/a4285c7f> .
+
+<urn:atm:triage:occurrence/ARCH-001-U2/pU-u1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 277 ;
+  triage:snippet "fn workflow_key_uses_legacy_message_id()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/a4285c7f> .
+
+<urn:atm:triage:occurrence/ARCH-001-U2/pU-u1/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 284 ;
+  triage:snippet ".map(|message_id| format!(\"legacy:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/a4285c7f> .
+
+<urn:atm:triage:occurrence/ARCH-001-U2/pU-u1/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 294 ;
+  triage:snippet "format!(\"legacy:{message_id}\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/a4285c7f> .
+
+# --- feature/pU-u2-one-message-identity occurrences (highest open branch) ---
+
+<urn:atm:triage:occurrence/ARCH-001-U2/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 189 ;
+  triage:snippet ".map(|message_id| format!(\"legacy:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d02> .
+
+<urn:atm:triage:occurrence/ARCH-001-U2/pU-u2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 261 ;
+  triage:snippet "\"legacy:test\".to_string()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d02> .
+
+<urn:atm:triage:occurrence/ARCH-001-U2/pU-u2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 284 ;
+  triage:snippet ".map(|message_id| format!(\"legacy:{message_id}\"))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d02> .
+
+<urn:atm:triage:occurrence/ARCH-001-U2/pU-u2/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/workflow.rs" ;
+  triage:line 294 ;
+  triage:snippet "format!(\"legacy:{message_id}\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d02> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/integrate-phase-U/d6390795>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "d6390795352a96ec50c197fee2a61e55a2253860" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u1/a4285c7f>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "a4285c7f4fbddfd18961d2d816b81367963e202b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d02>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d022e02597accfab9d49de284b8627e9310" ;
+  triage:orderIndex 2 .

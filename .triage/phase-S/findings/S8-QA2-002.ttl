@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-QA2-002>
+  a triage:Finding ;
+  triage:findingId "S8-QA2-002" ;
+  triage:title "Missing boundary test for export cap: text.len() == export_cap case unverified" ;
+  triage:description "ADR-010 §Export Limit states 'export the full ATM-authored body only when it is less than or equal to that limit'. The implementation at inbox_message.rs:464 uses message.text.len() > export_cap (stub when strictly greater) which correctly implements ≤ semantics. However there is no test that exercises the exact boundary text.len() == export_cap, leaving the boundary semantics unverified. Sprint-S8.md task 2.2 requires full-body durability; a boundary test is needed to confirm body-at-cap → full export (not stub)." ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-QA2-002/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:occurrence/S8-QA2-002/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/schema/inbox_message.rs" ;
+  triage:line 464 ;
+  triage:snippet "message.text.len() > export_cap — no test verifies text.len() == export_cap => full body exported (not stub)" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "237c0ce" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "237c0ce" ;
+  triage:orderIndex 1 .

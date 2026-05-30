@@ -1,0 +1,139 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-006>
+  a triage:Finding ;
+  triage:findingId "RSH-006" ;
+  triage:title "acquire_connection_guard() budget exhaustion has no tracing::warn!" ;
+  triage:description "In crates/atm-rusqlite/src/shared_db.rs, function acquire_connection_guard(): when *connection_count >= MAX_SQLITE_READER_CONNECTIONS the function returns Err with no structured log event. Budget saturation is operationally significant and must be observable without tracing every caller. Fix: add tracing::warn!(limit = MAX_SQLITE_READER_CONNECTIONS, current = %connection_count, \"sqlite reader connection budget exhausted\") before the return Err at the budget-exhaustion branch." ;
+  triage:phaseId "phase-T" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:pattern "missing-observability" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/pT-t1-integration-gate/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/pT-t2-sqlite-writer/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/pT-t3-immutable-rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/pT-t4-windows-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/pT-t5-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-006/phase-T-integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/38cda3c> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/1113b99> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/475de31> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> ;
+  triage:openOn <urn:atm:triage:worktree/phase-T-integrate/8be69f9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
+
+<urn:atm:triage:occurrence/RSH-006/pT-t1-integration-gate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 303 ;
+  triage:snippet "if *connection_count >= MAX_SQLITE_CONNECTIONS {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024> .
+
+<urn:atm:triage:occurrence/RSH-006/pT-t2-sqlite-writer/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 346 ;
+  triage:snippet "if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "38cda3c" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/38cda3c> .
+
+<urn:atm:triage:occurrence/RSH-006/pT-t3-immutable-rows/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 349 ;
+  triage:snippet "if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "1113b99" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/1113b99> .
+
+<urn:atm:triage:occurrence/RSH-006/pT-t4-windows-runtime/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 343 ;
+  triage:snippet "if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "475de31" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/475de31> .
+
+<urn:atm:triage:occurrence/RSH-006/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 343 ;
+  triage:snippet "if *connection_count >= MAX_SQLITE_READER_CONNECTIONS {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
+
+<urn:atm:triage:occurrence/RSH-006/phase-T-integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/shared_db.rs" ;
+  triage:line 303 ;
+  triage:snippet "if *connection_count >= MAX_SQLITE_CONNECTIONS {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "8be69f9" ;
+  triage:occursIn <urn:atm:triage:worktree/phase-T-integrate/8be69f9> .
+
+<urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/38cda3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "38cda3c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/1113b99>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "1113b99" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/475de31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "475de31" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5-hardening/6450bb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/phase-T-integrate/8be69f9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "8be69f9" ;
+  triage:orderIndex 6 .

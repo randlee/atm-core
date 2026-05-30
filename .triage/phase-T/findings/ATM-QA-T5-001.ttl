@@ -1,0 +1,98 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T5-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T5-001" ;
+  triage:title "Three-way conflict on notification queue depth: requirements.md=256, architecture.md=64, code=64" ;
+  triage:description "docs/atm-daemon/requirements.md states 'notification work queue depth: 256', but docs/architecture.md and notification_runtime.rs:12 both record DEFAULT_NOTIFICATION_QUEUE_CAPACITY = 64. Team-lead ruling: 64 is authoritative (code+arch agree). Fix: update requirements.md to say 64." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T06:09:11Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-001/t5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-001/t6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-001/t7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T5-001/t8/1> ;
+  triage:openOn <urn:atm:triage:worktree/t5/a99dde9> ;
+  triage:openOn <urn:atm:triage:worktree/t6/500315d> ;
+  triage:openOn <urn:atm:triage:worktree/t7/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/t8/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/t5/a99dde9> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-001/t5/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 402 ;
+  triage:snippet "  - notification work queue depth: `256`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:occursIn <urn:atm:triage:worktree/t5/a99dde9> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-001/t6/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 402 ;
+  triage:snippet "  - notification work queue depth: `256`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:occursIn <urn:atm:triage:worktree/t6/500315d> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-001/t7/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 415 ;
+  triage:snippet "  - notification work queue depth: `256`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:occursIn <urn:atm:triage:worktree/t7/6986027> .
+
+<urn:atm:triage:occurrence/ATM-QA-T5-001/t8/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 415 ;
+  triage:snippet "  - notification work queue depth: `256`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/t8/afbd906> .
+
+<urn:atm:triage:worktree/t5/a99dde9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "a99dde9" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/t6/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/t7/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/t8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .

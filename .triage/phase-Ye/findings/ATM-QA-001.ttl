@@ -1,0 +1,89 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "boundaries.md future-target phrasing for RuntimeStatusCache ArcSwap" ;
+  triage:description "docs/atm-daemon/boundaries.md:43-44 and :434-436 — RuntimeStatusCache control-plane note and DaemonStatusSourceAdapter record say \"Phase Ye target design is immutable snapshot publication.\" Y.19 delivered ArcSwap; language should be delivered, not future-target. Y.20 QA-1 reported as ATM-QA-003 (blocking). Fix: replace with delivered language removing \"Phase Ye target design\" phrasing." ;
+  triage:phaseId "phase-Ye" ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-20T21:30:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pYe-s19/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pYe-s19/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pYe-s20/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pYe-s20/2> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s19/d2694d8b> ;
+  triage:openOn <urn:atm:triage:worktree/pYe-s20/ea517bb5> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYe-s20/ea517bb5> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pYe-s19/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 43 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication for readers," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pYe-s19/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 434 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication through `ArcSwap`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s19/d2694d8b> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pYe-s20/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 43 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication for readers," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:headSha "ea517bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s20/ea517bb5> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pYe-s20/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/boundaries.md" ;
+  triage:line 435 ;
+  triage:snippet "Phase `Ye` target design is immutable snapshot publication through `ArcSwap`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:headSha "ea517bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pYe-s20/ea517bb5> .
+
+<urn:atm:triage:worktree/pYe-s19/d2694d8b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s19-runtime-status-snapshot-publication" ;
+  triage:headSha "d2694d8b" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pYe-s20/ea517bb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYe-s20-notification-runtime-channel-ownership" ;
+  triage:headSha "ea517bb5" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate/phase-Y/9d9ca6af>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "9d9ca6af" ;
+  triage:orderIndex 3 .

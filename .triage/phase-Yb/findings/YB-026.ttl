@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-026>
+  a triage:Finding ;
+  triage:findingId "YB-026" ;
+  triage:title "RSH-Y9-001: blocking FS I/O in non_claude_outbound_runtime.rs without spawn_blocking" ;
+  triage:description "crates/atm-daemon/src/non_claude_outbound_runtime.rs:49-104 performs blocking FS I/O (fs::create_dir_all, OpenOptions::open, write_all, sync_data) without spawn_blocking wrapper. Trait is synchronous by contract (fn deliver_payloads(&self, ...) -> Result); callers expect synchronous execution semantics. spawn_blocking would violate the trait contract. Team-lead preliminary ruling: waived as not applicable to synchronous trait implementations." ;
+  triage:phaseId "phase-Yb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "Important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "waived" ;
+  triage:dispatchReady false ;
+  triage:waiverReason "synchronous_trait_contract" ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:triagedBy "qa-triage-agent" ;
+  triage:notes "NonClaudeOutbound trait is fully synchronous (no async fn, no Future return type). The impl intentionally performs blocking I/O within the synchronous method body per the trait contract. RSH-Y9-001 (spawn_blocking for blocking I/O) only applies to async execution contexts where blocking calls could stall the tokio runtime. In a synchronous trait, blocking I/O is the expected execution model." .
+
+<urn:atm:triage:worktree/pYb-s9/b0370c86>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "b0370c86" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pYb-s10/ed00c79c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "ed00c79c" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pYb-s11/d3497baf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "../atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "d3497baf" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate/phase-Y>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "../atm-core-worktrees/integrate/phase-Y" ;
+  triage:orderIndex 6 .

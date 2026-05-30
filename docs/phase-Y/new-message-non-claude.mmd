@@ -1,0 +1,34 @@
+%% title: `Non-Claude Harness New Message`
+%% summary: New-message state machine for non-Claude harness delivery.
+%% commentary: This machine never appends JSONL. It persists SQLite on the success path, routes the original message through the non-Claude delivery path, and on SQLite failure still emits the original plus an `atm-system@<team>` error companion through that same non-Claude path.
+%% notes: no JSONL append ever | harness gate: NonClaude only | sqlite failure emits original + error companion
+%% sets: delivery
+flowchart TD
+    A["<b>NonClaudeHarnessNewMessage</b><br/>Received"] --> B["PersistSqlite
+durable message/state write"]
+    B -->|sqlite_ok| C["SqliteCommitted"]
+    B -->|sqlite_err| D["Deliver original through non-Claude path
+retain sqlite diagnostics"]
+    C --> D
+    D -->|deliver_ok_after_sqlite_ok| E["RunPrimaryNudge
+original message only"]
+    D -->|deliver_ok_after_sqlite_err| F["Deliver atm-system@<team> error message
+through non-Claude path"]
+    D -->|deliver_err| X1["Failed
+blocking original delivery failure"]
+    F -->|deliver_ok| G["RunPrimaryNudge
+original message"]
+    F -->|deliver_err| X2["Failed
+blocking error-companion delivery failure"]
+    G --> H["RunErrorNudge
+atm-system@<team> error message"]
+    E --> O["Delivered"]
+    H --> O
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,C,O happy;
+    class X1,X2 error;
+    class B,D,E,F,G,H neutral;

@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S2-011>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S2-011" ;
+  triage:title "Integration test spawns real atm-daemon binary — ADR-003 Tier 3 violation + no launch-lock" ;
+  triage:description "crates/atm-daemon/tests/run_daemon_production_path.rs:13 — integration test uses Command::new(daemon_bin) to spawn a real atm-daemon process. No Tier 3 ADR-003 classification attribute, no #[cfg(unix)] gate, no ADR-002 host-wide launch-lock acquisition before spawn. Violates ADR-003 (prohibited daemon spawn pattern in tests without explicit Tier 3 annotation) and ADR-002 (no singleton layer-1 guard)." ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T08:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S2-011/s2/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/ATM-QA-S2-011/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/tests/run_daemon_production_path.rs" ;
+  triage:line 13 ;
+  triage:snippet "Command::new(daemon_bin) — real daemon spawn, no ADR-003 Tier 3 classification, no #[cfg(unix)], no launch-lock" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "2adc339" ;
+  triage:orderIndex 2 .

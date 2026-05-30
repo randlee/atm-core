@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-020>
+  a triage:Finding ;
+  triage:findingId "FTQ-020" ;
+  triage:title "connect_daemon_local_ipc_until_ready uses yield_now() spin loop — no sleep, no state predicate, CI flaky (tests.rs:93)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:93-107 — connect_daemon_local_ipc_until_ready uses std::thread::yield_now() in a retry loop with no sleep and no explicit state predicate. Catches ALL error kinds (including permanent errors like wrong path or permissions) and retries until 3-second wall-clock deadline. Under CI load, yield_now() does not guarantee scheduler progress for the serve thread. Three independent reviewers (flaky-test-qa, req-qa as ATM-QA-S4-004, rust-qa-agent as QA-001) flagged this convergently. Anti-Flake Contract §4.1 explicitly prohibits retry loops with no explicit state predicate. Fix options: (1) wire readiness channel — Arc<AtomicBool> + Condvar signaled from serve thread after listener enters accept loop; (2) wire emit_ready_signal_if_requested hook to one-shot channel; (3) minimum: replace yield_now() with thread::sleep(Duration::from_millis(5)) with inline justification comment." ;
+  triage:category "FTQ" ;
+  triage:severity "critical" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-020/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:occurrence/FTQ-020/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 93 ;
+  triage:snippet "connect_daemon_local_ipc_until_ready — yield_now() spin loop, all error kinds retried, no sleep, no state predicate; CI flaky under load; convergent finding from 3 reviewers" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "dd36874" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "dd36874" ;
+  triage:orderIndex 4 .

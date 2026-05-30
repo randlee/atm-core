@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-EG-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-EG-004" ;
+  triage:title "docs/project-plan.md missing Phase V entry" ;
+  triage:description "docs/project-plan.md Phase V section (## 26) exists but is missing explicit key deliverables: SubsystemObservability per-subsystem injection, deleted helpers, .with_recovery() on 4 error categories, stable error code namespace. These deliverables are documented in individual sprint docs (sprint-V1.md through sprint-V4.md) but are not summarized in the project-plan.md Phase V section." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-V" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-EG-004/integrate-phase-V/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> .
+
+<urn:atm:triage:occurrence/ATM-QA-EG-004/integrate-phase-V/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 2973 ;
+  triage:snippet "## 26. Phase V Daemon Hardening And Boundary Cleanup — section exists but lacks explicit deliverables: SubsystemObservability per-subsystem injection, deleted helpers, .with_recovery() on 4 error categories, stable error code namespace" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-V" ;
+  triage:headSha "ec24c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> .
+
+<urn:atm:triage:worktree/integrate-phase-V/ec24c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-V" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-V" ;
+  triage:headSha "ec24c3e" ;
+  triage:orderIndex 5 .

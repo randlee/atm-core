@@ -2,6 +2,45 @@
 
 Rules and patterns for ensuring atm works correctly on Ubuntu, macOS, and Windows CI.
 
+## Phase S Daemon Portability Guard
+
+For same-host daemon functionality, operating-system-specific implementation
+differences are allowed only in these daemon-owned areas:
+- local IPC transport adapter
+- lifecycle-control source adapter
+- host-ownership adapter
+
+Do not solve Windows support by scattering `#[cfg(unix)]` / `#[cfg(windows)]`
+branches through runtime composition, dispatcher, replay, status-cache,
+watch/reconcile, or notifier code.
+
+Review rule:
+- if a new same-host daemon feature cannot be implemented on every supported
+  operating system through the documented portability boundaries, the docs and
+  architecture must be updated before implementation continues
+
+## No-Flaky-Test Policy
+
+Cross-platform daemon and runtime tests must not rely on timing luck and must
+not contain a path that can block indefinitely.
+
+Required shapes:
+- bounded channel handshakes
+- `Barrier`, `Condvar`, or predicate synchronization with a bounded wait
+- bounded readiness and shutdown probes tied to observable state
+- panic-safe cleanup for shared/global test hooks
+
+Forbidden shapes:
+- fixed sleeps as the primary correctness mechanism
+- retry-until-success loops with no predicate or deadline
+- unbounded `recv()`, `wait()`, or equivalent blocking calls in risky
+  same-host daemon/runtime tests
+- bare `join()` when the test has no bounded proof of completion first
+
+Mechanical-enforcement rule:
+- if a prohibited pattern is cheap and deterministic to detect, it belongs in
+  `just lint` rather than review-only guidance
+
 ## Home Directory Resolution
 
 **Problem**: `dirs::home_dir()` on Windows uses the Windows API (`SHGetKnownFolderPath`), which ignores both `HOME` and `USERPROFILE` environment variables. Tests that only redirect `HOME` do not relocate the canonical `~/.claude` config root on Windows.
@@ -44,6 +83,23 @@ Before declaring dev work complete, grep all integration test files:
 grep -rn 'ATM_CONFIG_HOME' crates/atm/tests/ || echo "FAIL: Missing ATM_CONFIG_HOME in test helpers"
 grep -rn 'env(\"HOME\"' crates/atm/tests/
 ```
+
+### Planned Phase S.5 Guardrails
+
+Immediate/default-lint families:
+- fixed-sleep test hygiene, with the current repository-local rule treated as
+  the proving implementation for later `sc-lint` extraction
+- daemon-spawn and warmup-helper rejection
+- production bare `Condvar::wait(...)`
+- production discarded `wait_timeout*` results
+- targeted same-host daemon test checks for cheap unbounded-wait syntax once
+  the repository-local rule is landed
+
+Deferred analyzer families:
+- path-sensitive `JoinHandle::join()` safety
+- polling-loop terminate-state placement
+- panic-safe cleanup proof for shared/global hook registries
+- bounded-wait result handling in test code
 
 ## Clippy Compliance
 
@@ -120,6 +176,54 @@ grep -rn "'/tmp/" crates/ && echo "FAIL: Found /tmp hardcoding" || echo "OK"
 
 - Check env vars with `std::env::var()`, not by reading `/proc` or shell config files.
 - For test isolation, set env vars per-command with `cmd.env("KEY", "value")` rather than `std::env::set_var()` which is global and causes race conditions in parallel tests.
+
+## Test Subprocess Isolation
+
+See also:
+- [`requirements.md`](./requirements.md) `REQ-CORE-TEST-001`
+- [`.claude/agents/arch-qa.md`](../.claude/agents/arch-qa.md) `RULE-011`
+
+Subprocess-style ATM tests must not reuse developer workstation config or
+identity state.
+
+Required pattern:
+- create one `TempDir` per test fixture
+- point `ATM_HOME` at that temp-owned runtime root
+- point `ATM_CONFIG_HOME` at that temp-owned config root
+- point `ATM_TEAMS_DIR` at a temp-owned teams directory when the test depends
+  on team discovery
+- pass environment overrides with `cmd.env(...)` on each spawned command
+
+Use explicit test-only names for team and agent fixtures:
+- `TEST_TEAM = "test-team"`
+- `TEST_SENDER = "test-sender"`
+- `TEST_RECIPIENT = "test-recipient"`
+- `TEST_LEAD = "test-lead"`
+
+Production role semantics may still matter in a few tests:
+- `ATM_TEAM` and `ATM_IDENTITY` may be set explicitly when the test is proving
+  production env-read behavior
+- `team-lead` may be used when the role itself is semantically significant,
+  but the raw literal should be centralized behind one constant such as
+  `ROLE_TEAM_LEAD`
+
+Avoid:
+- raw `atm-dev` / `arch-*` literals in generic test fixtures
+- `std::env::set_var()` in integration tests
+- reading or writing the developer's real ATM home during tests
+
+Recommended helper shape:
+
+```rust
+let env = TestEnvBuilder::new().build().expect("test env");
+let mut cmd = assert_cmd::cargo::cargo_bin_cmd!("atm");
+// TestEnvBuilder provides filesystem isolation only. Tests still set
+// ATM_IDENTITY and ATM_TEAM explicitly when the command under test needs them.
+cmd.envs(env.env_map.iter())
+    .env("ATM_IDENTITY", TEST_SENDER)
+    .env("ATM_TEAM", TEST_TEAM)
+    .current_dir(&env.cwd);
+```
 
 ## Line Endings
 

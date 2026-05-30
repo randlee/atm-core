@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W6-F003>
+  a triage:Finding ;
+  triage:findingId "RBP-W6-F003" ;
+  triage:title "RetainedJsonlFileSink three Mutex fields missing rationale and lock-order comment" ;
+  triage:description "crates/atm-daemon/bin_support/daemon_observability.rs lines 523-526: RetainedJsonlFileSink has three independent Mutex fields (health, last_written_file, last_prune_request_at) with no rationale comment. LogSink::write (line 700-707) acquires last_written_file then health — lock ordering is implicit and undocumented. No comment explains why three separate locks rather than one, or documents the acquisition order. Fix: add a comment on the struct or fields documenting (1) what each mutex guards, (2) why three locks rather than one, (3) lock-acquisition order (last_written_file before health in write path)." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:pattern "RBP-006" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W6-F003/pW-s6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> .
+
+<urn:atm:triage:occurrence/RBP-W6-F003/pW-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/bin_support/daemon_observability.rs" ;
+  triage:line 523 ;
+  triage:snippet "health: Mutex<SinkHealth>, last_written_file: Mutex<Option<std::fs::File>>, last_prune_request_at: Mutex<Option<SystemTime>>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s6-sqlite-error-contract" ;
+  triage:headSha "d27de5a2c54db23b4576ca28d57d89b2681f971a" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a> .
+
+<urn:atm:triage:worktree/pW-s6/d27de5a2c54db23b4576ca28d57d89b2681f971a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s6-sqlite-error-contract" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s6-sqlite-error-contract" ;
+  triage:headSha "d27de5a2c54db23b4576ca28d57d89b2681f971a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef258505e629d6a1fb89f5ce3f672e215445>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "4540ef258505e629d6a1fb89f5ce3f672e215445" ;
+  triage:orderIndex 2 .

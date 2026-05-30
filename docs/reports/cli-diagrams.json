@@ -1,0 +1,137 @@
+{
+  "title": "CLI Interface",
+  "generated_at": "2026-05-12T14:13:11.355722+00:00",
+  "set": "cli",
+  "output_path": "docs/reports/cli-diagrams.html",
+  "sections": [
+    {
+      "key": "atm-clear",
+      "title": "atm clear",
+      "summary": "Status mutation without content-row deletion.",
+      "commentary": "This path should mutate only message-status for normal clear or delete operations and leave hard deletion to retention cleanup policy.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-clear.mmd",
+      "fragment_path": "docs/reports/panels/atm-clear.html",
+      "sets": [
+        "cli"
+      ]
+    },
+    {
+      "key": "atm-doctor",
+      "title": "atm doctor",
+      "summary": "Health and diagnostic flow.",
+      "commentary": "This diagnostic flow should report config, runtime, and optional store-health failures clearly without mutating mailbox state.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-doctor.mmd",
+      "fragment_path": "docs/reports/panels/atm-doctor.html",
+      "sets": [
+        "cli"
+      ]
+    },
+    {
+      "key": "atm-list",
+      "title": "atm list",
+      "summary": "Bounded metadata-only mailbox query.",
+      "commentary": "This path queries bounded mailbox metadata rows from SQLite, joins immutable message rows with unified mutable state, excludes deleted and expired rows, then collapses logical-current rows in ATM before returning list output.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-list.mmd",
+      "fragment_path": "docs/reports/panels/atm-list.html",
+      "sets": [
+        "cli"
+      ]
+    },
+    {
+      "key": "atm-log",
+      "title": "atm log",
+      "summary": "Observability query and follow service path.",
+      "commentary": "This flow should stay behind the observability boundary and must not add ad hoc CLI-side file parsing.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-log.mmd",
+      "fragment_path": "docs/reports/panels/atm-log.html",
+      "sets": [
+        "cli"
+      ]
+    },
+    {
+      "key": "atm-members",
+      "title": "atm members",
+      "summary": "Team roster query path.",
+      "commentary": "This flow should read deterministic roster state through the team-admin boundary and surface query failures clearly.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-members.mmd",
+      "fragment_path": "docs/reports/panels/atm-members.html",
+      "sets": [
+        "cli"
+      ]
+    },
+    {
+      "key": "atm-read",
+      "title": "atm read",
+      "summary": "Single-message read with status-first selection.",
+      "commentary": "This read path selects a candidate row from SQLite mailbox metadata, loads full content only for the chosen message, and writes back read/ack state through unified message-state persistence when display mutations are required.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-read.mmd",
+      "fragment_path": "docs/reports/panels/atm-read.html",
+      "sets": [
+        "cli",
+        "client"
+      ]
+    },
+    {
+      "key": "atm-send-ack",
+      "title": "atm ack",
+      "summary": "Ack-state mutation and optional reply creation.",
+      "commentary": "This path should mutate only status plus any explicit reply row, then run post-commit effects without changing durable truth on hook or nudge failure.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-send-ack.mmd",
+      "fragment_path": "docs/reports/panels/atm-send-ack.html",
+      "sets": [
+        "cli",
+        "client"
+      ]
+    },
+    {
+      "key": "atm-send-compose",
+      "title": "atm send",
+      "summary": "Compose and persist one message, then run post-commit effects.",
+      "commentary": "This path should validate input, commit SQLite first, then run post-commit hooks or advisory nudges without letting any side effect outrun durable truth.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-send-compose.mmd",
+      "fragment_path": "docs/reports/panels/atm-send-compose.html",
+      "sets": [
+        "cli",
+        "client"
+      ]
+    },
+    {
+      "key": "atm-teams",
+      "title": "atm teams",
+      "summary": "Team-admin mutation and recovery path.",
+      "commentary": "This flow should stay in the retained team-admin surface and report config or store failures without bypassing the boundary.",
+      "notes": [],
+      "read_tables": [],
+      "write_tables": [],
+      "ssot_path": "docs/atm/atm-teams.mmd",
+      "fragment_path": "docs/reports/panels/atm-teams.html",
+      "sets": [
+        "cli"
+      ]
+    }
+  ]
+}

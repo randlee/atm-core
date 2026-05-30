@@ -1,0 +1,72 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ──────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/REQ-WIN-001-TEST>
+    a triage:Finding ;
+    triage:findingId "REQ-WIN-001-TEST" ;
+    triage:title "Windows lifecycle-control tests cover flag-sharing only — no transport shutdown integration test" ;
+    triage:description "Tests at crates/atm-daemon/src/lifecycle_control.rs:313-373 (integrate/phase-S) verify flag-sharing only (windows_reload_flag_is_shared_across_install_calls, windows_terminate_flag_is_shared_across_install_calls). No test exercises the transport serve-loop shutdown contract on integrate/phase-S. Sprint S.6 §3.2 requires shutdown regression tests covering the Windows transport + LifecycleControlSourceAdapter shutdown path with deadline assertions. Fixed on feature/pS-s6-runtime-remediation: crates/atm-daemon/src/tests.rs:223-265 adds #[cfg(windows)] windows_local_ipc_runtime_terminate_finishes_within_deadline which exercises serve_with_runtime_hooks, triggers terminate via LifecycleControlSourceAdapter, and asserts completion within a 3-second deadline. Also adds windows_terminate_request_wakes_waiters in lifecycle_control.rs:375-401 validating the state-change wake path." ;
+    triage:category "REQ" ;
+    triage:phaseId "phase-S" ;
+    triage:triageMode "initial_pass" ;
+    triage:severity "blocking" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "fixed" ;
+    triage:dispatchReady false ;
+    triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+
+    # Occurrences
+    triage:hasOccurrence <urn:atm:triage:occurrence/REQ-WIN-001-TEST/pS-s6/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/REQ-WIN-001-TEST/integrate-phase-S/1> ;
+
+    # Branch-level topology
+    triage:fixedOn <urn:atm:triage:worktree/pS-s6/b80f16a> ;
+    triage:openOn <urn:atm:triage:worktree/integrate-phase-S/3f67133> ;
+    triage:promoteTo <urn:atm:triage:worktree/pS-s6/b80f16a> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/pS-s6/b80f16a>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s6-runtime-remediation" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s6-runtime-remediation" ;
+    triage:headSha "b80f16a" ;
+    triage:orderIndex 1 ;
+    triage:branchStatus "fixed" .
+
+<urn:atm:triage:worktree/integrate-phase-S/3f67133>
+    a triage:WorktreeSnapshot ;
+    triage:branch "integrate/phase-S" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+    triage:headSha "3f67133" ;
+    triage:orderIndex 2 ;
+    triage:branchStatus "open" .
+
+# ── Occurrences: pS-s6 (fixed) ───────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/REQ-WIN-001-TEST/pS-s6/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/tests.rs" ;
+    triage:line 223 ;
+    triage:snippet "#[cfg(windows)] #[test] #[serial] fn windows_local_ipc_runtime_terminate_finishes_within_deadline()" ;
+    triage:status "fixed" ;
+    triage:closed true ;
+    triage:branch "feature/pS-s6-runtime-remediation" ;
+    triage:headSha "b80f16a" ;
+    triage:occursIn <urn:atm:triage:worktree/pS-s6/b80f16a> .
+
+# ── Occurrences: integrate/phase-S (open — s6 not yet merged) ────────────────
+
+<urn:atm:triage:occurrence/REQ-WIN-001-TEST/integrate-phase-S/1>
+    a triage:Occurrence ;
+    triage:file "crates/atm-daemon/src/lifecycle_control.rs" ;
+    triage:line 302 ;
+    triage:snippet "#[cfg(all(test, windows))] mod windows_tests — contains only windows_reload_flag_is_shared_across_install_calls and windows_terminate_flag_is_shared_across_install_calls; no transport serve-loop shutdown integration test" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "integrate/phase-S" ;
+    triage:headSha "3f67133" ;
+    triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3f67133> .

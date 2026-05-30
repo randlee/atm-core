@@ -1,0 +1,147 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# -----------------------------------------------------------------------
+# Finding: ATM-QA-008
+# FORCE_CANCEL_DEADLINE=10s + GRACEFUL_DRAIN_DEADLINE=5s = 16s worst-case
+# violates 5s clean-shutdown SLO
+# Generated: 2026-05-10T00:00:00Z  triage_mode: initial_pass
+# Worktrees: pS-s13-ipc-hardening, pS-s14-impl, pS-s15-rusqlite-hardening
+# -----------------------------------------------------------------------
+
+<urn:atm:triage:finding/ATM-QA-008>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-008" ;
+  triage:title "FORCE_CANCEL_DEADLINE=10s + GRACEFUL_DRAIN_DEADLINE=5s = 16s worst-case — violates 5s clean-shutdown SLO" ;
+  triage:description "crates/atm-daemon/src/lib.rs:37 — FORCE_CANCEL_DEADLINE=10s combined with GRACEFUL_DRAIN_DEADLINE=5s yields 16s worst-case shutdown time, violating the 5s clean-shutdown SLO defined in plan §5. Fix: reduce FORCE_CANCEL_DEADLINE or restructure shutdown stages to stay within the 5s SLO." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-S" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+
+  # occurrences on feature/pS-s13-ipc-hardening (order_index 1)
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s13/2> ;
+
+  # occurrences on feature/pS-s14-impl (order_index 2)
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s14/2> ;
+
+  # occurrences on feature/pS-s15-rusqlite-hardening (order_index 3)
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-008/pS-s15/2> ;
+
+  # all three branches open; highest open branch = highest order_index (pS-s15)
+  triage:openOn <urn:atm:triage:worktree/pS-s13/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15/93c63a9> ;
+
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+# -----------------------------------------------------------------------
+# Occurrences: feature/pS-s13-ipc-hardening  (4c03c2c, order_index 1)
+# -----------------------------------------------------------------------
+
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 36 ;
+  triage:snippet "pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
+
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s13/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 37 ;
+  triage:snippet "pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
+
+# -----------------------------------------------------------------------
+# Occurrences: feature/pS-s14-impl  (cf57c48, order_index 2)
+# -----------------------------------------------------------------------
+
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 36 ;
+  triage:snippet "pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 37 ;
+  triage:snippet "pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+# -----------------------------------------------------------------------
+# Occurrences: feature/pS-s15-rusqlite-hardening  (93c63a9, order_index 3)
+# -----------------------------------------------------------------------
+
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 36 ;
+  triage:snippet "pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(5);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:occurrence/ATM-QA-008/pS-s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/lib.rs" ;
+  triage:line 37 ;
+  triage:snippet "pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(10);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+# -----------------------------------------------------------------------
+# WorktreeSnapshots
+# -----------------------------------------------------------------------
+
+<urn:atm:triage:worktree/pS-s13/4c03c2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s14/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s15/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 .

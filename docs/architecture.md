@@ -7,11 +7,11 @@ mail and roster ownership to SQLite and reintroduces one tightly-bounded
 singleton daemon runtime for routing, notification, transport, and runtime
 health/state queries.
 
-The current workspace contains:
+The current merged workspace contains:
 - `atm-core`: reusable service library
 - `atm`: CLI binary
 
-The Phase Q target workspace remains intentionally small and adds:
+The daemon/runtime expansion adds:
 - `atm-daemon`: daemon runtime binary / transport host
 - `atm-rusqlite`: first concrete SQLite store implementation
 
@@ -19,6 +19,7 @@ The CLI stays thin. Product logic moves into `atm-core`.
 
 The retained command surface is:
 - `send`
+- `list`
 - `read`
 - `ack`
 - `clear`
@@ -26,6 +27,11 @@ The retained command surface is:
 - `doctor`
 - `teams`
 - `members`
+
+Approved additive CLI feature for the Phase `Y` line:
+- `help`
+- the `help` addition stays on the CLI conceptual-help surface only; it does
+  not reopen mailbox-truth or boundary-ownership work inside `Y.1`
 
 ## 1.1 Documentation Structure
 
@@ -46,6 +52,40 @@ Phase-Q supersession note:
 - for the current mail/runtime target architecture, Section 21 is
   authoritative
 
+Phase-R redesign note:
+- the abandoned early SQLite/daemon line is not the architectural baseline for forward
+  work
+- the Phase R redesign starts from crate-local boundary inventories and ADRs,
+  then rebuilds the implementation under lint/visibility guardrails
+- Phase R treats thin-client extension pressure as a first-class architectural
+  input (`atm-graft` was implemented in T.6–T.8, then completed and narrowed
+  through Phase U as the supported thin-client host line rather than removed)
+- for the boundary / adapter model, Phase R supersedes any earlier
+  pre-Phase-R architecture statements in this document that conflict with the
+  crate-local boundary inventories, ADRs, or `docs/plan-phase-R.md`
+
+Phase-S portability note:
+- the Phase R integrated daemon proved the runtime split, but it still hard-
+  coded Unix-only assumptions into the same-host host/runtime shell
+- Phase S is the active planning line for making the daemon feature-complete on
+  Windows as well as Unix-like hosts
+- feature parity across supported operating systems is mandatory; platform-
+  specific implementation differences are allowed only behind documented ATM-
+  owned portability boundaries
+- the canonical daemon wire contract is documented in
+  [`docs/atm-daemon/protocol-icd.md`](./atm-daemon/protocol-icd.md)
+- exact wire-header constants, packet-kind assignments, payload DTO mapping,
+  and the current daemon packet-surface inventory are owned by that ICD
+- the current daemon packet family is intentionally smaller than the retained
+  CLI surface:
+  - daemon packets: `send`, `ack`, `read`, `clear`, `doctor`, heartbeat
+  - non-packet retained surfaces: `log`, `teams`, `members`
+- S.5 planning adds `atm list` as a distinct CLI query surface; S.7 owns the
+  implementation line that refines the queue-query packet mapping instead of
+  preserving the old multi-message `read` response shape as the final
+  contract
+- Phase S planning is tracked in [`docs/plan-phase-S.md`](./plan-phase-S.md)
+
 ## 2. Crate Boundaries
 
 The post-Q product runtime is implemented by four crates:
@@ -57,7 +97,7 @@ The post-Q product runtime is implemented by four crates:
 
 Product-level boundary rules:
 
-- `atm-core` owns ATM business logic and the strict I/O boundaries that Phase Q
+- `atm-core` owns ATM business logic and the strict I/O boundaries that the current SQLite/daemon architecture
   routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
 - `atm-daemon` owns runtime composition, transport adapters, singleton
@@ -69,13 +109,122 @@ Product-level boundary rules:
 - `atm-daemon` must not become a second business-logic crate.
 - `atm-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
+- crate-local boundary records in `docs/<crate>/boundaries.md` are the
+  machine-readable contract used to drive architectural linting and review
+- thin-client workflow surfaces should be modeled around `send` and `receive`
+  rather than a broad command inventory
+- Phase T added `atm-graft` as a thin-client line (T.6–T.8); Phase U later
+  completed and tightened that supported line rather than deleting it
+  as out-of-scope for the 1.0 surface
+- `ack` may remain a retained CLI/user workflow, but thin-client protocol
+  surfaces should carry it through send-shaped request data rather than a
+  separate top-level method family
+- Phase R may depend on `sc-lint` for boundary/parser gate verification, but
+  `sc-lint` is an external tool dependency rather than an ATM-owned product
+  subsystem
+- durable ATM state is one host-scoped SQLite database at `~/.atm/db/mail.db`
+- the daemon is the only ATM writer for that database
+- direct read-only SQLite consumers are an allowed integration surface, but
+  ATM-owned command/runtime writes must not bypass the documented daemon/store
+  boundaries
+- canonical roster truth is the ATM roster in SQLite; Claude Code
+  `config.json` is ingress/projection/diagnostic surface only and must not
+  become a second runtime roster-truth dependency
+- mailbox row provenance/timing convenience fields are not part of the public
+  message contract unless one clear product requirement explicitly keeps them
+
+Lint and tooling boundary rules:
+- `atm-core` owns repository-local lint orchestration through `just`,
+  `.just/`, and `scripts/`
+- reusable static-analysis engines are incubated on `atm-core` through the
+  embedded `crates/sc-lint-*` workspace members, then migrated to the
+  standalone `sc-lint` repository only after the rule semantics stabilize
+- ATM-specific repository policy checks stay local to `atm-core` when they
+  depend on ATM role names, ATM-only document schemas, or ATM team-process
+  records
+- postmortem-linter partition for the current follow-up line is:
+  - reusable/static rules:
+    - Unix platform-gating checks
+    - bare production `Condvar::wait(...)` checks
+    - fixed-sleep test-hygiene checks after the current repository-local rule
+      shape is proven and extracted to `sc-lint`
+    - `config.json` roster-boundary rules after the repository-local allowlist
+      and false-positive shape is proven on `atm-core`
+  - ATM-local rules:
+    - duplicate semantic string-literal checks in non-test Rust code
+    - targeted same-host daemon test unbounded-wait checks until or unless the
+      rule family proves reusable enough for `sc-lint`
+    - triage Turtle consistency checks
+    - staged `config.json` allowlist gates until the reusable rule semantics
+      stabilize
 
 Crate-local boundary detail is owned by:
 
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
+- [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
 - [`docs/atm/architecture.md`](./atm/architecture.md)
+- [`docs/atm/boundaries.md`](./atm/boundaries.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
+- [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
+
+Current Phase R boundary direction:
+- shared protocol contract: `AtmProtocol` in `atm-core`
+- outbound transport boundary: `ClientTransport`
+- inbound transport boundary: `ServerTransport`
+- request routing boundary: `RequestDispatcher`
+- outbound notification boundary: `NotificationSink`
+- inbound runtime status boundary: `StatusSource`
+- watch/reconcile boundary family:
+  - `WatchEventSource`
+  - `ReconcileCoordinator`
+- current production composition ownership:
+  - `atm` is the CLI client composition root
+  - `atm-daemon` is the runtime composition root
+  - a separate composition crate remains out of scope unless an ADR opens it
+
+Current Phase R lint partition direction:
+- extend the existing `sc-portability` analyzer for reusable platform-gating
+  rules
+- extend the existing `sc-boundary` analyzer for reusable production-liveness
+  rules that need Rust-aware analysis
+- treat fixed-sleep test hygiene as a reusable lint family whose current
+  repository-local rule is the proving implementation before `sc-lint`
+  extraction
+- keep ATM duplicate semantic literal policy in the existing repository-local
+  identity lint
+- keep targeted same-host daemon unbounded-wait checks as repository-local
+  lint/CI first, then reevaluate extraction only after the false-positive and
+  allow-list shape is proven on `atm-core`
+- keep triage-record validation as repository-local lint/CI unless its rule
+  semantics become clearly reusable
+- keep `config.json` roster-boundary allowlist checks as repository-local
+  lint/CI until the rule semantics and approved-caller inventory stabilize
+
+Active postmortem rule families:
+- reusable analyzer rules:
+  - test-scope portability helpers:
+    - `PORT-001` hardcoded Unix-only absolute paths in test code
+    - `PORT-002` direct `dirs::home_dir()` without configured override checks
+    - `PORT-003` `std::env::set_var()` in test code
+  - production portability rules:
+  - `PORT-004` ungated `std::os::unix` imports in production code
+  - `PORT-005` `cfg_attr(not(unix), allow(dead_code))` portability suppressors
+  - `SCB-RUNTIME-001` bare production `Condvar::wait(...)`
+  - `SCB-RUNTIME-002` discarded `wait_timeout*` results in production code
+  - `SCB-CONFIG-001` production direct `config.json` roster reads outside the
+    explicit allowlist
+  - `SCB-CONFIG-002` generic runtime `load_team_config(...)` helper use from
+    retained command/runtime paths
+  - `SCB-CONFIG-003` Claude send pre-write `config.json` membership gates
+  - `Z.7` keeps the rule family machine-runnable by checking in both the
+    explicit allowlist and a known-bad fixture self-test for
+    `just lint boundaries`
+- ATM-local repository rules:
+  - duplicate semantic role-name literals in non-test Rust code
+  - targeted same-host daemon test unbounded-wait checks
+  - triage Turtle aggregate/branch consistency checks
 
 ### 2.3 Release Publication Boundary
 
@@ -161,6 +310,8 @@ ATM still owns:
 - ATM-specific structured fields
 - mapping CLI filters to shared query/follow APIs
 - ATM doctor projections over shared health models
+- the host-scoped retained-log root contract, including `ATM_LOG_DIR` as the
+  exact retained-log-directory override
 - ATM-owned config semantics for baseline roster, alias resolution, and
   runtime-identity precedence
 
@@ -184,6 +335,19 @@ Initial retained-command integration scope:
 Deferred from the initial retained-command integration scope:
 - `sc-observe`
 - `sc-observability-otlp`
+
+Phase W typed observability migration note:
+- `DaemonSubsystem` and the typed `emit_subsystem_event(...)` boundary are
+  complete on the current line.
+- The remaining migration from raw `&'static str` labels to validated
+  `ActionName` / `OutcomeLabel` values at `DaemonEvent` fields,
+  `SubsystemLogger` helpers, and `SubsystemObservability::event()` call sites
+  is intentionally deferred pending upstream `sc-observability-types`
+  support for a validated static-construction helper such as
+  `validated_static!` or `const new_static()`.
+- The deferred scope is still tracked architecture work across roughly
+  76 call sites in 10 files; it is not an approved permanent mixed-typing
+  end state.
 
 The controlling ATM-side implementation design is:
 - [`docs/atm-core/design/sc-observability-integration.md`](./atm-core/design/sc-observability-integration.md)
@@ -213,7 +377,7 @@ Product-level constraints that remain relevant here:
 Supersession note:
 - `no daemon client` and `no runtime spawning layer` describe the pre-Phase-Q
   retained CLI/runtime line only
-- the Phase Q target architecture in §21 supersedes those constraints with:
+- the current SQLite/daemon architecture in §21 supersedes those constraints with:
   - one explicit daemon runtime
   - no hidden direct SQLite fallback
   - one explicit daemon auto-start path when the daemon is absent
@@ -435,14 +599,14 @@ Architectural rules:
 - cross-team messages may project an alias-friendly sender in the persisted
   `from` field for Claude-facing ergonomics
 - whenever cross-team alias projection is used, ATM must also persist
-  canonical sender identity in `metadata.atm.fromIdentity`
+  canonical sender identity in SQLite-owned state
 - self-send checks, target validation, routing, and audit logic must use the
   canonical sender identity rather than the display-oriented `from` projection
 - ATM-owned post-send hooks are best-effort recipient-scoped helpers, not part
   of the atomic send boundary
 - the hook runs only after a successful non-`dry-run` send or ack; it fires
   after both `atm send` and `atm ack`
-- Phase Q addition: the retained hook contract now includes `atm ack` reply
+- Current runtime addition: the retained hook contract now includes `atm ack` reply
   writes as hook-producing outbound messages, not only `atm send`
 - each `[[atm.post_send_hooks]]` rule binds one recipient selector and one
   command argv
@@ -455,7 +619,7 @@ Architectural rules:
   `ATM_POST_SEND`
 - the payload includes `from`, `to`, `sender`, `recipient`, `team`,
   `message_id`, `requires_ack`, `is_ack` (bool), and optional `task_id`
-- Phase Q addition: `is_ack` is the explicit send-vs-ack discriminator for
+- Current runtime addition: `is_ack` is the explicit send-vs-ack discriminator for
   daemon-owned hook evaluation and downstream nudge logic
 - the hook may optionally emit one structured result object on stdout with a
   declared log level, message, and optional structured fields; ATM parses it
@@ -545,86 +709,49 @@ Current persisted inbox superset may contain:
   - `read`
   - `summary`
   - optional producer field `color`
-- legacy ATM top-level additive fields such as:
-  - `source_team`
+- ATM additive compatibility fields:
   - `message_id`
-  - `pendingAckAt`
-  - `acknowledgedAt`
-  - `acknowledgesMessageId`
-- shared/de facto interpreted fields such as:
+  - `parentMessageId`
+  - `threadMode`
   - `taskId`
-- forward metadata container:
-  - `metadata`
 - unknown fields
 
 Schema ownership split:
-
 - Claude-native baseline fields are documented in
   [`claude-code-message-schema.md`](./claude-code-message-schema.md)
-- legacy ATM top-level additive compatibility fields are documented in
-  [`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)
-- forward ATM machine-readable schema is documented in
+- ATM additive compatibility fields are documented in
   [`atm-message-schema.md`](./atm-message-schema.md)
 
-Forward architectural rules:
+U.3 body projection rule:
+- terminal `add-details` composes predecessor context into the effective body
+- terminal `supersede` exposes only the replacement body
+- crate-local ownership for the exact projection algorithm lives in
+  [`atm-core/architecture.md`](./atm-core/architecture.md)
 
-- new ATM-only machine-readable data belongs in `metadata.atm`
-- legacy top-level ATM fields remain read-compatible but are deprecated for new
-  write behavior
-- forward ATM-authored alert metadata, including legacy `atmAlertKind` and
-  `missingConfigPath`, belongs under `metadata.atm` as
-  `metadata.atm.alertKind` and `metadata.atm.missingConfigPath`
-- cross-team alias projection stores canonical sender identity in
-  `metadata.atm.fromIdentity`
-- ATM may enrich a Claude-native stored message by adding `metadata.atm`
-  without rewriting the native Claude fields
-- the current live design still uses a shared inbox surface; a separate
-  ATM-native inbox is intentionally deferred to a later architecture phase
-
-Current compatibility rule:
-
-- the current runtime send/alert write path may continue writing legacy
-  top-level alert fields during the compatibility period
-- the metadata.atm alert placement defined above is the forward architectural
-  target and must not be partially implemented without the corresponding
-  migration sprint and tests
-- the owning design rationale for this migration remains
-  [`atm-core/design/dedup-metadata-schema.md`](./atm-core/design/dedup-metadata-schema.md)
-  §2.2 and §3.3
+Architectural rules:
+- Claude JSON is a compatibility surface, not ATM-owned durable truth.
+- No normal ATM runtime/query path may read machine state from Claude JSON.
+- ATM-owned machine state belongs in SQLite-backed state and projections.
+- `metadata.atm` is not an approved namespace and must not survive in active
+  compatibility output.
+- ATM keeps one logical message identity; shared inbox `message_id` is the
+  compatibility wire encoding of that identity.
+- if SQLite persists `message_id`, it stores that same identity in the
+  compatibility wire form rather than as a second ATM-owned id.
+- Compatibility writes may preserve established top-level additive fields, but
+  they must not become the place where new ATM-owned machine state accumulates.
+- removed compatibility fields such as `source_team`, `pendingAckAt`,
+  `acknowledgedAt`, `acknowledgesMessageId`, and `expiresAt` must stay
+  SQLite-only or workflow-only even if older inbox files still contain them.
 
 File-ownership rule:
+- the private watcher/import/export boundary is the only approved place that
+  may read or write the shared Claude inbox surface for ATM-owned behavior
+- list/read/ack/clear/send runtime correctness must come from SQLite-owned
+  state and boundary-owned projections
 
-- Claude-owned inbox content is not an ATM-owned source of truth for ATM-local
-  workflow durability
-- ATM may still have legacy compatibility write paths on the shared inbox
-  surface, but those paths must be documented as compatibility behavior rather
-  than a general pattern to copy
-- ATM-owned machine state should converge on ATM-owned sidecars or equivalent
-  ATM-owned persisted state when stronger write guarantees are required
-- mailbox-local ATM workflow state now lives in the ATM-owned sidecar family at
-  `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
-- `read`, `ack`, and `clear` project mailbox display state by joining
-  Claude-owned inbox records with the ATM-owned workflow sidecar
-- messages without a stable ATM identity remain compatibility-only and may
-  still use the legacy inbox-local workflow fields until a later enrichment
-  phase lands
-
-Canonical read and ack axes are derived from persisted fields and not serialized separately.
-
-Invariant:
-- legacy top-level `message_id` values may be UUID or absent
-- forward ATM metadata `messageId` values must be ULID
-- write-path schema enforcement must reject placing ULID identifiers in the
-  legacy top-level `message_id` slot and must reject placing UUID identifiers
-  in forward `metadata.atm.messageId`
-- read-path validation failure for those ATM-owned fields must log a warning,
-  treat the malformed ATM-owned field as absent for ATM semantics, and continue
-  processing the message when the Claude-native envelope remains usable
-- when ATM authors a new ULID `messageId`, the persisted message `timestamp`
-  must be derived from that ULID creation time so identifier ordering and
-  timestamp ordering are aligned
-- legacy or externally imported records may still lack ATM machine identifiers
-- such records must be preserved as-is until enriched
+Canonical read and ack axes are derived from SQLite-backed persisted state and
+not serialized separately in Claude JSON.
 
 ## 6. Public Service APIs
 
@@ -634,12 +761,19 @@ Supersession note:
 - the API shape in this section remains relevant
 - the file-append-first ordering details below are compatibility-line behavior
   for the pre-Phase-Q runtime
-- the authoritative Phase Q send ordering is defined in §21 as:
+- the authoritative current send ordering is defined in §21 as:
   `SQLite commit -> Claude export / remote daemon handoff`
 
 Public entrypoint:
 
-`send::send_mail(request: SendRequest, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+`send::send_mail_via_store(request: SendRequest, store: &dyn SendStore, ingress: &dyn InboxIngress, exporter: &dyn InboxExport, observability: &dyn ObservabilityPort) -> Result<SendOutcome, AtmError>`
+
+Current runtime note:
+- Q.2 replaced the earlier `send_mail(request, observability)` entrypoint with
+  `send_mail_via_store(...)`
+- the store, ingress, and exporter parameters make the SQLite-first write,
+  ingest-before-export, and projection/export boundaries explicit at the public
+  service seam
 
 `SendRequest` contains:
 - home directory
@@ -667,7 +801,7 @@ Public entrypoint:
 | `agent` | `String` | Resolved target recipient. |
 | `sender` | `String` | Resolved sender identity. |
 | `outcome` | `&'static str` | Delivery result such as `sent` or `dry_run`. |
-| `message_id` | `Uuid` | ATM-authored UUID v4 for the send operation. |
+| `message_id` | `MessageId` | The one logical ATM message identity rendered in the compatibility form used by ATM and Claude-compatible consumers. |
 | `requires_ack` | `bool` | Whether the message requires acknowledgement. |
 | `task_id` | `Option<String>` | Optional task identifier persisted on the message. |
 | `summary` | `Option<String>` | Generated or caller-supplied summary text. |
@@ -689,10 +823,14 @@ Normal send JSON output includes:
 - `task_id`
 - `warnings` when send completed in a degraded but permitted mode
 
+For the ATM-authored compatibility wire shape, `message_id` is the shared
+inbox identifier used by ATM and Claude-compatible consumers.
+
 Dry-run send JSON output includes:
 - `action = "send"`
 - `agent`
 - `team`
+- `message_id`
 - `message`
 - `dry_run = true`
 - `requires_ack`
@@ -703,10 +841,7 @@ Send ordering rules:
 - resolve target address, team existence, and agent membership as one address-resolution stage before mailbox path selection
 - enter the atomic append boundary before final inbox mutation
 - validate message text inside the atomic append boundary
-- current legacy top-level `message_id` generation remains supported for live
-  compatibility
-- forward metadata schema generation must create the ATM ULID `messageId`
-  first and derive the persisted message `timestamp` from it
+- generate the one logical message identity inside the atomic append boundary
 - perform duplicate suppression and final append inside the same atomic append boundary
 
 #### 6.1.1 Idle-Notification Lifecycle
@@ -748,81 +883,105 @@ Missing-team-config fallback is limited to `send`:
 - repair notices must be deduplicated by unresolved condition so repeated sends
   do not flood inboxes
 
-### 6.2 Read Service
+### 6.2 Queue Inspection Services
 
-Public entrypoint:
+Phase S.5 splits queue inspection into two command surfaces:
 
-`read::read_mail(query: ReadQuery, observability: &dyn ObservabilityPort) -> Result<ReadOutcome, AtmError>`
+- `atm list` finds messages through a bounded metadata query
+- `atm read` opens one full message
 
-`ReadQuery` contains:
+Target service shape:
+
+- `list::list_mail(query: ListQuery, observability: &dyn ObservabilityPort)
+  -> Result<ListOutcome, AtmError>`
+- `read::read_mail(query: ReadQuery, observability: &dyn ObservabilityPort)
+  -> Result<ReadOutcome, AtmError>`
+
+Shared query model:
 - home directory
 - current directory
 - actor override
 - optional target address
 - team override
-- selection_mode
-- seen_state_filter
-- seen_state_update
-- ack_activation_mode
-- limit
-- sender_filter
-- timestamp_filter
+- sender filter
+- timestamp filter
+- task filter
+- contains filter
+- queue-state filters (`unread`, `pending_ack`, `all`)
+
+`ListQuery` adds:
+- optional limit
+
+`ReadQuery` adds:
+- optional exact `message_id`
 - optional timeout
+- read-mutation controls such as seen-state update and ack activation
 
-`seen_state_filter` is false when `--no-since-last-seen` is set. `--all` bypasses this filter regardless of the stored value.
+`ListOutcome` contains:
+- action
+- resolved team
+- resolved agent
+- messages
+- count
+- bucket_counts
 
-`seen_state_update` is false when `--no-update-seen` is set.
-
-Timeout rule:
-- if the requested selection is already non-empty after filtering and selection-mode application, return immediately
-- otherwise wait for a newly eligible message until the timeout expires
+Each list row contains:
+- `message_id`
+- `summary`
+- `from`
+- `timestamp`
+- `read`
+- `pending_ack`
+- `task_id`
 
 `ReadOutcome` contains:
 - action
 - resolved team
 - resolved agent
-- selection_mode
-- history_collapsed
-- mutation_applied
-- messages
+- selected message
+- `selected_message_id`
+- `match_count`
+- `additional_match_count`
+- `mutation_applied`
 - bucket_counts
 
-`ReadOutcome.bucket_counts` exposes:
-- unread
-- pending_ack
-- history
+Queue-inspection architectural rules:
+- default `atm list` must stay bounded by query behavior rather than
+  materializing full mailbox history and truncating it at render time
+- bare `atm read` must return one most-recent unread actionable message, with
+  pending-ack messages prioritized ahead of non-ack unread messages
+- selector-driven `atm read` must return the most recent match and report
+  additional matches in metadata rather than returning multiple full bodies
+- selector-driven `atm list` and `atm read` operate on logical current
+  messages; successor/update chains are collapsed to their terminal node before
+  result selection or row shaping
+- `--task <task-id>` selection happens after that terminal-node collapse so one
+  logical task thread does not surface as several superseded matches
+- `--contains` applies to both summary text and full durable message body text
+- summary/count queries must remain separable from full-body detail fetch
 
-Read deduplication rule:
+Deduplication rule:
 - collapse multiple entries with the same non-null `message_id` to the most
   recent entry before bucket selection and output rendering
 - when timestamps tie, keep the later encountered inbox record
 
-Read/enrichment rule:
-- when a message needs ATM workflow semantics but lacks ATM-owned machine
-  metadata, ATM may enrich the original stored message additively
-- enrichment must be idempotent and must not rewrite native Claude fields
-  except for the explicitly documented cross-team alias projection carve-out on
-  `from`, which also requires canonical sender identity in
-  `metadata.atm.fromIdentity`
+Read rule:
+- durable workflow semantics come from SQLite-backed state, not from ATM-owned
+  metadata read back out of Claude JSON
 
-The read service derives `MessageClass` from `(ReadState, AckState)` and applies display-bucket selection to the derived class, not to raw persisted fields.
+The queue-query services derive `MessageClass` from `(ReadState, AckState)` and
+apply display-bucket selection to the derived class, not to raw persisted
+fields.
 
-For merged inbox surfaces, any displayed-message mutation must be written back to the physical inbox file that contributed the displayed record. The merged view is a read projection, not a synthetic write target.
-
-The CLI JSON output mirrors the current contract:
-- `action`
-- `team`
-- `agent`
-- `messages`
-- `count`
-- `bucket_counts`
-- `history_collapsed`
+For merged inbox surfaces, any displayed-message mutation must be written back
+to the physical inbox file that contributed the displayed record. The merged
+view is a read projection, not a synthetic write target.
 
 ### 6.3 Ack Service
 
 Public entrypoint:
 
-`ack::ack_mail(request: AckRequest, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError>`
+`ack::ack_mail<S>(request: AckRequest, store: &S, observability: &dyn ObservabilityPort) -> Result<AckOutcome, AtmError> where S: AckStore`
 
 `AckRequest` contains:
 - home directory
@@ -840,14 +999,46 @@ Public entrypoint:
 - optional task id from the acknowledged message
 - reply target
 - reply message id
+  `AckOutcome.reply_message_id` uses the one logical message identity in the
+  CLI/output-compatible form
 - reply text
 - warnings: Vec<String>
-- Phase Q addition: `warnings` carries best-effort post-send-hook diagnostics
+- Current runtime addition: `warnings` carries best-effort post-send-hook diagnostics
   for `atm ack` without changing the successful acknowledgement state
 
 The ack service is responsible for the legal transition from `(Read, PendingAck)` to `(Read, Acknowledged)` plus the reply append.
 
-When the source message came from an origin inbox file in the merged surface, the acknowledgement writeback must update that source file atomically rather than projecting the change onto a different inbox file.
+Phase R continuation rules:
+- `atm ack` emits exactly one visible reply and that reply must hardcode
+  `requires_ack = false`
+- acknowledgement replies must never request acknowledgement themselves
+- compatibility/export surfaces encode successor metadata with
+  `parentMessageId` and `threadMode`
+- message update chains are linear and terminal-node driven:
+  - `add-details` appends context
+  - `supersede` replaces the prior message as the effective current one
+- the logical-current projection is mode-aware:
+  - terminal `add-details` keeps the terminal id but composes the still-valid
+    predecessor context into the current body
+  - terminal `supersede` keeps only the replacement body
+- only the original sender may append successors to the chain
+- one acknowledgement clears the chain through the current terminal node
+- the root message establishes whether the chain is ack-required and
+  successors inherit that ack class
+- if a later successor arrives on an already acknowledged ack-required chain,
+  the chain becomes pending again until the new terminal node is acknowledged
+- ephemeral messages are standalone, time-bounded rows only:
+  - they use `expires_at`
+  - they are not updatable
+  - they may not participate in successor chains
+  - they are cleaned up by periodic expiry sweep rather than first-read
+    deletion
+  - once read, they hide from normal reads but remain visible through
+    `--view-all` until expiry
+
+The current SQLite/daemon architecture supersedes the legacy source-file writeback rule: SQLite is the
+authoritative durable store for ack state, while inbox/file-surface projection
+is deferred to the Q.4 export/runtime path.
 
 ### 6.4 Clear Service
 
@@ -954,7 +1145,7 @@ Public entrypoint:
 - remediation
 
 The report model should reuse the current doctor command’s severity/finding
-structure where useful, but in the Phase Q target architecture it must include
+structure where useful, but in the current SQLite/daemon architecture it must include
 daemon/runtime checks rather than assuming a daemon-free local-only model.
 
 Roster output rules:
@@ -964,7 +1155,9 @@ Roster output rules:
 - show extra runtime members after the baseline set
 - snapshot `~/.claude/teams/*/inboxes/*.lock` at doctor start and end; any lock
   path present in both snapshots is stale and should surface as
-  `ATM_WARNING_STALE_MAILBOX_LOCK` with `rm -f <path>` recovery guidance
+  `ATM_WARNING_STALE_MAILBOX_LOCK` with recovery guidance that explicitly marks
+  the lock as a transitional compatibility diagnostic rather than a current-runtime
+  mail-correctness dependency
 
 ### 6.8 Team Recovery Services
 
@@ -984,19 +1177,24 @@ Architectural rules:
   ATM home directory
 - `add-member` is the retained local roster-repair path and must reject
   duplicates before mutating config
-- `backup` snapshots current team config, inboxes, and the ATM team task
-  bucket into a timestamped snapshot directory
+- `backup` snapshots current team config, the ATM-owned `.atm-state` workflow
+  compatibility state, a team-scoped export from the host-scoped SQLite
+  database at `~/.atm/db/mail.db`, inboxes, and the ATM team task bucket into
+  a timestamped snapshot directory
 - inbox backup excludes transient mailbox `*.lock` sentinels, dotfiles, and
   restore markers
 - `restore` is a local recovery path and must:
   - preserve the current team-lead entry and `leadSessionId`
   - restore only missing non-lead members
   - clear runtime-only restored-member state before persistence
+  - restore the ATM-owned `.atm-state` workflow compatibility state from the
+    chosen snapshot when present
+  - restore the selected team's durable records into the host-scoped SQLite
+    database from the chosen snapshot
   - restore non-lead inboxes from the chosen snapshot
-  - sweep stale mailbox `*.lock` sentinels before restored inbox files are copied in
-  - treat stale-sentinel sweep as result-bearing: if that cleanup hits a
-    read-only-filesystem failure, restore must stop and surface
-    `MailboxLockReadOnlyFilesystem` instead of warning and continuing
+  - treat stale mailbox `*.lock` sentinels as compatibility-only diagnostics;
+    restore must not require sweeping them in order to restore durable ATM
+    state or inbox compatibility files
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
 - Claude Code project task-list restoration remains separate from the retained
@@ -1019,9 +1217,9 @@ Architectural rules:
 
 Supersession note:
 - the stage list below describes the retained file-backed line
-- the Phase Q target pipeline is `ingest/reconcile -> SQLite projection ->
+- the current SQLite/daemon pipeline is `ingest/reconcile -> SQLite projection ->
   optional state mutation -> return outcome`
-- once Phase Q lands, SQLite projection rather than merged file truth becomes
+- in the current architecture, SQLite projection rather than merged file truth becomes
   authoritative for `read`
 
 The read pipeline stages are:
@@ -1054,7 +1252,7 @@ The ack pipeline stages are:
 7. emit command lifecycle records
 8. return outcome
 
-This stage list describes the pre-Phase-Q compatibility line. The Phase Q
+This stage list describes the pre-SQLite compatibility line. The current
 target pipeline is superseded by the SQLite SSOT and daemon-boundary design in
 Section 21.
 
@@ -1064,13 +1262,13 @@ The clear pipeline stages are:
 1. resolve actor identity and target inbox
 2. load the persisted inbox surface
 3. classify each message into read axis and ack axis
-4. compute clear eligibility from the two-axis model plus pending-ack override
+4. compute clear eligibility from the two-axis read and acknowledgement model
 5. apply optional age and idle-only filters
 6. atomically persist the kept set when not in dry-run mode
 7. emit command lifecycle records
 8. return outcome
 
-This stage list describes the pre-Phase-Q compatibility line. The Phase Q
+This stage list describes the pre-SQLite compatibility line. The current
 target pipeline is superseded by the SQLite SSOT and daemon-boundary design in
 Section 21.
 
@@ -1103,7 +1301,7 @@ The doctor pipeline stages are:
 
 Supersession note:
 - this section describes the retained mailbox/file-storage line
-- Phase Q supersedes it as the target architecture with SQLite durable truth
+- the current SQLite/daemon architecture supersedes it with SQLite durable truth
   and Claude inbox files as compatibility ingress/export only
 - any mailbox-lock or file-truth rule in this section is transitional unless
   restated in §21
@@ -1144,7 +1342,7 @@ uses `is_ack = false` for `atm send` and `is_ack = true` for `atm ack`, may
 optionally emit one structured stdout result for observability, and never rolls
 back a successful message write on failure or timeout.
 
-Phase Q hook-note:
+Current runtime hook-note:
 - once roster and pane mapping truth move to SQLite, the send path should place
   the authoritative recipient pane id into `ATM_POST_SEND.recipient_pane_id`
 - post-send hook implementations should prefer that payload field over local
@@ -1250,10 +1448,27 @@ Implementation rules:
   boundary
 - `atm` initializes the shared logger exactly once per process
 - the shared file sink is the authoritative retained log store for `atm log`
+- the default ATM-owned retained log file is `~/.atm/logs/atm.log.jsonl`
+- `ATM_LOG_DIR` overrides the exact retained log directory
+- retained log path ownership is host-scoped and independent of `ATM_HOME`
 - the shared console sink remains opt-in so it does not contaminate normal
   command output
 - the initial-release dependency is the published crates.io version
   `sc-observability = "1.0.0"`
+- the default retained logger baseline must include:
+  - daemon lifecycle `info!` events
+  - every subsystem `warn!` event
+  - every subsystem `error!` event
+- the daemon event-emission hot path must not perform per-event retained file
+  reopen/append/flush work inline; retained JSONL persistence must cross one
+  bounded in-memory queue into a background maintenance worker instead
+- the synchronous daemon success path is budgeted for one bounded in-memory
+  handoff only; retained logging must not delay request/lifecycle completion on
+  file reopen, append, flush, rotate, or prune work
+- retained-log rotation and pruning may run only on that background
+  maintenance worker, not on the synchronous daemon event-emission path
+- retained-log pruning must use a bounded work budget per maintenance tick; it
+  must not rely on an unbounded "scan until wall-clock deadline" strategy
 
 ### 14.3 Failure Diagnostic Rules
 
@@ -1267,6 +1482,61 @@ Required diagnostic behavior:
 - degraded recovery warnings that continue the command must also log stable
   error codes
 - command success-only logging is insufficient for the retained architecture
+
+### 14.4 Smoke And Coverage Reporting Architecture
+
+Smoke automation is a repo-owned execution/reporting surface, not an ad hoc
+operator script bundle.
+
+Ownership and layout:
+
+- operator skill surface:
+  - `.claude/skills/smoke-test/`
+- smoke implementation:
+  - `scripts/smoke/`
+- smoke report templates:
+  - `templates/smoke-report/`
+- smoke report artifacts:
+  - `reports/smoke/`
+- coverage implementation:
+  - `scripts/coverage/`
+- coverage report templates:
+  - `templates/coverage-report/`
+- coverage report artifacts:
+  - `reports/coverage/`
+
+Command architecture:
+
+- `just smoke`
+  - defaults to the normal smoke lane
+- `just smoke fast`
+  - runs the clean-room happy-path lane
+- `just smoke thorough`
+  - runs the full CLI/checklist lane
+- `just test coverage`
+  - runs coverage reporting only and must remain separate from plain
+    `just test`
+
+Artifact architecture:
+
+- smoke and coverage each keep tracked latest markdown reports
+- smoke and coverage each also write gitignored timestamped artifacts using
+  the same timestamp convention
+- smoke execution produces one canonical JSON payload per run and renders the
+  human-readable markdown reports from that payload
+- coverage execution produces one canonical JSON payload per host-platform run,
+  renders the matching tracked latest markdown report, and leaves the other
+  tracked platform report unchanged unless only a placeholder exists
+- Linux coverage reporting is an explicit deferred/unsupported platform in the
+  current Phase Z line; the coverage runner must fail clearly on Linux instead
+  of emitting misleading tracked-latest artifacts
+
+Logging architecture:
+
+- smoke/debug mode may enable detailed lifecycle/send/read/ack/nudge event
+  visibility so retained-log analysis can prove the happy path explicitly
+- routine production logging remains on the normal retained baseline and must
+  not log every ordinary send/read/ack success at default operator verbosity
 
 ## 15. Error Model
 
@@ -1295,6 +1565,7 @@ Required families:
 - identity
 - team not found
 - agent not found
+- store
 - mailbox read
 - mailbox write
 - file policy
@@ -1317,7 +1588,7 @@ The single source of truth for ATM-owned error codes is:
 Persisted-data errors should additionally carry file/entity/parser context so
 CLI surfaces can report the exact failing document and scope.
 
-Phase Q error-model rules:
+Current runtime error-model rules:
 - `AtmErrorCode` must not use wildcard or catch-all variants where a more
   specific code can be named
 - every documented `AtmErrorCode` must carry one recoverability classification
@@ -1334,7 +1605,7 @@ If a trait becomes necessary:
 - prefer a sealed trait
 - verify object safety before stabilization
 
-Phase Q boundary rule:
+Current runtime boundary rule:
 - all I/O-owning boundary traits are sealed by default
 - opening a boundary for external implementation requires explicit design
   review and crate-level documentation of the exception
@@ -1675,29 +1946,40 @@ sidecar move, and the current architecture documents the post-P.5 executed
 state.
 
 Current executed rule:
-- ATM-owned workflow durability for identified mailbox messages is written to
-  `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
-- `send` authors forward `metadata.atm.messageId` ULIDs for ATM-authored
-  records and seeds the corresponding sidecar entry
-  - QA criterion (a) for ULID assignment is verified through `send_mail`
-    coverage; the helper that writes `metadata.atm.messageId` remains an
-    internal `pub(crate)` workflow API and is not exposed to integration tests
-- `read` projects mailbox display state from the sidecar and only rewrites the
-  inbox file for legacy compatibility records that still lack a stable ATM
-  identity
-- `ack` writes the reply inbox file plus the source/reply workflow-state files
-  under one deterministic lock plan
-- `clear` classifies removable messages from the projected workflow view and
-  removes matching workflow-state entries when the inbox record is deleted
+- ATM-owned mailbox workflow durability lives in SQLite-backed state.
+- mutable per-message mailbox state is owned by the explicit
+  `mail_message_states` table rather than split visibility/ack storage.
+- `send` commits durable message/content state first.
+- `read`, `ack`, and `clear` read and mutate the SQLite-backed state model.
+- Claude inbox export is a compatibility projection only.
 
-Current executed limitation:
-- `send` and the missing-config team-lead notice path still seed workflow state
-  via an atomic owner-routed `load -> mutate -> save` sequence instead of a
-  dedicated freshness-proving helper
-- that means the sidecar family is already the source of truth, but concurrent
-  same-recipient send-side seeding is not yet hardened to the same
-  lock/reload/recompute standard used by mailbox read/ack/clear
-- P.6 is the tracked hardening continuation for that specific gap
+Current executed requirement:
+- any remaining code or docs that still describe workflow sidecars or
+  `metadata.atm.messageId` are cleanup debt and must be removed in Phase U.
+
+Unified-state ownership notes:
+- `mail_messages` keeps immutable content only
+- `mail_message_states` owns mutable mailbox/runtime state behind the
+  `message_key` foreign-key relationship
+- `expires_at` moved out of `mail_messages` and now lives only on
+  `mail_message_states`
+- deleted-row visibility is admin-only; normal list/read/count queries must
+  exclude rows with `deleted_at`
+- the earlier split model (`mail_visibility_states` plus `ack_state`) is
+  retired and must not be reintroduced under new names
+
+### 18.4.4 Phase U Provenance Reduction
+
+Phase U removed weak round-trip provenance from the durable mailbox contract.
+
+Current executed rule:
+- `imported_from` is removed from `MailStoreMessageRecord` durable truth and is
+  no longer part of the mailbox-row schema
+- `recorded_at` remains SQLite-owned ingest timing in `atm-rusqlite`, not
+  caller-supplied message data
+
+Governing ADR:
+- `docs/adr/ADR-005-host-scoped-sqlite-state-root.md`
 
 ### 18.5 New Error Codes
 
@@ -1756,11 +2038,10 @@ Single-write-path guardrail:
 
 Current owner-layer boundaries:
 - Claude-owned inbox compatibility surface:
-  `mailbox::store::observe_source_files(...)` for observational snapshots,
-  `mailbox::store::with_locked_source_files(...)` for shared mailbox
-  read/ack/clear lock+reload orchestration, and
-  `mailbox::store::commit_mailbox_state(...)` /
-  `mailbox::store::commit_source_files(...)` as the persistence leaf
+  retained mailbox commands now cross the `RetainedServiceRuntime` seam and
+  delegate through injected store adapters; low-level source-file discovery,
+  lock/reload orchestration, and persistence remain internal leaf helpers
+  behind that seam during the Phase R store transition
 - ATM-owned source-of-truth state:
   `workflow::{load_workflow_state(...), save_workflow_state(...),
   project_envelope(...), remember_initial_state(...),
@@ -1952,9 +2233,9 @@ Phase O adds three architecture-level hardening decisions:
      colliding on the temp-file name while preserving the target basename for
      operator debugging
 
-## 21. Phase Q Runtime Architecture
+## 21. Current SQLite Runtime Architecture
 
-Phase Q supersedes the mailbox-lock architecture as the target design for ATM
+The current SQLite/daemon architecture supersedes the mailbox-lock architecture as the target design for ATM
 mail correctness. The file-based mailbox line remains an interim compatibility
 surface only.
 
@@ -1965,11 +2246,11 @@ ATM moves to a split state model:
 - SQLite is the authoritative durable store for:
   - messages
   - ack/task state
-  - read/clear visibility state
+  - read/clear/delete message state
   - team roster
 - daemon memory is the authoritative live runtime view for:
   - current agent status
-  - `pid`: durable SQLite truth cached in daemon memory as the primary
+  - `pid`: transient daemon-owned process identity cached as the primary
     liveness field
   - `last_active_at`: daemon-memory-only runtime state used for live overlays
 
@@ -1978,43 +2259,62 @@ not the live truth.
 
 ### 21.1.1 SQLite Schema Contract
 
-The Phase Q target architecture uses one authoritative schema contract.
+The Phase R first implementation uses one authoritative schema contract with
+concrete SQLite table names:
 
-Minimum tables:
-- `messages`
-- `ack_state`
-- `message_visibility`
-- `tasks`
-- `team_roster`
-- `inbox_ingest`
+- `mail_messages`
+  - logical durable message store
+  - stores the full `MessageEnvelope` in `envelope_json`
+  - also stores queryable message columns:
+    - `from_agent`
+    - `message_text`
+    - `summary`
+    - `message_at`
+    - compatibility `message_id`
+- one canonical mutable message-state table
+  - logical `message_state` projection
+- `mail_ingest_replay_states`
+  - logical `inbox_ingest` replay/high-water projection
+- one canonical roster/member table
+  - per-member durable projection keyed by `(team_name, agent_name)`
 
 Minimum key rules:
 - `message_key` is the canonical ATM durable message identity
 - `message_key` must be source-typed:
   - `atm:<ulid>` for ATM-authored rows
   - `ext:<fingerprint>` for imported external rows without ATM ids
-- imported legacy `message_id` / forward `metadata.atm.messageId` values map
-  into that canonical identity model rather than replacing it
+- the shared inbox `message_id` is the compatibility wire encoding of the one
+  logical ATM message identity
 
 Minimum index/constraint rules:
 - unique identity enforcement on `message_key`
-- dedupe index for imported external/legacy identities
+- dedupe index for imported external/compatibility identities
+- one-successor enforcement on `(team, agent, parent_message_id)` for threaded
+  update chains
 - lookup indexes for:
   - recipient/team mailbox projection
   - task lookup
-  - visibility projection
+  - message-state projection
   - ingest replay/high-water tracking
 
-Minimum `team_roster` durable fields:
+Minimum canonical roster-member durable fields:
 - `team_name`
 - `agent_name`
+- `member_kind`
+- `harness`
+- `agent_type`
+- `model`
+- `metadata_json`
 - `recipient_pane_id TEXT NULL`
   - authoritative post-send-hook pane mapping when known
-  - updated through the roster/registration path rather than rediscovered from
-    local files after Phase Q migration
-- `pid INTEGER NULL`
-  - durable roster truth for the current owning process identity
-  - cached by the daemon as the primary liveness field
+
+`pid` is not part of the canonical roster-member durable schema. It remains
+transient daemon-owned runtime state only.
+
+Schema-governance rule:
+- any SQLite schema change is a contract change
+- schema changes require explicit user approval plus synchronized requirements,
+  architecture, and boundary doc updates before implementation is accepted
 
 ### 21.1.2 SQLite Runtime Invariants
 
@@ -2024,6 +2324,10 @@ detail.
 Required invariants:
 - `journal_mode = WAL`
 - `foreign_keys = ON`
+- schema bootstrap is deterministic, idempotent, and runs once per database
+  root before normal command operations use the durable store
+- per-operation connection acquisition may reapply runtime pragmas, but must
+  not rerun full schema bootstrap on every connection use
 - mutating ATM flows use explicit transactions
 - no normal command path relies on implicit autocommit as its correctness
   model
@@ -2037,6 +2341,12 @@ Required architectural rules:
 - re-export/replay is keyed by durable `message_key`
 - if daemon-managed retry/re-export state must survive crash, it is stored in
   SQLite with a bounded expiry/deadline rather than remaining RAM-only
+- remote replay rows live in the host-scoped SQLite root and are keyed by
+  mailbox identity plus durable `message_key` so startup resume can replay
+  pending remote handoff without duplicating committed local state
+- daemon startup is fail-closed when the persisted replay store cannot be
+  opened, because the bounded replay-resume sweep is part of the serving
+  startup contract rather than an optional degraded-mode feature
 - WAL checkpoint is part of graceful shutdown, but recovery correctness must
   not depend on graceful shutdown having succeeded
 - persisted retry state must not become a long-lived remote outbox; expired
@@ -2051,9 +2361,37 @@ Claude-owned inbox JSONL files remain required for:
 Architectural rule:
 - JSONL is ingress/egress compatibility only
 - JSONL is not ATM's authoritative durable mail state
+- ATM-authored JSONL exports are a bounded compatibility projection over the
+  durable SQLite message body
+- the default ATM-authored JSONL body export cap is `128 KiB`
+- config `[atm].claude_jsonl_body_export_max_bytes` may lower that cap,
+  including `0` for stub-only ATM-authored export
 
 `config.json` remains a team-ingress surface, but roster truth moves to
 SQLite.
+
+### 21.2.1 Delivery Policy Placement
+
+Compatibility export and notification policy must not remain scattered through
+command code.
+
+Architectural rules:
+
+- one central delivery-policy coordinator dispatches write-affecting events by:
+  - event family
+  - canonical roster `harness`
+- the coordinator is not a universal mail state machine; it is a dispatcher
+  and policy gate
+- event legality remains in dedicated event-family state machines
+- at minimum the runtime must model:
+  - `NewMessageStateMachine`
+  - `ThreadUpdateStateMachine`
+- `NewMessageStateMachine` must expose two auditable harness paths:
+  - Claude harness
+  - non-Claude harness
+- `ThreadUpdateStateMachine` remains separate because supersede/update legality
+  differs materially from standalone send
+- write-affecting transitions must emit observable transition records
 
 ### 21.3 Information Flow
 
@@ -2064,6 +2402,8 @@ There are three distinct paths:
    - ATM imports through one owned inbox-ingress boundary
    - imported records become durable in SQLite
    - replay is idempotent and parseable rows are not silently dropped
+   - ATM-authored oversized-body exports replace JSONL `text` with exactly
+     `atm read --message-id <id>` while keeping the full body durable in SQLite
 
 2. Native agent path
    - native agent/plugin traffic does not use JSONL
@@ -2076,16 +2416,93 @@ There are three distinct paths:
    - sender-side daemons do not write remote host JSONL directly
    - successful remote delivery requires remote daemon acceptance
 
+Projection-awareness rule:
+- watcher/reconcile logic must treat re-observed ATM-authored compatibility
+  projections for the same logical message as idempotent state rather than new
+  mail
+- re-observing the same ATM retrieval stub for the same `message_id` must not
+  trigger a new logical message import or notification loop
+
+### 21.3.1 New-Message Failure Contract
+
+The first daemon + SQLite release keeps one exact outward-delivery rule for new
+messages.
+
+Architectural rules:
+
+- for `RosterHarness::ClaudeCode`
+  - SQLite success:
+    - original message flow completes
+    - compatibility append runs
+    - normal nudge runs
+  - SQLite failure:
+    - the original message is still appended to the Claude inbox
+    - ATM appends a second `atm-system@<team>` error message to the Claude
+      inbox
+    - the notification path mirrors both messages
+  - compatibility append failure after SQLite success:
+    - post-send-hook execution is the fallback notification path
+- for non-Claude harnesses
+  - no compatibility JSONL append occurs
+  - on SQLite failure, the same original-plus-error-message rule applies
+    through the non-Claude delivery path rather than JSONL append
+
+### 21.3.2 Phase Yb Corrective Rule
+
+The accepted `integrate/phase-Y` baseline is not yet sufficient to claim that
+the architectural rule above is implemented cleanly.
+
+Phase `Yb` therefore tightens the architecture further:
+
+- Claude and non-Claude new-message machines must expose the same interface
+- both harness families must produce the same logical payload set:
+  - success -> original message only
+  - SQLite failure -> original message + `atm-system@<team>` error message
+- the only harness-specific difference may be the selected delivery target and
+  transport executor
+- the authoritative typed seam is:
+  - `atm_core::delivery_plan::DeliveryPlan`
+  - `atm_core::delivery_plan::ReplyDeliveryPlan`
+  - `atm_core::delivery_execution::execute_delivery_plan(...)`
+  - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+  - `atm_core::delivery_execution::NonClaudeOutboundDeliveryWriter`
+  - `atm_core::boundary::NonClaudeOutbound`
+- no command, ack, or persistence layer may branch on harness after the
+  machine has produced its delivery plan
+- post-send-hook execution remains notification-only and must not stand in for
+  real non-Claude outbound delivery
+
+Authoritative follow-on planning docs:
+
+- [phase-Yb/plan-phase-Yb.md](./phase-Yb/plan-phase-Yb.md)
+- [phase-Yb/removal-ledger.md](./phase-Yb/removal-ledger.md)
+- [phase-Yb/message-path-call-stacks.md](./phase-Yb/message-path-call-stacks.md)
+- [adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md](./adr/ADR-013-unified-delivery-plan-and-state-machine-ownership.md)
+
 ### 21.4 One Interface, Two Transport Implementations
 
-Phase Q uses one daemon API with two production transport adapters plus one
+ATM uses one daemon API with two production transport adapters plus one
 test transport:
 
-- same-host: Unix domain socket
+- same-host: one cross-platform local IPC contract
+  - Unix implementation: Unix domain socket
+  - Windows implementation: named-pipe-backed local IPC
 - cross-host: TCP/TLS
 - tests: in-process `test-socket`
 
 This is one protocol with multiple implementations, not multiple systems.
+
+Supported-platform parity rule:
+- same-host daemon functionality is not complete until the Unix and Windows
+  implementations both satisfy the same retained product behavior
+- platform-specific implementation differences are allowed only in:
+  - same-host local IPC adapter internals
+  - lifecycle-control source adapter internals
+  - host-ownership adapter internals
+- business logic, dispatcher routing, replay/state handling, health
+  projection, and runtime-lane behavior must not diverge by operating system
+- compile-only support or typed unsupported-path stubs are acceptable only as
+  temporary implementation states and must not be documented as final support
 
 Test-transport rule:
 - `test-socket` implements the same dispatcher/handler contract without real
@@ -2113,7 +2530,7 @@ Daemon responsibilities:
 - route selection
 - live status cache
 - daemon-facing diagnostics and health queries used by `atm doctor`
-- watch/reconcile runtime if enabled
+- watch/reconcile runtime
 
 Daemon non-responsibility:
 - it must not become the only home of ATM business logic
@@ -2124,6 +2541,8 @@ Auto-start path:
 - if the daemon is absent, the CLI/runtime path may perform exactly one
   auto-start attempt
 - after one auto-start attempt, the CLI/runtime path retries connect once
+- daemon startup waits at most `10s` for control-state publication
+  (`AUTO_START_PUBLISH_TIMEOUT`)
 - if the daemon remains unavailable, the command fails with a typed actionable
   error
 - there is no silent fallback from the production path to direct SQLite or
@@ -2131,7 +2550,7 @@ Auto-start path:
 
 ### 21.6 Strict I/O Ownership
 
-Phase Q's key architectural rule is strict ownership of all external I/O.
+The current runtime's key architectural rule is strict ownership of all external I/O.
 
 Required ownership model:
 - only the store subsystem touches SQLite
@@ -2167,12 +2586,12 @@ Minimum method set:
 - open/bootstrap store
 - run transaction
 - upsert/load message rows
-- upsert/load ack/visibility state
+- upsert/load unified message state
 - record/load ingest replay state
 - return health/readiness snapshot
 
 Scope rule:
-- `MailStore` owns message rows plus read/ack/visibility state tied directly to
+- `MailStore` owns message rows plus unified read/ack/delete/expiry state tied directly to
   message lifecycle
 - `MailStore` is not the long-term owner of generic task-orchestration or
   daemon-status domains
@@ -2205,9 +2624,14 @@ Object-safety rule:
   SQLite types
 
 Minimum method set:
-- replace/load roster rows
+- replace/load canonical roster member rows
 - query roster membership for routing/validation
 - return roster health/readiness snapshot
+
+Ownership rule:
+- runtime `pid` continuity is transient daemon-owned state and must not become
+  part of durable roster truth
+- `config.json` remains an ingress document, not a general runtime-read truth
 
 #### InboxIngress
 
@@ -2312,6 +2736,13 @@ Minimum method set:
 - trigger owned ingress/reconcile handler
 - shut down watcher cleanly
 
+Current implementation note:
+- `R.17` implements this as a daemon-owned polling subscription runtime plus a
+  separate debounce/coalesce reconcile worker
+- watch refresh owns only source-path discovery and cached batches
+- reconcile triggers inbox ingress and notifier callbacks only through their
+  declared boundaries
+
 Boundary rule:
 - the watcher/reconcile subsystem owns filesystem watch events only
 - it must not perform SQL directly
@@ -2334,9 +2765,16 @@ Minimum method set:
 - report live status update
 - return typed backpressure / unavailable results
 
+Current implementation note:
+- `R.17` implements a daemon-owned queued notifier worker with typed
+  unavailable/backpressure failures
+- notification delivery is no longer a tracing-only placeholder
+- the notifier queue is bounded to `64` events so plugin-local traffic fails
+  closed with backpressure rather than growing an unbounded daemon-side buffer
+
 ### 21.6.2 Structured Error And Observability Boundaries
 
-Phase Q must keep production runtime failure handling and observability
+The current runtime must keep production failure handling and observability
 structured at compile time.
 
 Architectural rules:
@@ -2348,15 +2786,21 @@ Architectural rules:
 - when reviewing transitional compatibility paths, apply these structured-error
   rules together with the pre-Phase-Q pipeline stage lists and their
   supersession notes; see Sections 8 and 9 for the Ack and Clear pipeline stage
-  lists and the inline notes that supersede them under Phase Q
+  lists and the inline notes that supersede them under the current runtime
 - SQLite-specific transaction, busy-timeout, shutdown-checkpoint, and
   `rusqlite` blocking-I/O rules are defined in
   [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
-  Sections 4, 5, and 6 and are part of this same Phase Q error boundary
+  Sections 4, 5, and 6 and are part of this same current-runtime error boundary
 - `atm` owns CLI-side `sc-observability` bootstrap and CLI event emission
 - `atm-daemon` owns daemon/runtime/transport `sc-observability` emission
 - `atm-core` owns ATM event and error models above the shared observability
   boundary
+- daemon-side observability remains bottom-of-stack:
+  - the shared daemon observability layer imports no daemon subsystem types
+  - daemon subsystems emit typed daemon event payloads through a sealed,
+    object-safe injected trait
+  - `AtmMessageId` and `TaskId` remain typed identifiers in daemon event
+    payloads; raw string semantic identifiers are not the Phase V target shape
 - native plugins may emit plugin-local diagnostics, but daemon-owned runtime,
   store, ingest, and transport events remain daemon-owned observability sinks
 - production runtime diagnostics must not collapse into ad hoc stdout/stderr
@@ -2364,17 +2808,25 @@ Architectural rules:
 
 ### 21.6.3 Doctor Health Interface
 
-`atm doctor` remains a CLI command, but the Phase Q architecture requires one
+`atm doctor` remains a CLI command, but the current SQLite/daemon architecture requires one
 explicit daemon health interface.
 
 Architectural rules:
 - CLI doctor code queries daemon/runtime state through one explicit request /
   response boundary
 - the daemon owns collection of runtime-only health such as:
+  - heartbeat-driven runtime member state
   - singleton ownership state
   - live status-cache health
   - ingest backlog / degraded-ingest state
   - SQLite readiness/openability as observed by the runtime
+- the runtime-health DTO returned across that boundary must carry:
+  - liveness
+  - readiness
+  - singleton-owner pid when known
+  - SQLite-ready state
+  - degraded-ingest state
+  - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
   answers
 
@@ -2382,14 +2834,30 @@ Architectural rules:
 
 The daemon runtime must use one documented operational contract.
 
-Required architectural defaults:
+Daemon singleton is requirement `#1`.
+
+Architectural rules:
+- only one `atm-daemon` process may exist anywhere on the host for the
+  supported runtime model
+- singleton enforcement uses at least:
+  - a pre-spawn launch gate before fork/exec
+  - a daemon-side startup gate before serving state
+  - a static lint/CI gate that rejects daemon-spawn patterns in ordinary tests
+- no test, tool, alternate socket path, or alternate `ATM_HOME` value is
+  exempt from the singleton rule
+
+Phase R operational defaults:
 - graceful shutdown drain deadline: `5s`
 - force-cancel deadline: `10s` total
+- daemon auto-start publish deadline: `10s`
+  (`AUTO_START_PUBLISH_TIMEOUT`)
 - same-host daemon request deadline: `3s`
 - per-leg TCP/TLS connect deadline: `5s`
 - per-leg TCP/TLS read/write deadline: `5s`
-- total remote retry budget: `30s`
-- SQLite `busy_timeout`: `1500ms`
+- total remote retry budget default: `30s` via
+  `daemon.remote_retry_budget`
+- SQLite `busy_timeout`: `5000ms`
+  - authoritative since `R.5`; supersedes the pre-`R.5` `1500ms` baseline
 - ingest batch processing slice: `2s`
 - doctor health query deadline: `3s`
 
@@ -2401,19 +2869,67 @@ Required caps:
 - SQLite handle budget: `1..=4`
 - status-cache cap: `4096`
 
-Required signal behavior:
-- install `SIGINT`/`SIGTERM`/`SIGHUP` handling before listeners accept
-- `SIGINT` and `SIGTERM` enter graceful shutdown
-- `SIGHUP` triggers bounded rescan/reload without dropping singleton ownership
+Required runtime-control behavior:
+- install the host runtime-control source before listeners accept
+- Unix may use `SIGINT` / `SIGTERM` / `SIGHUP`
+- Windows may use console-control or service-control equivalents
+- the graceful-shutdown control path enters the same bounded drain/checkpoint
+  sequence on every platform
+- the reload control path triggers bounded rescan/reload without dropping
+  singleton ownership
+
+Remote peer transport rules:
+- retryable remote peer failures are limited to transient socket/network
+  failures before remote acceptance:
+  - timeout
+  - connection refused
+  - connection reset / aborted
+  - broken pipe
+  - host unreachable / network unreachable
+- non-retryable failures include:
+  - protocol/frame decode failures
+  - TLS/certificate/authentication mismatch
+  - explicit remote daemon rejection
+- if a connection drops after the request write completes but before the remote
+  daemon confirms acceptance, the send result is one typed
+  `RemoteDeliveryOutcomeUnknown` failure (`ATM_REMOTE_OUTCOME_UNKNOWN`)
+- outbound peer delivery must resolve and open a fresh connection per attempt;
+  ordinary local interface changes must not require daemon restart for new
+  outbound attempts
+- TCP/TLS listeners bound to wildcard/unspecified local addresses must remain
+  the default so cable/unplug or Wi-Fi/ethernet rebinding does not require
+  restart in the normal case
+- if an operator binds the listener to one explicit local address and that
+  address disappears or changes, the daemon must surface degraded status and
+  require bounded reload/rebind rather than silently claiming readiness
+
+Phase R daemon implementation notes:
+- per-connection inflight cap `32` is documented now, but the current daemon
+  still processes one request per accepted connection, so the inflight count
+  is structurally `1` until framed multiplexing is introduced
+- bounded `SIGHUP` config/roster reload now lands in `R.18`, including
+  last-known-good preservation on invalid reload input
 
 ### 21.7 Test Strategy
 
 The daemon is not the test strategy.
 
-Phase Q test architecture must keep:
+The target daemon-runtime test architecture must keep:
 - core service logic testable in-process
 - transport/watch/runtime logic testable through fakes or harnesses
 - daemon process spawning out of the core test path
+- default correctness suites free of:
+  - daemon spawn
+  - socket publication timing
+  - retry sleeps
+  - environment mutation races
+  - auto-start side effects
+
+Required test tiers:
+- `FakeClientTransport` for deterministic CLI/composition tests
+- in-process loopback transport for request/handler integration
+- a narrow daemon-runtime suite for true singleton/startup/shutdown/recovery
+  requirements only
 
 If a capability cannot be tested without real daemon spawning, that is treated
 as a design smell rather than the default approach.
@@ -2421,13 +2937,13 @@ as a design smell rather than the default approach.
 ### 21.8 Lock Elimination
 
 The lock-release gate proved the file-based line is acceptable only as interim
-relief. The target Phase Q architecture removes mailbox-lock dependence from
+relief. The current SQLite/daemon architecture removes mailbox-lock dependence from
 ATM mail correctness by moving durable state ownership to SQLite and treating
 JSONL as compatibility ingress/egress only.
 
 ### 21.9 Five-Stage Migration Model
 
-Phase Q follows five architectural migration stages:
+The migration to the current SQLite/daemon architecture followed five architectural stages:
 
 1. store and boundary foundation
 2. compatibility ingest/export

@@ -1,0 +1,200 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ── Finding ──────────────────────────────────────────────────────────────────
+
+<urn:atm:triage:finding/FTQ-U9-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-U9-001" ;
+  triage:title "INJECTED_ACCEPT_ERROR_FOR_TEST is process-wide static Mutex — shared across tests" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs: INJECTED_ACCEPT_ERROR_FOR_TEST is a process-wide static Mutex. Shared across all tests; creates stale-sender leak risk and nondeterministic test behavior. Fix: convert to per-test injection channel passed at bind time." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:pattern "INJECTED_ACCEPT_ERROR_FOR_TEST|static.*Mutex.*new.*None" ;
+  triage:fileFilter "local_ipc_transport.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/integrate-phase-U/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/integrate-phase-U/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/pU-u8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/pU-u8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/pU-u8/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/pU-u8/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/pU-u9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/pU-u9/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-U9-001/pU-u9/4> ;
+
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/253fc60> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u8/8ce604b> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/integrate-phase-U/253fc60>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u8/8ce604b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:orderIndex 8 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
+
+# ── Occurrences: integrate/phase-U (head_sha 253fc60) ────────────────────────
+
+<urn:atm:triage:occurrence/FTQ-U9-001/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 764 ;
+  triage:snippet "static INJECTED_ACCEPT_ERROR_FOR_TEST: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>> =" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/253fc60> .
+
+<urn:atm:triage:occurrence/FTQ-U9-001/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 772 ;
+  triage:snippet "*INJECTED_ACCEPT_ERROR_FOR_TEST" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/253fc60> .
+
+<urn:atm:triage:occurrence/FTQ-U9-001/integrate-phase-U/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 785 ;
+  triage:snippet "*INJECTED_ACCEPT_ERROR_FOR_TEST" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/253fc60> .
+
+<urn:atm:triage:occurrence/FTQ-U9-001/integrate-phase-U/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 793 ;
+  triage:snippet "let sender = INJECTED_ACCEPT_ERROR_FOR_TEST" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "253fc60" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/253fc60> .
+
+# ── Occurrences: feature/pU-u8-shared-thin-client-icd (head_sha 8ce604b) ─────
+
+<urn:atm:triage:occurrence/FTQ-U9-001/pU-u8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 764 ;
+  triage:snippet "static INJECTED_ACCEPT_ERROR_FOR_TEST: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>> =" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/8ce604b> .
+
+<urn:atm:triage:occurrence/FTQ-U9-001/pU-u8/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 772 ;
+  triage:snippet "*INJECTED_ACCEPT_ERROR_FOR_TEST" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/8ce604b> .
+
+<urn:atm:triage:occurrence/FTQ-U9-001/pU-u8/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 785 ;
+  triage:snippet "*INJECTED_ACCEPT_ERROR_FOR_TEST" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/8ce604b> .
+
+<urn:atm:triage:occurrence/FTQ-U9-001/pU-u8/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 793 ;
+  triage:snippet "let sender = INJECTED_ACCEPT_ERROR_FOR_TEST" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "8ce604b" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/8ce604b> .
+
+# ── Occurrences: feature/pU-u9-client-owned-graft-runtime (head_sha 4ba0e00) ─
+
+<urn:atm:triage:occurrence/FTQ-U9-001/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 766 ;
+  triage:snippet "static INJECTED_ACCEPT_ERROR_FOR_TEST: std::sync::Mutex<Option<std::sync::mpsc::SyncSender<()>>> =" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U9-001/pU-u9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 774 ;
+  triage:snippet "*INJECTED_ACCEPT_ERROR_FOR_TEST" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U9-001/pU-u9/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 787 ;
+  triage:snippet "*INJECTED_ACCEPT_ERROR_FOR_TEST" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/FTQ-U9-001/pU-u9/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 795 ;
+  triage:snippet "let sender = INJECTED_ACCEPT_ERROR_FOR_TEST" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .

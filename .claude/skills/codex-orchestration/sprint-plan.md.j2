@@ -1,0 +1,95 @@
+---
+name: sprint-plan
+version: 1.1.0
+description: Generate a sprint plan document for atm-core phases.
+format: markdown
+required_variables:
+  - id
+  - title
+  - branch
+  - target
+optional_variables:
+  - status
+  - worktree
+  - goal
+  - dependencies
+  - exact_targets
+  - deliverables
+  - required_work
+  - explicit_code_samples
+  - non_closure
+  - acceptance_criteria
+  - validation
+defaults:
+  status: planned
+  worktree: ""
+  goal: []
+  dependencies: []
+  exact_targets: []
+  deliverables: []
+  required_work: []
+  explicit_code_samples: []
+  non_closure: []
+  acceptance_criteria: []
+  validation:
+    - "cargo build --workspace"
+    - "cargo test --workspace"
+    - "cargo clippy --workspace -- -D warnings"
+    - "git diff --check"
+---
+---
+id: {{ id }}
+title: {{ title }}
+status: {{ status }}
+branch: {{ branch }}
+{% if worktree %}worktree: {{ worktree }}
+{% endif %}target: {{ target }}
+---
+
+# Sprint {{ id }} — {{ title }}
+
+## Goal
+
+{% for item in goal %}- {{ item }}
+{% endfor %}
+## Hard Dependencies
+
+{% for dep in dependencies %}- {{ dep }}
+{% endfor %}
+## Exact Targets
+
+{% for file in exact_targets %}- `{{ file }}`
+{% endfor %}
+## Deliverables
+
+Every listed deliverable is expected to land at a production-ready level for
+the scope this sprint claims. If that cannot be done cleanly in one sprint, the
+sprint must be split before implementation begins. No deliverable may be
+silently dropped or partially deferred.
+
+{% for item in deliverables %}- {{ item }}
+{% endfor %}
+## Required Work
+
+{% for item in required_work %}- {{ item }}
+{% endfor %}
+## Explicit Code Samples
+
+If the sprint introduces or changes important traits, features, enums, protocol
+types, boundary contracts, or execution seams, this section must include
+explicit code samples or signatures showing the intended end state.
+
+{% for item in explicit_code_samples %}{{ item }}
+{% endfor %}
+## This Sprint Does Not Close
+
+{% for item in non_closure %}- {{ item }}
+{% endfor %}
+## Acceptance Criteria
+
+{% for criterion in acceptance_criteria %}- {{ criterion }}
+{% endfor %}
+## Required Validation
+
+{% for cmd in validation %}- `{{ cmd }}`
+{% endfor %}

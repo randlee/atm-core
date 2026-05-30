@@ -1,0 +1,70 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-RSH-F004>
+  a triage:Finding ;
+  triage:findingId "S7-RSH-F004" ;
+  triage:title "timeout_secs has no upper bound" ;
+  triage:description "crates/atm-core/src/read/mod.rs:47 and wait.rs:7 accept timeout_secs: u64 / Option<u64> with no upper-bound validation. On the wait path (wait::wait_for_eligible_message at read/wait.rs:6-31), Duration::from_secs(timeout_secs) is computed and the function polls in a 100ms loop until elapsed >= timeout; a u64::MAX value produces a timeout of ~584 million years. The daemon thread servicing the request remains blocked for the full duration, consuming a dispatch handle and denying a socket slot. The CLI accepts --timeout as Option<u64> (atm read.rs:68) and passes it directly to ReadQuery::new with no cap. A validation guard (e.g. const MAX_TIMEOUT_SECS: u64 = 3600) in ReadQuery::new and ListQuery::as_read_query would bound the exposure. Both worktrees have ReadQuery::timeout_secs; the feature branch also exposes the field via the new atm read --timeout flag. The finding is open on both branches." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s7-queue-query" ;
+  triage:promoteToBranch "feature/pS-s7-queue-query" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RSH-F004/s7/readquery/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RSH-F004/s7/wait/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RSH-F004/integrate-pS/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-RSH-F004/s7/readquery/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 47 ;
+  triage:snippet "pub timeout_secs: Option<u64> in ReadQuery — no upper-bound validation in ReadQuery::new; u64::MAX produces ~584M-year timeout; daemon dispatch thread blocked indefinitely" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-RSH-F004/s7/wait/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/wait.rs" ;
+  triage:line 7 ;
+  triage:snippet "timeout_secs: u64 passed to Duration::from_secs; poll loop runs until start.elapsed() >= timeout; no bound on caller-supplied value" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-RSH-F004/integrate-pS/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/mod.rs" ;
+  triage:line 45 ;
+  triage:snippet "pub timeout_secs: Option<u64> in ReadQuery — same unbounded field present on integrate/phase-S; no upper-bound validation" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "76a646c" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/76a646c> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/76a646c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "76a646c" ;
+  triage:orderIndex 2 .

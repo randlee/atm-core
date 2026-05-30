@@ -1,0 +1,56 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W7-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W7-002" ;
+  triage:title "Phase W absent from docs/project-plan.md" ;
+  triage:description "docs/project-plan.md section 27 (Phase W, line 3064) exists with integration branch, predecessor gate, goal, execution shape (W.1-W.4), and acceptance criteria but lacks: (1) a Status note block showing W.1-W.6 sprint completion with branch/PR/commit references, (2) execution shape entries for W.5 and W.6 (only W.1-W.4 listed), and (3) a phase closeout gate reference. plan-phase-W.md is similarly scoped to W.1-W.4 only. All six sprints (W.1-W.6) have been merged to integrate/phase-W (PRs #269-275). The sprint completion registry and W.5/W.6 execution entries are absent." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W7-002/pW-s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W7-002/integrate-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s7/7a3927d> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-W/15267c0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s7/7a3927d> .
+
+<urn:atm:triage:occurrence/ATM-QA-W7-002/pW-s7/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 3064 ;
+  triage:snippet "## 27. Phase W Production Readiness Follow-Up [no Status note, no W.5/W.6 execution entries, no sprint completion registry for W.1-W.6]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s7/7a3927d> .
+
+<urn:atm:triage:occurrence/ATM-QA-W7-002/integrate-W/1>
+  a triage:Occurrence ;
+  triage:file "docs/project-plan.md" ;
+  triage:line 3064 ;
+  triage:snippet "## 27. Phase W Production Readiness Follow-Up [no Status note, no W.5/W.6 execution entries, no sprint completion registry for W.1-W.6]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-W/15267c0> .
+
+<urn:atm:triage:worktree/pW-s7/7a3927d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "7a3927d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-W/15267c0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "15267c0" ;
+  triage:orderIndex 2 .

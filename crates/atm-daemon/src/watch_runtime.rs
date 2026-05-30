@@ -1,0 +1,854 @@
+use atm_core::boundary::{WatchEventBatch, WatchSubscriptionRequest};
+use atm_core::error::AtmError;
+use atm_core::protocol::ProtocolErrorEnvelope;
+use std::collections::HashMap;
+use std::fs;
+use std::path::PathBuf;
+use std::sync::{Arc, Condvar, Mutex, mpsc};
+use std::thread::{self, JoinHandle};
+use std::time::Duration;
+
+use crate::{DaemonSubsystem, SubsystemObservability};
+
+const DEFAULT_WATCH_POLL_INTERVAL: Duration = Duration::from_millis(50);
+const MAX_WATCH_SUBSCRIPTIONS: usize = 256;
+const WATCH_POLL_HEALTH_TIMEOUT_MULTIPLIER: u32 = 5;
+#[cfg(not(test))]
+const WATCH_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(2);
+#[cfg(test)]
+const WATCH_SHUTDOWN_DEADLINE: Duration = Duration::from_millis(100);
+
+#[derive(Clone)]
+pub(crate) struct WatchRuntime {
+    inner: Arc<WatchRuntimeInner>,
+}
+
+type WatchPoller =
+    Arc<dyn Fn(&WatchSubscriptionRequest) -> Result<WatchEventBatch, AtmError> + Send + Sync>;
+
+struct WatchRuntimeInner {
+    // Worker thread, poll callers, and shutdown path all access state
+    // concurrently; Mutex+Condvar guards the lifecycle and subscription
+    // registry.
+    state: Mutex<WatchState>,
+    wake: Condvar,
+    poller: WatchPoller,
+    poll_interval: Duration,
+    observability: SubsystemObservability,
+}
+
+#[derive(Default)]
+struct WatchState {
+    started: bool,
+    shutdown: bool,
+    worker: Option<JoinHandle<()>>,
+    subscriptions: HashMap<WatchKey, WatchSnapshot>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+struct WatchKey {
+    home_dir: PathBuf,
+    team: atm_core::types::TeamName,
+    agent: atm_core::types::AgentName,
+}
+
+#[derive(Clone)]
+struct WatchSnapshot {
+    request: WatchSubscriptionRequest,
+    requested_revision: u64,
+    observed_revision: u64,
+    batch: WatchEventBatch,
+    error: Option<WatchFailureSnapshot>,
+}
+
+#[derive(Clone)]
+struct WatchRefreshTarget {
+    key: WatchKey,
+    request: WatchSubscriptionRequest,
+    revision: u64,
+}
+
+#[derive(Clone)]
+struct WatchFailureSnapshot {
+    code: atm_core::error_codes::AtmErrorCode,
+    message: String,
+    recovery: Option<String>,
+}
+
+impl From<AtmError> for WatchFailureSnapshot {
+    fn from(error: AtmError) -> Self {
+        Self {
+            code: error.code,
+            message: error.message,
+            recovery: error.recovery,
+        }
+    }
+}
+
+impl WatchFailureSnapshot {
+    fn to_error(&self) -> AtmError {
+        ProtocolErrorEnvelope {
+            code: self.code,
+            message: self.message.clone(),
+            recovery: self.recovery.clone(),
+        }
+        .into_atm_error()
+    }
+}
+
+impl WatchKey {
+    fn from_request(request: &WatchSubscriptionRequest) -> Self {
+        Self {
+            home_dir: request.home_dir.clone(),
+            team: request.team.clone(),
+            agent: request.agent.clone(),
+        }
+    }
+}
+
+impl WatchRuntime {
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn new() -> Self {
+        Self::new_with_observability(SubsystemObservability::disabled(
+            DaemonSubsystem::WatchRuntime,
+        ))
+    }
+
+    pub(crate) fn new_with_observability(observability: SubsystemObservability) -> Self {
+        Self::new_with_poller(
+            Arc::new(|request| {
+                let team_dir =
+                    atm_core::home::team_dir_from_home(&request.home_dir, &request.team)?;
+                let config_path = team_dir.join("config.json");
+                let inbox_path = atm_core::home::inbox_path_from_home(
+                    &request.home_dir,
+                    &request.team,
+                    &request.agent,
+                )?;
+                let mut paths = Vec::new();
+                if config_path.is_file() {
+                    paths.push(config_path);
+                }
+                if inbox_path.exists() {
+                    paths.push(inbox_path.clone());
+                }
+                let inboxes_dir = inbox_path.parent().ok_or_else(|| {
+                    AtmError::daemon_unavailable("watch runtime inbox path has no parent directory")
+                })?;
+                let prefix = format!("{}.", request.agent.as_str());
+                let primary = format!("{}.json", request.agent.as_str());
+                if inboxes_dir.exists() {
+                    for entry in fs::read_dir(inboxes_dir).map_err(|source| {
+                        AtmError::daemon_unavailable(format!(
+                            "failed to enumerate watch runtime inbox directory {}",
+                            inboxes_dir.display()
+                        ))
+                        .with_source(source)
+                    })? {
+                        let path = entry
+                            .map_err(|source| {
+                                AtmError::daemon_unavailable(format!(
+                                    "failed to read one watch runtime inbox entry in {}",
+                                    inboxes_dir.display()
+                                ))
+                                .with_source(source)
+                            })?
+                            .path();
+                        if path
+                            .file_name()
+                            .and_then(|value| value.to_str())
+                            .map(|name| {
+                                name.starts_with(&prefix)
+                                    && name.ends_with(".json")
+                                    && name != primary
+                            })
+                            .unwrap_or(false)
+                        {
+                            paths.push(path);
+                        }
+                    }
+                }
+                paths.sort_by_key(|path| path.to_string_lossy().into_owned());
+                paths.dedup();
+                Ok(WatchEventBatch { paths })
+            }),
+            DEFAULT_WATCH_POLL_INTERVAL,
+            observability,
+        )
+    }
+
+    fn new_with_poller(
+        poller: WatchPoller,
+        poll_interval: Duration,
+        observability: SubsystemObservability,
+    ) -> Self {
+        Self {
+            inner: Arc::new(WatchRuntimeInner {
+                state: Mutex::new(WatchState::default()),
+                wake: Condvar::new(),
+                poller,
+                poll_interval,
+                observability,
+            }),
+        }
+    }
+
+    pub(crate) fn start(&self) -> Result<(), AtmError> {
+        let mut state = self.inner.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("watch runtime state lock poisoned").with_recovery(
+                "Restart the daemon; watch lifecycle state can no longer be trusted.",
+            )
+        })?;
+        if state.started {
+            return Ok(());
+        }
+        state.started = true;
+        state.shutdown = false;
+        drop(state);
+
+        let inner = Arc::clone(&self.inner);
+        let handle = thread::Builder::new()
+            .name("atm-daemon-watch".to_string())
+            .spawn(move || watch_worker_loop(inner))
+            .map_err(|source| {
+                self.inner.observability.emit_or_warn(
+                    "start",
+                    "failed",
+                    "failed to spawn watch runtime worker",
+                );
+                AtmError::daemon_unavailable("failed to spawn watch runtime worker")
+                    .with_source(source)
+            })?;
+        let mut state = match self.inner.state.lock() {
+            Ok(state) => state,
+            Err(_) => {
+                let _ = handle.join();
+                return Err(
+                    AtmError::daemon_unavailable("watch runtime state lock poisoned")
+                        .with_recovery(
+                            "Restart the daemon; watch lifecycle state can no longer be trusted.",
+                        ),
+                );
+            }
+        };
+        state.worker = Some(handle);
+        self.inner
+            .observability
+            .emit_or_warn("start", "ok", "watch runtime worker started");
+        Ok(())
+    }
+
+    pub(crate) fn shutdown(&self) -> Result<(), AtmError> {
+        let handle = {
+            let mut state = self.inner.state.lock().map_err(|_| {
+                AtmError::daemon_unavailable("watch runtime state lock poisoned").with_recovery(
+                    "Restart the daemon; watch lifecycle state can no longer be trusted.",
+                )
+            })?;
+            state.shutdown = true;
+            self.inner.wake.notify_all();
+            state.worker.take()
+        };
+        if let Some(handle) = handle {
+            let (result_tx, result_rx) = mpsc::sync_channel(1);
+            let join_helper = thread::Builder::new()
+                .name("atm-daemon-watch-join".to_string())
+                .spawn(move || {
+                    let _ = result_tx.send(handle.join());
+                })
+                .map_err(|source| {
+                    self.inner.observability.emit_or_warn(
+                        "shutdown",
+                        "failed",
+                        "failed to spawn watch runtime join helper",
+                    );
+                    AtmError::daemon_unavailable(
+                        "failed to spawn watch runtime join helper during shutdown",
+                    )
+                    .with_recovery(
+                        "Restart atm-daemon; watch shutdown could not create its bounded join helper.",
+                    )
+                    .with_source(source)
+                })?;
+            self.complete_watch_shutdown(result_rx, join_helper)?;
+        }
+        Ok(())
+    }
+
+    fn complete_watch_shutdown(
+        &self,
+        result_rx: mpsc::Receiver<thread::Result<()>>,
+        join_helper: thread::JoinHandle<()>,
+    ) -> Result<(), AtmError> {
+        match result_rx.recv_timeout(WATCH_SHUTDOWN_DEADLINE) {
+            Ok(Ok(())) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "ok",
+                    "watch runtime worker shut down cleanly",
+                );
+            }
+            Ok(Err(_)) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "failed",
+                    "watch runtime worker panicked during shutdown",
+                );
+                return Err(AtmError::daemon_unavailable(
+                    "watch runtime worker panicked during shutdown",
+                )
+                .with_recovery(
+                    "Restart atm-daemon; the watch background lane crashed while shutting down.",
+                ));
+            }
+            Err(mpsc::RecvTimeoutError::Timeout) => {
+                // Intentional detach: the timeout path must fail fast instead of blocking
+                // indefinitely on a stalled join helper during daemon shutdown.
+                drop(join_helper);
+                tracing::warn!(
+                    subsystem = "watch",
+                    action = "shutdown_detach",
+                    outcome = "deadline_exceeded",
+                    timeout_ms = WATCH_SHUTDOWN_DEADLINE.as_millis(),
+                    "watch runtime worker exceeded shutdown deadline; detaching join helper"
+                );
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "degraded",
+                    "watch runtime worker exceeded its shutdown deadline",
+                );
+                return Err(AtmError::daemon_unavailable(
+                    "watch runtime worker exceeded the bounded shutdown deadline",
+                )
+                .with_recovery(
+                    "Restart atm-daemon after the watch background lane becomes responsive again.",
+                ));
+            }
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                let _ = join_helper.join();
+                self.inner.observability.emit_or_warn(
+                    "shutdown",
+                    "failed",
+                    "watch runtime join helper disconnected during shutdown",
+                );
+                tracing::warn!(
+                    subsystem = "watch",
+                    action = "shutdown_join_helper",
+                    outcome = "disconnected",
+                    "watch runtime worker join helper exited before reporting shutdown status"
+                );
+            }
+        }
+        Ok(())
+    }
+
+    pub(crate) fn poll(
+        &self,
+        request: WatchSubscriptionRequest,
+    ) -> Result<WatchEventBatch, AtmError> {
+        let request_team = request.team.clone();
+        let request_agent = request.agent.clone();
+        let key = WatchKey::from_request(&request);
+        let mut state = self.inner.state.lock().map_err(|_| {
+            AtmError::daemon_unavailable("watch runtime state lock poisoned").with_recovery(
+                "Restart the daemon; watch lifecycle state can no longer be trusted.",
+            )
+        })?;
+        ensure_poll_available(&state)?;
+        let requested_revision = register_or_refresh_subscription(
+            &self.inner.observability,
+            &mut state,
+            key.clone(),
+            request,
+            &request_team,
+            &request_agent,
+        )?;
+        self.inner.wake.notify_one();
+        loop {
+            if let Some(entry) = state.subscriptions.get(&key)
+                && entry.observed_revision >= requested_revision
+            {
+                return match &entry.error {
+                    Some(error) => Err(error.to_error()),
+                    None => Ok(entry.batch.clone()),
+                };
+            }
+            if state.shutdown {
+                return Err(AtmError::daemon_unavailable(
+                    "watch runtime shut down before delivering an updated batch",
+                ));
+            }
+            let wait_timeout = self
+                .inner
+                .poll_interval
+                .saturating_mul(WATCH_POLL_HEALTH_TIMEOUT_MULTIPLIER);
+            state = wait_for_poll_progress(
+                &self.inner,
+                state,
+                wait_timeout,
+                &request_team,
+                &request_agent,
+            )?;
+        }
+    }
+
+    #[cfg(test)]
+    pub(crate) fn new_for_test(poller: WatchPoller, poll_interval: Duration) -> Self {
+        Self::new_with_poller(
+            poller,
+            poll_interval,
+            SubsystemObservability::disabled(DaemonSubsystem::WatchRuntime),
+        )
+    }
+}
+
+fn ensure_poll_available(state: &WatchState) -> Result<(), AtmError> {
+    if !state.started {
+        return Err(AtmError::daemon_unavailable(
+            "watch runtime is unavailable before daemon startup",
+        ));
+    }
+    if state.shutdown {
+        return Err(AtmError::daemon_unavailable(
+            "watch runtime is unavailable during daemon shutdown",
+        ));
+    }
+    Ok(())
+}
+
+fn register_or_refresh_subscription(
+    observability: &SubsystemObservability,
+    state: &mut WatchState,
+    key: WatchKey,
+    request: WatchSubscriptionRequest,
+    request_team: &atm_core::types::TeamName,
+    request_agent: &atm_core::types::AgentName,
+) -> Result<u64, AtmError> {
+    match state.subscriptions.get_mut(&key) {
+        Some(entry) => {
+            entry.request = request;
+            entry.requested_revision = entry.requested_revision.saturating_add(1);
+            Ok(entry.requested_revision)
+        }
+        None => insert_new_subscription(
+            observability,
+            state,
+            key,
+            request,
+            request_team,
+            request_agent,
+        ),
+    }
+}
+
+fn insert_new_subscription(
+    observability: &SubsystemObservability,
+    state: &mut WatchState,
+    key: WatchKey,
+    request: WatchSubscriptionRequest,
+    request_team: &atm_core::types::TeamName,
+    request_agent: &atm_core::types::AgentName,
+) -> Result<u64, AtmError> {
+    if state.subscriptions.len() >= MAX_WATCH_SUBSCRIPTIONS {
+        let event = observability
+            .event(
+                "poll",
+                "rejected",
+                "watch runtime refused a new subscription at the bounded registry cap",
+            )
+            .with_team(request_team.clone())
+            .with_agent(request_agent.clone());
+        observability.emit_event_or_warn(event);
+        return Err(
+            AtmError::daemon_unavailable(format!(
+                "watch runtime refused a new subscription because the bounded registry capacity of {MAX_WATCH_SUBSCRIPTIONS} entries was reached"
+            ))
+            .with_recovery(
+                "Reduce concurrent watch targets or restart atm-daemon so the bounded watch registry can be rebuilt from active callers.",
+            ),
+        );
+    }
+    state.subscriptions.insert(
+        key,
+        WatchSnapshot {
+            request,
+            requested_revision: 1,
+            observed_revision: 0,
+            batch: WatchEventBatch { paths: Vec::new() },
+            error: None,
+        },
+    );
+    Ok(1)
+}
+
+fn wait_for_poll_progress<'a>(
+    inner: &'a WatchRuntimeInner,
+    state: std::sync::MutexGuard<'a, WatchState>,
+    wait_timeout: Duration,
+    request_team: &atm_core::types::TeamName,
+    request_agent: &atm_core::types::AgentName,
+) -> Result<std::sync::MutexGuard<'a, WatchState>, AtmError> {
+    let wait = inner.wake.wait_timeout(state, wait_timeout).map_err(|_| {
+        AtmError::daemon_unavailable("watch runtime state lock poisoned")
+            .with_recovery("Restart the daemon; watch lifecycle state can no longer be trusted.")
+    })?;
+    if wait.1.timed_out() {
+        let event = inner
+            .observability
+            .event(
+                "poll",
+                "degraded",
+                "watch runtime did not deliver an updated batch before the worker health timeout elapsed",
+            )
+            .with_team(request_team.clone())
+            .with_agent(request_agent.clone());
+        inner.observability.emit_event_or_warn(event);
+        return Err(
+            AtmError::daemon_unavailable(
+                "watch runtime did not deliver an updated batch before the worker health timeout elapsed",
+            )
+            .with_recovery(
+                "Restart atm-daemon if the watch worker is no longer making progress.",
+            ),
+        );
+    }
+    Ok(wait.0)
+}
+
+impl Drop for WatchRuntime {
+    fn drop(&mut self) {
+        // RuntimeComposition::shutdown_background_lanes() is the authoritative stop path; Drop is
+        // only a last-resort cleanup when this is the final shared owner.
+        debug_assert!(
+            Arc::strong_count(&self.inner) >= 1,
+            "watch runtime drop should only observe positive Arc ownership"
+        );
+        if Arc::strong_count(&self.inner) == 1 {
+            let _ = self.shutdown();
+        }
+    }
+}
+
+fn watch_worker_loop(inner: Arc<WatchRuntimeInner>) {
+    loop {
+        let refresh_targets = {
+            let mut state = match inner.state.lock() {
+                Ok(state) => state,
+                Err(_) => return,
+            };
+            loop {
+                if state.shutdown {
+                    return;
+                }
+                if state
+                    .subscriptions
+                    .values()
+                    .any(|entry| entry.observed_revision < entry.requested_revision)
+                {
+                    break;
+                }
+                if state.subscriptions.is_empty() {
+                    let wait = match inner.wake.wait_timeout(state, inner.poll_interval) {
+                        Ok(wait) => wait,
+                        Err(_) => return,
+                    };
+                    state = wait.0;
+                    continue;
+                }
+                let wait = match inner.wake.wait_timeout(state, inner.poll_interval) {
+                    Ok(wait) => wait,
+                    Err(_) => return,
+                };
+                state = wait.0;
+                if wait.1.timed_out() {
+                    for entry in state.subscriptions.values_mut() {
+                        entry.requested_revision = entry.requested_revision.saturating_add(1);
+                    }
+                    break;
+                }
+            }
+            state
+                .subscriptions
+                .iter()
+                .filter(|(_, entry)| entry.observed_revision < entry.requested_revision)
+                .map(|(key, entry)| WatchRefreshTarget {
+                    key: key.clone(),
+                    request: entry.request.clone(),
+                    revision: entry.requested_revision,
+                })
+                .collect::<Vec<_>>()
+        };
+
+        for target in refresh_targets {
+            let result = (inner.poller)(&target.request);
+            if let Ok(mut state) = inner.state.lock() {
+                if let Some(entry) = state.subscriptions.get_mut(&target.key) {
+                    match result {
+                        Ok(batch) => {
+                            entry.batch = batch;
+                            entry.error = None;
+                        }
+                        Err(error) => {
+                            entry.error = Some(error.into());
+                        }
+                    }
+                    entry.observed_revision = target.revision;
+                    inner.wake.notify_all();
+                }
+            } else {
+                return;
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{MAX_WATCH_SUBSCRIPTIONS, WatchRuntime};
+    use atm_core::boundary::WatchEventBatch;
+    use atm_core::boundary::WatchSubscriptionRequest;
+    use atm_core::error::AtmError;
+    use std::fs;
+    use std::path::PathBuf;
+    use std::sync::{Arc, Condvar, Mutex, mpsc};
+    use std::time::Duration;
+    use tempfile::TempDir;
+
+    struct WatchRequestFixture {
+        _home_dir: TempDir,
+        request: WatchSubscriptionRequest,
+    }
+
+    fn request_for(agent: &str) -> WatchRequestFixture {
+        let home_dir = TempDir::new().expect("tempdir");
+        WatchRequestFixture {
+            request: WatchSubscriptionRequest {
+                home_dir: home_dir.path().to_path_buf(),
+                team: "test-team".parse().expect("team"),
+                agent: agent.parse().expect("agent"),
+            },
+            _home_dir: home_dir,
+        }
+    }
+
+    #[test]
+    fn watch_runtime_ignores_host_scoped_log_directory() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let team_dir = tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join("test-team");
+        fs::create_dir_all(&team_dir).expect("create team dir");
+        let config_path = team_dir.join("config.json");
+        fs::write(&config_path, r#"{"members":[]}"#).expect("write config");
+        let inboxes_dir = tempdir
+            .path()
+            .join(".claude")
+            .join("teams")
+            .join("test-team")
+            .join("inboxes");
+        fs::create_dir_all(&inboxes_dir).expect("create inboxes");
+        let primary = inboxes_dir.join("test-agent.json");
+        let origin = inboxes_dir.join("test-agent.host-a.json");
+        fs::write(&primary, "[]").expect("write primary inbox");
+        fs::write(&origin, "[]").expect("write origin inbox");
+
+        let logs_dir = tempdir.path().join(".atm").join("logs");
+        fs::create_dir_all(&logs_dir).expect("create logs dir");
+        fs::write(
+            logs_dir.join("atm.log.jsonl"),
+            "{\"message\":\"retained\"}\n",
+        )
+        .expect("write retained log");
+
+        let runtime = WatchRuntime::new();
+        runtime.start().expect("start");
+        let batch = runtime
+            .poll(WatchSubscriptionRequest {
+                home_dir: tempdir.path().to_path_buf(),
+                team: "test-team".parse().expect("team"),
+                agent: "test-agent".parse().expect("agent"),
+            })
+            .expect("poll");
+        runtime.shutdown().expect("shutdown");
+
+        assert_eq!(batch.paths, vec![config_path, origin, primary]);
+        assert!(
+            batch.paths.iter().all(|path| !path.starts_with(&logs_dir)),
+            "watch runtime must not subscribe to the host-scoped retained log directory"
+        );
+    }
+
+    #[test]
+    fn watch_runtime_returns_updated_batches_from_runtime_poller() {
+        let batches = Arc::new(Mutex::new(vec![
+            WatchEventBatch {
+                paths: vec![PathBuf::from("one.jsonl")],
+            },
+            WatchEventBatch {
+                paths: vec![PathBuf::from("two.jsonl")],
+            },
+        ]));
+        let runtime = WatchRuntime::new_for_test(
+            Arc::new({
+                let batches = Arc::clone(&batches);
+                move |_| {
+                    let mut batches = batches.lock().expect("batches");
+                    Ok(if batches.len() > 1 {
+                        batches.remove(0)
+                    } else {
+                        batches[0].clone()
+                    })
+                }
+            }),
+            Duration::from_millis(10),
+        );
+        runtime.start().expect("start");
+
+        let request = request_for("test-agent");
+        let first = runtime.poll(request.request.clone()).expect("first poll");
+        assert_eq!(first.paths, vec![PathBuf::from("one.jsonl")]);
+        let second = runtime.poll(request.request).expect("second poll");
+        assert_eq!(second.paths, vec![PathBuf::from("two.jsonl")]);
+        runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn watch_runtime_reports_degradation_from_background_failures() {
+        let fail = Arc::new(Mutex::new(false));
+        let runtime = WatchRuntime::new_for_test(
+            Arc::new({
+                let fail = Arc::clone(&fail);
+                move |_| {
+                    if *fail.lock().expect("flag") {
+                        Err(AtmError::daemon_unavailable("watch poll failed"))
+                    } else {
+                        Ok(WatchEventBatch { paths: Vec::new() })
+                    }
+                }
+            }),
+            Duration::from_millis(10),
+        );
+        runtime.start().expect("start");
+        let request = request_for("test-agent");
+        runtime.poll(request.request.clone()).expect("initial poll");
+        *fail.lock().expect("flag") = true;
+        let error = runtime.poll(request.request).expect_err("degraded");
+        assert!(error.message.contains("watch poll failed"));
+        runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn watch_runtime_shutdown_returns_within_bounded_deadline() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let release: Arc<(Mutex<bool>, Condvar)> = Arc::new((Mutex::new(false), Condvar::new()));
+        let runtime = WatchRuntime::new_for_test(
+            Arc::new({
+                let release = Arc::clone(&release);
+                move |_| {
+                    let (released, wake) = &*release;
+                    let mut released = released.lock().expect("released");
+                    started_tx.send(()).expect("started");
+                    while !*released {
+                        let wait = wake
+                            .wait_timeout(released, Duration::from_secs(1))
+                            .expect("released wait");
+                        released = wait.0;
+                        assert!(!wait.1.timed_out(), "watch test release timed out");
+                    }
+                    Ok(WatchEventBatch { paths: Vec::new() })
+                }
+            }),
+            Duration::from_millis(10),
+        );
+        runtime.start().expect("start");
+
+        let runtime_for_thread = runtime.clone();
+        let request = request_for("test-agent");
+        let poll_join = std::thread::spawn(move || runtime_for_thread.poll(request.request));
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker started");
+
+        let shutdown_error = runtime.shutdown().expect_err("shutdown timeout");
+        assert!(
+            shutdown_error
+                .message
+                .contains("exceeded the bounded shutdown deadline")
+        );
+
+        let (released, wake) = &*release;
+        *released.lock().expect("released") = true;
+        wake.notify_all();
+
+        let error = poll_join
+            .join()
+            .expect("poll join")
+            .expect_err("shutdown should interrupt the blocked poll");
+        assert!(error.message.contains("shut down before delivering"));
+    }
+
+    #[test]
+    fn watch_runtime_times_out_when_the_worker_stops_making_progress() {
+        let (started_tx, started_rx) = mpsc::channel();
+        let release: Arc<(Mutex<bool>, Condvar)> = Arc::new((Mutex::new(false), Condvar::new()));
+        let runtime = WatchRuntime::new_for_test(
+            Arc::new({
+                let release = Arc::clone(&release);
+                move |_| {
+                    let (released, wake) = &*release;
+                    let mut released = released.lock().expect("released");
+                    started_tx.send(()).expect("started");
+                    while !*released {
+                        let wait = wake
+                            .wait_timeout(released, Duration::from_secs(1))
+                            .expect("released wait");
+                        released = wait.0;
+                        assert!(!wait.1.timed_out(), "watch test release timed out");
+                    }
+                    Ok(WatchEventBatch { paths: Vec::new() })
+                }
+            }),
+            Duration::from_millis(100),
+        );
+        runtime.start().expect("start");
+
+        let runtime_for_thread = runtime.clone();
+        let request = request_for("test-agent");
+        let join = std::thread::spawn(move || runtime_for_thread.poll(request.request));
+        started_rx
+            .recv_timeout(Duration::from_secs(1))
+            .expect("worker started");
+        let error = join.join().expect("join").expect_err("health timeout");
+        assert!(error.message.contains("worker health timeout"));
+        let (released, wake) = &*release;
+        *released.lock().expect("released") = true;
+        wake.notify_all();
+        runtime.shutdown().expect("shutdown");
+    }
+
+    #[test]
+    fn watch_runtime_rejects_subscriptions_beyond_the_bounded_capacity() {
+        let runtime = WatchRuntime::new_for_test(
+            Arc::new(|_| Ok(WatchEventBatch { paths: Vec::new() })),
+            Duration::from_millis(10),
+        );
+        runtime.start().expect("start");
+
+        for index in 0..MAX_WATCH_SUBSCRIPTIONS {
+            let request = request_for(&format!("test-agent-{index}"));
+            runtime.poll(request.request).expect("bounded subscription");
+        }
+
+        let overflow = request_for("overflow-agent");
+        let error = runtime
+            .poll(overflow.request)
+            .expect_err("capacity overflow");
+        assert!(error.message.contains("bounded registry capacity"));
+
+        runtime.shutdown().expect("shutdown");
+    }
+}

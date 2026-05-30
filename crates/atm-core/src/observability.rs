@@ -2,6 +2,8 @@
 
 use std::path::PathBuf;
 
+use sc_lint_attributes::sc_lint;
+use sc_observability_types::{ActionName, ErrorCode, Level, OutcomeLabel, ServiceName};
 use serde::de::Error as DeError;
 use serde::ser::{Error as SerError, SerializeMap};
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
@@ -9,23 +11,49 @@ use serde_json::{Map, Value};
 use tracing::warn;
 
 use crate::error::{AtmError, AtmErrorCode};
-use crate::schema::LegacyMessageId;
+use crate::schema::AtmMessageId;
 use crate::types::{AgentName, IsoTimestamp, TaskId, TeamName};
 
 #[derive(Debug, Clone, Serialize, PartialEq, Eq)]
 pub struct CommandEvent {
     pub command: &'static str,
-    pub action: &'static str,
-    pub outcome: &'static str,
+    pub action: ActionName,
+    pub outcome: OutcomeLabel,
     pub team: TeamName,
     pub agent: AgentName,
-    pub sender: String,
-    pub message_id: Option<LegacyMessageId>,
+    pub sender: AgentName,
+    pub message_id: Option<AtmMessageId>,
     pub requires_ack: bool,
     pub dry_run: bool,
     pub task_id: Option<TaskId>,
     pub error_code: Option<AtmErrorCode>,
     pub error_message: Option<String>,
+}
+
+pub fn action_name(value: &'static str) -> ActionName {
+    ActionName::new(value)
+        .expect("ATM observability action literals must be valid ActionName values")
+}
+
+pub fn outcome_label(value: &'static str) -> OutcomeLabel {
+    OutcomeLabel::new(value)
+        .expect("ATM observability outcome literals must be valid OutcomeLabel values")
+}
+
+pub fn standard_level_for_outcome(outcome: &str) -> Level {
+    match outcome {
+        "ok" | "sent" | "dry_run" => Level::Info,
+        "timeout" => Level::Warn,
+        "error" | "failed" => Level::Error,
+        other => {
+            warn!(
+                code = %AtmErrorCode::ObservabilityEmitFailed,
+                outcome = other,
+                "unknown ATM command outcome for observability level"
+            );
+            Level::Warn
+        }
+    }
 }
 
 #[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
@@ -178,6 +206,7 @@ impl<'de> Deserialize<'de> for AtmJsonNumber {
 
 /// ATM-owned recursive JSON-value wrapper used by the observability boundary.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[sc_lint(boundary.allow("cycle.recursive_value_container"))]
 pub enum LogFieldValue {
     Null,
     Bool(bool),
@@ -277,6 +306,7 @@ impl<'de> Deserialize<'de> for LogFieldValue {
 
 /// ATM-owned map wrapper used by public observability record projections.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
+#[sc_lint(boundary.allow("cycle.recursive_value_container"))]
 pub struct LogFieldMap {
     entries: Vec<(LogFieldKey, LogFieldValue)>,
 }
@@ -368,7 +398,7 @@ pub struct AtmLogQuery {
 pub struct AtmLogRecord {
     pub timestamp: IsoTimestamp,
     pub severity: LogLevelFilter,
-    pub service: String,
+    pub service: ServiceName,
     pub target: Option<String>,
     pub action: Option<String>,
     pub message: Option<String>,
@@ -381,7 +411,7 @@ pub struct AtmLogSnapshot {
     pub truncated: bool,
 }
 
-#[derive(Debug, Clone, Copy, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "snake_case")]
 pub enum AtmObservabilityHealthState {
     Healthy,
@@ -389,30 +419,30 @@ pub enum AtmObservabilityHealthState {
     Unavailable,
 }
 
-#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+pub struct AtmObservabilityDiagnostic {
+    pub code: Option<ErrorCode>,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum RetainedSinkFaultMode {
+    Degraded,
+    Unavailable,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct AtmObservabilityHealth {
     pub active_log_path: Option<PathBuf>,
     pub logging_state: AtmObservabilityHealthState,
     pub query_state: Option<AtmObservabilityHealthState>,
+    pub maintenance: Option<sc_observability_types::MaintenanceHealthReport>,
+    pub diagnostic: Option<AtmObservabilityDiagnostic>,
     pub detail: Option<String>,
-}
-
-#[doc(hidden)]
-pub mod sealed {
-    pub trait Sealed {}
 }
 
 trait LogFollowPort: Send {
     fn poll(&mut self) -> Result<AtmLogSnapshot, AtmError>;
-}
-
-#[derive(Default)]
-struct EmptyFollowPort;
-
-impl LogFollowPort for EmptyFollowPort {
-    fn poll(&mut self) -> Result<AtmLogSnapshot, AtmError> {
-        Ok(AtmLogSnapshot::default())
-    }
 }
 
 struct ClosureFollowPort<F> {
@@ -440,9 +470,7 @@ pub struct LogTailSession {
 impl LogTailSession {
     /// Construct an empty follow session that never yields records.
     pub fn empty() -> Self {
-        Self {
-            inner: Box::<EmptyFollowPort>::default(),
-        }
+        Self::from_poller(|| Ok(AtmLogSnapshot::default()))
     }
 
     /// Construct one follow session from a polling closure.
@@ -466,7 +494,7 @@ impl LogTailSession {
     }
 }
 
-pub trait ObservabilityPort: sealed::Sealed {
+pub trait ObservabilityPort: crate::boundary::sealed::Sealed {
     /// Emit one ATM command event into the configured observability sink.
     ///
     /// # Errors
@@ -504,7 +532,7 @@ pub trait ObservabilityPort: sealed::Sealed {
 #[derive(Debug, Default, Clone, Copy)]
 pub struct NullObservability;
 
-impl sealed::Sealed for NullObservability {}
+impl crate::boundary::sealed::Sealed for NullObservability {}
 
 impl ObservabilityPort for NullObservability {
     fn emit(&self, _event: CommandEvent) -> Result<(), AtmError> {
@@ -524,6 +552,8 @@ impl ObservabilityPort for NullObservability {
             active_log_path: None,
             logging_state: AtmObservabilityHealthState::Unavailable,
             query_state: Some(AtmObservabilityHealthState::Unavailable),
+            maintenance: None,
+            diagnostic: None,
             detail: Some("observability adapter is not configured".to_string()),
         })
     }

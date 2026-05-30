@@ -1,25 +1,24 @@
 use std::collections::HashMap;
 
-use crate::schema::LegacyMessageId;
+use crate::schema::AtmMessageId;
 use crate::types::IsoTimestamp;
 
-/// Canonicalize a merged mailbox surface by the legacy top-level `message_id`
-/// owned by docs/atm-message-schema.md §2 and
-/// docs/atm-core/design/dedup-metadata-schema.md §3.1. For read/ack/clear, the
-/// newest message for a given LegacyMessageId wins; equal timestamps fall back
-/// to the later merged-surface position.
-pub(crate) fn dedupe_legacy_message_id_surface<T, FId, FTs>(
+/// Canonicalize a merged mailbox surface by top-level `message_id`.
+/// For read/ack/clear, the newest message for a given AtmMessageId wins;
+/// equal timestamps fall back to the later merged-surface position.
+#[cfg_attr(not(test), allow(dead_code))]
+pub(crate) fn dedupe_message_id_surface<T, FId, FTs>(
     messages: Vec<T>,
-    mut legacy_message_id: FId,
+    mut message_id: FId,
     mut timestamp: FTs,
 ) -> Vec<T>
 where
-    FId: FnMut(&T) -> Option<LegacyMessageId>,
+    FId: FnMut(&T) -> Option<AtmMessageId>,
     FTs: FnMut(&T) -> IsoTimestamp,
 {
-    let mut latest_for_id: HashMap<LegacyMessageId, (IsoTimestamp, usize)> = HashMap::new();
+    let mut latest_for_id: HashMap<AtmMessageId, (IsoTimestamp, usize)> = HashMap::new();
     for (index, message) in messages.iter().enumerate() {
-        if let Some(message_id) = legacy_message_id(message) {
+        if let Some(message_id) = message_id(message) {
             latest_for_id
                 .entry(message_id)
                 .and_modify(|entry| {
@@ -37,7 +36,7 @@ where
     messages
         .into_iter()
         .enumerate()
-        .filter_map(|(index, message)| match legacy_message_id(&message) {
+        .filter_map(|(index, message)| match message_id(&message) {
             Some(message_id) => latest_for_id
                 .get(&message_id)
                 .and_then(|(_, keep_index)| (*keep_index == index).then_some(message)),
@@ -50,21 +49,21 @@ where
 mod tests {
     use chrono::Utc;
 
-    use crate::schema::LegacyMessageId;
+    use crate::schema::AtmMessageId;
     use crate::types::IsoTimestamp;
 
-    use super::dedupe_legacy_message_id_surface;
+    use super::dedupe_message_id_surface;
 
     #[derive(Clone)]
     struct SurfaceRecord {
-        message_id: Option<LegacyMessageId>,
+        message_id: Option<AtmMessageId>,
         timestamp: IsoTimestamp,
         body: &'static str,
     }
 
     #[test]
-    fn dedupe_legacy_message_id_surface_keeps_newest_timestamp() {
-        let message_id = LegacyMessageId::new();
+    fn dedupe_message_id_surface_keeps_newest_timestamp() {
+        let message_id = AtmMessageId::new();
         let messages = vec![
             SurfaceRecord {
                 message_id: Some(message_id),
@@ -78,7 +77,7 @@ mod tests {
             },
         ];
 
-        let deduped = dedupe_legacy_message_id_surface(
+        let deduped = dedupe_message_id_surface(
             messages,
             |message| message.message_id,
             |message| message.timestamp,
@@ -89,8 +88,8 @@ mod tests {
     }
 
     #[test]
-    fn dedupe_legacy_message_id_surface_keeps_later_position_on_timestamp_tie() {
-        let message_id = LegacyMessageId::new();
+    fn dedupe_message_id_surface_keeps_later_position_on_timestamp_tie() {
+        let message_id = AtmMessageId::new();
         let timestamp = iso("2026-04-04T10:00:00Z");
         let messages = vec![
             SurfaceRecord {
@@ -105,7 +104,7 @@ mod tests {
             },
         ];
 
-        let deduped = dedupe_legacy_message_id_surface(
+        let deduped = dedupe_message_id_surface(
             messages,
             |message| message.message_id,
             |message| message.timestamp,
@@ -116,8 +115,8 @@ mod tests {
     }
 
     #[test]
-    fn dedupe_legacy_message_id_surface_preserves_records_without_message_id() {
-        let message_id = LegacyMessageId::new();
+    fn dedupe_message_id_surface_preserves_records_without_message_id() {
+        let message_id = AtmMessageId::new();
         let messages = vec![
             SurfaceRecord {
                 message_id: None,
@@ -136,7 +135,7 @@ mod tests {
             },
         ];
 
-        let deduped = dedupe_legacy_message_id_surface(
+        let deduped = dedupe_message_id_surface(
             messages,
             |message| message.message_id,
             |message| message.timestamp,
@@ -148,9 +147,9 @@ mod tests {
     }
 
     #[test]
-    fn dedupe_legacy_message_id_surface_keeps_distinct_ids() {
-        let first_id = LegacyMessageId::new();
-        let second_id = LegacyMessageId::new();
+    fn dedupe_message_id_surface_keeps_distinct_ids() {
+        let first_id = AtmMessageId::new();
+        let second_id = AtmMessageId::new();
         let messages = vec![
             SurfaceRecord {
                 message_id: Some(first_id),
@@ -164,7 +163,7 @@ mod tests {
             },
         ];
 
-        let deduped = dedupe_legacy_message_id_surface(
+        let deduped = dedupe_message_id_surface(
             messages,
             |message| message.message_id,
             |message| message.timestamp,

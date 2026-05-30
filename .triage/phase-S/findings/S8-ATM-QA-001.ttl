@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "S8-ATM-QA-001" ;
+  triage:title "Missing REQ-CORE-COMPAT-001 citation in config module docs" ;
+  triage:description "docs/atm-core/modules/config.md added in S.8 does not cite REQ-CORE-COMPAT-001, which is the governing requirement for the JSONL body export limit. The file describes parsing and validation of [atm].claude_jsonl_body_export_max_bytes and its 128 KiB default, and lists several related REQ citations, but REQ-CORE-COMPAT-001 is absent. Sprint-S8.md lists this requirement as a primary deliverable driver. Traceability gap: the implementation doc does not link back to the governing requirement, breaking the sprint-level traceability chain." ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteTo "feature/pS-s8-jsonl-compat" ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-ATM-QA-001/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-ATM-QA-001/s8/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/modules/config.md" ;
+  triage:line 1 ;
+  triage:snippet "# `atm-core::config`" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 ;
+  triage:status "present" ;
+  triage:note "config.md exists on integrate/phase-S but also lacks REQ-CORE-COMPAT-001 citation; S.8 feature branch added JSONL export content without adding the citation on either branch." .

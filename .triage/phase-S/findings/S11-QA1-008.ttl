@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S11-QA1-008>
+  a triage:Finding ;
+  triage:findingId "S11-QA1-008" ;
+  triage:title "env_lock() / LOCK static Mutex lacks doc comment explaining why interior mutability is required (RBP-006)" ;
+  triage:description "home.rs:245-248: static LOCK: OnceLock<Mutex<()>> and fn env_lock() carry no doc comment justifying the Mutex. The SAFETY note on the unsafe set_var block references the mutex implicitly but not at the declaration point. A future maintainer cannot determine why a process-wide Mutex is required. Add a doc comment: 'Process-wide mutex that serializes std::env::set_var/remove_var calls in tests. Required because these functions are unsafe in multi-threaded processes; concurrent env mutation produces undefined behavior.'" ;
+  triage:category "RBP" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s11-log-dir-override-order" ;
+  triage:promoteToBranch "feature/pS-s11-log-dir-override-order" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S11-QA1-008/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb> .
+
+<urn:atm:triage:occurrence/S11-QA1-008/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 245 ;
+  triage:snippet "static LOCK: OnceLock<Mutex<()>> and fn env_lock() — no doc comment justifying Mutex for concurrent env mutation safety in tests" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "34bf2eb" ;
+  triage:branch "feature/pS-s11-log-dir-override-order" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb> .
+
+<urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s11-log-dir-override-order" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s11-log-dir-override-order" ;
+  triage:headSha "34bf2eb" ;
+  triage:orderIndex 1 .

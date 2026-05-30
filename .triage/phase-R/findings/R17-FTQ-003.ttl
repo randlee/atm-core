@@ -1,0 +1,42 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+triage:R17-FTQ-003
+  a triage:Finding ;
+  triage:findingId "R17-FTQ-003" ;
+  triage:title "Fixed thread::sleep in reconcile_runtime.rs test code" ;
+  triage:description "In crates/atm-daemon/src/reconcile_runtime.rs test section, line 452 uses std::thread::sleep(Duration::from_millis(20)). Fixed sleeps in tests cause flaky failures on slow CI runners. Should use event-driven synchronization or bounded poll loop instead." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-R" ;
+  triage:severity "minor" ;
+  triage:pattern "thread::sleep" ;
+  triage:fileFilter "reconcile_runtime\\.rs" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:highestOpenBranch "R.17" ;
+  triage:promoteToBranch "R.17" ;
+  triage:dispatchReady true ;
+  triage:findingAggregate "open" ;
+  triage:triagedAt "2026-05-07T00:00:00Z"^^xsd:dateTime ;
+  triage:sweepResults (
+    [
+      triage:branch "R.15" ;
+      triage:branchStatus "absent" ;
+      triage:matchCount 0
+    ]
+    [
+      triage:branch "R.16" ;
+      triage:branchStatus "absent" ;
+      triage:matchCount 0
+    ]
+    [
+      triage:branch "R.17" ;
+      triage:branchStatus "open" ;
+      triage:matchCount 1 ;
+      triage:matchPath "crates/atm-daemon/src/reconcile_runtime.rs" ;
+      triage:matchLine 452
+    ]
+  ) ;
+  triage:references "R.17 QA-3 carry-forward: FTQ-003 minor — fixed sleep in reconcile_runtime tests" .

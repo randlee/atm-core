@@ -1,0 +1,40 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-RSH-003>
+  a triage:Finding ;
+  triage:findingId "INTG-RSH-003" ;
+  triage:title "No PATH_MAX ceiling on tilde-expanded hook paths — S8-RSH-002 re-raised" ;
+  triage:description "config/discovery.rs:66 — tilde expansion is present but no check against PATH_MAX after resolution. Oversized expanded paths produce kernel ENAMETOOLONG instead of typed AtmError. Fix: after resolved PathBuf built, check resolved.as_os_str().len() against 4095; return AtmError::config if exceeded." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "integration_gate" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T07:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-RSH-003/intg/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:occurrence/INTG-RSH-003/intg/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/discovery.rs" ;
+  triage:line 66 ;
+  triage:snippet "expand_home_tilde() → resolved PathBuf built with no length guard before use" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "847b150" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/ade96f2> .
+
+<urn:atm:triage:worktree/integrate-phase-S/ade96f2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "ade96f2" ;
+  triage:orderIndex 1 .

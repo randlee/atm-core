@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-021>
+  a triage:Finding ;
+  triage:findingId "FTQ-021" ;
+  triage:title "IPC smoke test client socket timeouts 1s shorter than server REQUEST_DEADLINE 3s (tests.rs:159)" ;
+  triage:description "crates/atm-daemon/src/tests.rs:159 — client socket timeouts (send=1s, recv=1s) are shorter than the server's REQUEST_DEADLINE (3s). Under load the client will time out and disconnect while the server is still processing, causing the test to fail non-deterministically. Fix: set client socket timeouts to Duration::from_secs(5) (REQUEST_DEADLINE + 2s margin)." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-021/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:occurrence/FTQ-021/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 159 ;
+  triage:snippet "set_send_timeout(Duration::from_secs(1)) + set_recv_timeout(Duration::from_secs(1)) — both less than server REQUEST_DEADLINE 3s; client disconnects under load before server processes request" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "dd36874" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "dd36874" ;
+  triage:orderIndex 4 .

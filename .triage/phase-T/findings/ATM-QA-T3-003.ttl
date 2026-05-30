@@ -1,0 +1,145 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: ATM-QA-T3-003
+# Title: requirements.md Section 4 Required References missing sprint-T3-immutable-rows.md
+# Phase: phase-T
+# Triage mode: initial_pass
+# Triaged: 2026-05-10T00:00:00Z
+
+<urn:atm:triage:finding/ATM-QA-T3-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T3-003" ;
+  triage:title "requirements.md Section 4 Required References missing sprint-T3-immutable-rows.md" ;
+  triage:description "docs/atm-rusqlite/requirements.md Section 4 Required References lists sprint-T2-sqlite-writer.md but does not list docs/phase-T/sprint-T3-immutable-rows.md. Sprint T.3 owns the REQ-RUSQLITE-IMMUT-* IDs that are defined in requirements.md, so the sprint doc must appear in Section 4." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "missing_reference" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-003/pT-t2-sqlite-writer/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-003/pT-t3-immutable-rows/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-003/pT-t4-windows-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-003/pT-t5-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-003/integrate-phase-T/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-T/47a3681> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-T/47a3681> .
+
+# Occurrence on feature/pT-t2-sqlite-writer
+# sprint-T3-immutable-rows.md absent from Section 4; sprint-T2 present at line 72 but T3 never added
+<urn:atm:triage:occurrence/ATM-QA-T3-003/pT-t2-sqlite-writer/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 72 ;
+  triage:snippet "- [`../phase-T/sprint-T2-sqlite-writer.md`](...) [sprint-T3-immutable-rows.md absent from Section 4]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385> .
+
+# Occurrence on feature/pT-t3-immutable-rows
+<urn:atm:triage:occurrence/ATM-QA-T3-003/pT-t3-immutable-rows/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 85 ;
+  triage:snippet "- [`../phase-T/sprint-T2-sqlite-writer.md`](...) [sprint-T3-immutable-rows.md absent from Section 4]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4> .
+
+# Occurrence on feature/pT-t4-windows-runtime
+<urn:atm:triage:occurrence/ATM-QA-T3-003/pT-t4-windows-runtime/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 85 ;
+  triage:snippet "- [`../phase-T/sprint-T2-sqlite-writer.md`](...) [sprint-T3-immutable-rows.md absent from Section 4]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53> .
+
+# Occurrence on feature/pT-t5-hardening
+<urn:atm:triage:occurrence/ATM-QA-T3-003/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 85 ;
+  triage:snippet "- [`../phase-T/sprint-T2-sqlite-writer.md`](...) [sprint-T3-immutable-rows.md absent from Section 4]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/6450bb5> .
+
+# Occurrence on integrate/phase-T
+# Section 4 contains no sprint-T entries at all on this branch (T2 merge not yet reflected)
+<urn:atm:triage:occurrence/ATM-QA-T3-003/integrate-phase-T/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/requirements.md" ;
+  triage:line 62 ;
+  triage:snippet "## 4. Required References [no sprint-T entries; sprint-T3-immutable-rows.md absent]" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "47a3681" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/47a3681> .
+
+# WorktreeSnapshot nodes
+<urn:atm:triage:worktree/pT-t1-integration-gate/0e6b024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pT-t2-sqlite-writer/8fde385>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "8fde385" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t3-immutable-rows/06b28a4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "06b28a4" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/8baee53>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "8baee53" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t5-hardening/6450bb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/integrate-phase-T/47a3681>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "47a3681" ;
+  triage:orderIndex 6 ;
+  triage:branchState "open" .

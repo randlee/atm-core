@@ -1,0 +1,65 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Sweep notes:
+# U2: lib.rs has no mail_message_states schema test (table doesn't exist yet on U2); absent.
+# U3: lib.rs has no mail_message_states schema test; absent.
+# U4: lib.rs line ~1396 has the sqlite_schema_tracks_unified_message_state_and_roster_runtime_columns test.
+#     The test checks mail_message_states columns: read, pending_ack_at, acknowledged_at, expires_at, deleted_at.
+#     The test does NOT include assert!(!collected.iter().any(|column| column == "stale_at")) for mail_message_states.
+#     The stale_at absent assertion (line 1437) exists for mail_messages, not for mail_message_states.
+#     => Finding is open on U4 only.
+
+<urn:atm:triage:finding/ATM-QA-U4-011>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U4-011" ;
+  triage:title "Schema test missing negative assert: mail_message_states should assert stale_at column absent" ;
+  triage:description "crates/atm-rusqlite/src/lib.rs:1396 — schema test checks for expected columns but does not assert stale_at column is absent from mail_message_states. Mirrors the mail_messages check already present." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #249" , "TASK-1380 QA-1 verdict at 335fe3d" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U4-011/pU-u4-unified-message-state/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-011/pU-u4-unified-message-state/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 1396 ;
+  triage:snippet "sqlite_schema_tracks_unified_message_state_and_roster_runtime_columns — mail_message_states section lacks assert!(!stale_at)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d> .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchState "absent" .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .

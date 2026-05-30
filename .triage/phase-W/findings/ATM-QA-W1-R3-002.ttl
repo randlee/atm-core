@@ -1,0 +1,61 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W1-R3-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W1-R3-002" ;
+  triage:title "composition.rs: 2 multiline silent emit discards remain in start() and start_with_socket_path_for_test()" ;
+  triage:description "Two multiline let _ = / .emit(...) continuation patterns remain in composition.rs after fix-R2. Site 1: lines 291-293 in start() — let _ = self.composition_observability .emit(\"start_requested\", \"ok\", \"daemon start requested\"). Site 2: lines 378-380 in start_with_socket_path_for_test() — identical pattern. Both should call self.composition_observability.emit_or_warn(\"start_requested\", \"ok\", \"daemon start requested\") to match the established pattern used throughout the rest of composition.rs (e.g. lines 273, 300, 321, 338, 349, 385, 406, 426, 437)." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W1-R3-002/pW-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W1-R3-002/pW-s1/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s1/0346b4c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s1/0346b4c> .
+
+<urn:atm:triage:occurrence/ATM-QA-W1-R3-002/pW-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 291 ;
+  triage:snippet "let _ =\n            self.composition_observability\n                .emit(\"start_requested\", \"ok\", \"daemon start requested\");" ;
+  triage:fixSnippet "self.composition_observability.emit_or_warn(\"start_requested\", \"ok\", \"daemon start requested\");" ;
+  triage:context "start()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "0346b4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1/0346b4c> .
+
+<urn:atm:triage:occurrence/ATM-QA-W1-R3-002/pW-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/composition.rs" ;
+  triage:line 378 ;
+  triage:snippet "let _ =\n            self.composition_observability\n                .emit(\"start_requested\", \"ok\", \"daemon start requested\");" ;
+  triage:fixSnippet "self.composition_observability.emit_or_warn(\"start_requested\", \"ok\", \"daemon start requested\");" ;
+  triage:context "start_with_socket_path_for_test()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "0346b4c" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1/0346b4c> .
+
+<urn:atm:triage:worktree/pW-s1/0346b4c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s1-emit-fallback" ;
+  triage:headSha "0346b4c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/phase-W/f9ea465>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "f9ea465" ;
+  triage:orderIndex 2 .

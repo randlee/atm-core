@@ -1,0 +1,35 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W3-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W3-001" ;
+  triage:title "Replay store assembly failure missing SqliteObservabilityEvent emission" ;
+  triage:description "crates/atm-daemon/src/composition.rs lines 170-176: the Err arm of sqlite_remote_replay_store_from_path_with_observability only calls tracing::warn! then falls through to None. The Arc<DaemonSqliteObservability> is already constructed in scope (sqlite_observability, line 158) and passed into the function call, but no SqliteObservabilityEvent is emitted for the assembly-failure path before returning None. Sprint W.3 AC explicitly lists replay-store assembly failure under the 'SQLite boundary assembly unavailable' event family (AtmErrorCode::DaemonUnavailable) and names composition.rs as a required insertion point. The fix is to call emit_sqlite_event_or_warn(&*sqlite_observability, SqliteObservabilityEvent::new('replay_store_assemble', SqliteObservabilityOutcome::Failed, error.to_string(), Some(AtmErrorCode::DaemonUnavailable))) inside the Err arm before yielding None. The integrate branch carries the same gap (uses the older non-observability variant sqlite_remote_replay_store_from_path with identical warning-only handling); merge-forward will close it once the feature branch is fixed." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteToWorktree "feature/pW-s3-sqlite-observability" ;
+  triage:verdict "CONFIRMED — replay-store assembly Err arm emits only tracing::warn!; DaemonSqliteObservability is in-scope but unused at that failure site; fix: call emit_sqlite_event_or_warn inside the Err arm with action='replay_store_assemble', outcome=Failed, error_code=DaemonUnavailable before falling through to None; dispatch to arch-ctm on feature/pW-s3-sqlite-observability" ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pW-s3-sqlite-observability/2f245dc> ,
+               <urn:atm:triage:worktree/integrate-phase-W/6df690b> .
+
+<urn:atm:triage:worktree/pW-s3-sqlite-observability/2f245dc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s3-sqlite-observability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s3-sqlite-observability" ;
+  triage:headSha "2f245dc" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/6df690b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "6df690b" ;
+  triage:orderIndex 2 .

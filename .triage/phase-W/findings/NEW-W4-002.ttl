@@ -1,0 +1,55 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/NEW-W4-002>
+  a triage:Finding ;
+  triage:findingId "NEW-W4-002" ;
+  triage:title "PeerTransportRuntime::persist_replay_request is #[cfg(test)]-only but sprint-W4.md lists as production path" ;
+  triage:description "crates/atm-daemon/src/peer_transport.rs:618-628: PeerTransportRuntime::persist_replay_request is #[cfg(test)]-only. Sprint-W4.md:130-132 lists it as a targeted production path. Production replay persistence runs through PeerClientTransport::persist_replay_request (non-test, lines 249-280) which works correctly, but the sprint doc is misleading. Fix: either expose the method as non-test with production delegation, or update sprint-W4.md to clarify this is test-only scaffolding and production path is PeerClientTransport::send." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-daemon/src" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/NEW-W4-002/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-W/8104e6a> ;
+  triage:resolutionNote "Verified fixed on the W.7 merge-forward head. sprint-W4.md now marks PeerTransportRuntime::persist_replay_request as #[cfg(test)] verification scaffolding and identifies PeerClientTransport::persist_replay_request as the production path." ;
+  triage:fixedOn <urn:atm:triage:worktree/pW-s7/4540ef2> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-W/4540ef2> .
+
+<urn:atm:triage:occurrence/NEW-W4-002/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 618 ;
+  triage:snippet "#[cfg(test)] pub(crate) fn persist_replay_request(...) -> Result<(), AtmError>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/8104e6a> .
+
+<urn:atm:triage:worktree/integrate-phase-W/8104e6a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "8104e6a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pW-s7/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 3 .

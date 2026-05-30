@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S12-QA1-007>
+  a triage:Finding ;
+  triage:findingId "S12-QA1-007" ;
+  triage:title "INTG-FTQ-006 fix description misleading — #[serial] is the actual isolation mechanism, not declaration order" ;
+  triage:description "crates/atm-core/src/home.rs:655,660,664: The INTG-FTQ-006 fix adds #[serial_test::serial] to host_log_dir_rejects_non_utf8_override and declares _atm_log_dir before _home per triage prescription. However, with Rust's reverse-declaration drop order, _home (holding env_lock MutexGuard) still drops FIRST, releasing the process-wide env mutex before _atm_log_dir restores ATM_LOG_DIR. The actual isolation protection is #[serial], not declaration order. The triage record and sprint doc description ('declare _atm_log_dir before _home so ATM_LOG_DIR is restored before the mutex is released') incorrectly describes the drop semantics. The SAFETY comment at line 665 correctly references #[serial]. Fix: either (a) swap declaration order so _home is declared first and drops last (after _atm_log_dir restores ATM_LOG_DIR), OR (b) add an explicit comment noting that #[serial] is the isolation mechanism and declaration order alone does not provide the stated invariant. Update sprint-S12.md fix description to match the actual mitigation used." ;
+  triage:category "DOC" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:promoteToBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-007/s12/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-007/s12/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 660 ;
+  triage:snippet "_atm_log_dir declared before _home (line 660 vs 664) — _home still drops first releasing env_lock; #[serial] at line 655 is the actual isolation mechanism, not declaration order" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s12-intg-gate-findings" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,98 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U6-NEW-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U6-NEW-001" ;
+  triage:title "sprint-U6.md YAML frontmatter status still 'planned' after implementation complete" ;
+  triage:description "docs/phase-U/sprint-U6.md YAML frontmatter shows status: planned. Sprint U.6 implementation is complete at 7aa4d38 on feature/pU-u6-provenance-field-reduction. Fix: update status to 'implemented' or 'complete'." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U6-NEW-001/pU-u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U6-NEW-001/pU-u5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U6-NEW-001/pU-u6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U6-NEW-001/pU-u7/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4/039a552> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5/d85a434> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u6/7aa4d38> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u7/8e37dd1> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u7/8e37dd1> .
+
+<urn:atm:triage:occurrence/ATM-QA-U6-NEW-001/pU-u4/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/sprint-U6.md" ;
+  triage:line 9 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/039a552> .
+
+<urn:atm:triage:occurrence/ATM-QA-U6-NEW-001/pU-u5/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/sprint-U6.md" ;
+  triage:line 9 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "d85a434" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/d85a434> .
+
+<urn:atm:triage:occurrence/ATM-QA-U6-NEW-001/pU-u6/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/sprint-U6.md" ;
+  triage:line 9 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "7aa4d38" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u6/7aa4d38> .
+
+<urn:atm:triage:occurrence/ATM-QA-U6-NEW-001/pU-u7/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-U/sprint-U6.md" ;
+  triage:line 9 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u7/8e37dd1> .
+
+<urn:atm:triage:worktree/pU-u4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u5/d85a434>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "d85a434" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u6/7aa4d38>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "7aa4d38" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u7/8e37dd1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:orderIndex 4 .

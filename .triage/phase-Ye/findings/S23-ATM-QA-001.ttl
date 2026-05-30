@@ -1,0 +1,54 @@
+@prefix atm:  <https://atm-core.dev/ontology/qa#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+atm:finding-S23-ATM-QA-001
+    a atm:QAFinding ;
+    atm:findingId         "S23-ATM-QA-001" ;
+    atm:phase             "phase-Ye" ;
+    atm:sprint            "Y.23" ;
+    atm:title             "readiness.md and issues.md record Y.23 accepted commit as 57e505b1 (Y.22 SHA)" ;
+    atm:severity          atm:Blocking ;
+    atm:repeatable        false ;
+    atm:triageMode        "initial_pass" ;
+    atm:triageDate        "2026-05-20"^^xsd:date ;
+
+    # Wrong vs correct SHA
+    atm:wrongSha          "57e505b1" ;
+    atm:correctSha        "197272e1" ;
+
+    # Scope: Y.23-specific docs; only pYe-s23 branch checked per triage instructions
+    atm:affectedBranch    "feature/pYe-s23-phase-end-architecture-proof" ;
+
+    # Highest open branch — same as affected (Y.23-only files)
+    atm:promoteToBranch   "feature/pYe-s23-phase-end-architecture-proof" ;
+
+    # Evidence
+    atm:evidence [
+        rdfs:label "readiness.md line 27 — '57e505b1' (wrong SHA)" ;
+        atm:file   "docs/phase-Ye/readiness.md" ;
+        atm:branch "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:lines  "27"
+    ] ;
+    atm:evidence [
+        rdfs:label "readiness.md line 56 — '57e505b1' (wrong SHA)" ;
+        atm:file   "docs/phase-Ye/readiness.md" ;
+        atm:branch "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:lines  "56"
+    ] ;
+    atm:evidence [
+        rdfs:label "readiness.md line 59 — accepted commit: '57e505b1' (wrong SHA)" ;
+        atm:file   "docs/phase-Ye/readiness.md" ;
+        atm:branch "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:lines  "59"
+    ] ;
+    atm:evidence [
+        rdfs:label "issues.md line 110 — Y.23 closes on accepted line: '57e505b1' (wrong SHA)" ;
+        atm:file   "docs/phase-Ye/issues.md" ;
+        atm:branch "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:lines  "110"
+    ] ;
+
+    atm:fixDescription    "Replace all occurrences of '57e505b1' (Y.22 SHA) with '197272e1' (correct Y.23 SHA) in docs/phase-Ye/readiness.md (lines 27, 56, 59) and docs/phase-Ye/issues.md (line 110) on feature/pYe-s23-phase-end-architecture-proof." ;
+    atm:sweepScope        "docs/phase-Ye/readiness.md docs/phase-Ye/issues.md" ;
+    atm:integrateStatus   "not applicable — docs/phase-Ye/ not yet present on integrate/phase-Y" .

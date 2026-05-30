@@ -2,212 +2,121 @@
 
 ## 1. Ownership
 
-This file documents ATM-authored and ATM-interpreted additions layered on top
-of the Claude Code-native message schema in
+This file documents the ATM-owned compatibility fields layered on top of the
+Claude Code-native message schema in
 [`claude-code-message-schema.md`](./claude-code-message-schema.md).
 
-Ownership:
+Ownership rules:
 
-- ATM owns only the additive fields and semantics defined in this file.
-- ATM must preserve the native Claude Code schema and must not rename or
-  replace it.
-- ATM must tolerate unknown additive fields from other producers.
+- Claude Code owns the native inbox shape.
+- ATM owns only the additive compatibility fields and semantics listed here.
+- ATM must not treat Claude JSON as the durable truth for ATM-owned machine
+  state.
+- Unknown additive fields must be tolerated and preserved.
+- Phase `Y` requires one field-justification ledger for every ATM additive
+  field that survives on the shared inbox surface.
 
 Enforcement model in this repo:
 
 - `tools/schema_models/atm_message_schema.py`
 
-## 2. Current ATM-Authored Additive Fields
+## 2. Supported Additive Compatibility Fields
 
-Fields authored by ATM CLI messages and workflow mutations:
+The shared Claude inbox surface may contain only these ATM additive fields:
 
 - `message_id`
-- `pendingAckAt`
-- `acknowledgedAt`
-- `acknowledgesMessageId`
-- `source_team`
-
-Current semantics:
-
-- `message_id` is ATM CLI only
-- `pendingAckAt` and `acknowledgedAt` are ATM CLI workflow fields
-- `acknowledgesMessageId` is an ATM reply-link field
-- `source_team` is ATM routing metadata
-
-These fields are additive and must coexist with the Claude Code-native message
-shape without redefining it.
-
-Historical provenance note:
-
-- `quality-mgr` historical analysis identified `message_id`, `source_team`,
-  `pendingAckAt`, and `acknowledgesMessageId` as ATM-added fields rather than
-  Claude Code-native envelope fields
-
-Forward migration requirement:
-
-- if ATM moves its machine-readable fields into metadata rather than top-level
-  additive envelope fields, the ATM-defined `message_id` format must be ULID
-  from day 1 of that metadata schema
-- ATM read compatibility must continue to accept legacy UUID `message_id`
-  values and missing `message_id` values in historical inbox data
-
-Deprecation rule:
-
-- the fields in this section are legacy top-level ATM write behavior
-- they remain read-compatible, but new ATM-only semantics must not continue to
-  proliferate as new top-level additive fields
-
-Legacy top-level placement map:
-
-- legacy `message_id` is ATM-owned, top-level, and read-compatible only
-- legacy `source_team` is ATM-owned, top-level, and read-compatible only
-- legacy `pendingAckAt` is ATM-owned, top-level, and read-compatible only
-- legacy `acknowledgedAt` is ATM-owned, top-level, and read-compatible only
-- legacy `acknowledgesMessageId` is ATM-owned, top-level, and read-compatible
-  only
-
-## 3. Forward ATM Metadata Schema
-
-Forward write target for ATM-owned machine-readable fields:
-
-- top-level `metadata` object
-- ATM-owned namespace under `metadata.atm`
-
-`metadata.atm` fields planned for ATM-authored or ATM-enriched messages:
-
-- `messageId`
-- `sourceTeam`
-- `fromIdentity`
-- `pendingAckAt`
-- `acknowledgedAt`
-- `acknowledgesMessageId`
-- ATM-owned alert metadata such as `alertKind`
-- ATM-owned alert metadata such as `missingConfigPath`
-
-Ownership rule:
-
-- ATM owns `metadata.atm`
-- shared or producer-defined fields may coexist in `metadata`, but ATM must not
-  assume ownership of the full `metadata` object
-
-Forward-write requirements:
-
-- no new ATM-only top-level fields
-- ATM machine-readable data moves to `metadata.atm`
-- `messageId` must be ULID for newly-authored ATM metadata records
-- ATM must generate `messageId` first and derive the persisted Claude-native
-  `timestamp` from the ULID time component so both values represent the same
-  creation instant
-- legacy top-level ATM fields remain read-compatible only
-
-Enrichment rule:
-
-- ATM may upgrade a Claude-native message by adding `metadata.atm` to the
-  original stored message
-- enrichment must be additive and idempotent
-- ATM must not rewrite native Claude fields such as `from`, `text`,
-  `timestamp`, `read`, or `summary` in order to attach ATM metadata
-- exception: when cross-team alias projection is intentionally used, ATM may
-  retain the Claude-facing alias in `from` only when canonical sender identity
-  is also recorded in `metadata.atm.fromIdentity`
-
-Forward placement map:
-
-- legacy top-level `message_id` migrates to `metadata.atm.messageId`
-- legacy top-level `source_team` migrates to `metadata.atm.sourceTeam`
-- cross-team alias projection stores canonical sender identity in
-  `metadata.atm.fromIdentity`
-- legacy top-level `pendingAckAt` remains `metadata.atm.pendingAckAt`
-- legacy top-level `acknowledgedAt` remains `metadata.atm.acknowledgedAt`
-- legacy top-level `acknowledgesMessageId` remains
-  `metadata.atm.acknowledgesMessageId`
-- legacy ATM alert fields such as `atmAlertKind` migrate to
-  `metadata.atm.alertKind`
-- legacy top-level `missingConfigPath` migrates to
-  `metadata.atm.missingConfigPath`
-
-Identifier rules:
-
-- legacy top-level `message_id` remains UUID-based read compatibility
-- forward `metadata.atm.messageId` must be ULID
-- forward `metadata.atm.acknowledgesMessageId` must reference the ULID-based
-  ATM message identity for the acknowledged message
-- for ATM-authored forward records, ATM generates the ULID first and derives
-  the persisted Claude-native `timestamp` from that ULID creation time
-- when present, `metadata.atm.messageId` is also the primary workflow-sidecar
-  key for `.claude/teams/<team>/.atm-state/workflow/<agent>.json`
-- write-path enforcement may reject wrong-format ATM-owned identifiers for the
-  active schema revision
-- read-path validation failure for wrong-format ATM-owned identifiers must warn,
-  preserve the message when the Claude-native envelope is still usable, and
-  treat the malformed ATM-owned field as absent for ATM semantics
-
-## 4. ATM-Interpreted Shared Fields And Forward Write Rule
-
-ATM currently interprets the following field when present:
-
+- `parentMessageId`
+- `threadMode`
 - `taskId`
 
-Ownership rule:
+These fields are immutable compatibility fields only. They are not the durable
+ATM-owned source of truth for mailbox state.
 
-- ATM defines ATM workflow semantics for `taskId`
-- ATM does not claim sole ownership of the field across all Claude-adjacent
-  systems
-- `taskId` must therefore be treated as a shared or de facto interoperable
-  field, not as a Claude Code-native field and not as an ATM-exclusive field
+Phase `Y` rule:
 
-Current ATM semantics for `taskId`:
+- field survival decisions must be owned by the relevant event-family state
+  machine plus the central delivery-policy coordinator
+- fields must not persist merely because scattered command code still reads
+  them
+- `Y.5` removed the mutable/shared-projection fields that previously leaked
+  workflow state into compatibility output
 
-- task-linked message
-- acknowledgement required
-- remains actionable until acknowledged
-- must not be cleared before acknowledgement
+## 3. One Message Identity
 
-Current evidence note:
+ATM uses one logical message identity.
 
-- `taskId` is documented and interpreted by ATM, but it was not present in the
-  current live `atm-dev` inbox data sampled during this design sprint
+Rules:
 
-Forward write rule:
+- ATM keeps one logical message identity in its own system.
+- Claude inbox `message_id` is the shared-wire encoding of that same identity.
+- if ATM persists a durable `message_id` column, it stores that same logical
+  identity in the compatibility wire form rather than as a second ATM-owned id
+- ATM must not persist a second ATM-owned message id under another field name.
+- `metadata.atm.messageId` is not part of the approved schema.
+- confusing `legacy_*` naming should be removed from the implementation line in
+  Phase U; the surviving identifier should be named for what it actually is.
 
-- ATM-authored shared-inbox writes must keep the Claude-native top level intact
-- ATM machine fields, including `taskId`, must be written under `metadata.atm`
-- legacy top-level ATM fields remain read-compatible only
-- forward writes must not emit legacy top-level ATM machine fields
+## 4. What Does Not Belong In Claude JSON
 
-Forward placement map addition:
+The following ATM-owned data must live in SQLite state rather than in shared
+Claude JSON:
 
-- legacy top-level `taskId` migrates to `metadata.atm.taskId`
+- read/unread state
+- ack-required / acknowledged state
+- delete/close state
+- expiration state (`expires_at`)
+- canonical sender projection
+- repair/alert machine metadata
 
-## 5. ATM-Specific Alert Metadata
+If an older compatibility shape is ever reconsidered, it requires explicit
+approval; the active Phase U design preserves no `metadata.atm` namespace.
 
-The current missing-config fallback branch uses ATM-specific fields in the
-legacy top-level schema:
+## 5. Threading And Task Semantics
 
-- `atmAlertKind`
-- `missingConfigPath`
+ATM may continue using these compatibility fields on the shared inbox surface:
 
-These are ATM-owned fields.
+- `parentMessageId`
+- `threadMode`
+- `taskId`
 
-Current design ruling:
+Interpretation rules:
 
-- ATM-authored back-channel alerts may use ATM-prefixed fields during the
-  legacy compatibility period
-- forward ATM alert metadata should move under `metadata.atm`
-- `atmAlertKind` migrates to `metadata.atm.alertKind`
-- `missingConfigPath` migrates to `metadata.atm.missingConfigPath`
-- new ATM-only fields should remain clearly ATM-owned until a broader shared
-  schema is explicitly approved
+- `threadMode` is limited to the approved product modes:
+  - `add-details`
+  - `supersede`
+- `taskId` is a shared reference value, not proof that ATM owns a full task
+  object model in the inbox.
 
-Not standardized yet:
+The durable current-state meaning of those fields belongs in SQLite-backed read
+and workflow logic, not in repeated JSON reads.
 
-- `priority`
-- `severity`
-- `error_code`
-- `repo`
-- `branch`
-- `ttl`
-- `dedup_key`
+## 6. Removed Compatibility Fields
 
-These may be preserved if present, but ATM should not assign durable cross-team
-message semantics to them until a dedicated schema decision is documented.
+The following ATM-owned fields must not be emitted in ATM-authored shared inbox
+output:
+
+- `source_team`
+- `pendingAckAt`
+- `acknowledgedAt`
+- `acknowledgesMessageId`
+- `expiresAt`
+
+Rationale:
+
+- they are mutable workflow truth, delivery-side routing detail, or admin
+  lifecycle data rather than immutable shared-inbox correlation context
+- SQLite-backed query and workflow paths own their current-state meaning
+- if a consumer still depends on one of these fields, that dependency is
+  obsolete and must be removed or explicitly reapproved
+
+## 7. No Active `metadata.atm` Namespace
+
+`metadata.atm` is not an approved namespace in the Phase U architecture.
+
+Rules:
+
+- ATM must not add or preserve machine-state fields under `metadata.atm`.
+- ATM must not rely on `metadata.atm` reads for normal mailbox behavior.
+- The active implementation must expose zero surviving `metadata.atm` fields.
+- inbound shared-inbox records that still carry `metadata.atm` for backward
+  compatibility are silently stripped, not rejected

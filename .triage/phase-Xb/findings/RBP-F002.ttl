@@ -1,0 +1,526 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F002>
+  a triage:Finding ;
+  triage:findingId "RBP-F002" ;
+  triage:title "boundary_support.rs error propagation lacks anyhow::Context caller-level context" ;
+  triage:description "crates/atm-core/src/boundary_support.rs uses bare ? propagation for errors without adding caller-level context via anyhow::Context (.context() or .with_context()). This reduces error message quality — errors from I/O operations and serialization are propagated raw without identifying which operation failed. Per Rust best practices, ? propagation at module boundaries should attach context." ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "Minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/atm-core/src/boundary_support.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S1/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S1/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S1/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S1/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S1/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S1/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S1/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S2/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S2/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S2/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S2/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S2/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S2/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S2/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S2/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S3/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S3/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S3/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S3/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S3/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S3/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S3/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S3/9> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S4/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S4/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S4/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S4/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S5/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S5/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S5/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S5/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F002/S5/6> ;
+  triage:openOn <urn:atm:triage:worktree/S1/2a0b3ec> ;
+  triage:openOn <urn:atm:triage:worktree/S2/7c377d1> ;
+  triage:openOn <urn:atm:triage:worktree/S3/029992e> ;
+  triage:openOn <urn:atm:triage:worktree/S4/64ade30> ;
+  triage:openOn <urn:atm:triage:worktree/S5/45b1397> ;
+  triage:promoteTo <urn:atm:triage:worktree/S5/45b1397> .
+
+<urn:atm:triage:occurrence/RBP-F002/S1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 41 ;
+  triage:snippet "config::load_config(&request.current_dir)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/RBP-F002/S1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 48 ;
+  triage:snippet "home::team_dir_from_home(&request.home_dir, &request.team)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/RBP-F002/S1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 49 ;
+  triage:snippet "config::load_team_config(&team_dir)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/RBP-F002/S1/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 63 ;
+  triage:snippet "mailbox::import_compat_source_projections(...)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/RBP-F002/S1/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 123 ;
+  triage:snippet "mailbox::store::write_compat_source_projections(&source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/RBP-F002/S1/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 131 ;
+  triage:snippet "mailbox::store::write_compat_mailbox_projection(&request.path, &request.messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/RBP-F002/S1/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 147 ;
+  triage:snippet "crate::mailbox::source::discover_source_paths(...)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/RBP-F002/S1/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 156 ;
+  triage:snippet "poll_watch(WatchSubscriptionRequest { ... })?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/RBP-F002/S1/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 161 ;
+  triage:snippet "import_inbox_source(InboxIngressImportRequest { ... })?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:occursIn <urn:atm:triage:worktree/S1/2a0b3ec> .
+
+<urn:atm:triage:occurrence/RBP-F002/S2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 41 ;
+  triage:snippet "config::load_config(&request.current_dir)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/7c377d1> .
+
+<urn:atm:triage:occurrence/RBP-F002/S2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 48 ;
+  triage:snippet "home::team_dir_from_home(&request.home_dir, &request.team)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/7c377d1> .
+
+<urn:atm:triage:occurrence/RBP-F002/S2/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 49 ;
+  triage:snippet "config::load_team_config(&team_dir)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/7c377d1> .
+
+<urn:atm:triage:occurrence/RBP-F002/S2/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 63 ;
+  triage:snippet "mailbox::import_compat_source_projections(...)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/7c377d1> .
+
+<urn:atm:triage:occurrence/RBP-F002/S2/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 123 ;
+  triage:snippet "mailbox::store::write_compat_source_projections(&source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/7c377d1> .
+
+<urn:atm:triage:occurrence/RBP-F002/S2/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 131 ;
+  triage:snippet "mailbox::store::write_compat_mailbox_projection(&request.path, &request.messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/7c377d1> .
+
+<urn:atm:triage:occurrence/RBP-F002/S2/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 147 ;
+  triage:snippet "crate::mailbox::source::discover_source_paths(...)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/7c377d1> .
+
+<urn:atm:triage:occurrence/RBP-F002/S2/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 156 ;
+  triage:snippet "poll_watch(WatchSubscriptionRequest { ... })?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/7c377d1> .
+
+<urn:atm:triage:occurrence/RBP-F002/S2/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 161 ;
+  triage:snippet "import_inbox_source(InboxIngressImportRequest { ... })?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:occursIn <urn:atm:triage:worktree/S2/7c377d1> .
+
+<urn:atm:triage:occurrence/RBP-F002/S3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 41 ;
+  triage:snippet "config::load_config(&request.current_dir)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/029992e> .
+
+<urn:atm:triage:occurrence/RBP-F002/S3/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 48 ;
+  triage:snippet "home::team_dir_from_home(&request.home_dir, &request.team)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/029992e> .
+
+<urn:atm:triage:occurrence/RBP-F002/S3/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 49 ;
+  triage:snippet "config::load_team_config(&team_dir)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/029992e> .
+
+<urn:atm:triage:occurrence/RBP-F002/S3/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 63 ;
+  triage:snippet "mailbox::import_compat_source_projections(...)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/029992e> .
+
+<urn:atm:triage:occurrence/RBP-F002/S3/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 123 ;
+  triage:snippet "mailbox::store::write_compat_source_projections(&source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/029992e> .
+
+<urn:atm:triage:occurrence/RBP-F002/S3/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 131 ;
+  triage:snippet "mailbox::store::write_compat_mailbox_projection(&request.path, &request.messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/029992e> .
+
+<urn:atm:triage:occurrence/RBP-F002/S3/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 147 ;
+  triage:snippet "crate::mailbox::source::discover_source_paths(...)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/029992e> .
+
+<urn:atm:triage:occurrence/RBP-F002/S3/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 156 ;
+  triage:snippet "poll_watch(WatchSubscriptionRequest { ... })?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/029992e> .
+
+<urn:atm:triage:occurrence/RBP-F002/S3/9>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 161 ;
+  triage:snippet "import_inbox_source(InboxIngressImportRequest { ... })?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:occursIn <urn:atm:triage:worktree/S3/029992e> .
+
+<urn:atm:triage:occurrence/RBP-F002/S4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 37 ;
+  triage:snippet "config::load_config(&request.current_dir)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/S4/64ade30> .
+
+<urn:atm:triage:occurrence/RBP-F002/S4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 44 ;
+  triage:snippet "home::team_dir_from_home(&request.home_dir, &request.team)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/S4/64ade30> .
+
+<urn:atm:triage:occurrence/RBP-F002/S4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 45 ;
+  triage:snippet "config::load_team_config(&team_dir)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/S4/64ade30> .
+
+<urn:atm:triage:occurrence/RBP-F002/S4/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 59 ;
+  triage:snippet "mailbox::import_compat_source_projections(...)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/S4/64ade30> .
+
+<urn:atm:triage:occurrence/RBP-F002/S4/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 119 ;
+  triage:snippet "mailbox::export_compat_source_projections(&source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/S4/64ade30> .
+
+<urn:atm:triage:occurrence/RBP-F002/S4/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 127 ;
+  triage:snippet "mailbox::export_compat_mailbox_projection(&request.path, &request.messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:occursIn <urn:atm:triage:worktree/S4/64ade30> .
+
+<urn:atm:triage:occurrence/RBP-F002/S5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 37 ;
+  triage:snippet "config::load_config(&request.current_dir)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:occursIn <urn:atm:triage:worktree/S5/45b1397> .
+
+<urn:atm:triage:occurrence/RBP-F002/S5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 44 ;
+  triage:snippet "home::team_dir_from_home(&request.home_dir, &request.team)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:occursIn <urn:atm:triage:worktree/S5/45b1397> .
+
+<urn:atm:triage:occurrence/RBP-F002/S5/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 45 ;
+  triage:snippet "config::load_team_config(&team_dir)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:occursIn <urn:atm:triage:worktree/S5/45b1397> .
+
+<urn:atm:triage:occurrence/RBP-F002/S5/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 59 ;
+  triage:snippet "mailbox::import_compat_source_projections(...)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:occursIn <urn:atm:triage:worktree/S5/45b1397> .
+
+<urn:atm:triage:occurrence/RBP-F002/S5/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 119 ;
+  triage:snippet "mailbox::export_compat_source_projections(&source_files)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:occursIn <urn:atm:triage:worktree/S5/45b1397> .
+
+<urn:atm:triage:occurrence/RBP-F002/S5/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/boundary_support.rs" ;
+  triage:line 127 ;
+  triage:snippet "mailbox::export_compat_mailbox_projection(&request.path, &request.messages)?" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:occursIn <urn:atm:triage:worktree/S5/45b1397> .
+
+<urn:atm:triage:worktree/S1/2a0b3ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "2a0b3ec" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/S2/7c377d1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "7c377d1" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/S3/029992e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "029992e" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/S4/64ade30>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "64ade30" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/S5/45b1397>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "45b1397" ;
+  triage:orderIndex 5 .

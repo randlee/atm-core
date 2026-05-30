@@ -1,0 +1,114 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-004" ;
+  triage:title "Lifecycle waiter uses ServeEvents channel — plan requires beacon-only shutdown signaling" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs lifecycle waiter still sends ServeEvent::Terminate via event_tx channel; plan §2 requires beacon-only shutdown signaling (ShutdownBeacon). Fix: replace ServeEvent::Terminate dispatch with ShutdownBeacon.trip() call." ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/S13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/S13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/S14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/S14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/S15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-004/S15/2> ;
+  triage:openOn <urn:atm:triage:worktree/S13/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/S14/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/S15/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/S13/4c03c2c> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/S13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 254 ;
+  triage:snippet "let _ = event_tx.send(ServeEvent::Terminate);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/S13/4c03c2c> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/S13/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 301 ;
+  triage:snippet "let _ = event_tx.send(ServeEvent::Terminate);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/S13/4c03c2c> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/S14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 254 ;
+  triage:snippet "let _ = event_tx.send(ServeEvent::Terminate);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/S14/cf57c48> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/S14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 301 ;
+  triage:snippet "let _ = event_tx.send(ServeEvent::Terminate);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/S14/cf57c48> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/S15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 254 ;
+  triage:snippet "let _ = event_tx.send(ServeEvent::Terminate);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/S15/93c63a9> .
+
+<urn:atm:triage:occurrence/ATM-QA-004/S15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 301 ;
+  triage:snippet "let _ = event_tx.send(ServeEvent::Terminate);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/S15/93c63a9> .
+
+<urn:atm:triage:worktree/S13/4c03c2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/S14/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/S15/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 .

@@ -17,7 +17,7 @@ fi
 
 TEAM="${ATM_TEAM:-atm-dev}"
 MESSAGE="You have unread ATM messages. Run: atm read --team ${TEAM}"
-LOG_FILE="/tmp/atm-nudge.log"
+LOG_FILE="${TMPDIR:-/tmp}/atm-nudge.log"
 TIMESTAMP="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 # Strategy 1: explicit env override ATM_NUDGE_ARCH_CTM, ATM_NUDGE_TEAM_LEAD, etc.

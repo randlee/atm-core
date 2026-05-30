@@ -1,0 +1,114 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S13-ARCH-003>
+  a triage:Finding ;
+  triage:findingId "S13-ARCH-003" ;
+  triage:title "RULE-005 duplicate — connect_daemon_local_ipc_until_ready defined in both tests.rs and local_ipc_transport.rs" ;
+  triage:description "fn connect_daemon_local_ipc_until_ready defined at tests.rs:116 (#[cfg(unix)]-gated) and again inside #[cfg(test)] module at local_ipc_transport.rs:1031. Same consolidation target as ARCH-001/S13-ARCH-002: move into crates/atm-daemon/src/test_support.rs; remove both inline definitions; import from test_support.rs. Note: the busy-spin pattern (yield_now loop) in this function is a separate minor finding (ATM-QA-009). Fix on feature/pS-s13-ipc-hardening; S.14 and S.15 receive via merge-forward." ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:rule "RULE-005" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T21:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s13-ipc-hardening" ;
+  triage:promoteToBranch "feature/pS-s13-ipc-hardening" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-ARCH-003/s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-ARCH-003/s13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-ARCH-003/s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-ARCH-003/s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-ARCH-003/s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S13-ARCH-003/s15/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c> .
+
+<urn:atm:triage:occurrence/S13-ARCH-003/s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 116 ;
+  triage:snippet "#[cfg(unix)] fn connect_daemon_local_ipc_until_ready(endpoint_path: &std::path::Path) -> LocalSocketStream — duplicate; canonical should be in test_support.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "4c03c2c" ;
+  triage:branch "feature/pS-s13-ipc-hardening" .
+
+<urn:atm:triage:occurrence/S13-ARCH-003/s13/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1031 ;
+  triage:snippet "fn connect_daemon_local_ipc_until_ready(endpoint_path: &Path) -> LocalSocketStream inside #[cfg(test)] module — duplicate; remove after canonical added to test_support.rs" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "4c03c2c" ;
+  triage:branch "feature/pS-s13-ipc-hardening" .
+
+<urn:atm:triage:occurrence/S13-ARCH-003/s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 116 ;
+  triage:snippet "fn connect_daemon_local_ipc_until_ready — propagated; resolved via merge-forward from s13 fix" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "cf57c48" ;
+  triage:branch "feature/pS-s14-impl" .
+
+<urn:atm:triage:occurrence/S13-ARCH-003/s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1042 ;
+  triage:snippet "fn connect_daemon_local_ipc_until_ready — propagated; resolved via merge-forward" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "cf57c48" ;
+  triage:branch "feature/pS-s14-impl" .
+
+<urn:atm:triage:occurrence/S13-ARCH-003/s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/tests.rs" ;
+  triage:line 116 ;
+  triage:snippet "fn connect_daemon_local_ipc_until_ready — propagated; resolved via merge-forward" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "93c63a9" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" .
+
+<urn:atm:triage:occurrence/S13-ARCH-003/s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 1031 ;
+  triage:snippet "fn connect_daemon_local_ipc_until_ready — propagated; resolved via merge-forward" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "93c63a9" ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" .
+
+<urn:atm:triage:worktree/feature-pS-s13-ipc-hardening/4c03c2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/feature-pS-s14-impl/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/feature-pS-s15-rusqlite-hardening/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .

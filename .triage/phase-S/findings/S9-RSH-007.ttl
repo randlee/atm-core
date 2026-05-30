@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S9-RSH-007>
+  a triage:Finding ;
+  triage:findingId "S9-RSH-007" ;
+  triage:title "WatchRuntime::shutdown() joins worker with no timeout — daemon shutdown can hang indefinitely" ;
+  triage:description "crates/atm-daemon/src/watch_runtime.rs:218 — WatchRuntime::shutdown() calls handle.join() unconditionally with no timeout after signalling the worker via the shutdown flag and condvar notify_all. If the watch worker stalls (e.g. blocked on file I/O or a notify event loop), daemon shutdown hangs indefinitely. Same class of bug as S9-RSH-001 (run_bounded_shutdown_step join-on-timeout). Found in S.9 QA-2 at c00b765. Fix: apply bounded-shutdown pattern — send shutdown signal, then either poll with a deadline or drop the handle on timeout rather than blocking unconditionally on join." ;
+  triage:category "RSH" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T03:30:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s9-logging-defaults" ;
+  triage:promoteToBranch "feature/pS-s9-logging-defaults" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-RSH-007/s9/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/c00b765> .
+
+<urn:atm:triage:occurrence/S9-RSH-007/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/watch_runtime.rs" ;
+  triage:line 218 ;
+  triage:snippet "handle.join().map_err(|_| AtmError::daemon_unavailable(...)) — unconditional join with no timeout in WatchRuntime::shutdown()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "c00b765" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/c00b765> .
+
+<urn:atm:triage:worktree/feature-pS-s9-logging-defaults/c00b765>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s9-logging-defaults" ;
+  triage:headSha "c00b765" ;
+  triage:orderIndex 1 .

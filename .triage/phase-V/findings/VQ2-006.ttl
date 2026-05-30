@@ -1,0 +1,14 @@
+finding_id = "VQ2-006"
+title = "Doc alignment gap: sprint-V2.md does not reflect all files touched by observability migration"
+severity = "minor"
+pattern = "doc-alignment-gap"
+repeatable = false
+sweep_scope = "docs/phase-V/sprint-V2.md"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "docs/phase-V/sprint-V2.md", lines = "", status = "open" }
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = "sprint-V2.md deliverable or file-scope section does not enumerate all files modified by the observability migration (e.g. boundary_adapters.rs, host_ownership.rs, notification_runtime.rs, peer_transport.rs, watch_runtime.rs). Update the plan doc to reflect actual scope so future reviewers have an accurate audit trail."

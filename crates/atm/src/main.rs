@@ -1,38 +1,49 @@
 mod commands;
+mod composition;
+mod constants;
 mod observability;
 mod output;
+mod output_contract;
 
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::{fs, fs::OpenOptions};
 
 use atm_core::error::AtmError;
 use atm_core::error_codes::AtmErrorCode;
 use atm_core::home;
+#[cfg(any(test, feature = "fault-injection"))]
+use atm_core::observability::RetainedSinkFaultMode;
 use atm_core::observability::{
-    AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityHealth, AtmObservabilityHealthState,
-    CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter, LogOrder, LogTailSession,
-    ObservabilityPort,
+    AtmLogQuery, AtmLogRecord, AtmLogSnapshot, AtmObservabilityDiagnostic, AtmObservabilityHealth,
+    AtmObservabilityHealthState, CommandEvent, LogFieldMap, LogFieldMatch, LogLevelFilter,
+    LogOrder, LogTailSession, ObservabilityPort, standard_level_for_outcome,
 };
 use chrono::{DateTime, Utc};
 use clap::Parser;
 use clap::error::ErrorKind;
-use sc_observability::{
-    ConsoleSink, JsonlFileSink, LogSink, Logger, LoggerBuilder, LoggerConfig, RetentionPolicy,
-    RotationPolicy, SinkRegistration,
-};
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability::LogSink;
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability::LoggerBuilder;
+use sc_observability::{ConsoleSink, Logger, LoggerConfig, SinkRegistration};
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability::{JsonlFileSink, RetentionPolicy, RotationPolicy};
 use sc_observability_types::{
-    ActionName, CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent,
-    LogQuery, OutcomeLabel, ProcessIdentity, QueryError, SchemaVersion, ServiceName, SinkHealth,
-    SinkHealthState, TargetCategory, Timestamp,
+    CorrelationId, DiagnosticInfo, Level, LevelFilter as SharedLevelFilter, LogEvent, LogQuery,
+    ProcessIdentity, QueryError, SchemaVersion, ServiceName, TargetCategory, Timestamp,
 };
+#[cfg(any(test, feature = "fault-injection"))]
+use sc_observability_types::{SinkHealth, SinkHealthState};
 use serde_json::Map;
 use time::OffsetDateTime;
 use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
-const ATM_SERVICE_NAME: &str = "atm";
 const ATM_COMMAND_TARGET: &str = "atm.command";
 const ATM_LOG_LEVEL_ENV: &str = "ATM_LOG";
+#[cfg(any(test, feature = "fault-injection"))]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
+const MAX_RETAINED_QUERY_RECORD_BYTES: usize = 64 * 1024;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConsoleLogRoute {
@@ -40,24 +51,87 @@ pub(crate) enum ConsoleLogRoute {
     Stderr,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-enum RetainedSinkFaultMode {
-    Degraded,
-    Unavailable,
-}
-
 fn main() {
     let exit_code = match run() {
         Ok(()) => 0,
         Err(error) => {
             eprintln!("{error}");
-            1
+            exit_code_for_atm_error(&error)
         }
     };
     std::process::exit(exit_code);
 }
 
-fn run() -> anyhow::Result<()> {
+#[cfg(test)]
+fn exit_code_for_error(error: &anyhow::Error) -> i32 {
+    error
+        .downcast_ref::<AtmError>()
+        .map_or(1, exit_code_for_atm_error)
+}
+
+fn exit_code_for_atm_error(error: &AtmError) -> i32 {
+    match error.code {
+        AtmErrorCode::ConfigHomeUnavailable
+        | AtmErrorCode::ConfigParseFailed
+        | AtmErrorCode::ConfigRetiredHookMembersKey
+        | AtmErrorCode::ConfigRetiredLegacyHookKeys
+        | AtmErrorCode::ConfigTeamParseFailed
+        | AtmErrorCode::ConfigTeamMissing => 2,
+        AtmErrorCode::IdentityUnavailable
+        | AtmErrorCode::IdentityConflict
+        | AtmErrorCode::AddressParseFailed
+        | AtmErrorCode::TeamUnavailable
+        | AtmErrorCode::TeamNotFound
+        | AtmErrorCode::AgentNotFound
+        | AtmErrorCode::MessageValidationFailed
+        | AtmErrorCode::AckInvalidState
+        | AtmErrorCode::ClearInvalidState
+        | AtmErrorCode::HelpTopicNotFound
+        | AtmErrorCode::TestFakeTransportInjectionFailed => 3,
+        AtmErrorCode::DaemonUnavailable
+        | AtmErrorCode::DaemonMayHaveExecuted
+        | AtmErrorCode::DaemonLifecycleWedge
+        | AtmErrorCode::DaemonLaunchGateRejected
+        | AtmErrorCode::DaemonServingStateRejected
+        | AtmErrorCode::DaemonStaleOwnerRecoveryFailed
+        | AtmErrorCode::DaemonAutoStartFailed
+        | AtmErrorCode::DaemonAdvisorySessionAlreadyRegistered
+        | AtmErrorCode::DaemonAdvisorySessionNotRegistered
+        | AtmErrorCode::RemoteDeliveryOutcomeUnknown
+        | AtmErrorCode::WarningSqliteHealthDegraded => 4,
+        AtmErrorCode::MailboxReadFailed
+        | AtmErrorCode::MailboxWriteFailed
+        | AtmErrorCode::MailboxLockFailed
+        | AtmErrorCode::MailboxLockReadOnlyFilesystem
+        | AtmErrorCode::MailboxLockTimeout => 5,
+        AtmErrorCode::FilePolicyRejected | AtmErrorCode::FileReferenceRewriteFailed => 6,
+        AtmErrorCode::ObservabilityEmitFailed
+        | AtmErrorCode::ObservabilityQueryFailed
+        | AtmErrorCode::ObservabilityFollowFailed
+        | AtmErrorCode::ObservabilityHealthFailed
+        | AtmErrorCode::ObservabilityBootstrapFailed
+        | AtmErrorCode::ObservabilityHealthOk => 7,
+        AtmErrorCode::SerializationFailed => 8,
+        AtmErrorCode::WaitTimeout => 9,
+        AtmErrorCode::WarningInvalidTeamMemberSkipped
+        | AtmErrorCode::WarningMailboxRecordSkipped
+        | AtmErrorCode::WarningMalformedAtmFieldIgnored
+        | AtmErrorCode::WarningObservabilityHealthDegraded
+        | AtmErrorCode::WarningOriginInboxEntrySkipped
+        | AtmErrorCode::WarningMissingTeamConfigFallback
+        | AtmErrorCode::WarningSendAlertStateDegraded
+        | AtmErrorCode::WarningIdentityDrift
+        | AtmErrorCode::WarningRosterDrift
+        | AtmErrorCode::WarningBaselineMemberMissing
+        | AtmErrorCode::WarningRestoreInProgress
+        | AtmErrorCode::WarningStaleMailboxLock
+        | AtmErrorCode::WarningHookSkipped
+        | AtmErrorCode::WarningHookExecutionFailed
+        | AtmErrorCode::InternalError => 1,
+    }
+}
+
+fn run() -> Result<(), AtmError> {
     let cli = match commands::Cli::try_parse() {
         Ok(cli) => cli,
         Err(error) => {
@@ -65,70 +139,91 @@ fn run() -> anyhow::Result<()> {
                 error.kind(),
                 ErrorKind::DisplayHelp | ErrorKind::DisplayVersion
             ) {
-                error.print()?;
+                error.print().map_err(|source| {
+                    AtmError::validation("failed to write ATM help/version output")
+                        .with_source(source)
+                })?;
                 return Ok(());
             }
             let validation_error = atm_core::error::AtmError::validation(error.to_string());
             observability::CliObservability::fallback()
-                .emit_fatal_error("parse", &validation_error);
-            return Err(error.into());
+                .report_fatal_error("parse", &validation_error);
+            return Err(validation_error);
         }
     };
 
     if let Err(error) = init_tracing(cli.stderr_logs()) {
         let fallback = observability::CliObservability::fallback();
-        fallback.emit_fatal_error("bootstrap", &error);
-        return Err(error.into());
+        fallback.report_fatal_error("bootstrap", &error);
+        return Err(error);
     }
 
     let observability = match init_observability(cli.stderr_logs()) {
         Ok(observability) => observability,
         Err(error) => {
             let fallback = observability::CliObservability::fallback();
-            fallback.emit_fatal_error("bootstrap", &error);
-            return Err(error.into());
+            fallback.report_fatal_error("bootstrap", &error);
+            return Err(error);
         }
     };
 
     match cli.run(&observability) {
         Ok(()) => Ok(()),
+        Err(error) => Err(report_and_map_service_error(&observability, error)),
+    }
+}
+
+fn report_and_map_service_error(
+    observability: &observability::CliObservability,
+    error: anyhow::Error,
+) -> AtmError {
+    match error.downcast::<AtmError>() {
+        Ok(error) => {
+            observability.report_fatal_error("service", &error);
+            error
+        }
         Err(error) => {
-            observability.emit_fatal_error("service", error.as_ref());
-            Err(error)
+            let mapped =
+                AtmError::validation(format!("ATM CLI command failed unexpectedly: {error}"));
+            observability.report_fatal_error("service", &mapped);
+            mapped
         }
     }
 }
 
 fn init_observability(stderr_logs: bool) -> Result<observability::CliObservability, AtmError> {
-    let home_dir = home::atm_home()?;
+    let log_dir = home::host_log_dir()?;
     let console_log_route = if stderr_logs {
         ConsoleLogRoute::Stderr
     } else {
         ConsoleLogRoute::Disabled
     };
-    let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|source| {
+    let service_name = ServiceName::new(constants::ATM_SERVICE_NAME).map_err(|source| {
         AtmError::observability_bootstrap("failed to validate ATM service name").with_source(source)
     })?;
     let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|source| {
         AtmError::observability_bootstrap("failed to validate ATM observability target")
             .with_source(source)
     })?;
-    let logger = build_logger(&home_dir, console_log_route, &service_name)?;
+    let (logger, active_log_path) = build_logger(&log_dir, console_log_route, &service_name)?;
 
     Ok(observability::CliObservability::from_boxed_port(Box::new(
-        ScObservabilityAdapter::new(logger, service_name, target_category),
+        ScObservabilityAdapter::new(logger, active_log_path, service_name, target_category),
     )))
 }
 
 pub(crate) fn build_logger(
-    home_dir: &Path,
+    log_dir: &Path,
     console_log_route: ConsoleLogRoute,
     service_name: &ServiceName,
-) -> Result<Logger, AtmError> {
-    let mut config = LoggerConfig::default_for(service_name.clone(), log_root(home_dir));
-    if let Some(level) = logger_level_override()? {
-        config.level = level;
-    }
+) -> Result<(Logger, PathBuf), AtmError> {
+    let active_log_path = log_dir.join("atm.log.jsonl");
+    ensure_retained_log_ready(log_dir, &active_log_path)?;
+    let mut config =
+        LoggerConfig::default_for(service_name.clone(), logger_root_for_log_dir(log_dir)?);
+    config.level = logger_level_override()?.unwrap_or(SharedLevelFilter::Info);
+    // Make the retained file threshold explicit so lifecycle info! events stay
+    // in the default retained log unless ATM_LOG overrides the level.
     // ATM CLI owns stdout/stderr UX by default; only opt into a shared
     // console sink when the CLI routing rule explicitly selects one.
     config.enable_console_sink = false;
@@ -139,20 +234,47 @@ pub(crate) fn build_logger(
     if console_log_route == ConsoleLogRoute::Stderr {
         builder.register_sink(SinkRegistration::new(Arc::new(ConsoleSink::stderr())));
     }
+    #[cfg(any(test, feature = "fault-injection"))]
     if let Some(mode) = retained_sink_fault_mode()? {
-        register_retained_sink_fault(&mut builder, home_dir, mode);
+        register_retained_sink_fault(&mut builder, log_dir, mode);
     }
-    Ok(builder.build())
+    Ok((builder.build(), active_log_path))
 }
 
-fn log_root(home_dir: &Path) -> PathBuf {
-    home_dir.join(".local").join("share")
+fn ensure_retained_log_ready(log_dir: &Path, active_log_path: &Path) -> Result<(), AtmError> {
+    fs::create_dir_all(log_dir).map_err(|source| {
+        AtmError::observability_bootstrap(format!(
+            "failed to create retained log directory {}",
+            log_dir.display()
+        ))
+        .with_source(source)
+    })?;
+    OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(active_log_path)
+        .map(|_| ())
+        .map_err(|source| {
+            AtmError::observability_bootstrap(format!(
+                "failed to open retained log file {} during startup",
+                active_log_path.display()
+            ))
+            .with_source(source)
+        })
 }
 
-fn fault_injection_log_path(home_dir: &Path) -> PathBuf {
-    log_root(home_dir)
-        .join("logs")
-        .join("atm-fault-injection.log.jsonl")
+fn logger_root_for_log_dir(log_dir: &Path) -> Result<PathBuf, AtmError> {
+    log_dir.parent().map(Path::to_path_buf).ok_or_else(|| {
+        AtmError::observability_bootstrap(format!(
+            "failed to determine the retained-log root parent for {}",
+            log_dir.display()
+        ))
+    })
+}
+
+#[cfg(any(test, feature = "fault-injection"))]
+fn fault_injection_log_path(log_dir: &Path) -> PathBuf {
+    log_dir.join("atm-fault-injection.log.jsonl")
 }
 
 fn init_tracing(stderr_logs: bool) -> Result<(), AtmError> {
@@ -208,6 +330,7 @@ fn tracing_level_filter(level: SharedLevelFilter) -> TracingLevelFilter {
     }
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError> {
     let Some(value) = std::env::var(ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV)
         .ok()
@@ -226,13 +349,14 @@ fn retained_sink_fault_mode() -> Result<Option<RetainedSinkFaultMode>, AtmError>
     }
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 fn register_retained_sink_fault(
     builder: &mut LoggerBuilder,
-    home_dir: &Path,
+    log_dir: &Path,
     mode: RetainedSinkFaultMode,
 ) {
     let sink = Arc::new(JsonlFileSink::new(
-        fault_injection_log_path(home_dir),
+        fault_injection_log_path(log_dir),
         RotationPolicy::default(),
         RetentionPolicy::default(),
     ));
@@ -241,11 +365,13 @@ fn register_retained_sink_fault(
     )));
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 struct RetainedSinkHealthOverride {
     inner: Arc<dyn LogSink>,
     mode: RetainedSinkFaultMode,
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 impl RetainedSinkHealthOverride {
     fn new(inner: Arc<dyn LogSink>, mode: RetainedSinkFaultMode) -> Self {
         Self { inner, mode }
@@ -259,6 +385,7 @@ impl RetainedSinkHealthOverride {
     }
 }
 
+#[cfg(any(test, feature = "fault-injection"))]
 impl LogSink for RetainedSinkHealthOverride {
     fn write(
         &self,
@@ -280,21 +407,28 @@ impl LogSink for RetainedSinkHealthOverride {
 
 struct ScObservabilityAdapter {
     logger: Logger,
+    active_log_path: PathBuf,
     service_name: ServiceName,
     target_category: TargetCategory,
 }
 
 impl ScObservabilityAdapter {
-    fn new(logger: Logger, service_name: ServiceName, target_category: TargetCategory) -> Self {
+    fn new(
+        logger: Logger,
+        active_log_path: PathBuf,
+        service_name: ServiceName,
+        target_category: TargetCategory,
+    ) -> Self {
         Self {
             logger,
+            active_log_path,
             service_name,
             target_category,
         }
     }
 }
 
-impl atm_core::observability::sealed::Sealed for ScObservabilityAdapter {}
+impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
 
 impl ObservabilityPort for ScObservabilityAdapter {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
@@ -332,59 +466,47 @@ impl ObservabilityPort for ScObservabilityAdapter {
             .query
             .as_ref()
             .map(|query| map_query_state(query.state));
-        let query_detail = report
+        let query_diagnostic = report
             .query
             .as_ref()
-            .and_then(|query| query.last_error.clone().map(render_diagnostic_summary));
+            .and_then(|query| query.last_error.clone().map(map_diagnostic_summary));
+        let diagnostic = report
+            .last_error
+            .map(map_diagnostic_summary)
+            .or(query_diagnostic);
+        let detail = diagnostic
+            .as_ref()
+            .map(|diagnostic| diagnostic.message.clone())
+            .or_else(|| {
+                report.maintenance.as_ref().map(|maintenance| {
+                    format!(
+                        "maintenance state={} rotated_files_total={} pruned_files_total={} last_pass_at={}",
+                        match maintenance.state {
+                            sc_observability_types::MaintenanceWorkerState::Running => "running",
+                            sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
+                            sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
+                        },
+                        maintenance.rotated_files_total,
+                        maintenance.pruned_files_total,
+                        maintenance
+                            .last_pass_at
+                            .map(|timestamp| timestamp.into_inner().to_string())
+                            .unwrap_or_else(|| "never".to_string())
+                    )
+                })
+            });
         Ok(AtmObservabilityHealth {
-            active_log_path: Some(report.active_log_path),
+            active_log_path: Some(self.active_log_path.clone()),
             logging_state: map_logging_state(report.state),
             query_state,
-            detail: report
-                .last_error
-                .map(render_diagnostic_summary)
-                .or(query_detail),
+            maintenance: report.maintenance,
+            diagnostic,
+            detail,
         })
     }
 }
 
-fn map_command_event(
-    service_name: &ServiceName,
-    target_category: &TargetCategory,
-    event: CommandEvent,
-) -> Result<LogEvent, AtmError> {
-    let schema_version =
-        SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
-            .map_err(|source| {
-                AtmError::observability_emit("failed to validate ATM observability schema version")
-                    .with_source(source)
-            })?;
-    let action = ActionName::new(event.action).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM observability action")
-            .with_source(source)
-    })?;
-    let request_id = event
-        .message_id
-        .map(|value| CorrelationId::new(value.to_string()))
-        .transpose()
-        .map_err(|source| {
-            AtmError::observability_emit("failed to validate ATM observability request id")
-                .with_source(source)
-        })?;
-    let correlation_id = event
-        .task_id
-        .as_deref()
-        .map(CorrelationId::new)
-        .transpose()
-        .map_err(|source| {
-            AtmError::observability_emit("failed to validate ATM observability correlation id")
-                .with_source(source)
-        })?;
-    let outcome = OutcomeLabel::new(event.outcome).map_err(|source| {
-        AtmError::observability_emit("failed to validate ATM observability outcome label")
-            .with_source(source)
-    })?;
-
+fn build_command_event_fields(event: &CommandEvent) -> Map<String, serde_json::Value> {
     let mut fields = Map::new();
     fields.insert(
         "command".to_string(),
@@ -400,7 +522,7 @@ fn map_command_event(
     );
     fields.insert(
         "sender".to_string(),
-        serde_json::Value::String(event.sender.clone()),
+        serde_json::Value::String(event.sender.to_string()),
     );
     fields.insert(
         "requires_ack".to_string(),
@@ -434,14 +556,45 @@ fn map_command_event(
             serde_json::Value::String(error_message.clone()),
         );
     }
+    fields
+}
 
+fn map_command_event(
+    service_name: &ServiceName,
+    target_category: &TargetCategory,
+    event: CommandEvent,
+) -> Result<LogEvent, AtmError> {
+    let schema_version =
+        SchemaVersion::new(sc_observability_types::constants::OBSERVATION_ENVELOPE_VERSION)
+            .map_err(|source| {
+                AtmError::observability_emit("failed to validate ATM observability schema version")
+                    .with_source(source)
+            })?;
+    let request_id = event
+        .message_id
+        .map(|value| CorrelationId::new(value.to_string()))
+        .transpose()
+        .map_err(|source| {
+            AtmError::observability_emit("failed to validate ATM observability request id")
+                .with_source(source)
+        })?;
+    let correlation_id = event
+        .task_id
+        .as_deref()
+        .map(CorrelationId::new)
+        .transpose()
+        .map_err(|source| {
+            AtmError::observability_emit("failed to validate ATM observability correlation id")
+                .with_source(source)
+        })?;
+    let fields = build_command_event_fields(&event);
     Ok(LogEvent {
         version: schema_version,
         timestamp: Timestamp::now_utc(),
-        level: level_for_outcome(event.outcome),
+        level: level_for_outcome(event.outcome.as_str()),
         service: service_name.clone(),
         target: target_category.clone(),
-        action,
+        action: event.action,
         message: Some(format!(
             "ATM command {} completed with outcome {}",
             event.command, event.outcome
@@ -450,7 +603,7 @@ fn map_command_event(
         trace: None,
         request_id,
         correlation_id,
-        outcome: Some(outcome),
+        outcome: Some(event.outcome),
         diagnostic: None,
         state_transition: None,
         fields,
@@ -496,32 +649,51 @@ fn map_field_match(
 }
 
 fn map_snapshot(snapshot: sc_observability_types::LogSnapshot) -> Result<AtmLogSnapshot, AtmError> {
-    let records = snapshot
-        .events
-        .into_iter()
-        .map(map_record)
-        .collect::<Result<Vec<_>, _>>()?;
+    let records = snapshot.events.into_iter().try_fold(
+        Vec::new(),
+        |mut records, event| -> Result<Vec<AtmLogRecord>, AtmError> {
+            if let Some(record) = map_record(event)? {
+                records.push(record);
+            }
+            Ok(records)
+        },
+    )?;
     Ok(AtmLogSnapshot {
         records,
         truncated: snapshot.truncated,
     })
 }
 
-fn map_record(event: LogEvent) -> Result<AtmLogRecord, AtmError> {
+fn map_record(event: LogEvent) -> Result<Option<AtmLogRecord>, AtmError> {
+    let encoded = serde_json::to_vec(&event).map_err(|source| {
+        AtmError::observability_query("failed to encode shared retained log event")
+            .with_source(source)
+    })?;
+    if encoded.len() > MAX_RETAINED_QUERY_RECORD_BYTES {
+        tracing::warn!(
+            bytes = encoded.len(),
+            max_bytes = MAX_RETAINED_QUERY_RECORD_BYTES,
+            service = %event.service,
+            target = %event.target,
+            action = %event.action,
+            "dropping oversized retained log record during ATM projection"
+        );
+        return Ok(None);
+    }
     let fields = serde_json::from_value::<LogFieldMap>(serde_json::Value::Object(event.fields))
         .map_err(|source| {
             AtmError::observability_query("failed to project shared log fields into ATM types")
                 .with_source(source)
         })?;
-    Ok(AtmLogRecord {
+    Ok(Some(AtmLogRecord {
         timestamp: map_timestamp_back(event.timestamp)?,
         severity: map_level_back(event.level),
-        service: event.service.to_string(),
+        service: event.service,
         target: Some(event.target.to_string()),
         action: Some(event.action.to_string()),
         message: event.message,
         fields,
-    })
+    }))
 }
 
 fn map_timestamp(timestamp: atm_core::types::IsoTimestamp) -> Result<Timestamp, AtmError> {
@@ -599,47 +771,55 @@ fn map_query_state(state: sc_observability_types::QueryHealthState) -> AtmObserv
 }
 
 fn level_for_outcome(outcome: &str) -> Level {
-    match outcome {
-        "ok" | "sent" | "dry_run" => Level::Info,
-        "timeout" => Level::Warn,
-        "error" | "failed" => Level::Error,
-        other => {
-            tracing::warn!(code = %AtmErrorCode::ObservabilityEmitFailed,
-                outcome = other,
-                "unknown ATM command outcome for observability level"
-            );
-            Level::Warn
-        }
+    if matches!(
+        outcome,
+        "initial_miss"
+            | "retry_attempt"
+            | "pending"
+            | "connected"
+            | "acquired"
+            | "launched"
+            | "spawn_requested"
+            | "publish_wait_started"
+            | "publish_wait_continuing"
+            | "auto_started"
+    ) {
+        return Level::Debug;
     }
+    standard_level_for_outcome(outcome)
 }
 
 fn map_query_error(source: QueryError) -> AtmError {
-    let code = source.code().as_str().to_string();
-    AtmError::observability_query(format!("shared observability query failed ({code})"))
-        .with_source(source)
+    AtmError::observability_query("shared observability query failed").with_source(source)
 }
 
 fn map_follow_error(phase: &str, source: QueryError) -> AtmError {
-    let code = source.code().as_str().to_string();
-    AtmError::observability_follow(format!(
-        "shared observability follow {phase} failed ({code})"
-    ))
-    .with_source(source)
+    AtmError::observability_follow(format!("shared observability follow {phase} failed"))
+        .with_source(source)
 }
 
-fn render_diagnostic_summary(summary: sc_observability_types::DiagnosticSummary) -> String {
-    match summary.code {
-        Some(code) => format!("{}: {}", code.as_str(), summary.message),
-        None => summary.message,
+fn map_diagnostic_summary(
+    summary: sc_observability_types::DiagnosticSummary,
+) -> AtmObservabilityDiagnostic {
+    AtmObservabilityDiagnostic {
+        code: summary.code,
+        message: summary.message,
     }
 }
 
-#[cfg(test)]
-pub(crate) fn new_adapter_port_for_tests(
+#[allow(
+    unfulfilled_lint_expectations,
+    reason = "The adapter-port constructor is exercised in normal builds even though the dead-code expectation remains documented for narrower configurations."
+)]
+#[expect(
+    dead_code,
+    reason = "The adapter-port constructor remains part of the CLI observability surface even when specific test configurations do not call it directly."
+)]
+pub(crate) fn new_adapter_port(
     home_dir: &std::path::Path,
     stderr_logs: bool,
 ) -> Result<Box<dyn ObservabilityPort + Send + Sync>, AtmError> {
-    let service_name = ServiceName::new(ATM_SERVICE_NAME).map_err(|source| {
+    let service_name = ServiceName::new(constants::ATM_SERVICE_NAME).map_err(|source| {
         AtmError::observability_bootstrap("failed to validate ATM service name").with_source(source)
     })?;
     let target_category = TargetCategory::new(ATM_COMMAND_TARGET).map_err(|source| {
@@ -651,56 +831,53 @@ pub(crate) fn new_adapter_port_for_tests(
     } else {
         ConsoleLogRoute::Disabled
     };
-    let logger = build_logger(home_dir, console_log_route, &service_name)?;
+    let test_log_dir = resolve_adapter_log_dir(home_dir)?;
+    let (logger, active_log_path) = build_logger(&test_log_dir, console_log_route, &service_name)?;
     Ok(Box::new(ScObservabilityAdapter::new(
         logger,
+        active_log_path,
         service_name,
         target_category,
     )))
 }
 
+fn resolve_adapter_log_dir(_home_dir: &Path) -> Result<PathBuf, AtmError> {
+    match home::host_log_dir() {
+        Ok(log_dir) => Ok(log_dir),
+        #[cfg(test)]
+        Err(error) if error.code == AtmErrorCode::ConfigHomeUnavailable => {
+            Ok(home::host_log_dir_from_home(_home_dir))
+        }
+        Err(error) => Err(error),
+    }
+}
+
 #[cfg(test)]
 mod adapter_tests {
-    use std::sync::{Mutex, OnceLock};
-
+    use anyhow::anyhow;
+    use atm_core::error::AtmError;
+    use atm_core::test_support::EnvGuard;
     use sc_observability_types::LevelFilter as SharedLevelFilter;
     use serial_test::serial;
+    use tempfile::TempDir;
     use tracing_subscriber::filter::LevelFilter as TracingLevelFilter;
 
     use super::{
-        ATM_LOG_LEVEL_ENV, level_for_outcome, logger_level_override, tracing_level_filter,
+        ATM_LOG_LEVEL_ENV, exit_code_for_atm_error, exit_code_for_error, init_observability,
+        level_for_outcome, logger_level_override, tracing_level_filter,
     };
 
-    fn env_lock() -> &'static Mutex<()> {
-        static LOCK: OnceLock<Mutex<()>> = OnceLock::new();
-        LOCK.get_or_init(|| Mutex::new(()))
-    }
-
-    fn with_env_var<R>(key: &str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
-        let _guard = env_lock().lock().expect("env lock");
-        let previous = std::env::var_os(key);
+    fn with_env_var<R>(key: &'static str, value: Option<&str>, f: impl FnOnce() -> R) -> R {
         match value {
             Some(value) => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::set_var(key, value) }
+                let _guard = EnvGuard::set_raw(key, value);
+                f()
             }
             None => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::remove_var(key) }
+                let _guard = EnvGuard::unset_raw(key);
+                f()
             }
         }
-        let result = f();
-        match previous {
-            Some(value) => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::set_var(key, value) }
-            }
-            None => {
-                // SAFETY: this test helper serializes process environment access.
-                unsafe { std::env::remove_var(key) }
-            }
-        }
-        result
     }
 
     #[test]
@@ -717,6 +894,19 @@ mod adapter_tests {
             ("ok", sc_observability_types::Level::Info),
             ("sent", sc_observability_types::Level::Info),
             ("dry_run", sc_observability_types::Level::Info),
+            ("initial_miss", sc_observability_types::Level::Debug),
+            ("retry_attempt", sc_observability_types::Level::Debug),
+            ("pending", sc_observability_types::Level::Debug),
+            ("connected", sc_observability_types::Level::Debug),
+            ("acquired", sc_observability_types::Level::Debug),
+            ("launched", sc_observability_types::Level::Debug),
+            ("spawn_requested", sc_observability_types::Level::Debug),
+            ("publish_wait_started", sc_observability_types::Level::Debug),
+            (
+                "publish_wait_continuing",
+                sc_observability_types::Level::Debug,
+            ),
+            ("auto_started", sc_observability_types::Level::Debug),
             ("timeout", sc_observability_types::Level::Warn),
             ("error", sc_observability_types::Level::Error),
             ("failed", sc_observability_types::Level::Error),
@@ -758,5 +948,54 @@ mod adapter_tests {
             tracing_level_filter(SharedLevelFilter::Off),
             TracingLevelFilter::OFF
         );
+    }
+
+    #[test]
+    #[serial]
+    fn init_observability_fails_closed_when_atm_log_dir_is_invalid() {
+        let tempdir = TempDir::new().expect("tempdir");
+        let _env = EnvGuard::set_many([
+            ("ATM_LOG", Some("info")),
+            ("ATM_LOG_DIR", Some("relative/logs")),
+            ("HOME", Some(tempdir.path().to_str().expect("utf8 path"))),
+        ]);
+
+        let error = init_observability(false).expect_err("invalid ATM_LOG_DIR should fail closed");
+        assert!(error.is_config());
+        assert!(error.message.contains("absolute path"));
+    }
+
+    #[test]
+    fn exit_code_categories_map_to_distinct_values() {
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::home_directory_unavailable()),
+            2
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::validation("bad input")),
+            3
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::daemon_unavailable("daemon down")),
+            4
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::mailbox_lock("locked")),
+            5
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::file_policy("blocked")),
+            6
+        );
+        assert_eq!(
+            exit_code_for_atm_error(&AtmError::observability_emit("emit failed")),
+            7
+        );
+    }
+
+    #[test]
+    fn non_atm_errors_fall_back_to_exit_code_one() {
+        let error = anyhow!("plain anyhow failure");
+        assert_eq!(exit_code_for_error(&error), 1);
     }
 }

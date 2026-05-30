@@ -5,20 +5,76 @@
 This document defines the `atm-rusqlite` crate architectural boundary.
 
 It complements the product and `atm-core` architecture documents and owns only
-the first concrete SQLite implementation of the Phase Q store family.
+the first concrete SQLite implementation of the current store family.
+
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
+
+## 1.1 ADRs
+
+## Concrete SQLite adapters remain private
+
+```yaml
+adr_id: ADR-ATM-RUSQLITE-001
+crate: atm-rusqlite
+title: Concrete SQLite adapters remain private
+status: accepted
+date: 2026-05-03
+deciders:
+  - team-lead
+  - arch-ctm
+tags:
+  - privacy
+  - sqlite
+related_boundaries:
+  - BOUNDARY-MailStore-Sqlite
+  - BOUNDARY-RosterStore-Sqlite
+code_references:
+  - docs/atm-rusqlite/boundaries.md
+  - docs/atm-core/boundaries.md
+```
+
+Context:
+- Direct caller access to SQLite implementation types is one of the clearest
+  architecture violations from the abandoned early SQLite line.
+
+Decision:
+- Concrete SQLite adapter types, constructors, and re-exports remain private.
+- Callers depend on `atm-core` contracts, not on concrete SQLite types.
+
+Consequences:
+- CLI and thin extension crates cannot bypass store contracts.
+- Runtime composition may still assemble the concrete adapters through the
+  legal composition owner.
+
+Alternatives considered:
+- Public concrete store types with policy enforced only by review.
+
+Follow-up work:
+- Keep forbidden dependency edges and reference checks aligned with this rule.
 
 ## 2. Architectural Rules
 
 - `atm-rusqlite` implements store contracts; it does not define them.
 - `atm-rusqlite` must not own workflow, routing, daemon, watcher, transport,
   or notifier business logic.
+- bounded queue-query support for Phase S now owns the concrete SQL metadata
+  projections and bounded row/count helpers used by `atm list` and
+  selector-driven `atm read`, while logical message selection rules remain in
+  `atm-core`
 - all direct SQLite access stays inside this crate.
 - concrete `rusqlite` types, row mappers, connection wiring, and migration
   helpers remain private implementation details.
 - public callers depend on `atm-core` traits such as `MailStore`, `TaskStore`,
   and `RosterStore`, not on concrete SQLite structs.
+- schema changes are architecture changes and require explicit user approval
+  plus matching doc updates before they land.
 - routine database failure handling uses typed `Result`/error-enum paths rather
   than panic/unwrap.
+- thin callers and runtime callers should depend on `atm-core` contracts
+  rather than this crate directly
+- the current production runtime composition root may depend on this crate in
+  order to assemble concrete store adapters
 
 ## 3. Store Implementation Shape
 
@@ -26,8 +82,28 @@ The first implementation may share one internal SQLite root object, but the
 public boundary shape must remain split:
 
 - `MailStore`
-- `TaskStore`
 - `RosterStore`
+- `TaskStore` may remain an upstream trait, but no SQLite task schema is
+  approved until the task model is explicitly designed.
+
+Within `MailStore`, the current approved durable shape is:
+- `mail_messages` for immutable/authored message content
+- `mail_message_states` for mutable mailbox state such as read, ack, expiry,
+  and delete visibility
+
+Within `RosterStore`, the current approved durable shape is:
+- one canonical `team_roster` member table
+- explicit member fields for `member_kind`, `harness`, `agent_type`, `model`,
+  optional `recipient_pane_id`, and `metadata_json`
+- no whole-roster JSON snapshot table
+- no durable member `pid`
+
+Mail content/provenance rule:
+- weak provenance round-trip fields are not part of the `MailStoreMessageRecord`
+  contract
+- if the SQLite implementation keeps ingest timing such as `recorded_at` for
+  local health/reporting, that timing remains store-owned internal data rather
+  than caller-supplied message content
 
 Architectural rule:
 - sharing one internal connection/transaction root is acceptable
@@ -43,7 +119,7 @@ Architectural rule:
 - enforcement of:
   - `journal_mode = WAL`
   - `foreign_keys = ON`
-  - `busy_timeout = 1500ms`
+  - `busy_timeout = 5000ms`
   - explicit transactions for mutating operations
 
 `atm-rusqlite` does not own:
@@ -62,7 +138,7 @@ Rules:
 - ATM-owned `AtmErrorCode` remains the public code vocabulary
 - the crate must not invent local ad hoc error-code strings
 - connection open/configuration is not complete until `journal_mode = WAL`,
-  `foreign_keys = ON`, and `busy_timeout = 1500ms` have all been enforced
+  `foreign_keys = ON`, and `busy_timeout = 5000ms` have all been enforced
 - `SQLITE_BUSY` must map to a typed retry-able ATM store error rather than
   leaking as a raw driver failure
 - `SQLITE_BUSY_SNAPSHOT` must map to a typed retry-able or replay-required ATM
@@ -83,7 +159,7 @@ Rules:
   thread pool
 - direct invocation of `rusqlite` calls from an async task is not permitted in
   production because it can block the runtime under mailbox or ingest load
-- the dedicated blocking execution path must respect the Phase Q SQLite handle
+- the dedicated blocking execution path must respect the approved SQLite handle
   budget of `1..=4`
 
 ## 7. Testability

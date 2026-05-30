@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-003" ;
+  triage:title "Missing 'initial connect miss' trace event in DaemonSupervisor bootstrap" ;
+  triage:description "When the first try_connect() attempt fails in DaemonSupervisor, no distinct trace event is emitted. The attempt-level 'initial connect miss' event is absent at lib.rs:229." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-003/integrate-phase-W/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-W/fc2c8ae> ;
+  triage:fixedOn <urn:atm:triage:worktree/pW-s2-daemon-client-traceability/f3c1b3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s2-daemon-client-traceability/f3c1b3d> .
+
+<urn:atm:triage:occurrence/ATM-QA-003/integrate-phase-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 122 ;
+  triage:snippet "if try_connect().is_ok() { return Ok(()); } /* no trace emit on first-attempt miss */" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-W/fc2c8ae> .
+
+<urn:atm:triage:worktree/pW-s2-daemon-client-traceability/f3c1b3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/fc2c8ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:orderIndex 2 .

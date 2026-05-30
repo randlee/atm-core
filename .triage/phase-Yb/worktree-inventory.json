@@ -1,0 +1,48 @@
+{
+  "phase_id": "phase-Yb",
+  "integration_branch": "integrate/phase-Y",
+  "integration_worktree_path": "../atm-core-worktrees/integrate/phase-Y",
+  "triage_root": "../atm-core-worktrees/integrate/phase-Y/.triage",
+  "worktrees": [
+    {
+      "order": 1,
+      "branch": "feature/pYb-s7-degraded-delivery-contract-hardening",
+      "path": "../atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening",
+      "sprint": "Y.7",
+      "sprint_doc": "docs/phase-Yb/sprint-Y7.md",
+      "status": "in_progress"
+    },
+    {
+      "order": 2,
+      "branch": "feature/pYb-s8-policy-cleanup-and-impossible-path-removal",
+      "path": "../atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal",
+      "sprint": "Y.8",
+      "sprint_doc": "docs/phase-Yb/sprint-Y8.md",
+      "status": "pending"
+    },
+    {
+      "order": 3,
+      "branch": "feature/pYb-s9-non-claude-outbound-boundary-formalization",
+      "path": "../atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization",
+      "sprint": "Y.9",
+      "sprint_doc": "docs/phase-Yb/sprint-Y9.md",
+      "status": "pending"
+    },
+    {
+      "order": 4,
+      "branch": "feature/pYb-s10-boundary-enforcement-and-smoke-handoff",
+      "path": "../atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff",
+      "sprint": "Y.10",
+      "sprint_doc": "docs/phase-Yb/sprint-Y10.md",
+      "status": "pending"
+    },
+    {
+      "order": 5,
+      "branch": "integrate/phase-Yb",
+      "path": "../atm-core-worktrees/integrate/phase-Yb",
+      "sprint": "integration",
+      "sprint_doc": "docs/phase-Yb/plan-phase-Yb.md",
+      "status": "active"
+    }
+  ]
+}

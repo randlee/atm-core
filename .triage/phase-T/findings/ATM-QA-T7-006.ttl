@@ -1,0 +1,124 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T7-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T7-006" ;
+  triage:title "BOUNDARY-001 boundary record absent from boundaries.md" ;
+  triage:description "docs/atm-core/boundaries.md and docs/atm-rusqlite/boundaries.md have no entry for the rusqlite::Connection / message_count_in_connection RULE-012 path. ADR-ATM-RUSQLITE-002 references BOUNDARY-MailStore-Sqlite etc. but BOUNDARY-001 record is absent. Fix: add BOUNDARY-001 boundary record referencing ADR-ATM-RUSQLITE-002 to docs/atm-rusqlite/boundaries.md." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-006/pT-t4-windows-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-006/pT-t5-hardening/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-006/pT-t6-graft-client-surface/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-006/pT-t7-graft-runtime/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T7-006/pT-t8-atm-graft-crate/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4-windows-runtime/68a83ea> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5-hardening/1939b55> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t7-graft-runtime/6986027> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> ;
+  triage:note "Companion to ATM-QA-BOUNDARY-001 (code violation). Code violation is already fixed on all branches (fn now accepts &SharedDbTarget). This finding is documentation-only: BOUNDARY-001 record missing from docs/atm-rusqlite/boundaries.md across all phase-T feature branches. Fix goes on highest open branch (pT-t8) and merge-forward propagates." .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-006/pT-t4-windows-runtime/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/boundaries.md" ;
+  triage:line 1 ;
+  triage:snippet "BOUNDARY-001 record absent — no entry for rusqlite::Connection / message_count_in_connection RULE-012 path or ADR-ATM-RUSQLITE-002" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "68a83ea" ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4-windows-runtime/68a83ea> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-006/pT-t5-hardening/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/boundaries.md" ;
+  triage:line 1 ;
+  triage:snippet "BOUNDARY-001 record absent — no entry for rusqlite::Connection / message_count_in_connection RULE-012 path or ADR-ATM-RUSQLITE-002" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "1939b55" ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5-hardening/1939b55> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-006/pT-t6-graft-client-surface/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/boundaries.md" ;
+  triage:line 1 ;
+  triage:snippet "BOUNDARY-001 record absent — no entry for rusqlite::Connection / message_count_in_connection RULE-012 path or ADR-ATM-RUSQLITE-002" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "500315d" ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-006/pT-t7-graft-runtime/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/boundaries.md" ;
+  triage:line 1 ;
+  triage:snippet "BOUNDARY-001 record absent — no entry for rusqlite::Connection / message_count_in_connection RULE-012 path or ADR-ATM-RUSQLITE-002" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "6986027" ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7-graft-runtime/6986027> .
+
+<urn:atm:triage:occurrence/ATM-QA-T7-006/pT-t8-atm-graft-crate/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-rusqlite/boundaries.md" ;
+  triage:line 1 ;
+  triage:snippet "BOUNDARY-001 record absent — no entry for rusqlite::Connection / message_count_in_connection RULE-012 path or ADR-ATM-RUSQLITE-002" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "afbd906" ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906> .
+
+<urn:atm:triage:worktree/pT-t4-windows-runtime/68a83ea>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "68a83ea" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t5-hardening/1939b55>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "1939b55" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t6-graft-client-surface/500315d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "500315d" ;
+  triage:orderIndex 6 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t7-graft-runtime/6986027>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "6986027" ;
+  triage:orderIndex 7 ;
+  triage:branchState "open" .
+
+<urn:atm:triage:worktree/pT-t8-atm-graft-crate/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 ;
+  triage:branchState "open" .

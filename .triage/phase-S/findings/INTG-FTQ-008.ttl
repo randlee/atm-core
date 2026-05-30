@@ -1,0 +1,46 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/INTG-FTQ-008>
+  a triage:Finding ;
+  triage:findingId "INTG-FTQ-008" ;
+  triage:title "SHUTDOWN_FINALIZER_THREADS static registry has no RAII drain in inline tests — registry contamination on test panic" ;
+  triage:description "If bounded_shutdown_step_does_not_exceed_retained_finalizer_cap panics mid-test, blocking handles remain in registry. Subsequent serial test observes contaminated registry. Fix: wrap drain call in RAII guard (Drop impl)." ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:rule "FTQ-TEST-ISOLATION" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T01:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-11T02:11:06Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "integrate/phase-S" ;
+  triage:promoteToBranch "integrate/phase-S" ;
+  triage:mergeForwardNeeded false ;
+  triage:propagated false ;
+  triage:regressed false ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/INTG-FTQ-008/integrate-phase-S/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/4118b27> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
+
+<urn:atm:triage:occurrence/INTG-FTQ-008/integrate-phase-S/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 44 ;
+  triage:snippet "static SHUTDOWN_FINALIZER_THREADS: Mutex<Vec<JoinHandle<()>>>" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "67d6c90" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/4118b27> .
+
+<urn:atm:triage:worktree/integrate-phase-S/4118b27>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "67d6c90" ;
+  triage:orderIndex 1 ;
+  triage:branchState "open" .

@@ -1,0 +1,180 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Triage notes (followup_pass @ 2026-05-12):
+# Prior record (initial_pass): U2/U3/U4@335fe3d all open on requirements.md and architecture.md.
+# Current sweep results:
+# U1 (6a692b4): requirements.md no match; architecture.md no match — absent (no prior record, predates U4 feature).
+# U2 (1b22524, unchanged): requirements.md no match; architecture.md no match — open (unchanged from prior).
+# U3 (c1e0e06, unchanged): requirements.md no match; architecture.md no match — open (unchanged from prior).
+# U4 (039a552, was 335fe3d): requirements.md still missing mail_message_states/unified-state section — open.
+#     architecture.md line 1849: partial mention "mail_message_states table rather than split visibility/ack storage"
+#     but Phase U section absent, REQ-CORE-MAILBOX-UNIFIED absent, expires_at-moved absent,
+#     admin-only deleted visibility absent — open. Head SHA advanced but fix not applied.
+# U5 (ae75f1a, new): requirements.md no match; architecture.md same partial mention (line 1849) as U4 — open.
+# Finding-level aggregate: open (no fix landed on any branch).
+# promote_to_branch = feature/pU-u5-sqlite-query-cutover (highest order_index with open occurrence).
+
+<urn:atm:triage:finding/ATM-QA-U4-009>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U4-009" ;
+  triage:title "docs/requirements.md and docs/architecture.md missing Phase U unified-state sections" ;
+  triage:description "sprint-U4.md:130-137 lists docs/requirements.md and docs/architecture.md as Required Document Updates. Neither document contains a Phase U unified-state section or REQ-CORE-MAILBOX-UNIFIED requirement. docs/requirements.md is missing: mail_message_states as single canonical mutable state owner, expires_at/deleted_at/read/pending_ack_at/acknowledged_at fields, split-state model retired statement. docs/architecture.md has one partial mention of mail_message_states at line 1849 but is missing: Phase U section, FK to mail_messages, admin-only deleted row visibility description, expires_at moved out of mail_messages statement." ;
+  triage:triageMode "followup_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "directory" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:references "PR #249" , "TASK-1380 QA-1 verdict at 335fe3d" , "followup_pass at 039a552" ;
+  triage:hasOccurrence
+    <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u2-one-message-identity/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u2-one-message-identity/2> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u3-thread-update-hardening/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u3-thread-update-hardening/2> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u4-unified-message-state/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u4-unified-message-state/2> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u5-sqlite-query-cutover/1> ,
+    <urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u5-sqlite-query-cutover/2> ;
+  triage:openOn
+    <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> ,
+    <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> ,
+    <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> ,
+    <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+# U1: absent — no prior occurrence, doc predates U4 feature
+<urn:atm:triage:worktree/pU-u1-metadata-atm-read-cleanup/6a692b4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b4" ;
+  triage:orderIndex 1 ;
+  triage:branchState "absent" .
+
+# U2: open (unchanged from initial_pass)
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u2-one-message-identity/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "mail_message_states and REQ-CORE-MAILBOX-UNIFIED absent; split-state-retired statement absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u2-one-message-identity/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Phase U unified-state section absent; expires_at-moved and admin-only deleted visibility absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524> .
+
+<urn:atm:triage:worktree/pU-u2-one-message-identity/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 ;
+  triage:branchState "open" .
+
+# U3: open (unchanged from initial_pass)
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u3-thread-update-hardening/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "mail_message_states and REQ-CORE-MAILBOX-UNIFIED absent; split-state-retired statement absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u3-thread-update-hardening/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1 ;
+  triage:snippet "Phase U unified-state section absent; expires_at-moved and admin-only deleted visibility absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06> .
+
+<urn:atm:triage:worktree/pU-u3-thread-update-hardening/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 ;
+  triage:branchState "open" .
+
+# U4: open (head advanced 335fe3d→039a552; fix not applied; architecture.md partial mention at line 1849 insufficient)
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u4-unified-message-state/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "mail_message_states and REQ-CORE-MAILBOX-UNIFIED absent; split-state-retired statement absent; expires_at field list absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u4-unified-message-state/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1849 ;
+  triage:snippet "Partial: 'mail_message_states table rather than split visibility/ack storage' — Phase U section absent; REQ-CORE-MAILBOX-UNIFIED absent; expires_at-moved absent; admin-only deleted visibility absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4-unified-message-state/039a552> .
+
+<urn:atm:triage:worktree/pU-u4-unified-message-state/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 4 ;
+  triage:branchState "open" .
+
+# U5: open (new branch; requirements.md absent; architecture.md same partial mention as U4 at line 1849)
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u5-sqlite-query-cutover/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 1 ;
+  triage:snippet "mail_message_states and REQ-CORE-MAILBOX-UNIFIED absent; split-state-retired statement absent; expires_at field list absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:occurrence/ATM-QA-U4-009/pU-u5-sqlite-query-cutover/2>
+  a triage:Occurrence ;
+  triage:file "docs/architecture.md" ;
+  triage:line 1849 ;
+  triage:snippet "Partial: 'mail_message_states table rather than split visibility/ack storage' — Phase U section absent; REQ-CORE-MAILBOX-UNIFIED absent; expires_at-moved absent; admin-only deleted visibility absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a> .
+
+<urn:atm:triage:worktree/pU-u5-sqlite-query-cutover/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 ;
+  triage:branchState "open" .

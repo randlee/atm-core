@@ -1,14 +1,19 @@
+use crate::output_contract::{HelpResult, HelpResultKind};
 use anyhow::Result;
 use atm_core::ack::AckOutcome;
 use atm_core::clear::ClearOutcome;
-use atm_core::doctor::{DoctorReport, DoctorSeverity, DoctorStatus};
+use atm_core::doctor::{
+    BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+    BootstrapTraceReport, DoctorReport, DoctorSeverity, DoctorStatus,
+};
+use atm_core::list::ListOutcome;
 use atm_core::observability::{AtmLogRecord, AtmLogSnapshot};
+use atm_core::protocol::{RuntimeLivenessState, RuntimeReadinessState, RuntimeStatusSnapshot};
 use atm_core::read::ReadOutcome;
 use atm_core::send::SendOutcome;
 use atm_core::team_admin::{
     AddMemberOutcome, BackupOutcome, MembersList, RestoreOutcome, RestorePlan, TeamsList,
 };
-use atm_core::types::DisplayBucket;
 
 /// Print one send result in human-readable or JSON form.
 pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
@@ -22,7 +27,76 @@ pub fn print_send_result(outcome: &SendOutcome, json: bool) -> Result<()> {
     }
 
     for warning in &outcome.warnings {
-        eprintln!("{warning}");
+        eprintln!("{}", warning.render());
+    }
+
+    Ok(())
+}
+
+/// Print one help result in human-readable or JSON form.
+pub fn print_help_result(result: &HelpResult, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(result)?);
+        return Ok(());
+    }
+
+    match result.kind {
+        HelpResultKind::CommandHelp => {
+            print!("{}", result.body);
+            if !result.body.ends_with('\n') {
+                println!();
+            }
+        }
+        _ => println!("{}", result.body),
+    }
+
+    Ok(())
+}
+
+/// Print one list result in human-readable or JSON form.
+pub fn print_list_result(outcome: &ListOutcome, json: bool) -> Result<()> {
+    if json {
+        println!("{}", serde_json::to_string_pretty(outcome)?);
+        return Ok(());
+    }
+
+    println!("Queue: {}@{}", outcome.agent, outcome.team);
+    println!(
+        "Unread: {} | Pending-Ack: {} | History: {}",
+        outcome.bucket_counts.unread,
+        outcome.bucket_counts.pending_ack,
+        outcome.bucket_counts.history
+    );
+
+    for row in &outcome.rows {
+        println!(
+            "- {} {}: {}",
+            row.timestamp.into_inner().to_rfc3339(),
+            row.from,
+            row.summary
+        );
+        println!(
+            "  message_id: {}",
+            row.message_id
+                .map(|message_id| message_id.to_string())
+                .unwrap_or_else(|| "<none>".to_string())
+        );
+        if let Some(task_id) = &row.task_id {
+            println!("  task_id: {task_id}");
+        }
+        println!(
+            "  state: {}{}",
+            if row.read { "read" } else { "unread" },
+            if row.pending_ack { " pending-ack" } else { "" }
+        );
+    }
+
+    if outcome.history_collapsed && outcome.bucket_counts.history > 0 {
+        println!();
+        println!(
+            "History: {} older messages hidden. Use --all to show them.",
+            outcome.bucket_counts.history
+        );
     }
 
     Ok(())
@@ -42,17 +116,39 @@ pub fn print_read_result(outcome: &ReadOutcome, json: bool) -> Result<()> {
         outcome.bucket_counts.pending_ack,
         outcome.bucket_counts.history
     );
+    println!(
+        "Selected: {} | Matches: {} | Additional: {}",
+        outcome
+            .selected_message_id
+            .map(|message_id| message_id.to_string())
+            .unwrap_or_else(|| "<none>".to_string()),
+        outcome.match_count,
+        outcome.additional_match_count
+    );
+    if let Some(message) = &outcome.message {
+        println!();
+        println!("From: {}", message.envelope.from);
+        println!(
+            "At: {}",
+            message.envelope.timestamp.into_inner().to_rfc3339()
+        );
+        if let Some(task_id) = &message.envelope.task_id {
+            println!("Task: {task_id}");
+        }
+        if let Some(summary) = message.envelope.summary.as_deref() {
+            println!("Summary: {summary}");
+        }
+        println!("Body:");
+        println!("{}", message.envelope.text);
+    } else {
+        println!();
+        println!("No matching message.");
+    }
 
-    print_bucket(outcome, DisplayBucket::Unread, "Unread");
-    print_bucket(outcome, DisplayBucket::PendingAck, "Pending Ack");
-
-    if !outcome.history_collapsed {
-        print_bucket(outcome, DisplayBucket::History, "History");
-    } else if outcome.bucket_counts.history > 0 {
+    if outcome.additional_match_count > 0 {
         println!();
         println!(
-            "History: {} older messages hidden. Use --history or --all to show them.",
-            outcome.bucket_counts.history
+            "Additional matches remain. Use `atm list` with the same filters to inspect them."
         );
     }
 
@@ -75,7 +171,7 @@ pub fn print_ack_result(outcome: &AckOutcome, json: bool) -> Result<()> {
     }
 
     for warning in &outcome.warnings {
-        eprintln!("{warning}");
+        eprintln!("{}", warning.render());
     }
 
     Ok(())
@@ -147,24 +243,8 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
         return Ok(());
     }
 
-    println!(
-        "Doctor status: {}",
-        match report.summary.status {
-            DoctorStatus::Healthy => "healthy",
-            DoctorStatus::Warning => "warning",
-            DoctorStatus::Error => "error",
-        }
-    );
-    println!("{}", report.summary.message);
-    println!(
-        "Active log path: {}",
-        report
-            .observability
-            .active_log_path
-            .as_ref()
-            .map(|path| path.display().to_string())
-            .unwrap_or_else(|| "<unavailable>".to_string())
-    );
+    print_doctor_summary(report);
+    print_doctor_observability(report);
     println!(
         "Logging health: {} | Query readiness: {}",
         render_doctor_state(report.observability.logging_state),
@@ -174,61 +254,118 @@ pub fn print_doctor_result(report: &DoctorReport, json: bool) -> Result<()> {
             .map(render_doctor_state)
             .unwrap_or("unknown")
     );
-
-    if report.environment.atm_home.is_some()
-        || report.environment.atm_team.is_some()
-        || report.environment.atm_identity.is_some()
-        || report.environment.team_override.is_some()
-    {
-        println!();
-        println!("Environment:");
-        if let Some(path) = &report.environment.atm_home {
-            println!("  ATM_HOME={}", path.display());
-        }
-        if let Some(team) = &report.environment.atm_team {
-            println!("  ATM_TEAM={team}");
-        }
-        if let Some(identity) = &report.environment.atm_identity {
-            println!("  ATM_IDENTITY={identity}");
-        }
-        if let Some(team_override) = &report.environment.team_override {
-            println!("  --team={team_override}");
-        }
+    if let Some(runtime_status) = &report.runtime_status {
+        print_runtime_status(runtime_status);
     }
-
-    if !report.findings.is_empty() {
-        println!();
-        println!("Findings:");
-        for finding in &report.findings {
-            println!(
-                "  [{}] {} {}",
-                render_finding_severity(finding.severity),
-                finding.code,
-                finding.message
-            );
-            if let Some(remediation) = &finding.remediation {
-                println!("    remediation: {remediation}");
-            }
-        }
+    if let Some(bootstrap_trace) = &report.bootstrap_trace {
+        print_bootstrap_trace(bootstrap_trace);
     }
-
-    if let Some(roster) = &report.member_roster {
-        println!();
-        println!("Members: {}", roster.team);
-        for member in &roster.members {
-            println!("  - {}", member.name);
-        }
-    }
-
-    if !report.recommendations.is_empty() {
-        println!();
-        println!("Recommendations:");
-        for recommendation in &report.recommendations {
-            println!("  - {recommendation}");
-        }
-    }
+    print_doctor_environment(report);
+    print_doctor_findings(report);
+    print_doctor_roster(report);
+    print_doctor_recommendations(report);
 
     Ok(())
+}
+
+fn print_doctor_summary(report: &DoctorReport) {
+    println!(
+        "Doctor status: {}",
+        render_doctor_status(report.summary.status)
+    );
+    println!("{}", report.summary.message);
+}
+
+fn print_doctor_observability(report: &DoctorReport) {
+    println!(
+        "Active log path: {}",
+        report
+            .observability
+            .active_log_path
+            .as_ref()
+            .map(|path| path.display().to_string())
+            .unwrap_or_else(|| "<unavailable>".to_string())
+    );
+    if let Some(maintenance) = &report.observability.maintenance {
+        println!(
+            "Maintenance: {} | Rotated: {} | Pruned: {} | Last pass: {}",
+            render_maintenance_state(maintenance.state),
+            maintenance.rotated_files_total,
+            maintenance.pruned_files_total,
+            maintenance
+                .last_pass_at
+                .map(|timestamp| timestamp.into_inner().to_string())
+                .unwrap_or_else(|| "never".to_string())
+        );
+    }
+}
+
+fn print_doctor_environment(report: &DoctorReport) {
+    if report.environment.atm_home.is_none()
+        && report.environment.atm_team.is_none()
+        && report.environment.atm_identity.is_none()
+        && report.environment.team_override.is_none()
+    {
+        return;
+    }
+
+    println!();
+    println!("Environment:");
+    if let Some(path) = &report.environment.atm_home {
+        println!("  ATM_HOME={}", path.display());
+    }
+    if let Some(team) = &report.environment.atm_team {
+        println!("  ATM_TEAM={team}");
+    }
+    if let Some(identity) = &report.environment.atm_identity {
+        println!("  ATM_IDENTITY={identity}");
+    }
+    if let Some(team_override) = &report.environment.team_override {
+        println!("  --team={team_override}");
+    }
+}
+
+fn print_doctor_findings(report: &DoctorReport) {
+    if report.findings.is_empty() {
+        return;
+    }
+
+    println!();
+    println!("Findings:");
+    for finding in &report.findings {
+        println!(
+            "  [{}] {} {}",
+            render_finding_severity(finding.severity),
+            finding.code,
+            finding.message
+        );
+        if let Some(remediation) = &finding.remediation {
+            println!("    remediation: {remediation}");
+        }
+    }
+}
+
+fn print_doctor_roster(report: &DoctorReport) {
+    let Some(roster) = &report.member_roster else {
+        return;
+    };
+    println!();
+    println!("Members: {}", roster.team);
+    for member in &roster.members {
+        println!("  - {}", member.name);
+    }
+}
+
+fn print_doctor_recommendations(report: &DoctorReport) {
+    if report.recommendations.is_empty() {
+        return;
+    }
+
+    println!();
+    println!("Recommendations:");
+    for recommendation in &report.recommendations {
+        println!("  - {recommendation}");
+    }
 }
 
 /// Print one teams listing in human-readable or JSON form.
@@ -270,7 +407,7 @@ pub fn print_members_result(outcome: &MembersList, json: bool) -> Result<()> {
             empty_dash(&member.agent_type),
             empty_dash(&member.model),
             empty_dash(&member.cwd),
-            empty_dash(&member.tmux_pane_id)
+            empty_dash_opt(member.tmux_pane_id.as_deref())
         );
     }
     Ok(())
@@ -337,38 +474,12 @@ pub fn print_restore_result(outcome: &RestoreOutcome, json: bool) -> Result<()> 
     Ok(())
 }
 
-fn print_bucket(outcome: &ReadOutcome, bucket: DisplayBucket, label: &str) {
-    let messages = outcome
-        .messages
-        .iter()
-        .filter(|message| message.bucket == bucket)
-        .collect::<Vec<_>>();
-
-    if messages.is_empty() {
-        return;
-    }
-
-    println!();
-    println!("{label}:");
-    for message in messages {
-        println!(
-            "- {} {}: {}",
-            message.envelope.timestamp.into_inner().to_rfc3339(),
-            message.envelope.from,
-            message
-                .envelope
-                .summary
-                .as_deref()
-                .unwrap_or(message.envelope.text.as_str())
-        );
-        if let Some(message_id) = message.envelope.message_id {
-            println!("  message_id: {message_id}");
-        }
-    }
-}
-
 fn empty_dash(value: &str) -> &str {
     if value.is_empty() { "-" } else { value }
+}
+
+fn empty_dash_opt(value: Option<&str>) -> &str {
+    value.filter(|value| !value.is_empty()).unwrap_or("-")
 }
 
 fn print_log_record_line(record: &AtmLogRecord) {
@@ -407,10 +518,157 @@ fn render_doctor_state(
     }
 }
 
+fn render_doctor_status(status: DoctorStatus) -> &'static str {
+    match status {
+        DoctorStatus::Healthy => "healthy",
+        DoctorStatus::Warning => "warning",
+        DoctorStatus::Error => "error",
+    }
+}
+
+fn render_maintenance_state(state: sc_observability_types::MaintenanceWorkerState) -> &'static str {
+    match state {
+        sc_observability_types::MaintenanceWorkerState::Running => "running",
+        sc_observability_types::MaintenanceWorkerState::Degraded => "degraded",
+        sc_observability_types::MaintenanceWorkerState::Stopped => "stopped",
+    }
+}
+
 fn render_finding_severity(severity: DoctorSeverity) -> &'static str {
     match severity {
         DoctorSeverity::Info => "info",
         DoctorSeverity::Warning => "warning",
         DoctorSeverity::Error => "error",
+    }
+}
+
+fn print_runtime_status(runtime_status: &RuntimeStatusSnapshot) {
+    println!();
+    println!("Runtime status:");
+    println!(
+        "  Liveness: {} | Readiness: {}",
+        render_runtime_liveness(runtime_status.liveness),
+        render_runtime_readiness(runtime_status.readiness)
+    );
+    println!(
+        "  SQLite ready: {} | Degraded ingest: {}",
+        render_bool(runtime_status.sqlite_ready),
+        render_bool(runtime_status.degraded_ingest)
+    );
+    println!(
+        "  Members: active={} idle={} offline={} unknown={}",
+        runtime_status.member_counts.active_members,
+        runtime_status.member_counts.idle_members,
+        runtime_status.member_counts.offline_members,
+        runtime_status.member_counts.unknown_members
+    );
+    if let Some(owner_pid) = runtime_status.singleton_owner_pid {
+        println!("  Singleton owner pid: {owner_pid}");
+    }
+    if let Some(detail) = &runtime_status.detail {
+        println!("  Detail: {detail}");
+    }
+}
+
+fn print_bootstrap_trace(trace: &BootstrapTraceReport) {
+    print!("{}", render_bootstrap_trace_section(trace));
+}
+
+fn render_runtime_liveness(state: RuntimeLivenessState) -> &'static str {
+    match state {
+        RuntimeLivenessState::Running => "running",
+        RuntimeLivenessState::Unavailable => "unavailable",
+    }
+}
+
+fn render_runtime_readiness(state: RuntimeReadinessState) -> &'static str {
+    match state {
+        RuntimeReadinessState::Ready => "ready",
+        RuntimeReadinessState::Degraded => "degraded",
+        RuntimeReadinessState::Unavailable => "unavailable",
+    }
+}
+
+fn render_bootstrap_connect(state: BootstrapConnectOutcome) -> &'static str {
+    match state {
+        BootstrapConnectOutcome::Connected => "connected",
+        BootstrapConnectOutcome::NotFound => "not_found",
+        BootstrapConnectOutcome::Timeout => "timeout",
+        BootstrapConnectOutcome::Failed => "failed",
+    }
+}
+
+fn render_bootstrap_launch_gate(state: BootstrapLaunchGateOutcome) -> &'static str {
+    match state {
+        BootstrapLaunchGateOutcome::Launched => "launched",
+        BootstrapLaunchGateOutcome::Failed => "failed",
+        BootstrapLaunchGateOutcome::Skipped => "skipped",
+    }
+}
+
+fn render_bootstrap_auto_start(state: BootstrapAutoStartOutcome) -> &'static str {
+    match state {
+        BootstrapAutoStartOutcome::AutoStarted => "auto_started",
+        BootstrapAutoStartOutcome::Failed => "failed",
+        BootstrapAutoStartOutcome::Skipped => "skipped",
+    }
+}
+
+fn render_bool(value: bool) -> &'static str {
+    if value { "yes" } else { "no" }
+}
+
+fn render_bootstrap_trace_section(trace: &BootstrapTraceReport) -> String {
+    let mut output = String::from("\nBootstrap trace:\n");
+    output.push_str(&format!(
+        "  Daemon connect: {}\n",
+        render_bootstrap_connect(trace.daemon_connect)
+    ));
+    output.push_str(&format!(
+        "  Launch gate: {}\n",
+        render_bootstrap_launch_gate(trace.daemon_launch_gate)
+    ));
+    output.push_str(&format!(
+        "  Auto-start: {}\n",
+        render_bootstrap_auto_start(trace.daemon_auto_start)
+    ));
+    if let Some(detail) = &trace.connect_detail {
+        output.push_str(&format!("  Connect detail: {detail}\n"));
+    }
+    if let Some(detail) = &trace.launch_gate_detail {
+        output.push_str(&format!("  Launch-gate detail: {detail}\n"));
+    }
+    if let Some(detail) = &trace.auto_start_detail {
+        output.push_str(&format!("  Auto-start detail: {detail}\n"));
+    }
+    output
+}
+
+#[cfg(test)]
+mod tests {
+    use atm_core::doctor::{
+        BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
+        BootstrapTraceReport,
+    };
+
+    use super::render_bootstrap_trace_section;
+
+    #[test]
+    fn bootstrap_trace_section_renders_doctor_output_block() {
+        let rendered = render_bootstrap_trace_section(&BootstrapTraceReport {
+            daemon_connect: BootstrapConnectOutcome::Connected,
+            daemon_launch_gate: BootstrapLaunchGateOutcome::Launched,
+            daemon_auto_start: BootstrapAutoStartOutcome::AutoStarted,
+            connect_detail: Some("connect detail".to_string()),
+            launch_gate_detail: None,
+            auto_start_detail: Some("auto-start detail".to_string()),
+        });
+
+        assert!(rendered.contains("Bootstrap trace:"));
+        assert!(rendered.contains("Daemon connect: connected"));
+        assert!(rendered.contains("Launch gate: launched"));
+        assert!(rendered.contains("Auto-start: auto_started"));
+        assert!(rendered.contains("Connect detail: connect detail"));
+        assert!(rendered.contains("Auto-start detail: auto-start detail"));
     }
 }

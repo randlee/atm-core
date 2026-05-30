@@ -8,6 +8,9 @@ The `atm-core` crate owns the reusable ATM business logic, persistent-store
 contracts, and strict I/O subsystem boundaries. Product behavior remains
 defined in [`../requirements.md`](../requirements.md).
 
+The crate-local machine-readable boundary inventory lives in:
+- [`./boundaries.md`](./boundaries.md)
+
 ## 2. Ownership
 
 `atm-core` owns:
@@ -18,7 +21,7 @@ defined in [`../requirements.md`](../requirements.md).
 - inbox ingress/export contracts
 - config ingress contracts
 - workflow and typestate rules
-- send/read/ack/clear service behavior
+- list/send/read/ack/clear service behavior
 - log query/follow service behavior over the observability boundary
 - doctor service behavior
 - structured core errors
@@ -42,6 +45,7 @@ Initial allocation:
 - `REQ-CORE-CONFIG-*`
 - `REQ-CORE-MAILBOX-*`
 - `REQ-CORE-WORKFLOW-*`
+- `REQ-CORE-LIST-*`
 - `REQ-CORE-SEND-*`
 - `REQ-CORE-READ-*`
 - `REQ-CORE-ACK-*`
@@ -52,6 +56,7 @@ Initial allocation:
 - `REQ-CORE-TEAM-*`
 - `REQ-CORE-RUNTIME-*`
 - `REQ-CORE-STORE-*`
+- `REQ-CORE-COMPAT-*`
 - `REQ-CORE-INGEST-*`
 - `REQ-CORE-BOUNDARY-*`
 - `REQ-CORE-TRANSPORT-*`
@@ -66,10 +71,12 @@ Initial crate requirement IDs:
   resolution policy across the CLI and daemon-backed runtime. Satisfies the
   path/config/identity aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-IDENTITY-001`, `REQ-P-DOCTOR-001`.
+  It also owns parsing and validation of `[atm].claude_jsonl_body_export_max_bytes`
+  for the ATM-authored JSONL compatibility envelope.
 - `REQ-CORE-CONFIG-002` `atm-core` owns shared address parsing, alias rewrite,
   and team/member validation policy. Satisfies the address resolution and
   target-validation aspects of:
-  `REQ-P-ADDRESS-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
+  `REQ-P-ADDRESS-001`, `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`,
   `REQ-P-CLEAR-001`.
 - `REQ-CORE-CONFIG-003` `atm-core` owns persisted config/team schema recovery
   and diagnostic policy. Satisfies the compatibility-recovery and
@@ -89,14 +96,36 @@ Initial crate requirement IDs:
 - `REQ-CORE-MAILBOX-001` `atm-core` owns transitional mailbox compatibility
   behavior and the file-backed import/export boundary during the migration
   line. Satisfies the persisted mailbox compatibility aspects of:
-  `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-READ-001`,
+  `REQ-P-CONTRACT-001`, `REQ-P-SEND-001`, `REQ-P-LIST-001`, `REQ-P-READ-001`,
   `REQ-P-ACK-001`, `REQ-P-CLEAR-001`, `REQ-P-RELIABILITY-001`,
   `REQ-P-IDLE-001`.
+  Phase-U note: active compatibility reads no longer depend on `metadata.atm`;
+  inbound shared-inbox records strip that namespace through
+  `strip_metadata_atm_namespace()` in
+  `crates/atm-core/src/schema/inbox_message.rs`.
+- `REQ-CORE-COMPAT-001` `atm-core` owns the Claude JSONL compatibility
+  projection contract for ATM-authored exports and inbound compatibility
+  ingestion, including the bounded export cap, retrieval-stub rule, and
+  idempotent watcher/reconcile projection handling for the same logical
+  message. Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
+  Phase-U note: the active compatibility contract strips inbound
+  `metadata.atm` rather than preserving it as a live schema surface; the
+  production enforcement point is `strip_metadata_atm_namespace()` in
+  `crates/atm-core/src/schema/inbox_message.rs`.
 - `REQ-CORE-WORKFLOW-001` `atm-core` owns the two-axis workflow model and legal
   transitions. Satisfies the state-classification and legal-transition aspects
   of:
-  `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
+  `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-ACK-001`, `REQ-P-CLEAR-001`,
   `REQ-P-WORKFLOW-001`.
+- `REQ-CORE-LIST-001` `atm-core` owns the metadata-first queue query contract
+  shared by `atm list` and selector-driven `atm read`, including bounded
+  query behavior, shared match filters, successor-chain terminal-node
+  selection, and list-row shaping. Satisfies:
+  `REQ-P-LIST-001`, `REQ-P-READ-001`, `REQ-P-RELIABILITY-001`.
+  U.3 note: logical-current projection must remain mode-aware; terminal
+  `add-details` preserves predecessor context in the effective current body,
+  while terminal `supersede` does not.
 - `REQ-CORE-SEND-003` `atm-core` owns send-path message construction,
   classification, and compatibility-export behavior above the owned
   ingress/export boundaries. Satisfies the send-path service aspects of:
@@ -125,7 +154,9 @@ Initial crate requirement IDs:
   state-separation and reliability aspects of:
   `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-001` `atm-core` owns the SQLite schema contract, canonical
-  `message_key` identity model, and required lookup/dedupe constraints.
+  `message_key` row-key model, the one-logical-message-identity rule
+  (`AtmMessageId`), and required lookup/dedupe constraints for the compatible
+  `message_id` wire form.
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-STORE-002` `atm-core` owns WAL / foreign-key / explicit
@@ -136,9 +167,16 @@ Initial crate requirement IDs:
   Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-BOUNDARY-001` `atm-core` owns the strict trait boundaries for
-  store, inbox ingress/export, config ingress, watcher/reconcile, and
-  notifier-facing service calls. Satisfies the subsystem-boundary aspects of:
+  store, protocol, transport, inbox ingress/export, config ingress,
+  watcher/reconcile, notification sink, and status-source calls. Satisfies the subsystem-boundary aspects of:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
+  Phase-Z follow-on note: repository-local lint must also be able to reject
+  direct command-entry retained-runtime acquisition in `atm teams`,
+  `atm members`, and `atm teams add-member`; direct command/team-admin ambient
+  workspace-config reads; and public ambient singleton/runtime-factory
+  exposure that bypasses approved wrappers. A pre-existing survivor is allowed
+  only when an explicit TOML allowlist entry records its owner and sunset
+  sprint; any new violation must fail lint immediately.
 - `REQ-CORE-BOUNDARY-002` `atm-core` owns the typed error-model contracts used
   by service boundaries. Satisfies the structured-error aspects of:
   `REQ-P-ERROR-001`, `REQ-P-RELIABILITY-001`.
@@ -152,11 +190,25 @@ Initial crate requirement IDs:
 - `REQ-CORE-DAEMON-002` `atm-core` owns the contract that daemon runtime
   orchestration stays outside mail business semantics. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
-- `REQ-CORE-TRANSPORT-001` `atm-core` owns the typed daemon API contract shared
-  by Unix domain socket, TCP/TLS, and in-process test transport. Satisfies:
+- `REQ-CORE-DAEMON-003` `atm-core` owns the production runtime-entry contract
+  that callers connect to an already-running daemon first, auto-start it once
+  when absent, and fail with a typed daemon-unavailable error rather than
+  silently falling back to direct SQLite or inbox-file access. Satisfies:
+  `REQ-P-RUNTIME-001`, `REQ-P-RELIABILITY-001`.
+- historical `REQ-CORE-GRAFT-001` is retired by the Phase U graft restack.
+  Any earlier graft-specific contract intent is superseded by
+  `REQ-CORE-TRANSPORT-001`, `REQ-CORE-TRANSPORT-002`, and the shared
+  `AtmProtocol` / `ClientTransport` family rather than by a graft-private core
+  requirement.
+  The generic session identifier name reserved for the thin-client line is
+  `AdvisorySessionId`; later advisory/session work must build on that
+  generic core-owned name rather than reviving `GraftSessionId`.
+- `REQ-CORE-TRANSPORT-001` `atm-core` owns the shared `AtmProtocol` contract
+  used by client transport, server transport, and in-process test transport. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-TEST-001`.
-- `REQ-CORE-TRANSPORT-002` `atm-core` owns route-selection semantics between
-  local and cross-host daemon paths. Satisfies:
+- `REQ-CORE-TRANSPORT-002` `atm-core` owns the public `ClientTransport` and
+  `ServerTransport` contracts plus route-selection semantics between local and
+  cross-host daemon paths. Satisfies:
   `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-TRANSPORT-003` `atm-core` owns the typed transport timeout and
   retry semantics exposed at service boundaries. Satisfies:
@@ -164,9 +216,20 @@ Initial crate requirement IDs:
 - `REQ-CORE-TRANSPORT-004` `atm-core` owns the remote-acceptance and
   no-durable-remote-outbox semantics above transport implementations. Satisfies:
   `REQ-P-RELIABILITY-001`.
+- `REQ-CORE-TRANSPORT-005` `atm-core` owns the thread-safe client transport
+  contract used by production, fake, and loopback transports. The shared
+  `ClientTransport` boundary must remain object-safe and include `Send + Sync`
+  semantics so callers do not have to restate them ad hoc. Satisfies:
+  `REQ-P-TEST-001`, `REQ-P-CONTRACT-001`.
+- `REQ-CORE-TRANSPORT-006` `atm-core` owns the shared ATM wire-frame schema
+  and framed encode/decode helpers used by same-host local IPC, cross-host
+  daemon transport, and in-process protocol tests. The canonical wire contract
+  is documented in `docs/atm-daemon/protocol-icd.md`, including exact header
+  constants, `message_kind` assignments, and payload DTO mapping. Satisfies:
+  `REQ-P-CONTRACT-001`, `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-LOCK-RETIRE-001` `atm-core` owns the service-layer rule that normal
-  ATM mail correctness must not depend on mailbox locks in the Phase Q target
-  architecture. Satisfies:
+  ATM mail correctness must not depend on mailbox locks in the current
+  SQLite/daemon architecture. Satisfies:
   `REQ-P-RELIABILITY-001`.
 - `REQ-CORE-DOCTOR-002` `atm-core` owns the daemon-health query contract
   consumed by `atm doctor`. Satisfies:
@@ -174,7 +237,7 @@ Initial crate requirement IDs:
 - `REQ-CORE-TEST-RUNTIME-001` `atm-core` owns the rule that core correctness is
   testable in process without daemon spawning. Satisfies:
   `REQ-P-TEST-001`.
-- `REQ-CORE-QA-RUNTIME-001` `atm-core` owns the Phase Q QA invariants for
+- `REQ-CORE-QA-RUNTIME-001` `atm-core` owns the current runtime QA invariants for
   daemon singleton/runtime and boundary enforcement. Satisfies:
   `REQ-P-ACCEPTANCE-001`, `REQ-P-TEST-001`.
 
@@ -182,6 +245,7 @@ Initial crate requirement IDs:
 
 Per-module documentation lives under:
 
+- [`modules/list.md`](./modules/list.md)
 - [`modules/send.md`](./modules/send.md)
 - [`modules/read.md`](./modules/read.md)
 - [`modules/ack.md`](./modules/ack.md)
@@ -210,13 +274,20 @@ The `atm-core` crate docs must remain aligned with:
 - [`../documentation-guidelines.md`](../documentation-guidelines.md)
 - [`../atm-message-schema.md`](../atm-message-schema.md)
 - [`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)
+  (historical only; its `metadata.atm` coverage was superseded and removed
+  from the active compatibility design in Phase U)
 - [`../atm-error-codes.md`](../atm-error-codes.md)
-- [`../plan-phase-Q.md`](../plan-phase-Q.md)
+- [`../plan-phase-R.md`](../plan-phase-R.md)
+- [`../plan-phase-S.md`](../plan-phase-S.md)
+- [`../plan-phase-U.md`](../plan-phase-U.md)
+- [`../testing-guidelines.md`](../testing-guidelines.md)
+- [`../atm-daemon/protocol-icd.md`](../atm-daemon/protocol-icd.md)
+- [`./boundaries.md`](./boundaries.md)
 - [`./design/dedup-metadata-schema.md`](./design/dedup-metadata-schema.md)
 - [`./design/sc-observability-integration.md`](./design/sc-observability-integration.md)
 - [`./design/sc-obs-1.0-integration.md`](./design/sc-obs-1.0-integration.md)
 
-## 6. Phase Q Store And Boundary Requirements
+## 6. Phase R Store And Boundary Requirements
 
 Requirement IDs:
 - `REQ-CORE-RUNTIME-001`
@@ -242,16 +313,42 @@ Required `atm-core` crate rules:
   - notifier-facing service integration
 - `atm-core` owns the canonical durable-store contract including:
   - `messages`
-  - `ack_state`
-  - `message_visibility`
-  - `tasks`
-  - `team_roster`
+  - one unified mutable message-state surface
+  - one canonical roster/team/member surface
   - `inbox_ingest`
+- `atm-core` must keep daemon-owned live `pid` state out of the canonical
+  roster/member surface
+- `atm-core` must treat `config.json` / `TeamConfig` as config-ingress input
+  rather than the durable roster/store contract
 - `atm-core` owns the canonical `message_key` identity format and the required
   dedupe / lookup indexes above the store boundary
 - `atm-core` must model `message_key` as a semantic newtype at the service and
   store boundaries; durable identities must not remain raw `String` values
 - `atm-core` must model resource-cap and timeout settings with typed wrappers
+- `ClientTransport` remains the shared request/response seam for:
+  - production same-host local IPC transport
+  - production remote daemon peer transport
+  - fake in-process transport doubles
+  - loopback in-process transport
+- `ClientTransport` must be strong enough for shared ownership and concurrent
+  request execution without downstream callers restating `Send + Sync`
+- `atm-core` owns one ATM frame contract for local IPC and remote daemon
+  request/response transport, as defined by
+  `docs/atm-daemon/protocol-icd.md`
+- the current shared daemon packet family covers:
+  - send compose
+  - send acknowledge
+  - receive
+  - clear
+  - doctor
+  - heartbeat
+  - advisory register
+  - advisory unregister
+  - advisory fetch
+  - advisory drain
+  - advisory stream
+- `atm-core` framed transport helpers must delimit packets explicitly rather
+  than relying on EOF/connection shutdown to mark request boundaries
   rather than passing raw integer literals through the service boundary
 - `atm-core` owns the ingest replay/degradation contract and must not silently
   drop parseable external rows
@@ -276,8 +373,8 @@ Required `atm-core` crate rules:
 
 Phase-Q crate-local supersession note:
 - earlier daemon-free phrasing in this file is historical from the prior line
-- for the Phase Q target architecture, the requirements in this section and in
-  product `requirements.md` Section 21 are authoritative
+- for the current SQLite/daemon architecture, the requirements in this section
+  and in product `requirements.md` Section 21 are authoritative
 
 ## 7. Send Alert Metadata
 
@@ -285,33 +382,19 @@ Requirement ID:
 - `REQ-CORE-SEND-002`
 
 Required write-path rules:
-- ATM-authored alert field writes must use ATM-owned `metadata.atm` fields
-- forward alert writes must target `metadata.atm.alertKind` and
-  `metadata.atm.missingConfigPath` or a later explicitly documented
-  `metadata.atm` field
+- ATM-owned alert/repair machine state must not be introduced back into shared
+  Claude JSON under any new namespace
 - new ATM-only alert top-level fields must be rejected with a descriptive
   validation error on the write path
-- exception: until the alert metadata migration sprint lands, the current
-  runtime send path may continue writing legacy top-level `atmAlertKind` and
-  `missingConfigPath` fields; this carve-out is bounded by
-  [`architecture.md` §3.1](./architecture.md)
-- the write-path rejection requirement applies to new ATM-only alert fields
-  introduced after Phase J
+- structured alert/repair state belongs in SQLite-owned state and typed ATM
+  diagnostics instead
 
 Required read-path rules:
 - ATM read must accept legacy top-level alert fields such as `atmAlertKind` and
-  `missingConfigPath`
-- ATM read must also accept forward `metadata.atm` alert fields
-- malformed ATM-owned alert metadata must degrade gracefully, emit warning
+  `missingConfigPath` while they still exist in compatibility data
+- malformed additive ATM alert fields must degrade gracefully, emit warning
   diagnostics, and never cause the message to be dropped when the
   Claude-native envelope remains usable
-
-Forward migration rule:
-- legacy top-level `atmAlertKind` migrates to `metadata.atm.alertKind`
-- legacy top-level `missingConfigPath` migrates to
-  `metadata.atm.missingConfigPath`
-- the forward architectural target and compatibility-period carve-out are
-  documented in [`architecture.md` §3.1](./architecture.md)
 
 ## 8. Observability Integration Boundary
 
@@ -408,7 +491,7 @@ Required identity rules:
 - same-team messages keep current canonical sender projection behavior
 - cross-team messages may persist an alias-oriented `from` value for
   Claude-facing ergonomics only when ATM also stores canonical sender identity
-  in `metadata.atm.fromIdentity`
+  in SQLite-owned state
 - canonical sender identity remains the source of truth for validation,
   self-send checks, routing, and audit behavior
 - each `[[atm.post_send_hooks]]` rule binds one `recipient` selector and one
@@ -445,7 +528,7 @@ Required identity rules:
 - hook-rule evaluation and execution outcomes must remain observable through
   structured diagnostics without creating caller-visible warnings for expected
   recipient non-match
-- once Phase Q roster truth is stored in SQLite, `atm-core` must source
+- once roster truth is stored in SQLite, `atm-core` must source
   `recipient_pane_id` from the authoritative roster/store boundary rather than
   forcing hooks to rediscover it from local files
 - hook failure or timeout is best-effort only and must not roll back a
@@ -457,16 +540,17 @@ Required identity rules:
 Required doctor rules:
 - `atm doctor` must flag obsolete `[atm].identity` when present with
   `ATM_WARNING_IDENTITY_DRIFT`
-- `atm doctor` must compare `[atm].team_members` against `config.json.members`
-- missing baseline members are findings
-- extra runtime members in `config.json` are allowed
+- `atm doctor` must compare canonical ATM roster truth against
+  `config.json.members`
+- ATM roster members missing from `config.json` are findings
+- Claude `config.json` members missing from ATM roster truth are findings
 - doctor roster output must show all `config.json` members, with baseline
   members first and `team-lead` first among the baseline set
 - `atm doctor` must snapshot `~/.claude/teams/*/inboxes/*.lock` at start and
   end of the run; any lock path present in both snapshots is stale and must be
   reported with `ATM_WARNING_STALE_MAILBOX_LOCK` plus `rm -f <path>` recovery guidance
 
-## 9. Retained Team Recovery Surface
+## 10. Retained Team Recovery Surface
 
 Requirement ID:
 - `REQ-CORE-TEAM-001`
@@ -478,24 +562,114 @@ Required service rules:
   - `add-member`
   - team backup
   - team restore
-- these services remain local file/config/inbox operations and must not depend
-  on daemon orchestration or runtime spawning
+- these services remain local user-facing workflows and must not depend on
+  daemon orchestration or runtime spawning, but their team/member truth is the
+  canonical ATM roster rather than raw `config.json`
+- `atm members` and `atm teams` must report ATM roster truth; Claude file drift
+  is reported by `atm doctor`, not by treating `config.json` as the primary
+  team/member surface
 - `add-member` must validate team existence and reject duplicate member names
-  before mutating local team config
+  before mutating canonical ATM roster truth
+- `add-member` must project the resulting approved member set into
+  `config.json`; it must not treat local `config.json` as the durable source
+  of truth
+- `atm teams` and `atm members` must source their displayed team/member state
+  from canonical ATM roster rows, not from raw Claude file membership
+- retained Claude compatibility member fields such as `tmux_pane_id` are
+  canonical ATM roster-member metadata and must not be durably sourced from
+  `.atm.toml`
+- ATM-owned member pane metadata is stored on the canonical roster row as
+  `recipient_pane_id` and projected back to Claude compatibility
+  `AgentMember.tmux_pane_id`
 - backup must snapshot:
   - `config.json`
   - team inbox files, excluding transient `*.lock` sentinels, dotfiles, and
     restore markers
   - the ATM team task bucket
+  - ATM-owned durable roster/task state needed for deterministic restore
+  - the canonical ATM roster audit snapshot as `atm-roster.json`
 - restore must:
+  - require the operator to recreate the Claude team shell through
+    `TeamCreate` before ATM projects restored roster state back into
+    `config.json`
   - preserve the current team-lead entry and current `leadSessionId`
-  - add only missing non-lead members from the snapshot
-  - clear runtime-only restored-member fields such as session or pane state
+  - restore non-lead membership from canonical ATM roster truth rather than
+    from backup `config.json`
+  - preserve canonical member metadata such as `tmux_pane_id`
   - restore non-lead inboxes
   - sweep stale inbox `*.lock` sentinels before copying restored inbox files
   - recompute `.highwatermark` from the maximum restored task id
   - support a dry-run path without making changes
+- restore must not replay backup `config.json` as roster truth
+- restore may read the freshly recreated Claude team shell only through a
+  narrow preservation helper for current `team-lead` / `leadSessionId`, not
+  through a generic roster-truth config loader
+- backup remains an audit / emergency-inspection surface rather than the source
+  of roster truth during restore
 - malformed or missing snapshot material must fail with structured errors
   before partial restore is committed
 - `members` must remain useful as a local roster inspection command even when
-  daemon or hook state is unavailable
+  daemon or hook state is unavailable because roster truth is stored in ATM
+  durable state rather than in raw Claude config alone
+
+## 10.1 Claude Config Ingress Ownership
+
+Requirement ID:
+- `REQ-CORE-CLAUDE-ROSTER-001`
+
+Required service rules:
+- ATM roster state in SQLite is the canonical roster truth for runtime
+  membership decisions
+- the immutable public runtime roster surface is `ClaudeCodeTeamRoster`
+- retained runtime commands (`list`, `read`, `clear`, `ack`) must validate
+  membership through ATM roster truth only
+- Claude send must not use `config.json` as a pre-write membership gate
+- the post-write Claude roster warning path must build
+  `ClaudeCodeTeamRoster` from canonical ATM roster rows through `RosterStore` /
+  SQLite rather than through a direct `config.json` read
+- `doctor` may read `config.json` only as a comparison surface against
+  canonical ATM roster truth
+- watcher / reconcile is the only approved production reader of external
+  `config.json` roster changes
+- any new-team ingest or external Claude roster edit must flow into canonical
+  ATM roster truth through the watcher / reconcile lane
+- daemon-authored Claude `config.json` projection writes must be suppressed
+  once and only once through an explicit process-local journal; restart must
+  clear suppression state and crash recovery must fall back to ordinary
+  idempotent external ingest
+
+## 10.2 Config Boundary Static Gates
+
+Requirement ID:
+- `REQ-CORE-CLAUDE-ROSTER-002`
+
+Required service rules:
+- repository-local lint / `sc-lint`-candidate rules must be defined for the
+  `config.json` roster boundary so later regressions are mechanically
+  detectable
+- the first required rules are:
+  - reject production direct `load_claude_team_config_document(...)` roster reads
+    outside the explicit allowlist
+  - reject generic runtime team-config helper use from retained command paths
+  - reject Claude send paths that consult `config.json` before the durable ATM
+    write has succeeded
+
+## 11. Phase Yb Delivery-Plan Ownership
+
+Requirement IDs:
+
+- `REQ-ATM-CORE-YB-001`
+- `REQ-ATM-CORE-YB-002`
+
+Required service rules:
+
+- `atm-core` must define `atm_core::delivery_plan::DeliveryPlan` and
+  `atm_core::delivery_plan::ReplyDeliveryPlan`
+- `atm-core` must define the shared execution entry points:
+  - `atm_core::delivery_execution::execute_delivery_plan(...)`
+  - `atm_core::delivery_execution::execute_reply_delivery_plan(...)`
+- `atm-core` must define `atm_core::boundary::NonClaudeOutbound` as the
+  first-class non-Claude payload boundary
+- `NotificationSink` must remain notification-only
+- `send/mod.rs`, `send/persistence.rs`, and `ack/mod.rs` must not perform
+  harness policy after the machine output plan exists

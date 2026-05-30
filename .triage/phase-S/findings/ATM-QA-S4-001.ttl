@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-S4-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-S4-001" ;
+  triage:title "prepare_local_ipc_endpoint returns Ok(()) silently on non-Unix — unresolved TODO stub (local_ipc_transport.rs:454)" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs:454-459 — #[cfg(not(unix))] block for prepare_local_ipc_endpoint returns Ok(()) with a TODO(S.2/ADR-007) comment and no implementation. Sprint S.4 Required Work item 1 requires resolving non-Unix same-host stubs. The same-host-portability lint detects only daemon_unavailable() stubs, not silent Ok(()) pass-throughs — this stub survived the lint coverage gap. Violates REQ-P-PLATFORM-002 and REQ-DAEMON-PLATFORM-001. Fix: either (a) implement proper Windows endpoint preparation (directory creation for lock-file collateral if needed), OR (b) document why Ok(()) is correct and intentional for Windows named-pipe semantics and remove the TODO marker." ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T18:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-S4-001/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:occurrence/ATM-QA-S4-001/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 454 ;
+  triage:snippet "#[cfg(not(unix))] prepare_local_ipc_endpoint returns Ok(()) with TODO(S.2/ADR-007) — unresolved Windows stub, silent pass-through not caught by same-host-portability lint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "dd36874" ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874> .
+
+<urn:atm:triage:worktree/feature-pS-s4-hardening/dd36874>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s4-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s4-hardening" ;
+  triage:headSha "dd36874" ;
+  triage:orderIndex 4 .

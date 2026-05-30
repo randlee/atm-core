@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-EG-003>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-EG-003" ;
+  triage:title "sprint-V1.md missing Implementation Record section" ;
+  triage:description "docs/phase-V/sprint-V1.md has status: implemented but no Implementation Record section documenting what was actually delivered in V.1 (observability boundary design, shared wiring scoping docs)." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-V" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:pattern "ac-unsatisfied-impl-record" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-EG-003/integrate-phase-V/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> .
+
+<urn:atm:triage:occurrence/ATM-QA-EG-003/integrate-phase-V/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-V/sprint-V1.md" ;
+  triage:line 1 ;
+  triage:snippet "status: implemented — no ## Implementation Record section present (file ends at Sprint Output, line 102)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-V" ;
+  triage:headSha "ec24c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> .
+
+<urn:atm:triage:worktree/integrate-phase-V/ec24c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-V" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-V" ;
+  triage:headSha "ec24c3e" ;
+  triage:orderIndex 5 .

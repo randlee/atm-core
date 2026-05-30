@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S11-QA1-005>
+  a triage:Finding ;
+  triage:findingId "S11-QA1-005" ;
+  triage:title "host_log_dir_prefers_atm_log_dir_override happy-path test is #[cfg(unix)] — no cross-platform coverage of basic override" ;
+  triage:description "The basic happy-path test host_log_dir_prefers_atm_log_dir_override (home.rs:503-510) is #[cfg(unix)]-gated. On Windows CI, there is no test exercising the core override-first behavior at all. The fix for S11-QA1-002 (adding a non-gated test that sets ATM_LOG_DIR to a TempDir path without touching HOME) will also satisfy this finding — a single non-gated test covers both the headless scenario and the basic override happy path on all platforms." ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s11-log-dir-override-order" ;
+  triage:promoteToBranch "feature/pS-s11-log-dir-override-order" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S11-QA1-005/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb> .
+
+<urn:atm:triage:occurrence/S11-QA1-005/s11/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/home.rs" ;
+  triage:line 503 ;
+  triage:snippet "#[cfg(unix)] fn host_log_dir_prefers_atm_log_dir_override — basic override happy-path has no cross-platform test" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "34bf2eb" ;
+  triage:branch "feature/pS-s11-log-dir-override-order" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb> .
+
+<urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s11-log-dir-override-order" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s11-log-dir-override-order" ;
+  triage:headSha "34bf2eb" ;
+  triage:orderIndex 1 .

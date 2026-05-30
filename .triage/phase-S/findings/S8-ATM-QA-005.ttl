@@ -1,0 +1,59 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-ATM-QA-005>
+  a triage:Finding ;
+  triage:findingId "S8-ATM-QA-005" ;
+  triage:title "REQ-DAEMON-RUNTIME-008 and no-churn rule block missing ADR-010 citation" ;
+  triage:description "docs/atm-daemon/requirements.md REQ-DAEMON-RUNTIME-008 (lines 205-211) defines the no-churn invariant for watcher/reconcile handling of ATM-authored compatibility projection updates. Its Satisfies list cites REQ-CORE-COMPAT-001 and REQ-P-RELIABILITY-001 but does not cite ADR-010-claude-jsonl-compatibility-envelope.md, which is the design record that introduces the retrieval-stub projection and the no-churn rule. Similarly, docs/atm-daemon/architecture.md lines 191-197 reproduce the no-churn rule in prose but contain no reference to ADR-010. Sprint S.8 is the phase where ADR-010 was implemented; the traceability link from the governing requirement and its architecture prose back to the originating design record is absent from both documents, breaking the sprint-level citation chain." ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:promoteTo "feature/pS-s8-jsonl-compat" ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-ATM-QA-005/s8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-ATM-QA-005/s8/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-ATM-QA-005/s8/1>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/requirements.md" ;
+  triage:line 205 ;
+  triage:snippet "REQ-DAEMON-RUNTIME-008 — Satisfies: REQ-CORE-COMPAT-001, REQ-P-RELIABILITY-001 — ADR-010 citation absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:occurrence/S8-ATM-QA-005/s8/2>
+  a triage:Occurrence ;
+  triage:file "docs/atm-daemon/architecture.md" ;
+  triage:line 191 ;
+  triage:snippet "watcher/reconcile observation of ATM-authored compatibility projection updates must be idempotent ... must not create a new-mail churn loop — ADR-010 citation absent" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "48109b8" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/48109b8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "48109b8" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3450be4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3450be4" ;
+  triage:orderIndex 2 ;
+  triage:status "present" ;
+  triage:note "Both docs/atm-daemon/requirements.md and docs/atm-daemon/architecture.md exist on integrate/phase-S. REQ-DAEMON-RUNTIME-008 and the no-churn prose block are also present on integrate/phase-S without ADR-010 citation; the gap is present on both branches." .

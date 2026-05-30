@@ -1,12 +1,63 @@
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::PathBuf;
+use std::time::Duration;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
 use crate::types::{AgentName, TeamName};
 
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub const DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES: u64 = 128 * 1024;
+pub const MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES: u64 = 1_048_576;
+pub const MAX_POST_SEND_HOOKS: usize = 64;
+pub const MAX_POST_SEND_HOOK_COMMAND_PATH_BYTES: usize = 4096;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
+pub struct ByteCount(u64);
+
+impl ByteCount {
+    pub const fn new(value: u64) -> Self {
+        Self(value)
+    }
+
+    pub const fn get(self) -> u64 {
+        self.0
+    }
+
+    pub const fn is_zero(self) -> bool {
+        self.0 == 0
+    }
+
+    pub fn as_usize(self) -> Option<usize> {
+        usize::try_from(self.0).ok()
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DaemonConfig {
+    pub remote_retry_budget: Duration,
+}
+
+impl Default for DaemonConfig {
+    fn default() -> Self {
+        Self {
+            remote_retry_budget: Duration::from_secs(30),
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct GraftConfig {
+    pub enabled: bool,
+}
+
+impl Default for GraftConfig {
+    fn default() -> Self {
+        Self { enabled: true }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
 pub struct AtmConfig {
     /// Deprecated compatibility-only field for legacy `.atm.toml` parsing.
     ///
@@ -23,10 +74,34 @@ pub struct AtmConfig {
     pub identity: Option<String>,
     pub default_team: Option<TeamName>,
     pub team_members: Vec<TeamName>,
+    /// Alias destination values are free-form routing strings; no domain constraint is applied at
+    /// the config layer, so no newtype wrapper is needed here.
     pub aliases: BTreeMap<String, String>,
     pub post_send_hooks: Vec<PostSendHookRule>,
+    pub claude_jsonl_body_export_max_bytes: ByteCount,
+    pub daemon: DaemonConfig,
+    pub graft: GraftConfig,
     pub config_root: PathBuf,
     pub(crate) obsolete_identity_present: bool,
+}
+
+impl Default for AtmConfig {
+    fn default() -> Self {
+        Self {
+            identity: None,
+            default_team: None,
+            team_members: Vec::new(),
+            aliases: BTreeMap::new(),
+            post_send_hooks: Vec::new(),
+            claude_jsonl_body_export_max_bytes: ByteCount::new(
+                DEFAULT_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES,
+            ),
+            daemon: DaemonConfig::default(),
+            graft: GraftConfig::default(),
+            config_root: PathBuf::new(),
+            obsolete_identity_present: false,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Eq)]

@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S12-QA1-005>
+  a triage:Finding ;
+  triage:findingId "S12-QA1-005" ;
+  triage:title "Sprint S.12 not present in docs/plan-phase-S.md" ;
+  triage:description "docs/plan-phase-S.md: Sprint S.12 has no entry in the Phase S plan document. plan-phase-S.md defines the Phase S sprint sequence (S.0–S.4 originally planned plus integration-gate remediation sprints) but has no S.12 entry with sequencing dependencies or acceptance gate relationship. docs/project-plan.md references plan-phase-S.md as the Phase S tracking document. Fix: add S.12 entry to docs/plan-phase-S.md (parallel to S.10 and S.11 entries if those are already present) documenting the sprint goal, base branch, and phase-gate relationship to integrate/phase-S." ;
+  triage:category "DOC" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:promoteToBranch "feature/pS-s12-intg-gate-findings" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S12-QA1-005/s12/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:occurrence/S12-QA1-005/s12/1>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-S.md" ;
+  triage:line 1 ;
+  triage:snippet "Sprint S.12 absent from plan-phase-S.md — no entry for integration gate remediation sprint" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "bd9e0e8" ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8> .
+
+<urn:atm:triage:worktree/feature-pS-s12-intg-gate-findings/bd9e0e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s12-intg-gate-findings" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s12-intg-gate-findings" ;
+  triage:headSha "bd9e0e8" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,87 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# Finding: S14-QA3-PLAN-001
+# plan-phase-S.md §4.1 anti-flake contract missing exception entry for
+# connect_daemon_local_ipc_until_ready sleep(5ms)
+#
+# Triage mode  : initial_pass
+# Phase        : phase-S
+# Swept at     : 2026-05-10T00:00:00Z
+# sweep_scope  : file_only  (docs/plan-phase-S.md only)
+# repeatable   : false
+#
+# Sweep result : NO_MATCH on both worktrees — the exception entry is absent
+# from §4.1 in both feature/pS-s14-impl and feature/pS-s15-rusqlite-hardening.
+# The pattern (connect_daemon_local_ipc_until_ready | sleep.*5.*ms) was searched
+# in docs/plan-phase-S.md on each worktree; neither produced a hit.
+#
+# Classification:
+#   feature/pS-s14-impl             → open  (missing entry; origin of fix)
+#   feature/pS-s15-rusqlite-hardening → open  (inherited from s14 merge)
+#
+# Finding status: open
+# promote_to_branch: feature/pS-s14-impl  (order_index 1, origin branch)
+
+<urn:atm:triage:finding/S14-QA3-PLAN-001>
+    a triage:Finding ;
+    triage:findingId "S14-QA3-PLAN-001" ;
+    triage:title "plan-phase-S.md §4.1 anti-flake contract missing exception entry for connect_daemon_local_ipc_until_ready sleep(5ms)" ;
+    triage:description "TASK-1244 replaced yield_now() with sleep(Duration::from_millis(5)) in test_support.rs:91 inside connect_daemon_local_ipc_until_ready(). The §4.1 anti-flake contract in docs/phase-S/plan-phase-S.md requires that any approved use of sleep() in tests be listed as a named exception with rationale. No such entry was added for connect_daemon_local_ipc_until_ready. Fix: add an exception entry to docs/phase-S/plan-phase-S.md §4.1 naming connect_daemon_local_ipc_until_ready and explaining the rationale (polling helper needs a fixed backoff interval; yield_now() provides no delay guarantee)." ;
+    triage:triageMode "initial_pass" ;
+    triage:category "ATM-QA" ;
+    triage:phaseId "phase-S" ;
+    triage:severity "minor" ;
+    triage:repeatable false ;
+    triage:sweepScope "file_only" ;
+    triage:status "open" ;
+    triage:dispatchReady true ;
+    triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/S14-QA3-PLAN-001/pS-s14-impl/1> ;
+    triage:hasOccurrence <urn:atm:triage:occurrence/S14-QA3-PLAN-001/pS-s15-rusqlite-hardening/1> ;
+    triage:openOn <urn:atm:triage:worktree/pS-s14-impl/a17efcc> ;
+    triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/1c8e288> ;
+    triage:promoteTo <urn:atm:triage:worktree/pS-s14-impl/a17efcc> .
+
+# Occurrence 1 — feature/pS-s14-impl
+# The §4.1 accepted-exceptions list in docs/plan-phase-S.md does not contain
+# an entry for connect_daemon_local_ipc_until_ready. The absence is the
+# violation: a sleep(5ms) was introduced (TASK-1244) without the required doc update.
+<urn:atm:triage:occurrence/S14-QA3-PLAN-001/pS-s14-impl/1>
+    a triage:Occurrence ;
+    triage:file "docs/plan-phase-S.md" ;
+    triage:line 207 ;
+    triage:snippet "Accepted production exceptions: [connect_daemon_local_ipc_until_ready entry absent]" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pS-s14-impl" ;
+    triage:headSha "a17efcc" ;
+    triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/a17efcc> .
+
+# Occurrence 2 — feature/pS-s15-rusqlite-hardening (inherited via merge-forward from s14)
+<urn:atm:triage:occurrence/S14-QA3-PLAN-001/pS-s15-rusqlite-hardening/1>
+    a triage:Occurrence ;
+    triage:file "docs/plan-phase-S.md" ;
+    triage:line 207 ;
+    triage:snippet "Accepted production exceptions: [connect_daemon_local_ipc_until_ready entry absent]" ;
+    triage:status "open" ;
+    triage:closed false ;
+    triage:branch "feature/pS-s15-rusqlite-hardening" ;
+    triage:headSha "1c8e288" ;
+    triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/1c8e288> .
+
+# WorktreeSnapshot — feature/pS-s14-impl
+<urn:atm:triage:worktree/pS-s14-impl/a17efcc>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s14-impl" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+    triage:headSha "a17efcc" ;
+    triage:orderIndex 1 .
+
+# WorktreeSnapshot — feature/pS-s15-rusqlite-hardening
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/1c8e288>
+    a triage:WorktreeSnapshot ;
+    triage:branch "feature/pS-s15-rusqlite-hardening" ;
+    triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+    triage:headSha "1c8e288" ;
+    triage:orderIndex 2 .

@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-Y6-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-Y6-006" ;
+  triage:title "No test for append path with oversized body → retrieval stub (ADR-010 gap)" ;
+  triage:description "ADR-010 requires that when an ATM-authored message body exceeds claude_jsonl_body_export_max_bytes, the Claude JSONL text field is replaced with 'atm read --message-id <id>'. The existing test write_compat_mailbox_projection_exports_retrieval_stub_when_config_cap_is_zero verifies this for the full-rewrite path. No parallel test exists for append_compat_mailbox_message (the new append-only path). Fix: add a test for append_compat_mailbox_message that verifies oversized ATM-authored message bodies produce the retrieval stub in JSONL append output when claude_jsonl_body_export_max_bytes = 0." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "REQ" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-core/src/mailbox/store.rs" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:openOn <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s6/2b808428> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-Y6-006/pY-s6/1> .
+
+<urn:atm:triage:occurrence/ATM-QA-Y6-006/pY-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/mailbox/store.rs" ;
+  triage:line 64 ;
+  triage:snippet "append_compat_mailbox_message — no test verifies oversized body produces retrieval stub in append output (ADR-010 §body_export_max_bytes)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s6/2b808428> .
+
+<urn:atm:triage:worktree/pY-s6/2b808428>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s6-append-only-compatibility-export" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s6-append-only-compatibility-export" ;
+  triage:headSha "2b808428" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .

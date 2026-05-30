@@ -1,0 +1,14 @@
+finding_id = "VQ2-003"
+title = "Test module imports DaemonSubsystem in daemon_observability.rs, violating hard boundary rule"
+severity = "important"
+pattern = "boundary-violation"
+repeatable = true
+sweep_scope = "crates/atm-daemon/src/daemon_observability.rs"
+highest_open_branch = "feature/pV-s2-observability-migration"
+promote_to_branch = "feature/pV-s2-observability-migration"
+occurrences = [
+  { branch = "feature/pV-s2-observability-migration", file = "crates/atm-daemon/src/daemon_observability.rs", lines = "847", status = "open" }
+]
+dispatch_ready = true
+dispatch_blocked_pending_triage_commit = false
+notes = "The shared observability layer must not import daemon subsystem types. This boundary applies equally inside #[cfg(test)] blocks — test code in this module lives in the observability crate scope and inherits its boundary constraints. Remove the DaemonSubsystem import from the test module; refactor the affected test to use a stub or a type that does not cross the boundary."

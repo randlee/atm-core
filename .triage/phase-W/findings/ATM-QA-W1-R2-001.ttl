@@ -1,0 +1,105 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W1-R2-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W1-R2-001" ;
+  triage:title "advisory_runtime.rs: 6 silent emit discards remain" ;
+  triage:description "crates/atm-daemon/src/advisory_runtime.rs lines 93, 112, 140, 157, 305, 339 have let _ = self.observability.emit_event(event) or let _ = self.observability.emit(...) — silent discards not converted to warn_emit_fallback pattern." ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/6> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s1/c21ec05> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s1/c21ec05> .
+
+<urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 93 ;
+  triage:snippet "let _ = self.observability.emit_event(event);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1/c21ec05> .
+
+<urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 112 ;
+  triage:snippet "let _ = self.observability.emit_event(event);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1/c21ec05> .
+
+<urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 140 ;
+  triage:snippet "let _ = self.observability.emit_event(event);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1/c21ec05> .
+
+<urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 157 ;
+  triage:snippet "let _ = self.observability.emit(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1/c21ec05> .
+
+<urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 305 ;
+  triage:snippet "let _ = self.observability.emit_event(event);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1/c21ec05> .
+
+<urn:atm:triage:occurrence/ATM-QA-W1-R2-001/pW-s1/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 339 ;
+  triage:snippet "let _ = self.observability.emit_event(event);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s1/c21ec05> .
+
+<urn:atm:triage:worktree/pW-s1/c21ec05>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s1-emit-fallback" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s1-emit-fallback" ;
+  triage:headSha "c21ec05" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/phase-W/b2298e3>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "b2298e3" ;
+  triage:orderIndex 2 .

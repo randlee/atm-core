@@ -1,0 +1,164 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+# ─── Finding ────────────────────────────────────────────────────────────────
+<urn:atm:triage:finding/ATM-QA-W4-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W4-002" ;
+  triage:title "send_once connect failure missing .with_recovery()" ;
+  triage:description "crates/atm-daemon/src/peer_transport.rs: AtmError::daemon_unavailable calls in send_once (connect, set_read_timeout, set_write_timeout, decode-response) have no .with_recovery(). V.4 Category Binding maps socket/connect failures to required recovery text. Fix: add .with_recovery('Verify the remote peer endpoint is reachable and the remote daemon is running. Check the peer endpoint configuration.') or equivalent per V.4 table." ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+
+  # occurrences on feature/pW-s4-peer-replay-recovery
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W4-002/pW-s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W4-002/pW-s4/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W4-002/pW-s4/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W4-002/pW-s4/4> ;
+
+  # occurrences on integrate/phase-W
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W4-002/integrate-W/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W4-002/integrate-W/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W4-002/integrate-W/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W4-002/integrate-W/4> ;
+
+  triage:openOn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-W/d43ded3fa97873e8e18773bbc67dd5de465dce37> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> ;
+  triage:resolutionNote "Verified fixed on the W.7 merge-forward head. peer_transport.rs now carries the required .with_recovery(...) guidance on the four send_once daemon_unavailable branches: connect, read-timeout setup, write-timeout setup, and response-frame decode." ;
+  triage:fixedOn <urn:atm:triage:worktree/pW-s7/4540ef2> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate-phase-W/4540ef2> .
+
+# ─── WorktreeSnapshots ───────────────────────────────────────────────────────
+<urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-W/d43ded3fa97873e8e18773bbc67dd5de465dce37>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pW-s7/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s7-triage-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s7-triage-closeout" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/integrate-phase-W/4540ef2>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "4540ef2" ;
+  triage:orderIndex 4 .
+
+# ─── Occurrences: feature/pW-s4-peer-replay-recovery ────────────────────────
+# Occurrence 1: connect failure (the QA-reported primary instance)
+<urn:atm:triage:occurrence/ATM-QA-W4-002/pW-s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 414 ;
+  triage:snippet "error: AtmError::daemon_unavailable(format!(\"failed to connect to remote daemon peer at {endpoint}\")).with_source(source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+
+# Occurrence 2: set_read_timeout failure
+<urn:atm:triage:occurrence/ATM-QA-W4-002/pW-s4/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 425 ;
+  triage:snippet "error: AtmError::daemon_unavailable(\"failed to apply remote peer read deadline\").with_source(source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+
+# Occurrence 3: set_write_timeout failure
+<urn:atm:triage:occurrence/ATM-QA-W4-002/pW-s4/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 436 ;
+  triage:snippet "error: AtmError::daemon_unavailable(\"failed to apply remote peer write deadline\").with_source(source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+
+# Occurrence 4: decode response frame failure
+<urn:atm:triage:occurrence/ATM-QA-W4-002/pW-s4/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 490 ;
+  triage:snippet "error: AtmError::daemon_unavailable(\"failed to decode remote peer response frame\").with_source(error)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s4-peer-replay-recovery" ;
+  triage:headSha "0a57328d0cce46e87a5573918a480cbd2ceaf2da" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s4/0a57328d0cce46e87a5573918a480cbd2ceaf2da> .
+
+# ─── Occurrences: integrate/phase-W ─────────────────────────────────────────
+# Occurrence 1: connect failure
+<urn:atm:triage:occurrence/ATM-QA-W4-002/integrate-W/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 346 ;
+  triage:snippet "error: AtmError::daemon_unavailable(format!(\"failed to connect to remote daemon peer at {endpoint}\")).with_source(source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-W/d43ded3fa97873e8e18773bbc67dd5de465dce37> .
+
+# Occurrence 2: set_read_timeout failure
+<urn:atm:triage:occurrence/ATM-QA-W4-002/integrate-W/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 357 ;
+  triage:snippet "error: AtmError::daemon_unavailable(\"failed to apply remote peer read deadline\").with_source(source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-W/d43ded3fa97873e8e18773bbc67dd5de465dce37> .
+
+# Occurrence 3: set_write_timeout failure
+<urn:atm:triage:occurrence/ATM-QA-W4-002/integrate-W/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 368 ;
+  triage:snippet "error: AtmError::daemon_unavailable(\"failed to apply remote peer write deadline\").with_source(source)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-W/d43ded3fa97873e8e18773bbc67dd5de465dce37> .
+
+# Occurrence 4: decode response frame failure
+<urn:atm:triage:occurrence/ATM-QA-W4-002/integrate-W/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/peer_transport.rs" ;
+  triage:line 422 ;
+  triage:snippet "error: AtmError::daemon_unavailable(\"failed to decode remote peer response frame\").with_source(error)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "d43ded3fa97873e8e18773bbc67dd5de465dce37" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-W/d43ded3fa97873e8e18773bbc67dd5de465dce37> .

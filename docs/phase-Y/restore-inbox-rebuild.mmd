@@ -1,0 +1,32 @@
+%% title: `Restore Inbox Rebuild`
+%% summary: Restore-marker-scoped staged publish for inbox restore recovery.
+%% commentary: This machine stays distinct from normal repair because it is a privileged recovery path with restore-marker validation, staged restore output, and restore-specific publish semantics.
+%% notes: restore marker required | ClaudeCode harness only | staged restore publish
+%% sets: delivery
+flowchart TD
+    A["<b>RestoreInboxRebuildStateMachine</b><br/>Received"] --> B["ValidateRestoreMarker"]
+    B -->|marker_invalid| E1["Rejected
+validation error"]
+    B -->|marker_ok| C["ValidateClaudeHarness"]
+    C -->|non_claude| E2["Rejected
+validation error"]
+    C -->|claude_ok| D["LoadRestoreProjection"]
+    D -->|projection_err| X1["Failed
+projection load failure"]
+    D -->|projection_loaded| E["StageRestoreOutput
+staged rebuild output"]
+    E -->|stage_err| X2["Failed
+staging failure"]
+    E -->|stage_ok| F["PublishRestoreOutput
+atomic publish + documented cleanup"]
+    F -->|publish_err| X3["Failed
+publish failure"]
+    F -->|publish_ok| O["Delivered"]
+
+    classDef happy fill:#14532d,color:#ffffff,stroke:#14532d,stroke-width:2px;
+    classDef error fill:#7f1d1d,color:#ffffff,stroke:#7f1d1d,stroke-width:2px;
+    classDef neutral fill:#e2e8f0,color:#111827,stroke:#334155,stroke-width:2px;
+
+    class A,O happy;
+    class E1,E2,X1,X2,X3 error;
+    class B,C,D,E,F neutral;

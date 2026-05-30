@@ -1,0 +1,247 @@
+---
+name: 03-consistency-hardening-task
+version: 1.0.0
+description: team-lead assignment template for cross-document consistency and ambiguity hardening after critical plan review.
+format: xml
+required_variables:
+  - task_id
+  - phase
+  - description
+  - worktree_path
+  - branch
+  - pr_target
+  - source_of_truth
+  - references
+  - previous_step_json
+  - round_id
+  - round_index
+  - replay_nonce
+---
+<atm-task id="{{ task_id }}" sprint="{{ phase }}" assignee="arch-ctm" mode="plan-hardening-consistency">
+  <description>{{ description }}</description>
+
+  <worktree>{{ worktree_path }}</worktree>
+  <branch>{{ branch }}</branch>
+  <pr-target>{{ pr_target }}</pr-target>
+  <round id="{{ round_id }}" index="{{ round_index }}" reviewer="quality-mgr" reviewed-commit="{{ reviewed_commit | default('') }}" supersedes="{{ supersedes_task_id | default('') }}"/>
+  <replay-nonce>{{ replay_nonce }}</replay-nonce>
+
+  <source-of-truth>
+{{ source_of_truth }}
+  </source-of-truth>
+
+{% if questions_or_concerns is defined and questions_or_concerns | trim %}
+  <questions-or-concerns>
+{{ questions_or_concerns }}
+  </questions-or-concerns>
+{% endif %}
+
+  <references>
+{{ references }}
+  </references>
+
+{% if reviewer_findings_json is defined and reviewer_findings_json | trim %}
+  <reviewer-findings-json>
+<![CDATA[
+{{ reviewer_findings_json }}
+]]>
+  </reviewer-findings-json>
+{% endif %}
+
+  <required-input>
+    The following fenced JSON handoff from `critical-plan-reviewer` is
+    required input. Reject the task if it is missing or malformed.
+
+    Expected shape:
+    ```json
+    {
+      "status": "PASS | FAIL",
+      "mode": "critical-plan-review",
+      "reviewer": "critical-plan-reviewer",
+      "round_id": "STEP3-R1",
+      "round_index": 1,
+      "reviewed_commit": "abc1234",
+      "previous_reviewed_commit": "",
+      "findings_hash": "stable-round-fingerprint",
+      "scope": {
+        "phase": "string or null",
+        "sprint": "string or null"
+      },
+      "sprint_scores": [
+        {
+          "sprint": "X.12",
+          "status": "PASS | FAIL",
+          "blocking_count": 0,
+          "important_count": 0,
+          "minor_count": 0
+        }
+      ],
+      "docs_read": [],
+      "findings": [],
+      "minor_wording": [],
+      "ready_for_next_step": true,
+      "errors": []
+    }
+    ```
+<![CDATA[
+{{ previous_step_json }}
+]]>
+  </required-input>
+
+  <plan-hardening-consistency>
+    Read the current plan docs from disk first, using `<source-of-truth>` and
+    `<references>`, before doing anything else.
+
+    This is the second required hardening pass. The sprint-shape and
+    production-ready deliverable split should already be hardened. Your job in
+    this pass is to eliminate document inconsistency, contradiction, ambiguity,
+    undefined types/interfaces, and missing boundary or ADR coverage.
+
+    Do not relax or reinterpret the already-approved sprint deliverables.
+    Instead, make every affected document reflect those deliverables
+    consistently and unambiguously.
+
+    You should welcome improvements that clarify, tighten, or make the
+    documents more internally consistent when those improvements are consistent
+    with what the user already discussed with you. You must resist and push
+    back on substantial scope changes that are at odds with that user
+    discussion.
+
+    If `team-lead` routing, repo drift, or source references imply a
+    substantial scope change, that is a hard stop: push back, describe the
+    scope conflict explicitly, and require user discussion before consistency
+    hardening continues.
+
+    <audit-phase>
+      Verify that every document in the required-documents list exists, is
+      complete, and is consistent with the source-of-truth plan content and
+      with every other affected document. Then create a structured task list of
+      all findings. Do not begin the fix phase until the task list is complete.
+
+      Before normal consistency review, compare the current docs and task
+      framing against the user-approved scope already in context. If you detect
+      a substantial deliverable-scope rewrite, emit a `SCOPE-CONFLICT`
+      finding, push back to `team-lead`, and stop. Do not "fix" the
+      inconsistency by harmonizing documents around the new scope.
+
+      <required-documents>
+        <doc id="project-plan">
+          Top-level project-plan covering the phase and all sprints in the phase.
+        </doc>
+        <doc id="phase-plan">
+          Phase plan covering the whole remaining phase, including every sprint
+          required to finish the phase.
+        </doc>
+        <doc id="sprint-plan">
+          A hardened sprint doc for every sprint in the phase. A sprint doc that
+          is referenced in the phase plan but does not exist is a GAP finding.
+        </doc>
+        <doc id="requirements">
+          Product requirements covering all features and behaviors in scope.
+        </doc>
+        <doc id="architecture">
+          Product architecture document.
+        </doc>
+        <doc id="crate-docs">
+          Requirements and architecture docs for every crate affected by this phase.
+        </doc>
+        <doc id="adrs">
+          An ADR for every significant architectural decision, plus an up-to-date ADR index.
+        </doc>
+        <doc id="protocol-schema-interface">
+          Protocol, schema, and interface docs for every boundary touched by this phase.
+        </doc>
+        <doc id="machine-readable-boundaries">
+          Machine-readable boundary definitions (e.g. interface contracts, schema files)
+          for every architectural boundary in scope.
+        </doc>
+        <doc id="issues-inventory">
+          Issues inventory reflecting the current state of known issues and their disposition.
+        </doc>
+        <doc id="testing-cross-platform">
+          Testing and cross-platform guidance. Required when the phase touches
+          platform-specific behavior or has cross-platform acceptance criteria.
+        </doc>
+        <doc id="process-qa-triage">
+          Process, QA, and triage docs or prompts when the phase changes ATM
+          workflow, triage flow, QA routing, or shared coordination prompts.
+        </doc>
+      </required-documents>
+
+      Each entry in the task list must include:
+        - Finding number
+        - Document name and section (or "missing" if the document does not exist)
+        - Finding type (from the list below)
+        - One-sentence description of the problem
+
+      <finding-types>
+        <type id="GAP">Required detail is absent entirely, or a required document does not exist.</type>
+        <type id="VAGUE">Language is ambiguous or leaves an implementation choice to the developer that the plan should resolve explicitly.</type>
+        <type id="CONTRA">Two or more documents contradict each other.</type>
+        <type id="MISSING-ADR">A significant architectural decision is made inline without a corresponding ADR.</type>
+        <type id="BOUNDARY">An architectural boundary, module ownership rule, or interface contract is undefined or incompletely specified.</type>
+        <type id="UNDEF">An important type, trait, struct, enum, or protocol is referenced but not explicitly defined in any document.</type>
+        <type id="CROSS-DOC">A definition or decision in one document is not reflected consistently in documents that depend on it.</type>
+        <type id="ORDERING">Task dependencies are missing or incorrectly ordered such that a dev agent could begin work out of sequence.</type>
+        <type id="SCOPE-CONFLICT">The task framing, repo docs, or team-lead concerns materially change the user-discussed deliverable scope; consistency hardening must stop and push back instead of normalizing the new scope.</type>
+      </finding-types>
+    </audit-phase>
+
+    <fix-phase>
+      Work through every finding in the task list in order. For each finding:
+        1. State the finding number and type.
+        2. Describe the fix being applied.
+        3. Apply the fix. Fixes may require updating an existing document
+           or creating a new document (e.g. a missing ADR or architecture
+           definition).
+        4. Confirm the fix did not introduce a new finding.
+        5. Mark the finding as resolved in the task list.
+
+      `SCOPE-CONFLICT` is not resolved by rewriting the plan around a new
+      scope. It is resolved only by stopping, pushing back to team-lead, and
+      requiring user discussion before scope changes proceed.
+    </fix-phase>
+
+    <repeat>
+      After all findings are resolved, return to audit-phase and repeat.
+      Continue until audit-phase produces zero findings.
+    </repeat>
+
+    Return fenced JSON to `team-lead` when this pass completes. `team-lead`
+    will hand the plan off to the codex-orchestration plan-QA flow via
+    `quality-mgr`.
+
+    <exit-criterion>
+      Output fenced JSON only when audit-phase produces zero findings:
+
+      ```json
+      {
+        "status": "PASS | FAIL",
+        "mode": "plan-hardening-consistency",
+        "round_id": "{{ round_id }}",
+        "round_index": {{ round_index }},
+        "reviewed_commit": "<commit-sha>",
+        "previous_reviewed_commit": "{{ previous_reviewed_commit | default('') }}",
+        "iterations": 0,
+        "findings_resolved": 0,
+        "final_finding_count": 0,
+        "docs_modified": [],
+        "docs_created": [],
+        "ready_for_next_step": true,
+        "errors": []
+      }
+      ```
+    </exit-criterion>
+  </plan-hardening-consistency>
+
+  <workflow>
+    <step id="a">ACK this message immediately. In the ACK, include a brief outline of the plan/work you understand to be in scope. If the required fenced JSON handoff from `critical-plan-reviewer` is missing or malformed, reject the task immediately. If the task includes questions-or-concerns, address them explicitly in the same ACK before starting work. If the task appears to materially change the user-discussed deliverable scope, the ACK must push back explicitly and state that consistency hardening is blocked pending user discussion. Make reasonable assumptions and do not ask clarifying questions unless a real blocker prevents execution.</step>
+    <step id="b">Immediately after ACK, begin executing the task in the same work session.</step>
+    <step id="c">Before editing, update the worktree from the target branch and include prior fixes already merged to that target.</step>
+    <step id="d">As soon as the hardening changes are complete and the branch is pushable, commit and push immediately. Send branch name and commit hash right away so team-lead critical review can begin in parallel.</step>
+    <step id="e">After the push report, run the required validation. Do not wait for PR creation before starting validation.</step>
+    <step id="f">When validation completes, send a second report with PASS or FAIL, concrete failure details if any, and whether follow-up fixes are required.</step>
+    <step id="g">After the hardening loop converges, ensure all document updates are staged, committed, and pushed. Return fenced JSON only. The next step after this pass is codex-orchestration plan QA through `quality-mgr`, not another local plan-hardening review loop.</step>
+    <step id="h">After the validation report, read ATM again for follow-up work.</step>
+  </workflow>
+</atm-task>

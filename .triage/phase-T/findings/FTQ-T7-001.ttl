@@ -1,0 +1,118 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-T7-001>
+  a triage:Finding ;
+  triage:findingId "FTQ-T7-001" ;
+  triage:title "3-second readiness gate too tight for CI" ;
+  triage:description "crates/atm-daemon/src/test_support.rs:82 — ready_rx.recv_timeout(Duration::from_secs(3)) is too short for Windows CI runners. Fix: increase to 10s or use exponential backoff with a 30s ceiling." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "FTQ" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T7-001/pT-t4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T7-001/pT-t5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T7-001/pT-t6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T7-001/pT-t7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-T7-001/pT-t8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4/36b4868> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5/30082e8> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t6/d57cf81> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t7/afbd906> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t8/afbd906> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+<urn:atm:triage:occurrence/FTQ-T7-001/pT-t4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/test_support.rs" ;
+  triage:line 82 ;
+  triage:snippet ".recv_timeout(std::time::Duration::from_secs(3))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "36b4868" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/36b4868> .
+
+<urn:atm:triage:occurrence/FTQ-T7-001/pT-t5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/test_support.rs" ;
+  triage:line 82 ;
+  triage:snippet ".recv_timeout(std::time::Duration::from_secs(3))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/30082e8> .
+
+<urn:atm:triage:occurrence/FTQ-T7-001/pT-t6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/test_support.rs" ;
+  triage:line 82 ;
+  triage:snippet ".recv_timeout(std::time::Duration::from_secs(3))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:headSha "d57cf81" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t6/d57cf81> .
+
+<urn:atm:triage:occurrence/FTQ-T7-001/pT-t7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/test_support.rs" ;
+  triage:line 82 ;
+  triage:snippet ".recv_timeout(std::time::Duration::from_secs(3))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t7/afbd906> .
+
+<urn:atm:triage:occurrence/FTQ-T7-001/pT-t8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/test_support.rs" ;
+  triage:line 82 ;
+  triage:snippet ".recv_timeout(std::time::Duration::from_secs(3))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t8/afbd906> .
+
+<urn:atm:triage:worktree/pT-t4/36b4868>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "36b4868" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/30082e8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "30082e8" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/pT-t6/d57cf81>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t6-graft-client-surface" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t6-graft-client-surface" ;
+  triage:headSha "d57cf81" ;
+  triage:orderIndex 6 .
+
+<urn:atm:triage:worktree/pT-t7/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t7-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t7-graft-runtime" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 7 .
+
+<urn:atm:triage:worktree/pT-t8/afbd906>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t8-atm-graft-crate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t8-atm-graft-crate" ;
+  triage:headSha "afbd906" ;
+  triage:orderIndex 8 .

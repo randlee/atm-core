@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S11-QA1-006>
+  a triage:Finding ;
+  triage:findingId "S11-QA1-006" ;
+  triage:title "ADR-011 does not explicitly state override-first evaluation order" ;
+  triage:description "ADR-011 states ATM_LOG_DIR override exists but is silent on evaluation order. sprint-S11.md says the override-first contract is 'implied by ADR-011'. Fix: add one sentence to the ADR-011 Decision section under the ATM_LOG_DIR override bullet: 'ATM_LOG_DIR is evaluated before any OS home-directory resolution; a valid ATM_LOG_DIR value bypasses home_dir() entirely.' This makes override-first ordering an explicit ADR contract." ;
+  triage:category "DOC" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s11-log-dir-override-order" ;
+  triage:promoteToBranch "feature/pS-s11-log-dir-override-order" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S11-QA1-006/s11/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb> .
+
+<urn:atm:triage:occurrence/S11-QA1-006/s11/1>
+  a triage:Occurrence ;
+  triage:file "docs/adr/ADR-011-host-scoped-retained-log-root.md" ;
+  triage:line 26 ;
+  triage:snippet "ATM_LOG_DIR override described but evaluation order (before home_dir() resolution) not explicitly stated" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "34bf2eb" ;
+  triage:branch "feature/pS-s11-log-dir-override-order" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb> .
+
+<urn:atm:triage:worktree/feature-pS-s11-log-dir-override-order/34bf2eb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s11-log-dir-override-order" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s11-log-dir-override-order" ;
+  triage:headSha "34bf2eb" ;
+  triage:orderIndex 1 .

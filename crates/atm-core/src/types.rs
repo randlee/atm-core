@@ -48,10 +48,6 @@ impl AgentName {
         self.0
     }
 
-    /// Construct from a value that has already passed `validate_path_segment`
-    /// or came from a trusted internal deserialization context.
-    ///
-    /// Raw untrusted strings must go through `FromStr` or `Deserialize`.
     pub(crate) fn from_validated(value: impl Into<String>) -> Self {
         Self(value.into())
     }
@@ -251,9 +247,156 @@ impl fmt::Display for TaskId {
     }
 }
 
+const MAX_MODEL_NAME_BYTES: usize = 256;
+const MAX_PANE_ID_BYTES: usize = 256;
+
+/// Retained provider/model label carried across roster and config boundaries.
+#[derive(Debug, Clone, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct ModelName(String);
+
+impl ModelName {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        if value.len() > MAX_MODEL_NAME_BYTES {
+            return Err(AtmError::validation(format!(
+                "model must be at most {MAX_MODEL_NAME_BYTES} bytes"
+            )));
+        }
+        Ok(Self(value))
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for ModelName {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl From<ModelName> for String {
+    fn from(value: ModelName) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for ModelName {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for ModelName {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for ModelName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+/// Claude-compatible pane identifier preserved across roster and config
+/// projection boundaries.
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord, Hash, Serialize)]
+#[serde(transparent)]
+pub struct PaneId(String);
+
+impl PaneId {
+    pub fn new(value: impl Into<String>) -> Result<Self, AtmError> {
+        let value = value.into();
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(AtmError::validation("pane id must not be blank"));
+        }
+        if trimmed.len() > MAX_PANE_ID_BYTES {
+            return Err(AtmError::validation(format!(
+                "pane id must be at most {MAX_PANE_ID_BYTES} bytes"
+            )));
+        }
+        Ok(Self(trimmed.to_string()))
+    }
+
+    pub fn from_cli(value: &str) -> Result<Self, AtmError> {
+        let trimmed = value.trim();
+        if trimmed.is_empty() {
+            return Err(AtmError::validation("pane id must not be blank"));
+        }
+        let normalized = if trimmed.starts_with('%') || trimmed.contains(':') {
+            trimmed.to_string()
+        } else {
+            format!("%{trimmed}")
+        };
+        Self::new(normalized)
+    }
+
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+
+    pub fn into_inner(self) -> String {
+        self.0
+    }
+}
+
+impl<'de> Deserialize<'de> for PaneId {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = String::deserialize(deserializer)?;
+        Self::new(value).map_err(serde::de::Error::custom)
+    }
+}
+
+impl From<PaneId> for String {
+    fn from(value: PaneId) -> Self {
+        value.0
+    }
+}
+
+impl AsRef<str> for PaneId {
+    fn as_ref(&self) -> &str {
+        self.as_str()
+    }
+}
+
+impl Deref for PaneId {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.as_str()
+    }
+}
+
+impl fmt::Display for PaneId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::{AgentName, TaskId, TeamName};
+    use super::{AgentName, ModelName, PaneId, TaskId, TeamName};
 
     #[test]
     fn task_id_rejects_blank_deserialization() {
@@ -274,6 +417,28 @@ mod tests {
         let error = serde_json::from_str::<TeamName>("\"   \"").expect_err("blank team name");
 
         assert!(error.to_string().contains("team"));
+    }
+
+    #[test]
+    fn model_name_rejects_overlong_values() {
+        let value = "x".repeat(257);
+        let error = ModelName::new(value).expect_err("invalid model");
+
+        assert!(error.message.contains("model"));
+    }
+
+    #[test]
+    fn pane_id_cli_normalizes_plain_numeric_fragment() {
+        let pane = PaneId::from_cli("7").expect("pane");
+
+        assert_eq!(pane.as_str(), "%7");
+    }
+
+    #[test]
+    fn pane_id_deserialize_rejects_blank() {
+        let error = serde_json::from_str::<PaneId>("\"   \"").expect_err("blank pane");
+
+        assert!(error.to_string().contains("pane id must not be blank"));
     }
 }
 
@@ -333,7 +498,7 @@ pub enum AckState {
     Acknowledged,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum MessageClass {
     Unread,
@@ -342,7 +507,7 @@ pub enum MessageClass {
     Read,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum DisplayBucket {
     Unread,
@@ -350,19 +515,28 @@ pub enum DisplayBucket {
     History,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum ReadSelection {
     Actionable,
-    UnreadOnly,
-    PendingAckOnly,
-    ActionableWithHistory,
+    Unread,
+    PendingAck,
     All,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum AckActivationMode {
     PromoteDisplayedUnread,
     ReadOnly,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CommandAction {
+    Ack,
+    Clear,
+    List,
+    Read,
+    Send,
 }

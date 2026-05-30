@@ -1,0 +1,73 @@
+boundary_id = "BOUNDARY-GraftSharedClientConsumer"
+owner_package = "atm-graft"
+owner_crate_path = "atm_graft"
+name = "GraftSharedClientConsumer"
+
+[public]
+facade = "GraftClient"
+
+[implementation]
+type = "GraftClient"
+module = "atm_graft"
+visibility = "public"
+constructor = "public"
+
+[composition]
+roots = ["atm_graft::GraftClient::connect", "atm_graft::GraftClient::from_transport"]
+
+[ownership]
+io_owns = [
+  "same_host_client_transport",
+  "shared_request_response_mapping",
+]
+io_forbidden = [
+  "sqlite",
+  "daemon_request_dispatch",
+  "daemon_private_graft_api",
+]
+
+[dependencies]
+allowed_dependents = []
+allowed_dependencies = ["atm-core", "atm-daemon-client"]
+forbidden_edges = [
+  "atm-graft -> atm-daemon",
+  "atm-graft -> atm-rusqlite",
+]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = [
+  "atm_daemon::client",
+  "rusqlite::Connection",
+]
+
+[contracts]
+request_types = ["RequestEnvelope", "SendRequestEnvelope", "ReadQuery", "AckRequest"]
+response_types = ["ResponseEnvelope", "SendResponseEnvelope", "ReadOutcome", "AckOutcome"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = ["atm_core::transport::testing::FakeClientTransport"]
+forbidden_test_bypasses = [
+  "atm_daemon::client",
+  "rusqlite::Connection",
+]
+
+[enforcement]
+lint_rules = [
+  "LINT-BOUNDARY-GRAFT-SHARED-CLIENT-EDGES",
+  "LINT-BOUNDARY-GRAFT-SHARED-CLIENT-REFERENCES",
+]
+review_gates = [
+  "no_graft_to_daemon_edge",
+  "no_graft_to_sqlite_edge",
+  "shared_transport_only",
+]
+
+[status]
+state = "active"
+notes = [
+  "U.8 keeps atm-graft on the shared atm-core client transport and request/response envelopes only",
+  "atm-daemon-client is a distinct thin-client crate; it does not share the atm-daemon runtime",
+  "session runtime and advisory stream ownership are deferred to U.9 and U.10",
+]

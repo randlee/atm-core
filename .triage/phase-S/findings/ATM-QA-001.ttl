@@ -1,0 +1,150 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-001" ;
+  triage:title "ShutdownBeacon.wake Condvar never waited on — dead concurrency primitive" ;
+  triage:description "crates/atm-daemon/src/shutdown_beacon.rs:9 — ShutdownBeacon has a wake: Condvar field. trip() calls notify_all() but no code anywhere calls wait() or wait_timeout() on it. Violates sprint-S13-ipc-plan.md §2 'wakeable wait primitive' contract. Fix: remove dead Condvar or add paired wait_until_tripped() method." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pS-s13/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pS-s13/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pS-s13/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pS-s14/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pS-s14/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pS-s14/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pS-s15/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pS-s15/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-001/pS-s15/3> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s13/4c03c2c> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14/cf57c48> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15/93c63a9> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pS-s13/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 1 ;
+  triage:snippet "use std::sync::Condvar;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pS-s13/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 9 ;
+  triage:snippet "    wake: Condvar," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pS-s13/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 15 ;
+  triage:snippet "        self.wake.notify_all();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s13/4c03c2c> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pS-s14/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 1 ;
+  triage:snippet "use std::sync::Condvar;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pS-s14/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 9 ;
+  triage:snippet "    wake: Condvar," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pS-s14/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 15 ;
+  triage:snippet "        self.wake.notify_all();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14/cf57c48> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pS-s15/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 1 ;
+  triage:snippet "use std::sync::Condvar;" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pS-s15/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 9 ;
+  triage:snippet "    wake: Condvar," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:occurrence/ATM-QA-001/pS-s15/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/shutdown_beacon.rs" ;
+  triage:line 15 ;
+  triage:snippet "        self.wake.notify_all();" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+<urn:atm:triage:worktree/pS-s13/4c03c2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s14/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s15/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 .

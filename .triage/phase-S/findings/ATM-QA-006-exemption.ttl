@@ -1,0 +1,24 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-006-exemption>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-006-exemption" ;
+  triage:title "Windows 25ms lifecycle polling exception recorded as accepted plan exemption" ;
+  triage:description "The bounded 25ms Windows lifecycle wake polling loop remains an accepted temporary exception per docs/plan-phase-S.md §4.1. No code change is required on feature/pS-s14-impl for this item." ;
+  triage:phaseId "phase-S" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:status "accepted" ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-006-exemption/pS-s14/1> .
+
+<urn:atm:triage:occurrence/ATM-QA-006-exemption/pS-s14/1>
+  a triage:Occurrence ;
+  triage:file "docs/plan-phase-S.md" ;
+  triage:line 209 ;
+  triage:snippet "Windows lifecycle-control wake propagation uses a bounded `25ms` polling loop" ;
+  triage:status "accepted" ;
+  triage:closed true ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "dcb5df9" .

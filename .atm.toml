@@ -6,11 +6,18 @@ identity = "team-lead"
 recipient = "arch-ctm"
 command = ["scripts/atm-nudge.py", "arch-ctm"]
 
+[[atm.post_send_hooks]]
+recipient = "arch-inj"
+command = ["scripts/atm-nudge.py", "arch-inj"]
+
 [plugins.atm-agent-mcp]
 codex_bin = "codex"
 identity = "arch-ctm"
 sandbox = "workspace-write"
 approval_policy = "on-failure"
+
+[startup.team-lead]
+all = ["Read /codex-orchestration SKILL.md and /triaging-findings SKILL.md"]
 
 # ── rmux: tmux session launcher ──────────────────────────────────────
 [rmux]
@@ -39,6 +46,13 @@ tmux_pane_id = "%2"
 model = "sonnet"
 color = "blue"
 env = { ATM_IDENTITY = "quality-mgr", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
+
+[[rmux.windows.panes]]
+name = "arch-inj"
+tmux_pane_id = "%3"
+command = "codex -c features.codex_hooks=true --yolo"
+dir = "/Users/randlee/Documents/github/atm-core-worktrees/plan/atm-graft"
+env = { ATM_IDENTITY = "arch-inj", ATM_TEAM = "atm-dev", CLAUDE_CODE_TASK_LIST_ID = "atm-dev" }
 
 [[rmux.windows]]
 name = "monitoring"

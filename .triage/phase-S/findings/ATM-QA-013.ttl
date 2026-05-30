@@ -1,0 +1,51 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-013>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-013" ;
+  triage:title "docs/plan-phase-S.md not verified to contain S.13 sprint entry" ;
+  triage:description "docs/plan-phase-S.md was not verified to contain the S.13 sprint entry. The reviewer could not confirm the S.13 planning section is present or up-to-date. Fix: verify docs/plan-phase-S.md contains an S.13 sprint entry; add or update it if missing." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:pattern "sprint-S13|S\\.13|S13" ;
+  triage:fileFilter "plan-phase-S\\.md" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:fixedOn <urn:atm:triage:worktree/pS-s13/4c03c2c> ;
+  triage:fixedOn <urn:atm:triage:worktree/pS-s14/cf57c48> ;
+  triage:fixedOn <urn:atm:triage:worktree/pS-s15/93c63a9> .
+
+# --- Sweep Results ---
+# Pattern 'sprint-S13|S\\.13|S13' applied to docs/plan-phase-S.md in each worktree.
+# S.13 section found at line 618 in all three supplied worktrees and in integrate/phase-S.
+# The section includes goal, required outcomes, and required closeout work.
+# No fix is required. The finding was a reviewer uncertainty, not an actual gap.
+
+# --- Worktree Snapshots ---
+
+<urn:atm:triage:worktree/pS-s13/4c03c2c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s13-ipc-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s13-ipc-hardening" ;
+  triage:headSha "4c03c2c" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s14/cf57c48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "cf57c48" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pS-s15/93c63a9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "93c63a9" ;
+  triage:orderIndex 3 .

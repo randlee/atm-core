@@ -1,0 +1,91 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/YB-003>
+  a triage:Finding ;
+  triage:findingId "YB-003" ;
+  triage:title "Hook capture count used as NonClaude delivery proof in test" ;
+  triage:description "Test send_non_claude_sqlite_failure_delivers_original_and_error_via_hook_path uses captures.len() == 2 as NonClaude delivery proof. Sprint-Y7.md AC explicitly forbids metadata-only hook behavior as NonClaude proof." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed" ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedBy "PYB-PHASE-END-QA-2" ;
+  triage:fixedOnBranch "integrate/phase-Y" ;
+  triage:fixedAtCommit "9d5b3474" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-003/pYb-s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/YB-003/pYb-s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s7/61e9dfd9> ;
+  triage:openOn <urn:atm:triage:worktree/pYb-s8/6b7725bc> ;
+  triage:fixedOn <urn:atm:triage:worktree/pYb-s9/c3426bb4> ;
+  triage:promoteTo <urn:atm:triage:worktree/pYb-s9/c3426bb4> ;
+  triage:highestOpenBranch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:highestFixedBranch "feature/pYb-s9-non-claude-outbound-boundary-formalization" .
+
+<urn:atm:triage:occurrence/YB-003/pYb-s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1589 ;
+  triage:snippet "assert_eq!(captures.len(), 2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "61e9dfd9" ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s7/61e9dfd9> .
+
+<urn:atm:triage:occurrence/YB-003/pYb-s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 1544 ;
+  triage:snippet "assert_eq!(captures.len(), 2);" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "6b7725bc" ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:occursIn <urn:atm:triage:worktree/pYb-s8/6b7725bc> .
+
+<urn:atm:triage:worktree/pYb-s7/61e9dfd9>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s7-degraded-delivery-contract-hardening" ;
+  triage:headSha "61e9dfd9" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pYb-s8/6b7725bc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s8-policy-cleanup-and-impossible-path-removal" ;
+  triage:headSha "6b7725bc" ;
+  triage:orderIndex 2 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pYb-s9/c3426bb4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s9-non-claude-outbound-boundary-formalization" ;
+  triage:headSha "c3426bb4" ;
+  triage:orderIndex 3 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/pYb-s10/c531c3ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s10-boundary-enforcement-and-smoke-handoff" ;
+  triage:headSha "c531c3ab" ;
+  triage:orderIndex 4 ;
+  triage:status "absent" .
+
+<urn:atm:triage:worktree/pYb-s11/e0ea1f07>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pYb-s11-y10-gap-closure" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pYb-s11-y10-gap-closure" ;
+  triage:headSha "e0ea1f07" ;
+  triage:orderIndex 5 ;
+  triage:status "absent" .

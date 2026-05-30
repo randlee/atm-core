@@ -1,0 +1,85 @@
+---
+name: boundary-section
+version: 1.0.0
+description: Per-boundary architecture section template for strict trait/facade enforcement.
+format: markdown
+required_variables:
+  - boundary_name
+  - purpose
+  - public_trait
+  - impl_type
+  - impl_module
+  - visibility
+  - constructor_path
+  - allowed_instantiation
+  - forbidden_instantiation
+  - allowed_dependencies
+  - forbidden_dependencies
+  - forbidden_references
+  - io_owns
+  - io_not_owns
+  - request_types
+  - response_types
+  - error_types
+  - test_seam
+  - test_bypass_forbidden
+  - compile_time_enforcement
+  - lint_enforcement
+  - review_gate
+---
+### {{ boundary_name }}
+
+Purpose:
+{{ purpose }}
+
+Public boundary:
+- Trait/facade: `{{ public_trait }}`
+
+Concrete implementation:
+- Type: `{{ impl_type }}`
+- Crate/module: `{{ impl_module }}`
+- Visibility: {{ visibility }}
+
+Construction:
+- Constructor path: `{{ constructor_path }}`
+- Instantiation allowed only in:
+{{ allowed_instantiation }}
+- Instantiation forbidden in:
+{{ forbidden_instantiation }}
+
+Allowed dependencies:
+{{ allowed_dependencies }}
+
+Forbidden dependencies:
+{{ forbidden_dependencies }}
+
+Forbidden references:
+{{ forbidden_references }}
+
+I/O ownership:
+- owns:
+{{ io_owns }}
+- does not own:
+{{ io_not_owns }}
+
+Input/output contract:
+- request types:
+{{ request_types }}
+- response types:
+{{ response_types }}
+- error types:
+{{ error_types }}
+
+Test seam:
+- tests use:
+{{ test_seam }}
+- tests must not bypass the boundary via:
+{{ test_bypass_forbidden }}
+
+Enforcement:
+- compile-time:
+{{ compile_time_enforcement }}
+- lint/CI:
+{{ lint_enforcement }}
+- review gate:
+{{ review_gate }}

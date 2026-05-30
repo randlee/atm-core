@@ -1,0 +1,106 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-005>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-005" ;
+  triage:title "docs/requirements.md and docs/atm-core/requirements.md reference legacy-atm-message-schema.md without supersession note" ;
+  triage:description "docs/requirements.md:46, docs/requirements.md:432, and docs/atm-core/requirements.md:253 all reference docs/legacy-atm-message-schema.md; none have a supersession note that metadata.atm coverage in that document was removed as of Phase U." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-11T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/integrate-phase-U/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/integrate-phase-U/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/integrate-phase-U/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pU-u1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-005/pU-u1/3> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/e45dc48> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/ATM-QA-005/integrate-phase-U/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 46 ;
+  triage:snippet "[`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/ATM-QA-005/integrate-phase-U/2>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 432 ;
+  triage:snippet "[`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/ATM-QA-005/integrate-phase-U/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 253 ;
+  triage:snippet "[`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-U/8aa2aed> .
+
+<urn:atm:triage:occurrence/ATM-QA-005/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 46 ;
+  triage:snippet "[`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+<urn:atm:triage:occurrence/ATM-QA-005/pU-u1/2>
+  a triage:Occurrence ;
+  triage:file "docs/requirements.md" ;
+  triage:line 432 ;
+  triage:snippet "[`legacy-atm-message-schema.md`](./legacy-atm-message-schema.md)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+<urn:atm:triage:occurrence/ATM-QA-005/pU-u1/3>
+  a triage:Occurrence ;
+  triage:file "docs/atm-core/requirements.md" ;
+  triage:line 253 ;
+  triage:snippet "[`../legacy-atm-message-schema.md`](../legacy-atm-message-schema.md)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/e45dc48> .
+
+<urn:atm:triage:worktree/integrate-phase-U/8aa2aed>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "8aa2aed" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u1/e45dc48>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "e45dc48" ;
+  triage:orderIndex 1 .

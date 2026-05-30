@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-F-002>
+  a triage:Finding ;
+  triage:findingId "RSH-F-002" ;
+  triage:title "Lingering dispatch threads on timeout at local_ipc_transport.rs:613" ;
+  triage:description "crates/atm-daemon/src/local_ipc_transport.rs — std::thread::spawn at line 600 (integrate) / 656 (feature/pS-s6) spawns a dispatch thread whose JoinHandle is stored in lock_dispatch_handles. On recv_timeout Timeout, handle_connection returns an error response and exits without calling reap_finished_dispatches(). In integrate/phase-S the function ends at Ok(()) with no reap call, so timed-out handles accumulate in the handles vec until shutdown join_tracked_dispatches(). feature/pS-s6-runtime-remediation adds registry.reap_finished_dispatches()? at the end of handle_connection (line 697), cleaning up any finished handle on every connection. The fix is present in s6; integrate/phase-S still lacks the per-connection reap." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-F-002/pS-s6/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-F-002/integrate-pS/1> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-S/3f67133> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s6-runtime-remediation/b80f16a> .
+
+<urn:atm:triage:occurrence/RSH-F-002/pS-s6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 656 ;
+  triage:snippet "std::thread::spawn dispatch handle stored via lock_dispatch_handles; reap_finished_dispatches() called at line 697 end of handle_connection — FIXED in this branch" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:headSha "b80f16a" ;
+  triage:branch "feature/pS-s6-runtime-remediation" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s6-runtime-remediation/b80f16a> .
+
+<urn:atm:triage:occurrence/RSH-F-002/integrate-pS/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 600 ;
+  triage:snippet "std::thread::spawn dispatch handle stored via lock_dispatch_handles; handle_connection ends at Ok(()) (line 641) with no reap_finished_dispatches() call — timed-out handles accumulate until shutdown join_tracked_dispatches()" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "3f67133" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/3f67133> .
+
+<urn:atm:triage:worktree/feature-pS-s6-runtime-remediation/b80f16a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s6-runtime-remediation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s6-runtime-remediation" ;
+  triage:headSha "b80f16a" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/3f67133>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "3f67133" ;
+  triage:orderIndex 2 .

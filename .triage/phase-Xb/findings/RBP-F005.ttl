@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-F005>
+  a triage:Finding ;
+  triage:findingId "RBP-F005" ;
+  triage:title "local_ipc_transport.rs: 3 functions exceed RULE-002 80-line limit" ;
+  triage:description "arch-ctm code audit 2026-05-16 corrected stale title. Three RULE-002 violations on current s4/s5 head: (1) serve_with_deadlines_and_accept_probe ~406 lines (was 479 at initial triage — partially refactored but still over limit); (2) request_worker >80 lines; (3) reconcile_runtime >80 lines. All in crates/atm-daemon/src/local_ipc_transport.rs. Deferred to s5 per XB-S4-QA-1 task." ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:severity "Important" ;
+  triage:repeatable true ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/s4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/s5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-F005/integrate/1> ;
+  triage:openOn <urn:atm:triage:worktree/s1/71511a4> ;
+  triage:openOn <urn:atm:triage:worktree/s2/cde16ab> ;
+  triage:openOn <urn:atm:triage:worktree/s3/b792ffb> ;
+  triage:openOn <urn:atm:triage:worktree/s4/df874cd> ;
+  triage:openOn <urn:atm:triage:worktree/s5/701a3e4> ;
+  triage:openOn <urn:atm:triage:worktree/integrate/54aa0dd> ;
+  triage:promoteTo <urn:atm:triage:worktree/s5/701a3e4> .
+
+<urn:atm:triage:occurrence/RBP-F005/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 290 ;
+  triage:snippet "async fn serve_with_deadlines_and_accept_probe(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/71511a4> .
+
+<urn:atm:triage:occurrence/RBP-F005/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 290 ;
+  triage:snippet "async fn serve_with_deadlines_and_accept_probe(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "cde16ab" ;
+  triage:occursIn <urn:atm:triage:worktree/s2/cde16ab> .
+
+<urn:atm:triage:occurrence/RBP-F005/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 290 ;
+  triage:snippet "async fn serve_with_deadlines_and_accept_probe(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "b792ffb" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/b792ffb> .
+
+<urn:atm:triage:occurrence/RBP-F005/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 290 ;
+  triage:snippet "async fn serve_with_deadlines_and_accept_probe(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df874cd" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/df874cd> .
+
+<urn:atm:triage:occurrence/RBP-F005/s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 290 ;
+  triage:snippet "async fn serve_with_deadlines_and_accept_probe(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "701a3e4" ;
+  triage:occursIn <urn:atm:triage:worktree/s5/701a3e4> .
+
+<urn:atm:triage:occurrence/RBP-F005/integrate/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/local_ipc_transport.rs" ;
+  triage:line 290 ;
+  triage:snippet "async fn serve_with_deadlines_and_accept_probe(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:headSha "54aa0dd" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate/54aa0dd> .
+
+<urn:atm:triage:worktree/s1/71511a4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "71511a4" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/s2/cde16ab>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "cde16ab" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/s3/b792ffb>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "b792ffb" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/s4/df874cd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "df874cd" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/s5/701a3e4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "701a3e4" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate/54aa0dd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Xb" ;
+  triage:headSha "54aa0dd" ;
+  triage:orderIndex 6 .

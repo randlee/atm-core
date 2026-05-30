@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-EG-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-EG-001" ;
+  triage:title "sprint-V2.md frontmatter stale (status/worktree/branch fields)" ;
+  triage:description "docs/phase-V/sprint-V2.md frontmatter still reads status: planned, worktree: TBD, branch: TBD. Must be updated to: status: implemented, worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pV-s2-observability-migration, branch: feature/pV-s2-observability-migration." ;
+  triage:phaseId "phase-V" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-EG-001/integrate-phase-V/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-EG-001/integrate-phase-V/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-EG-001/integrate-phase-V/3> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> ;
+  triage:promoteTo <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> .
+
+<urn:atm:triage:occurrence/ATM-QA-EG-001/integrate-phase-V/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-V/sprint-V2.md" ;
+  triage:line 7 ;
+  triage:snippet "status: planned" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-V" ;
+  triage:headSha "ec24c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> .
+
+<urn:atm:triage:occurrence/ATM-QA-EG-001/integrate-phase-V/2>
+  a triage:Occurrence ;
+  triage:file "docs/phase-V/sprint-V2.md" ;
+  triage:line 8 ;
+  triage:snippet "worktree: TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-V" ;
+  triage:headSha "ec24c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> .
+
+<urn:atm:triage:occurrence/ATM-QA-EG-001/integrate-phase-V/3>
+  a triage:Occurrence ;
+  triage:file "docs/phase-V/sprint-V2.md" ;
+  triage:line 9 ;
+  triage:snippet "branch: TBD" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-V" ;
+  triage:headSha "ec24c3e" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-V/ec24c3e> .
+
+<urn:atm:triage:worktree/integrate-phase-V/ec24c3e>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-V" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-V" ;
+  triage:headSha "ec24c3e" ;
+  triage:orderIndex 5 .

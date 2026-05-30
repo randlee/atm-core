@@ -1,0 +1,47 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-QA-001>
+  a triage:Finding ;
+  triage:findingId "ARCH-QA-001" ;
+  triage:title "output.rs imports HelpResult/HelpResultKind from commands/help.rs — arch boundary violation" ;
+  triage:description "crates/atm/src/output.rs:1 imports HelpResult/HelpResultKind from commands/help.rs, breaking the pattern where output.rs renders only atm_core-owned types. Fix: move HelpResult/HelpResultKind to a dedicated output-contract module, OR document deliberate exception in docs/atm/architecture.md." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "arch" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-16T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-QA-001/pY-s1/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s1/b4735abf> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s1/b4735abf> .
+
+<urn:atm:triage:occurrence/ARCH-QA-001/pY-s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/output.rs" ;
+  triage:line 1 ;
+  triage:snippet "use crate::commands::help::{HelpResult, HelpResultKind};" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pY-s1-atm-help-and-ux" ;
+  triage:headSha "b4735abf" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s1/b4735abf> .
+
+<urn:atm:triage:worktree/pY-s1/b4735abf>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s1-atm-help-and-ux" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s1-atm-help-and-ux" ;
+  triage:headSha "b4735abf" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/integrate-Y/292b8e38>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Y" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Y" ;
+  triage:headSha "292b8e38" ;
+  triage:orderIndex 2 ;
+  triage:status "absent" .

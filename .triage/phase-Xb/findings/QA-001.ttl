@@ -1,0 +1,120 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/QA-001>
+  a triage:Finding ;
+  triage:findingId "QA-001" ;
+  triage:title "cargo fmt check fails — formatting violations in production code" ;
+  triage:description "cargo fmt --check reports formatting diffs on feature/pXb-s1-mailbox-runtime-cutover and propagated to downstream branches. Fix: run cargo fmt --all on each branch and commit the result." ;
+  triage:phaseId "phase-Xb" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "QA" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "crates/" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-15T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/s1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/s1/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/s3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/QA-001/s4/1> ;
+  triage:openOn <urn:atm:triage:worktree/s1/ae0e20b> ;
+  triage:openOn <urn:atm:triage:worktree/s3/adc7c4b> ;
+  triage:openOn <urn:atm:triage:worktree/s4/f10c9ec> ;
+  triage:fixedOn <urn:atm:triage:worktree/s2/5dd2380> ;
+  triage:fixedOn <urn:atm:triage:worktree/s5/5d4c92a> ;
+  triage:fixedOn <urn:atm:triage:worktree/integrate/b1e70b6> ;
+  triage:promoteTo <urn:atm:triage:worktree/s4/f10c9ec> .
+
+<urn:atm:triage:occurrence/QA-001/s1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/tests/mailbox_locking.rs" ;
+  triage:line 1151 ;
+  triage:snippet "atm_core::boundary::MessageKey::new(format!(\"atm:{}\", message.message_id.expect(\"message id\")))" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/ae0e20b> .
+
+<urn:atm:triage:occurrence/QA-001/s1/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 164 ;
+  triage:snippet "let limit_i64 = limit.map(i64::try_from).transpose().map_err(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:occursIn <urn:atm:triage:worktree/s1/ae0e20b> .
+
+<urn:atm:triage:occurrence/QA-001/s3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 164 ;
+  triage:snippet "let limit_i64 = limit.map(i64::try_from).transpose().map_err(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:occursIn <urn:atm:triage:worktree/s3/adc7c4b> .
+
+<urn:atm:triage:occurrence/QA-001/s4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/mailbox_metadata.rs" ;
+  triage:line 164 ;
+  triage:snippet "let limit_i64 = limit.map(i64::try_from).transpose().map_err(...)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:occursIn <urn:atm:triage:worktree/s4/f10c9ec> .
+
+<urn:atm:triage:worktree/s1/ae0e20b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s1-mailbox-runtime-cutover" ;
+  triage:headSha "ae0e20b" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/s2/5dd2380>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s2-command-path-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s2-command-path-simplification" ;
+  triage:headSha "5dd2380" ;
+  triage:orderIndex 2 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/s3/adc7c4b>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s3-runtime-truth-unification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s3-runtime-truth-unification" ;
+  triage:headSha "adc7c4b" ;
+  triage:orderIndex 3 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/s4/f10c9ec>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s4-replay-and-ipc-consolidation" ;
+  triage:headSha "f10c9ec" ;
+  triage:orderIndex 4 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/s5/5d4c92a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pXb-s5-guardrails-and-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pXb-s5-guardrails-and-closeout" ;
+  triage:headSha "5d4c92a" ;
+  triage:orderIndex 5 ;
+  triage:status "fixed" .
+
+<urn:atm:triage:worktree/integrate/b1e70b6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-Xb" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-Xb" ;
+  triage:headSha "b1e70b6" ;
+  triage:orderIndex 6 ;
+  triage:status "fixed" .

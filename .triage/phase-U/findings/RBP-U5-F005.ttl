@@ -1,0 +1,140 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-U5-F005>
+  a triage:Finding ;
+  triage:findingId "RBP-U5-F005" ;
+  triage:title "Clones all envelopes into ThreadIndex unnecessarily in list.rs" ;
+  triage:description "crates/atm-core/src/list.rs: Clones all envelopes into ThreadIndex unnecessarily. Refactor to avoid the clone." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-U" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U5-F005/pU-u1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U5-F005/pU-u2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U5-F005/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U5-F005/pU-u4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U5-F005/pU-u5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-U5-F005/pU-u5/2> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u1/6a692b40> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1b22524> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/c1e0e06> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u4/335fe3d> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u5/ae75f1a> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# --- Occurrences ---
+
+# u1: .zip(envelopes.iter().cloned()) in classify_summary_source_files
+<urn:atm:triage:occurrence/RBP-U5-F005/pU-u1/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 268 ;
+  triage:snippet ".zip(envelopes.iter().cloned())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u1/6a692b40> .
+
+# u2: same as u1
+<urn:atm:triage:occurrence/RBP-U5-F005/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 268 ;
+  triage:snippet ".zip(envelopes.iter().cloned())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1b22524> .
+
+# u3: .zip(envelopes.iter().cloned()) — lines shifted by 6
+<urn:atm:triage:occurrence/RBP-U5-F005/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 262 ;
+  triage:snippet ".zip(envelopes.iter().cloned())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/c1e0e06> .
+
+# u4: same pattern as u3
+<urn:atm:triage:occurrence/RBP-U5-F005/pU-u4/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 262 ;
+  triage:snippet ".zip(envelopes.iter().cloned())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u4/335fe3d> .
+
+# u5 occ-1: envelopes vec built via message.envelope.clone() in classify_summary_source_files
+<urn:atm:triage:occurrence/RBP-U5-F005/pU-u5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 239 ;
+  triage:snippet ".map(|message| message.envelope.clone())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# u5 occ-2: envelopes vec built via message.envelope.clone() in logical_current_messages
+<urn:atm:triage:occurrence/RBP-U5-F005/pU-u5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/list.rs" ;
+  triage:line 263 ;
+  triage:snippet ".map(|message| message.envelope.clone())" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u5/ae75f1a> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/pU-u1/6a692b40>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u1-metadata-atm-read-cleanup" ;
+  triage:headSha "6a692b40" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u2/1b22524>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1b22524" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u3/c1e0e06>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "c1e0e06" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u4/335fe3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "335fe3d" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u5/ae75f1a>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "ae75f1a" ;
+  triage:orderIndex 5 .

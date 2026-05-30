@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RBP-W2-F001>
+  a triage:Finding ;
+  triage:findingId "RBP-W2-F001" ;
+  triage:title "parse_bootstrap_agent/parse_bootstrap_team missing .with_recovery()" ;
+  triage:description "parse_bootstrap_agent and parse_bootstrap_team at crates/atm-daemon-client/src/lib.rs:419 are missing .with_recovery() calls. Both functions use .unwrap_or_else so they never return Err in practice. This finding auto-resolves if ARCH-002 is fixed and the env-var parse moves to the composition layer." ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RBP" ;
+  triage:phaseId "phase-W" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crate" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-13T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W2-F001/pW-s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RBP-W2-F001/pW-s2/2> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s2/f3c1b3d> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/RBP-W2-F001/pW-s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 419 ;
+  triage:snippet "fn parse_bootstrap_agent() -> Result<AgentName, AtmError> { std::env::var(\"ATM_IDENTITY\").unwrap_or_else(|_| \"unknown\".to_string()).parse() }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:occurrence/RBP-W2-F001/pW-s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon-client/src/lib.rs" ;
+  triage:line 425 ;
+  triage:snippet "fn parse_bootstrap_team() -> Result<TeamName, AtmError> { std::env::var(\"ATM_TEAM\").unwrap_or_else(|_| \"unknown\".to_string()).parse() }" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s2/f3c1b3d> .
+
+<urn:atm:triage:worktree/pW-s2/f3c1b3d>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s2-daemon-client-traceability" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s2-daemon-client-traceability" ;
+  triage:headSha "f3c1b3d" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-W/fc2c8ae>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "fc2c8ae" ;
+  triage:orderIndex 2 .

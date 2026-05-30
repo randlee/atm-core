@@ -1,0 +1,240 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ARCH-U10-002>
+  a triage:Finding ;
+  triage:findingId "ARCH-U10-002" ;
+  triage:title "DaemonGraftSessionAlreadyRegistered graft-named error code (co-finding ATM-QA-U10-001)" ;
+  triage:description "error_codes.rs:43 defines DaemonGraftSessionAlreadyRegistered; protocol.rs:125 references the same graft-named error variant. U.10 acceptance criteria requires generic replacement (DaemonAdvisorySessionAlreadyRegistered). Both sites must change together. Co-finding ATM-QA-U10-001 covers the same root cause." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ARCH" ;
+  triage:severity "blocking" ;
+  triage:repeatable true ;
+  triage:sweepScope "workspace" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:notes "Co-finding ATM-QA-U10-001 is the same root cause. Both resolved by renaming the error variant. integrate/phase-U shows absent (already fixed on integration branch). Occurrences remain open on feature/pU-u9 (order 9) and feature/pU-u10 (order 10). promote_to_branch is the highest open branch: feature/pU-u10-generic-advisory-notification." ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/8> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/6> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/7> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/8> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u9/4ba0e00> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u10/3730257> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u10/3730257> .
+
+# ── WorktreeSnapshots ─────────────────────────────────────────────────────────
+
+<urn:atm:triage:worktree/integrate-phase-U/54fabfa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-U" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-U" ;
+  triage:headSha "54fabfa" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/pU-u9/4ba0e00>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:orderIndex 9 .
+
+<urn:atm:triage:worktree/pU-u10/3730257>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:orderIndex 10 .
+
+# ── Occurrences on feature/pU-u9 ─────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 964 ;
+  triage:snippet "error.code == atm_core::error_codes::AtmErrorCode::DaemonGraftSessionAlreadyRegistered" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/graft_runtime.rs" ;
+  triage:line 70 ;
+  triage:snippet "return Err(AtmError::daemon_graft_session_already_registered(format!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/error_codes.rs" ;
+  triage:line 43 ;
+  triage:snippet "DaemonGraftSessionAlreadyRegistered," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/error_codes.rs" ;
+  triage:line 137 ;
+  triage:snippet "Self::DaemonGraftSessionAlreadyRegistered =>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/error_codes.rs" ;
+  triage:line 201 ;
+  triage:snippet "Ok(Self::DaemonGraftSessionAlreadyRegistered)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/error.rs" ;
+  triage:line 219 ;
+  triage:snippet "pub fn daemon_graft_session_already_registered(message: impl Into<String>) -> Self {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/error.rs" ;
+  triage:line 221 ;
+  triage:snippet "AtmErrorCode::DaemonGraftSessionAlreadyRegistered," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u9/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 125 ;
+  triage:snippet "| AtmErrorCode::DaemonGraftSessionAlreadyRegistered" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u9-client-owned-graft-runtime" ;
+  triage:headSha "4ba0e00" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u9/4ba0e00> .
+
+# ── Occurrences on feature/pU-u10 ────────────────────────────────────────────
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 963 ;
+  triage:snippet "error.code == atm_core::error_codes::AtmErrorCode::DaemonGraftSessionAlreadyRegistered" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/error_codes.rs" ;
+  triage:line 43 ;
+  triage:snippet "DaemonGraftSessionAlreadyRegistered," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/error_codes.rs" ;
+  triage:line 137 ;
+  triage:snippet "Self::DaemonGraftSessionAlreadyRegistered =>" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/error_codes.rs" ;
+  triage:line 201 ;
+  triage:snippet "Ok(Self::DaemonGraftSessionAlreadyRegistered)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/protocol.rs" ;
+  triage:line 125 ;
+  triage:snippet "| AtmErrorCode::DaemonGraftSessionAlreadyRegistered" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/6>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/error.rs" ;
+  triage:line 219 ;
+  triage:snippet "pub fn daemon_graft_session_already_registered(message: impl Into<String>) -> Self {" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/7>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/error.rs" ;
+  triage:line 221 ;
+  triage:snippet "AtmErrorCode::DaemonGraftSessionAlreadyRegistered," ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .
+
+<urn:atm:triage:occurrence/ARCH-U10-002/pU-u10/8>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/advisory_runtime.rs" ;
+  triage:line 70 ;
+  triage:snippet "return Err(AtmError::daemon_graft_session_already_registered(format!(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u10-generic-advisory-notification" ;
+  triage:headSha "3730257" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u10/3730257> .

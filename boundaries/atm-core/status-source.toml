@@ -1,0 +1,44 @@
+boundary_id = "BOUNDARY-StatusSource"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "StatusSource"
+
+[public]
+trait = "StatusSource"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["inbound_runtime_status_updates"]
+io_forbidden = ["sqlite", "socket_io"]
+
+[dependencies]
+allowed_dependents = ["atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["status update notifications"]
+response_types = ["status snapshots"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = []
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-STATUS-SOURCE-REFERENCES"]
+review_gates = ["no_status_leakage_into_roster_store"]
+
+[status]
+state = "active"
+notes = ["callable status trait and named snapshot DTOs landed in atm_core::boundary", "live status remains separate from durable roster truth", "runtime status snapshots now carry liveness, readiness, singleton-owner, SQLite-ready, degraded-ingest, and member-count fields"]

@@ -1,0 +1,96 @@
+[identities]
+forbidden_literals = [
+  "team-lead",
+  "arch-ctm",
+  "arch-qa",
+  "arch-inj",
+  "arch-obs",
+  "quality-mgr",
+  "publisher",
+  "atm-dev",
+]
+
+[identities.production_canonical_literals]
+"team-lead" = ["crates/atm-core/src/roles.rs"]
+
+[fixed_sleep]
+# Empty by default: no test file is exempt until a narrow daemon-runtime suite
+# is explicitly approved and listed here.
+allowed_paths = []
+
+[portability]
+config_home_env = "ATM_CONFIG_HOME"
+
+[line_counts]
+max_total_lines = 0
+max_production_lines = 1000
+max_scoped_code_lines = 0
+
+[line_counts.exclusions]
+"crates/atm-core/src/mailbox/lock.rs" = "Q.6 split pending"
+"crates/atm-core/src/read/mod.rs" = "Q.6 split pending"
+"crates/atm-rusqlite/src/tests.rs" = "Q.6 split pending"
+
+[cargo_shear.allowed_empty_files]
+"src/config/bridge.rs" = "deferred bridge-hostname config scope; placeholder module reserved for future phase"
+"src/log/filters.rs" = "deferred retained-log filter helpers; placeholder module reserved for future phase"
+"src/mailbox/hash.rs" = "deferred mailbox hashing helpers; placeholder module reserved for future phase"
+"src/model_registry.rs" = "deferred model-registry integration surface; placeholder module reserved for future phase"
+"src/schema/permissions.rs" = "deferred permissions schema models; placeholder module reserved for future phase"
+"src/schema/settings.rs" = "deferred settings schema models; placeholder module reserved for future phase"
+
+[cargo_shear.allowed_unlinked_files]
+
+[boundaries]
+doc_glob = "docs/*/boundaries.md"
+toml_glob = "boundaries/*/*.toml"
+
+[[boundaries.global_dependency_ownership]]
+dependency = "rusqlite"
+allowed_manifest_paths = ["crates/atm-rusqlite/Cargo.toml"]
+allowed_source_roots = ["crates/atm-rusqlite/src"]
+manifest_message = "only crates/atm-rusqlite may depend on rusqlite"
+source_message = "only crates/atm-rusqlite source may import rusqlite directly"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-core/Cargo.toml"
+dependency_package = "atm-rusqlite"
+allowed_sections = ["dev-dependencies"]
+message = "atm-core may reference atm-rusqlite only in dev-dependencies"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm/Cargo.toml"
+dependency_package = "atm-daemon"
+allowed_sections = []
+message = "atm must not depend on atm-daemon"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-core/Cargo.toml"
+dependency_package = "atm-daemon"
+allowed_sections = []
+message = "atm-core must not depend on atm-daemon"
+
+[[boundaries.manifest_section_rules]]
+owner_manifest_path = "crates/atm-daemon/Cargo.toml"
+dependency_package = "atm-rusqlite"
+allowed_sections = ["dependencies"]
+message = "atm-daemon may depend on atm-rusqlite only through the documented runtime-owned SQLite boundaries"
+
+[version_sync.winget]
+enabled = true
+manifest_glob = ".winget/*.yaml"
+package_version_field = "PackageVersion"
+manifest_version_field = "ManifestVersion"
+installer_url_field = "InstallerUrl"
+
+[version_sync.release_wiring]
+enabled = true
+file = ".github/workflows/release.yml"
+required_fragments = [
+  "update-homebrew:",
+  "repository: randlee/homebrew-tap",
+  "for formula in homebrew-tap/Formula/agent-team-mail.rb homebrew-tap/Formula/atm.rb; do",
+  "version='${{ needs.gate-and-tag.outputs.release_version }}'",
+  "tarball_url=\"https://github.com/randlee/atm-core/releases/download/${tag}/atm_${version}_aarch64-apple-darwin.tar.gz\"",
+  "sed -i \"s|version \\\"[^\\\"]*\\\"|version \\\"${version}\\\"|g\" \"$formula\"",
+]

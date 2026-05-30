@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/CI-S14-QA3-003>
+  a triage:Finding ;
+  triage:findingId "CI-S14-QA3-003" ;
+  triage:title "test_observability.rs wait_for_message_contains missing #[cfg(unix)] gate — dead_code error on Windows" ;
+  triage:description "The wait_for_message_contains method (or its impl block) in crates/atm-daemon/src/test_observability.rs has no #[cfg(unix)] gate. All call sites are in #[cfg(unix)] test blocks. On Windows, clippy -D warnings promotes dead_code to an error. CI job 'Just lint (windows-latest)' fails. Fix: add #[cfg(unix)] attribute to the wait_for_message_contains method or its enclosing impl block in test_observability.rs." ;
+  triage:phaseId "phase-S" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "CI" ;
+  triage:severity "important" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-S14-QA3-003/pS-s14-impl/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/CI-S14-QA3-003/pS-s15-rusqlite-hardening/1> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s14-impl/d1bb4a6> ;
+  triage:openOn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/15ef8c8> ;
+  triage:promoteTo <urn:atm:triage:worktree/pS-s14-impl/d1bb4a6> .
+
+<urn:atm:triage:occurrence/CI-S14-QA3-003/pS-s14-impl/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/test_observability.rs" ;
+  triage:line 79 ;
+  triage:snippet "pub(crate) fn wait_for_message_contains(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:headSha "d1bb4a6" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s14-impl/d1bb4a6> .
+
+<urn:atm:triage:occurrence/CI-S14-QA3-003/pS-s15-rusqlite-hardening/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/test_observability.rs" ;
+  triage:line 79 ;
+  triage:snippet "pub(crate) fn wait_for_message_contains(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "15ef8c8" ;
+  triage:occursIn <urn:atm:triage:worktree/pS-s15-rusqlite-hardening/15ef8c8> .
+
+<urn:atm:triage:worktree/pS-s14-impl/d1bb4a6>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s14-impl" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s14-impl" ;
+  triage:headSha "d1bb4a6" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pS-s15-rusqlite-hardening/15ef8c8>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s15-rusqlite-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s15-rusqlite-hardening" ;
+  triage:headSha "15ef8c8" ;
+  triage:orderIndex 2 .

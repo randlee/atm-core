@@ -1,0 +1,168 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U8-QA-001>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U8-QA-001" ;
+  triage:title "atm-graft/src/lib.rs uses hardcoded /tmp/ paths" ;
+  triage:description "crates/atm-graft/src/lib.rs:257,258,309,310,363,364,380,381 — hardcoded \"/tmp/\" string literals used in test PathBuf constructions for home_dir and current_dir arguments. Must use std::env::temp_dir() for cross-platform compatibility (Windows has no /tmp/). All 8 occurrences are in the #[cfg(test)] module (send_uses_shared_send_envelope, read_uses_shared_receive_envelope, ack_uses_shared_ack_envelope, protocol_round_trip_uses_shared_request_family). Sweep also found additional /tmp/ hardcoding in crates/sc-lint-boundary/src/tests.rs (lines 387, 458, 680) and one JSON value literal in crates/atm-rusqlite/src/lib.rs:2231 — those are recorded as additional occurrences but the primary fix target is atm-graft." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "important" ;
+  triage:repeatable true ;
+  triage:sweepScope "all /tmp/ string literals in workspace Rust source" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/4> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/5> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/extra-1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/extra-2> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/extra-3> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/extra-4> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u8/633c34c> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+# --- Primary occurrences: atm-graft/src/lib.rs (U.8 introduced, test module) ---
+
+<urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 257 ;
+  triage:snippet "PathBuf::from(\"/tmp/home\")  // send_uses_shared_send_envelope, home_dir arg" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 258 ;
+  triage:snippet "PathBuf::from(\"/tmp/current\")  // send_uses_shared_send_envelope, current_dir arg" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/3>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 309 ;
+  triage:snippet "PathBuf::from(\"/tmp/home\")  // read_uses_shared_receive_envelope, home_dir arg" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 363 ;
+  triage:snippet "home_dir: PathBuf::from(\"/tmp/home\"),  // ack_uses_shared_ack_envelope, AckRequest.home_dir" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/5>
+  a triage:Occurrence ;
+  triage:file "crates/atm-graft/src/lib.rs" ;
+  triage:line 380 ;
+  triage:snippet "PathBuf::from(\"/tmp/home\"),  // protocol_round_trip_uses_shared_request_family, ReadQuery home_dir" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+# --- Additional sweep occurrences (same branch, separate crates) ---
+
+<urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/extra-1>
+  a triage:Occurrence ;
+  triage:file "crates/sc-lint-boundary/src/tests.rs" ;
+  triage:line 387 ;
+  triage:snippet "let _ = PathBuf::from(\"/tmp/test-artifact\");" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/extra-2>
+  a triage:Occurrence ;
+  triage:file "crates/sc-lint-boundary/src/tests.rs" ;
+  triage:line 458 ;
+  triage:snippet "std::path::PathBuf::from(\"/tmp/runtime-socket\")" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/extra-3>
+  a triage:Occurrence ;
+  triage:file "crates/sc-lint-boundary/src/tests.rs" ;
+  triage:line 680 ;
+  triage:snippet "\"/tmp/runtime.sock\"" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+<urn:atm:triage:occurrence/ATM-QA-U8-QA-001/pU-u8/extra-4>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/lib.rs" ;
+  triage:line 2231 ;
+  triage:snippet "serde_json::Value::String(\"/tmp/alpha\".to_string()),  // JSON test fixture — assess whether temp_dir() is appropriate for fixture data" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u8/633c34c> .
+
+# --- WorktreeSnapshots ---
+
+<urn:atm:triage:worktree/pU-u4/039a552>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u4-unified-message-state" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u4-unified-message-state" ;
+  triage:headSha "039a552" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pU-u5/9bae271>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u5-sqlite-query-cutover" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u5-sqlite-query-cutover" ;
+  triage:headSha "9bae271" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pU-u6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u7/8e37dd1>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u7-roster-simplification" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u7-roster-simplification" ;
+  triage:headSha "8e37dd1" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pU-u8/633c34c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u8-shared-thin-client-icd" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u8-shared-thin-client-icd" ;
+  triage:headSha "633c34c" ;
+  triage:orderIndex 5 .

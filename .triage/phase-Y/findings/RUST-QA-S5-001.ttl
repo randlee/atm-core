@@ -1,0 +1,62 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RUST-QA-S5-001>
+  a triage:Finding ;
+  triage:findingId "RUST-QA-S5-001" ;
+  triage:title "execute_upsert_message 86 lines — RULE-002 violation" ;
+  triage:description "crates/atm-rusqlite/src/writer/ops.rs fn execute_upsert_message was 86 lines, exceeding the 80-line RULE-002 limit. Fix: extract helpers to bring body under 80 lines." ;
+  triage:phaseId "phase-Y" ;
+  triage:triageMode "sprint_review" ;
+  triage:category "RUST-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-17T00:00:00Z"^^xsd:dateTime ;
+  triage:closureNote "Fixed in Y.5 fix-r1 commit e55b0c89: execute_upsert_message now 71 lines (lines 58-128); new helper insert_initial_message_state 27 lines. All production functions in ops.rs confirmed ≤80 lines. QA-2 rust-qa recheck PASS." ;
+  triage:closedOn <urn:atm:triage:worktree/pY-s5/e55b0c89> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RUST-QA-S5-001/pY-s5/1> ;
+  triage:openOn <urn:atm:triage:worktree/pY-s5/1dd78933> ;
+  triage:promoteTo <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/RUST-QA-S5-001/pY-s5/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 58 ;
+  triage:snippet "fn execute_upsert_message(...) { // 86 lines, RULE-002 violation" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/1dd78933> .
+
+<urn:atm:triage:occurrence/RUST-QA-S5-001/pY-s5/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 58 ;
+  triage:snippet "fn execute_upsert_message(...) { // 71 lines (58-128), COMPLIANT" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "e55b0c89" ;
+  triage:closureNote "71 lines. Helper insert_initial_message_state (27 lines) extracted. Full ops.rs inventory: all functions ≤80 lines." ;
+  triage:occursIn <urn:atm:triage:worktree/pY-s5/e55b0c89> .
+
+<urn:atm:triage:worktree/pY-s5/1dd78933>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "1dd78933" ;
+  triage:orderIndex 1 ;
+  triage:status "open" .
+
+<urn:atm:triage:worktree/pY-s5/e55b0c89>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pY-s5-mutable-compatibility-field-removal" ;
+  triage:headSha "e55b0c89" ;
+  triage:orderIndex 2 ;
+  triage:status "closed" .

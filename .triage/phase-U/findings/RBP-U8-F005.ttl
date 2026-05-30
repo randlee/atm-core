@@ -1,0 +1,36 @@
+finding_id: RBP-U8-F005
+title: persisted_peer_addr no-op identity function in peer_transport.rs
+severity: minor
+phase_id: phase-U
+triage_mode: initial_pass
+status: open
+
+location:
+  confirmed: crates/atm-daemon/src/peer_transport.rs:637
+  excerpt: |
+    fn persisted_peer_addr(endpoint: SocketAddr) -> SocketAddr {
+        endpoint
+    }
+
+description: >
+  `persisted_peer_addr` is a private free function that takes a SocketAddr and
+  returns it unchanged. It is called at line 227 as
+  `peer_addr: persisted_peer_addr(endpoint)`. The function body is a pure
+  identity — it neither transforms the address nor reads any persisted state
+  despite its name implying it does. It adds indirection with zero semantic
+  value and should be removed; the call site should use `endpoint` directly.
+
+pattern: dead/no-op function
+repeatable: false
+
+promote_to_branch: feature/pU-u8-shared-thin-client-icd
+commit_ref: 633c34c
+
+fix_guidance: >
+  Delete `persisted_peer_addr` at crates/atm-daemon/src/peer_transport.rs:637
+  and replace the call site at line 227 with the `endpoint` argument directly:
+    peer_addr: endpoint,
+  Confirm no other call sites exist before removal.
+
+dispatch_blocked_pending_triage_commit: true
+recorded_at: 2026-05-12

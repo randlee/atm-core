@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/FTQ-014>
+  a triage:Finding ;
+  triage:findingId "FTQ-014" ;
+  triage:title "shutdown_lane_with_deadline discards JoinHandle — background lane threads outlive TempDir on timeout (composition.rs)" ;
+  triage:description "crates/atm/src/composition.rs — shutdown_lane_with_deadline discards the JoinHandle when the deadline fires. Three background lane threads can outlive the TempDir created for test fixtures, causing use-after-free or resource leaks in test contexts. JoinHandles should be stored and joined or detached explicitly. File unchanged from bcb5aab through 4176880 — fix deferred, still open. (quality-mgr reported as FTQ-008; remapped FTQ-014 to avoid conflict; confirmed STILL_OPEN in S.2 QA-4 at 4176880 line 390.)" ;
+  triage:category "FTQ" ;
+  triage:severity "important" ;
+  triage:triageMode "followup_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "fixed" ;
+  triage:dispatchReady false ;
+  triage:triagedAt "2026-05-09T12:30:00Z"^^xsd:dateTime ;
+  triage:closedAt "2026-05-09T13:45:00Z"^^xsd:dateTime ;
+  triage:fixedAt "8421917" ;  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-014/s2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/FTQ-014/s2/2> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/4176880> ;
+  triage:promoteTo <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/4176880> .
+
+<urn:atm:triage:occurrence/FTQ-014/s2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 368 ;
+  triage:snippet "shutdown_lane_with_deadline — JoinHandle discarded; 3 threads can outlive TempDir on timeout" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:headSha "2adc339" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339> .
+
+<urn:atm:triage:occurrence/FTQ-014/s2/2>
+  a triage:Occurrence ;
+  triage:file "crates/atm/src/composition.rs" ;
+  triage:line 390 ;
+  triage:snippet "QA-4 confirmation: shutdown_lane_with_deadline JoinHandle discarded — still open at 4176880" ;
+  triage:status "fixed" ;
+  triage:closed false ;
+  triage:headSha "4176880" ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s2-windows-ipc/4176880> .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/2adc339>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "2adc339" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/feature-pS-s2-windows-ipc/4176880>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s2-windows-ipc" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s2-windows-ipc" ;
+  triage:headSha "4176880" ;
+  triage:orderIndex 2 .

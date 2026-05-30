@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S9-ATM-QA-004>
+  a triage:Finding ;
+  triage:findingId "S9-ATM-QA-004" ;
+  triage:title "Watcher/reconcile exclusion proof absent — sprint Required Work 5.1-5.3 test missing" ;
+  triage:description "Sprint-S9 Required Work §5 (added by FIX-P1 to resolve PLAN-QA ATM-QA-001) requires a test verifying that ~/.atm/logs/ appends do not trigger reconcile events. Rust-qa confirms the watcher only watches ~/.claude/teams/*/inboxes/ so the behavior is correct by design, but the required verification test is absent. Fix: add a test proving that appending to ~/.atm/logs/atm.log.jsonl produces no reconcile event." ;
+  triage:category "REQ" ;
+  triage:severity "blocking" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T02:30:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s9-logging-defaults" ;
+  triage:promoteToBranch "feature/pS-s9-logging-defaults" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S9-ATM-QA-004/s9/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74> .
+
+<urn:atm:triage:occurrence/S9-ATM-QA-004/s9/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/reconcile_runtime.rs" ;
+  triage:line 1 ;
+  triage:snippet "No test for watcher exclusion of ~/.atm/logs/ — sprint Required Work §5.2 requires proof that log-dir appends produce no reconcile event" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "d6f3b74" ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74> .
+
+<urn:atm:triage:worktree/feature-pS-s9-logging-defaults/d6f3b74>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s9-logging-defaults" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s9-logging-defaults" ;
+  triage:headSha "d6f3b74" ;
+  triage:orderIndex 1 .

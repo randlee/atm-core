@@ -1,0 +1,37 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-FTQ-003>
+  a triage:Finding ;
+  triage:findingId "S7-FTQ-003" ;
+  triage:title "Fixed 100ms sleep in wait.rs polling loop" ;
+  triage:description "crates/atm-core/src/read/wait.rs — wait_for_eligible_message() uses a hardcoded poll_interval = Duration::from_millis(100) with thread::sleep(poll_interval) inside the polling loop. This makes test timing latent and environment-dependent: on slow CI runners the minimum observable wait time for any message is 100ms regardless of how quickly the message becomes available, and the total wait is non-deterministically padded by up to 100ms per poll iteration. The sleep is also a production-code concern: callers cannot tune the poll interval for low-latency or battery-sensitive contexts. Fix: make poll_interval configurable via a parameter or const, or replace the sleep-based poll with a filesystem-watch or channel-based notification so tests that need fast response are not bounded by the fixed interval." ;
+  triage:category "FTQ" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-FTQ-003/s7/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-FTQ-003/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/read/wait.rs" ;
+  triage:line 16 ;
+  triage:snippet "let poll_interval = Duration::from_millis(100); ... thread::sleep(poll_interval) — hardcoded 100ms sleep in polling loop; test timing latent; minimum observable response time is one full poll interval regardless of message availability" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .

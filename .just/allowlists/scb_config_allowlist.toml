@@ -1,0 +1,44 @@
+# Z.8 removed the startup-only config-ingress survivor; Z.11 keeps the remaining
+# compare-only and projection-extra preservation reads narrowly allowlisted.
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/team_admin.rs"
+symbol = "load_team_projection_extra_for_member_add"
+why = "temporary non-roster Claude config extra preservation while add-member still projects canonical ATM roster truth back into config.json"
+sunset_sprint = "Z.11"
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/team_admin/restore.rs"
+symbol = "load_recreated_lead_shell_state"
+why = "temporary recreated-shell lead metadata preservation after Claude TeamCreate until Z.11 gives restore a dedicated projection metadata path"
+sunset_sprint = "Z.11"
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/service_runtime.rs"
+symbol = "load_team_config_for_doctor_compare"
+why = "doctor compare-only read remains allowed while Z.11 keeps config.json drift reporting separate from canonical ATM roster truth"
+sunset_sprint = "Z.11"
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/config/mod.rs"
+symbol = "load_claude_team_config_document"
+why = "the single canonical Claude team config parser implementation remains the approved entry point for watcher ingest, doctor compare, and temporary shell-preservation seams"
+sunset_sprint = "Z.11"
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-core/src/config/mod.rs"
+symbol = "load_team_config_reports_missing_document_distinctly"
+why = "test-only parser coverage intentionally exercises the canonical Claude team config loader's missing-document contract"
+sunset_sprint = "Z.11"
+
+[[allow]]
+rule = "SCB-CONFIG-001"
+path = "crates/atm-daemon/src/projection_write_journal.rs"
+symbol = "ingest_claude_team_config_from_watch_batch"
+why = "watcher-owned reconcile ingest remains the only daemon path allowed to parse Claude team config documents into canonical ATM roster truth"
+sunset_sprint = "Z.11"

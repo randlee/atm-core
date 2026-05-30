@@ -1,0 +1,57 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-W8-002>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-W8-002" ;
+  triage:title "rustfmt import ordering violation in sqlite_observability.rs" ;
+  triage:description "crates/atm-daemon/src/sqlite_observability.rs lines 6-7: `use crate::DaemonSubsystem;` appears before `use crate::DaemonRuntimeObservability;`, violating alphabetical rustfmt import ordering. This is the CI Format FAIL at a2358bd. The integrate branch (a5aa8c4) already has the correct state: DaemonSubsystem import removed entirely (DaemonSubsystem::Sqlite replaced with literal string \"sqlite\" in emit_subsystem_event call at line 60), and DaemonRuntimeObservability remains. Fix on feature/pW-s8: remove `use crate::DaemonSubsystem;` and replace `DaemonSubsystem::Sqlite` at line 60 with `\"sqlite\"` to align with integrate/phase-W state." ;
+  triage:category "QA" ;
+  triage:phaseId "phase-W" ;
+  triage:triageMode "initial_pass" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-14T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-W8-002/pW-s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/pW-s8/a2358bd> ;
+  triage:closedOn <urn:atm:triage:worktree/integrate-pW/a5aa8c4> ;
+  triage:promoteTo <urn:atm:triage:worktree/pW-s8/a2358bd> .
+
+<urn:atm:triage:occurrence/ATM-QA-W8-002/pW-s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/sqlite_observability.rs" ;
+  triage:line 6 ;
+  triage:snippet "use crate::DaemonSubsystem; (line 6) before use crate::DaemonRuntimeObservability; (line 7) — wrong alphabetical order; DaemonSubsystem also unused after integrate W.6 fix" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pW-s8-phase-w-closeout" ;
+  triage:headSha "a2358bd" ;
+  triage:occursIn <urn:atm:triage:worktree/pW-s8/a2358bd> .
+
+<urn:atm:triage:occurrence/ATM-QA-W8-002/integrate-pW/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/sqlite_observability.rs" ;
+  triage:line 6 ;
+  triage:snippet "use crate::DaemonRuntimeObservability; — correct state; DaemonSubsystem removed, emit_subsystem_event uses literal string \"sqlite\"" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:branch "integrate/phase-W" ;
+  triage:headSha "a5aa8c4" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-pW/a5aa8c4> .
+
+<urn:atm:triage:worktree/pW-s8/a2358bd>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pW-s8-phase-w-closeout" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pW-s8-phase-w-closeout" ;
+  triage:headSha "a2358bd" ;
+  triage:orderIndex 0 .
+
+<urn:atm:triage:worktree/integrate-pW/a5aa8c4>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-W" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-W" ;
+  triage:headSha "a5aa8c4" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/RSH-U3-002>
+  a triage:Finding ;
+  triage:findingId "RSH-U3-002" ;
+  triage:title "validate_message_text not applied to File source variant after file_policy::process_file_reference" ;
+  triage:description "crates/atm-core/src/send/mod.rs resolve_message_body (line 381): validate_message_text is enforced on Inline and Stdin variants but not on File source after file_policy::process_file_reference. The composite message body (render_reference_message output or in-repo path string) is returned directly without passing through validate_message_text, so the 256 KiB size invariant is bypassed for File source. Required fix: call validate_message_text (or equivalent size check) on the return value of process_file_reference before returning from resolve_message_body." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:repeatable true ;
+  triage:sweepScope "crate" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U3-002/pU-u3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/RSH-U3-002/pU-u2/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u3/8394248> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u2/1fb49d0> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/RSH-U3-002/pU-u3/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 381 ;
+  triage:snippet "SendMessageSource::File { path, message } => file_policy::process_file_reference(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u3/8394248> .
+
+<urn:atm:triage:occurrence/RSH-U3-002/pU-u2/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/send/mod.rs" ;
+  triage:line 381 ;
+  triage:snippet "SendMessageSource::File { path, message } => file_policy::process_file_reference(" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u2/1fb49d0> .
+
+<urn:atm:triage:worktree/pU-u3/8394248>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u3-thread-update-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u3-thread-update-hardening" ;
+  triage:headSha "8394248" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pU-u2/1fb49d0>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u2-one-message-identity" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u2-one-message-identity" ;
+  triage:headSha "1fb49d0" ;
+  triage:orderIndex 2 .

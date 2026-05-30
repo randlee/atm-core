@@ -1,0 +1,38 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-U6-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-U6-006" ;
+  triage:title "ops.rs ingest-timing comment has no ADR traceability" ;
+  triage:description "crates/atm-rusqlite/src/writer/ops.rs:93 — the ingest-timing comment explaining why recorded_at is store-set references no ADR. Minor: add a reference to the relevant ADR (e.g. ADR-005 or a new ADR if applicable)." ;
+  triage:phaseId "phase-U" ;
+  triage:triageMode "initial_pass" ;
+  triage:category "ATM-QA" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-12T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-U6-006/pU-u6/1> ;
+  triage:openOn <urn:atm:triage:worktree/pU-u6/22dfffa> ;
+  triage:promoteTo <urn:atm:triage:worktree/pU-u6/22dfffa> .
+
+<urn:atm:triage:occurrence/ATM-QA-U6-006/pU-u6/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-rusqlite/src/writer/ops.rs" ;
+  triage:line 92 ;
+  triage:snippet "// Ingest timing is owned by the durable store, not by callers." ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:occursIn <urn:atm:triage:worktree/pU-u6/22dfffa> .
+
+<urn:atm:triage:worktree/pU-u6/22dfffa>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pU-u6-provenance-field-reduction" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pU-u6-provenance-field-reduction" ;
+  triage:headSha "22dfffa" ;
+  triage:orderIndex 6 .

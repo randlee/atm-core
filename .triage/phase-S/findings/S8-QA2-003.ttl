@@ -1,0 +1,39 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S8-QA2-003>
+  a triage:Finding ;
+  triage:findingId "S8-QA2-003" ;
+  triage:title "Undocumented 1 MiB upper cap for claude_jsonl_body_export_max_bytes not in ADR-010" ;
+  triage:description "config/types.rs defines MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES = 1_048_576 (1 MiB) as an upper cap on claude_jsonl_body_export_max_bytes. This constraint does not appear in ADR-010 (which defines only the 128 KiB default and 0=stub-only semantics) nor in sprint-S8.md acceptance criteria. The error recovery message in mod.rs:296 references '1048576 bytes'. This is undocumented behavior — any consumer who sets a value above 1 MiB will receive a silent clamp or error with no documented justification. Fix: document the 1 MiB ceiling in ADR-010 §Validation with rationale, or remove the cap if unintentional." ;
+  triage:category "REQ" ;
+  triage:severity "important" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "closed" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s8-jsonl-compat" ;
+  triage:promoteToBranch "feature/pS-s8-jsonl-compat" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S8-QA2-003/s8/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:occurrence/S8-QA2-003/s8/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-core/src/config/types.rs" ;
+  triage:line 11 ;
+  triage:snippet "MAX_CLAUDE_JSONL_BODY_EXPORT_MAX_BYTES = 1_048_576 — upper cap not documented in ADR-010 or sprint-S8.md acceptance criteria" ;
+  triage:status "closed" ;
+  triage:closed true ;
+  triage:headSha "237c0ce" ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce> .
+
+<urn:atm:triage:worktree/feature-pS-s8-jsonl-compat/237c0ce>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s8-jsonl-compat" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s8-jsonl-compat" ;
+  triage:headSha "237c0ce" ;
+  triage:orderIndex 1 .

@@ -1,0 +1,138 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/ATM-QA-T3-006>
+  a triage:Finding ;
+  triage:findingId "ATM-QA-T3-006" ;
+  triage:title "sprint-T3-immutable-rows.md Acceptance Criteria missing rows-changed detection criterion" ;
+  triage:description "docs/phase-T/sprint-T3-immutable-rows.md Acceptance Criteria section (lines 46-56 on T.3) has 6 items but omits the rows-changed detection criterion. The Deliverables section names it. Fix: add AC item 'rows-changed detection is used to determine inserted=true/false rather than a pre-write probe or conflict-driven mutation.' Feature branch pT-t3 added WriteOpResult::UpsertMessage { inserted: bool } at AC line 52; all other branches and integrate/phase-T still omit this criterion." ;
+  triage:triageMode "followup_pass" ;
+  triage:category "missing_acceptance_criterion" ;
+  triage:phaseId "phase-T" ;
+  triage:severity "minor" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "fixed_partial" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-10T00:00:00Z"^^xsd:dateTime ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-006/pT-t1/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-006/pT-t2/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-006/pT-t3/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-006/pT-t4/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-006/pT-t5/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/ATM-QA-T3-006/integrate-phase-T/1> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t1/0e6b024> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t2/38cda3c> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t4/475de31> ;
+  triage:openOn <urn:atm:triage:worktree/pT-t5/6450bb5> ;
+  triage:openOn <urn:atm:triage:worktree/integrate-phase-T/05d5bfc> ;
+  triage:fixedOn <urn:atm:triage:worktree/pT-t3/6668842> ;
+  triage:promoteTo <urn:atm:triage:worktree/pT-t4/475de31> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-006/pT-t1/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-T/sprint-T3-immutable-rows.md" ;
+  triage:line 46 ;
+  triage:snippet "## Acceptance Criteria (rows-changed detection criterion absent)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t1/0e6b024> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-006/pT-t2/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-T/sprint-T3-immutable-rows.md" ;
+  triage:line 46 ;
+  triage:snippet "## Acceptance Criteria (rows-changed detection criterion absent)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:headSha "38cda3c" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t2/38cda3c> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-006/pT-t3/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-T/sprint-T3-immutable-rows.md" ;
+  triage:line 52 ;
+  triage:snippet "- `WriteOpResult::UpsertMessage { inserted: bool }` reports `true` on the first insert and `false` on duplicate-key no-op replays" ;
+  triage:status "fixed" ;
+  triage:closed true ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:headSha "6668842" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t3/6668842> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-006/pT-t4/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-T/sprint-T3-immutable-rows.md" ;
+  triage:line 46 ;
+  triage:snippet "## Acceptance Criteria (rows-changed detection criterion absent)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:headSha "475de31" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t4/475de31> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-006/pT-t5/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-T/sprint-T3-immutable-rows.md" ;
+  triage:line 46 ;
+  triage:snippet "## Acceptance Criteria (rows-changed detection criterion absent)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:occursIn <urn:atm:triage:worktree/pT-t5/6450bb5> .
+
+<urn:atm:triage:occurrence/ATM-QA-T3-006/integrate-phase-T/1>
+  a triage:Occurrence ;
+  triage:file "docs/phase-T/sprint-T3-immutable-rows.md" ;
+  triage:line 46 ;
+  triage:snippet "## Acceptance Criteria (rows-changed detection criterion absent)" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:branch "integrate/phase-T" ;
+  triage:headSha "05d5bfc" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-T/05d5bfc> .
+
+<urn:atm:triage:worktree/pT-t1/0e6b024>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t1-integration-gate" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t1-integration-gate" ;
+  triage:headSha "0e6b024" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/pT-t2/38cda3c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t2-sqlite-writer" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t2-sqlite-writer" ;
+  triage:headSha "38cda3c" ;
+  triage:orderIndex 2 .
+
+<urn:atm:triage:worktree/pT-t3/6668842>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t3-immutable-rows" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t3-immutable-rows" ;
+  triage:headSha "6668842" ;
+  triage:orderIndex 3 .
+
+<urn:atm:triage:worktree/pT-t4/475de31>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t4-windows-runtime" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t4-windows-runtime" ;
+  triage:headSha "475de31" ;
+  triage:orderIndex 4 .
+
+<urn:atm:triage:worktree/pT-t5/6450bb5>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pT-t5-hardening" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pT-t5-hardening" ;
+  triage:headSha "6450bb5" ;
+  triage:orderIndex 5 .
+
+<urn:atm:triage:worktree/integrate-phase-T/05d5bfc>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-T" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-T" ;
+  triage:headSha "05d5bfc" ;
+  triage:orderIndex 6 .

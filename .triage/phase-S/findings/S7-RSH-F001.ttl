@@ -1,0 +1,58 @@
+@prefix triage: <urn:atm:triage:> .
+@prefix xsd: <http://www.w3.org/2001/XMLSchema#> .
+
+<urn:atm:triage:finding/S7-RSH-F001>
+  a triage:Finding ;
+  triage:findingId "S7-RSH-F001" ;
+  triage:title "Orphaned JoinHandle on shutdown timeout in run_bounded_shutdown_step" ;
+  triage:description "crates/atm-daemon/src/runtime_health.rs:484-494 — run_bounded_shutdown_step spawns a thread whose JoinHandle is stored in shutdown_handle. On the Timeout arm, the #[cfg(not(test))] path calls drop(shutdown_handle), which releases the JoinHandle without joining the thread. The spawned thread continues running after the deadline and is never reaped at shutdown: the daemon process exits with a live background thread that may hold file handles, locks, or other resources. The test path (#[cfg(test)]) pushes the handle into SHUTDOWN_FINALIZER_THREADS for deferred join verification, but production code has no equivalent reap. The fix is to call shutdown_handle.join() (ignoring the result) on the Timeout arm in non-test builds, or retain the handle in a registry joined on daemon exit. The code is identical on both worktrees; the issue originates in integrate/phase-S and was carried forward to feature/pS-s7-queue-query without modification." ;
+  triage:category "RSH" ;
+  triage:severity "minor" ;
+  triage:triageMode "initial_pass" ;
+  triage:phaseId "phase-S" ;
+  triage:repeatable false ;
+  triage:sweepScope "file_only" ;
+  triage:status "open" ;
+  triage:dispatchReady true ;
+  triage:triagedAt "2026-05-09T00:00:00Z"^^xsd:dateTime ;
+  triage:highestOpenBranch "feature/pS-s7-queue-query" ;
+  triage:promoteToBranch "feature/pS-s7-queue-query" ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RSH-F001/s7/1> ;
+  triage:hasOccurrence <urn:atm:triage:occurrence/S7-RSH-F001/integrate-pS/1> ;
+  triage:openOn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-RSH-F001/s7/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 492 ;
+  triage:snippet "#[cfg(not(test))] drop(shutdown_handle) — JoinHandle dropped without join on recv_timeout Timeout arm; spawned thread runs untracked past shutdown deadline" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "9c01bca" ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:occursIn <urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca> .
+
+<urn:atm:triage:occurrence/S7-RSH-F001/integrate-pS/1>
+  a triage:Occurrence ;
+  triage:file "crates/atm-daemon/src/runtime_health.rs" ;
+  triage:line 492 ;
+  triage:snippet "#[cfg(not(test))] drop(shutdown_handle) — identical to feature branch; JoinHandle dropped without join on Timeout arm; orphaned thread holds resources past deadline" ;
+  triage:status "open" ;
+  triage:closed false ;
+  triage:headSha "76a646c" ;
+  triage:branch "integrate/phase-S" ;
+  triage:occursIn <urn:atm:triage:worktree/integrate-phase-S/76a646c> .
+
+<urn:atm:triage:worktree/feature-pS-s7-queue-query/9c01bca>
+  a triage:WorktreeSnapshot ;
+  triage:branch "feature/pS-s7-queue-query" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/feature/pS-s7-queue-query" ;
+  triage:headSha "9c01bca" ;
+  triage:orderIndex 1 .
+
+<urn:atm:triage:worktree/integrate-phase-S/76a646c>
+  a triage:WorktreeSnapshot ;
+  triage:branch "integrate/phase-S" ;
+  triage:path "/Users/randlee/Documents/github/atm-core-worktrees/integrate/phase-S" ;
+  triage:headSha "76a646c" ;
+  triage:orderIndex 2 .

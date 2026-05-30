@@ -1,0 +1,61 @@
+@prefix atm:  <https://atm-core.dev/ontology/qa#> .
+@prefix xsd:  <http://www.w3.org/2001/XMLSchema#> .
+@prefix rdfs: <http://www.w3.org/2000/01/rdf-schema#> .
+
+atm:finding-S23-ARCH-004
+    a atm:QAFinding ;
+    atm:findingId         "S23-ARCH-004" ;
+    atm:phase             "phase-Ye" ;
+    atm:sprint            "Y.23" ;
+    atm:title             "architecture.md uses 'target ownership shape' instead of 'accepted ownership shape'" ;
+    atm:severity          atm:Blocking ;
+    atm:repeatable        false ;
+    atm:triageMode        "initial_pass" ;
+    atm:triageDate        "2026-05-20"^^xsd:date ;
+
+    # Affected branches (all branches where the phrase is present)
+    atm:affectedBranch    "feature/pYe-s19-runtime-status-snapshot-publication" ;
+    atm:affectedBranch    "feature/pYe-s20-notification-runtime-channel-ownership" ;
+    atm:affectedBranch    "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+    atm:affectedBranch    "feature/pYe-s22-reconcile-runtime-cutover" ;
+    atm:affectedBranch    "feature/pYe-s23-phase-end-architecture-proof" ;
+
+    # Highest open branch — fix target
+    atm:promoteToWorktre  "feature/pYe-s23-phase-end-architecture-proof" ;
+    atm:promoteToBranch   "feature/pYe-s23-phase-end-architecture-proof" ;
+
+    # Evidence
+    atm:evidence [
+        rdfs:label "s19 — 2 occurrences at lines 524, 527" ;
+        atm:file   "docs/atm-daemon/architecture.md" ;
+        atm:branch "feature/pYe-s19-runtime-status-snapshot-publication" ;
+        atm:lines  "524, 527"
+    ] ;
+    atm:evidence [
+        rdfs:label "s20 — 1 occurrence at line 524" ;
+        atm:file   "docs/atm-daemon/architecture.md" ;
+        atm:branch "feature/pYe-s20-notification-runtime-channel-ownership" ;
+        atm:lines  "524"
+    ] ;
+    atm:evidence [
+        rdfs:label "s21 — 1 occurrence at line 528" ;
+        atm:file   "docs/atm-daemon/architecture.md" ;
+        atm:branch "feature/pYe-s21-reconcile-runtime-actor-foundation" ;
+        atm:lines  "528"
+    ] ;
+    atm:evidence [
+        rdfs:label "s22 — 1 occurrence at line 529" ;
+        atm:file   "docs/atm-daemon/architecture.md" ;
+        atm:branch "feature/pYe-s22-reconcile-runtime-cutover" ;
+        atm:lines  "529"
+    ] ;
+    atm:evidence [
+        rdfs:label "s23 — 1 occurrence at line 529" ;
+        atm:file   "docs/atm-daemon/architecture.md" ;
+        atm:branch "feature/pYe-s23-phase-end-architecture-proof" ;
+        atm:lines  "529"
+    ] ;
+
+    atm:fixDescription    "Replace every occurrence of 'target ownership shape' with 'accepted ownership shape' in docs/atm-daemon/architecture.md on the highest open branch (pYe-s23). Merge-forward will close the finding on earlier branches." ;
+    atm:sweepScope        "docs/atm-daemon/architecture.md" ;
+    atm:integrateStatus   "clean — phrase absent from integrate/phase-Y" .
