@@ -24,6 +24,7 @@ daemon-owned runtime state plus injected subsystem reports, including
 cross-subsystem drift comparison where that comparison is not backend-specific.
 
 The concrete simplification decisions are frozen now:
+- the concrete `ConfigDoctor` implementation lives in `atm-runtime`
 - remove `sqlite_boundary: Option<SqliteBoundaryAssembly>` from
   `crates/atm-daemon/src/runtime_health.rs`
 - replace direct roster access there with injected `RosterStore`
@@ -76,6 +77,13 @@ The concrete simplification decisions are frozen now:
   - bounded store findings
   - any SQLite-specific detail that does not belong in daemon runtime state
 
+- `atm-runtime` owns the concrete `ConfigDoctor` implementation and the direct
+  local doctor-path assembly used by the CLI. The frozen ownership rule is:
+  - `ConfigDoctor` trait stays in `atm-core`
+  - concrete `ConfigDoctor` implementation lives in `atm-runtime`
+  - backend-specific `config.json` investigation does not live in
+    `atm-daemon`
+
 - `atm-core/src/doctor/mod.rs` becomes an explicit aggregator/orchestrator over
   subsystem doctors rather than a backend-specific implementation surface.
   The minimum aggregate shape is frozen:
@@ -96,7 +104,11 @@ The concrete simplification decisions are frozen now:
   ```
 
 - The direct CLI doctor path is restored for local diagnostics that do not
-  require daemon-owned runtime state.
+  require daemon-owned runtime state. The frozen dependency-edge decision is:
+  - the `atm` crate depends on `atm-runtime` for direct local doctor-path
+    assembly
+  - `atm` must not depend directly on `atm-rusqlite`
+  - direct local doctor wiring must remain outside `atm-daemon`
 
 - `RuntimeStatusSnapshot` is simplified to daemon-owned runtime state only.
   The frozen delete list is:
@@ -131,7 +143,11 @@ same seam from opposite sides.
 ## Acceptance Criteria
 
 - store diagnostics are owned by `atm-rusqlite`
+- the owning crate for the concrete `ConfigDoctor` implementation is named
+  explicitly as `atm-runtime`
 - CLI doctor can answer direct local store/config checks without daemon routing
+- the `atm -> atm-runtime` dependency edge is frozen explicitly as the direct
+  local doctor-path seam, and no direct `atm -> atm-rusqlite` edge is allowed
 - daemon runtime health no longer owns SQLite-specific probing or SQLite-named
   runtime cache fields
 - the sprint doc freezes the aggregate doctor DTO and the reduced runtime
@@ -154,6 +170,9 @@ same seam from opposite sides.
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
+- `docs/atm-runtime/architecture.md`
+- `docs/atm-runtime/requirements.md`
+- `docs/atm-runtime/boundaries.md`
 - `docs/atm-rusqlite/requirements.md`
 
 ## Risks And Watchouts

@@ -24,6 +24,7 @@ crate-local ADR records that remain embedded in crate architecture documents.
 
 ## Extracted Crate-Local ADRs
 
+- [ADR-ATM-RUNTIME-001 — `atm-runtime` As Concrete Composition Root](./ADR-ATM-RUNTIME-001.md)
 - [ADR-ATM-RUSQLITE-002 — Single In-Process SQLite Write Worker](./ADR-ATM-RUSQLITE-002.md)
 
 ## Embedded Crate-Local ADR Records

@@ -22,6 +22,18 @@ live in `atm-daemon`.
   - SQLite-backed `RemoteReplayStore`
 - `atm-runtime` must expose storage-neutral runtime inputs to callers through
   the `atm-core` trait surfaces frozen by `Phase AA`.
+- `atm-runtime` must own the concrete `ConfigDoctor` implementation used by
+  the direct local doctor path.
+- `atm-runtime` must support an `atm -> atm-runtime` dependency edge for the
+  direct local doctor path while forbidding any direct `atm -> atm-rusqlite`
+  dependency.
+- `atm-runtime` must support an `atm-daemon -> atm-runtime` dependency edge
+  for runtime bundle assembly while preserving the forbidden
+  `atm-daemon -> atm-rusqlite` edge.
+- `atm-runtime` must fail closed during `RuntimeBundle` assembly. If any
+  component cannot be constructed, including the replay-store component needed
+  by `REQ-DAEMON-RUNTIME-005`, daemon startup must fail before entering
+  serving state.
 - `atm-runtime` must not own:
   - CLI parsing/rendering
   - daemon transport

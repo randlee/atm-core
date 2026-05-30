@@ -16,6 +16,8 @@ It sits between:
 - installation of the active `MailStore`, `TaskStore`, and `RosterStore`
   implementations
 - installation of subsystem doctor implementations
+- the concrete `ConfigDoctor` implementation and its direct local doctor-path
+  assembly
 - installation of the active `RemoteReplayStore`
 - SQLite-specific observability injection into SQLite-owned code
 
@@ -45,7 +47,16 @@ pub struct RuntimeBundle {
 `atm-daemon` must consume only this kind of injected storage-neutral bundle and
 must not construct `SqliteBoundaryAssembly` directly.
 
+The direct CLI doctor path is allowed to depend on `atm-runtime` for this
+bundle/doctor assembly. It must not depend directly on `atm-rusqlite`.
+
 ## Boundary Rule
 
 `atm-runtime` is the legal Phase AA location for concrete SQLite assembly.
 That authorization does not extend to `atm-daemon`.
+
+## Startup Rule
+
+Any `RuntimeBundle` assembly failure is fail-closed. The daemon must not enter
+serving state if any required runtime component, including replay-store
+construction, fails.

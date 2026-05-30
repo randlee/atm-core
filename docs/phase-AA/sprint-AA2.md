@@ -37,17 +37,20 @@ The concrete transfer decisions are frozen now:
 
 - `REQ-CORE-BOUNDARY-001`
 - `REQ-DAEMON-RUNTIME-002`
+- `REQ-DAEMON-RUNTIME-005`
 - `REQ-RUSQLITE-STORE-001`
 
 ## Governing ADRs
 
 - `docs/adr/ADR-001-sealed-trait-pattern.md`
+- `docs/adr/ADR-ATM-RUNTIME-001.md`
 - supersedes the current daemon composition assumption in
   `docs/atm-daemon/architecture.md`
 
 ## Governing Boundaries
 
 - `boundaries/atm-core/runtime-factory.toml`
+- `boundaries/atm-runtime/runtime-composition.toml`
 - `boundaries/atm-rusqlite/sqlite-boundary-assembly.toml`
 - `boundaries/atm-rusqlite/shared-db.toml`
 
@@ -72,6 +75,21 @@ The concrete transfer decisions are frozen now:
   - `crates/atm-runtime/src/composition.rs`
   - `crates/atm-runtime/src/replay_store.rs`
 
+- `atm-runtime` dependency ownership is frozen through a machine-readable
+  boundary record:
+  - `boundaries/atm-runtime/runtime-composition.toml`
+  The minimum rule set is:
+  - allowed dependents:
+    - `atm`
+    - `atm-daemon`
+  - allowed dependencies:
+    - `atm-core`
+    - `atm-rusqlite`
+  - forbidden edges:
+    - `atm-daemon -> atm-rusqlite`
+    - `atm -> atm-rusqlite`
+    - `atm-runtime -> atm-daemon`
+
 - The minimum runtime bundle contract is frozen in this sprint doc so daemon
   startup does not invent its own seam:
 
@@ -87,6 +105,13 @@ The concrete transfer decisions are frozen now:
       pub remote_replay_store: Arc<dyn RemoteReplayStore>,
   }
   ```
+
+- RuntimeBundle assembly remains fail-closed. The frozen startup rule is:
+  - if any RuntimeBundle component cannot be constructed, including
+    `remote_replay_store`, daemon startup must fail before entering serving
+    state
+  - this preserves the `REQ-DAEMON-RUNTIME-005` replay-resume invariant
+  - the property must remain testable through the existing in-process harness
 
 - Concrete SQLite boundary assembly moves into `atm-runtime`. The frozen move
   list is:
@@ -126,6 +151,8 @@ about composition ownership transfer.
 ## Acceptance Criteria
 
 - `atm-runtime` exists and owns concrete production assembly
+- `boundaries/atm-runtime/runtime-composition.toml` exists and records the
+  allowed and forbidden dependency edges for the new crate
 - `atm-daemon` no longer constructs `SqliteBoundaryAssembly`
 - `RemoteReplayStateRecord` and `RemoteReplayStore` no longer originate in
   daemon-private or SQLite-private modules
@@ -136,6 +163,9 @@ about composition ownership transfer.
   doctor traits rather than backend identity
 - direct daemon-to-SQLite assembly imports are removed from production
   composition code
+- daemon startup remains fail-closed when any RuntimeBundle component cannot be
+  assembled, including the replay-store component required by
+  `REQ-DAEMON-RUNTIME-005`
 
 ## Required Validation
 
@@ -153,7 +183,9 @@ about composition ownership transfer.
 - `docs/atm-core/architecture.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-runtime/architecture.md`
+- `docs/atm-runtime/boundaries.md`
 - `docs/atm-runtime/requirements.md`
+- `docs/adr/ADR-ATM-RUNTIME-001.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-rusqlite/requirements.md`
