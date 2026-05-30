@@ -6,6 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "AST-sensitive Rust boundary analyzer."
+publish = false
 repository.workspace = true
 homepage.workspace = true
 

@@ -6,6 +6,7 @@ rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 description = "Source-level declarative attributes for sc-lint analyzers."
+publish = false
 repository.workspace = true
 homepage.workspace = true
 
