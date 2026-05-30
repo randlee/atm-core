@@ -35,7 +35,7 @@ sc-observability-types.workspace = true
 sc-lint-attributes = { path = "../sc-lint-attributes", version = "0.1.0" }
 
 [dev-dependencies]
-atm-runtime-test-support = { path = "../atm-runtime-test-support", version = "1.2.0" }
+atm-runtime-test-support = { path = "../atm-runtime-test-support" }
 serial_test = "3"
 tempfile = "3"
 
