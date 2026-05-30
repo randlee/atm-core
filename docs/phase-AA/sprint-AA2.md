@@ -90,6 +90,17 @@ The concrete transfer decisions are frozen now:
     - `atm -> atm-rusqlite`
     - `atm-runtime -> atm-daemon`
 
+- The `AA.2` to `AA.4` boundary-governance window is frozen explicitly:
+  - `boundaries/atm-runtime/runtime-composition.toml` defines the intended
+    post-AA end-state edges immediately so composition work cannot drift
+  - the existing `atm-rusqlite` boundary TOMLs remain the authoritative
+    `just lint boundaries` policy until `AA.5` relocks them
+  - `AA.2`, `AA.3`, and `AA.4` must not widen any SQLite boundary allowlist to
+    match temporary implementation convenience
+  - `AA.5` is the sprint that removes `atm-daemon` from the SQLite boundary
+    allowlists and makes all machine-readable boundary records agree on the
+    forbidden edge again
+
 - The minimum runtime bundle contract is frozen in this sprint doc so daemon
   startup does not invent its own seam:
 
@@ -153,6 +164,10 @@ about composition ownership transfer.
 - `atm-runtime` exists and owns concrete production assembly
 - `boundaries/atm-runtime/runtime-composition.toml` exists and records the
   allowed and forbidden dependency edges for the new crate
+- the sprint doc explicitly defines the `AA.2` through `AA.4` transition
+  policy: `runtime-composition.toml` freezes the target end-state edges while
+  the existing `atm-rusqlite` TOMLs remain the authoritative lint inputs until
+  `AA.5` relocks them
 - `atm-daemon` no longer constructs `SqliteBoundaryAssembly`
 - `RemoteReplayStateRecord` and `RemoteReplayStore` no longer originate in
   daemon-private or SQLite-private modules

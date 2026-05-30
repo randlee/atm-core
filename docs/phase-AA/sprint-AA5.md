@@ -35,6 +35,7 @@ code and in review workflow.
 
 ## Governing Boundaries
 
+- `boundaries/atm-runtime/runtime-composition.toml`
 - `boundaries/atm-rusqlite/sqlite-boundary-assembly.toml`
 - `boundaries/atm-rusqlite/mail-store-sqlite.toml`
 - `boundaries/atm-rusqlite/roster-store-sqlite.toml`
@@ -62,6 +63,10 @@ code and in review workflow.
   - restore explicit forbidden edges
   - restore any visibility/constructor privacy that was widened only to permit
     daemon-side SQLite assembly
+  - make the SQLite boundary TOMLs agree with
+    `boundaries/atm-runtime/runtime-composition.toml` on the forbidden
+    `atm-daemon -> atm-rusqlite` edge so no policy contradiction remains after
+    relock
 
 - A second repository-owned architecture guard exists. The minimum executable
   surface is frozen now:
@@ -88,6 +93,10 @@ code and in review workflow.
 
 - Boundary-policy widening is explicitly documented as an architecture change,
   not routine lint-data churn.
+- The temporary `AA.2` through `AA.4` transition rule is closed, meaning there
+  is no longer a split between target-state boundary policy in
+  `runtime-composition.toml` and authoritative lint policy in the SQLite
+  boundary TOMLs.
 
 - The `boundary-guard` QA agent is defined as a required review participant.
   The exact relaxation table is frozen:
@@ -125,6 +134,8 @@ actually clean will either fail immediately or produce more policy cheating.
 
 - `atm-daemon` is forbidden again as a dependent of SQLite assembly/store
   boundaries
+- `boundaries/atm-runtime/runtime-composition.toml` and the SQLite boundary
+  TOMLs agree on the same forbidden daemon-to-SQLite edge after relock
 - a second architecture-enforcement layer exists beyond the TOML lint
 - boundary-policy widening is treated as an architecture change, not routine
   config churn

@@ -783,6 +783,16 @@ Doctor health contract distinction:
   them through the documented request boundary
 - `atm doctor` must report both dimensions explicitly rather than treating
   process existence as equivalent to request-serving readiness
+- Phase AA supersession note:
+  - `AA.3` deletes `sqlite_ready`, `sqlite_detail`, and the SQLite-backed
+    continuity wording from the daemon-owned runtime snapshot
+  - after `AA.3`, `RuntimeStatusSnapshot` carries only daemon-owned runtime
+    state and no store-specific readiness fields
+  - SQLite/store readiness moves to subsystem doctor reports and does not
+    remain part of the daemon runtime DTO
+  - `docs/phase-AA/sprint-AA3.md` is the frozen source of truth for the
+    post-AA runtime snapshot shape, and this section must be updated during
+    that sprint to match the final implementation
 - readiness states are:
   - `ready` when the daemon owns the runtime, SQLite-backed continuity is
     available, ingest is healthy, and no active identity-conflict path exists

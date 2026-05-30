@@ -53,6 +53,7 @@ The concrete simplification decisions are frozen now:
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-rusqlite/boundaries.md`
+- `boundaries/atm-runtime/runtime-composition.toml`
 
 ## Prerequisites
 
@@ -179,3 +180,6 @@ same seam from opposite sides.
 
 - do not let “optional daemon fast path” turn back into “daemon owns the only
   doctor implementation”
+- `AA.3` must update `docs/atm-daemon/architecture.md` and
+  `docs/architecture.md` so their runtime-health contract no longer claims
+  daemon-owned `sqlite_ready` / `sqlite_detail` fields once this sprint lands

@@ -230,6 +230,8 @@ Purpose:
 - add `crates/atm-runtime`
 - move concrete SQLite construction and production runtime wiring there
 - make `atm-daemon` receive only storage-neutral runtime inputs
+- freeze the end-state runtime boundary early in
+  `runtime-composition.toml` while leaving the SQLite TOML relock to `AA.5`
 
 Execution branch:
 - `feature/pAA-s2-atm-runtime-composition-transfer`
@@ -272,6 +274,8 @@ Purpose:
 - treat boundary-policy widening as an explicit architecture change
 - add a `boundary-guard` QA agent that reviews plans and phase-ending
   reviews for any boundary loosening before closure
+- close the temporary `AA.2` to `AA.4` transition window by making the
+  SQLite boundary TOMLs agree with `runtime-composition.toml`
 
 Execution branch:
 - `feature/pAA-s5-boundary-relock-and-permanent-enforcement`

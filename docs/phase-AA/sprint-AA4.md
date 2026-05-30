@@ -51,6 +51,7 @@ The concrete delete/move decisions are frozen now:
 
 - `docs/atm-daemon/boundaries.md`
 - `docs/atm-rusqlite/boundaries.md`
+- `boundaries/atm-runtime/runtime-composition.toml`
 
 ## Prerequisites
 

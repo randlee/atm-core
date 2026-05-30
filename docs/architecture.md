@@ -2849,9 +2849,11 @@ Phase AA target doctor split:
   daemon-owned runtime state
 - direct local doctor checks that only require config or store access do not
   need daemon routing
-- SQLite/store readiness is therefore expected to move out of daemon-owned
-  health collection and into the direct local diagnostics path or the
-  `atm-runtime` composition layer
+- SQLite/store readiness will be removed from daemon-owned health collection in
+  `AA.3`, with `sqlite_ready` and `sqlite_detail` deleted per
+  `docs/phase-AA/sprint-AA3.md`
+- store readiness then lives in direct local diagnostics or other subsystem
+  doctor reports assembled above the backend, not in the daemon runtime DTO
 
 ### 21.6.4 Shutdown, Signals, Timeouts, And Resource Caps
 
