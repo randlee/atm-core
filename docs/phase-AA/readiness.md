@@ -5,6 +5,9 @@
 Track the accepted closure state for the daemon simplification line that
 removes concrete SQLite knowledge from `atm-daemon`.
 
+Authoritative supporting inventory:
+- `docs/phase-AA/issues.md`
+
 ## Sprint Status
 
 | Sprint | Status | Branch | Worktree | Closure Gate |
@@ -32,3 +35,5 @@ removes concrete SQLite knowledge from `atm-daemon`.
   whenever that edge reappears
 - a `boundary-guard` QA agent reviews both plans and phase-ending reviews
   and flags boundary-policy widening before closure
+- `docs/phase-AA/issues.md` has no open issue whose planned closure sprint is
+  still incomplete

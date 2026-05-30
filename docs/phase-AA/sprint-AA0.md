@@ -96,6 +96,10 @@ delete code instead of arguing about ownership.
 - `docs/phase-AA/readiness.md` exists and records the AA sprint line plus
   phase exit criteria.
 
+- `docs/phase-AA/issues.md` exists and is the authoritative Phase AA issues
+  inventory for architectural findings that remain open across multiple
+  sprints.
+
 ## Split Recommendation
 
 Keep this sprint documentation-only. If daemon code edits begin before the
@@ -126,6 +130,7 @@ will reintroduce ambiguity.
 - `docs/atm-daemon/requirements.md`
 - `docs/atm-daemon/architecture.md`
 - `docs/phase-AA/readiness.md`
+- `docs/phase-AA/issues.md`
 - `docs/phase-AA/daemon-state-machines.md`
 - `docs/phase-AA/daemon-sqlite-leak-ledger.md`
 

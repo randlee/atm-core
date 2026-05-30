@@ -149,6 +149,7 @@ actually clean will either fail immediately or produce more policy cheating.
 ## Required Document Updates
 
 - `docs/phase-AA/readiness.md`
+- `docs/phase-AA/issues.md`
 - `docs/project-plan.md`
 - `docs/plan-phase-AA.md`
 - `docs/architecture.md`

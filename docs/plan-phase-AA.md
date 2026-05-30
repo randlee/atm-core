@@ -50,6 +50,11 @@ Current violated state that `Phase AA` must delete:
 - daemon owns SQLite-specific observability glue
 - daemon test support composes SQLite assemblies directly
 
+Authoritative planning support artifacts:
+- `docs/phase-AA/readiness.md`
+- `docs/phase-AA/issues.md`
+- `.claude/agents/boundary-guard.md`
+
 ## Why Phase AA Exists
 
 The daemon was intended to be simple and storage-agnostic. The boundary was
