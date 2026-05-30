@@ -98,11 +98,6 @@ Required rules:
   and store boundaries
 - the current runtime composition owner may depend on this crate in order to
   assemble production adapters, but thin callers and extension crates must not
-- Phase-AA target direction:
-  - the long-term concrete composition owner is `atm-runtime`, not
-    `atm-daemon`
-  - daemon crates must not retain direct SQLite assembly dependencies after
-    the Phase AA simplification line closes
 - schema bootstrap must be deterministic and idempotent
 - schema bootstrap must run once per database root before normal store
   operations, not on every connection acquisition
