@@ -506,6 +506,7 @@ fn clone_lifecycle_wake_write(
     })
 }
 
+#[cfg(unix)]
 fn register_lifecycle_signal_flag(
     signal: i32,
     flag: Arc<AtomicBool>,
