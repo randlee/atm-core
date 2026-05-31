@@ -61,6 +61,7 @@ The concrete transfer decisions are frozen now:
 ## Hard Dependencies
 
 - accepted `atm-runtime` crate ownership model
+- `ADR-ATM-RUNTIME-001` must be accepted before this sprint begins
 
 ## Out Of Scope
 

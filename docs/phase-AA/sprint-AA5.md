@@ -150,6 +150,9 @@ actually clean will either fail immediately or produce more policy cheating.
 
 ## Required Validation
 
+- `scripts/check-boundary-guard.py` and `scripts/test_boundary_guard.py` are
+  AA.5 deliverables; run these checks at end-of-sprint after implementation
+  lands
 - `just lint boundaries`
 - `python3 scripts/check-boundary-guard.py --base-ref origin/integrate/phase-AA`
 - `python3 -m unittest scripts.test_boundary_guard`

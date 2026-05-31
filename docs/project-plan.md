@@ -180,6 +180,7 @@ Phase R sequencing rule:
 Status summary:
 - Phase AA is the active simplification planning line for restoring
   `atm-daemon` to a thin-router role.
+- Integration Branch: `integrate/phase-AA`
 - The authoritative plan is [`docs/plan-phase-AA.md`](./plan-phase-AA.md).
 - The authoritative closure checklist is
   [`docs/phase-AA/readiness.md`](./phase-AA/readiness.md).
@@ -196,6 +197,14 @@ Deliverables:
 - subsystem doctor trait model and direct local doctor path
 - deletion of remaining daemon-side SQLite leaks
 - `boundary-guard` and relocked machine-readable boundary policy
+
+Sprint line:
+- `AA.0` `feature/pAA-s0-daemon-architecture-restatement`
+- `AA.1` `feature/pAA-s1-subsystem-doctor-traits`
+- `AA.2` `feature/pAA-s2-atm-runtime-composition-transfer`
+- `AA.3` `feature/pAA-s3-direct-doctor-and-runtime-health-split`
+- `AA.4` `feature/pAA-s4-delete-daemon-sqlite-leaks`
+- `AA.5` `feature/pAA-s5-boundary-relock-and-guard`
 
 Acceptance:
 - Phase AA exit criteria are satisfied only through
