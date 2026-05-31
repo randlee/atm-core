@@ -283,6 +283,23 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pAA-s5-boundary-relock-and-permanent-enforcement`
 
+### AA.6 `sc-observability` 1.2.0 Upgrade
+
+Purpose:
+- upgrade `sc-observability` / `sc-observability-types` from `1.1.0` to
+  `1.2.0`
+- migrate ATM off the deprecated `Logger::emit()` compatibility path
+- absorb the queue-backed logger runtime API changes without regressing CLI or
+  daemon observability behavior
+- migrate retained-log policy code to the `1.2.0` field/type surface,
+  including `writer_shutdown_timeout`
+
+Execution branch:
+- `feature/pAA-s6-obs-upgrade`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s6-obs-upgrade`
+
 ## Out Of Scope
 
 `Phase AA` does not:

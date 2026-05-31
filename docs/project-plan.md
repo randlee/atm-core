@@ -205,6 +205,7 @@ Sprint line:
 - `AA.3` `feature/pAA-s3-direct-doctor-and-runtime-health-split`
 - `AA.4` `feature/pAA-s4-delete-daemon-sqlite-leaks`
 - `AA.5` `feature/pAA-s5-boundary-relock-and-permanent-enforcement`
+- `AA.6` `feature/pAA-s6-obs-upgrade`
 
 Acceptance:
 - Phase AA exit criteria are satisfied only through
