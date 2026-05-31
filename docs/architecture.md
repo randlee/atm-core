@@ -44,6 +44,7 @@ moved into:
 - [`docs/atm/architecture.md`](./atm/architecture.md)
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-runtime/architecture.md`](./atm-runtime/architecture.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 
 Phase-Q supersession note:

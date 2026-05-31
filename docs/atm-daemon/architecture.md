@@ -793,18 +793,17 @@ Doctor health contract distinction:
   - `docs/phase-AA/sprint-AA3.md` is the frozen source of truth for the
     post-AA runtime snapshot shape, and this section must be updated during
     that sprint to match the final implementation
-- readiness states are:
-  - `ready` when the daemon owns the runtime, SQLite-backed continuity is
-    available, ingest is healthy, and no active identity-conflict path exists
-  - `degraded` when the daemon is still running but SQLite continuity, ingest,
-    or identity-conflict handling is impaired
-  - `unavailable` when the daemon still owns the runtime but every tracked
-    member has transitioned fully offline
-- the runtime health snapshot projected into `atm doctor` must also carry:
-  - singleton-owner pid when known
-  - SQLite-ready state
-  - degraded-ingest state
-  - aggregate active/idle/offline/unknown member counts
+- pre-AA historical baseline only, superseded by the frozen `AA.3` delete
+  list:
+  - readiness states previously treated SQLite continuity as part of daemon
+    readiness
+  - the runtime health snapshot previously carried:
+    - singleton-owner pid when known
+    - SQLite-ready state
+    - degraded-ingest state
+    - aggregate active/idle/offline/unknown member counts
+  - this historical baseline is retained only to explain the pre-AA daemon
+    shape and must not be treated as the post-AA runtime-health contract
 
 ## 3.6 Crash Recovery
 

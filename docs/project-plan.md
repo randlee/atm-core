@@ -113,6 +113,7 @@ Status:
   - `crates/atm-daemon`
   - `crates/atm-daemon-client`
   - `crates/atm-graft`
+  - `crates/atm-runtime`
   - `crates/atm-rusqlite`
   - `crates/sc-lint-*` support crates
 
@@ -173,6 +174,32 @@ Phase R sequencing rule:
   - feature behavior
 
 ## 4. Work Sequence
+
+### Phase AA: Remove SQLite From Daemon [PLANNED]
+
+Status summary:
+- Phase AA is the active simplification planning line for restoring
+  `atm-daemon` to a thin-router role.
+- The authoritative plan is [`docs/plan-phase-AA.md`](./plan-phase-AA.md).
+- The authoritative closure checklist is
+  [`docs/phase-AA/readiness.md`](./phase-AA/readiness.md).
+
+Goal:
+- move concrete SQLite/runtime assembly to `atm-runtime`
+- remove daemon-owned SQLite diagnostics, observability glue, and replay/store
+  leakage
+- relock the daemon-to-SQLite boundary with a permanent second enforcement
+  layer
+
+Deliverables:
+- `crates/atm-runtime` as the concrete composition root
+- subsystem doctor trait model and direct local doctor path
+- deletion of remaining daemon-side SQLite leaks
+- `boundary-guard` and relocked machine-readable boundary policy
+
+Acceptance:
+- Phase AA exit criteria are satisfied only through
+  `docs/phase-AA/readiness.md`
 
 ### Phase 0: Document Lock [COMPLETE]
 

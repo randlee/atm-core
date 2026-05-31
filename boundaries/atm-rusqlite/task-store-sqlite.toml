@@ -70,4 +70,5 @@ notes = [
   "ack-related task transitions still resolve through send-shape workflows, not a separate public ack API",
   "crate-root implementation remains temporary; module split is still deferred",
   "assembled through atm_rusqlite::SqliteBoundaryAssembly",
+  "transition note: atm-daemon remains in allowed_dependents through the AA.2-AA.4 window; runtime-composition.toml governs the target end-state while AA.5 relocks the sqlite boundary TOMLs",
 ]

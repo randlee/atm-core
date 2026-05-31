@@ -32,6 +32,22 @@ At minimum, detect:
 - any removal from `forbidden`
 - any direct `atm-daemon -> atm-rusqlite` dependency edge in code or manifests
 
+## Mandatory Trigger Points
+
+`boundary-guard` must run at these points:
+1. after `critical-plan-reviewer` and before `team-lead` approval on any plan
+   branch that modifies a boundary TOML
+2. as a required reviewer in every phase-ending review packet
+
+## Blocking Posture
+
+`boundary-guard` is mandatory, not advisory.
+
+- any `Blocking` finding stops merge on plan branches that modify boundary
+  TOMLs
+- any `Blocking` finding stops merge on phase-ending review branches
+- `Minor` findings remain advisory only
+
 ## Output Contract
 
 Return fenced JSON only.

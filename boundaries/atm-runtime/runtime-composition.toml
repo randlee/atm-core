@@ -4,24 +4,26 @@ owner_crate_path = "atm_runtime"
 name = "RuntimeComposition"
 
 [public]
-trait = null
+facade = "RuntimeComposition"
 notes = "Phase AA concrete composition seam that assembles storage-neutral runtime inputs for atm and atm-daemon"
 
 [implementation]
-visibility = "crate_only"
-constructor = "crate_only"
+type = "RuntimeComposition"
+module = "atm_runtime"
+visibility = "pub(crate)"
+constructor = "pub(crate)"
 
 [composition]
-roots = ["atm-runtime"]
+roots = ["atm_runtime::composition"]
 
 [ownership]
 io_owns = ["runtime_dependency_assembly", "config_doctor_assembly", "replay_store_assembly"]
 io_forbidden = ["daemon_transport", "daemon_lifecycle", "direct_socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon"]
+allowed_dependents = ["atm", "atm-daemon", "atm-runtime"]
 allowed_dependencies = ["atm-core", "atm-rusqlite"]
-forbidden_edges = ["atm-daemon -> atm-rusqlite", "atm -> atm-rusqlite", "atm-runtime -> atm-daemon"]
+forbidden_edges = ["atm -> atm-rusqlite", "atm-runtime -> atm-daemon"]
 
 [references]
 scope = "outside_owner_crate"
@@ -34,7 +36,7 @@ error_types = ["AtmError"]
 
 [testing]
 allowed_test_double_paths = []
-forbidden_test_bypasses = ["direct sqlite assembly inside atm-daemon"]
+forbidden_test_bypasses = ["RuntimeComposition"]
 
 [enforcement]
 lint_rules = ["SCB-RUNTIME-001", "SCB-RUNTIME-002"]
@@ -42,4 +44,4 @@ review_gates = ["no_direct_backend_leakage", "no_runtime_to_daemon_backedge"]
 
 [status]
 state = "planned"
-notes = ["introduced by Phase AA to freeze the atm-runtime ownership boundary before implementation", "daemon startup remains fail-closed on any RuntimeBundle assembly failure"]
+notes = ["introduced by Phase AA to freeze the atm-runtime ownership boundary before implementation", "daemon startup remains fail-closed on any RuntimeBundle assembly failure", "the daemon-to-sqlite edge remains governed by the existing rusqlite boundary TOMLs until AA.5 relocks them; this record does not fail that edge during the AA.2-AA.4 transition window"]

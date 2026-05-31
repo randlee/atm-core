@@ -81,10 +81,13 @@ Crate-local ownership docs live under:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-runtime/requirements.md`](./atm-runtime/requirements.md)
+- [`docs/atm-runtime/architecture.md`](./atm-runtime/architecture.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
+- [`docs/atm-runtime/boundaries.md`](./atm-runtime/boundaries.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 - [`docs/atm/boundaries.md`](./atm/boundaries.md)
 
