@@ -2,6 +2,12 @@
 default_team = "atm-dev"
 identity = "team-lead"
 
+[atm.idle_notify]
+recipient = "team-lead"
+
+[atm.idle_notify.agent.arch-ctm]
+seconds = 60
+
 [[atm.post_send_hooks]]
 recipient = "arch-ctm"
 command = ["scripts/atm-nudge.py", "arch-ctm"]
