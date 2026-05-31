@@ -204,7 +204,7 @@ Sprint line:
 - `AA.2` `feature/pAA-s2-atm-runtime-composition-transfer`
 - `AA.3` `feature/pAA-s3-direct-doctor-and-runtime-health-split`
 - `AA.4` `feature/pAA-s4-delete-daemon-sqlite-leaks`
-- `AA.5` `feature/pAA-s5-boundary-relock-and-guard`
+- `AA.5` `feature/pAA-s5-boundary-relock-and-permanent-enforcement`
 
 Acceptance:
 - Phase AA exit criteria are satisfied only through
