@@ -71,6 +71,8 @@ The `1.2.0` migration surface is frozen now:
 
 - the `AA.5` boundary relock is complete, so the upgrade does not have to
   preserve daemon-local SQLite seams that the earlier sprints are deleting
+- `docs/atm-runtime/boundaries.md` is created by `AA.2` and must exist before
+  this sprint begins
 
 ## Out Of Scope
 
@@ -87,6 +89,10 @@ The `1.2.0` migration surface is frozen now:
   deprecated compatibility path. The minimum migration set is frozen now:
   - `crates/atm/src/main.rs`
   - `crates/atm-daemon/bin_support/daemon_observability.rs`
+  - if `AA.4` moves the concrete `sc-observability` composition into
+    `atm-runtime`, the migration target shifts from daemon bin-support code to
+    the `atm-runtime` adapter/composition path that owns logger assembly after
+    that move
   - any surviving direct adapter-layer logger call site after `AA.4`
 
 - Queue-admission vs durability semantics are made explicit. The migration rule
@@ -149,6 +155,13 @@ unrelated observability refactors or feature work once the migration compiles.
   - `writer_shutdown_timeout` and typed retained-log policy field migration
 - `docs/plan-phase-AA.md` contains an `AA.6` section after `AA.5`
 - `docs/project-plan.md` includes the `AA.6` sprint entry before closeout
+- `docs/architecture.md` is either updated by this sprint or removed from
+  Required Document Updates if no `AA.6` migration detail lands there
+- `docs/requirements.md` is either updated by this sprint or removed from
+  Required Document Updates if no `AA.6` requirement text lands there
+- `docs/atm-core/design/sc-observability-integration.md` is either updated by
+  this sprint or removed from Required Document Updates if no migration detail
+  lands there
 
 ## Required Validation
 

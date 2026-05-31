@@ -310,6 +310,10 @@ Execution worktree:
   the daemon
 - preserve daemon-local helper code solely because it already exists
 
+The scoped `sc-observability` / `sc-observability-types` `1.2.0` dependency
+upgrade in `AA.6` is in scope for this phase as closeout work required to
+finish the daemon/runtime simplification line cleanly.
+
 ## Exit Criteria
 
 Authoritative Phase `AA` exit criteria live only in

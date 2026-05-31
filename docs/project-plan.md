@@ -197,6 +197,9 @@ Deliverables:
 - subsystem doctor trait model and direct local doctor path
 - deletion of remaining daemon-side SQLite leaks
 - `boundary-guard` and relocked machine-readable boundary policy
+- `sc-observability` / `sc-observability-types` upgraded to `1.2.0` with the
+  queue-backed logger API, retained-log policy field migration, and updated
+  health projection
 
 Sprint line:
 - `AA.0` `feature/pAA-s0-daemon-architecture-restatement`
