@@ -86,16 +86,23 @@ def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
     workspace_member_dirs = {manifest_path.parent.resolve() for manifest_path in manifests}
     manifest_payloads: dict[Path, tuple[str, dict, str]] = {}
     expected_versions: dict[Path, str] = {}
+    publish_flags: dict[Path, bool] = {}
     for path in manifests:
         text = read_text(path)
         rel_manifest = path.relative_to(repo_root).as_posix()
         manifest = tomllib.loads(text)
         manifest_payloads[path] = (text, manifest, rel_manifest)
-        expected_versions[path.parent.resolve()] = expected_package_version(
+        member_dir = path.parent.resolve()
+        expected_versions[member_dir] = expected_package_version(
             manifest,
             workspace_version,
             rel_manifest,
         )
+        package = manifest.get("package", {}) if isinstance(manifest.get("package"), dict) else {}
+        publish_value = package.get("publish", True)
+        # publish can be bool or list (registry allowlist); treat anything other than
+        # an explicit False as publishable for version-pin enforcement.
+        publish_flags[member_dir] = publish_value is not False
 
     for path, (_text, manifest, rel_manifest) in manifest_payloads.items():
         for section_name, dependencies in dependency_sections(manifest):
@@ -107,6 +114,12 @@ def validate_crate_versions(repo_root: Path, workspace_version: str) -> None:
                     continue
                 resolved_path = (path.parent / dependency_path).resolve()
                 if resolved_path not in workspace_member_dirs:
+                    continue
+                # Skip version-pin enforcement when the target crate is publish=false.
+                # Versioned deps on publish=false crates break `cargo publish` (cargo
+                # tries to resolve the pin on crates.io, where the crate never appears),
+                # so the only legal shape for such deps is path-only.
+                if not publish_flags.get(resolved_path, True):
                     continue
                 dependency_version = expected_versions[resolved_path]
                 pinned_version = dependency.get("version")
