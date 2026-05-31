@@ -97,15 +97,22 @@ def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
     version = workspace_version(repo_root)
     manifests = member_manifests(repo_root)
     expected_versions: dict[Path, str] = {}
+    publish_flags: dict[Path, bool] = {}
 
     for manifest_path in manifests:
         manifest = tomllib_load(manifest_path)
         rel_manifest = relative_manifest_display(manifest_path, repo_root)
-        expected_versions[manifest_path.parent.resolve()] = expected_package_version(
+        member_dir = manifest_path.parent.resolve()
+        expected_versions[member_dir] = expected_package_version(
             manifest,
             version,
             rel_manifest,
         )
+        package = manifest.get("package", {}) if isinstance(manifest.get("package"), dict) else {}
+        publish_value = package.get("publish", True)
+        # `publish = false` (bool) marks the crate as internal-only; treat any
+        # other value (True or registry allowlist) as publishable.
+        publish_flags[member_dir] = publish_value is not False
 
     for manifest_path in manifests:
         manifest = tomllib_load(manifest_path)
@@ -132,6 +139,11 @@ def collect_manifest_violations(repo_root: Path) -> list[ManifestViolation]:
                 resolved_path = (manifest_path.parent / dependency_path).resolve()
                 expected_dependency_version = expected_versions.get(resolved_path)
                 if expected_dependency_version is None:
+                    continue
+                # Skip version-pin enforcement when the target crate is publish=false.
+                # Versioned deps on publish=false crates break `cargo publish` (cargo
+                # tries to resolve the pin on crates.io, where the crate never appears).
+                if not publish_flags.get(resolved_path, True):
                     continue
                 dependency_path = dependency.get("path")
                 pinned_version = dependency.get("version")
