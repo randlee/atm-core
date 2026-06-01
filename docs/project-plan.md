@@ -3945,3 +3945,8 @@ Implementation Branches:
 | Sprint | Status | Branch | Artifacts |
 | --- | --- | --- | --- |
 | `PI.1` | `complete` | `feature/pPI-s1-validation-infra` | `Justfile`, `.just/print_help.py`, `scripts/validate_release.py`, `scripts/verify_release_archive.py`, `scripts/release_artifacts.py`, `release/publish-artifacts.toml`, `release/RELEASE-NOTES-TEMPLATE.md`, `.github/workflows/release-preflight.yml`, `.github/workflows/release.yml` |
+| `PI.2` | `in_progress` | `feature/pPI-s2-publisher-prompt` | `.claude/agents/publisher.md`, `docs/publishing-improvements/plan.md` |
+| `PI.3` | `planned` | `TBD` | `.claude/agents/publisher.md`, `docs/publishing-improvements/plan.md` |
+
+Authoritative sprint plan:
+- `docs/publishing-improvements/plan.md`
