@@ -3937,3 +3937,12 @@ Acceptance / Phase Entry Gate:
   on the accepted `integrate/phase-Z` line
 - the final `Z.4` release verdict must not close until `Z.23` and `Z.24` also
   close on the accepted `integrate/phase-Z` line
+
+Publishing improvements implementation:
+
+- `PI.2`
+  - branch: `feature/pPI-s2-publisher-prompt`
+  - artifacts:
+    - `.claude/agents/publisher.md`
+    - `docs/publishing-improvements/plan.md`
+    - `docs/project-plan.md`
