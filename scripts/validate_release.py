@@ -129,7 +129,7 @@ def validate_support_files(root: Path, findings: list[Finding]) -> None:
 
 
 def validate_lint(root: Path, findings: list[Finding]) -> None:
-    completed = run_capture(["python3", ".just/run_lint.py", "all"], cwd=root)
+    completed = run_capture(["just", "lint"], cwd=root)
     append_completed_findings(
         findings,
         "lint",
@@ -310,7 +310,17 @@ def validate_publish_surface(
 
 def validate_inventory(root: Path, version: str, findings: list[Finding]) -> None:
     tag = f"v{version}"
-    commit = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=root, text=True).strip()
+    commit_result = run_capture(["git", "rev-parse", "HEAD"], cwd=root)
+    if commit_result.returncode != 0:
+        append_completed_findings(
+            findings,
+            "inventory-commit",
+            commit_result,
+            "release commit resolved",
+            "release commit resolution failed",
+        )
+        return
+    commit = commit_result.stdout.strip()
     with tempfile.TemporaryDirectory(prefix="atm-release-inventory-") as tmpdir:
         output = Path(tmpdir) / "release-inventory.json"
         completed = run_capture(
@@ -631,25 +641,26 @@ def main(argv: list[str] | None = None) -> int:
         "dependency-currency": lambda: validate_dependency_currency(root, findings),
     }
 
-    if args.target == "all":
-        for target in (
-            "support-files",
-            "lint",
-            "manifest",
-            "publish-surface",
-            "release-binaries",
-            "inventory",
-            "cargo-lock-drift",
-            "dependency-currency",
-        ):
-            print(f"== validate {target} ==")
-            actions[target]()
-    else:
-        actions[args.target]()
-
     findings_path = root / args.findings
-    write_findings(root, version, findings_path, findings)
-    print(f"wrote findings: {findings_path}")
+    try:
+        if args.target == "all":
+            for target in (
+                "support-files",
+                "lint",
+                "manifest",
+                "publish-surface",
+                "release-binaries",
+                "inventory",
+                "cargo-lock-drift",
+                "dependency-currency",
+            ):
+                print(f"== validate {target} ==")
+                actions[target]()
+        else:
+            actions[args.target]()
+    finally:
+        write_findings(root, version, findings_path, findings)
+        print(f"wrote findings: {findings_path}")
 
     blockers = [finding for finding in findings if finding.blocks]
     if blockers:
