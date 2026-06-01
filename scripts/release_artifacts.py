@@ -159,6 +159,18 @@ def list_release_binaries(args: argparse.Namespace) -> int:
     return 0
 
 
+def validate_release_binaries(args: argparse.Namespace) -> int:
+    binaries = {entry["name"] for entry in load_manifest(Path(args.manifest))["release_binaries"]}
+    missing = [name for name in args.required if name not in binaries]
+    if missing:
+        print("missing required release binaries:")
+        for name in missing:
+            print(f"  - {name}")
+        return 1
+    print("ok: required release binaries are present in the manifest")
+    return 0
+
+
 def cargo_build_bin_args(args: argparse.Namespace) -> int:
     print(" ".join(f'--bin {entry["name"]}' for entry in load_manifest(Path(args.manifest))["release_binaries"]))
     return 0
@@ -385,6 +397,11 @@ def build_parser() -> argparse.ArgumentParser:
     list_bins = subparsers.add_parser("list-release-binaries")
     list_bins.add_argument("--manifest", required=True)
     list_bins.set_defaults(func=list_release_binaries)
+
+    validate_bins = subparsers.add_parser("validate-release-binaries")
+    validate_bins.add_argument("--manifest", required=True)
+    validate_bins.add_argument("--required", action="append", default=[])
+    validate_bins.set_defaults(func=validate_release_binaries)
 
     build_bins = subparsers.add_parser("cargo-build-bin-args")
     build_bins.add_argument("--manifest", required=True)
