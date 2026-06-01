@@ -8,6 +8,7 @@ license.workspace = true
 description = "Source-level declarative attributes for sc-lint analyzers."
 repository.workspace = true
 homepage.workspace = true
+publish = false
 
 [lib]
 proc-macro = true

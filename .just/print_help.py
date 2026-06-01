@@ -15,6 +15,7 @@ SECTIONS = (
             ("version", "Show current workspace version state."),
             ("version latest", "Show recommended direct dependency upgrades."),
             ("ci", "Run the local CI-equivalent command set."),
+            ("validate", "Run the full retained release validation suite."),
         ),
     ),
     (
@@ -54,6 +55,18 @@ SECTIONS = (
             ("lint spell", "Run the spelling/content check."),
             ("lint daemon-singleton", "Run the daemon singleton/no-spawn test gate."),
             ("lint pytests", "Run the Python lint-tool unit tests."),
+        ),
+    ),
+    (
+        "Validate",
+        (
+            ("validate", "Run the full retained release preflight suite."),
+            ("validate lint", "Run only the lint portion of release validation."),
+            ("validate support-files", "Check required release support files."),
+            ("validate manifest", "Run manifest / preflight-mode / publish-order checks."),
+            ("validate publish-surface", "Run package / dry-run / unpublished-version checks."),
+            ("validate release-binaries", "Check required release binaries in the manifest."),
+            ("validate inventory", "Generate and validate a temporary release inventory."),
         ),
     ),
     (

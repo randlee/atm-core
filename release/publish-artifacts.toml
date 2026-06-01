@@ -7,8 +7,63 @@ cargo_toml = "crates/atm-core/Cargo.toml"
 required = true
 publish = true
 publish_order = 1
-preflight_check = "full"
+preflight_check = "locked"
 wait_after_publish_seconds = 60
+verify_install = false
+
+[[crates]]
+artifact = "atm-rusqlite"
+package = "atm-rusqlite"
+cargo_toml = "crates/atm-rusqlite/Cargo.toml"
+required = true
+publish = true
+publish_order = 2
+preflight_check = "locked"
+wait_after_publish_seconds = 30
+verify_install = false
+
+[[crates]]
+artifact = "atm-daemon-client"
+package = "atm-daemon-client"
+cargo_toml = "crates/atm-daemon-client/Cargo.toml"
+required = true
+publish = true
+publish_order = 3
+preflight_check = "locked"
+wait_after_publish_seconds = 30
+verify_install = false
+
+[[crates]]
+artifact = "atm-daemon-bootstrap"
+package = "atm-daemon-bootstrap"
+cargo_toml = "crates/atm-daemon-bootstrap/Cargo.toml"
+required = true
+publish = true
+publish_order = 4
+preflight_check = "locked"
+wait_after_publish_seconds = 30
+verify_install = false
+
+[[crates]]
+artifact = "atm-daemon"
+package = "atm-daemon"
+cargo_toml = "crates/atm-daemon/Cargo.toml"
+required = true
+publish = true
+publish_order = 5
+preflight_check = "locked"
+wait_after_publish_seconds = 30
+verify_install = false
+
+[[crates]]
+artifact = "atm-graft"
+package = "atm-graft"
+cargo_toml = "crates/atm-graft/Cargo.toml"
+required = false
+publish = true
+publish_order = 6
+preflight_check = "locked"
+wait_after_publish_seconds = 30
 verify_install = false
 
 [[crates]]
@@ -17,10 +72,13 @@ package = "agent-team-mail"
 cargo_toml = "crates/atm/Cargo.toml"
 required = true
 publish = true
-publish_order = 2
+publish_order = 7
 preflight_check = "locked"
 wait_after_publish_seconds = 0
 verify_install = true
 
 [[release_binaries]]
 name = "atm"
+
+[[release_binaries]]
+name = "atm-daemon"

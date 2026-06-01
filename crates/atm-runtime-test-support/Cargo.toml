@@ -8,6 +8,7 @@ license.workspace = true
 description = "SQLite-backed retained-runtime test support for ATM workspace crates."
 repository.workspace = true
 homepage.workspace = true
+publish = false
 
 [lib]
 name = "atm_runtime_test_support"

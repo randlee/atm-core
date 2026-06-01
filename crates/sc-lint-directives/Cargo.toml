@@ -8,6 +8,7 @@ license.workspace = true
 description = "Shared directive parsing for sc-lint proc-macro and analyzer crates."
 repository.workspace = true
 homepage.workspace = true
+publish = false
 
 [lib]
 name = "sc_lint_directives"

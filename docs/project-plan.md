@@ -3937,3 +3937,11 @@ Acceptance / Phase Entry Gate:
   on the accepted `integrate/phase-Z` line
 - the final `Z.4` release verdict must not close until `Z.23` and `Z.24` also
   close on the accepted `integrate/phase-Z` line
+
+## Publishing Improvements
+
+Implementation Branches:
+
+| Sprint | Status | Branch | Artifacts |
+| --- | --- | --- | --- |
+| `PI.1` | `complete` | `feature/pPI-s1-validation-infra` | `Justfile`, `.just/print_help.py`, `scripts/validate_release.py`, `scripts/verify_release_archive.py`, `scripts/release_artifacts.py`, `release/publish-artifacts.toml`, `release/RELEASE-NOTES-TEMPLATE.md`, `.github/workflows/release-preflight.yml`, `.github/workflows/release.yml` |
