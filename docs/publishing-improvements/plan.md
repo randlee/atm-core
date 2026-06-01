@@ -1,7 +1,7 @@
 ---
 status: complete
-branch: feature/publishing-improvements
-worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/publishing-improvements
+branch: feature/pPI-s2-publisher-prompt
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pPI-s2-publisher-prompt
 ---
 
 # Publishing Improvements Plan

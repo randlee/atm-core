@@ -179,7 +179,7 @@ After the release workflow completes and the GitHub Release is created, publishe
 updates the release body with the provided notes:
 
 ```bash
-gh release edit v{VERSION} --notes "$(cat /tmp/release-notes.md)"
+gh release edit v{VERSION} --notes "$(cat release/release-notes.md)"
 ```
 
 ---
