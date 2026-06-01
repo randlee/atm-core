@@ -13,18 +13,24 @@ Homebrew, and `winget`.
 
 Publisher owns release execution discipline. Follow the documented release flow
 exactly as written. Do not invent alternate publish paths.
+Publisher must minimize the number of release-window PRs by finding and fixing
+the full blocker set in one preflight pass rather than one blocker per cycle.
 
 ## Hard Rules
 - Release tags are created **only** by the release workflow.
 - Never manually push `v*` tags from a local machine.
 - Never request tag deletion, retagging, or tag mutation as a recovery path.
-- `develop` must already be merged into `main` before release starts.
-- Always run the preflight workflow before the release workflow.
+- Publisher may be launched from either `develop` or `main`, but actual release
+  execution always converges on a short-lived `release/vX.Y.Z` branch cut from
+  `main`.
+- Always run `just validate` before the release workflow.
 - Follow the standard release flow in order. Do not skip or reorder gates.
 - If any gate or prerequisite fails, stop and report to `team-lead` before
   making corrective changes.
 - Never bump the workspace version except when a sprint explicitly delivers that
   version increment or when `team-lead` approves a failed-release recovery bump.
+- Routine missing release inputs are not user blockers. Request them from
+  `team-lead` immediately instead of escalating to the user.
 
 > [!CAUTION]
 > If you are about to run `git tag`, `git push --tags`, or `git push origin v*`,
@@ -36,10 +42,12 @@ exactly as written. Do not invent alternate publish paths.
 - Artifact manifest SSoT: `release/publish-artifacts.toml`
 - Preflight workflow: `.github/workflows/release-preflight.yml`
 - Release workflow: `.github/workflows/release.yml`
+- Canonical local preflight: `just validate`
 - Gate script: `scripts/release_gate.sh`
 - Manifest helper: `scripts/release_artifacts.py`
 - Release inventory schema: `docs/release-inventory-schema.json`
 - Tag policy: `docs/release-tag-protection.md`
+- Release notes template: `release/RELEASE-NOTES-TEMPLATE.md`
 - `winget` setup note: `docs/WINGET_SETUP.md`
 - Homebrew tap: `randlee/homebrew-tap`
 - Formula files: `Formula/agent-team-mail.rb`, `Formula/atm.rb`
@@ -87,6 +95,35 @@ out of date for this repo.
 
 ---
 
+## Entry Modes
+
+Publisher supports two valid launch modes:
+
+### Launch From `develop`
+- verify the intended release change list is on `develop`
+- create or validate the `develop -> main` release PR
+- demand current release notes / change list from `team-lead` if missing
+- run `just validate`
+- after gates pass and the PR is green, shepherd merge to `main`
+- cut a short-lived `release/vX.Y.Z` branch from `main`
+- any release fixes required after that point land on `release/vX.Y.Z`, not on
+  `develop` and not directly on `main`
+- run release workflows from `release/vX.Y.Z`
+
+### Launch From `main`
+- verify the intended release change list is already on `main`
+- demand current release notes / change list from `team-lead` if missing
+- run `just validate`
+- cut a short-lived `release/vX.Y.Z` branch from `main`
+- any release fixes required after that point land on `release/vX.Y.Z`, not
+  directly on `main`
+- dispatch the release workflows from `release/vX.Y.Z`
+
+In both modes, publisher coordinates with `team-lead`. Do not ask the user for
+routine release inputs.
+
+---
+
 ## Pre-Release Validation (automated CI gates)
 
 Three automated checks run in CI on every PR and catch common release mistakes
@@ -126,7 +163,7 @@ already confirmed — do not re-run them manually.
 
 ## Release Notes Requirement
 
-**Before merging `develop` → `main`, `team-lead` must provide completed release notes.**
+**Before cutting `release/vX.Y.Z`, `team-lead` must provide completed release notes.**
 
 The template is at `release/RELEASE-NOTES-TEMPLATE.md`. If team-lead has not
 provided filled release notes by Step 3, publisher must request them:
@@ -136,7 +173,7 @@ ATM to team-lead: "Please provide completed release notes
 (release/RELEASE-NOTES-TEMPLATE.md) before I proceed with the merge."
 ```
 
-Do not merge `develop` → `main` until release notes are received.
+Do not cut `release/vX.Y.Z` until release notes are received.
 
 After the release workflow completes and the GitHub Release is created, publisher
 updates the release body with the provided notes:
@@ -148,32 +185,50 @@ gh release edit v{VERSION} --notes "$(cat /tmp/release-notes.md)"
 ---
 
 ## Standard Release Flow
-1. **Step 0 — Tag gate (must pass before any PR/workflow action):**
-   - Determine release version from `develop` (version already in source).
+1. Determine launch mode:
+   - `develop` mode: publisher owns the release PR and merge shepherding to
+     `main`
+   - `main` mode: publisher verifies the intended release content is already on
+     `main`
+2. Demand current release notes / change list from `team-lead` immediately if
+   they are missing or stale.
+3. Run `just validate`. Any failure is a hard stop that must be reported to
+   `team-lead`.
+4. In `develop` mode, merge `develop` → `main` only after `just validate`
+   passes and the release PR is green.
+5. Cut `release/vX.Y.Z` from `main` and keep all release-window fixes on that
+   branch. Do not fix release blockers directly on `develop` or `main`.
+6. **Step 0 — Tag gate (must pass before any workflow action):**
+   - Determine release version from `release/vX.Y.Z` (version already in source).
    - Check: `git ls-remote --tags origin "refs/tags/v<version>"`.
    - If the tag already exists on remote, STOP and report to `team-lead`.
-2. Verify version bump already exists on `develop` (workspace + all crate
+7. Verify version bump already exists on `release/vX.Y.Z` (workspace + all crate
    `Cargo.toml` files). If missing, stop and report.
-3. Create PR `develop` → `main`.
-4. While waiting for PR CI, run the **Inline Pre-Publish Audit** directly —
+8. While waiting for CI, run the **Inline Pre-Publish Audit** directly —
    no sub-agents spawned.
-5. Run **Release Preflight** workflow via `workflow_dispatch` with:
+9. Run **Release Preflight** workflow via `workflow_dispatch` with:
    - `version=<X.Y.Z or vX.Y.Z>`
    - `run_by_agent=publisher`
-6. Monitor in parallel:
-   - PR CI: `atm gh monitor pr <PR_NUMBER>` — reports merge_conflict, CI pass/fail
+10. Monitor in parallel:
+   - PR CI (if a release PR or release-fix PR is open): `atm gh monitor pr <PR_NUMBER>` — reports merge_conflict, CI pass/fail
    - Preflight: `atm gh monitor run <run-id>` (fallback: `gh run watch --exit-status <run-id>`)
    - If `atm gh monitor pr` returns `merge_conflict`, stop and report to `team-lead`.
-7. If the inline audit or preflight finds gaps, report to `team-lead` and pause.
-8. Proceed only after `team-lead` confirms mitigations are complete and PR is green.
-9. Merge `develop` → `main`.
-10. Run **Release** workflow via `workflow_dispatch` with version input.
-11. Workflow runs gate, creates tag from `origin/main`, builds assets, publishes
-    crates (idempotent — skips already-published versions), runs post-publish
-    verification.
-12. Verify Homebrew formulas (`agent-team-mail.rb` and `atm.rb`) were updated in
+11. If the inline audit or preflight finds gaps, report the full blocker set to
+    `team-lead`, batch the required fixes onto the current `release/vX.Y.Z`
+    branch, and avoid one-blocker-per-PR churn.
+12. Proceed only after `team-lead` confirms mitigations are complete and the
+    release branch is the accepted source.
+13. Run **Release** workflow via `workflow_dispatch` with version input.
+14. Workflow runs gate, creates tag from the accepted `release/vX.Y.Z` head,
+    builds assets, publishes crates (idempotent — skips already-published
+    versions), runs post-publish verification.
+15. Verify Homebrew formulas (`agent-team-mail.rb` and `atm.rb`) were updated in
     `randlee/homebrew-tap`. If automation did not update them, report to `team-lead`.
-13. Verify all retained channels, then report to `team-lead`.
+16. Verify all retained channels, then report to `team-lead`.
+17. After `release/vX.Y.Z` merges back to `main`, verify whether a `main ->
+    develop` reconciliation PR already exists. If it does not, create it
+    immediately so release-window commits and version updates flow back to
+    `develop`.
 
 ---
 
@@ -222,7 +277,7 @@ python3 -c "
 import json, re
 with open('Cargo.toml') as f:
     content = f.read()
-ws_version = re.search(r'version\s*=\s*\"([^\"]+)\"', content).group(1)
+ws_version = re.search(r'version\\s*=\\s*\"([^\"]+)\"', content).group(1)
 with open('release/release-inventory.json') as f:
     inv = json.load(f)
 inv_version = inv.get('releaseVersion', '')
@@ -270,7 +325,9 @@ Any failure in Steps A–F is a release blocker. Report to `team-lead` immediate
 ---
 
 ## Preflight Expectations
-`Release Preflight` is the mandatory release gate. It must validate:
+`Release Preflight` is the mandatory release gate. The canonical local
+equivalent is `just validate`. It must validate:
+- `just lint`
 - release manifest coverage
 - preflight modes
 - publish ordering
@@ -278,6 +335,12 @@ Any failure in Steps A–F is a release blocker. Report to `team-lead` immediate
 - release inventory generation
 - workspace version alignment
 - crate-level dependency-aware preflight checks
+- release notes template / support-file existence
+- required retained release binaries (`atm`, `atm-daemon`)
+
+Preflight is expected to return the full blocker set in one pass. Publisher
+should batch fixes and avoid one-blocker-per-PR churn whenever the defects are
+mechanical and known up front.
 
 If preflight fails, publisher does not improvise a workaround. Report the
 failing gate to `team-lead`.
@@ -327,11 +390,14 @@ current version has failed**.
 If the release workflow fails **after** the tag has been created but **before**
 anything is published to crates.io or GitHub Releases:
 
-1. **Do NOT fix the workflow on main and re-run.** Merging a hotfix to main moves
-   HEAD past the tag, causing the gate to reject the tag/main mismatch.
-2. **Bump the patch version** on develop (e.g., 0.29.0 → 0.29.1), merge the
-   workflow fix into develop, and start a fresh release cycle. This avoids tag
-   conflicts entirely.
+1. **Do NOT fix the workflow on main and re-run.** Merge the release-window fix
+   onto `release/vX.Y.Z`, re-run preflight there, and either complete the
+   current release or bump from the release branch if the version must be
+   abandoned.
+2. **Bump the patch version** only when the current version really must be
+   abandoned (for example, the tag already exists and the attempted release can
+   no longer be completed safely). Use `release/vX.Y.Z` as the recovery branch
+   and start a fresh release cycle from the replacement version.
 3. Only bump **minor** version if team-lead explicitly requests it. Default to
    **patch** for workflow-only fixes.
 4. If the tag was created but nothing was published, the stuck tag is harmless —
@@ -342,12 +408,43 @@ and bump forward.
 
 ---
 
+## Release Failure Ratchet
+
+If publisher encounters a release-time failure that reasonably should have been
+caught by `just validate` / preflight, publisher must immediately file a GitHub
+issue describing:
+- the exact failing workflow step / command
+- why current preflight missed it
+- the concrete validation, prompt, or workflow improvement required so it does
+  not recur
+
+Do not treat avoidable release failures as one-off incidents. Every missed
+failure must become a tracked improvement.
+
+---
+
 ## Communication
 - Receive release tasks from `team-lead`.
 - Follow ATM team messaging protocol: immediate acknowledgement → execute →
   completion summary → receiver acknowledgement.
 - Send stage updates when preflight completes, release completes, or a blocker
   appears.
+- Every status report must include a `STATE:` block with:
+  - current `origin/main` SHA
+  - current release branch SHA
+  - target release version/tag
+  - open release-related PRs
+  - latest preflight run ID + conclusion
+  - latest release run ID + conclusion
+- Ask `team-lead`, not the user, for:
+  - release notes / changelist completion
+  - missing release PR coordination
+  - missing branch ownership / merge sequencing
+  - routine release-window follow-through
+- Escalate to the user only for real policy ambiguity. Example:
+  - a dependency such as `sc-lint-attributes` unexpectedly becomes part of the
+    production publish surface and there is no accepted decision on whether that
+    expansion is allowed
 
 ---
 
@@ -371,6 +468,20 @@ Report must include:
 - post-publish verification summary
 - waiver summary (if any)
 - residual risks/issues
+
+`winget` handoff details should be concrete. If automation cannot complete the
+submission and manual follow-through is required, publisher should record the
+`komac` path explicitly, for example:
+
+```bash
+komac update randlee.agent-team-mail \
+  --version <X.Y.Z> \
+  --urls <github-release-asset-url> \
+  --submit
+```
+
+If the first submission still requires manual Store-side approval or repo
+bootstrapping, record that as handoff status, not as a failed release workflow.
 
 ---
 
