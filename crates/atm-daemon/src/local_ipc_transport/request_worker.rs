@@ -64,24 +64,8 @@ pub(super) fn handle_connection(
 }
 
 fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<(), AtmError> {
-    stream
-        .set_recv_timeout(Some(REQUEST_DEADLINE))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to apply daemon request read deadline")
-                .with_recovery(
-                    "Restart the daemon; the same-host request socket could not apply its bounded read deadline.",
-                )
-                .with_source(source)
-        })?;
-    stream
-        .set_send_timeout(Some(REQUEST_DEADLINE))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to apply daemon response write deadline")
-                .with_recovery(
-                    "Restart the daemon; the same-host request socket could not apply its bounded write deadline.",
-                )
-                .with_source(source)
-        })
+    apply_deadline(stream.set_recv_timeout(Some(REQUEST_DEADLINE)), "failed to apply daemon request read deadline")?;
+    apply_deadline(stream.set_send_timeout(Some(REQUEST_DEADLINE)), "failed to apply daemon response write deadline")
 }
 
 fn read_request_frame(
@@ -102,13 +86,10 @@ fn dispatch_advisory_stream(
     request_id: RequestId,
     request: atm_core::AdvisoryStreamRequest,
 ) -> Result<(), AtmError> {
-    stream.set_send_timeout(Some(REQUEST_DEADLINE)).map_err(|source| {
-        AtmError::daemon_unavailable("failed to apply daemon advisory-stream write deadline")
-            .with_recovery(
-                "Restart the daemon; the same-host advisory stream socket could not apply its bounded write deadline.",
-            )
-            .with_source(source)
-    })?;
+    apply_deadline(
+        stream.set_send_timeout(Some(REQUEST_DEADLINE)),
+        "failed to apply daemon advisory-stream write deadline",
+    )?;
     let mut sink = LocalIpcAdvisoryStreamSink {
         stream,
         codec,
@@ -116,6 +97,19 @@ fn dispatch_advisory_stream(
         force_shutdown,
     };
     dispatcher.dispatch_advisory_stream(request, &mut sink)
+}
+
+fn apply_deadline(result: std::io::Result<()>, message: &'static str) -> Result<(), AtmError> {
+    match result {
+        Ok(()) => Ok(()),
+        #[cfg(windows)]
+        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => Ok(()),
+        Err(source) => Err(AtmError::daemon_unavailable(message)
+            .with_recovery(
+                "Restart the daemon; the same-host request socket could not apply its bounded deadline.",
+            )
+            .with_source(source)),
+    }
 }
 
 fn dispatch_request(

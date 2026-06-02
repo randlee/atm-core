@@ -103,7 +103,7 @@ Deferred analyzer families:
 
 ## Clippy Compliance
 
-CI runs Rust 1.93 clippy with `-D warnings`. Local toolchains may be older and miss lints.
+CI runs Rust 1.94.1 clippy with `-D warnings`. Local toolchains may be older and miss lints.
 
 ### Known Strict Lints
 

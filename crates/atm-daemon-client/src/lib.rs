@@ -321,18 +321,14 @@ pub fn exchange(
     request_deadline: Duration,
 ) -> Result<ResponseEnvelope, AtmError> {
     let mut stream = try_connect(endpoint)?;
-    stream
-        .set_send_timeout(Some(request_deadline))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to configure daemon local IPC write timeout")
-                .with_source(source)
-        })?;
-    stream
-        .set_recv_timeout(Some(request_deadline))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to configure daemon local IPC read timeout")
-                .with_source(source)
-        })?;
+    apply_local_ipc_deadline(
+        stream.set_send_timeout(Some(request_deadline)),
+        "failed to configure daemon local IPC write timeout",
+    )?;
+    apply_local_ipc_deadline(
+        stream.set_recv_timeout(Some(request_deadline)),
+        "failed to configure daemon local IPC read timeout",
+    )?;
     let request_id = atm_core::protocol::next_request_id();
     let frame = atm_core::protocol::request_to_frame_payload(request_id, request)?;
     atm_core::protocol::write_frame(&mut stream, &frame, "failed to write daemon request frame")?;
@@ -363,6 +359,15 @@ pub fn exchange(
         ));
     }
     Ok(response)
+}
+
+fn apply_local_ipc_deadline(result: std::io::Result<()>, message: &'static str) -> Result<(), AtmError> {
+    match result {
+        Ok(()) => Ok(()),
+        #[cfg(windows)]
+        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => Ok(()),
+        Err(source) => Err(AtmError::daemon_unavailable(message).with_source(source)),
+    }
 }
 
 pub fn unexpected_response(command: &str, response: ResponseEnvelope) -> AtmError {
@@ -782,6 +787,7 @@ pub fn is_launch_gate_contention_error(error: &std::io::Error) -> bool {
 
 #[cfg(test)]
 mod tests {
+    use std::io;
     use std::path::PathBuf;
     use std::sync::atomic::{AtomicUsize, Ordering};
     use std::sync::{Arc, Mutex};
@@ -800,7 +806,7 @@ mod tests {
 
     use super::{
         BootstrapTraceability, DaemonBinaryPath, DaemonLocalIpcEndpoint, DaemonSupervisor,
-        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard,
+        HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard, apply_local_ipc_deadline,
     };
 
     #[derive(Debug, Default)]
@@ -989,5 +995,47 @@ mod tests {
 
         let error = LaunchGateGuard::rejected_error(&endpoint);
         assert_eq!(error.code, AtmErrorCode::DaemonLaunchGateRejected);
+    }
+
+    #[test]
+    fn local_ipc_deadline_handles_unsupported_timeout_per_platform_contract() {
+        let result = apply_local_ipc_deadline(
+            Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "named pipes do not support I/O timeouts",
+            )),
+            "failed to configure daemon local IPC write timeout",
+        );
+
+        #[cfg(windows)]
+        assert!(result.is_ok());
+
+        #[cfg(not(windows))]
+        {
+            let error = result.expect_err(
+                "non-Windows local IPC transports should keep unsupported deadline setup as an error",
+            );
+            assert_eq!(error.code, AtmErrorCode::DaemonUnavailable);
+            assert!(
+                error
+                    .message
+                    .contains("failed to configure daemon local IPC write timeout")
+            );
+        }
+    }
+
+    #[test]
+    fn local_ipc_deadline_preserves_non_unsupported_errors() {
+        let result = apply_local_ipc_deadline(
+            Err(io::Error::new(
+                io::ErrorKind::BrokenPipe,
+                "synthetic local IPC failure",
+            )),
+            "failed to configure daemon local IPC write timeout",
+        )
+        .expect_err("non-unsupported timeout errors should remain failures");
+
+        assert_eq!(result.code, AtmErrorCode::DaemonUnavailable);
+        assert!(result.message.contains("failed to configure daemon local IPC write timeout"));
     }
 }

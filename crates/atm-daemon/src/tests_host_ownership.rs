@@ -8,7 +8,8 @@ use tempfile::TempDir;
 
 use crate::host_ownership::{
     HOST_RUNTIME_OWNER_LOCK_FILE, HostOwnershipAdapter, clear_stale_recovery_signal_for_test,
-    install_stale_recovery_signal_for_test,
+    install_stale_recovery_signal_for_test, recorded_owner_identity_at_path_for_test,
+    recorded_owner_identity_for_guard_for_test,
 };
 
 struct StaleRecoverySignalGuard;
@@ -23,6 +24,26 @@ impl StaleRecoverySignalGuard {
 impl Drop for StaleRecoverySignalGuard {
     fn drop(&mut self) {
         clear_stale_recovery_signal_for_test();
+    }
+}
+
+fn write_stale_owner_record(
+    lock_path: &std::path::Path,
+    file: &mut std::fs::File,
+    token: &str,
+) {
+    writeln!(file, "{}:{token}", u32::MAX).expect("write owner");
+    file.sync_all().expect("sync owner");
+    #[cfg(windows)]
+    {
+        let shadow_path = lock_path.with_file_name(format!(
+            "{}.meta",
+            lock_path
+                .file_name()
+                .expect("lock file name")
+                .to_string_lossy()
+        ));
+        std::fs::write(&shadow_path, format!("{}:{token}\n", u32::MAX)).expect("write owner shadow");
     }
 }
 
@@ -85,8 +106,7 @@ fn singleton_guard_reports_stale_owner_record_failure() {
         .open(&lock_path)
         .expect("open lock file");
     fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-    writeln!(&mut file, "{}:deadbeef", u32::MAX).expect("write owner");
-    file.sync_all().expect("sync owner");
+    write_stale_owner_record(&lock_path, &mut file, "deadbeef");
 
     let error = HostOwnershipAdapter::acquire_at(lock_path).expect_err("stale");
     assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
@@ -111,8 +131,7 @@ fn singleton_guard_recovers_stale_owner_once_lock_is_released() {
         .open(&lock_path)
         .expect("open lock file");
     fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-    writeln!(&mut file, "{}:deadbeef", u32::MAX).expect("write owner");
-    file.sync_all().expect("sync owner");
+    write_stale_owner_record(&lock_path, &mut file, "deadbeef");
     drop(file);
 
     let guard =
@@ -139,8 +158,7 @@ fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
         .open(&lock_path)
         .expect("open lock file");
     fs2::FileExt::try_lock_exclusive(&file).expect("lock file");
-    writeln!(&mut file, "{}:token-a", u32::MAX).expect("write owner");
-    file.sync_all().expect("sync owner");
+    write_stale_owner_record(&lock_path, &mut file, "token-a");
 
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
     let (continue_tx, continue_rx) = mpsc::sync_channel(0);
@@ -152,8 +170,7 @@ fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
         .expect("stale recovery hook did not fire within 5s");
     file.set_len(0).expect("clear record");
     file.seek(SeekFrom::Start(0)).expect("rewind");
-    writeln!(&mut file, "{}:token-b", u32::MAX).expect("rewrite owner");
-    file.sync_all().expect("resync owner");
+    write_stale_owner_record(&lock_path, &mut file, "token-b");
     drop(file);
     continue_tx
         .send(())
@@ -172,19 +189,17 @@ fn host_ownership_record_uses_pid_and_token_while_held_and_clears_on_release() {
     );
     let guard = HostOwnershipAdapter::acquire_at(lock_path.clone()).expect("acquire");
 
-    let record = std::fs::read_to_string(&lock_path).expect("read record");
-    let trimmed = record.trim();
-    // The singleton tests intentionally read the same owner.lock metadata that
-    // ADR-002 documents for the launch.lock -> owner.lock handoff.
-    let (pid, token) = trimmed.split_once(':').expect("pid:token");
-    assert_eq!(pid, std::process::id().to_string());
+    let (pid, token) = recorded_owner_identity_for_guard_for_test(&guard)
+        .expect("read owner record while held")
+        .expect("pid:token");
+    assert_eq!(pid, std::process::id());
     assert!(!token.is_empty(), "token should not be empty");
 
     drop(guard);
 
-    let cleared = std::fs::read_to_string(&lock_path).expect("read cleared record");
-    assert!(
-        cleared.trim().is_empty(),
+    assert_eq!(
+        recorded_owner_identity_at_path_for_test(&lock_path).expect("read cleared record"),
+        None,
         "record should be cleared on drop"
     );
 }

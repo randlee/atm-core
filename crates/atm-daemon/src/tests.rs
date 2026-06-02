@@ -30,9 +30,6 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_runtime_test_support::SQLITE_RUNTIME_PATH_ENV;
 use atm_runtime_test_support::install_sqlite_retained_runtime_factory;
 use atm_rusqlite::assemble_boundary;
-#[cfg(windows)]
-use interprocess::local_socket::Stream as LocalSocketStream;
-use interprocess::local_socket::traits::Stream as _;
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -40,7 +37,10 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
-use crate::test_support::connect_daemon_local_ipc_until_ready;
+use crate::test_support::{
+    configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
+    connect_local_ipc_with_timeout,
+};
 
 const TEST_TEAM: &str = "test-team";
 fn test_team() -> &'static TeamName {
@@ -121,12 +121,7 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     });
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    stream
-        .set_send_timeout(Some(Duration::from_secs(5)))
-        .expect("set send timeout");
-    stream
-        .set_recv_timeout(Some(Duration::from_secs(5)))
-        .expect("set recv timeout");
+    configure_test_local_ipc_timeouts(&stream);
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: tempdir.path().join("home"),
         current_dir: tempdir.path().join("cwd"),
@@ -170,6 +165,10 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
         (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
+        (
             SQLITE_RUNTIME_PATH_ENV,
             Some(db_path.to_str().expect("utf8 sqlite db path")),
         ),
@@ -199,12 +198,7 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
     });
 
     let mut stream = connect_daemon_local_ipc_until_ready(&socket_path, ready_rx);
-    stream
-        .set_send_timeout(Some(Duration::from_secs(5)))
-        .expect("set send timeout");
-    stream
-        .set_recv_timeout(Some(Duration::from_secs(5)))
-        .expect("set recv timeout");
+    configure_test_local_ipc_timeouts(&stream);
     let request = RequestEnvelope::Doctor(DoctorQuery {
         home_dir: atm_home.clone(),
         current_dir: atm_home.clone(),
@@ -249,6 +243,17 @@ fn compose_runtime_start_writes_retained_log_and_reports_healthy_observability()
 #[serial_test::serial(env)]
 fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     let tempdir = TempDir::new().expect("tempdir");
+    let atm_home = tempdir.path().join("atm-home");
+    std::fs::create_dir_all(&atm_home).expect("atm home dir");
+    let _env = EnvGuard::set_many([
+        ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
+        ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
+        ("USERPROFILE", None),
+    ]);
     let socket_path = tempdir.path().join("daemon.sock");
     let server_transport = LocalIpcServerTransportAdapter::new();
     let runtime = server_transport
@@ -296,7 +301,7 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
         .expect("serve runtime result");
     join.join().expect("join serve thread");
     assert!(
-        LocalSocketStream::connect(local_ipc_name).is_err(),
+        connect_local_ipc_with_timeout(local_ipc_name, Duration::from_millis(250)).is_err(),
         "windows same-host runtime should reject new local IPC connections after shutdown",
     );
 }
@@ -364,6 +369,10 @@ fn production_runtime_installs_daemon_notification_sink() {
 
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
         ("HOME", Some(tempdir.path().to_str().expect("utf8 home"))),
         ("USERPROFILE", None),
     ]);

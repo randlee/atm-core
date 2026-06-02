@@ -78,15 +78,30 @@ pub(crate) fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {
             ));
         }
     };
-    stream
-        .set_send_timeout(Some(REQUEST_DEADLINE))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to apply daemon listener wake timeout")
-                .with_recovery(
-                    "Restart the daemon; the shutdown wake connection could not apply its bounded send deadline.",
-                )
-                .with_source(source)
-        })?;
+    if let Err(source) = stream.set_send_timeout(Some(REQUEST_DEADLINE)) {
+        #[cfg(not(windows))]
+        {
+            return Err(
+                AtmError::daemon_unavailable("failed to apply daemon listener wake timeout")
+                    .with_recovery(
+                        "Restart the daemon; the shutdown wake connection could not apply its bounded send deadline.",
+                    )
+                    .with_source(source),
+            );
+        }
+        #[cfg(windows)]
+        {
+            if source.kind() != std::io::ErrorKind::Unsupported {
+                return Err(
+                    AtmError::daemon_unavailable("failed to apply daemon listener wake timeout")
+                        .with_recovery(
+                            "Restart the daemon; the shutdown wake connection could not apply its bounded send deadline.",
+                        )
+                        .with_source(source),
+                );
+            }
+        }
+    }
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable("failed to flush daemon listener wake signal")
             .with_recovery(
