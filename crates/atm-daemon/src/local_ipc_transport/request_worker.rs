@@ -11,9 +11,6 @@ use interprocess::local_socket::traits::Stream;
 
 use crate::active_connection_registry::{ActiveConnectionRegistry, TrackedDispatchHandle};
 
-#[cfg(windows)]
-use std::os::windows::io::AsRawHandle;
-
 #[cfg(test)]
 use super::PreparedRuntimeServer;
 use super::{MAX_CONCURRENT_CONNECTIONS, REQUEST_DEADLINE, write_shutdown_response};
@@ -36,9 +33,17 @@ enum DeadlineSupport {
     Unsupported,
 }
 
-enum ReadRequestFrameOutcome {
+#[cfg(windows)]
+const WINDOWS_READ_HELPER_POLL_INTERVAL: std::time::Duration =
+    std::time::Duration::from_millis(100);
+
+enum ReadRequestFrameResult {
     EndOfStream,
-    Frame(atm_core::protocol::FramePayload),
+    Frame {
+        stream: LocalSocketStream,
+        frame: atm_core::protocol::FramePayload,
+    },
+    #[cfg(windows)]
     TimedOut,
 }
 
@@ -53,12 +58,32 @@ pub(super) fn handle_connection(
         return write_shutdown_response(&mut stream, &codec).map(|_| ());
     }
     let read_deadline_support = configure_request_deadlines(&stream)?;
-    let _read_deadline_guard = RequestReadDeadlineGuard::arm(&stream, read_deadline_support)?;
 
-    let frame = match read_request_frame(&mut stream)? {
-        ReadRequestFrameOutcome::EndOfStream => return Ok(()),
-        ReadRequestFrameOutcome::Frame(frame) => frame,
-        ReadRequestFrameOutcome::TimedOut => {
+    let frame = match read_request_frame_with_deadline(
+        stream,
+        force_shutdown,
+        read_deadline_support,
+    )? {
+        ReadRequestFrameResult::EndOfStream => return Ok(()),
+        ReadRequestFrameResult::Frame {
+            stream: resumed_stream,
+            frame,
+        } => {
+            stream = resumed_stream;
+            frame
+        }
+        #[cfg(windows)]
+        ReadRequestFrameResult::TimedOut if force_shutdown.load(Ordering::SeqCst) => {
+            tracing::info!(
+                subsystem = "local_ipc",
+                action = "request_read",
+                outcome = "forced_shutdown",
+                "daemon forced shutdown interrupted a Windows same-host request read before a complete frame arrived"
+            );
+            return Ok(());
+        }
+        #[cfg(windows)]
+        ReadRequestFrameResult::TimedOut => {
             tracing::warn!(
                 subsystem = "local_ipc",
                 action = "request_read",
@@ -91,6 +116,80 @@ pub(super) fn handle_connection(
     Ok(())
 }
 
+fn read_request_frame_with_deadline(
+    mut stream: LocalSocketStream,
+    force_shutdown: &AtomicBool,
+    read_deadline_support: DeadlineSupport,
+) -> Result<ReadRequestFrameResult, AtmError> {
+    #[cfg(windows)]
+    if read_deadline_support == DeadlineSupport::Unsupported {
+        return read_request_frame_with_helper(stream, force_shutdown);
+    }
+    #[cfg(not(windows))]
+    let _ = (force_shutdown, read_deadline_support);
+
+    match read_request_frame(&mut stream)? {
+        None => Ok(ReadRequestFrameResult::EndOfStream),
+        Some(frame) => Ok(ReadRequestFrameResult::Frame { stream, frame }),
+    }
+}
+
+#[cfg(windows)]
+fn read_request_frame_with_helper(
+    mut stream: LocalSocketStream,
+    force_shutdown: &AtomicBool,
+) -> Result<ReadRequestFrameResult, AtmError> {
+    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("local-ipc-read-helper".to_string())
+        .spawn(move || {
+            let result = read_request_frame(&mut stream);
+            let _ = result_tx.send((stream, result));
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn Windows named-pipe request read helper")
+                .with_recovery(
+                    "Restart the daemon; the same-host Windows request read helper could not be created.",
+                )
+                .with_source(source)
+        })?;
+
+    let started = std::time::Instant::now();
+    loop {
+        let remaining = REQUEST_DEADLINE.saturating_sub(started.elapsed());
+        if remaining.is_zero() || force_shutdown.load(Ordering::SeqCst) {
+            return Ok(ReadRequestFrameResult::TimedOut);
+        }
+        let poll = std::cmp::min(remaining, WINDOWS_READ_HELPER_POLL_INTERVAL);
+        match result_rx.recv_timeout(poll) {
+            Ok((stream, Ok(Some(frame)))) => {
+                return Ok(ReadRequestFrameResult::Frame { stream, frame });
+            }
+            Ok((_, Ok(None))) => return Ok(ReadRequestFrameResult::EndOfStream),
+            Ok((_, Err(error))) => return Err(error),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(AtmError::daemon_unavailable(
+                    "Windows named-pipe request read helper disconnected unexpectedly",
+                )
+                .with_recovery(
+                    "Restart the daemon; the same-host Windows request read helper stopped before it could return a frame result.",
+                ));
+            }
+        }
+    }
+}
+
+fn read_request_frame(
+    stream: &mut LocalSocketStream,
+) -> Result<Option<atm_core::protocol::FramePayload>, AtmError> {
+    atm_core::protocol::read_frame(
+        stream,
+        "failed to read daemon request frame",
+        "daemon request frame exceeded the maximum supported size",
+    )
+}
+
 fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<DeadlineSupport, AtmError> {
     let read_deadline_support = apply_optional_deadline(
         stream.set_recv_timeout(Some(REQUEST_DEADLINE)),
@@ -101,21 +200,6 @@ fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<DeadlineSup
         "failed to apply daemon response write deadline",
     )?;
     Ok(read_deadline_support)
-}
-
-fn read_request_frame(stream: &mut LocalSocketStream) -> Result<ReadRequestFrameOutcome, AtmError> {
-    match atm_core::protocol::read_frame(
-        stream,
-        "failed to read daemon request frame",
-        "daemon request frame exceeded the maximum supported size",
-    ) {
-        Ok(Some(frame)) => Ok(ReadRequestFrameOutcome::Frame(frame)),
-        Ok(None) => Ok(ReadRequestFrameOutcome::EndOfStream),
-        Err(error) if is_windows_named_pipe_deadline_abort(&error) => {
-            Ok(ReadRequestFrameOutcome::TimedOut)
-        }
-        Err(error) => Err(error),
-    }
 }
 
 fn dispatch_advisory_stream(
@@ -164,128 +248,6 @@ fn apply_optional_deadline(
             )
             .with_source(source)),
     }
-}
-
-struct RequestReadDeadlineGuard {
-    #[cfg(windows)]
-    watchdog: Option<std::thread::JoinHandle<()>>,
-    #[cfg(windows)]
-    cancel_tx: Option<std::sync::mpsc::Sender<()>>,
-}
-
-impl RequestReadDeadlineGuard {
-    fn arm(
-        stream: &LocalSocketStream,
-        read_deadline_support: DeadlineSupport,
-    ) -> Result<Self, AtmError> {
-        #[cfg(not(windows))]
-        {
-            let _ = stream;
-            let _ = read_deadline_support;
-            Ok(Self {})
-        }
-
-        #[cfg(windows)]
-        {
-            if read_deadline_support != DeadlineSupport::Unsupported {
-                return Ok(Self {
-                    watchdog: None,
-                    cancel_tx: None,
-                });
-            }
-
-            let handle = stream.as_raw_handle() as windows_sys::Win32::Foundation::HANDLE;
-            let (cancel_tx, cancel_rx) = std::sync::mpsc::channel();
-            let watchdog = std::thread::Builder::new()
-                .name("local-ipc-read-watchdog".to_string())
-                .spawn(move || match cancel_rx.recv_timeout(REQUEST_DEADLINE) {
-                    Ok(()) | Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {}
-                    Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
-                        if let Err(error) = cancel_windows_named_pipe_io(handle) {
-                            tracing::warn!(
-                                %error,
-                                subsystem = "local_ipc",
-                                action = "request_read_watchdog_cancel",
-                                deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
-                                "failed to cancel a stalled Windows named-pipe request read after the bounded runtime deadline"
-                            );
-                        }
-                    }
-                })
-                .map_err(|source| {
-                    AtmError::daemon_unavailable(
-                        "failed to spawn Windows named-pipe request read watchdog",
-                    )
-                    .with_recovery(
-                        "Restart the daemon; the same-host Windows request watchdog could not be created.",
-                    )
-                    .with_source(source)
-                })?;
-            Ok(Self {
-                watchdog: Some(watchdog),
-                cancel_tx: Some(cancel_tx),
-            })
-        }
-    }
-}
-
-impl Drop for RequestReadDeadlineGuard {
-    fn drop(&mut self) {
-        #[cfg(windows)]
-        {
-            if let Some(cancel_tx) = self.cancel_tx.take() {
-                let _ = cancel_tx.send(());
-            }
-            if let Some(watchdog) = self.watchdog.take()
-                && watchdog.join().is_err()
-            {
-                tracing::warn!(
-                    subsystem = "local_ipc",
-                    action = "request_read_watchdog_join",
-                    "Windows named-pipe request read watchdog panicked during teardown"
-                );
-            }
-        }
-    }
-}
-
-#[cfg(windows)]
-fn cancel_windows_named_pipe_io(
-    handle: windows_sys::Win32::Foundation::HANDLE,
-) -> std::io::Result<()> {
-    use std::ptr;
-
-    use windows_sys::Win32::Foundation::ERROR_NOT_FOUND;
-    use windows_sys::Win32::System::IO::CancelIoEx;
-
-    let cancelled = unsafe { CancelIoEx(handle, ptr::null_mut()) };
-    if cancelled != 0 {
-        return Ok(());
-    }
-    let error = std::io::Error::last_os_error();
-    if error.raw_os_error() == Some(ERROR_NOT_FOUND as i32) {
-        return Ok(());
-    }
-    Err(error)
-}
-
-#[cfg(not(windows))]
-fn is_windows_named_pipe_deadline_abort(_error: &AtmError) -> bool {
-    false
-}
-
-#[cfg(windows)]
-fn is_windows_named_pipe_deadline_abort(error: &AtmError) -> bool {
-    use windows_sys::Win32::Foundation::ERROR_OPERATION_ABORTED;
-
-    error
-        .source
-        .as_ref()
-        .and_then(|source| source.downcast_ref::<std::io::Error>())
-        .is_some_and(|source| {
-            source.kind() == std::io::ErrorKind::Interrupted
-                || source.raw_os_error() == Some(ERROR_OPERATION_ABORTED as i32)
-        })
 }
 
 fn dispatch_request(

@@ -46,7 +46,7 @@ impl std::fmt::Display for OwnerToken {
 
 #[cfg(test)]
 // Tests inject one stale-recovery rendezvous at a time, so the hook state stays behind a
-// process-local mutex instead of raw statics that would race under parallel execution.
+// process-local mutex instead of raw static items that would race under parallel execution.
 static STALE_RECOVERY_OBSERVED_SIGNAL: std::sync::Mutex<Option<StaleRecoverySignal>> =
     std::sync::Mutex::new(None);
 

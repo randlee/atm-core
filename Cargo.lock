@@ -140,7 +140,6 @@ dependencies = [
  "signal-hook",
  "tempfile",
  "tracing",
- "windows-sys 0.59.0",
 ]
 
 [[package]]

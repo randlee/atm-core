@@ -67,8 +67,8 @@ Windows named pipes report `ErrorKind::Unsupported` for `set_recv_timeout()` and
 fallback contract.
 
 Required fallback shapes:
-- request reads: watchdog or equivalent cancellation path that actively breaks the blocked read at
-  the documented deadline
+- request reads: a watchdog or equivalent bounded fallback that prevents blocked Windows
+  named-pipe reads from pinning the connection slot or shutdown drain past the documented deadline
 - shutdown wake connections: no unbounded `flush()`/drain after the `Unsupported` bypass; the wake
   path must still return within the same bounded deadline
 - shutdown drain: unsupported socket deadlines must not leave `active_connections` pinned past the
