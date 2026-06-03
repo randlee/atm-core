@@ -24,7 +24,29 @@ struct StaleRecoverySignal {
     continue_rx: std::sync::mpsc::Receiver<()>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub(crate) struct OwnerToken(String);
+
+impl OwnerToken {
+    fn from_record(record: impl Into<String>) -> Self {
+        Self(record.into())
+    }
+
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub(crate) fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+impl std::fmt::Display for OwnerToken {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
 #[cfg(test)]
+// Tests inject one stale-recovery rendezvous at a time, so the hook state stays behind a
+// process-local mutex instead of raw statics that would race under parallel execution.
 static STALE_RECOVERY_OBSERVED_SIGNAL: std::sync::Mutex<Option<StaleRecoverySignal>> =
     std::sync::Mutex::new(None);
 
@@ -192,12 +214,22 @@ fn open_lock_file(lock_path: &Path) -> Result<File, AtmError> {
 fn recover_stale_owner_lock(
     lock_path: &Path,
     stale_pid: u32,
-    stale_token: &str,
+    stale_token: &OwnerToken,
 ) -> Result<File, AtmError> {
-    for _ in 0..STALE_OWNER_RECOVERY_RETRY_ATTEMPTS {
+    for attempt in 0..STALE_OWNER_RECOVERY_RETRY_ATTEMPTS {
         // This retry is only used on stale-owner recovery, not the hot path.
         // OS file-lock APIs do not expose a release notification, so bounded
         // polling is required here and is capped at 3 x 25ms = 75ms total.
+        tracing::debug!(
+            subsystem = "host_ownership",
+            action = "recover_stale_owner_wait",
+            attempt = attempt + 1,
+            attempts = STALE_OWNER_RECOVERY_RETRY_ATTEMPTS,
+            retry_interval_ms = OWNER_RECOVERY_RETRY_INTERVAL.as_millis() as u64,
+            stale_pid,
+            lock_path = %lock_path.display(),
+            "waiting before retrying stale host-runtime owner recovery"
+        );
         thread::sleep(OWNER_RECOVERY_RETRY_INTERVAL);
         let retry_file = open_lock_file(lock_path)?;
         match retry_file.try_lock_exclusive() {
@@ -233,11 +265,17 @@ fn recover_stale_owner_lock(
 fn recorded_owner_identity(
     lock_file: &File,
     lock_path: &Path,
-) -> Result<Option<(u32, String)>, AtmError> {
+) -> Result<Option<(u32, OwnerToken)>, AtmError> {
     match read_owner_record_from_handle(lock_file) {
         Ok(identity) => Ok(identity),
+        #[cfg(windows)]
         Err(error) if is_owner_lock_contention_error(&error) => {
             read_owner_record_from_shadow_path(lock_path)
+        }
+        #[cfg(not(windows))]
+        Err(error) if is_owner_lock_contention_error(&error) => {
+            let _ = error;
+            Ok(read_owner_record_from_shadow_path(lock_path))
         }
         Err(source) => Err(
             AtmError::daemon_unavailable("failed to read daemon ownership record")
@@ -248,7 +286,7 @@ fn recorded_owner_identity(
 
 fn read_owner_record_from_handle(
     lock_file: &File,
-) -> Result<Option<(u32, String)>, std::io::Error> {
+) -> Result<Option<(u32, OwnerToken)>, std::io::Error> {
     let mut clone = lock_file
         .try_clone()
         .map_err(|source| std::io::Error::new(source.kind(), source.to_string()))?;
@@ -258,14 +296,14 @@ fn read_owner_record_from_handle(
     Ok(parse_owner_record(&record))
 }
 
-fn parse_owner_record(record: &str) -> Option<(u32, String)> {
+fn parse_owner_record(record: &str) -> Option<(u32, OwnerToken)> {
     let trimmed = record.trim();
     if trimmed.is_empty() {
         return None;
     }
     let (pid, token) = trimmed.split_once(':').unwrap_or((trimmed, ""));
     let pid = pid.parse::<u32>().ok()?;
-    Some((pid, token.to_string()))
+    Some((pid, OwnerToken::from_record(token)))
 }
 
 #[cfg(windows)]
@@ -279,14 +317,14 @@ fn owner_record_shadow_path(lock_path: &Path) -> PathBuf {
 }
 
 #[cfg(not(windows))]
-fn read_owner_record_from_shadow_path(
-    _lock_path: &Path,
-) -> Result<Option<(u32, String)>, AtmError> {
-    Ok(None)
+fn read_owner_record_from_shadow_path(_lock_path: &Path) -> Option<(u32, OwnerToken)> {
+    None
 }
 
 #[cfg(windows)]
-fn read_owner_record_from_shadow_path(lock_path: &Path) -> Result<Option<(u32, String)>, AtmError> {
+fn read_owner_record_from_shadow_path(
+    lock_path: &Path,
+) -> Result<Option<(u32, OwnerToken)>, AtmError> {
     let shadow_path = owner_record_shadow_path(lock_path);
     let record = match fs::read_to_string(&shadow_path) {
         Ok(record) => record,
@@ -313,9 +351,40 @@ fn sync_owner_record_shadow(lock_path: &Path, record: &str) -> Result<(), AtmErr
     #[cfg(windows)]
     {
         let shadow_path = owner_record_shadow_path(lock_path);
-        fs::write(&shadow_path, record).map_err(|source| {
+        let temp_path = shadow_path.with_file_name(format!(
+            ".{}.tmp.{}.shadow",
+            shadow_path
+                .file_name()
+                .and_then(|name| name.to_str())
+                .unwrap_or("owner.lock.meta"),
+            std::process::id(),
+        ));
+        {
+            let mut file = File::create(&temp_path).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to create daemon ownership shadow temp record at {}",
+                    temp_path.display()
+                ))
+                .with_source(source)
+            })?;
+            file.write_all(record.as_bytes()).map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to write daemon ownership shadow temp record at {}",
+                    temp_path.display()
+                ))
+                .with_source(source)
+            })?;
+            file.sync_all().map_err(|source| {
+                AtmError::daemon_unavailable(format!(
+                    "failed to sync daemon ownership shadow temp record at {}",
+                    temp_path.display()
+                ))
+                .with_source(source)
+            })?;
+        }
+        fs::rename(&temp_path, &shadow_path).map_err(|source| {
             AtmError::daemon_unavailable(format!(
-                "failed to write daemon ownership shadow record at {}",
+                "failed to replace daemon ownership shadow record at {}",
                 shadow_path.display()
             ))
             .with_source(source)
@@ -325,14 +394,17 @@ fn sync_owner_record_shadow(lock_path: &Path, record: &str) -> Result<(), AtmErr
 
 #[cfg_attr(windows, allow(dead_code))]
 fn write_owner_record(lock_file: &mut File, lock_path: &Path) -> Result<(), AtmError> {
-    let token = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to derive daemon ownership token")
-                .with_source(source)
-        })?
-        .as_nanos();
-    let record = format!("{}:{token:x}\n", std::process::id());
+    let token = OwnerToken::from_record(format!(
+        "{:x}",
+        SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .map_err(|source| {
+                AtmError::daemon_unavailable("failed to derive daemon ownership token")
+                    .with_source(source)
+            })?
+            .as_nanos()
+    ));
+    let record = format!("{}:{token}\n", std::process::id());
     lock_file.set_len(0).map_err(|source| {
         AtmError::daemon_unavailable("failed to reset daemon ownership metadata")
             .with_source(source)
@@ -353,10 +425,10 @@ fn owner_record_matches(
     lock_file: &File,
     lock_path: &Path,
     expected_pid: u32,
-    expected_token: &str,
+    expected_token: &OwnerToken,
 ) -> Result<bool, AtmError> {
     Ok(match recorded_owner_identity(lock_file, lock_path)? {
-        Some((pid, token)) => pid == expected_pid && token == expected_token,
+        Some((pid, token)) => pid == expected_pid && token == *expected_token,
         None => false,
     })
 }
@@ -387,14 +459,14 @@ fn clear_owner_record(lock_file: &mut File, lock_path: &Path) -> Result<(), AtmE
 #[cfg(test)]
 pub(crate) fn recorded_owner_identity_for_guard_for_test(
     guard: &HostOwnershipGuard,
-) -> Result<Option<(u32, String)>, AtmError> {
+) -> Result<Option<(u32, OwnerToken)>, AtmError> {
     recorded_owner_identity(&guard.lock_file, &guard.lock_path)
 }
 
 #[cfg(test)]
 pub(crate) fn recorded_owner_identity_at_path_for_test(
     lock_path: &Path,
-) -> Result<Option<(u32, String)>, AtmError> {
+) -> Result<Option<(u32, OwnerToken)>, AtmError> {
     let file = open_lock_file(lock_path)?;
     recorded_owner_identity(&file, lock_path)
 }

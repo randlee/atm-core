@@ -27,6 +27,30 @@ impl Drop for StaleRecoverySignalGuard {
     }
 }
 
+fn join_with_timeout<T: Send + 'static>(
+    join: std::thread::JoinHandle<T>,
+    timeout: Duration,
+    context: &str,
+) -> T {
+    let (result_tx, result_rx) = mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("test-bounded-join".to_string())
+        .spawn(move || {
+            let _ = result_tx.send(join.join());
+        })
+        .expect("spawn bounded join helper");
+    match result_rx.recv_timeout(timeout) {
+        Ok(Ok(result)) => result,
+        Ok(Err(_)) => panic!("{context}: worker panicked"),
+        Err(mpsc::RecvTimeoutError::Timeout) => {
+            panic!("{context}: join did not complete within {timeout:?}")
+        }
+        Err(mpsc::RecvTimeoutError::Disconnected) => {
+            panic!("{context}: join helper disconnected before returning")
+        }
+    }
+}
+
 fn write_stale_owner_record(_lock_path: &std::path::Path, file: &mut std::fs::File, token: &str) {
     writeln!(file, "{}:{token}", u32::MAX).expect("write owner");
     file.sync_all().expect("sync owner");
@@ -173,7 +197,8 @@ fn singleton_guard_rejects_stale_recovery_when_owner_token_changes() {
         .send(())
         .expect("resume stale owner recovery after rewriting the token");
 
-    let error = join.join().expect("join").expect_err("token mismatch");
+    let error = join_with_timeout(join, Duration::from_secs(15), "stale owner recovery join")
+        .expect_err("token mismatch");
     assert_eq!(error.code, AtmErrorCode::DaemonStaleOwnerRecoveryFailed);
 }
 

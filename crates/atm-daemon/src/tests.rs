@@ -293,7 +293,9 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     let local_ipc_name =
         atm_core::protocol::daemon_local_ipc_name_from_path(&tempdir.path().join("daemon.sock"))
             .expect("ipc name");
-    ready_rx.recv().expect("daemon ready");
+    ready_rx
+        .recv_timeout(Duration::from_secs(10))
+        .expect("daemon ready within deadline");
     lifecycle.set_terminate_for_test(true);
 
     serve_result_rx

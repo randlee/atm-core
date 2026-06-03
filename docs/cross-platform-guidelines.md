@@ -41,6 +41,43 @@ Mechanical-enforcement rule:
 - if a prohibited pattern is cheap and deterministic to detect, it belongs in
   `just lint` rather than review-only guidance
 
+## Windows Same-Host Runtime Contracts
+
+### Host-Ownership Sidecar Recovery
+
+Windows host-ownership recovery uses a same-directory sidecar shadow file:
+- lock file: `owner.lock`
+- shadow file: `owner.lock.meta`
+
+Required behavior:
+- write the canonical `pid:token` owner record to the locked file
+- mirror the same record to `owner.lock.meta` with temp-file-plus-rename replacement
+- when reading the locked file fails with a Windows lock/sharing violation during stale-owner
+  recovery, fall back to `owner.lock.meta`
+- reject recovery if the pid/token changes between the first stale-owner observation and the
+  eventual retry lock acquisition
+
+This sidecar is a recovery aid only. It does not replace the locked file as the source of truth
+while the lock handle remains readable.
+
+### `ErrorKind::Unsupported` Is Not a Timeout Exemption
+
+Windows named pipes report `ErrorKind::Unsupported` for `set_recv_timeout()` and
+`set_send_timeout()`. Code may tolerate that result only when it immediately installs a bounded
+fallback contract.
+
+Required fallback shapes:
+- request reads: watchdog or equivalent cancellation path that actively breaks the blocked read at
+  the documented deadline
+- shutdown wake connections: no unbounded `flush()`/drain after the `Unsupported` bypass; the wake
+  path must still return within the same bounded deadline
+- shutdown drain: unsupported socket deadlines must not leave `active_connections` pinned past the
+  forced-cancel window
+
+Forbidden shape:
+- swallowing `ErrorKind::Unsupported` and then proceeding to an unbounded read, write, flush, or
+  shutdown wait
+
 ## Home Directory Resolution
 
 **Problem**: `dirs::home_dir()` on Windows uses the Windows API (`SHGetKnownFolderPath`), which ignores both `HOME` and `USERPROFILE` environment variables. Tests that only redirect `HOME` do not relocate the canonical `~/.claude` config root on Windows.

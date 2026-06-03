@@ -11,6 +11,10 @@ use crate::lifecycle_control::LifecycleControlSourceAdapter;
 
 const TEST_LOCAL_IPC_CONNECT_DEADLINE: std::time::Duration = std::time::Duration::from_secs(10);
 const TEST_LOCAL_IPC_REQUEST_DEADLINE: std::time::Duration = std::time::Duration::from_secs(5);
+const TEST_LOCAL_IPC_CONNECT_RETRY_INITIAL_DELAY: std::time::Duration =
+    std::time::Duration::from_millis(1);
+const TEST_LOCAL_IPC_CONNECT_RETRY_MAX_DELAY: std::time::Duration =
+    std::time::Duration::from_millis(25);
 
 pub(crate) struct LifecycleFlagResetGuard {
     lifecycle: LifecycleControlSourceAdapter,
@@ -107,6 +111,7 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
         .into_owned();
     let deadline = std::time::Instant::now() + TEST_LOCAL_IPC_CONNECT_DEADLINE;
     let mut attempts = 0usize;
+    let mut retry_delay = TEST_LOCAL_IPC_CONNECT_RETRY_INITIAL_DELAY;
     let mut last_error = None;
     while std::time::Instant::now() < deadline {
         match connect_local_ipc_with_timeout(ipc_name.clone(), TEST_LOCAL_IPC_CONNECT_DEADLINE) {
@@ -116,7 +121,11 @@ pub(crate) fn connect_daemon_local_ipc_until_ready(
                 last_error = Some(error);
                 // The ready signal is the structural synchronization point; this retry only
                 // covers the residual OS socket publication race after readiness.
-                std::thread::sleep(std::time::Duration::from_millis(1));
+                std::thread::sleep(retry_delay);
+                retry_delay = std::cmp::min(
+                    retry_delay.saturating_mul(2),
+                    TEST_LOCAL_IPC_CONNECT_RETRY_MAX_DELAY,
+                );
             }
         }
     }
@@ -153,22 +162,24 @@ pub(crate) fn connect_local_ipc_with_timeout(
 }
 
 pub(crate) fn configure_test_local_ipc_timeouts(stream: &LocalSocketStream) {
-    if let Err(error) = stream.set_send_timeout(Some(TEST_LOCAL_IPC_REQUEST_DEADLINE)) {
+    apply_test_deadline(
+        stream.set_send_timeout(Some(TEST_LOCAL_IPC_REQUEST_DEADLINE)),
+        "set send timeout",
+    );
+    apply_test_deadline(
+        stream.set_recv_timeout(Some(TEST_LOCAL_IPC_REQUEST_DEADLINE)),
+        "set recv timeout",
+    );
+}
+
+fn apply_test_deadline(result: std::io::Result<()>, context: &str) {
+    if let Err(error) = result {
         #[cfg(windows)]
         {
             if error.kind() == std::io::ErrorKind::Unsupported {
                 return;
             }
         }
-        panic!("set send timeout: {error}");
-    }
-    if let Err(error) = stream.set_recv_timeout(Some(TEST_LOCAL_IPC_REQUEST_DEADLINE)) {
-        #[cfg(windows)]
-        {
-            if error.kind() == std::io::ErrorKind::Unsupported {
-                return;
-            }
-        }
-        panic!("set recv timeout: {error}");
+        panic!("{context}: {error}");
     }
 }
