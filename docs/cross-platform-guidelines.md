@@ -78,6 +78,79 @@ Forbidden shape:
 - swallowing `ErrorKind::Unsupported` and then proceeding to an unbounded read, write, flush, or
   shutdown wait
 
+## Windows Smoke Test
+
+Use this procedure on a fresh Windows checkout of `feature/windows-test-parity`. The Windows
+machine should treat Git as the handoff channel: pull this branch first, then run the steps below
+from Windows PowerShell in the repository root.
+
+1. Prerequisites
+   - Install the Rust MSVC toolchain (`rustup default stable-x86_64-pc-windows-msvc` or equivalent).
+   - Clone `atm-core`, then pull the branch under test:
+   ```powershell
+   git fetch origin
+   git switch feature/windows-test-parity
+   git pull --ff-only origin feature/windows-test-parity
+   ```
+
+2. Create a disposable ATM environment
+   ```powershell
+   $SmokeRoot = Join-Path $env:TEMP "atm-win-smoke"
+   Remove-Item $SmokeRoot -Recurse -Force -ErrorAction SilentlyContinue
+   New-Item -ItemType Directory -Force -Path $SmokeRoot | Out-Null
+   New-Item -ItemType Directory -Force -Path (Join-Path $SmokeRoot ".claude\\teams\\smoke-team\\inboxes") | Out-Null
+   Set-Content -Path (Join-Path $SmokeRoot ".claude\\teams\\smoke-team\\config.json") -Value '{"members":[{"name":"smoke-user"}]}'
+   Set-Content -Path (Join-Path (Get-Location) ".atm.toml") -Value "[atm]`ndefault_team = `"smoke-team`"`n"
+   $env:ATM_HOME = $SmokeRoot
+   $env:ATM_CONFIG_HOME = $SmokeRoot
+   $env:ATM_TEAM = "smoke-team"
+   $env:ATM_IDENTITY = "smoke-user"
+   $env:ATM_DAEMON_SOCKET = "\\.\pipe\atm-win-smoke"
+   ```
+
+3. Build the release binaries
+   ```powershell
+   cargo build --release -p atm-daemon -p atm-daemon-client
+   ```
+   Pass indicator:
+   - `target\release\atm-daemon.exe` and `target\release\atm.exe` exist
+   Fail indicator:
+   - cargo exits non-zero or the release binaries are missing
+
+4. Run `atm doctor` and confirm the daemon reaches ready state
+   ```powershell
+   $Doctor = .\target\release\atm.exe doctor --json | ConvertFrom-Json
+   $Doctor.summary.status
+   $Doctor.runtime_status.readiness
+   ```
+   Pass indicator:
+   - `summary.status` is `healthy` or `warning`
+   - `runtime_status.readiness` is `ready`
+   Fail indicator:
+   - `doctor` exits non-zero
+   - `runtime_status.readiness` is absent or not `ready`
+
+5. Verify the named-pipe IPC endpoint is published
+   ```powershell
+   Get-ChildItem \\.\pipe\ | Where-Object { $_.Name -eq "atm-win-smoke" }
+   ```
+   Pass indicator:
+   - the command returns one pipe entry named `atm-win-smoke`
+   Fail indicator:
+   - no matching pipe appears after the `doctor` step
+
+6. Confirm the daemon accepts a connection and a round-trip mailbox operation
+   ```powershell
+   .\target\release\atm.exe send smoke-user "windows smoke hello" --json
+   .\target\release\atm.exe read --all --json
+   ```
+   Pass indicator:
+   - `send` returns a normal sent result
+   - `read --all --json` includes the `windows smoke hello` body for `smoke-user@smoke-team`
+   Fail indicator:
+   - `send` reports daemon unavailable / connection refused
+   - `read` does not show the just-sent message
+
 ## Home Directory Resolution
 
 **Problem**: `dirs::home_dir()` on Windows uses the Windows API (`SHGetKnownFolderPath`), which ignores both `HOME` and `USERPROFILE` environment variables. Tests that only redirect `HOME` do not relocate the canonical `~/.claude` config root on Windows.
