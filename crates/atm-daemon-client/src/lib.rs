@@ -361,7 +361,10 @@ pub fn exchange(
     Ok(response)
 }
 
-fn apply_local_ipc_deadline(result: std::io::Result<()>, message: &'static str) -> Result<(), AtmError> {
+fn apply_local_ipc_deadline(
+    result: std::io::Result<()>,
+    message: &'static str,
+) -> Result<(), AtmError> {
     match result {
         Ok(()) => Ok(()),
         #[cfg(windows)]
@@ -1036,6 +1039,10 @@ mod tests {
         .expect_err("non-unsupported timeout errors should remain failures");
 
         assert_eq!(result.code, AtmErrorCode::DaemonUnavailable);
-        assert!(result.message.contains("failed to configure daemon local IPC write timeout"));
+        assert!(
+            result
+                .message
+                .contains("failed to configure daemon local IPC write timeout")
+        );
     }
 }

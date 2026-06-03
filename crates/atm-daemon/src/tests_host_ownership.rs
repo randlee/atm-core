@@ -27,23 +27,20 @@ impl Drop for StaleRecoverySignalGuard {
     }
 }
 
-fn write_stale_owner_record(
-    lock_path: &std::path::Path,
-    file: &mut std::fs::File,
-    token: &str,
-) {
+fn write_stale_owner_record(_lock_path: &std::path::Path, file: &mut std::fs::File, token: &str) {
     writeln!(file, "{}:{token}", u32::MAX).expect("write owner");
     file.sync_all().expect("sync owner");
     #[cfg(windows)]
     {
-        let shadow_path = lock_path.with_file_name(format!(
+        let shadow_path = _lock_path.with_file_name(format!(
             "{}.meta",
-            lock_path
+            _lock_path
                 .file_name()
                 .expect("lock file name")
                 .to_string_lossy()
         ));
-        std::fs::write(&shadow_path, format!("{}:{token}\n", u32::MAX)).expect("write owner shadow");
+        std::fs::write(&shadow_path, format!("{}:{token}\n", u32::MAX))
+            .expect("write owner shadow");
     }
 }
 

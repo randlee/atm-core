@@ -246,10 +246,12 @@ fn recorded_owner_identity(
     }
 }
 
-fn read_owner_record_from_handle(lock_file: &File) -> Result<Option<(u32, String)>, std::io::Error> {
-    let mut clone = lock_file.try_clone().map_err(|source| {
-        std::io::Error::new(source.kind(), source.to_string())
-    })?;
+fn read_owner_record_from_handle(
+    lock_file: &File,
+) -> Result<Option<(u32, String)>, std::io::Error> {
+    let mut clone = lock_file
+        .try_clone()
+        .map_err(|source| std::io::Error::new(source.kind(), source.to_string()))?;
     clone.seek(SeekFrom::Start(0))?;
     let mut record = String::new();
     clone.read_to_string(&mut record)?;
@@ -277,7 +279,9 @@ fn owner_record_shadow_path(lock_path: &Path) -> PathBuf {
 }
 
 #[cfg(not(windows))]
-fn read_owner_record_from_shadow_path(_lock_path: &Path) -> Result<Option<(u32, String)>, AtmError> {
+fn read_owner_record_from_shadow_path(
+    _lock_path: &Path,
+) -> Result<Option<(u32, String)>, AtmError> {
     Ok(None)
 }
 
@@ -288,13 +292,11 @@ fn read_owner_record_from_shadow_path(lock_path: &Path) -> Result<Option<(u32, S
         Ok(record) => record,
         Err(source) if source.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(source) => {
-            return Err(
-                AtmError::daemon_unavailable(format!(
-                    "failed to read daemon ownership shadow record at {}",
-                    shadow_path.display()
-                ))
-                .with_source(source),
-            );
+            return Err(AtmError::daemon_unavailable(format!(
+                "failed to read daemon ownership shadow record at {}",
+                shadow_path.display()
+            ))
+            .with_source(source));
         }
     };
     Ok(parse_owner_record(&record))

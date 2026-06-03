@@ -37,9 +37,10 @@ use std::sync::mpsc;
 use std::time::Duration;
 use tempfile::TempDir;
 
+#[cfg(windows)]
+use crate::test_support::connect_local_ipc_with_timeout;
 use crate::test_support::{
     configure_test_local_ipc_timeouts, connect_daemon_local_ipc_until_ready,
-    connect_local_ipc_with_timeout,
 };
 
 const TEST_TEAM: &str = "test-team";

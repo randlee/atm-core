@@ -64,8 +64,14 @@ pub(super) fn handle_connection(
 }
 
 fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<(), AtmError> {
-    apply_deadline(stream.set_recv_timeout(Some(REQUEST_DEADLINE)), "failed to apply daemon request read deadline")?;
-    apply_deadline(stream.set_send_timeout(Some(REQUEST_DEADLINE)), "failed to apply daemon response write deadline")
+    apply_deadline(
+        stream.set_recv_timeout(Some(REQUEST_DEADLINE)),
+        "failed to apply daemon request read deadline",
+    )?;
+    apply_deadline(
+        stream.set_send_timeout(Some(REQUEST_DEADLINE)),
+        "failed to apply daemon response write deadline",
+    )
 }
 
 fn read_request_frame(
