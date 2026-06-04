@@ -11,16 +11,13 @@ use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
     home::host_runtime_dir, load_atm_config,
 };
-use atm_rusqlite::{
-    SqliteObservability, assemble_boundary_with_observability, assemble_default_boundary,
-};
+use atm_rusqlite::{assemble_boundary, assemble_default_boundary};
 
 use crate::replay_store::{SqliteRemoteReplayStore, SqliteRuntimeStorageFinalizer};
 
 #[derive(Clone)]
 pub struct RuntimeAssemblyInputs {
     pub sqlite_db_path: PathBuf,
-    pub sqlite_observability: Arc<dyn SqliteObservability>,
     pub non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     pub notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 }
@@ -29,7 +26,6 @@ impl fmt::Debug for RuntimeAssemblyInputs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RuntimeAssemblyInputs")
             .field("sqlite_db_path", &self.sqlite_db_path)
-            .field("sqlite_observability", &"dyn SqliteObservability")
             .field("non_claude_outbound", &"dyn NonClaudeOutbound")
             .field("notification_sink", &"dyn NotificationSink")
             .finish()
@@ -77,7 +73,6 @@ impl ConfigDoctor for RuntimeConfigDoctor {
 pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
     assemble_sqlite_runtime_at_path(
         &inputs.sqlite_db_path,
-        Arc::clone(&inputs.sqlite_observability),
         Arc::clone(&inputs.non_claude_outbound),
         Arc::clone(&inputs.notification_sink),
     )
@@ -85,14 +80,10 @@ pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeA
 
 fn assemble_sqlite_runtime_at_path(
     sqlite_db_path: &Path,
-    sqlite_observability: Arc<dyn SqliteObservability>,
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
-    let assembly = Arc::new(assemble_boundary_with_observability(
-        sqlite_db_path,
-        sqlite_observability,
-    )?);
+    let assembly = Arc::new(assemble_boundary(sqlite_db_path)?);
     let service_runtime = LocalServiceRuntime::new_with_delivery_boundaries(
         assembly.mail_store_arc(),
         assembly.task_store_arc(),

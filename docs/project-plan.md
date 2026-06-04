@@ -205,6 +205,10 @@ Status summary:
   production SQLite/runtime assembly out of daemon production composition, and
   froze the target runtime boundary while the SQLite TOML relock remains
   deferred to `AA.5`.
+- `AA.4` removes the remaining daemon-side SQLite leak paths by deleting the
+  daemon-private SQLite observability adapter, deleting direct daemon test
+  boundary assembly calls, and relying on `atm-core` / `atm-runtime` replay
+  seams instead of a direct `atm-daemon -> atm-rusqlite` dependency.
 
 Goal:
 - move concrete SQLite/runtime assembly to `atm-runtime`

@@ -9,7 +9,6 @@ use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::notification_runtime::NotificationRuntime;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
-use crate::sqlite_observability::DaemonSqliteObservability;
 use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
     peer_transport::PeerTransportConfig,
@@ -178,11 +177,8 @@ impl RuntimeComposition {
                 Arc::clone(&observability),
             )),
         );
-        let sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability> =
-            Arc::new(DaemonSqliteObservability::new(Arc::clone(&observability)));
         let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
             sqlite_db_path: replay_store_path,
-            sqlite_observability: Arc::clone(&sqlite_observability),
             non_claude_outbound: Arc::new(DaemonNonClaudeOutbound::new()),
             notification_sink: Arc::new(notification_sink.clone()),
         })
@@ -890,11 +886,8 @@ pub(crate) fn compose_runtime(
             ),
         ),
     );
-    let sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability> =
-        Arc::new(DaemonSqliteObservability::new(Arc::clone(&observability)));
     let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
         sqlite_db_path: replay_store_path,
-        sqlite_observability,
         non_claude_outbound: Arc::new(DaemonNonClaudeOutbound::new()),
         notification_sink: Arc::new(notification_sink.clone()),
     })

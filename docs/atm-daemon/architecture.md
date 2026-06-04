@@ -805,6 +805,13 @@ Doctor health contract distinction:
     remain part of the daemon runtime DTO
   - the daemon aggregates subsystem doctor reports plus daemon-owned runtime
     findings, but does not perform backend-specific investigation logic
+- `AA.4` final state:
+  - `atm-daemon` no longer imports `atm-rusqlite` directly in production code
+  - daemon-side SQLite observability glue is deleted rather than retained as a
+    private adapter layer
+  - daemon tests that need concrete SQLite-backed state assemble through
+    `atm-runtime` / daemon test helpers instead of calling SQLite boundary
+    assembly functions directly
 
 ## 3.6 Crash Recovery
 

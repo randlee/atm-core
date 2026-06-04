@@ -765,6 +765,67 @@ impl boundary::StatusSource for DaemonStatusSource {
 }
 
 #[cfg(test)]
+impl DaemonRequestDispatcher {
+    pub(crate) fn new_for_test(
+        home_dir: std::path::PathBuf,
+        status_cache: RuntimeStatusCache,
+        roster_db_path: std::path::PathBuf,
+    ) -> Self {
+        let observability = std::sync::Arc::new(
+            crate::test_observability::TestDaemonObservability::new(
+                atm_core::home::host_log_dir_from_home(&home_dir),
+            )
+            .expect("daemon test observability"),
+        );
+        let runtime_observability: std::sync::Arc<dyn crate::DaemonRuntimeObservability> =
+            observability.clone();
+        let runtime_assembly =
+            crate::test_support::sqlite_runtime_assembly_for_test(&roster_db_path);
+        match build_runtime_status_cache_state(
+            None,
+            runtime_assembly.runtime_bundle.roster_store.as_ref(),
+        ) {
+            Ok(state) => status_cache.publish_state(state),
+            Err(error) => {
+                tracing::warn!(
+                    %error,
+                    "failed to hydrate test runtime status cache from runtime-bound roster state"
+                );
+            }
+        }
+        let advisory_runtime_observability = crate::SubsystemObservability::new(
+            crate::DaemonSubsystem::AdvisoryRuntime,
+            std::sync::Arc::clone(&runtime_observability),
+        );
+        let runtime_health_observability = crate::SubsystemObservability::new(
+            crate::DaemonSubsystem::RuntimeHealth,
+            std::sync::Arc::clone(&runtime_observability),
+        );
+        let notification_runtime = NotificationRuntime::new_with_observability(
+            crate::SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
+        );
+        notification_runtime.set_liveness_override_for_test(Some(
+            crate::notification_runtime::NotificationWorkerLiveness::Live,
+        ));
+        Self {
+            home_dir: crate::AtmHomeDir::from_path_for_test(home_dir.clone()),
+            observability: runtime_observability,
+            advisory_runtime_observability: advisory_runtime_observability.clone(),
+            runtime_health_observability,
+            status_cache,
+            service_runtime: runtime_assembly.service_runtime.clone(),
+            runtime_bundle: runtime_assembly.runtime_bundle.clone(),
+            roster_store: Some(runtime_assembly.runtime_bundle.roster_store.clone()),
+            storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
+            notification_runtime,
+            advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new_with_observability(
+                advisory_runtime_observability,
+            ),
+        }
+    }
+}
+
+#[cfg(test)]
 mod tests {
     use super::{
         DaemonRequestDispatcher, MAX_SHUTDOWN_FINALIZER_THREADS, NotificationWorkerLiveness,
@@ -975,7 +1036,3 @@ mod tests {
         runtime.shutdown().expect("shutdown notification runtime");
     }
 }
-
-#[cfg(test)]
-#[path = "runtime_health_test_support.rs"]
-mod runtime_health_test_support;
