@@ -9,6 +9,9 @@ Current design assumption:
 - runtime composition must go through `atm-core` boundary traits/facades
 - client crates such as `atm`, `atm-graft`, and future harness-specific clients
   must not depend on this crate directly
+- after `AA.5`, `atm-daemon` is forbidden again as a direct dependent of the
+  SQLite assembly, store, and shared-db state-root records; daemon callers
+  reach SQLite only through `atm-runtime`
 
 Canonical machine-readable boundary sources:
 - [`boundaries/atm-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-sqlite.toml)
@@ -28,6 +31,11 @@ review:
 
 These are not public boundary traits, but they are important private
 implementation surfaces for review.
+
+AA.5 relock note:
+- `python3 scripts/check-boundary-guard.py --base-ref <review-base-ref>` is the
+  second enforcement layer that detects policy widening and any reintroduced
+  `atm-daemon -> atm-rusqlite` code edge before review closure
 
 ## SqliteBoundaryAssembly
 

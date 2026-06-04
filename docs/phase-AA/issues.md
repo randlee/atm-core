@@ -11,10 +11,10 @@ AA.0 freezes this inventory as the starting point for the execution line.
 
 | ID | Status | Summary | Planned Closure |
 | --- | --- | --- | --- |
-| `AA-ISSUE-001` | `planned` | `atm-daemon` currently carries a direct `atm-rusqlite` dependency and concrete SQLite references. | `AA.2` through `AA.5` |
-| `AA-ISSUE-002` | `planned` | daemon runtime health currently owns SQLite-specific readiness and status fields. | `AA.3` |
-| `AA-ISSUE-003` | `planned` | daemon still carries SQLite observability, replay-store, and test-support leakage. | `AA.4` |
-| `AA-ISSUE-004` | `planned` | repository enforcement currently trusts boundary TOML as final authority without an independent guard for policy widening. | `AA.5` |
+| `AA-ISSUE-001` | `closed` | `atm-daemon` currently carries a direct `atm-rusqlite` dependency and concrete SQLite references. | `AA.2` through `AA.5` |
+| `AA-ISSUE-002` | `closed` | daemon runtime health currently owns SQLite-specific readiness and status fields. | `AA.3` |
+| `AA-ISSUE-003` | `closed` | daemon still carries SQLite observability, replay-store, and test-support leakage. | `AA.4` |
+| `AA-ISSUE-004` | `closed` | repository enforcement currently trusts boundary TOML as final authority without an independent guard for policy widening. | `AA.5` |
 
 ## Inventory Rules
 

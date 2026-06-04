@@ -209,6 +209,9 @@ Status summary:
   daemon-private SQLite observability adapter, deleting direct daemon test
   boundary assembly calls, and relying on `atm-core` / `atm-runtime` replay
   seams instead of a direct `atm-daemon -> atm-rusqlite` dependency.
+- `AA.5` relocks the daemon-to-SQLite edge in the runtime and SQLite boundary
+  TOMLs, adds the independent `check-boundary-guard.py` review guard, and
+  freezes boundary-policy widening as an explicit architecture change.
 
 Goal:
 - move concrete SQLite/runtime assembly to `atm-runtime`

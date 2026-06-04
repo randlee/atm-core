@@ -26,13 +26,14 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-runtime", "atm-runtime-test-support"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime", "atm-runtime-test-support"]
 allowed_dependencies = [
   "atm-core",
   "rusqlite",
 ]
 forbidden_edges = [
   "atm -> atm-rusqlite",
+  "atm-daemon -> atm-rusqlite",
   "atm-graft -> atm-rusqlite",
 ]
 
@@ -70,5 +71,5 @@ notes = [
   "ack-related task transitions still resolve through send-shape workflows, not a separate public ack API",
   "crate-root implementation remains temporary; module split is still deferred",
   "assembled through atm_rusqlite::SqliteBoundaryAssembly",
-  "transition note: atm-daemon remains in allowed_dependents through the AA.2-AA.4 window; runtime-composition.toml governs the target end-state while AA.5 relocks the sqlite boundary TOMLs",
+  "AA.5 relocks this store boundary so daemon callers must reach task persistence only through atm-runtime-owned composition",
 ]

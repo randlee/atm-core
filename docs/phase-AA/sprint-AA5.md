@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.5
 worktree: ../atm-core-worktrees/feature/pAA-s5-boundary-relock-and-permanent-enforcement
 branch: feature/pAA-s5-boundary-relock-and-permanent-enforcement
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -40,6 +40,7 @@ code and in review workflow.
 - `boundaries/atm-rusqlite/mail-store-sqlite.toml`
 - `boundaries/atm-rusqlite/roster-store-sqlite.toml`
 - `boundaries/atm-rusqlite/task-store-sqlite.toml`
+- `boundaries/atm-rusqlite/shared-db.toml`
 
 ## Prerequisites
 
@@ -63,6 +64,8 @@ code and in review workflow.
   - restore explicit forbidden edges
   - restore any visibility/constructor privacy that was widened only to permit
     daemon-side SQLite assembly
+  - include the crate-private `SharedDbStateRoot` record in the relock so no
+    daemon allowlist survives on a SQLite state-root seam
   - make the SQLite boundary TOMLs agree with
     `boundaries/atm-runtime/runtime-composition.toml` on the forbidden
     `atm-daemon -> atm-rusqlite` edge so no policy contradiction remains after
@@ -86,6 +89,13 @@ code and in review workflow.
         "field": "allowed_dependents",
         "change": "added atm-daemon",
         "requires_approval": true
+      }
+    ],
+    "violations": [
+      {
+        "category": "FORBIDDEN-EDGE | POLICY-RELAXATION",
+        "detail": "clear statement of the boundary problem",
+        "ref": "path:line"
       }
     ]
   }

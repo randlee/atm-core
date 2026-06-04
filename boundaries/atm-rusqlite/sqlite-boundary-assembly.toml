@@ -29,13 +29,14 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-runtime", "atm-runtime-test-support"]
+allowed_dependents = ["atm-daemon-bootstrap", "atm-runtime", "atm-runtime-test-support"]
 allowed_dependencies = [
   "atm-core",
   "rusqlite",
 ]
 forbidden_edges = [
   "atm -> atm-rusqlite",
+  "atm-daemon -> atm-rusqlite",
   "atm-graft -> atm-rusqlite",
 ]
 
@@ -66,6 +67,6 @@ review_gates = [
 state = "active"
 notes = [
   "hosts the shared assembly seam for mail, task, and roster adapters over one sqlite root",
-  "daemon runtime may use the public assembly seam for roster truth and SQLite readiness checks",
-  "transition note: atm-daemon remains in allowed_dependents through the AA.2-AA.4 window; runtime-composition.toml governs the target end-state while AA.5 relocks the sqlite boundary TOMLs",
+  "daemon runtime reaches the public assembly seam only through atm-runtime-owned composition",
+  "AA.5 relocks this boundary so the sqlite assembly record again forbids the daemon-to-sqlite edge directly",
 ]
