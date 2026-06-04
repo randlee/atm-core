@@ -60,6 +60,16 @@ Phase-S planning note:
   - `S.9` host-scoped retained logging defaults, including watcher/reconcile
     exclusion for `~/.atm/logs/`
 
+Phase-AB planning note:
+- `Phase AB` is the active cross-host smoke planning line that follows the
+  completed same-host release-readiness work in `Phase Z`
+- the authoritative planning document is
+  [`docs/plan-phase-AB.md`](./plan-phase-AB.md)
+- `Phase AB` owns Windows/macOS real-binary cross-host smoke coverage on
+  disposable clean-room state first, then disposable copied-state revalidation
+- the planning branch is `plan/phase-AB`
+- the execution integration branch is `integrate/phase-AB`
+
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
   - new crates
@@ -94,6 +104,8 @@ Status:
   source-of-truth and daemon-boundary redesign.
 - Phase R is the merged daemon baseline.
 - Phase S is the active planning line for Windows-complete daemon parity.
+- Phase AB is the active planning line for Windows/macOS cross-host ATM smoke
+  execution after the accepted Phase Z baseline.
 - the current merged workspace contains:
   - `crates/atm-core`
   - `crates/atm`
