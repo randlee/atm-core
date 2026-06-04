@@ -22,6 +22,15 @@ use std::sync::Mutex;
 pub const AUTO_START_PUBLISH_TIMEOUT: Duration = Duration::from_secs(10);
 pub const HOST_RUNTIME_LAUNCH_LOCK_FILE: &str = "launch.lock";
 const LOCAL_IPC_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
+#[cfg(windows)]
+const LOCAL_IPC_READ_HELPER_POLL_INTERVAL: Duration = Duration::from_millis(100);
+
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LocalIpcDeadlineSupport {
+    Applied,
+    Unsupported,
+}
 
 #[derive(Debug, Clone)]
 pub struct DaemonLocalIpcEndpoint(PathBuf);
@@ -321,11 +330,11 @@ pub fn exchange(
     request_deadline: Duration,
 ) -> Result<ResponseEnvelope, AtmError> {
     let mut stream = try_connect(endpoint)?;
-    apply_local_ipc_deadline(
+    let _send_deadline_support = apply_local_ipc_deadline(
         stream.set_send_timeout(Some(request_deadline)),
         "failed to configure daemon local IPC write timeout",
     )?;
-    apply_local_ipc_deadline(
+    let recv_deadline_support = apply_local_ipc_deadline(
         stream.set_recv_timeout(Some(request_deadline)),
         "failed to configure daemon local IPC read timeout",
     )?;
@@ -335,19 +344,8 @@ pub fn exchange(
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable("failed to flush daemon request frame").with_source(source)
     })?;
-    let response_frame = atm_core::protocol::read_frame(
-        &mut stream,
-        "failed to read daemon response frame",
-        "daemon response frame exceeded the maximum supported size",
-    )?
-    .ok_or_else(|| {
-        AtmError::daemon_unavailable(
-            "daemon closed the local IPC connection before returning a response frame",
-        )
-        .with_recovery(
-            "Retry the request after atm-daemon reaches serving state and inspect daemon logs if the problem persists.",
-        )
-    })?;
+    let response_frame =
+        read_response_frame_with_deadline(stream, request_deadline, recv_deadline_support)?;
     let (response_id, response) = atm_core::protocol::response_from_frame_payload(response_frame)?;
     if response_id != request_id {
         return Err(AtmError::daemon_unavailable(format!(
@@ -361,14 +359,96 @@ pub fn exchange(
     Ok(response)
 }
 
+fn read_response_frame_with_deadline(
+    mut stream: LocalSocketStream,
+    request_deadline: Duration,
+    recv_deadline_support: LocalIpcDeadlineSupport,
+) -> Result<atm_core::protocol::FramePayload, AtmError> {
+    #[cfg(windows)]
+    if recv_deadline_support == LocalIpcDeadlineSupport::Unsupported {
+        return read_response_frame_with_helper(stream, request_deadline);
+    }
+    #[cfg(not(windows))]
+    let _ = (request_deadline, recv_deadline_support);
+
+    read_response_frame(&mut stream)
+}
+
+#[cfg(windows)]
+fn read_response_frame_with_helper(
+    mut stream: LocalSocketStream,
+    request_deadline: Duration,
+) -> Result<atm_core::protocol::FramePayload, AtmError> {
+    let (result_tx, result_rx) = mpsc::sync_channel(1);
+    thread::Builder::new()
+        .name("local-ipc-response-read-helper".to_string())
+        .spawn(move || {
+            let result = read_response_frame(&mut stream);
+            let _ = result_tx.send(result);
+        })
+        .map_err(|source| {
+            AtmError::daemon_unavailable("failed to spawn daemon local IPC read helper")
+                .with_recovery(
+                    "Retry the request after the same-host daemon read helper can be created again.",
+                )
+                .with_source(source)
+        })?;
+
+    let started = Instant::now();
+    loop {
+        let remaining = request_deadline.saturating_sub(started.elapsed());
+        if remaining.is_zero() {
+            return Err(AtmError::daemon_unavailable(
+                "timed out reading daemon response frame",
+            )
+            .with_recovery(
+                "Retry the request after atm-daemon reaches serving state. If the same-host read path remains stuck, inspect daemon and local IPC health before retrying again.",
+            ));
+        }
+        let poll = std::cmp::min(remaining, LOCAL_IPC_READ_HELPER_POLL_INTERVAL);
+        match result_rx.recv_timeout(poll) {
+            Ok(result) => return result,
+            Err(mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(AtmError::daemon_unavailable(
+                    "daemon local IPC read helper disconnected unexpectedly",
+                )
+                .with_recovery(
+                    "Retry the request after the same-host daemon read helper can be created again.",
+                ));
+            }
+        }
+    }
+}
+
+fn read_response_frame(
+    stream: &mut LocalSocketStream,
+) -> Result<atm_core::protocol::FramePayload, AtmError> {
+    atm_core::protocol::read_frame(
+        stream,
+        "failed to read daemon response frame",
+        "daemon response frame exceeded the maximum supported size",
+    )?
+    .ok_or_else(|| {
+        AtmError::daemon_unavailable(
+            "daemon closed the local IPC connection before returning a response frame",
+        )
+        .with_recovery(
+            "Retry the request after atm-daemon reaches serving state and inspect daemon logs if the problem persists.",
+        )
+    })
+}
+
 fn apply_local_ipc_deadline(
     result: std::io::Result<()>,
     message: &'static str,
-) -> Result<(), AtmError> {
+) -> Result<LocalIpcDeadlineSupport, AtmError> {
     match result {
-        Ok(()) => Ok(()),
+        Ok(()) => Ok(LocalIpcDeadlineSupport::Applied),
         #[cfg(windows)]
-        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => Ok(()),
+        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
+            Ok(LocalIpcDeadlineSupport::Unsupported)
+        }
         Err(source) => Err(AtmError::daemon_unavailable(message).with_source(source)),
     }
 }
