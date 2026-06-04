@@ -18,7 +18,7 @@ Authoritative supporting inventory:
 | `AA.3` | `complete` | `feature/pAA-s3-direct-doctor-and-runtime-health-split` | `../atm-core-worktrees/feature/pAA-s3-direct-doctor-and-runtime-health-split` | `atm doctor` regains direct local store diagnostics; daemon aggregates injected subsystem reports plus daemon-owned runtime state without backend-specific diagnosis logic |
 | `AA.4` | `complete` | `feature/pAA-s4-delete-daemon-sqlite-leaks` | `../atm-core-worktrees/feature/pAA-s4-delete-daemon-sqlite-leaks` | remaining SQLite observability, replay, and test-support leaks are removed from `atm-daemon` |
 | `AA.5` | `complete` | `feature/pAA-s5-boundary-relock-and-permanent-enforcement` | `../atm-core-worktrees/feature/pAA-s5-boundary-relock-and-permanent-enforcement` | daemon-to-SQLite edge is forbidden again, all boundary TOMLs agree on that policy, and a second enforcement layer exists beyond TOML lint |
-| `AA.6` | `planned` | `feature/pAA-s6-obs-upgrade` | `../atm-core-worktrees/feature/pAA-s6-obs-upgrade` | ATM builds and validates on `sc-observability` / `sc-observability-types` `1.2.0` with the queue-backed logger API, retained-log policy field migration, and updated health projection |
+| `AA.6` | `complete` | `feature/pAA-s6-obs-upgrade` | `../atm-core-worktrees/feature/pAA-s6-obs-upgrade` | ATM builds and validates on `sc-observability` / `sc-observability-types` `1.2.0` with the queue-backed logger API, retained-log policy field migration, and updated health projection |
 
 ## Phase Exit Criteria
 
