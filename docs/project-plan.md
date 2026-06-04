@@ -70,6 +70,16 @@ Phase-AA simplification note:
   concrete SQLite construction to a dedicated `atm-runtime` crate and
   restoring a direct local doctor/store-health path
 
+Phase-AB planning note:
+- `Phase AB` is the active cross-host smoke planning line that follows the
+  completed same-host release-readiness work in `Phase Z`
+- the authoritative planning document is
+  [`docs/plan-phase-AB.md`](./plan-phase-AB.md)
+- `Phase AB` owns Windows/macOS real-binary cross-host smoke coverage on
+  disposable clean-room state first, then disposable copied-state revalidation
+- the planning branch is `plan/phase-AB`
+- the execution integration branch is `integrate/phase-AB`
+
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
   - new crates
@@ -107,6 +117,8 @@ Status:
 - Phase AA is the architectural simplification planning line for removing
   SQLite references from `atm-daemon` and moving concrete runtime assembly out
   to `atm-runtime`.
+- Phase AB is the active planning line for Windows/macOS cross-host ATM smoke
+  execution after the accepted Phase Z baseline.
 - the current merged workspace contains:
   - `crates/atm-core`
   - `crates/atm`
@@ -3990,3 +4002,57 @@ Acceptance / Phase Entry Gate:
   on the accepted `integrate/phase-Z` line
 - the final `Z.4` release verdict must not close until `Z.23` and `Z.24` also
   close on the accepted `integrate/phase-Z` line
+
+## 37. Phase AB Windows/macOS Cross-Host Smoke
+
+Status summary:
+- `Phase Z` is complete and remains the accepted same-host release-readiness
+  line on `develop`.
+- Windows same-host build/test and release-binary daemon parity have been
+  restored on the post-`Z` baseline.
+- cross-host messaging between Windows and macOS has not yet been validated in
+  one authoritative executable smoke phase.
+- `Phase AB` is the next planning line and is not yet started.
+
+Planning branch:
+- `plan/phase-AB`
+
+Future integration branch:
+- `integrate/phase-AB`
+
+Goal:
+- validate Windows <-> macOS cross-host ATM messaging on real binaries
+- keep clean-room disposable state as the first validation lane
+- prove durable send/read/ack, degraded notification visibility, and
+  retry-visible recovery across hosts
+- revalidate on copied state only after the disposable lane passes
+
+Execution shape:
+- `AB.1` cross-host harness and clean-room baseline
+  - branch: `feature/pAB-s1-cross-host-harness-and-clean-room-baseline`
+- `AB.2` one-way cross-host delivery
+  - branch: `feature/pAB-s2-one-way-cross-host-delivery`
+- `AB.3` cross-host ack round-trip
+  - branch: `feature/pAB-s3-cross-host-ack-round-trip`
+- `AB.4` degraded notification and retry-visible recovery
+  - branch: `feature/pAB-s4-degraded-notification-and-retry-visible-recovery`
+- `AB.5` copied-state revalidation and readiness closeout
+  - branch: `feature/pAB-s5-copied-state-revalidation-and-readiness-closeout`
+
+Immediate planning outputs:
+- `docs/plan-phase-AB.md`
+- `docs/phase-AB/cross-host-smoke-checklist.md`
+- `docs/phase-AB/cross-host-findings-ledger.md`
+- `docs/phase-AB/readiness.md`
+- `docs/phase-AB/sprint-AB1.md`
+- `docs/phase-AB/sprint-AB2.md`
+- `docs/phase-AB/sprint-AB3.md`
+- `docs/phase-AB/sprint-AB4.md`
+- `docs/phase-AB/sprint-AB5.md`
+
+Acceptance / Phase Entry Gate:
+- `Phase Z` must remain closed on `develop`
+- the clean-room disposable host-pair lane must pass before copied-state
+  validation begins
+- the phase does not close until both disposable and copied-state cross-host
+  smoke lanes pass with retained evidence
