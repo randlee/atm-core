@@ -6,6 +6,7 @@ use std::fmt;
 use std::path::PathBuf;
 
 use super::{MessageKey, sealed};
+use crate::doctor::DoctorSeverity;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String", into = "String")]
@@ -352,6 +353,19 @@ pub struct MailStoreResponse {
     pub opened: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DoctorFinding {
+    pub code: &'static str,
+    pub severity: DoctorSeverity,
+    pub summary: String,
+    pub detail: Option<String>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct MailStoreDoctorReport {
+    pub findings: Vec<DoctorFinding>,
+}
+
 /// BOUNDARY-MailStore — see docs/atm-core/boundaries.md.
 pub trait MailStore: sealed::Sealed {
     /// # Errors
@@ -451,4 +465,13 @@ pub trait MailStore: sealed::Sealed {
         &self,
         request: MailStoreHealthSnapshotRequest,
     ) -> Result<MailStoreHealthSnapshotResponse, AtmError>;
+}
+
+/// BOUNDARY-MailStoreDoctor — see docs/atm-core/boundaries.md.
+pub trait MailStoreDoctor: sealed::Sealed + Send + Sync {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when durable mail-store diagnostics cannot be
+    /// collected or summarized into the shared doctor report shape.
+    fn inspect_mail_store(&self) -> Result<MailStoreDoctorReport, AtmError>;
 }

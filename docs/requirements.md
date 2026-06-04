@@ -30,6 +30,11 @@ Phase-AA simplification direction:
 - each subsystem owns its own diagnostic trait and backend-specific diagnosis
 - top-level doctor code aggregates subsystem findings and daemon-owned runtime
   state, but must not reimplement backend-specific diagnosis logic
+- `MailStore`, `TaskStore`, and `RosterStore` remain the primary
+  storage-neutral capability traits during this simplification line
+- later SQLite-backed and Claude-JSON-backed implementations may satisfy that
+  same behavior-named trait family rather than forcing backend-shaped parallel
+  trait trees
 
 The retained product surface is:
 - `atm send`

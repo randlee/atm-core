@@ -9,6 +9,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
+use super::mail::DoctorFinding;
 use super::{AckTransition, MessageKey, ReplaySource, TaskState, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
@@ -269,6 +270,11 @@ pub struct TaskStoreResponse {
     pub record: TaskStoreTaskRecord,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct TaskStoreDoctorReport {
+    pub findings: Vec<DoctorFinding>,
+}
+
 /// Stub roster-store request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct RosterStoreReplaceRosterRequest {
@@ -361,6 +367,11 @@ pub struct RosterStoreResponse {
     pub replaced: bool,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct RosterStoreDoctorReport {
+    pub findings: Vec<DoctorFinding>,
+}
+
 /// Stub config-ingress request for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct ConfigLoadRequest {
@@ -371,6 +382,11 @@ pub struct ConfigLoadRequest {
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct ConfigLoadResponse {
     pub config: Option<AtmConfig>,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Default)]
+pub struct ConfigDoctorReport {
+    pub findings: Vec<DoctorFinding>,
 }
 
 /// Imported source-file snapshot returned by inbox ingress.
@@ -552,6 +568,15 @@ pub trait TaskStore: sealed::Sealed {
     ) -> Result<TaskStoreQueryTaskMetadataResponse, AtmError>;
 }
 
+/// BOUNDARY-TaskStoreDoctor — see docs/atm-core/boundaries.md.
+pub trait TaskStoreDoctor: sealed::Sealed + Send + Sync {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when durable task-store diagnostics cannot be
+    /// collected or summarized into the shared doctor report shape.
+    fn inspect_task_store(&self) -> Result<TaskStoreDoctorReport, AtmError>;
+}
+
 /// BOUNDARY-RosterStore — see docs/atm-core/boundaries.md.
 pub trait RosterStore: sealed::Sealed {
     /// # Errors
@@ -592,6 +617,15 @@ pub trait RosterStore: sealed::Sealed {
     ) -> Result<RosterStoreHealthSnapshotResponse, AtmError>;
 }
 
+/// BOUNDARY-RosterStoreDoctor — see docs/atm-core/boundaries.md.
+pub trait RosterStoreDoctor: sealed::Sealed + Send + Sync {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when durable roster-store diagnostics cannot be
+    /// collected or summarized into the shared doctor report shape.
+    fn inspect_roster_store(&self) -> Result<RosterStoreDoctorReport, AtmError>;
+}
+
 /// BOUNDARY-ConfigIngress — see docs/atm-core/boundaries.md.
 pub trait ConfigIngress: sealed::Sealed {
     /// # Errors
@@ -599,6 +633,15 @@ pub trait ConfigIngress: sealed::Sealed {
     /// Returns `AtmError` when persisted ATM configuration cannot be loaded,
     /// parsed, or validated into typed models.
     fn load_config(&self, request: ConfigLoadRequest) -> Result<ConfigLoadResponse, AtmError>;
+}
+
+/// BOUNDARY-ConfigDoctor — see docs/atm-core/boundaries.md.
+pub trait ConfigDoctor: sealed::Sealed + Send + Sync {
+    /// # Errors
+    ///
+    /// Returns `AtmError` when config diagnostics cannot be collected or
+    /// summarized into the shared doctor report shape.
+    fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError>;
 }
 
 /// BOUNDARY-InboxIngress — see docs/atm-core/boundaries.md.

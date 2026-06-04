@@ -103,6 +103,11 @@ Required rules:
     `atm-daemon`
   - daemon crates must not retain direct SQLite assembly dependencies after
     the Phase AA simplification line closes
+  - `atm-rusqlite` owns store-doctor behavior behind the subsystem-owned
+    `MailStoreDoctor`, `TaskStoreDoctor`, and `RosterStoreDoctor` traits
+  - minimum store-doctor responsibilities are path resolution, openability,
+    schema/bootstrap/migration readiness, bounded store findings, and bounded
+    task-store findings when task persistence shares the same store
 - schema bootstrap must be deterministic and idempotent
 - schema bootstrap must run once per database root before normal store
   operations, not on every connection acquisition

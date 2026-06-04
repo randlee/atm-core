@@ -101,6 +101,8 @@ Phase-AA target direction:
 - daemon doctor code aggregates subsystem reports and daemon-owned runtime
   state only, and may compare reports for drift without reimplementing backend
   diagnosis
+- the aggregate-only doctor surface consumes `MailStoreDoctor`,
+  `TaskStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor`
 
 Phase R redesign notes:
 - `atm-daemon` remains runtime-oriented, not business-logic-oriented

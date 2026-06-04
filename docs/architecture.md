@@ -99,6 +99,10 @@ Phase-AA simplification note:
   instead of daemon-local backend-aware helpers
 - top-level doctor code may aggregate subsystem reports and daemon-owned
   runtime state, but must not reimplement backend-specific diagnosis logic
+- `MailStore`, `TaskStore`, and `RosterStore` remain the primary
+  storage-neutral capability traits
+- backend-specific implementations such as SQLite-backed and Claude-JSON-backed
+  adapters are allowed to satisfy that same behavior-named trait family
 
 ## 2. Crate Boundaries
 

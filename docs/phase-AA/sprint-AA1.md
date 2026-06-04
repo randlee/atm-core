@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.1
 worktree: ../atm-core-worktrees/feature/pAA-s1-subsystem-doctor-traits
 branch: feature/pAA-s1-subsystem-doctor-traits
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
