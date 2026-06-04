@@ -9,6 +9,12 @@ use interprocess::local_socket::prelude::*;
 const LISTENER_WAKE_CONNECT_DEADLINE: Duration = Duration::from_millis(250);
 const REQUEST_DEADLINE: Duration = Duration::from_secs(3);
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeadlineSupport {
+    Applied,
+    Unsupported,
+}
+
 pub(crate) fn schedule_delayed_listener_wake(
     endpoint_path: PathBuf,
     delay: Duration,
@@ -78,15 +84,17 @@ pub(crate) fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {
             ));
         }
     };
-    stream
-        .set_send_timeout(Some(REQUEST_DEADLINE))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to apply daemon listener wake timeout")
-                .with_recovery(
-                    "Restart the daemon; the shutdown wake connection could not apply its bounded send deadline.",
-                )
-                .with_source(source)
-        })?;
+    let send_deadline_support = apply_listener_wake_deadline(
+        stream.set_send_timeout(Some(REQUEST_DEADLINE)),
+        "failed to apply daemon listener wake timeout",
+    )?;
+    if send_deadline_support == DeadlineSupport::Unsupported {
+        // The wake path only needs the connect itself to unblock accept(). On Windows named
+        // pipes, explicit flush can block until the peer drains the send buffer, so once the
+        // timeout API is reported as unsupported we drop the empty wake connection immediately
+        // instead of reintroducing an unbounded wait while shutting the daemon down.
+        return Ok(());
+    }
     stream.flush().map_err(|source| {
         AtmError::daemon_unavailable("failed to flush daemon listener wake signal")
             .with_recovery(
@@ -95,4 +103,22 @@ pub(crate) fn wake_listener(endpoint_path: &Path) -> Result<(), AtmError> {
             .with_source(source)
     })?;
     Ok(())
+}
+
+fn apply_listener_wake_deadline(
+    result: std::io::Result<()>,
+    message: &'static str,
+) -> Result<DeadlineSupport, AtmError> {
+    match result {
+        Ok(()) => Ok(DeadlineSupport::Applied),
+        #[cfg(windows)]
+        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
+            Ok(DeadlineSupport::Unsupported)
+        }
+        Err(source) => Err(AtmError::daemon_unavailable(message)
+            .with_recovery(
+                "Restart the daemon; the shutdown wake connection could not apply its bounded send deadline.",
+            )
+            .with_source(source)),
+    }
 }

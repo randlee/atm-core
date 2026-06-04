@@ -26,6 +26,27 @@ enum RequestExecutionRisk {
     SideEffecting,
 }
 
+#[cfg_attr(not(windows), allow(dead_code))]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum DeadlineSupport {
+    Applied,
+    Unsupported,
+}
+
+#[cfg(windows)]
+const WINDOWS_READ_HELPER_POLL_INTERVAL: std::time::Duration =
+    std::time::Duration::from_millis(100);
+
+enum ReadRequestFrameResult {
+    EndOfStream,
+    Frame {
+        stream: LocalSocketStream,
+        frame: atm_core::protocol::FramePayload,
+    },
+    #[cfg(windows)]
+    TimedOut,
+}
+
 pub(super) fn handle_connection(
     mut stream: LocalSocketStream,
     dispatcher: Arc<dyn RequestDispatcher + Send + Sync>,
@@ -36,10 +57,42 @@ pub(super) fn handle_connection(
     if force_shutdown.load(Ordering::SeqCst) {
         return write_shutdown_response(&mut stream, &codec).map(|_| ());
     }
-    configure_request_deadlines(&stream)?;
+    let read_deadline_support = configure_request_deadlines(&stream)?;
 
-    let Some(frame) = read_request_frame(&mut stream)? else {
-        return Ok(());
+    let frame = match read_request_frame_with_deadline(
+        stream,
+        force_shutdown,
+        read_deadline_support,
+    )? {
+        ReadRequestFrameResult::EndOfStream => return Ok(()),
+        ReadRequestFrameResult::Frame {
+            stream: resumed_stream,
+            frame,
+        } => {
+            stream = resumed_stream;
+            frame
+        }
+        #[cfg(windows)]
+        ReadRequestFrameResult::TimedOut if force_shutdown.load(Ordering::SeqCst) => {
+            tracing::info!(
+                subsystem = "local_ipc",
+                action = "request_read",
+                outcome = "forced_shutdown",
+                "daemon forced shutdown interrupted a Windows same-host request read before a complete frame arrived"
+            );
+            return Ok(());
+        }
+        #[cfg(windows)]
+        ReadRequestFrameResult::TimedOut => {
+            tracing::warn!(
+                subsystem = "local_ipc",
+                action = "request_read",
+                outcome = "deadline_exceeded",
+                deadline_ms = REQUEST_DEADLINE.as_millis() as u64,
+                "daemon local IPC request read exceeded the runtime deadline; closing the stalled connection"
+            );
+            return Ok(());
+        }
     };
     tracing::debug!(
         max_daemon_frame_bytes = atm_core::protocol::MAX_DAEMON_FRAME_BYTES,
@@ -63,25 +116,68 @@ pub(super) fn handle_connection(
     Ok(())
 }
 
-fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<(), AtmError> {
-    stream
-        .set_recv_timeout(Some(REQUEST_DEADLINE))
+fn read_request_frame_with_deadline(
+    mut stream: LocalSocketStream,
+    force_shutdown: &AtomicBool,
+    read_deadline_support: DeadlineSupport,
+) -> Result<ReadRequestFrameResult, AtmError> {
+    #[cfg(windows)]
+    if read_deadline_support == DeadlineSupport::Unsupported {
+        return read_request_frame_with_helper(stream, force_shutdown);
+    }
+    #[cfg(not(windows))]
+    let _ = (force_shutdown, read_deadline_support);
+
+    match read_request_frame(&mut stream)? {
+        None => Ok(ReadRequestFrameResult::EndOfStream),
+        Some(frame) => Ok(ReadRequestFrameResult::Frame { stream, frame }),
+    }
+}
+
+#[cfg(windows)]
+fn read_request_frame_with_helper(
+    mut stream: LocalSocketStream,
+    force_shutdown: &AtomicBool,
+) -> Result<ReadRequestFrameResult, AtmError> {
+    let (result_tx, result_rx) = std::sync::mpsc::sync_channel(1);
+    std::thread::Builder::new()
+        .name("local-ipc-read-helper".to_string())
+        .spawn(move || {
+            let result = read_request_frame(&mut stream);
+            let _ = result_tx.send((stream, result));
+        })
         .map_err(|source| {
-            AtmError::daemon_unavailable("failed to apply daemon request read deadline")
+            AtmError::daemon_unavailable("failed to spawn Windows named-pipe request read helper")
                 .with_recovery(
-                    "Restart the daemon; the same-host request socket could not apply its bounded read deadline.",
+                    "Restart the daemon; the same-host Windows request read helper could not be created.",
                 )
                 .with_source(source)
         })?;
-    stream
-        .set_send_timeout(Some(REQUEST_DEADLINE))
-        .map_err(|source| {
-            AtmError::daemon_unavailable("failed to apply daemon response write deadline")
-                .with_recovery(
-                    "Restart the daemon; the same-host request socket could not apply its bounded write deadline.",
+
+    let started = std::time::Instant::now();
+    loop {
+        let remaining = REQUEST_DEADLINE.saturating_sub(started.elapsed());
+        if remaining.is_zero() || force_shutdown.load(Ordering::SeqCst) {
+            return Ok(ReadRequestFrameResult::TimedOut);
+        }
+        let poll = std::cmp::min(remaining, WINDOWS_READ_HELPER_POLL_INTERVAL);
+        match result_rx.recv_timeout(poll) {
+            Ok((stream, Ok(Some(frame)))) => {
+                return Ok(ReadRequestFrameResult::Frame { stream, frame });
+            }
+            Ok((_, Ok(None))) => return Ok(ReadRequestFrameResult::EndOfStream),
+            Ok((_, Err(error))) => return Err(error),
+            Err(std::sync::mpsc::RecvTimeoutError::Timeout) => continue,
+            Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => {
+                return Err(AtmError::daemon_unavailable(
+                    "Windows named-pipe request read helper disconnected unexpectedly",
                 )
-                .with_source(source)
-        })
+                .with_recovery(
+                    "Restart the daemon; the same-host Windows request read helper stopped before it could return a frame result.",
+                ));
+            }
+        }
+    }
 }
 
 fn read_request_frame(
@@ -94,6 +190,18 @@ fn read_request_frame(
     )
 }
 
+fn configure_request_deadlines(stream: &LocalSocketStream) -> Result<DeadlineSupport, AtmError> {
+    let read_deadline_support = apply_optional_deadline(
+        stream.set_recv_timeout(Some(REQUEST_DEADLINE)),
+        "failed to apply daemon request read deadline",
+    )?;
+    apply_optional_deadline(
+        stream.set_send_timeout(Some(REQUEST_DEADLINE)),
+        "failed to apply daemon response write deadline",
+    )?;
+    Ok(read_deadline_support)
+}
+
 fn dispatch_advisory_stream(
     stream: &mut LocalSocketStream,
     dispatcher: &dyn RequestDispatcher,
@@ -102,13 +210,10 @@ fn dispatch_advisory_stream(
     request_id: RequestId,
     request: atm_core::AdvisoryStreamRequest,
 ) -> Result<(), AtmError> {
-    stream.set_send_timeout(Some(REQUEST_DEADLINE)).map_err(|source| {
-        AtmError::daemon_unavailable("failed to apply daemon advisory-stream write deadline")
-            .with_recovery(
-                "Restart the daemon; the same-host advisory stream socket could not apply its bounded write deadline.",
-            )
-            .with_source(source)
-    })?;
+    apply_deadline_contract(
+        stream.set_send_timeout(Some(REQUEST_DEADLINE)),
+        "failed to apply daemon advisory-stream write deadline",
+    )?;
     let mut sink = LocalIpcAdvisoryStreamSink {
         stream,
         codec,
@@ -116,6 +221,33 @@ fn dispatch_advisory_stream(
         force_shutdown,
     };
     dispatcher.dispatch_advisory_stream(request, &mut sink)
+}
+
+fn apply_deadline_contract(
+    result: std::io::Result<()>,
+    message: &'static str,
+) -> Result<(), AtmError> {
+    match apply_optional_deadline(result, message)? {
+        DeadlineSupport::Applied | DeadlineSupport::Unsupported => Ok(()),
+    }
+}
+
+fn apply_optional_deadline(
+    result: std::io::Result<()>,
+    message: &'static str,
+) -> Result<DeadlineSupport, AtmError> {
+    match result {
+        Ok(()) => Ok(DeadlineSupport::Applied),
+        #[cfg(windows)]
+        Err(source) if source.kind() == std::io::ErrorKind::Unsupported => {
+            Ok(DeadlineSupport::Unsupported)
+        }
+        Err(source) => Err(AtmError::daemon_unavailable(message)
+            .with_recovery(
+                "Restart the daemon; the same-host request socket could not apply its bounded deadline.",
+            )
+            .with_source(source)),
+    }
 }
 
 fn dispatch_request(
