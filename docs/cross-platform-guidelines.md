@@ -84,6 +84,13 @@ Use this procedure on a fresh Windows checkout of `feature/windows-test-parity`.
 machine should treat Git as the handoff channel: pull this branch first, then run the steps below
 from Windows PowerShell in the repository root.
 
+Observed result on the first Windows machine for this branch:
+- `PASS` after pulling `feature/windows-test-parity` and running the same-host daemon smoke flow
+- verified outcomes: `doctor --json` reached ready, the named pipe was published, `send` succeeded,
+  and `read --all --json` returned the delivered body
+- one environment caveat: stale local daemon/test processes can hold the host owner lock and must
+  be cleared before rerunning the smoke
+
 1. Prerequisites
    - Install the Rust MSVC toolchain (`rustup default stable-x86_64-pc-windows-msvc` or equivalent).
    - Clone `atm-core`, then pull the branch under test:
@@ -108,18 +115,19 @@ from Windows PowerShell in the repository root.
    $env:ATM_DAEMON_SOCKET = "\\.\pipe\atm-win-smoke"
    ```
 
-3. Build the release binaries
+3. Build the workspace
    ```powershell
-   cargo build --release -p atm-daemon -p atm-daemon-client
+   just build
    ```
    Pass indicator:
-   - `target\release\atm-daemon.exe` and `target\release\atm.exe` exist
+   - workspace build exits zero
+   - `target\debug\atm-daemon.exe` and `target\debug\atm.exe` exist
    Fail indicator:
-   - cargo exits non-zero or the release binaries are missing
+   - `just build` exits non-zero or the binaries are missing
 
 4. Run `atm doctor` and confirm the daemon reaches ready state
    ```powershell
-   $Doctor = .\target\release\atm.exe doctor --json | ConvertFrom-Json
+   $Doctor = .\target\debug\atm.exe doctor --json | ConvertFrom-Json
    $Doctor.summary.status
    $Doctor.runtime_status.readiness
    ```
@@ -141,8 +149,8 @@ from Windows PowerShell in the repository root.
 
 6. Confirm the daemon accepts a connection and a round-trip mailbox operation
    ```powershell
-   .\target\release\atm.exe send smoke-user "windows smoke hello" --json
-   .\target\release\atm.exe read --all --json
+   .\target\debug\atm.exe send smoke-user "windows smoke hello" --json
+   .\target\debug\atm.exe read --all --json
    ```
    Pass indicator:
    - `send` returns a normal sent result
