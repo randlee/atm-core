@@ -59,7 +59,8 @@ pub struct RuntimeAssembly {
 ```
 
 The direct CLI doctor path is allowed to depend on `atm-runtime` for runtime
-bundle and doctor assembly. It must not depend directly on `atm-rusqlite`.
+bundle and doctor assembly. `atm doctor` now assembles its local config/store
+doctor path here and must not depend directly on `atm-rusqlite`.
 
 ## Boundary Rule
 

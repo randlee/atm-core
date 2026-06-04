@@ -52,7 +52,7 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
         request: RequestEnvelope,
     ) -> Result<ResponseEnvelope, atm_core::error::AtmError> {
         match request {
-            RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(DoctorReport {
+            RequestEnvelope::Doctor(_) => Ok(ResponseEnvelope::Doctor(Box::new(DoctorReport {
                 summary: DoctorSummary {
                     status: DoctorStatus::Healthy,
                     message: "ok".to_string(),
@@ -77,9 +77,15 @@ impl RequestDispatcher for DoctorOnlyDispatcher {
                     diagnostic: None,
                     detail: None,
                 },
+                config: atm_core::boundary::ConfigDoctorReport::default(),
+                mail_store: atm_core::boundary::MailStoreDoctorReport::default(),
+                task_store: atm_core::boundary::TaskStoreDoctorReport::default(),
+                roster_store: atm_core::boundary::RosterStoreDoctorReport::default(),
+                daemon_runtime: None,
+                drift_findings: Vec::new(),
                 runtime_status: None,
                 bootstrap_trace: None,
-            })),
+            }))),
             other => panic!("unexpected request in DoctorOnlyDispatcher: {other:?}"),
         }
     }

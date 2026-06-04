@@ -1,4 +1,3 @@
-use crate::doctor::DoctorSeverity;
 use crate::error::AtmError;
 use crate::protocol::RequestEnvelope;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
@@ -12,14 +11,7 @@ use super::{
     TaskStore, TaskStoreDoctor, sealed,
 };
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DoctorFinding {
-    pub code: &'static str,
-    pub severity: DoctorSeverity,
-    pub summary: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub detail: Option<String>,
-}
+pub type DoctorFinding = crate::doctor::DoctorFinding;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteReplayStateRecord {

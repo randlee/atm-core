@@ -551,16 +551,15 @@ fn print_runtime_status(runtime_status: &RuntimeStatusSnapshot) {
         render_runtime_readiness(runtime_status.readiness)
     );
     println!(
-        "  SQLite ready: {} | Degraded ingest: {}",
-        render_bool(runtime_status.sqlite_ready),
-        render_bool(runtime_status.degraded_ingest)
-    );
-    println!(
         "  Members: active={} idle={} offline={} unknown={}",
         runtime_status.member_counts.active_members,
         runtime_status.member_counts.idle_members,
         runtime_status.member_counts.offline_members,
         runtime_status.member_counts.unknown_members
+    );
+    println!(
+        "  Degraded ingest: {}",
+        render_bool(runtime_status.degraded_ingest)
     );
     if let Some(owner_pid) = runtime_status.singleton_owner_pid {
         println!("  Singleton owner pid: {owner_pid}");

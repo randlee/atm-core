@@ -266,7 +266,7 @@ impl<'a> CliComposition<'a> {
                     error_code: None,
                     error_message: None,
                 });
-                Ok(outcome)
+                Ok(*outcome)
             }
             other => Err(unexpected_response("receive", other)),
         }
@@ -318,11 +318,15 @@ impl<'a> CliComposition<'a> {
         }
     }
 
+    #[allow(
+        dead_code,
+        reason = "AA.3 restores the direct local doctor path in DoctorCommand, but the daemon-routed doctor request seam remains covered by transport tests."
+    )]
     pub(crate) fn doctor(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
         match self.send_request(RequestEnvelope::Doctor(query))? {
             ResponseEnvelope::Doctor(mut report) => {
                 report.bootstrap_trace = self.bootstrap_trace.clone();
-                Ok(report)
+                Ok(*report)
             }
             other => Err(unexpected_response("doctor", other)),
         }

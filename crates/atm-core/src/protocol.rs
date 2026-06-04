@@ -65,9 +65,9 @@ pub enum ResponseEnvelope {
     Send(SendResponseEnvelope),
     Heartbeat(TeamMemberHeartbeatResponse),
     List(ListOutcome),
-    Receive(ReadOutcome),
+    Receive(Box<ReadOutcome>),
     Clear(ClearOutcome),
-    Doctor(DoctorReport),
+    Doctor(Box<DoctorReport>),
     AdvisoryRegister(AdvisorySessionRegistrationResponse),
     AdvisoryUnregister(AdvisorySessionUnregistrationResponse),
     AdvisoryFetch(AdvisoryFetchResponse),
@@ -785,8 +785,6 @@ pub struct RuntimeStatusSnapshot {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub singleton_owner_pid: Option<u32>,
     #[serde(default)]
-    pub sqlite_ready: bool,
-    #[serde(default)]
     pub degraded_ingest: bool,
     #[serde(default)]
     pub member_counts: RuntimeStatusCounts,
@@ -895,7 +893,6 @@ mod tests {
             readiness: RuntimeReadinessState::Ready,
             detail: Some("runtime cache ready".to_string()),
             singleton_owner_pid: Some(777),
-            sqlite_ready: true,
             degraded_ingest: false,
             member_counts: RuntimeStatusCounts {
                 active_members: 2,

@@ -2839,19 +2839,18 @@ Architectural rules:
 explicit daemon health interface.
 
 Architectural rules:
-- CLI doctor code queries daemon/runtime state through one explicit request /
+- CLI doctor code may answer direct local config/store checks without daemon
+  routing, but daemon-owned runtime state still crosses one explicit request /
   response boundary
 - the daemon owns collection of runtime-only health such as:
   - heartbeat-driven runtime member state
   - singleton ownership state
   - live status-cache health
   - ingest backlog / degraded-ingest state
-  - SQLite readiness/openability as observed by the runtime
 - the runtime-health DTO returned across that boundary must carry:
   - liveness
   - readiness
   - singleton-owner pid when known
-  - SQLite-ready state
   - degraded-ingest state
   - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
@@ -2862,9 +2861,9 @@ Phase AA target doctor split:
   daemon-owned runtime state
 - direct local doctor checks that only require config or store access do not
   need daemon routing
-- SQLite/store readiness will be removed from daemon-owned health collection in
-  `AA.3`, with `sqlite_ready` and `sqlite_detail` deleted per
-  `docs/phase-AA/sprint-AA3.md`
+- SQLite/store readiness has been removed from daemon-owned health collection
+  in `AA.3`; `RuntimeStatusSnapshot` carries no store-specific readiness
+  fields
 - store readiness then lives in direct local diagnostics or other subsystem
   doctor reports assembled above the backend, not in the daemon runtime DTO
 

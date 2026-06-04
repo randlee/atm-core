@@ -255,6 +255,7 @@ Phase R redesign notes:
   - `TaskStoreDoctorReport`
   - `RosterStoreDoctorReport`
   - `ConfigDoctorReport`
+  - `DaemonRuntimeDoctorReport`
 - the daemon may aggregate those subsystem reports and compare them for drift,
   but it must not reimplement backend-specific diagnosis logic
 - `atm-core` team-admin surfaces must treat ATM roster rows as canonical team

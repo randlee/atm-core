@@ -38,7 +38,8 @@ Notes:
   - `HeartbeatActivity` / `TeamMemberHeartbeat{Request,Response}` as the
     canonical daemon-owned member-liveness DTO family added in `R.15`
   - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
-    `atm doctor`
+    `atm doctor`; after `AA.3` it carries daemon-owned runtime state only and
+    no store-specific readiness fields
 - `atm-runtime-test-support` is an allowed workspace-local dependent for the
   retained-runtime test harness seam; it is not a production consumer
   boundary.

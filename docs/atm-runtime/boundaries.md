@@ -32,6 +32,7 @@ Forbidden edges:
 Notes:
 - `atm-runtime` is composition-only
 - direct local `ConfigDoctor` ownership lives here
+- direct local `atm doctor` assembly lives here
 - runtime shutdown finalization is exported through the storage-neutral
   `RuntimeStorageFinalizer` seam
 - daemon startup remains fail-closed on any `RuntimeBundle` construction error

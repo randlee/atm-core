@@ -2,6 +2,9 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
+use crate::boundary::{
+    ConfigDoctorReport, MailStoreDoctorReport, RosterStoreDoctorReport, TaskStoreDoctorReport,
+};
 use crate::error_codes::AtmErrorCode;
 use crate::observability::AtmObservabilityHealth;
 use crate::protocol::RuntimeStatusSnapshot;
@@ -87,6 +90,11 @@ pub struct BootstrapTraceReport {
     pub auto_start_detail: Option<String>,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
+pub struct DaemonRuntimeDoctorReport {
+    pub findings: Vec<DoctorFinding>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct DoctorReport {
     pub summary: DoctorSummary,
@@ -96,6 +104,14 @@ pub struct DoctorReport {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub member_roster: Option<MembersList>,
     pub observability: AtmObservabilityHealth,
+    pub config: ConfigDoctorReport,
+    pub mail_store: MailStoreDoctorReport,
+    pub task_store: TaskStoreDoctorReport,
+    pub roster_store: RosterStoreDoctorReport,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub daemon_runtime: Option<DaemonRuntimeDoctorReport>,
+    #[serde(default)]
+    pub drift_findings: Vec<DoctorFinding>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub runtime_status: Option<RuntimeStatusSnapshot>,
     #[serde(default, skip_serializing_if = "Option::is_none")]

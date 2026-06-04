@@ -30,6 +30,8 @@ live in `atm-daemon`.
 - `atm-runtime` must support an `atm -> atm-runtime` dependency edge for the
   direct local doctor path while forbidding any direct `atm -> atm-rusqlite`
   dependency.
+- `atm-runtime` must remain the assembly point used by `atm doctor` when it
+  performs direct local config/store diagnostics.
 - `atm-runtime` must support an `atm-daemon -> atm-runtime` dependency edge
   for runtime bundle assembly while preserving the forbidden
   `atm-daemon -> atm-rusqlite` edge.

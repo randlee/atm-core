@@ -3,12 +3,13 @@ use std::thread::JoinHandle;
 use std::time::Duration;
 
 use atm_core::{
-    RequestEnvelope, ResponseEnvelope,
+    LocalServiceRuntime, RequestEnvelope, ResponseEnvelope,
     ack::ack_mail,
     boundary,
     clear::clear_mail,
     doctor::{
-        self, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
+        self, DaemonRuntimeDoctorReport, DoctorFinding, DoctorQuery, DoctorReport, DoctorSeverity,
+        DoctorStatus, DoctorSummary,
     },
     error::AtmError,
     graft::{
@@ -37,6 +38,7 @@ use crate::notification_runtime::{NotificationRuntime, NotificationWorkerLivenes
 pub(crate) use crate::runtime_status_cache::MAX_STATUS_CACHE_ENTRIES;
 pub(crate) use crate::runtime_status_cache::RuntimeStatusCache;
 use crate::runtime_status_cache::{build_runtime_status_cache_state, runtime_status_finding};
+use atm_runtime::RuntimeAssembly;
 const SHUTDOWN_WAL_CHECKPOINT_DEADLINE: Duration = Duration::from_secs(2);
 // The retained observability flush is best-effort during shutdown; Phase S records this bounded
 // 2-second deadline as an accepted production exception in the anti-flake contract docs.
@@ -57,6 +59,8 @@ pub(crate) struct DaemonRequestDispatcher {
     advisory_runtime_observability: SubsystemObservability,
     runtime_health_observability: SubsystemObservability,
     status_cache: RuntimeStatusCache,
+    service_runtime: LocalServiceRuntime,
+    runtime_bundle: boundary::RuntimeBundle,
     roster_store: Option<Arc<dyn boundary::RosterStore + Send + Sync>>,
     storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
     notification_runtime: NotificationRuntime,
@@ -68,6 +72,8 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
         f.debug_struct("DaemonRequestDispatcher")
             .field("home_dir", &self.home_dir.as_path())
             .field("status_cache", &self.status_cache)
+            .field("service_runtime", &self.service_runtime)
+            .field("runtime_bundle", &self.runtime_bundle)
             .field("roster_store_present", &self.roster_store.is_some())
             .field(
                 "storage_finalizer_present",
@@ -322,8 +328,7 @@ impl DaemonRequestDispatcher {
         home_dir: AtmHomeDir,
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
-        roster_store: Arc<dyn boundary::RosterStore + Send + Sync>,
-        storage_finalizer: Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>,
+        runtime_assembly: RuntimeAssembly,
         notification_runtime: NotificationRuntime,
     ) -> Self {
         let advisory_runtime_observability = SubsystemObservability::new(
@@ -332,6 +337,7 @@ impl DaemonRequestDispatcher {
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
+        let roster_store = runtime_assembly.runtime_bundle.roster_store.clone();
         match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
@@ -340,14 +346,13 @@ impl DaemonRequestDispatcher {
                     action = "sqlite_cache_hydration",
                     outcome = "degraded",
                     %error,
-                    "failed to hydrate runtime status cache from sqlite roster state"
+                    "failed to hydrate runtime status cache from runtime-bound roster state"
                 );
                 runtime_health_observability.emit_or_warn(
                     "sqlite_cache_hydration",
                     "degraded",
-                    "failed to hydrate runtime status cache from sqlite roster state",
+                    "failed to hydrate runtime status cache from runtime-bound roster state",
                 );
-                status_cache.mark_sqlite_unavailable();
             }
         }
         Self {
@@ -356,8 +361,10 @@ impl DaemonRequestDispatcher {
             advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability: runtime_health_observability.clone(),
             status_cache,
+            service_runtime: runtime_assembly.service_runtime,
+            runtime_bundle: runtime_assembly.runtime_bundle,
             roster_store: Some(roster_store),
-            storage_finalizer: Some(storage_finalizer),
+            storage_finalizer: Some(runtime_assembly.storage_finalizer),
             notification_runtime,
             advisory_runtime: AdvisoryRuntime::new_with_observability(
                 advisory_runtime_observability,
@@ -415,16 +422,18 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
                 query,
                 self.observability.as_ref(),
             )?)),
-            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(read_mail(
+            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(Box::new(read_mail(
                 query,
                 self.observability.as_ref(),
-            )?)),
+            )?))),
             RequestEnvelope::Clear(query) => Ok(ResponseEnvelope::Clear(clear_mail(
                 query,
                 self.observability.as_ref(),
             )?)),
             RequestEnvelope::Doctor(query) => {
-                Ok(ResponseEnvelope::Doctor(self.project_doctor_report(query)?))
+                Ok(ResponseEnvelope::Doctor(Box::new(
+                    self.project_doctor_report(query)?,
+                )))
             }
             RequestEnvelope::AdvisoryRegister(request) => Ok(ResponseEnvelope::AdvisoryRegister(
                 self.register_advisory_session(request)?,
@@ -466,14 +475,13 @@ impl DaemonRequestDispatcher {
                 self.runtime_health_observability.emit_or_warn(
                     "reload_unavailable",
                     "failed",
-                    "sqlite-backed daemon runtime reload is unavailable because the sqlite boundary is not assembled",
+                    "daemon runtime reload is unavailable because the roster store is not assembled",
                 );
-                self.status_cache.mark_sqlite_unavailable();
                 AtmError::daemon_unavailable(
-                    "sqlite-backed daemon runtime reload is unavailable because the sqlite boundary is not assembled",
+                    "daemon runtime reload is unavailable because the roster store is not assembled",
                 )
                 .with_recovery(
-                    "Restore the host-scoped ATM SQLite durable-state database and restart atm-daemon before retrying SIGHUP reload.",
+                    "Restore the runtime-bound roster store and restart atm-daemon before retrying SIGHUP reload.",
                 )
             })?;
         let current_state = self.status_cache.clone_state();
@@ -521,14 +529,13 @@ impl DaemonRequestDispatcher {
                 self.runtime_health_observability.emit_or_warn(
                     "heartbeat_unavailable",
                     "failed",
-                    "sqlite-backed roster truth is unavailable for daemon heartbeats",
+                    "daemon heartbeats are unavailable because the roster store is not assembled",
                 );
-                self.status_cache.mark_sqlite_unavailable();
                 AtmError::daemon_unavailable(
-                    "sqlite-backed roster truth is unavailable for daemon heartbeats",
+                    "daemon heartbeats are unavailable because the roster store is not assembled",
                 )
                 .with_recovery(
-                    "Restore the host-scoped ATM SQLite database and restart atm-daemon before retrying heartbeat traffic.",
+                    "Restore the runtime-bound roster store and restart atm-daemon before retrying heartbeat traffic.",
                 )
             })?;
         let membership = roster_store.query_membership(
@@ -590,15 +597,25 @@ impl DaemonRequestDispatcher {
     }
 
     fn project_doctor_report(&self, query: DoctorQuery) -> Result<DoctorReport, AtmError> {
-        let mut report = doctor::run_doctor(query, self.observability.as_ref())?;
         let daemon_observability_finding = match self.observability.health() {
             Ok(health) => daemon_observability_finding(&health),
             Err(error) => doctor::health::observability_finding_from_error(&error),
         };
-        report.findings.push(daemon_observability_finding);
-        report.findings.push(notification_worker_liveness_finding(
-            project_runtime_health(&self.notification_runtime),
-        ));
+        let daemon_runtime = DaemonRuntimeDoctorReport {
+            findings: vec![
+                daemon_observability_finding,
+                notification_worker_liveness_finding(project_runtime_health(
+                    &self.notification_runtime,
+                )),
+            ],
+        };
+        let mut report = doctor::run_doctor_with_runtime_bundle(
+            query,
+            self.observability.as_ref(),
+            &self.service_runtime,
+            &self.runtime_bundle,
+            Some(daemon_runtime),
+        )?;
         let runtime_status = match &report.member_roster {
             Some(roster) => self.status_cache.snapshot_for_members(
                 roster
@@ -608,9 +625,15 @@ impl DaemonRequestDispatcher {
             ),
             None => self.status_cache.snapshot(),
         };
-        report
-            .findings
-            .push(runtime_status_finding(&runtime_status));
+        let runtime_status_finding = runtime_status_finding(&runtime_status);
+        report.findings.push(runtime_status_finding.clone());
+        if let Some(daemon_runtime) = report.daemon_runtime.as_mut() {
+            daemon_runtime.findings.push(runtime_status_finding);
+        } else {
+            report.daemon_runtime = Some(DaemonRuntimeDoctorReport {
+                findings: vec![runtime_status_finding],
+            });
+        }
         report.recommendations = report
             .findings
             .iter()
