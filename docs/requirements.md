@@ -24,6 +24,9 @@ Phase-AA simplification direction:
 - the daemon remains part of the product, but it must return to the original
   thin-router role
 - concrete SQLite construction moves to a dedicated `atm-runtime` crate
+- `AA.2` lands that composition root and moves production runtime/store
+  assembly there; later AA sprints finish the doctor split, delete remaining
+  daemon SQLite leaks, and relock the boundary permanently
 - the daemon must not know that the current durable adapter is SQLite
 - direct local diagnostics such as store-openability and baseline SQLite
   health may be answered without routing through the daemon

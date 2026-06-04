@@ -5,6 +5,8 @@ use super::DaemonRequestDispatcher;
 use crate::notification_runtime::NotificationRuntime;
 use crate::runtime_status_cache::{RuntimeStatusCache, build_runtime_status_cache_state};
 use crate::sqlite_observability::DaemonSqliteObservability;
+use atm_core::{LocalFileNonClaudeOutbound, LocalFileNotificationSink};
+use atm_runtime::{RuntimeAssemblyInputs, assemble_sqlite_runtime};
 
 impl DaemonRequestDispatcher {
     pub(crate) fn new_for_test(
@@ -52,6 +54,17 @@ impl DaemonRequestDispatcher {
                 None
             }
         };
+        let runtime_assembly = sqlite_boundary.as_ref().and_then(|_| {
+            assemble_sqlite_runtime(RuntimeAssemblyInputs {
+                sqlite_db_path: roster_db_path.clone(),
+                sqlite_observability: Arc::clone(&sqlite_observability),
+                non_claude_outbound: Arc::new(LocalFileNonClaudeOutbound::new()),
+                notification_sink: Arc::new(LocalFileNotificationSink::at_path(
+                    home_dir.join("notifications.jsonl"),
+                )),
+            })
+            .ok()
+        });
         let advisory_runtime_observability = crate::SubsystemObservability::new(
             crate::DaemonSubsystem::AdvisoryRuntime,
             Arc::clone(&runtime_observability),
@@ -72,7 +85,12 @@ impl DaemonRequestDispatcher {
             advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability,
             status_cache,
-            sqlite_boundary,
+            roster_store: runtime_assembly
+                .as_ref()
+                .map(|assembly| assembly.runtime_bundle.roster_store.clone()),
+            storage_finalizer: runtime_assembly
+                .as_ref()
+                .map(|assembly| assembly.storage_finalizer.clone()),
             notification_runtime,
             advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new_with_observability(
                 advisory_runtime_observability,

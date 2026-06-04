@@ -8,9 +8,10 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread;
 use std::time::{Duration, Instant};
 
-use crate::RemoteReplayStateRecord;
 use atm_core::AtmConfig;
-use atm_core::boundary::{self, AtmProtocol, ClientTransport, MessageKey};
+use atm_core::boundary::{
+    self, AtmProtocol, ClientTransport, MessageKey, RemoteReplayStateRecord, RemoteReplayStore,
+};
 use atm_core::error::{AtmError, AtmErrorCode};
 use atm_core::protocol::{
     JsonAtmProtocolCodec, RequestEnvelope, ResponseEnvelope, TeamMemberHeartbeatRequest,
@@ -117,21 +118,6 @@ fn daemon_peer_endpoint_from_env() -> Option<SocketAddr> {
     }
 }
 
-pub(crate) trait RemoteReplayStore: Send + Sync + std::fmt::Debug {
-    fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError>;
-
-    fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError>;
-
-    fn delete(
-        &self,
-        team: &TeamName,
-        agent: &AgentName,
-        message_key: &MessageKey,
-    ) -> Result<(), AtmError>;
-
-    fn purge_expired(&self, now: IsoTimestamp) -> Result<usize, AtmError>;
-}
-
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum AttemptFailureKind {
     Retryable,
@@ -159,13 +145,28 @@ pub(crate) struct ReplayResumeSummary {
     pub(crate) purged_expired: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 struct PeerClientTransport {
     endpoint: Option<SocketAddr>,
     config: PeerTransportConfig,
     replay_store: Option<Arc<dyn RemoteReplayStore>>,
     codec: JsonAtmProtocolCodec,
     observability: SubsystemObservability,
+}
+
+impl std::fmt::Debug for PeerClientTransport {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("PeerClientTransport")
+            .field("endpoint", &self.endpoint)
+            .field("config", &self.config)
+            .field(
+                "replay_store",
+                &self.replay_store.as_ref().map(|_| "dyn RemoteReplayStore"),
+            )
+            .field("codec", &"JsonAtmProtocolCodec")
+            .field("observability", &self.observability)
+            .finish()
+    }
 }
 
 impl PeerClientTransport {
@@ -191,7 +192,7 @@ impl PeerClientTransport {
         replay_db_path: PathBuf,
     ) -> Self {
         let replay_store =
-            crate::sqlite_remote_replay_store_from_path(replay_db_path).expect("replay store");
+            atm_runtime::sqlite_remote_replay_store_for_test(replay_db_path).expect("replay store");
         Self {
             endpoint: Some(endpoint),
             config,
@@ -1023,7 +1024,7 @@ mod tests {
         let team: TeamName = "test-team".parse().expect("team");
         let agent: AgentName = "test-agent".parse().expect("agent");
         let replay_store =
-            crate::sqlite_remote_replay_store_from_path(tempdir.path().join("mail.db"))
+            atm_runtime::sqlite_remote_replay_store_for_test(tempdir.path().join("mail.db"))
                 .expect("replay store");
         let client = PeerClientTransport {
             endpoint: None,
@@ -1057,7 +1058,7 @@ mod tests {
         let team: TeamName = "test-team".parse().expect("team");
         let agent: AgentName = "test-agent".parse().expect("agent");
         let replay_store =
-            crate::sqlite_remote_replay_store_from_path(tempdir.path().join("mail.db"))
+            atm_runtime::sqlite_remote_replay_store_for_test(tempdir.path().join("mail.db"))
                 .expect("replay store");
         let client = PeerClientTransport {
             endpoint: Some(SocketAddr::from((Ipv4Addr::LOCALHOST, 7002))),

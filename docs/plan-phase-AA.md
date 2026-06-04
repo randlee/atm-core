@@ -228,6 +228,12 @@ Execution worktree:
 
 ### AA.2 `atm-runtime` Skeleton And Composition Transfer
 
+Status:
+- complete on `feature/pAA-s2-atm-runtime-composition-transfer`
+- `atm-runtime` now owns concrete production runtime/store assembly
+- the target-state runtime boundary is frozen in
+  `boundaries/atm-runtime/runtime-composition.toml`
+
 Purpose:
 - add `crates/atm-runtime`
 - move concrete SQLite construction and production runtime wiring there

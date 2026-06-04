@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.2
 worktree: ../atm-core-worktrees/feature/pAA-s2-atm-runtime-composition-transfer
 branch: feature/pAA-s2-atm-runtime-composition-transfer
-status: planned
+status: complete
 estimated_scope: large
 ```
 

@@ -47,8 +47,19 @@ pub struct RuntimeBundle {
 `atm-daemon` must consume only this kind of injected storage-neutral bundle and
 must not construct `SqliteBoundaryAssembly` directly.
 
-The direct CLI doctor path is allowed to depend on `atm-runtime` for this
-bundle/doctor assembly. It must not depend directly on `atm-rusqlite`.
+The concrete public assembly surface exported by `atm-runtime` is the
+`RuntimeAssembly` family:
+
+```rust
+pub struct RuntimeAssembly {
+    pub service_runtime: LocalServiceRuntime,
+    pub runtime_bundle: RuntimeBundle,
+    pub storage_finalizer: Arc<dyn RuntimeStorageFinalizer>,
+}
+```
+
+The direct CLI doctor path is allowed to depend on `atm-runtime` for runtime
+bundle and doctor assembly. It must not depend directly on `atm-rusqlite`.
 
 ## Boundary Rule
 
@@ -60,3 +71,7 @@ That authorization does not extend to `atm-daemon`.
 Any `RuntimeBundle` assembly failure is fail-closed. The daemon must not enter
 serving state if any required runtime component, including replay-store
 construction, fails.
+
+Shutdown-time storage finalization follows the same ownership split:
+- `atm-runtime` injects a storage-neutral `RuntimeStorageFinalizer`
+- daemon runtime code uses that seam instead of talking directly to SQLite

@@ -29,7 +29,7 @@ io_forbidden = [
 ]
 
 [dependencies]
-allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-runtime", "atm-runtime-test-support"]
 allowed_dependencies = [
   "atm-core",
   "rusqlite",

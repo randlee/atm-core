@@ -101,6 +101,9 @@ Required rules:
 - Phase-AA target direction:
   - the long-term concrete composition owner is `atm-runtime`, not
     `atm-daemon`
+  - `AA.2` lands that production composition transfer; any remaining direct
+    daemon references stay transition-scoped until `AA.4` / `AA.5` remove and
+    relock them
   - daemon crates must not retain direct SQLite assembly dependencies after
     the Phase AA simplification line closes
   - `atm-rusqlite` owns store-doctor behavior behind the subsystem-owned

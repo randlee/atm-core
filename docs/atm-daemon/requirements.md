@@ -30,8 +30,7 @@ The canonical daemon/client recovery text rule set lives in:
 - singleton daemon startup and host ownership
 - same-host daemon API transport
 - cross-host daemon-to-daemon transport
-- runtime composition of `atm-core` service boundaries
-- runtime composition of the current concrete adapter set used in production
+- daemon-side consumption of injected `atm-core` service boundaries
 - live agent status cache
 - runtime watch/reconcile loop if enabled
 - daemon-side `sc-observability` emission
@@ -47,7 +46,8 @@ The canonical daemon/client recovery text rule set lives in:
   boundary
 
 Phase-AA target direction:
-- `atm-daemon` stops being the concrete SQLite composition owner
+- `AA.2` moves concrete production runtime/store composition into
+  `atm-runtime`
 - SQLite construction, SQLite-specific observability injection, and direct
   SQLite health probing move out of this crate
 - daemon-owned doctor reporting is reduced to daemon-owned runtime state rather

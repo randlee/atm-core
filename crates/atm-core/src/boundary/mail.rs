@@ -6,7 +6,6 @@ use std::fmt;
 use std::path::PathBuf;
 
 use super::{MessageKey, sealed};
-use crate::doctor::DoctorSeverity;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String", into = "String")]
@@ -353,17 +352,9 @@ pub struct MailStoreResponse {
     pub opened: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct DoctorFinding {
-    pub code: &'static str,
-    pub severity: DoctorSeverity,
-    pub summary: String,
-    pub detail: Option<String>,
-}
-
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailStoreDoctorReport {
-    pub findings: Vec<DoctorFinding>,
+    pub findings: Vec<super::DoctorFinding>,
 }
 
 /// BOUNDARY-MailStore — see docs/atm-core/boundaries.md.

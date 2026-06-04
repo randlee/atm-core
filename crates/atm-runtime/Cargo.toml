@@ -1,15 +1,17 @@
 [package]
-name = "atm-daemon-bootstrap"
+name = "atm-runtime"
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
-description = "Shared same-host ATM daemon bootstrap helpers."
+description = "ATM concrete runtime composition crate."
 repository.workspace = true
 homepage.workspace = true
 
+[lib]
+name = "atm_runtime"
+
 [dependencies]
 atm-core = { package = "agent-team-mail-core", path = "../atm-core", version = "1.2.1" }
-atm-daemon-client = { path = "../atm-daemon-client", version = "1.2.1" }
-atm-runtime = { path = "../atm-runtime", version = "1.2.1" }
+atm-rusqlite = { path = "../atm-rusqlite", version = "1.2.1" }

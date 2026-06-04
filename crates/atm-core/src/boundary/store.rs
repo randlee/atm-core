@@ -9,8 +9,7 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::mail::DoctorFinding;
-use super::{AckTransition, MessageKey, ReplaySource, TaskState, sealed};
+use super::{AckTransition, DoctorFinding, MessageKey, ReplaySource, TaskState, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct TaskStoreTaskMetadata {
