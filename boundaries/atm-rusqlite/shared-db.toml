@@ -69,4 +69,5 @@ state = "unix_implemented_windows_pending"
 notes = [
   "crate-private state-root surface must remain review-visible because it owns sqlite bootstrap and transaction policy",
   "shared database root is host-scoped under the ADR-005 durable-state model",
+  "transition note: atm-daemon remains in allowed_dependents through the AA.2-AA.4 window; runtime-composition.toml governs the target end-state while AA.5 relocks the sqlite boundary TOMLs",
 ]

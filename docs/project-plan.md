@@ -60,6 +60,16 @@ Phase-S planning note:
   - `S.9` host-scoped retained logging defaults, including watcher/reconcile
     exclusion for `~/.atm/logs/`
 
+Phase-AA simplification note:
+- after the retained daemon/SQLite line proved the transport split, the daemon
+  accumulated concrete SQLite composition and health/observability ownership
+  that violated the intended boundary
+- the corrective planning line is Phase AA, tracked in
+  [`docs/plan-phase-AA.md`](./plan-phase-AA.md)
+- Phase AA restores the original daemon role as a thin router by moving
+  concrete SQLite construction to a dedicated `atm-runtime` crate and
+  restoring a direct local doctor/store-health path
+
 Phase R execution entry:
 - Wave 1 deliverable: the new Phase R skeleton
   - new crates
@@ -94,12 +104,16 @@ Status:
   source-of-truth and daemon-boundary redesign.
 - Phase R is the merged daemon baseline.
 - Phase S is the active planning line for Windows-complete daemon parity.
+- Phase AA is the architectural simplification planning line for removing
+  SQLite references from `atm-daemon` and moving concrete runtime assembly out
+  to `atm-runtime`.
 - the current merged workspace contains:
   - `crates/atm-core`
   - `crates/atm`
   - `crates/atm-daemon`
   - `crates/atm-daemon-client`
   - `crates/atm-graft`
+  - `crates/atm-runtime`
   - `crates/atm-rusqlite`
   - `crates/sc-lint-*` support crates
 
@@ -160,6 +174,45 @@ Phase R sequencing rule:
   - feature behavior
 
 ## 4. Work Sequence
+
+### Phase AA: Remove SQLite From Daemon [PLANNED]
+
+Status summary:
+- Phase AA is the active simplification planning line for restoring
+  `atm-daemon` to a thin-router role.
+- Integration Branch: `integrate/phase-AA`
+- The authoritative plan is [`docs/plan-phase-AA.md`](./plan-phase-AA.md).
+- The authoritative closure checklist is
+  [`docs/phase-AA/readiness.md`](./phase-AA/readiness.md).
+
+Goal:
+- move concrete SQLite/runtime assembly to `atm-runtime`
+- remove daemon-owned SQLite diagnostics, observability glue, and replay/store
+  leakage
+- relock the daemon-to-SQLite boundary with a permanent second enforcement
+  layer
+
+Deliverables:
+- `crates/atm-runtime` as the concrete composition root
+- subsystem doctor trait model and direct local doctor path
+- deletion of remaining daemon-side SQLite leaks
+- `boundary-guard` and relocked machine-readable boundary policy
+- `sc-observability` / `sc-observability-types` upgraded to `1.2.0` with the
+  queue-backed logger API, retained-log policy field migration, and updated
+  health projection
+
+Sprint line:
+- `AA.0` `feature/pAA-s0-daemon-architecture-restatement`
+- `AA.1` `feature/pAA-s1-subsystem-doctor-traits`
+- `AA.2` `feature/pAA-s2-atm-runtime-composition-transfer`
+- `AA.3` `feature/pAA-s3-direct-doctor-and-runtime-health-split`
+- `AA.4` `feature/pAA-s4-delete-daemon-sqlite-leaks`
+- `AA.5` `feature/pAA-s5-boundary-relock-and-permanent-enforcement`
+- `AA.6` `feature/pAA-s6-obs-upgrade`
+
+Acceptance:
+- Phase AA exit criteria are satisfied only through
+  `docs/phase-AA/readiness.md`
 
 ### Phase 0: Document Lock [COMPLETE]
 

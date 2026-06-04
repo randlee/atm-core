@@ -20,6 +20,14 @@ mail routing, native agent notification, and cross-host transport need one
 coordinating process, while ATM command behavior remains the user-facing
 surface.
 
+Phase-AA simplification direction:
+- the daemon remains part of the product, but it must return to the original
+  thin-router role
+- concrete SQLite construction moves to a dedicated `atm-runtime` crate
+- the daemon must not know that the current durable adapter is SQLite
+- direct local diagnostics such as store-openability and baseline SQLite
+  health may be answered without routing through the daemon
+
 The retained product surface is:
 - `atm send`
 - `atm list`
@@ -73,10 +81,13 @@ Crate-local ownership docs live under:
 - [`docs/atm-core/architecture.md`](./atm-core/architecture.md)
 - [`docs/atm-daemon/requirements.md`](./atm-daemon/requirements.md)
 - [`docs/atm-daemon/architecture.md`](./atm-daemon/architecture.md)
+- [`docs/atm-runtime/requirements.md`](./atm-runtime/requirements.md)
+- [`docs/atm-runtime/architecture.md`](./atm-runtime/architecture.md)
 - [`docs/atm-rusqlite/requirements.md`](./atm-rusqlite/requirements.md)
 - [`docs/atm-rusqlite/architecture.md`](./atm-rusqlite/architecture.md)
 - [`docs/atm-core/boundaries.md`](./atm-core/boundaries.md)
 - [`docs/atm-daemon/boundaries.md`](./atm-daemon/boundaries.md)
+- [`docs/atm-runtime/boundaries.md`](./atm-runtime/boundaries.md)
 - [`docs/atm-rusqlite/boundaries.md`](./atm-rusqlite/boundaries.md)
 - [`docs/atm/boundaries.md`](./atm/boundaries.md)
 
@@ -1563,6 +1574,14 @@ Run local ATM diagnostics for the retained ATM runtime.
 `atm doctor` remains a local diagnostics command, but in the current SQLite/daemon architecture
 architecture it must also report daemon/runtime availability because normal ATM
 mail behavior depends on the singleton daemon being present.
+
+Phase-AA target direction:
+- `atm doctor` keeps daemon/runtime reporting, but daemon routing is not the
+  only legal path for diagnostics
+- checks that are inherently local and store-backed may run directly from the
+  CLI
+- daemon-routed doctor data is additive and exists for daemon-owned runtime
+  state or faster asynchronous answers when the daemon is already live
 
 ### 11.2 Supported Flags
 

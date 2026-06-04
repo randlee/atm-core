@@ -67,4 +67,5 @@ state = "active"
 notes = [
   "hosts the shared assembly seam for mail, task, and roster adapters over one sqlite root",
   "daemon runtime may use the public assembly seam for roster truth and SQLite readiness checks",
+  "transition note: atm-daemon remains in allowed_dependents through the AA.2-AA.4 window; runtime-composition.toml governs the target end-state while AA.5 relocks the sqlite boundary TOMLs",
 ]
