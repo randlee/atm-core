@@ -1,3 +1,10 @@
+---
+title: Phase AB Plan
+status: complete
+branch: plan/phase-AB
+worktree: ../atm-core-worktrees/feature/phase-AA-cross-host-smoke-plan
+---
+
 # Phase AB Plan
 
 ## Goal
@@ -56,6 +63,10 @@ Phase `AB` may:
 - harden existing cross-host delivery/bootstrap code when the bug is required to
   make the smoke matrix pass
 - add explicit operator guidance for cross-host setup and recovery
+- add notes that cross-host daemon operations must not block the async runtime
+  without explicit justification
+- rely on the existing ATM message payload size limits; `Phase AB` does not add
+  a separate cross-host payload limit layer
 
 Phase `AB` must not:
 
@@ -79,6 +90,9 @@ Required shape:
 - one disposable `ATM_CONFIG_HOME` per host
 - explicit `ATM_LOG_DIR` per host
 - explicit cross-host transport configuration per host
+- cross-host transport configuration is validated before any send is attempted;
+  misconfiguration must fail fast with a clear error instead of silently
+  hanging or surfacing a misleading downstream failure
 - no reads or writes against live `~/.claude` or `~/.atm`
 
 ### Lane B: Copied-State Cross-Host Revalidation
@@ -149,6 +163,10 @@ Purpose:
   degrade
 - prove retry-visible observability during daemon restart or temporary peer
   unavailability
+- require explicit bounded timeouts for cross-host send and retry operations so
+  every smoke row completes within a defined wall-clock window
+- capture evidence that in-flight work was drained or queued before a daemon
+  restart is treated as complete
 
 Execution branch:
 - `feature/pAB-s4-degraded-notification-and-retry-visible-recovery`
@@ -195,6 +213,8 @@ Every smoke row must capture:
 - `doctor --json` for the active daemon host when relevant
 - `log snapshot --json` from both hosts when the row exercises daemon-backed
   behavior
+- for restart or temporary-unavailability rows, evidence that shutdown drained
+  or queued in-flight work before the restart completed
 
 ## Immediate Planning Outputs
 
