@@ -361,15 +361,13 @@ pub fn exchange(
 
 fn read_response_frame_with_deadline(
     mut stream: LocalSocketStream,
-    request_deadline: Duration,
-    recv_deadline_support: LocalIpcDeadlineSupport,
+    _request_deadline: Duration,
+    _recv_deadline_support: LocalIpcDeadlineSupport,
 ) -> Result<atm_core::protocol::FramePayload, AtmError> {
     #[cfg(windows)]
-    if recv_deadline_support == LocalIpcDeadlineSupport::Unsupported {
-        return read_response_frame_with_helper(stream, request_deadline);
+    if _recv_deadline_support == LocalIpcDeadlineSupport::Unsupported {
+        return read_response_frame_with_helper(stream, _request_deadline);
     }
-    #[cfg(not(windows))]
-    let _ = (request_deadline, recv_deadline_support);
 
     read_response_frame(&mut stream)
 }
@@ -384,7 +382,11 @@ fn read_response_frame_with_helper(
         .name("local-ipc-response-read-helper".to_string())
         .spawn(move || {
             let result = read_response_frame(&mut stream);
-            let _ = result_tx.send(result);
+            if result_tx.send(result).is_err() {
+                tracing::debug!(
+                    "daemon local IPC response-read helper dropped its result because the caller timed out first"
+                );
+            }
         })
         .map_err(|source| {
             AtmError::daemon_unavailable("failed to spawn daemon local IPC read helper")
