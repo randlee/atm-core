@@ -95,6 +95,10 @@ Phase-AA simplification note:
   `atm-daemon`
 - the daemon remains in the product, but as a thin router rather than a
   concrete storage/runtime host
+- subsystem-specific diagnosis belongs behind subsystem-owned diagnostic traits
+  instead of daemon-local backend-aware helpers
+- top-level doctor code may aggregate subsystem reports and daemon-owned
+  runtime state, but must not reimplement backend-specific diagnosis logic
 
 ## 2. Crate Boundaries
 

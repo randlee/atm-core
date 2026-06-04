@@ -97,6 +97,10 @@ Phase-AA target direction:
 - SQLite-specific composition, observability, replay, and direct store-health
   logic are removed from this crate
 - daemon health becomes daemon-owned runtime projection only
+- subsystem-owned diagnostic traits perform backend-specific investigation
+- daemon doctor code aggregates subsystem reports and daemon-owned runtime
+  state only, and may compare reports for drift without reimplementing backend
+  diagnosis
 
 Phase R redesign notes:
 - `atm-daemon` remains runtime-oriented, not business-logic-oriented
@@ -136,6 +140,7 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - `atm-daemon` must not reimplement `atm-core` business logic.
 - `atm-daemon` must not access SQLite except through the `atm-core` store
   boundary.
+- `atm-daemon` must not own concrete SQLite semantics.
 - `atm-daemon` must not parse or write inbox JSONL except through the
   `atm-core` ingress/export boundaries.
 - write-affecting daemon mail events must route through one central
@@ -150,6 +155,11 @@ Current retained ATM surfaces outside the daemon request/response packet family:
 - daemon runtime-health/status assembly must discover teams and members only
   through the installed `RosterStore`; `ATM_HOME/.claude/teams` is a config
   ingress surface, not a runtime-truth discovery path
+- deep backend-specific diagnosis belongs to subsystem-owned doctor traits
+  rather than daemon-local logic
+- daemon doctor aggregation may combine subsystem reports with daemon-owned
+  runtime state and compare those reports for drift, but it must not inspect
+  SQLite internals directly
 - read-mostly daemon runtime-health/status projection must publish immutable
   snapshots to readers rather than coordinating ordinary reads through one
   daemon-shared mutable cache lock

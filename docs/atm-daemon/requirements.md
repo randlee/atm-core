@@ -52,6 +52,10 @@ Phase-AA target direction:
   SQLite health probing move out of this crate
 - daemon-owned doctor reporting is reduced to daemon-owned runtime state rather
   than direct store readiness checks
+- each subsystem owns its own backend-specific diagnosis behind a subsystem
+  doctor trait
+- daemon doctor code aggregates subsystem reports and daemon-owned runtime
+  state only; it must not reimplement backend-specific diagnosis
 
 Current request/response packet families owned by the daemon transport line:
 - send compose

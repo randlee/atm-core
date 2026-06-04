@@ -12,13 +12,13 @@ than rediscovering ownership.
 | --- | --- | --- |
 | `crates/atm-daemon/src/sqlite_observability.rs` | daemon-owned SQLite observability adapter | `delete` |
 | `crates/atm-daemon/src/runtime_health_test_support.rs` | daemon-local SQLite test assembly | `delete` |
-| `crates/atm-daemon/src/lib.rs` | `SqliteRemoteReplayStore`, `RemoteReplayStateRecord` re-export, direct SQLite observability type use | `rewrite` to remove replay wrapper and all direct `atm_rusqlite` types |
-| `crates/atm-daemon/src/composition.rs` | `SqliteBoundaryAssembly::new*`, SQLite observability injection, concrete production boundary construction | `move` concrete assembly to `atm-runtime`; `rewrite` daemon composition to injected ports only |
-| `crates/atm-daemon/src/runtime_health.rs` | direct `SqliteBoundaryAssembly`, direct roster-store use, WAL checkpoint call, SQLite readiness probing | `rewrite` to injected subsystem reports plus daemon-owned runtime state only |
-| `crates/atm-daemon/src/runtime_status_cache.rs` | `sqlite_ready`, `sqlite_detail`, `mark_sqlite_unavailable*` | `delete` SQLite-named fields/helpers; keep only daemon runtime fields |
-| `crates/atm-daemon/src/peer_transport.rs` | daemon-owned replay DTO/trait coupled to SQLite-owned record type | `rewrite` to storage-neutral replay DTO/trait owned outside daemon and `atm-rusqlite` |
-| `crates/atm-daemon/src/tests.rs` | direct `assemble_boundary(...)` use | `rewrite` to composition/subsystem fixtures; no daemon-local SQLite assembly |
-| `crates/atm-daemon/src/tests_advisory.rs` | direct `assemble_boundary(...)` use | `rewrite` to composition/subsystem fixtures; no daemon-local SQLite assembly |
+| `crates/atm-daemon/src/lib.rs` | `SqliteRemoteReplayStore`, `RemoteReplayStateRecord` re-export, direct SQLite observability type use | `keep-and-rewrite` to remove the replay wrapper and all direct `atm_rusqlite` types while preserving the daemon entry surface |
+| `crates/atm-daemon/src/composition.rs` | `SqliteBoundaryAssembly::new*`, SQLite observability injection, concrete production boundary construction | `move` concrete assembly to `atm-runtime`; keep daemon composition storage-neutral |
+| `crates/atm-daemon/src/runtime_health.rs` | direct `SqliteBoundaryAssembly`, direct roster-store use, WAL checkpoint call, SQLite readiness probing | `keep-and-rewrite` to injected subsystem reports plus daemon-owned runtime state only |
+| `crates/atm-daemon/src/runtime_status_cache.rs` | `sqlite_ready`, `sqlite_detail`, `mark_sqlite_unavailable*` | `keep-and-rewrite` to daemon runtime fields only, with SQLite-named status removed |
+| `crates/atm-daemon/src/peer_transport.rs` | daemon-owned replay DTO/trait coupled to SQLite-owned record type | `keep-and-rewrite` to a storage-neutral replay DTO/trait owned outside daemon and `atm-rusqlite` |
+| `crates/atm-daemon/src/tests.rs` | direct `assemble_boundary(...)` use | `keep-and-rewrite` to composition/subsystem fixtures with no daemon-local SQLite assembly |
+| `crates/atm-daemon/src/tests_advisory.rs` | direct `assemble_boundary(...)` use | `keep-and-rewrite` to composition/subsystem fixtures with no daemon-local SQLite assembly |
 
 ## Concrete Type Decisions
 
