@@ -70,6 +70,13 @@ Follow-up work:
 - Keep adapter assembly in daemon-owned composition code only.
 - Revisit only if a later ADR extracts a dedicated composition crate.
 
+Phase-AA supersession note:
+- this ADR records the current merged ownership shape only
+- `Phase AA` intentionally supersedes it by moving concrete runtime/store
+  composition into a dedicated `atm-runtime` crate
+- after `Phase AA`, `atm-daemon` is no longer a legal home for SQLite adapter
+  construction
+
 ## 2. Responsibilities
 
 The `atm-daemon` crate is responsible for:
@@ -84,6 +91,12 @@ The `atm-daemon` crate is responsible for:
 - daemon health/status query surface for `atm doctor`
 
 The `atm-daemon` crate must remain thin.
+
+Phase-AA target direction:
+- the daemon remains transport/lifecycle-owned
+- SQLite-specific composition, observability, replay, and direct store-health
+  logic are removed from this crate
+- daemon health becomes daemon-owned runtime projection only
 
 Phase R redesign notes:
 - `atm-daemon` remains runtime-oriented, not business-logic-oriented
@@ -770,18 +783,27 @@ Doctor health contract distinction:
   them through the documented request boundary
 - `atm doctor` must report both dimensions explicitly rather than treating
   process existence as equivalent to request-serving readiness
-- readiness states are:
-  - `ready` when the daemon owns the runtime, SQLite-backed continuity is
-    available, ingest is healthy, and no active identity-conflict path exists
-  - `degraded` when the daemon is still running but SQLite continuity, ingest,
-    or identity-conflict handling is impaired
-  - `unavailable` when the daemon still owns the runtime but every tracked
-    member has transitioned fully offline
-- the runtime health snapshot projected into `atm doctor` must also carry:
-  - singleton-owner pid when known
-  - SQLite-ready state
-  - degraded-ingest state
-  - aggregate active/idle/offline/unknown member counts
+- Phase AA supersession note:
+  - `AA.3` deletes `sqlite_ready`, `sqlite_detail`, and the SQLite-backed
+    continuity wording from the daemon-owned runtime snapshot
+  - after `AA.3`, `RuntimeStatusSnapshot` carries only daemon-owned runtime
+    state and no store-specific readiness fields
+  - SQLite/store readiness moves to subsystem doctor reports and does not
+    remain part of the daemon runtime DTO
+  - `docs/phase-AA/sprint-AA3.md` is the frozen source of truth for the
+    post-AA runtime snapshot shape, and this section must be updated during
+    that sprint to match the final implementation
+- pre-AA historical baseline only, superseded by the frozen `AA.3` delete
+  list:
+  - readiness states previously treated SQLite continuity as part of daemon
+    readiness
+  - the runtime health snapshot previously carried:
+    - singleton-owner pid when known
+    - SQLite-ready state
+    - degraded-ingest state
+    - aggregate active/idle/offline/unknown member counts
+  - this historical baseline is retained only to explain the pre-AA daemon
+    shape and must not be treated as the post-AA runtime-health contract
 
 ## 3.6 Crash Recovery
 

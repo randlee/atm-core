@@ -46,6 +46,13 @@ The canonical daemon/client recovery text rule set lives in:
 - direct ownership of SQLite semantics beyond using the `atm-core` store
   boundary
 
+Phase-AA target direction:
+- `atm-daemon` stops being the concrete SQLite composition owner
+- SQLite construction, SQLite-specific observability injection, and direct
+  SQLite health probing move out of this crate
+- daemon-owned doctor reporting is reduced to daemon-owned runtime state rather
+  than direct store readiness checks
+
 Current request/response packet families owned by the daemon transport line:
 - send compose
 - send acknowledge
