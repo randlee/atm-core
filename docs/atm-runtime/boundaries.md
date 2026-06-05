@@ -32,6 +32,10 @@ Forbidden edges:
 Notes:
 - `atm-runtime` is composition-only
 - direct local `ConfigDoctor` ownership lives here
+- the replay-store contract keeps the richer retained-request shape
+  (`team`/`agent`/`message_key`, endpoint, request envelope, retry metadata)
+  rather than the original planning stub because daemon replay resume needs
+  that identity and expiry data directly
 - runtime shutdown finalization is exported through the storage-neutral
   `RuntimeStorageFinalizer` seam
 - daemon startup remains fail-closed on any `RuntimeBundle` construction error

@@ -47,6 +47,13 @@ pub struct RuntimeBundle {
 `atm-daemon` must consume only this kind of injected storage-neutral bundle and
 must not construct `SqliteBoundaryAssembly` directly.
 
+The retained replay contract intentionally uses the richer runtime-owned shape
+rather than the original planning stub. The installed `RemoteReplayStateRecord`
+keeps `(team, agent, message_key)`, peer endpoint, request envelope, expiry,
+attempt counters, and `last_error: Option<AtmErrorCode>` so replay resume can
+retry, deduplicate, and age out retained requests without reconstructing those
+fields from opaque payload bytes.
+
 The concrete public assembly surface exported by `atm-runtime` is the
 `RuntimeAssembly` family:
 
@@ -75,3 +82,9 @@ construction, fails.
 Shutdown-time storage finalization follows the same ownership split:
 - `atm-runtime` injects a storage-neutral `RuntimeStorageFinalizer`
 - daemon runtime code uses that seam instead of talking directly to SQLite
+
+Config inspection follows the same seam discipline:
+- `atm-runtime` owns the direct `ConfigDoctor`
+- daemon startup captures one validated `current_dir` and passes it into
+  runtime assembly so the direct doctor path and startup config load inspect
+  the same workspace root

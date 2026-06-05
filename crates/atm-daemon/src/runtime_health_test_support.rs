@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use super::DaemonRequestDispatcher;
 use crate::notification_runtime::NotificationRuntime;
+use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
 use crate::runtime_status_cache::{RuntimeStatusCache, build_runtime_status_cache_state};
-use crate::sqlite_observability::DaemonSqliteObservability;
 use atm_core::{LocalFileNonClaudeOutbound, LocalFileNotificationSink};
 use atm_runtime::{RuntimeAssemblyInputs, assemble_sqlite_runtime};
 
@@ -22,17 +22,25 @@ impl DaemonRequestDispatcher {
         );
         let runtime_observability: Arc<dyn crate::DaemonRuntimeObservability> =
             observability.clone();
-        let sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability> =
-            Arc::new(DaemonSqliteObservability::new(
+        let sqlite_observer: Arc<dyn atm_runtime::RuntimeSqliteObserver> =
+            Arc::new(DaemonRuntimeSqliteObserver::new(
                 Arc::clone(&runtime_observability),
                 status_cache.clone(),
             ));
-        let sqlite_boundary = match atm_rusqlite::assemble_boundary_with_observability(
-            &roster_db_path,
-            Arc::clone(&sqlite_observability),
-        ) {
-            Ok(boundary) => {
-                match build_runtime_status_cache_state(None, boundary.roster_store()) {
+        let runtime_assembly = match assemble_sqlite_runtime(RuntimeAssemblyInputs {
+            sqlite_db_path: roster_db_path.clone(),
+            config_current_dir: home_dir.clone(),
+            sqlite_observer: Arc::clone(&sqlite_observer),
+            non_claude_outbound: Arc::new(LocalFileNonClaudeOutbound::new()),
+            notification_sink: Arc::new(LocalFileNotificationSink::at_path(
+                home_dir.join("notifications.jsonl"),
+            )),
+        }) {
+            Ok(assembly) => {
+                match build_runtime_status_cache_state(
+                    None,
+                    assembly.runtime_bundle.roster_store.as_ref(),
+                ) {
                     Ok(state) => status_cache.publish_state(state),
                     Err(error) => {
                         tracing::warn!(
@@ -42,29 +50,18 @@ impl DaemonRequestDispatcher {
                         status_cache.mark_sqlite_unavailable();
                     }
                 }
-                Some(boundary)
+                Some(assembly)
             }
             Err(error) => {
                 tracing::warn!(
                     %error,
                     path = %roster_db_path.display(),
-                    "failed to assemble sqlite boundary for test daemon runtime health"
+                    "failed to assemble sqlite runtime for test daemon runtime health"
                 );
                 status_cache.mark_sqlite_unavailable();
                 None
             }
         };
-        let runtime_assembly = sqlite_boundary.as_ref().and_then(|_| {
-            assemble_sqlite_runtime(RuntimeAssemblyInputs {
-                sqlite_db_path: roster_db_path.clone(),
-                sqlite_observability: Arc::clone(&sqlite_observability),
-                non_claude_outbound: Arc::new(LocalFileNonClaudeOutbound::new()),
-                notification_sink: Arc::new(LocalFileNotificationSink::at_path(
-                    home_dir.join("notifications.jsonl"),
-                )),
-            })
-            .ok()
-        });
         let advisory_runtime_observability = crate::SubsystemObservability::new(
             crate::DaemonSubsystem::AdvisoryRuntime,
             Arc::clone(&runtime_observability),

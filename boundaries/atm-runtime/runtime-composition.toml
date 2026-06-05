@@ -26,7 +26,7 @@ io_forbidden = ["daemon_transport", "daemon_lifecycle", "direct_socket_io"]
 [dependencies]
 allowed_dependents = ["atm", "atm-daemon", "atm-daemon-bootstrap"]
 allowed_dependencies = ["atm-core", "atm-rusqlite"]
-forbidden_edges = ["atm -> atm-rusqlite", "atm-runtime -> atm-daemon"]
+forbidden_edges = ["atm-daemon -> atm-rusqlite", "atm -> atm-rusqlite", "atm-runtime -> atm-daemon"]
 
 [references]
 scope = "outside_owner_crate"

@@ -11,16 +11,16 @@ use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
     home::host_runtime_dir, load_atm_config,
 };
-use atm_rusqlite::{
-    SqliteObservability, assemble_boundary_with_observability, assemble_default_boundary,
-};
+use atm_rusqlite::{assemble_boundary_with_observability, assemble_default_boundary};
 
 use crate::replay_store::{SqliteRemoteReplayStore, SqliteRuntimeStorageFinalizer};
+use crate::sqlite_observability::{RuntimeSqliteObservability, RuntimeSqliteObserver};
 
 #[derive(Clone)]
 pub struct RuntimeAssemblyInputs {
     pub sqlite_db_path: PathBuf,
-    pub sqlite_observability: Arc<dyn SqliteObservability>,
+    pub config_current_dir: PathBuf,
+    pub sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     pub non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     pub notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 }
@@ -29,7 +29,8 @@ impl fmt::Debug for RuntimeAssemblyInputs {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("RuntimeAssemblyInputs")
             .field("sqlite_db_path", &self.sqlite_db_path)
-            .field("sqlite_observability", &"dyn SqliteObservability")
+            .field("config_current_dir", &self.config_current_dir)
+            .field("sqlite_observer", &"dyn RuntimeSqliteObserver")
             .field("non_claude_outbound", &"dyn NonClaudeOutbound")
             .field("notification_sink", &"dyn NotificationSink")
             .finish()
@@ -54,20 +55,15 @@ impl fmt::Debug for RuntimeAssembly {
 }
 
 #[derive(Debug, Default)]
-struct RuntimeConfigDoctor;
+struct RuntimeConfigDoctor {
+    config_current_dir: PathBuf,
+}
 
 impl boundary::sealed::Sealed for RuntimeConfigDoctor {}
 
 impl ConfigDoctor for RuntimeConfigDoctor {
     fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError> {
-        let current_dir = std::env::current_dir().map_err(|source| {
-            AtmError::config("failed to resolve current directory for config doctor")
-                .with_recovery(
-                    "Run the direct doctor path from a readable ATM workspace before retrying config inspection.",
-                )
-                .with_source(source)
-        })?;
-        let _ = load_atm_config(&current_dir)?;
+        let _ = load_atm_config(&self.config_current_dir)?;
         Ok(ConfigDoctorReport {
             findings: Vec::new(),
         })
@@ -77,7 +73,8 @@ impl ConfigDoctor for RuntimeConfigDoctor {
 pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeAssembly, AtmError> {
     assemble_sqlite_runtime_at_path(
         &inputs.sqlite_db_path,
-        Arc::clone(&inputs.sqlite_observability),
+        inputs.config_current_dir.clone(),
+        Arc::clone(&inputs.sqlite_observer),
         Arc::clone(&inputs.non_claude_outbound),
         Arc::clone(&inputs.notification_sink),
     )
@@ -85,10 +82,12 @@ pub fn assemble_sqlite_runtime(inputs: RuntimeAssemblyInputs) -> Result<RuntimeA
 
 fn assemble_sqlite_runtime_at_path(
     sqlite_db_path: &Path,
-    sqlite_observability: Arc<dyn SqliteObservability>,
+    config_current_dir: PathBuf,
+    sqlite_observer: Arc<dyn RuntimeSqliteObserver>,
     non_claude_outbound: Arc<dyn NonClaudeOutbound + Send + Sync>,
     notification_sink: Arc<dyn NotificationSink + Send + Sync>,
 ) -> Result<RuntimeAssembly, AtmError> {
+    let sqlite_observability = Arc::new(RuntimeSqliteObservability::new(sqlite_observer));
     let assembly = Arc::new(assemble_boundary_with_observability(
         sqlite_db_path,
         sqlite_observability,
@@ -107,7 +106,7 @@ fn assemble_sqlite_runtime_at_path(
         mail_store_doctor: assembly.mail_store_doctor_arc(),
         task_store_doctor: assembly.task_store_doctor_arc(),
         roster_store_doctor: assembly.roster_store_doctor_arc(),
-        config_doctor: Arc::new(RuntimeConfigDoctor),
+        config_doctor: Arc::new(RuntimeConfigDoctor { config_current_dir }),
         remote_replay_store: Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&assembly))),
     };
     let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> =
@@ -120,6 +119,13 @@ fn assemble_sqlite_runtime_at_path(
 }
 
 pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
+    let config_current_dir = std::env::current_dir().map_err(|source| {
+        AtmError::config("failed to resolve current directory for direct runtime assembly")
+            .with_recovery(
+                "Run the direct retained runtime path from a readable ATM workspace so config inspection and runtime assembly share one validated root.",
+            )
+            .with_source(source)
+    })?;
     let boundary = Arc::new(assemble_default_boundary()?);
     let notification_path = host_runtime_dir()?.join("notifications.jsonl");
     if let Some(parent) = notification_path.parent() {
@@ -148,7 +154,7 @@ pub fn assemble_default_runtime() -> Result<RuntimeAssembly, AtmError> {
         mail_store_doctor: boundary.mail_store_doctor_arc(),
         task_store_doctor: boundary.task_store_doctor_arc(),
         roster_store_doctor: boundary.roster_store_doctor_arc(),
-        config_doctor: Arc::new(RuntimeConfigDoctor),
+        config_doctor: Arc::new(RuntimeConfigDoctor { config_current_dir }),
         remote_replay_store: Arc::new(SqliteRemoteReplayStore::new(Arc::clone(&boundary))),
     };
     let storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync> =
@@ -168,5 +174,12 @@ pub fn with_default_roster_store<T>(
     f: impl FnOnce(&(dyn RosterStore + Send + Sync)) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
     let assembly = assemble_default_runtime()?;
-    f(assembly.runtime_bundle.roster_store.as_ref())
+    let result = f(assembly.runtime_bundle.roster_store.as_ref());
+    let finalize_result = assembly.storage_finalizer.finalize_storage_shutdown();
+    match (result, finalize_result) {
+        (Ok(value), Ok(())) => Ok(value),
+        (Ok(_), Err(error)) => Err(error),
+        (Err(error), Ok(())) => Err(error),
+        (Err(error), Err(_)) => Err(error),
+    }
 }

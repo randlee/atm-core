@@ -1,5 +1,4 @@
-use crate::doctor::DoctorSeverity;
-use crate::error::AtmError;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::protocol::RequestEnvelope;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use serde::{Deserialize, Serialize};
@@ -11,15 +10,6 @@ use super::{
     ConfigDoctor, MailStore, MailStoreDoctor, MessageKey, RosterStore, RosterStoreDoctor,
     TaskStore, TaskStoreDoctor, sealed,
 };
-
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct DoctorFinding {
-    pub code: &'static str,
-    pub severity: DoctorSeverity,
-    pub summary: String,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub detail: Option<String>,
-}
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct RemoteReplayStateRecord {
@@ -35,7 +25,7 @@ pub struct RemoteReplayStateRecord {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub last_attempt_at: Option<IsoTimestamp>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_error: Option<String>,
+    pub last_error: Option<AtmErrorCode>,
 }
 
 #[derive(Clone)]
