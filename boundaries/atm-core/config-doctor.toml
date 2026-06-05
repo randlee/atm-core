@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-ConfigDoctor"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "ConfigDoctor"
+
+[public]
+trait = "ConfigDoctor"
+notes = "aggregate-only diagnostics boundary for configuration health"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["config_diagnostics"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm", "atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["ConfigDoctor method inputs"]
+response_types = ["ConfigDoctorReport", "DoctorFinding"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["std::fs::read_to_string"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-CONFIGDOCTOR-REFERENCES"]
+review_gates = ["aggregate_only_doctor_model"]
+
+[status]
+state = "stub_landed"
+notes = ["shared doctor-trait contract landed in atm_core::boundary", "config diagnostics remain aggregate-only and must not bypass the owned config ingress seam"]

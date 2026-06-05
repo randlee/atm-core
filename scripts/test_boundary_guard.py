@@ -58,7 +58,11 @@ class BoundaryGuardTests(unittest.TestCase):
         base_doc = {
             "dependencies": {
                 "allowed_dependents": ["atm-runtime"],
-                "forbidden_edges": ["atm-daemon -> atm-rusqlite", "atm -> atm-rusqlite"],
+                "forbidden_edges": [
+                    "atm-daemon -> atm-rusqlite",
+                    "atm -> atm-rusqlite",
+                    "atm-runtime -> atm-daemon",
+                ],
             },
             "implementation": {"visibility": "private", "constructor": "private"},
             "testing": {"forbidden_test_bypasses": ["rusqlite::Connection"]},
@@ -66,7 +70,7 @@ class BoundaryGuardTests(unittest.TestCase):
         }
         current_doc = {
             "dependencies": {
-                "allowed_dependents": ["atm-runtime", "atm-daemon"],
+                "allowed_dependents": ["atm-runtime", "atm-daemon-bootstrap"],
                 "forbidden_edges": ["atm -> atm-rusqlite"],
             },
             "implementation": {"visibility": "public", "constructor": "public"},
@@ -89,6 +93,17 @@ class BoundaryGuardTests(unittest.TestCase):
                 "forbidden_test_bypasses",
                 "forbidden",
             },
+        )
+        allowed_relaxation = next(
+            item for item in relaxations if item["field"] == "allowed_dependents"
+        )
+        forbidden_relaxation = next(
+            item for item in relaxations if item["field"] == "forbidden_edges"
+        )
+        self.assertEqual(allowed_relaxation["change"], "added atm-daemon-bootstrap")
+        self.assertEqual(
+            forbidden_relaxation["change"],
+            "removed atm-daemon -> atm-rusqlite, atm-runtime -> atm-daemon",
         )
 
     def test_required_policy_rejects_lingering_daemon_allowlist(self) -> None:

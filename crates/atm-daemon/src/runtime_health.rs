@@ -760,6 +760,8 @@ impl boundary::sealed::Sealed for DaemonStatusSource {}
 
 impl boundary::StatusSource for DaemonStatusSource {
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
+        // StatusSource currently exposes a Result-based boundary contract, but
+        // the daemon cache snapshot itself is an infallible ArcSwap read.
         Ok(self.status_cache.snapshot())
     }
 }

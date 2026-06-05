@@ -124,15 +124,17 @@ Product-level boundary rules:
 - `atm-core` owns ATM business logic and the strict I/O boundaries that the current SQLite/daemon architecture
   routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
-- `atm-daemon` owns transport adapters, singleton enforcement, request
-  routing, and live-status runtime state.
+- `atm-daemon` owns transport adapters, singleton enforcement, live-status
+  runtime state, request routing, and daemon-owned runtime projection.
 - `atm-runtime` owns concrete runtime/store composition and storage-neutral
-  runtime assembly for daemon and direct CLI doctor callers.
+  doctor/runtime assembly for daemon and direct CLI doctor callers.
 - `atm-rusqlite` owns the first concrete SQLite implementation of the durable
   store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.
+- `atm-runtime` must remain a thin composition crate rather than a second
+  daemon or workflow host.
 - `atm-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
 - crate-local boundary records in `docs/<crate>/boundaries.md` are the
@@ -1171,6 +1173,11 @@ Public entrypoint:
 - environment override visibility
 - current team member roster from `config.json`
 - observability health
+- aggregate-only subsystem doctor output from:
+  - `MailStoreDoctor`
+  - `TaskStoreDoctor`
+  - `RosterStoreDoctor`
+  - `ConfigDoctor`
 
 `DoctorFinding` contains:
 - severity
@@ -1181,6 +1188,10 @@ Public entrypoint:
 The report model should reuse the current doctor command’s severity/finding
 structure where useful, but in the current SQLite/daemon architecture it must include
 daemon/runtime checks rather than assuming a daemon-free local-only model.
+Daemon/CLI orchestration stays aggregate-only: those top-level paths may
+compose the `MailStoreDoctor`, `TaskStoreDoctor`, `RosterStoreDoctor`, and
+`ConfigDoctor` reports, but they must not reimplement backend-specific store
+investigation logic.
 
 Roster output rules:
 - show all current `config.json` members in doctor output

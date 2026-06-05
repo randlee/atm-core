@@ -9,6 +9,7 @@ use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::notification_runtime::NotificationRuntime;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
+use crate::worker_support::retain_join_helper;
 use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
     peer_transport::PeerTransportConfig,
@@ -795,6 +796,7 @@ where
             result
         }
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            retain_join_helper(lane_name, shutdown_handle, deadline);
             tracing::warn!(
                 subsystem = "composition",
                 action = "shutdown_lane_deadline",
@@ -802,7 +804,7 @@ where
                 lane = lane_name,
                 timeout_ms = deadline.as_millis(),
                 thread_id = ?shutdown_thread_id,
-                "daemon shutdown lane timed out; join worker left detached after deadline"
+                "daemon shutdown lane timed out; join worker retained for bounded background cleanup"
             );
             Err(AtmError::daemon_unavailable(format!(
                 "daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"

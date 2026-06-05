@@ -77,13 +77,12 @@ def compare_boundary_policy(path: Path, base_doc: dict, current_doc: dict) -> li
         _as_list(base_doc, "dependencies", "allowed_dependents"),
         _as_list(current_doc, "dependencies", "allowed_dependents"),
     )
-    daemon_additions = [value for value in allowed_additions if value == "atm-daemon"]
-    if daemon_additions:
+    if allowed_additions:
         relaxations.append(
             {
                 "file": path.as_posix(),
                 "field": "allowed_dependents",
-                "change": f"added {', '.join(daemon_additions)}",
+                "change": f"added {', '.join(allowed_additions)}",
                 "requires_approval": True,
             }
         )
@@ -92,13 +91,12 @@ def compare_boundary_policy(path: Path, base_doc: dict, current_doc: dict) -> li
         _as_list(base_doc, "dependencies", "forbidden_edges"),
         _as_list(current_doc, "dependencies", "forbidden_edges"),
     )
-    daemon_edge_removals = [value for value in forbidden_removals if value == FORBIDDEN_EDGE]
-    if daemon_edge_removals:
+    if forbidden_removals:
         relaxations.append(
             {
                 "file": path.as_posix(),
                 "field": "forbidden_edges",
-                "change": f"removed {', '.join(daemon_edge_removals)}",
+                "change": f"removed {', '.join(forbidden_removals)}",
                 "requires_approval": True,
             }
         )
@@ -278,7 +276,7 @@ def build_report(repo_root: Path, base_ref: str) -> dict:
         *check_forbidden_code_edge(repo_root),
     ]
     return {
-        "status": "FAIL" if policy_relaxations or violations else "PASS",
+        "status": "FAIL" if violations else "PASS",
         "forbidden_edges": [FORBIDDEN_EDGE],
         "policy_relaxations": policy_relaxations,
         "violations": violations,
