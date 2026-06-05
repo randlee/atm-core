@@ -22,6 +22,7 @@ mod peer_transport;
 mod projection_write_journal;
 mod reconcile_runtime;
 mod runtime_health;
+mod runtime_sqlite_observer;
 mod runtime_status_cache;
 mod shutdown_beacon;
 #[cfg(test)]

@@ -322,7 +322,7 @@ pub(crate) fn build_runtime_status_cache_state(
         .teams;
     if teams.len() > MAX_RELOAD_TEAMS {
         return Err(AtmError::config(format!(
-            "daemon runtime reload rejected because sqlite-backed roster truth contains more than {MAX_RELOAD_TEAMS} teams"
+            "daemon runtime reload rejected because persisted roster state contains more than {MAX_RELOAD_TEAMS} teams"
         ))
         .with_recovery(
             "Reduce the number of persisted ATM teams or raise the documented reload cap before retrying SIGHUP.",

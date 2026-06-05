@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.3
 worktree: ../atm-core-worktrees/feature/pAA-s3-direct-doctor-and-runtime-health-split
 branch: feature/pAA-s3-direct-doctor-and-runtime-health-split
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -135,6 +135,20 @@ The concrete simplification decisions are frozen now:
       // no sqlite_detail
   }
   ```
+
+- Supersession note:
+  - the implemented runtime snapshot keeps the evolved daemon-owned transport
+    and liveness projection instead of the earlier placeholder field names:
+    - `liveness: RuntimeLivenessState`
+    - `readiness: RuntimeReadinessState`
+    - `detail: Option<String>`
+    - `singleton_owner_pid: Option<u32>`
+    - `degraded_ingest: bool`
+    - `member_counts: RuntimeStatusCounts`
+  - justification: AA.3 removed the daemon-owned SQLite readiness/detail
+    fields as planned, but the runtime-health/reporting surface had already
+    converged on typed liveness/readiness enums and aggregated member counts
+    rather than the older boolean/counter sketch
 
 ## Split Recommendation
 
