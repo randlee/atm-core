@@ -1,6 +1,6 @@
 ---
 name: boundary-guard
-version: 0.1.0
+version: 0.2.0
 description: Reviews boundary TOML and crate-edge changes for policy relaxations or forbidden dependency reintroduction before plan approval and phase closeout.
 tools: Glob, Grep, LS, Read, BashOutput
 model: sonnet
@@ -31,6 +31,11 @@ At minimum, detect:
 - any removal from `forbidden_test_bypasses`
 - any removal from `forbidden`
 - any direct `atm-daemon -> atm-rusqlite` dependency edge in code or manifests
+- any mismatch between `runtime-composition.toml` and the SQLite boundary TOMLs
+  on the forbidden `atm-daemon -> atm-rusqlite` edge
+
+Run `python3 scripts/check-boundary-guard.py --base-ref <review-base-ref>` as
+the first machine check and treat any non-zero result as a blocking failure.
 
 ## Mandatory Trigger Points
 
@@ -57,6 +62,7 @@ Return fenced JSON only.
   "status": "PASS | FAIL",
   "mode": "boundary-guard-review",
   "reviewer": "boundary-guard",
+  "guard_script": "python3 scripts/check-boundary-guard.py --base-ref <review-base-ref>",
   "findings": [
     {
       "severity": "Blocking | Important | Minor",

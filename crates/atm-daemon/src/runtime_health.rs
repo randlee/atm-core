@@ -764,6 +764,8 @@ impl boundary::StatusSource for DaemonStatusSource {
     // status-source seam for implementations that may need to surface IO or
     // transport failures.
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
+        // StatusSource currently exposes a Result-based boundary contract, but
+        // the daemon cache snapshot itself is an infallible ArcSwap read.
         Ok(self.status_cache.snapshot())
     }
 }

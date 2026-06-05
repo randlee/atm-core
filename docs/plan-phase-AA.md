@@ -284,6 +284,8 @@ Purpose:
   reviews for any boundary loosening before closure
 - close the temporary `AA.2` to `AA.4` transition window by making the
   SQLite boundary TOMLs agree with `runtime-composition.toml`
+- include the `SharedDbStateRoot` record in that relock so no daemon allowlist
+  survives on a crate-private SQLite state-root seam
 
 Execution branch:
 - `feature/pAA-s5-boundary-relock-and-permanent-enforcement`
