@@ -1,0 +1,45 @@
+boundary_id = "BOUNDARY-TaskStoreDoctor"
+owner_package = "atm-core"
+owner_crate_path = "atm_core"
+name = "TaskStoreDoctor"
+
+[public]
+trait = "TaskStoreDoctor"
+notes = "paired subsystem-owned diagnostics boundary for the TaskStore capability"
+
+[implementation]
+visibility = "trait_only"
+constructor = "none"
+
+[composition]
+roots = []
+
+[ownership]
+io_owns = ["task_store_diagnostics"]
+io_forbidden = ["socket_io", "process_spawn"]
+
+[dependencies]
+allowed_dependents = ["atm-rusqlite", "atm-daemon"]
+allowed_dependencies = []
+forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
+
+[references]
+scope = "outside_owner_crate"
+forbidden = []
+
+[contracts]
+request_types = ["TaskStoreDoctor method inputs"]
+response_types = ["TaskStoreDoctorReport", "DoctorFinding"]
+error_types = ["AtmError"]
+
+[testing]
+allowed_test_double_paths = []
+forbidden_test_bypasses = ["rusqlite::Connection"]
+
+[enforcement]
+lint_rules = ["LINT-BOUNDARY-TASKSTOREDOCTOR-REFERENCES"]
+review_gates = ["no_concrete_store_leakage"]
+
+[status]
+state = "planned"
+notes = ["shared doctor-trait contract landed in atm_core::boundary", "task-store diagnostics remain planning-line until the durable task surface moves past placeholder persistence"]

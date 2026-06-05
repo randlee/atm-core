@@ -11,6 +11,8 @@ mod writer;
 use atm_core::boundary;
 pub use atm_core::boundary::RemoteReplayStateRecord;
 use atm_core::error::AtmError;
+#[cfg(test)]
+use atm_core::error::AtmErrorCode;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 pub use boundary_assembly::{
     SqliteBoundaryAssembly, assemble_boundary, assemble_boundary_with_observability,
@@ -2376,7 +2378,7 @@ CREATE UNIQUE INDEX uq_mail_messages_legacy_identity
             ),
             attempt_count: 1,
             last_attempt_at: Some(now),
-            last_error: Some("ATM_DAEMON_UNAVAILABLE".to_string()),
+            last_error: Some(AtmErrorCode::DaemonUnavailable),
         };
 
         assembly

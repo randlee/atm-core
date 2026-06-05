@@ -1,10 +1,11 @@
-use std::path::PathBuf;
 use std::sync::Arc;
 
 use atm_core::boundary::{self, MessageKey, RemoteReplayStateRecord};
 use atm_core::error::AtmError;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_rusqlite::{NullSqliteObservability, SqliteBoundaryAssembly};
+use atm_rusqlite::SqliteBoundaryAssembly;
+#[cfg(any(test, feature = "test-utils"))]
+use {atm_rusqlite::NullSqliteObservability, std::path::PathBuf};
 
 #[derive(Debug, Clone)]
 pub(crate) struct SqliteRemoteReplayStore {
@@ -17,6 +18,9 @@ impl SqliteRemoteReplayStore {
     }
 }
 
+/// Test-only helper for daemon and runtime smoke coverage that need one real
+/// replay-store implementation without widening the public runtime assembly API.
+#[cfg(any(test, feature = "test-utils"))]
 pub fn sqlite_remote_replay_store_for_test(
     db_path: PathBuf,
 ) -> Result<Arc<dyn boundary::RemoteReplayStore + Send + Sync>, AtmError> {

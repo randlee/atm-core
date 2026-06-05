@@ -1,3 +1,4 @@
+use atm_core::boundary::ReplaySource;
 use atm_core::boundary::RequestDispatcher;
 use atm_core::graft::{
     AdvisoryBatchLimit, AdvisoryDrainRequest, AdvisoryFetchRequest, AdvisorySessionId,
@@ -7,12 +8,36 @@ use atm_core::protocol::{RequestEnvelope, ResponseEnvelope};
 use atm_core::schema::{AgentMember, TeamConfig};
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::IsoTimestamp;
+use atm_runtime_test_support::open_sqlite_boundary;
 use tempfile::TempDir;
 
 use crate::runtime_health::{DaemonRequestDispatcher, RuntimeStatusCache};
-use crate::test_support::install_test_roster;
 
 const TEST_TEAM: &str = "test-team";
+
+fn replay_source_static(label: &'static str) -> ReplaySource {
+    ReplaySource::new(label).unwrap_or_else(|_| unreachable!("static replay source must validate"))
+}
+
+fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
+    let assembly = open_sqlite_boundary(db_path).expect("assemble boundary");
+    let roster_store = assembly.roster_store();
+    roster_store
+        .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
+            team: TEST_TEAM.parse().expect("team"),
+            members: members
+                .iter()
+                .map(|name| {
+                    atm_core::boundary::RosterMemberRecord::from_claude_code_member(
+                        TEST_TEAM.parse().expect("team"),
+                        AgentMember::with_name((*name).parse().expect("member")),
+                    )
+                })
+                .collect(),
+            source: Some(replay_source_static("daemon-graft-test")),
+        })
+        .expect("replace roster");
+}
 
 fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
     let team_dir = home_dir.join(".claude").join("teams").join(TEST_TEAM);
@@ -46,12 +71,7 @@ fn advisory_test_dispatcher() -> (TempDir, DaemonRequestDispatcher) {
     let atm_home = tempdir.path().join("atm-home");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
-    install_test_roster(
-        &db_path,
-        &TEST_TEAM.parse().expect("team"),
-        &[ROLE_TEAM_LEAD],
-        "daemon-graft-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
     // TempDir keeps filesystem state process-local across platforms, but this
     // helper still exercises the same POSIX-style local IPC/runtime globals as
