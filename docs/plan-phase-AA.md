@@ -53,6 +53,8 @@ Current violated state that `Phase AA` must delete:
 Authoritative planning support artifacts:
 - `docs/phase-AA/readiness.md`
 - `docs/phase-AA/issues.md`
+- `docs/phase-AA/daemon-state-machines.md`
+- `docs/phase-AA/daemon-sqlite-leak-ledger.md`
 - `.claude/agents/boundary-guard.md`
 
 ## Why Phase AA Exists

@@ -5,6 +5,8 @@
 Track the known Phase AA issue set so planning, QA, and phase closeout use one
 authoritative inventory rather than ad hoc reviewer memory.
 
+AA.0 freezes this inventory as the starting point for the execution line.
+
 ## Open Architectural Issues
 
 | ID | Status | Summary | Planned Closure |

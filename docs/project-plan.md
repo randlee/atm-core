@@ -196,6 +196,9 @@ Status summary:
 - The authoritative plan is [`docs/plan-phase-AA.md`](./plan-phase-AA.md).
 - The authoritative closure checklist is
   [`docs/phase-AA/readiness.md`](./phase-AA/readiness.md).
+- `AA.0` completed the daemon-role restatement, top-level state-machine
+  inventory, and daemon-side SQLite leak ledger that later AA sprints must
+  follow.
 
 Goal:
 - move concrete SQLite/runtime assembly to `atm-runtime`

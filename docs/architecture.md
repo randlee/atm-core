@@ -95,14 +95,19 @@ Phase-AA simplification note:
   `atm-daemon`
 - the daemon remains in the product, but as a thin router rather than a
   concrete storage/runtime host
+- subsystem-specific diagnosis belongs behind subsystem-owned diagnostic traits
+  instead of daemon-local backend-aware helpers
+- top-level doctor code may aggregate subsystem reports and daemon-owned
+  runtime state, but must not reimplement backend-specific diagnosis logic
 
 ## 2. Crate Boundaries
 
-The post-Q product runtime is implemented by four crates:
+The post-Q product runtime is implemented by five crates:
 
 - `atm-core`
 - `atm`
 - `atm-daemon`
+- `atm-runtime`
 - `atm-rusqlite`
 
 Product-level boundary rules:
@@ -110,13 +115,17 @@ Product-level boundary rules:
 - `atm-core` owns ATM business logic and the strict I/O boundaries that the current SQLite/daemon architecture
   routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
-- `atm-daemon` owns runtime composition, transport adapters, singleton
-  enforcement, and live-status runtime state.
+- `atm-daemon` owns transport adapters, singleton enforcement, live-status
+  runtime state, and daemon-owned runtime projection.
+- `atm-runtime` owns concrete runtime/store composition and concrete
+  doctor/runtime assembly that must stay out of `atm-daemon`.
 - `atm-rusqlite` owns the first concrete SQLite implementation of the durable
   store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.
+- `atm-runtime` must remain a thin composition crate rather than a second
+  daemon or workflow host.
 - `atm-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
 - crate-local boundary records in `docs/<crate>/boundaries.md` are the
