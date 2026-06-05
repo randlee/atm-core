@@ -30,6 +30,7 @@ adr_id: ADR-ATM-DAEMON-001
 crate: atm-daemon
 title: Daemon is the current runtime composition root
 status: accepted
+superseded_by: ADR-ATM-RUNTIME-001
 date: 2026-05-03
 deciders:
   - team-lead
@@ -104,6 +105,12 @@ Phase-AA target direction:
 - daemon doctor code aggregates subsystem reports and daemon-owned runtime
   state only, and may compare reports for drift without reimplementing backend
   diagnosis
+- in the steady-state `Phase AA` ownership split, `atm-daemon` owns only:
+  1. transport admission and endpoint publication
+  2. lifecycle / singleton ownership and bounded shutdown
+  3. request validation and frame-contract enforcement
+  4. request dispatch through injected service/runtime ports
+  5. typed daemon error/report projection for daemon-owned runtime state
 - the aggregate-only doctor surface consumes `MailStoreDoctor`,
   `TaskStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor`
 
@@ -396,9 +403,9 @@ Lifecycle state model:
   - `Stopped`
 - the authoritative transition document is
   [`./startup-state-machine.md`](./startup-state-machine.md)
-- the implementation may use typestate or one internal state enum, but the
-  legal lifecycle transitions must remain explicit rather than inferred from
-  loosely-coupled booleans
+- the implementation must use typestate as the governing lifecycle contract;
+  helper enums may exist internally, but they must remain subordinate to the
+  typestate boundary and must not replace the explicit legal transitions
 - accepted transition graph:
   - `Starting -> Running`
   - `Starting -> Stopped` on failed startup/rollback
@@ -463,10 +470,12 @@ The final daemon observability contract is defined in
 
 Required architectural decisions:
 - the injected daemon observability trait remains object-safe and sealed
-- the daemon lifecycle stays modeled as an explicit runtime state machine
-  rather than a typestate API in Phase V
+- the daemon lifecycle stays modeled as an explicit typestate-backed runtime
+  state machine; helper enums may not replace the typestate contract
 - `LaunchGateGuard` remains a launch/admission coordination primitive, not a
-  typestate token
+  lifecycle typestate token, but it still carries one type-level invariant:
+  a live guard proves launch admission is held for the current startup handoff
+  and cannot coexist with the post-admission running token
 - daemon event payloads use typed semantic identifiers:
   - `DaemonSubsystem` enum
   - `AtmMessageId`
@@ -615,9 +624,11 @@ Required shutdown sequence:
 4. cancel remaining inflight work at the force-cancel deadline
 5. checkpoint SQLite WAL
 6. flush observability sinks on a best-effort basis
-7. clear or invalidate current owner metadata while `owner.lock` is still held
-8. release the live exclusive ownership lock
-9. remove the same-host listener artifact if the local-IPC adapter requires a
+7. request stop for the lifecycle wake worker, unregister active hooks, and
+   join the worker within the documented `1s` bound
+8. clear or invalidate current owner metadata while `owner.lock` is still held
+9. release the live exclusive ownership lock
+10. remove the same-host listener artifact if the local-IPC adapter requires a
    removable endpoint artifact on that operating system
 
 Force-cancel rule:
@@ -641,6 +652,8 @@ Exit-code expectations tied to these SLOs:
 - singleton or stale-owner admission failures exit `64` and must not hot-loop
   restart
 - lifecycle-wedge detection exits `71`
+- degraded shutdown after force-cancel or helper-lane timeout emits
+  `DaemonShutdownDegraded` and exits `72`
 
 Required deadlines:
 - normal drain deadline: `5s`
@@ -702,7 +715,7 @@ Required saturation behavior:
   in Phase R the transport remains single-request-per-connection, so the
   in-flight count is structurally `1` until framed multiplexing exists
 - ingest queue full: fail the enqueue with structured degradation/health
-  reporting; no silent drop
+  reporting through `DaemonIngestQueueSaturated`; no silent drop
 - retry queue full: fail remote send attempt rather than enqueueing unbounded
 - watch subscription cap exceeded: reject the new subscription with typed
   over-capacity failure rather than retaining unbounded watcher state
@@ -764,6 +777,11 @@ Required timeout defaults:
 - reconcile runtime drain during runtime teardown: `2s` max
 - watch runtime drain during runtime teardown: `2s` max
 - retained-log flush and sync during runtime teardown: `2s` best-effort max
+- configurable timeout or retry-budget overrides may raise these defaults, but
+  they must not violate the floor contract:
+  - global minimum timeout floor: `250ms`
+  - same-host request and daemon-health minimum floor: `1s`
+  - `daemon.remote_retry_budget` accepted range: `1s..=300s`
 
 Shutdown sub-deadline rationale:
 - these per-component bounds sit under the existing daemon shutdown ceilings so
@@ -805,6 +823,9 @@ Doctor health contract distinction:
     remain part of the daemon runtime DTO
   - the daemon aggregates subsystem doctor reports plus daemon-owned runtime
     findings, but does not perform backend-specific investigation logic
+  - the earlier `AA.0` to `AA.2` transitional fields (`sqlite_ready`,
+    `sqlite_detail`, and the interim degraded-ingest stub) are historical only
+    and must not be reintroduced on this branch
 
 ## 3.6 Crash Recovery
 

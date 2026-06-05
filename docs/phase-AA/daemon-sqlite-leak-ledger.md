@@ -53,6 +53,18 @@ Phase AA decision:
 - deep health belongs to subsystem doctor traits
 - daemon aggregates subsystem reports and daemon-owned runtime state only
 
+## WAL Checkpoint Ownership Record
+
+Frozen references that must leave daemon-owned SQLite control flow by `AA.3`:
+- `docs/atm-daemon/architecture.md §3.1.2` step `5` documents the current
+  graceful-shutdown WAL checkpoint step; the daemon-side implementation leak is
+  the direct checkpoint call in `crates/atm-daemon/src/runtime_health.rs`, and
+  the Phase AA decision remains `keep-and-rewrite` until that call is removed
+- `docs/atm-daemon/architecture.md §3.6` documents the crash-recovery rule that
+  graceful-shutdown WAL checkpoint is best-effort only; this is a retained
+  contract reference, not permission for daemon-owned SQLite control flow after
+  `AA.3`
+
 ## Review Rule
 
 If implementation work proposes:
