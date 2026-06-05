@@ -29,7 +29,7 @@ This crate remains part of the current workspace.
 adr_id: ADR-ATM-DAEMON-001
 crate: atm-daemon
 title: Daemon is the current runtime composition root
-status: accepted
+status: superseded
 superseded_by: ADR-ATM-RUNTIME-001
 date: 2026-05-03
 deciders:
