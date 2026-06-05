@@ -34,8 +34,8 @@ use atm_daemon_client::{
 use atm_daemon_client::{HOST_RUNTIME_LAUNCH_LOCK_FILE, LaunchGateGuard};
 #[cfg(test)]
 use atm_runtime_test_support::{
-    SqliteRuntimeGuard, install_sqlite_retained_runtime_factory as install_test_runtime_factory,
-    open_sqlite_boundary,
+    SQLITE_RUNTIME_PATH_ENV,
+    install_sqlite_retained_runtime_factory as install_test_runtime_factory, open_sqlite_boundary,
 };
 
 use crate::observability::CliObservability;
@@ -496,14 +496,14 @@ mod tests {
 
     use super::{
         CliComposition, DaemonLocalIpcEndpoint, DaemonSupervisor, HOST_RUNTIME_LAUNCH_LOCK_FILE,
-        LaunchGateGuard, LocalIpcClientTransportAdapter, SqliteRuntimeGuard, open_sqlite_boundary,
+        LaunchGateGuard, LocalIpcClientTransportAdapter, SQLITE_RUNTIME_PATH_ENV,
+        open_sqlite_boundary,
     };
     use crate::observability::CliObservability;
 
     struct LoopbackFixture {
-        _tempdir: TempDir,
         _env_guard: EnvGuard,
-        _runtime_guard: SqliteRuntimeGuard,
+        _tempdir: TempDir,
         home_dir: std::path::PathBuf,
         current_dir: std::path::PathBuf,
     }
@@ -514,17 +514,22 @@ mod tests {
             let tempdir = tempfile::tempdir().expect("tempdir");
             let home_dir = tempdir.path().to_path_buf();
             let sqlite_db_path = home_dir.join("runtime").join("mail.sqlite3");
-            let runtime_guard = SqliteRuntimeGuard::install(sqlite_db_path);
-            let env_guard = EnvGuard::set_many([(
-                "ATM_HOME",
-                Some(home_dir.to_str().expect("utf-8 tempdir path")),
-            )]);
             let current_dir = tempdir.path().join("cwd");
             fs::create_dir_all(&current_dir).expect("cwd");
+            fs::write(current_dir.join(".atm.toml"), "[atm]\n").expect("fixture atm config");
+            let env_guard = EnvGuard::set_many([
+                (
+                    "ATM_HOME",
+                    Some(home_dir.to_str().expect("utf-8 tempdir path")),
+                ),
+                (
+                    SQLITE_RUNTIME_PATH_ENV,
+                    Some(sqlite_db_path.to_str().expect("utf-8 sqlite db path")),
+                ),
+            ]);
             let fixture = Self {
-                _tempdir: tempdir,
                 _env_guard: env_guard,
-                _runtime_guard: runtime_guard,
+                _tempdir: tempdir,
                 home_dir,
                 current_dir,
             };

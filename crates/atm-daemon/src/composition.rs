@@ -219,6 +219,8 @@ impl RuntimeComposition {
         let config_ingress = DaemonConfigIngress::new();
         let composition_observability =
             SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
+        // Runtime status snapshots are read on the hot doctor/status path, so
+        // the cache uses ArcSwap for lock-free reads while writes stay explicit.
         let status_cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
@@ -446,6 +448,7 @@ impl RuntimeComposition {
             )
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, move || {
+            self.request_dispatcher.preflush_observability_shutdown();
             if let Some(signal) = ready_signal.as_ref() {
                 signal.send(()).map_err(|_| {
                     AtmError::daemon_unavailable(

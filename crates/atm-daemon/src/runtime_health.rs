@@ -21,7 +21,7 @@ use atm_core::{
     list::list_mail,
     process::process_is_alive,
     protocol::{
-        RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope,
+        RuntimeLivenessState, RuntimeStatusSnapshot, SendRequestEnvelope, SendResponseEnvelope,
         TeamMemberHeartbeatRequest, TeamMemberHeartbeatResponse,
     },
     read::read_mail,
@@ -686,7 +686,7 @@ fn notification_worker_liveness_finding(snapshot: RuntimeHealthSnapshot) -> Doct
         },
         NotificationWorkerLiveness::Degraded => DoctorFinding {
             severity: DoctorSeverity::Warning,
-            code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded,
+            code: atm_core::error_codes::AtmErrorCode::WarningSendAlertStateDegraded,
             message:
                 "notification worker liveness is degraded on the runtime-owned seam".to_string(),
             remediation: Some(
@@ -773,9 +773,18 @@ impl boundary::StatusSource for DaemonStatusSource {
     // status-source seam for implementations that may need to surface IO or
     // transport failures.
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
-        // StatusSource currently exposes a Result-based boundary contract, but
-        // the daemon cache snapshot itself is an infallible ArcSwap read.
-        Ok(self.status_cache.snapshot())
+        let snapshot = self.status_cache.snapshot();
+        if matches!(snapshot.liveness, RuntimeLivenessState::Unavailable)
+            && snapshot.singleton_owner_pid.is_none()
+        {
+            return Err(AtmError::daemon_unavailable(
+                "daemon runtime status snapshot is unavailable because no owner process is recorded",
+            )
+            .with_recovery(
+                "Restart atm-daemon or restore same-host ownership before retrying daemon status collection.",
+            ));
+        }
+        Ok(snapshot)
     }
 }
 

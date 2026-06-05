@@ -906,7 +906,7 @@ fn doctor_projects_degraded_runtime_when_member_identity_conflicts_exist() {
                 .iter()
                 .find(|finding| {
                     finding.code
-                        == atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded
+                        == atm_core::error_codes::AtmErrorCode::WarningSendAlertStateDegraded
                 })
                 .expect("runtime finding");
             assert!(finding.message.contains("owner_pid="));

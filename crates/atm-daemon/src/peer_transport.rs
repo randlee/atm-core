@@ -29,6 +29,7 @@ const PEER_CONNECT_DEADLINE: Duration = Duration::from_secs(5);
 const PEER_IO_DEADLINE: Duration = Duration::from_secs(5);
 const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
 const MIN_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(1);
+const MAX_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
 const MAX_REMOTE_REPLAY_RESUME_RECORDS: usize = 10_000;
@@ -66,6 +67,15 @@ impl PeerTransportConfig {
             ))
             .with_recovery(
                 "Raise daemon.remote_retry_budget to at least one second before starting atm-daemon.",
+            ));
+        }
+        if remote_retry_budget > MAX_REMOTE_RETRY_BUDGET {
+            return Err(AtmError::validation(format!(
+                "daemon.remote_retry_budget must not exceed {} second(s)",
+                MAX_REMOTE_RETRY_BUDGET.as_secs()
+            ))
+            .with_recovery(
+                "Lower daemon.remote_retry_budget to one week or less before starting atm-daemon.",
             ));
         }
         Ok(Self {
@@ -289,6 +299,9 @@ impl PeerClientTransport {
             .endpoint
             .ok_or_else(remote_peer_endpoint_not_configured_error)?;
         let recorded_at = IsoTimestamp::now();
+        // The configured retry budget intentionally bounds both the live retry
+        // window and the retained replay TTL so durable replay cannot outlive
+        // the operator-visible retry promise for one remote delivery attempt.
         let expires_at = IsoTimestamp::from_datetime(
             recorded_at.into_inner()
                 + chrono::Duration::from_std(self.config.remote_retry_budget)

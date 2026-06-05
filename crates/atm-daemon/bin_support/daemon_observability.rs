@@ -290,6 +290,9 @@ impl DaemonObservability {
         };
         match lifecycle {
             LoggerLifecycle::Running(logger_runtime) => {
+                // Concurrent emitters fail closed while this preflush runs so
+                // the final shutdown event cannot be reordered behind older
+                // retained-log queue entries during teardown.
                 // Drain queued work before the final shutdown event is emitted,
                 // but release the mutex first so the blocking flush path cannot
                 // deadlock with a concurrent logger admission attempt.
@@ -906,6 +909,8 @@ fn level_for_outcome(subsystem: &str, action: &ActionName, outcome: &str) -> Lev
         other => {
             tracing::warn!(
                 code = %AtmErrorCode::ObservabilityEmitFailed,
+                service = ATM_SERVICE_NAME,
+                target = ATM_DAEMON_TARGET,
                 subsystem,
                 action = action.as_str(),
                 outcome = other,

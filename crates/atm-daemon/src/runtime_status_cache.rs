@@ -402,7 +402,7 @@ pub(crate) fn runtime_status_finding(snapshot: &RuntimeStatusSnapshot) -> Doctor
         },
         RuntimeReadinessState::Degraded => DoctorFinding {
             severity: DoctorSeverity::Warning,
-            code: atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded,
+            code: atm_core::error_codes::AtmErrorCode::WarningSendAlertStateDegraded,
             message: summary,
             remediation: snapshot.detail.clone().or(Some(
                 "Restore daemon runtime backing services and rerun `atm doctor`.".to_string(),

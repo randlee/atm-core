@@ -20,9 +20,9 @@ io_owns = ["sqlite", "task_store_diagnostics"]
 io_forbidden = ["socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-daemon", "atm-daemon-bootstrap", "atm-runtime-test-support"]
+allowed_dependents = ["atm-runtime", "atm-daemon-bootstrap", "atm-runtime-test-support"]
 allowed_dependencies = ["atm-core", "rusqlite"]
-forbidden_edges = ["atm -> atm-rusqlite", "atm-graft -> atm-rusqlite"]
+forbidden_edges = ["atm -> atm-rusqlite", "atm-daemon -> atm-rusqlite", "atm-graft -> atm-rusqlite"]
 
 [references]
 scope = "outside_owner_crate"
@@ -42,5 +42,5 @@ lint_rules = ["LINT-BOUNDARY-TASKSTOREDOCTOR-SQLITE-REFERENCES"]
 review_gates = ["no_public_impl", "no_public_constructor", "no_public_reexport"]
 
 [status]
-state = "planned"
+state = "active"
 notes = ["task persistence remains a placeholder surface; diagnostic record is frozen for Phase AA"]

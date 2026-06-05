@@ -8,7 +8,7 @@ use atm_core::error::AtmError;
 use atm_core::test_support::{remove_env_var, set_env_var};
 use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-    home::host_runtime_dir,
+    home::{atm_home, host_runtime_dir_from_home},
 };
 use atm_rusqlite::{SqliteBoundaryAssembly, SqliteWriterLockGuard};
 
@@ -96,7 +96,7 @@ fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
         assembly.roster_store_arc(),
         std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
         std::sync::Arc::new(LocalFileNotificationSink::at_path(
-            host_runtime_dir()?.join("notifications.jsonl"),
+            host_runtime_dir_from_home(&atm_home()?).join("notifications.jsonl"),
         )),
     );
     if runtime_cache.len() >= MAX_SQLITE_RUNTIME_CACHE_ENTRIES {
