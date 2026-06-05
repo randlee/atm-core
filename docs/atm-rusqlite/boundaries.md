@@ -12,8 +12,11 @@ Current design assumption:
 
 Canonical machine-readable boundary sources:
 - [`boundaries/atm-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-sqlite.toml)
+- [`boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml)
 - [`boundaries/atm-rusqlite/task-store-sqlite.toml`](../../boundaries/atm-rusqlite/task-store-sqlite.toml)
+- [`boundaries/atm-rusqlite/task-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/task-store-doctor-sqlite.toml)
 - [`boundaries/atm-rusqlite/roster-store-sqlite.toml`](../../boundaries/atm-rusqlite/roster-store-sqlite.toml)
+- [`boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml)
 - [`boundaries/atm-rusqlite/sqlite-boundary-assembly.toml`](../../boundaries/atm-rusqlite/sqlite-boundary-assembly.toml)
 - [`boundaries/atm-rusqlite/shared-db.toml`](../../boundaries/atm-rusqlite/shared-db.toml)
 
@@ -72,6 +75,15 @@ Notes:
 - Caller crates should know only the `MailStore` trait, never this concrete
   type.
 
+## SqliteMailStoreDoctorAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml](../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml)
+
+Purpose:
+- Own the SQLite-backed implementation of the `MailStoreDoctor` diagnostics
+  contract.
+
 ## SqliteTaskStoreAdapter
 
 Purpose:
@@ -81,6 +93,15 @@ Notes:
 - Task persistence is not an approved SQLite schema line today.
 - The trait may remain upstream as a contract placeholder, but this crate must
   not grow or preserve an unapproved durable task schema.
+
+## SqliteTaskStoreDoctorAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-rusqlite/task-store-doctor-sqlite.toml](../../boundaries/atm-rusqlite/task-store-doctor-sqlite.toml)
+
+Purpose:
+- Own the SQLite-backed implementation of the `TaskStoreDoctor` diagnostics
+  contract.
 
 ## SqliteRosterStoreAdapter
 
@@ -97,3 +118,12 @@ Notes:
   - `model`
   - `metadata_json`
 - Durable roster truth must not carry daemon-owned `pid` continuity.
+
+## SqliteRosterStoreDoctorAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml](../../boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml)
+
+Purpose:
+- Own the SQLite-backed implementation of the `RosterStoreDoctor` diagnostics
+  contract.

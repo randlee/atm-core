@@ -32,6 +32,9 @@ Phase-AA simplification direction:
   state, but must not reimplement backend-specific diagnosis logic
 - `MailStore`, `TaskStore`, and `RosterStore` remain the primary
   storage-neutral capability traits during this simplification line
+- `MailStoreDoctor`, `TaskStoreDoctor`, `RosterStoreDoctor`, and
+  `ConfigDoctor` are the explicit subsystem doctor traits used by that
+  aggregate-only health model
 - later SQLite-backed and Claude-JSON-backed implementations may satisfy that
   same behavior-named trait family rather than forcing backend-shaped parallel
   trait trees

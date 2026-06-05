@@ -78,13 +78,13 @@ pub(crate) fn compute_identity_fingerprint(
     let fingerprint = request
         .message
         .message_id
-        .map(|message_id| message_id.to_string())
+        .map(|message_id| crate::boundary::MessageFingerprint::from(message_id.to_string()))
         .or_else(|| {
-            Some(format!(
+            Some(crate::boundary::MessageFingerprint::from(format!(
                 "{}:{}",
                 request.message.from,
                 request.message.timestamp.into_inner().to_rfc3339()
-            ))
+            )))
         });
     InboxIngressIdentityFingerprintResponse { fingerprint }
 }
