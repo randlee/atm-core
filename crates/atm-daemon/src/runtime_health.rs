@@ -759,6 +759,10 @@ impl DaemonStatusSource {
 impl boundary::sealed::Sealed for DaemonStatusSource {}
 
 impl boundary::StatusSource for DaemonStatusSource {
+    // The boundary contract is fallible even though the in-memory snapshot read
+    // is currently infallible; keeping the `Result` preserves the shared
+    // status-source seam for implementations that may need to surface IO or
+    // transport failures.
     fn snapshot(&self) -> Result<RuntimeStatusSnapshot, AtmError> {
         // StatusSource currently exposes a Result-based boundary contract, but
         // the daemon cache snapshot itself is an infallible ArcSwap read.

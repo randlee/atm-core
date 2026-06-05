@@ -1,5 +1,4 @@
-use crate::error::AtmError;
-use crate::error_codes::AtmErrorCode;
+use crate::error::{AtmError, AtmErrorCode};
 use crate::protocol::RequestEnvelope;
 use crate::types::{AgentName, IsoTimestamp, TeamName};
 use serde::{Deserialize, Serialize};

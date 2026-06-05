@@ -4,11 +4,8 @@ use atm_core::boundary::{self, MessageKey, RemoteReplayStateRecord};
 use atm_core::error::AtmError;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::SqliteBoundaryAssembly;
-
 #[cfg(any(test, feature = "test-utils"))]
-use atm_rusqlite::NullSqliteObservability;
-#[cfg(any(test, feature = "test-utils"))]
-use std::path::PathBuf;
+use {atm_rusqlite::NullSqliteObservability, std::path::PathBuf};
 
 #[derive(Debug, Clone)]
 pub(crate) struct SqliteRemoteReplayStore {

@@ -10,10 +10,7 @@ use super::{
     local_ipc_transport::RuntimeServeHooks,
     non_claude_outbound_runtime::DaemonNonClaudeOutbound,
     notification_runtime::NotificationRuntime,
-    test_support::{
-        DoctorOnlyDispatcher, LifecycleFlagResetGuard, install_test_roster,
-        sqlite_runtime_assembly_for_test,
-    },
+    test_support::{DoctorOnlyDispatcher, LifecycleFlagResetGuard},
 };
 use atm_core::boundary::RequestDispatcher;
 use atm_core::doctor::DoctorQuery;
@@ -30,8 +27,9 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail_with_runtime};
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_runtime_test_support::SQLITE_RUNTIME_PATH_ENV;
-use atm_runtime_test_support::install_sqlite_retained_runtime_factory;
+use atm_runtime_test_support::{
+    SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+};
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -315,6 +313,29 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
     );
 }
 
+fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
+    let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
+    assembly
+        .roster_store()
+        .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
+            team: test_team().clone(),
+            members: members
+                .iter()
+                .map(|name| {
+                    atm_core::boundary::RosterMemberRecord::from_claude_code_member(
+                        test_team().clone(),
+                        AgentMember::with_name((*name).parse().expect("member")),
+                    )
+                })
+                .collect(),
+            source: Some(
+                atm_core::boundary::ReplaySource::new("daemon-heartbeat-test")
+                    .expect("replay source"),
+            ),
+        })
+        .expect("replace roster");
+}
+
 fn write_team_config(home_dir: &std::path::Path, members: &[&str]) {
     let team_dir = home_dir.join(".claude").join("teams").join(TEST_TEAM);
     std::fs::create_dir_all(team_dir.join("inboxes")).expect("inboxes dir");
@@ -350,12 +371,7 @@ fn production_runtime_installs_daemon_notification_sink() {
     std::fs::create_dir_all(&workspace_dir).expect("workspace dir");
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     write_workspace_config(&workspace_dir);
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD, "qa-a"],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
 
     let _env = EnvGuard::set_many([
@@ -374,11 +390,11 @@ fn production_runtime_installs_daemon_notification_sink() {
         SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
     ));
     sink.start().expect("start notification sink");
-    let runtime_assembly = sqlite_runtime_assembly_for_test(&db_path);
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     let runtime = build_production_runtime(
-        runtime_assembly.runtime_bundle.mail_store.clone(),
-        runtime_assembly.runtime_bundle.task_store.clone(),
-        runtime_assembly.runtime_bundle.roster_store.clone(),
+        assembly.mail_store_arc(),
+        assembly.task_store_arc(),
+        assembly.roster_store_arc(),
         Arc::new(DaemonNonClaudeOutbound::new()),
         Arc::new(sink.clone()),
     );
@@ -421,12 +437,7 @@ fn heartbeat_updates_status_cache_and_doctor_projection() {
         Some(db_path.to_str().expect("utf8 sqlite db path")),
     )]);
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD, "qa-a"],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
 
     let status_cache = RuntimeStatusCache::new();
@@ -485,12 +496,7 @@ fn dispatcher_hydrates_unknown_members_from_team_roster_on_startup() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD, "qa-a"],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
 
     let status_cache = RuntimeStatusCache::new();
@@ -512,12 +518,7 @@ fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
 
     let status_cache = RuntimeStatusCache::new();
@@ -540,12 +541,7 @@ fn reload_runtime_view_applies_updated_team_config_and_preserves_live_state() {
         }))
         .expect("initial heartbeat");
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD, "qa-a"],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD, "qa-a"]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD, "qa-a"]);
 
     dispatcher
@@ -569,12 +565,7 @@ fn reload_runtime_view_ignores_invalid_config_and_preserves_last_known_good_stat
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
 
     let status_cache = RuntimeStatusCache::new();
@@ -618,12 +609,7 @@ fn finalize_shutdown_drains_test_tracked_finalizer_threads() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
 
@@ -638,12 +624,7 @@ fn heartbeat_rejects_live_pid_conflict() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
@@ -696,12 +677,7 @@ fn heartbeat_accepts_pid_takeover_when_previous_pid_is_dead() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
 
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home, RuntimeStatusCache::new(), db_path);
@@ -802,12 +778,7 @@ fn heartbeat_retries_identity_conflict_after_old_pid_dies() {
     std::fs::create_dir_all(&atm_home).expect("atm home dir");
     let db_path = tempdir.path().join("mail.db");
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
 
     let status_cache = RuntimeStatusCache::new();
     let dispatcher = DaemonRequestDispatcher::new_for_test(atm_home, status_cache.clone(), db_path);
@@ -903,12 +874,7 @@ fn doctor_projects_degraded_runtime_when_member_identity_conflicts_exist() {
         Some(db_path.to_str().expect("utf8 sqlite db path")),
     )]);
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
 
     let status_cache = RuntimeStatusCache::new();
@@ -963,12 +929,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
         Some(db_path.to_str().expect("utf8 sqlite db path")),
     )]);
 
-    install_test_roster(
-        &db_path,
-        test_team(),
-        &[ROLE_TEAM_LEAD],
-        "daemon-heartbeat-test",
-    );
+    install_test_roster(&db_path, &[ROLE_TEAM_LEAD]);
     write_team_config(&atm_home, &[ROLE_TEAM_LEAD]);
 
     let status_cache = RuntimeStatusCache::new();
