@@ -15,8 +15,11 @@ RUNTIME_COMPOSITION = Path("boundaries/atm-runtime/runtime-composition.toml")
 SQLITE_BOUNDARY_FILES = [
     Path("boundaries/atm-rusqlite/sqlite-boundary-assembly.toml"),
     Path("boundaries/atm-rusqlite/mail-store-sqlite.toml"),
+    Path("boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml"),
     Path("boundaries/atm-rusqlite/roster-store-sqlite.toml"),
+    Path("boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml"),
     Path("boundaries/atm-rusqlite/task-store-sqlite.toml"),
+    Path("boundaries/atm-rusqlite/task-store-doctor-sqlite.toml"),
     Path("boundaries/atm-rusqlite/shared-db.toml"),
 ]
 ALL_GUARDED_BOUNDARY_FILES = [RUNTIME_COMPOSITION, *SQLITE_BOUNDARY_FILES]
