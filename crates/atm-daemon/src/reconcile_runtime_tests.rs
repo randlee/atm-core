@@ -541,10 +541,9 @@ impl InboxIngress for FakeInboxIngress {
         request: InboxIngressIdentityFingerprintRequest,
     ) -> InboxIngressIdentityFingerprintResponse {
         InboxIngressIdentityFingerprintResponse {
-            fingerprint: request
-                .message
-                .message_id
-                .map(|message_id| message_id.to_string()),
+            fingerprint: request.message.message_id.map(|message_id| {
+                atm_core::boundary::MessageFingerprint::from(message_id.to_string())
+            }),
         }
     }
 

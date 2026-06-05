@@ -352,9 +352,11 @@ pub struct MailStoreResponse {
     pub opened: bool,
 }
 
+pub type DoctorFinding = crate::doctor::DoctorFinding;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct MailStoreDoctorReport {
-    pub findings: Vec<super::DoctorFinding>,
+    pub findings: Vec<DoctorFinding>,
 }
 
 /// BOUNDARY-MailStore — see docs/atm-core/boundaries.md.

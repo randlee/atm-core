@@ -33,7 +33,11 @@ Owned concerns:
 Primary files:
 - `crates/atm-daemon/src/local_ipc_transport.rs`
 - `crates/atm-daemon/src/local_ipc_transport/request_worker.rs`
-- dispatch portions of `crates/atm-daemon/src/runtime_health.rs`
+- temporary pre-`AA.3` dispatch portions of
+  `crates/atm-daemon/src/runtime_health.rs`
+  - this file is still listed below as a target violation because its current
+    SQLite-aware health logic exceeds the desired machine boundary and must be
+    deleted or split during the Phase AA line
 
 ### 3. Session / Connection Lifecycle
 
