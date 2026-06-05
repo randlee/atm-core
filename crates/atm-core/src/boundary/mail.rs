@@ -352,7 +352,6 @@ pub struct MailStoreResponse {
 }
 
 pub type DoctorFinding = crate::doctor::DoctorFinding;
-
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailStoreDoctorReport {
     pub findings: Vec<DoctorFinding>,

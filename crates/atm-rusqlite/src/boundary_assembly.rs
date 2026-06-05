@@ -1,13 +1,12 @@
 use atm_core::boundary;
+use atm_core::boundary::RemoteReplayStateRecord;
 use atm_core::error::AtmError;
-use atm_core::protocol::RequestEnvelope;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
     home::host_runtime_dir,
 };
 use rusqlite::params;
-use std::net::SocketAddr;
 use std::path::Path;
 use std::sync::Arc;
 
@@ -27,26 +26,18 @@ struct SqliteRosterStore {
 #[path = "roster_store.rs"]
 mod roster_store_impl;
 
-#[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
-pub struct RemoteReplayStateRecord {
-    pub team: TeamName,
-    pub agent: AgentName,
-    pub message_key: boundary::MessageKey,
-    pub peer_addr: SocketAddr,
-    pub request: RequestEnvelope,
-    pub recorded_at: IsoTimestamp,
-    pub expires_at: IsoTimestamp,
-    #[serde(default)]
-    pub attempt_count: u32,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_attempt_at: Option<IsoTimestamp>,
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub last_error: Option<String>,
-}
-
 impl SqliteRosterStore {
     fn new(db: Arc<SharedDb>) -> Self {
         Self { db }
+    }
+}
+
+impl boundary::RosterStoreDoctor for SqliteRosterStore {
+    fn inspect_roster_store(&self) -> Result<boundary::RosterStoreDoctorReport, AtmError> {
+        self.db.with_connection(|_| Ok(()))?;
+        Ok(boundary::RosterStoreDoctorReport {
+            findings: Vec::new(),
+        })
     }
 }
 
@@ -143,6 +134,18 @@ impl SqliteBoundaryAssembly {
     }
 
     pub fn roster_store_arc(&self) -> Arc<dyn boundary::RosterStore + Send + Sync> {
+        self.roster_store.clone()
+    }
+
+    pub fn mail_store_doctor_arc(&self) -> Arc<dyn boundary::MailStoreDoctor + Send + Sync> {
+        self.mail_store.clone()
+    }
+
+    pub fn task_store_doctor_arc(&self) -> Arc<dyn boundary::TaskStoreDoctor + Send + Sync> {
+        self.task_store.clone()
+    }
+
+    pub fn roster_store_doctor_arc(&self) -> Arc<dyn boundary::RosterStoreDoctor + Send + Sync> {
         self.roster_store.clone()
     }
 

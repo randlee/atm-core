@@ -1,30 +1,32 @@
 use std::sync::Arc;
 
 use atm_core::error::AtmError;
-use atm_rusqlite::{SqliteObservability, SqliteObservabilityEvent, SqliteObservabilityOutcome};
+#[cfg(test)]
+use atm_core::error::AtmErrorCode;
+use atm_runtime::{RuntimeSqliteEvent, RuntimeSqliteObserver, RuntimeSqliteOutcome};
 
-use crate::DaemonRuntimeObservability;
 use crate::DaemonSubsystem;
+use crate::daemon_runtime_observability::DaemonRuntimeObservability;
 use crate::runtime_status_cache::RuntimeStatusCache;
 
 type ActionName = sc_observability_types::ActionName;
 type OutcomeLabel = sc_observability_types::OutcomeLabel;
 
 #[derive(Clone)]
-pub(crate) struct DaemonSqliteObservability {
+pub(crate) struct DaemonRuntimeSqliteObserver {
     observability: Arc<dyn DaemonRuntimeObservability>,
     status_cache: RuntimeStatusCache,
 }
 
-impl std::fmt::Debug for DaemonSqliteObservability {
+impl std::fmt::Debug for DaemonRuntimeSqliteObserver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DaemonSqliteObservability")
+        f.debug_struct("DaemonRuntimeSqliteObserver")
             .field("status_cache", &self.status_cache)
             .finish_non_exhaustive()
     }
 }
 
-impl DaemonSqliteObservability {
+impl DaemonRuntimeSqliteObserver {
     pub(crate) fn new(
         observability: Arc<dyn DaemonRuntimeObservability>,
         status_cache: RuntimeStatusCache,
@@ -36,17 +38,17 @@ impl DaemonSqliteObservability {
     }
 }
 
-impl SqliteObservability for DaemonSqliteObservability {
-    fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError> {
-        match event.outcome {
-            SqliteObservabilityOutcome::Ok => {}
-            SqliteObservabilityOutcome::Failed | SqliteObservabilityOutcome::Timeout => {
-                self.status_cache
-                    .mark_sqlite_unavailable_with_detail(format!(
-                        "[{}] {}",
-                        event.action, event.message
-                    ));
-            }
+impl RuntimeSqliteObserver for DaemonRuntimeSqliteObserver {
+    fn emit_sqlite_event(&self, event: RuntimeSqliteEvent) -> Result<(), AtmError> {
+        if matches!(
+            event.outcome,
+            RuntimeSqliteOutcome::Failed | RuntimeSqliteOutcome::Timeout
+        ) {
+            self.status_cache
+                .mark_sqlite_unavailable_with_detail(format!(
+                    "[{}] {}",
+                    event.action, event.message
+                ));
         }
         let action = ActionName::new(event.action).map_err(|source| {
             AtmError::observability_emit("failed to validate ATM daemon sqlite subsystem action")
@@ -70,7 +72,6 @@ impl SqliteObservability for DaemonSqliteObservability {
 mod tests {
     use super::*;
     use atm_core::doctor::DoctorSeverity;
-    use atm_core::error_codes::AtmErrorCode;
 
     #[test]
     fn sqlite_failure_updates_runtime_status_and_retained_log() {
@@ -83,13 +84,13 @@ mod tests {
                 .expect("test observability"),
         );
         let status_cache = RuntimeStatusCache::new();
-        let sqlite_observability =
-            DaemonSqliteObservability::new(observability.clone(), status_cache.clone());
+        let sqlite_observer =
+            DaemonRuntimeSqliteObserver::new(observability.clone(), status_cache.clone());
 
-        sqlite_observability
-            .emit(SqliteObservabilityEvent::new(
+        sqlite_observer
+            .emit_sqlite_event(RuntimeSqliteEvent::new(
                 "writer_submit",
-                SqliteObservabilityOutcome::Timeout,
+                RuntimeSqliteOutcome::Timeout,
                 "sqlite writer submission queue did not accept a write within 10s",
                 Some(AtmErrorCode::DaemonUnavailable),
             ))

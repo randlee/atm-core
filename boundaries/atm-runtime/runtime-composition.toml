@@ -1,47 +1,54 @@
 boundary_id = "BOUNDARY-AtmRuntime-Composition"
 owner_package = "atm-runtime"
 owner_crate_path = "atm_runtime"
-name = "RuntimeComposition"
+name = "RuntimeAssembly"
 
 [public]
-facade = "RuntimeComposition"
+facade = "RuntimeAssembly"
 notes = "Phase AA concrete composition seam that assembles storage-neutral runtime inputs for atm and atm-daemon"
 
 [implementation]
-type = "RuntimeComposition"
-module = "atm_runtime"
-visibility = "pub(crate)"
-constructor = "pub(crate)"
+type = "RuntimeAssembly"
+module = "atm_runtime::composition"
+visibility = "public"
+constructor = "public"
 
 [composition]
-roots = ["atm_runtime::composition"]
+roots = [
+  "atm_runtime::composition::assemble_sqlite_runtime",
+  "atm_runtime::composition::assemble_default_runtime",
+]
 
 [ownership]
 io_owns = ["runtime_dependency_assembly", "config_doctor_assembly", "replay_store_assembly"]
 io_forbidden = ["daemon_transport", "daemon_lifecycle", "direct_socket_io"]
 
 [dependencies]
-allowed_dependents = ["atm", "atm-daemon", "atm-runtime"]
+allowed_dependents = ["atm", "atm-daemon", "atm-daemon-bootstrap"]
 allowed_dependencies = ["atm-core", "atm-rusqlite"]
-forbidden_edges = ["atm -> atm-rusqlite", "atm-runtime -> atm-daemon"]
+forbidden_edges = ["atm-daemon -> atm-rusqlite", "atm -> atm-rusqlite", "atm-runtime -> atm-daemon"]
 
 [references]
 scope = "outside_owner_crate"
 forbidden = []
 
 [contracts]
-request_types = ["runtime bootstrap/config inputs"]
-response_types = ["RuntimeBundle", "doctor assembly handles"]
+request_types = ["RuntimeAssemblyInputs"]
+response_types = ["RuntimeAssembly", "RuntimeBundle", "RuntimeStorageFinalizer"]
 error_types = ["AtmError"]
 
 [testing]
 allowed_test_double_paths = []
-forbidden_test_bypasses = ["RuntimeComposition"]
+forbidden_test_bypasses = ["assemble_boundary_with_observability", "assemble_default_boundary"]
 
 [enforcement]
 lint_rules = ["SCB-RUNTIME-001", "SCB-RUNTIME-002"]
 review_gates = ["no_direct_backend_leakage", "no_runtime_to_daemon_backedge"]
 
 [status]
-state = "planned"
-notes = ["introduced by Phase AA to freeze the atm-runtime ownership boundary before implementation", "daemon startup remains fail-closed on any RuntimeBundle assembly failure", "the daemon-to-sqlite edge remains governed by the existing rusqlite boundary TOMLs until AA.5 relocks them; this record does not fail that edge during the AA.2-AA.4 transition window"]
+state = "concrete_landed"
+notes = [
+  "implemented by AA.2 as the concrete runtime/store composition root for atm and atm-daemon",
+  "daemon startup remains fail-closed on any RuntimeBundle assembly failure",
+  "the daemon-to-sqlite edge remains governed by the existing rusqlite boundary TOMLs until AA.5 relocks them; this record freezes the target end-state during the AA.2-AA.4 transition window",
+]

@@ -194,6 +194,29 @@ Purpose:
 - Own durable roster-store diagnostics without moving backend-specific
   diagnosis into daemon or CLI code.
 
+## Phase AA Runtime Composition Adjuncts
+
+Purpose:
+- Own the storage-neutral runtime/replay contracts that concrete composition
+  code and daemon runtime code share without letting those seams become
+  daemon-private or SQLite-private.
+
+Owned shared contracts:
+- `DoctorFinding`
+- `RuntimeBundle`
+- `RemoteReplayStateRecord`
+- `RemoteReplayStore`
+- `RuntimeStorageFinalizer`
+
+Notes:
+- `RuntimeBundle` groups the installed storage-neutral service and doctor
+  handles that callers consume after `atm-runtime` assembles the concrete
+  backend.
+- `RemoteReplayStore` keeps bounded replay persistence behind an
+  `atm-core`-owned contract even though the first implementation is SQLite.
+- `RuntimeStorageFinalizer` keeps shutdown-time storage finalization, such as
+  bounded WAL checkpoint work, outside daemon-private adapter knowledge.
+
 ## ConfigIngress
 
 Canonical machine-readable boundary source:

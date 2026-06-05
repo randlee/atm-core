@@ -199,6 +199,12 @@ Status summary:
 - `AA.0` completed the daemon-role restatement, top-level state-machine
   inventory, and daemon-side SQLite leak ledger that later AA sprints must
   follow.
+- `AA.1` completed the subsystem-owned doctor traits and shared diagnostic DTO
+  move into `atm-core`.
+- `AA.2` completed the `atm-runtime` composition-root introduction, moved
+  production SQLite/runtime assembly out of daemon production composition, and
+  froze the target runtime boundary while the SQLite TOML relock remains
+  deferred to `AA.5`.
 
 Goal:
 - move concrete SQLite/runtime assembly to `atm-runtime`

@@ -13,6 +13,7 @@ The current merged workspace contains:
 
 The daemon/runtime expansion adds:
 - `atm-daemon`: daemon runtime binary / transport host
+- `atm-runtime`: concrete runtime/store composition root
 - `atm-rusqlite`: first concrete SQLite store implementation
 
 The CLI stays thin. Product logic moves into `atm-core`.
@@ -120,9 +121,9 @@ Product-level boundary rules:
   routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
 - `atm-daemon` owns transport adapters, singleton enforcement, live-status
-  runtime state, and daemon-owned runtime projection.
-- `atm-runtime` owns concrete runtime/store composition and concrete
-  doctor/runtime assembly that must stay out of `atm-daemon`.
+  runtime state, request routing, and daemon-owned runtime projection.
+- `atm-runtime` owns concrete runtime/store composition and storage-neutral
+  doctor/runtime assembly for daemon and direct CLI doctor callers.
 - `atm-rusqlite` owns the first concrete SQLite implementation of the durable
   store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
@@ -210,7 +211,7 @@ Current Phase R boundary direction:
   - `atm` remains the CLI composition root
   - `atm-runtime` becomes the concrete runtime/store composition root
   - `atm-daemon` consumes storage-neutral runtime inputs and stops
-    constructing SQLite-backed adapters directly
+    constructing SQLite-backed adapters directly in production composition
 
 Current Phase R lint partition direction:
 - extend the existing `sc-portability` analyzer for reusable platform-gating

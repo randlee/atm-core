@@ -75,6 +75,7 @@ Phase-AA supersession note:
 - this ADR records the current merged ownership shape only
 - `Phase AA` intentionally supersedes it by moving concrete runtime/store
   composition into a dedicated `atm-runtime` crate
+- `AA.2` lands that transfer for production composition paths
 - after `Phase AA`, `atm-daemon` is no longer a legal home for SQLite adapter
   construction
 
@@ -95,6 +96,8 @@ The `atm-daemon` crate must remain thin.
 
 Phase-AA target direction:
 - the daemon remains transport/lifecycle-owned
+- `AA.2` moves concrete production runtime/store composition into
+  `atm-runtime`
 - SQLite-specific composition, observability, replay, and direct store-health
   logic are removed from this crate
 - daemon health becomes daemon-owned runtime projection only

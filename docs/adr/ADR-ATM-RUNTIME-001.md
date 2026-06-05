@@ -4,8 +4,8 @@
 adr_id: ADR-ATM-RUNTIME-001
 crate: atm-runtime
 title: atm-runtime as concrete composition root
-status: proposed
-date: 2026-05-30
+status: accepted
+date: 2026-06-04
 deciders:
   - team-lead
   - arch-ctm
@@ -60,3 +60,9 @@ Introduce `atm-runtime` as the concrete composition root.
   direct dependency on `atm-rusqlite`
 - the new crate requires explicit boundary governance so its dependency edges
   do not become another silent leak point
+- storage-neutral replay/runtime composition contracts live in `atm-core`,
+  while `atm-runtime` owns the concrete SQLite-backed implementations and
+  assembly wiring
+- the `AA.2` through `AA.4` transition window freezes the target end-state in
+  `boundaries/atm-runtime/runtime-composition.toml` before `AA.5` relocks the
+  authoritative SQLite boundary TOMLs

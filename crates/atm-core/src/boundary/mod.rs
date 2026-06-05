@@ -23,12 +23,14 @@ pub mod sealed {
 }
 
 mod mail;
+mod runtime;
 mod store;
 
 // Intentional re-export façade: the boundary module is the stable public import
 // surface for Phase R/AA contracts, so callers should not need to know whether
 // an item lives in `mail` or `store`.
 pub use mail::*;
+pub use runtime::*;
 pub use store::*;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, PartialOrd, Ord, Hash)]

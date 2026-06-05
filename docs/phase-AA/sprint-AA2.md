@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.2
 worktree: ../atm-core-worktrees/feature/pAA-s2-atm-runtime-composition-transfer
 branch: feature/pAA-s2-atm-runtime-composition-transfer
-status: planned
+status: complete
 estimated_scope: large
 ```
 
@@ -151,6 +151,26 @@ The concrete transfer decisions are frozen now:
   }
   ```
 
+- Supersession note:
+  - the implemented retained-runtime replay contract intentionally keeps the
+    richer daemon resume shape:
+    - `team: TeamName`
+    - `agent: AgentName`
+    - `message_key: MessageKey`
+    - `peer_addr: SocketAddr`
+    - `request: RequestEnvelope`
+    - `recorded_at: IsoTimestamp`
+    - `expires_at: IsoTimestamp`
+    - `attempt_count: u32`
+    - `last_attempt_at: Option<IsoTimestamp>`
+    - `last_error: Option<AtmErrorCode>`
+  - `RemoteReplayStore::delete(...)` therefore remains keyed by
+    `(team, agent, message_key)` and `purge_expired(...)` remains keyed by an
+    explicit `now: IsoTimestamp`
+  - justification: the bounded replay-resume path must preserve transport
+    identity, retry counters, and expiry metadata without reverse-engineering
+    those fields back out of an opaque payload blob
+
 - `atm-daemon` startup consumes only injected storage-neutral runtime inputs
   expressed through `MailStore`, `TaskStore`, `RosterStore`, the doctor
   traits from `AA.1`, and `RemoteReplayStore`.
@@ -182,6 +202,8 @@ about composition ownership transfer.
 - daemon startup remains fail-closed when any RuntimeBundle component cannot be
   assembled, including the replay-store component required by
   `REQ-DAEMON-RUNTIME-005`
+- daemon startup and the direct config doctor path share one validated
+  `current_dir` capture instead of re-resolving config roots independently
 
 ## Required Validation
 

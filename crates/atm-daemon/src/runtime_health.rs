@@ -26,7 +26,6 @@ use atm_core::{
     read::read_mail,
     send::send_mail,
 };
-use atm_rusqlite::SqliteBoundaryAssembly;
 
 use crate::AtmHomeDir;
 use crate::advisory_runtime::AdvisoryRuntime;
@@ -58,7 +57,8 @@ pub(crate) struct DaemonRequestDispatcher {
     advisory_runtime_observability: SubsystemObservability,
     runtime_health_observability: SubsystemObservability,
     status_cache: RuntimeStatusCache,
-    sqlite_boundary: Option<SqliteBoundaryAssembly>,
+    roster_store: Option<Arc<dyn boundary::RosterStore + Send + Sync>>,
+    storage_finalizer: Option<Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>>,
     notification_runtime: NotificationRuntime,
     advisory_runtime: AdvisoryRuntime,
 }
@@ -68,7 +68,11 @@ impl std::fmt::Debug for DaemonRequestDispatcher {
         f.debug_struct("DaemonRequestDispatcher")
             .field("home_dir", &self.home_dir.as_path())
             .field("status_cache", &self.status_cache)
-            .field("sqlite_boundary_present", &self.sqlite_boundary.is_some())
+            .field("roster_store_present", &self.roster_store.is_some())
+            .field(
+                "storage_finalizer_present",
+                &self.storage_finalizer.is_some(),
+            )
             .field(
                 "notification_worker_liveness",
                 &self.notification_runtime.worker_liveness(),
@@ -318,7 +322,8 @@ impl DaemonRequestDispatcher {
         home_dir: AtmHomeDir,
         status_cache: RuntimeStatusCache,
         observability: Arc<dyn DaemonRuntimeObservability>,
-        sqlite_boundary: SqliteBoundaryAssembly,
+        roster_store: Arc<dyn boundary::RosterStore + Send + Sync>,
+        storage_finalizer: Arc<dyn boundary::RuntimeStorageFinalizer + Send + Sync>,
         notification_runtime: NotificationRuntime,
     ) -> Self {
         let advisory_runtime_observability = SubsystemObservability::new(
@@ -327,7 +332,7 @@ impl DaemonRequestDispatcher {
         );
         let runtime_health_observability =
             SubsystemObservability::new(DaemonSubsystem::RuntimeHealth, Arc::clone(&observability));
-        match build_runtime_status_cache_state(None, sqlite_boundary.roster_store()) {
+        match build_runtime_status_cache_state(None, roster_store.as_ref()) {
             Ok(state) => status_cache.publish_state(state),
             Err(error) => {
                 tracing::warn!(
@@ -351,7 +356,8 @@ impl DaemonRequestDispatcher {
             advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability: runtime_health_observability.clone(),
             status_cache,
-            sqlite_boundary: Some(sqlite_boundary),
+            roster_store: Some(roster_store),
+            storage_finalizer: Some(storage_finalizer),
             notification_runtime,
             advisory_runtime: AdvisoryRuntime::new_with_observability(
                 advisory_runtime_observability,
@@ -453,9 +459,9 @@ impl boundary::RequestDispatcher for DaemonRequestDispatcher {
 impl DaemonRequestDispatcher {
     pub(crate) fn reload_runtime_view(&self) -> Result<(), AtmError> {
         let roster_store = self
-            .sqlite_boundary
+            .roster_store
             .as_ref()
-            .map(SqliteBoundaryAssembly::roster_store)
+            .cloned()
             .ok_or_else(|| {
                 self.runtime_health_observability.emit_or_warn(
                     "reload_unavailable",
@@ -471,7 +477,8 @@ impl DaemonRequestDispatcher {
                 )
             })?;
         let current_state = self.status_cache.clone_state();
-        let next_state = build_runtime_status_cache_state(Some(&current_state), roster_store)?;
+        let next_state =
+            build_runtime_status_cache_state(Some(&current_state), roster_store.as_ref())?;
         let reloaded_members = next_state.member_count();
         self.status_cache.publish_state(next_state);
         tracing::info!(
@@ -482,11 +489,11 @@ impl DaemonRequestDispatcher {
     }
 
     pub(crate) fn finalize_storage_shutdown(&self) {
-        if let Some(boundary) = self.sqlite_boundary.clone() {
+        if let Some(storage_finalizer) = self.storage_finalizer.clone() {
             Self::run_bounded_shutdown_step(
                 "sqlite_wal_checkpoint",
                 SHUTDOWN_WAL_CHECKPOINT_DEADLINE,
-                move || boundary.checkpoint_wal(),
+                move || storage_finalizer.finalize_storage_shutdown(),
             );
         }
     }
@@ -507,9 +514,9 @@ impl DaemonRequestDispatcher {
         request: TeamMemberHeartbeatRequest,
     ) -> Result<TeamMemberHeartbeatResponse, AtmError> {
         let roster_store = self
-            .sqlite_boundary
+            .roster_store
             .as_ref()
-            .map(SqliteBoundaryAssembly::roster_store)
+            .cloned()
             .ok_or_else(|| {
                 self.runtime_health_observability.emit_or_warn(
                     "heartbeat_unavailable",

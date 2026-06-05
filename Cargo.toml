@@ -1,6 +1,7 @@
 [workspace]
 members = [
     "crates/atm-core",
+    "crates/atm-runtime",
     "crates/atm-runtime-test-support",
     "crates/atm",
     "crates/atm-daemon-bootstrap",

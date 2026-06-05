@@ -46,7 +46,8 @@ The canonical daemon/client recovery text rule set lives in:
   boundary
 
 Phase-AA target direction:
-- `atm-daemon` stops being the concrete SQLite composition owner
+- `AA.2` moves concrete production runtime/store composition into
+  `atm-runtime`
 - SQLite construction, SQLite-specific observability injection, and direct
   SQLite health probing move out of this crate
 - daemon-owned doctor reporting is reduced to daemon-owned runtime state rather

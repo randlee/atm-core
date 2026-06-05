@@ -19,7 +19,7 @@ io_owns = ["durable_roster_state", "member_routing_metadata"]
 io_forbidden = ["socket_io", "process_spawn"]
 
 [dependencies]
-allowed_dependents = ["atm-rusqlite", "atm-daemon"]
+allowed_dependents = ["atm-rusqlite", "atm-daemon", "atm-runtime"]
 allowed_dependencies = []
 forbidden_edges = ["atm-core -> atm-daemon", "atm-core -> atm-rusqlite"]
 
