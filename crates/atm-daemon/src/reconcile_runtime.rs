@@ -686,7 +686,7 @@ fn compute_reconcile_notification_fingerprints(
                 )
                 .fingerprint;
             let fingerprint = fingerprint?;
-            current_fingerprints.insert(NotificationFingerprint::new(fingerprint)?);
+            current_fingerprints.insert(NotificationFingerprint::new(fingerprint.to_string())?);
         }
     }
     Some(current_fingerprints)

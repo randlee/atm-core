@@ -14,7 +14,9 @@ use std::str::FromStr;
 /// Workspace-convention seal only; not compiler-enforced outside this crate.
 ///
 /// Only ATM workspace crates may implement boundary traits. Enforced by
-/// boundary lint, forbidden-edge rules, and review gates.
+/// boundary lint, forbidden-edge rules, and review gates; this is a documented
+/// enforcement limitation until the trait surfaces move behind stricter crate
+/// extraction or compiler-enforced sealing.
 #[doc(hidden)]
 pub mod sealed {
     pub trait Sealed {}
@@ -24,6 +26,9 @@ mod mail;
 mod runtime;
 mod store;
 
+// Intentional re-export façade: the boundary module is the stable public import
+// surface for Phase R/AA contracts, so callers should not need to know whether
+// an item lives in `mail` or `store`.
 pub use mail::*;
 pub use runtime::*;
 pub use store::*;
