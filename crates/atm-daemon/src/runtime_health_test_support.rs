@@ -22,11 +22,9 @@ impl DaemonRequestDispatcher {
         );
         let runtime_observability: Arc<dyn crate::DaemonRuntimeObservability> =
             observability.clone();
-        let sqlite_observer: Arc<dyn atm_runtime::RuntimeSqliteObserver> =
-            Arc::new(DaemonRuntimeSqliteObserver::new(
-                Arc::clone(&runtime_observability),
-                status_cache.clone(),
-            ));
+        let sqlite_observer: Arc<dyn atm_runtime::RuntimeSqliteObserver> = Arc::new(
+            DaemonRuntimeSqliteObserver::new(Arc::clone(&runtime_observability)),
+        );
         let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
             sqlite_db_path: roster_db_path.clone(),
             config_current_dir: home_dir.clone(),

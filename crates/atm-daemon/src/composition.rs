@@ -180,13 +180,8 @@ impl RuntimeComposition {
                 Arc::clone(&observability),
             )),
         );
-        let sqlite_observer = Arc::new(DaemonRuntimeSqliteObserver::new(
-            Arc::clone(&observability),
-            RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
-                DaemonSubsystem::RuntimeStatusCache,
-                Arc::clone(&observability),
-            )),
-        ));
+        let sqlite_observer =
+            Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
         let config_current_dir =
             std::env::current_dir().unwrap_or_else(|_| home_dir.as_path().to_path_buf());
         let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
@@ -899,13 +894,7 @@ pub(crate) fn compose_runtime(
             ),
         ),
     );
-    let sqlite_observer = Arc::new(DaemonRuntimeSqliteObserver::new(
-        Arc::clone(&observability),
-        RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
-            DaemonSubsystem::RuntimeStatusCache,
-            Arc::clone(&observability),
-        )),
-    ));
+    let sqlite_observer = Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
     let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
         sqlite_db_path: replay_store_path,
         config_current_dir: current_dir.clone(),
