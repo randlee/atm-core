@@ -27,9 +27,9 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail_with_runtime};
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_runtime_test_support::SQLITE_RUNTIME_PATH_ENV;
-use atm_runtime_test_support::install_sqlite_retained_runtime_factory;
-use atm_rusqlite::assemble_boundary;
+use atm_runtime_test_support::{
+    SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+};
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -310,7 +310,7 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
 }
 
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
-    let assembly = assemble_boundary(db_path).expect("sqlite boundary");
+    let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
     assembly
         .roster_store()
         .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
@@ -386,7 +386,7 @@ fn production_runtime_installs_daemon_notification_sink() {
         SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
     ));
     sink.start().expect("start notification sink");
-    let assembly = assemble_boundary(&db_path).expect("sqlite boundary");
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     let runtime = build_production_runtime(
         assembly.mail_store_arc(),
         assembly.task_store_arc(),

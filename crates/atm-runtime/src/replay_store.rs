@@ -17,6 +17,9 @@ impl SqliteRemoteReplayStore {
     }
 }
 
+/// Test-only helper for daemon and runtime smoke coverage that need one real
+/// replay-store implementation without widening the public runtime assembly API.
+#[cfg(any(test, feature = "test-utils"))]
 pub fn sqlite_remote_replay_store_for_test(
     db_path: PathBuf,
 ) -> Result<Arc<dyn boundary::RemoteReplayStore + Send + Sync>, AtmError> {

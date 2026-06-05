@@ -31,6 +31,7 @@ const DEFAULT_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(30);
 const MIN_REMOTE_RETRY_BUDGET: Duration = Duration::from_secs(1);
 const INITIAL_RETRY_BACKOFF: Duration = Duration::from_millis(250);
 const MAX_RETRY_BACKOFF: Duration = Duration::from_secs(5);
+const MAX_REMOTE_REPLAY_RESUME_RECORDS: usize = 10_000;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) struct PeerTransportConfig {
@@ -214,6 +215,14 @@ impl PeerClientTransport {
         let now = IsoTimestamp::now();
         let purged_expired = replay_store.purge_expired(now)?;
         let records = replay_store.load_all()?;
+        if records.len() > MAX_REMOTE_REPLAY_RESUME_RECORDS {
+            return Err(AtmError::daemon_unavailable(format!(
+                "daemon remote replay resume exceeded the bounded record cap ({MAX_REMOTE_REPLAY_RESUME_RECORDS})"
+            ))
+            .with_recovery(
+                "Drain or delete retained remote replay rows until the bounded startup replay cap is back under control, then restart atm-daemon.",
+            ));
+        }
         let mut delivered = 0usize;
         let mut retained = 0usize;
         for mut record in records {
@@ -236,7 +245,7 @@ impl PeerClientTransport {
                 Err(error) => {
                     record.attempt_count = record.attempt_count.saturating_add(1);
                     record.last_attempt_at = Some(IsoTimestamp::now());
-                    record.last_error = Some(error.code.to_string());
+                    record.last_error = Some(error.code);
                     tracing::warn!(
                         subsystem = "peer_transport",
                         action = "resume_replay",

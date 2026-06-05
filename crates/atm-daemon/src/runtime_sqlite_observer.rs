@@ -1,34 +1,55 @@
 use std::sync::Arc;
 
 use atm_core::error::AtmError;
-use atm_rusqlite::{SqliteObservability, SqliteObservabilityEvent};
+#[cfg(test)]
+use atm_core::error::AtmErrorCode;
+use atm_runtime::{RuntimeSqliteEvent, RuntimeSqliteObserver, RuntimeSqliteOutcome};
 
-use crate::DaemonRuntimeObservability;
 use crate::DaemonSubsystem;
+use crate::daemon_runtime_observability::DaemonRuntimeObservability;
+use crate::runtime_status_cache::RuntimeStatusCache;
 
 type ActionName = sc_observability_types::ActionName;
 type OutcomeLabel = sc_observability_types::OutcomeLabel;
 
 #[derive(Clone)]
-pub(crate) struct DaemonSqliteObservability {
+pub(crate) struct DaemonRuntimeSqliteObserver {
     observability: Arc<dyn DaemonRuntimeObservability>,
+    status_cache: RuntimeStatusCache,
 }
 
-impl std::fmt::Debug for DaemonSqliteObservability {
+impl std::fmt::Debug for DaemonRuntimeSqliteObserver {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("DaemonSqliteObservability")
+        f.debug_struct("DaemonRuntimeSqliteObserver")
+            .field("status_cache", &self.status_cache)
             .finish_non_exhaustive()
     }
 }
 
-impl DaemonSqliteObservability {
-    pub(crate) fn new(observability: Arc<dyn DaemonRuntimeObservability>) -> Self {
-        Self { observability }
+impl DaemonRuntimeSqliteObserver {
+    pub(crate) fn new(
+        observability: Arc<dyn DaemonRuntimeObservability>,
+        status_cache: RuntimeStatusCache,
+    ) -> Self {
+        Self {
+            observability,
+            status_cache,
+        }
     }
 }
 
-impl SqliteObservability for DaemonSqliteObservability {
-    fn emit(&self, event: SqliteObservabilityEvent) -> Result<(), AtmError> {
+impl RuntimeSqliteObserver for DaemonRuntimeSqliteObserver {
+    fn emit_sqlite_event(&self, event: RuntimeSqliteEvent) -> Result<(), AtmError> {
+        if matches!(
+            event.outcome,
+            RuntimeSqliteOutcome::Failed | RuntimeSqliteOutcome::Timeout
+        ) {
+            self.status_cache
+                .mark_sqlite_unavailable_with_detail(format!(
+                    "[{}] {}",
+                    event.action, event.message
+                ));
+        }
         let action = ActionName::new(event.action).map_err(|source| {
             AtmError::observability_emit("failed to validate ATM daemon sqlite subsystem action")
                 .with_source(source)
@@ -50,8 +71,7 @@ impl SqliteObservability for DaemonSqliteObservability {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use atm_core::error_codes::AtmErrorCode;
-    use atm_rusqlite::SqliteObservabilityOutcome;
+    use atm_core::doctor::DoctorSeverity;
 
     #[test]
     fn sqlite_failure_updates_runtime_status_and_retained_log() {
@@ -63,12 +83,14 @@ mod tests {
             crate::test_observability::TestDaemonObservability::new(log_dir)
                 .expect("test observability"),
         );
-        let sqlite_observability = DaemonSqliteObservability::new(observability.clone());
+        let status_cache = RuntimeStatusCache::new();
+        let sqlite_observer =
+            DaemonRuntimeSqliteObserver::new(observability.clone(), status_cache.clone());
 
-        sqlite_observability
-            .emit(SqliteObservabilityEvent::new(
+        sqlite_observer
+            .emit_sqlite_event(RuntimeSqliteEvent::new(
                 "writer_submit",
-                SqliteObservabilityOutcome::Timeout,
+                RuntimeSqliteOutcome::Timeout,
                 "sqlite writer submission queue did not accept a write within 10s",
                 Some(AtmErrorCode::DaemonUnavailable),
             ))
@@ -80,11 +102,17 @@ mod tests {
                 std::time::Duration::from_secs(1),
             )
             .expect("retained log sqlite message");
-        observability
-            .wait_for_message_contains(
-                "sqlite writer submission queue did not accept a write",
-                std::time::Duration::from_secs(1),
-            )
-            .expect("retained log sqlite detail");
+        let snapshot = status_cache.snapshot();
+        assert!(!snapshot.sqlite_ready);
+        assert!(
+            snapshot
+                .detail
+                .as_ref()
+                .expect("sqlite detail")
+                .contains("[writer_submit] sqlite writer submission queue did not accept a write")
+        );
+
+        let finding = crate::runtime_status_cache::runtime_status_finding(&snapshot);
+        assert_eq!(finding.severity, DoctorSeverity::Warning);
     }
 }

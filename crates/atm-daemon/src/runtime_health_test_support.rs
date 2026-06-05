@@ -3,8 +3,8 @@ use std::sync::Arc;
 
 use super::DaemonRequestDispatcher;
 use crate::notification_runtime::NotificationRuntime;
+use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
 use crate::runtime_status_cache::{RuntimeStatusCache, build_runtime_status_cache_state};
-use crate::sqlite_observability::DaemonSqliteObservability;
 use atm_core::{LocalFileNonClaudeOutbound, LocalFileNotificationSink};
 use atm_runtime::{RuntimeAssemblyInputs, assemble_sqlite_runtime};
 
@@ -22,12 +22,15 @@ impl DaemonRequestDispatcher {
         );
         let runtime_observability: Arc<dyn crate::DaemonRuntimeObservability> =
             observability.clone();
-        let sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability> = Arc::new(
-            DaemonSqliteObservability::new(Arc::clone(&runtime_observability)),
-        );
+        let sqlite_observer: Arc<dyn atm_runtime::RuntimeSqliteObserver> =
+            Arc::new(DaemonRuntimeSqliteObserver::new(
+                Arc::clone(&runtime_observability),
+                status_cache.clone(),
+            ));
         let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
             sqlite_db_path: roster_db_path.clone(),
-            sqlite_observability: Arc::clone(&sqlite_observability),
+            config_current_dir: home_dir.clone(),
+            sqlite_observer: Arc::clone(&sqlite_observer),
             non_claude_outbound: Arc::new(LocalFileNonClaudeOutbound::new()),
             notification_sink: Arc::new(LocalFileNotificationSink::at_path(
                 home_dir.join("notifications.jsonl"),
