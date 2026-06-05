@@ -42,7 +42,9 @@ pub struct SqliteRuntimeGuard {
 impl SqliteRuntimeGuard {
     pub fn install(path: impl Into<PathBuf>) -> Self {
         install_sqlite_retained_runtime_factory();
-        let env_guard = env_lock().lock().expect("env lock");
+        let env_guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let previous = std::env::var_os(SQLITE_RUNTIME_PATH_ENV).map(PathBuf::from);
         set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());
         Self {

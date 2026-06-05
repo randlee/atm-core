@@ -59,6 +59,8 @@ Phase-AA target direction:
 - the aggregate-only doctor surface consumes `MailStoreDoctor`,
   `TaskStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` rather than
   backend-shaped helpers
+- `RuntimeStatusSnapshot` must not carry `sqlite_ready` / `sqlite_detail` or
+  any other store-specific readiness field after `AA.3`
 
 Current request/response packet families owned by the daemon transport line:
 - send compose

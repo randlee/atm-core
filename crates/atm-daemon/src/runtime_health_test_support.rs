@@ -22,12 +22,10 @@ impl DaemonRequestDispatcher {
         );
         let runtime_observability: Arc<dyn crate::DaemonRuntimeObservability> =
             observability.clone();
-        let sqlite_observer: Arc<dyn atm_runtime::RuntimeSqliteObserver> =
-            Arc::new(DaemonRuntimeSqliteObserver::new(
-                Arc::clone(&runtime_observability),
-                status_cache.clone(),
-            ));
-        let runtime_assembly = match assemble_sqlite_runtime(RuntimeAssemblyInputs {
+        let sqlite_observer: Arc<dyn atm_runtime::RuntimeSqliteObserver> = Arc::new(
+            DaemonRuntimeSqliteObserver::new(Arc::clone(&runtime_observability)),
+        );
+        let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
             sqlite_db_path: roster_db_path.clone(),
             config_current_dir: home_dir.clone(),
             sqlite_observer: Arc::clone(&sqlite_observer),
@@ -35,33 +33,25 @@ impl DaemonRequestDispatcher {
             notification_sink: Arc::new(LocalFileNotificationSink::at_path(
                 home_dir.join("notifications.jsonl"),
             )),
-        }) {
-            Ok(assembly) => {
-                match build_runtime_status_cache_state(
-                    None,
-                    assembly.runtime_bundle.roster_store.as_ref(),
-                ) {
-                    Ok(state) => status_cache.publish_state(state),
-                    Err(error) => {
-                        tracing::warn!(
-                            %error,
-                            "failed to hydrate test runtime status cache from sqlite roster state"
-                        );
-                        status_cache.mark_sqlite_unavailable();
-                    }
-                }
-                Some(assembly)
-            }
+        })
+        .unwrap_or_else(|error| {
+            panic!(
+                "failed to assemble sqlite runtime for test daemon runtime health at {}: {error}",
+                roster_db_path.display()
+            )
+        });
+        match build_runtime_status_cache_state(
+            None,
+            runtime_assembly.runtime_bundle.roster_store.as_ref(),
+        ) {
+            Ok(state) => status_cache.publish_state(state),
             Err(error) => {
                 tracing::warn!(
                     %error,
-                    path = %roster_db_path.display(),
-                    "failed to assemble sqlite runtime for test daemon runtime health"
+                    "failed to hydrate test runtime status cache from runtime-bound roster state"
                 );
-                status_cache.mark_sqlite_unavailable();
-                None
             }
-        };
+        }
         let advisory_runtime_observability = crate::SubsystemObservability::new(
             crate::DaemonSubsystem::AdvisoryRuntime,
             Arc::clone(&runtime_observability),
@@ -82,12 +72,10 @@ impl DaemonRequestDispatcher {
             advisory_runtime_observability: advisory_runtime_observability.clone(),
             runtime_health_observability,
             status_cache,
-            roster_store: runtime_assembly
-                .as_ref()
-                .map(|assembly| assembly.runtime_bundle.roster_store.clone()),
-            storage_finalizer: runtime_assembly
-                .as_ref()
-                .map(|assembly| assembly.storage_finalizer.clone()),
+            service_runtime: runtime_assembly.service_runtime.clone(),
+            runtime_bundle: runtime_assembly.runtime_bundle.clone(),
+            roster_store: Some(runtime_assembly.runtime_bundle.roster_store.clone()),
+            storage_finalizer: Some(runtime_assembly.storage_finalizer.clone()),
             notification_runtime,
             advisory_runtime: crate::advisory_runtime::AdvisoryRuntime::new_with_observability(
                 advisory_runtime_observability,

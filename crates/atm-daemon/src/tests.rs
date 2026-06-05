@@ -863,7 +863,7 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
 
 #[test]
 #[serial_test::serial(env)]
-fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
+fn doctor_projects_degraded_runtime_when_member_identity_conflicts_exist() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -880,7 +880,13 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
     let status_cache = RuntimeStatusCache::new();
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
-    status_cache.mark_sqlite_unavailable();
+    status_cache.insert_member_for_test(
+        test_team().clone(),
+        ROLE_TEAM_LEAD.parse().expect("member"),
+        Some(std::process::id()),
+        RuntimeMemberState::IdentityConflict,
+        Some(IsoTimestamp::now()),
+    );
 
     let doctor = dispatcher
         .dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
@@ -899,10 +905,12 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
                 .findings
                 .iter()
                 .find(|finding| {
-                    finding.code == atm_core::error_codes::AtmErrorCode::WarningSqliteHealthDegraded
+                    finding.code
+                        == atm_core::error_codes::AtmErrorCode::WarningObservabilityHealthDegraded
                 })
                 .expect("runtime finding");
-            assert!(finding.message.contains("sqlite_ready=false"));
+            assert!(finding.message.contains("owner_pid="));
+            assert!(finding.message.contains("unknown=1"));
         }
         other => panic!("expected doctor response, got {other:?}"),
     }
@@ -960,7 +968,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
                 })
                 .expect("runtime finding");
             assert!(finding.message.contains("owner_pid="));
-            assert!(finding.message.contains("sqlite_ready=true"));
+            assert!(finding.message.contains("degraded_ingest=false"));
         }
         other => panic!("expected doctor response, got {other:?}"),
     }

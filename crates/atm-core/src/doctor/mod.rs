@@ -7,6 +7,7 @@ use std::path::{Path, PathBuf};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use crate::boundary::RosterMemberRecord;
+use crate::boundary::RuntimeBundle;
 use crate::config;
 use crate::error_codes::AtmErrorCode;
 use crate::observability::ObservabilityPort;
@@ -19,8 +20,8 @@ use crate::types::{AgentName, TeamName};
 
 pub use report::{
     BootstrapAutoStartOutcome, BootstrapConnectOutcome, BootstrapLaunchGateOutcome,
-    BootstrapTraceReport, DoctorEnvironmentVisibility, DoctorFinding, DoctorReport, DoctorSeverity,
-    DoctorStatus, DoctorSummary,
+    BootstrapTraceReport, DaemonRuntimeDoctorReport, DoctorEnvironmentVisibility, DoctorFinding,
+    DoctorReport, DoctorSeverity, DoctorStatus, DoctorSummary,
 };
 
 #[derive(Debug, Clone, serde::Serialize, serde::Deserialize)]
@@ -92,9 +93,163 @@ pub fn run_doctor_with_runtime(
         environment,
         member_roster,
         observability: observability_health,
+        config: crate::boundary::ConfigDoctorReport::default(),
+        mail_store: crate::boundary::MailStoreDoctorReport::default(),
+        task_store: crate::boundary::TaskStoreDoctorReport::default(),
+        roster_store: crate::boundary::RosterStoreDoctorReport::default(),
+        daemon_runtime: None,
+        drift_findings: Vec::new(),
         runtime_status: None,
         bootstrap_trace: None,
     })
+}
+
+pub fn run_doctor_with_runtime_bundle(
+    query: DoctorQuery,
+    observability: &dyn ObservabilityPort,
+    runtime: &LocalServiceRuntime,
+    runtime_bundle: &RuntimeBundle,
+    daemon_runtime: Option<report::DaemonRuntimeDoctorReport>,
+) -> Result<DoctorReport, crate::error::AtmError> {
+    let config = runtime.load_config(&query.current_dir)?;
+    let home_dir = query.home_dir.clone();
+    let initial_lock_snapshot = snapshot_mailbox_lock_paths(&home_dir);
+    let resolved_team = resolved_doctor_team(&query, config.as_ref());
+    let environment = health::environment_visibility(query.home_dir, query.team_override);
+    let (observability_health, observability_finding) = doctor_observability_status(observability);
+    let mut general_findings = Vec::new();
+    let mut drift_findings = Vec::new();
+    let mut reports = inspect_runtime_bundle_sections(runtime_bundle, &mut general_findings);
+    push_obsolete_identity_finding(config.as_ref(), &mut reports.config);
+    let member_roster = resolved_team.as_ref().and_then(|team| {
+        load_member_roster(
+            runtime,
+            &home_dir,
+            team,
+            config.as_ref(),
+            &mut drift_findings,
+        )
+    });
+    push_stale_mailbox_lock_findings(
+        &initial_lock_snapshot,
+        &snapshot_mailbox_lock_paths(&home_dir),
+        &mut drift_findings,
+    );
+    let findings = collect_doctor_findings(
+        &reports,
+        &drift_findings,
+        &general_findings,
+        observability_finding,
+        daemon_runtime.as_ref(),
+    );
+    let summary = summarize_doctor_findings(&findings);
+    let recommendations = collect_recommendations(&findings);
+
+    Ok(DoctorReport {
+        summary,
+        findings,
+        recommendations,
+        environment,
+        member_roster,
+        observability: observability_health,
+        config: reports.config,
+        mail_store: reports.mail_store,
+        task_store: reports.task_store,
+        roster_store: reports.roster_store,
+        daemon_runtime,
+        drift_findings,
+        runtime_status: None,
+        bootstrap_trace: None,
+    })
+}
+
+struct DoctorSectionReports {
+    config: crate::boundary::ConfigDoctorReport,
+    mail_store: crate::boundary::MailStoreDoctorReport,
+    task_store: crate::boundary::TaskStoreDoctorReport,
+    roster_store: crate::boundary::RosterStoreDoctorReport,
+}
+
+fn inspect_runtime_bundle_sections(
+    runtime_bundle: &RuntimeBundle,
+    findings: &mut Vec<DoctorFinding>,
+) -> DoctorSectionReports {
+    DoctorSectionReports {
+        config: inspect_doctor_section(runtime_bundle.config_doctor.inspect_config(), findings),
+        mail_store: inspect_doctor_section(
+            runtime_bundle.mail_store_doctor.inspect_mail_store(),
+            findings,
+        ),
+        task_store: inspect_doctor_section(
+            runtime_bundle.task_store_doctor.inspect_task_store(),
+            findings,
+        ),
+        roster_store: inspect_doctor_section(
+            runtime_bundle.roster_store_doctor.inspect_roster_store(),
+            findings,
+        ),
+    }
+}
+
+fn push_obsolete_identity_finding(
+    config: Option<&config::AtmConfig>,
+    config_report: &mut crate::boundary::ConfigDoctorReport,
+) {
+    if config.is_some_and(|config| config.obsolete_identity_present) {
+        config_report.findings.push(DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: AtmErrorCode::WarningIdentityDrift,
+            message: "obsolete [atm].identity is still present in .atm.toml; ATM no longer uses config identity as a runtime fallback.".to_string(),
+            remediation: Some(
+                "Remove [atm].identity from .atm.toml and set ATM_IDENTITY in the active agent environment instead."
+                    .to_string(),
+            ),
+        });
+    }
+}
+
+fn collect_doctor_findings(
+    reports: &DoctorSectionReports,
+    drift_findings: &[DoctorFinding],
+    general_findings: &[DoctorFinding],
+    observability_finding: DoctorFinding,
+    daemon_runtime: Option<&report::DaemonRuntimeDoctorReport>,
+) -> Vec<DoctorFinding> {
+    let mut findings = Vec::new();
+    findings.extend(reports.config.findings.iter().cloned());
+    findings.extend(reports.mail_store.findings.iter().cloned());
+    findings.extend(reports.task_store.findings.iter().cloned());
+    findings.extend(reports.roster_store.findings.iter().cloned());
+    findings.extend(drift_findings.iter().cloned());
+    findings.extend(general_findings.iter().cloned());
+    findings.push(observability_finding);
+    if let Some(runtime_report) = daemon_runtime {
+        findings.extend(runtime_report.findings.iter().cloned());
+    }
+    findings
+}
+
+fn collect_recommendations(findings: &[DoctorFinding]) -> Vec<String> {
+    findings
+        .iter()
+        .filter_map(|finding| finding.remediation.clone())
+        .collect()
+}
+
+fn inspect_doctor_section<T>(
+    result: Result<T, crate::error::AtmError>,
+    findings: &mut Vec<DoctorFinding>,
+) -> T
+where
+    T: Default,
+{
+    match result {
+        Ok(report) => report,
+        Err(error) => {
+            push_doctor_error(findings, DoctorSeverity::Error, error);
+            T::default()
+        }
+    }
 }
 
 fn resolved_doctor_team(

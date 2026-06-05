@@ -30,6 +30,9 @@ Phase-AA simplification direction:
 - the daemon must not know that the current durable adapter is SQLite
 - direct local diagnostics such as store-openability and baseline SQLite
   health may be answered without routing through the daemon
+- `atm doctor` now uses that direct local path for config/store diagnostics
+  through `atm-runtime`; daemon routing remains only for daemon-owned runtime
+  state
 - each subsystem owns its own diagnostic trait and backend-specific diagnosis
 - top-level doctor code aggregates subsystem findings and daemon-owned runtime
   state, but must not reimplement backend-specific diagnosis logic

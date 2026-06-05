@@ -108,6 +108,9 @@ Required rules:
     the Phase AA simplification line closes
   - `atm-rusqlite` owns store-doctor behavior behind the subsystem-owned
     `MailStoreDoctor`, `TaskStoreDoctor`, and `RosterStoreDoctor` traits
+  - direct config/store diagnostics surface SQLite-specific readiness through
+    those store-doctor traits rather than through daemon runtime snapshot
+    fields
   - minimum store-doctor responsibilities are path resolution, openability,
     schema/bootstrap/migration readiness, bounded store findings, and bounded
     task-store findings when task persistence shares the same store

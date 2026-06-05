@@ -816,42 +816,16 @@ Doctor health contract distinction:
   them through the documented request boundary
 - `atm doctor` must report both dimensions explicitly rather than treating
   process existence as equivalent to request-serving readiness
-- interim `AA.0` to `AA.2` runtime snapshot stub:
-  - minimum daemon-owned fields:
-    - `liveness`
-    - `readiness`
-    - `owner_pid`
-    - `degraded_ingest`
-    - `active_count`
-    - `idle_count`
-    - `offline_count`
-    - `unknown_count`
-  - transitional pre-`AA.3` fields still present until the delete sprint lands:
-    - `sqlite_ready`
-    - `sqlite_detail`
-  - this interim stub is valid only through the `AA.0` to `AA.2` window and
-    must not be treated as the post-`AA.3` daemon-runtime DTO
-- Phase AA supersession note:
-  - `AA.3` deletes `sqlite_ready`, `sqlite_detail`, and the SQLite-backed
-    continuity wording from the daemon-owned runtime snapshot
-  - after `AA.3`, `RuntimeStatusSnapshot` carries only daemon-owned runtime
-    state and no store-specific readiness fields
+- `AA.3` final state:
+  - `RuntimeStatusSnapshot` now carries only daemon-owned runtime state and no
+    store-specific readiness fields
   - SQLite/store readiness moves to subsystem doctor reports and does not
     remain part of the daemon runtime DTO
-  - `docs/phase-AA/sprint-AA3.md` is the frozen source of truth for the
-    post-AA runtime snapshot shape, and this section must be updated during
-    that sprint to match the final implementation
-- pre-AA historical baseline only, superseded by the frozen `AA.3` delete
-  list:
-  - readiness states previously treated SQLite continuity as part of daemon
-    readiness
-  - the runtime health snapshot previously carried:
-    - singleton-owner pid when known
-    - SQLite-ready state
-    - degraded-ingest state
-    - aggregate active/idle/offline/unknown member counts
-  - this historical baseline is retained only to explain the pre-AA daemon
-    shape and must not be treated as the post-AA runtime-health contract
+  - the daemon aggregates subsystem doctor reports plus daemon-owned runtime
+    findings, but does not perform backend-specific investigation logic
+  - the earlier `AA.0` to `AA.2` transitional fields (`sqlite_ready`,
+    `sqlite_detail`, and the interim degraded-ingest stub) are historical only
+    and must not be reintroduced on this branch
 
 ## 3.6 Crash Recovery
 

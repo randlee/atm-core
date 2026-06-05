@@ -17,7 +17,6 @@ use crate::{
 };
 use atm_core::boundary::{
     ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher, RosterStore,
-    RuntimeStorageFinalizer,
 };
 use atm_core::error::AtmError;
 use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
@@ -181,13 +180,8 @@ impl RuntimeComposition {
                 Arc::clone(&observability),
             )),
         );
-        let sqlite_observer = Arc::new(DaemonRuntimeSqliteObserver::new(
-            Arc::clone(&observability),
-            RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
-                DaemonSubsystem::RuntimeStatusCache,
-                Arc::clone(&observability),
-            )),
-        ));
+        let sqlite_observer =
+            Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
         let config_current_dir =
             std::env::current_dir().unwrap_or_else(|_| home_dir.as_path().to_path_buf());
         let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
@@ -244,8 +238,7 @@ impl RuntimeComposition {
             home_dir,
             &status_cache,
             &observability,
-            runtime_assembly.runtime_bundle.roster_store.clone(),
-            runtime_assembly.storage_finalizer.clone(),
+            runtime_assembly.clone(),
             notification_sink.runtime(),
         );
         let host_ownership_adapter = build_host_ownership_adapter(&observability);
@@ -730,16 +723,14 @@ fn build_request_dispatcher(
     home_dir: AtmHomeDir,
     status_cache: &RuntimeStatusCache,
     observability: &Arc<dyn DaemonRuntimeObservability>,
-    roster_store: Arc<dyn RosterStore + Send + Sync>,
-    storage_finalizer: Arc<dyn RuntimeStorageFinalizer + Send + Sync>,
+    runtime_assembly: RuntimeAssembly,
     notification_runtime: NotificationRuntime,
 ) -> Arc<DaemonRequestDispatcher> {
     Arc::new(DaemonRequestDispatcher::new(
         home_dir,
         status_cache.clone(),
         Arc::clone(observability),
-        roster_store,
-        storage_finalizer,
+        runtime_assembly,
         notification_runtime,
     ))
 }
@@ -903,13 +894,7 @@ pub(crate) fn compose_runtime(
             ),
         ),
     );
-    let sqlite_observer = Arc::new(DaemonRuntimeSqliteObserver::new(
-        Arc::clone(&observability),
-        RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
-            DaemonSubsystem::RuntimeStatusCache,
-            Arc::clone(&observability),
-        )),
-    ));
+    let sqlite_observer = Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
     let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
         sqlite_db_path: replay_store_path,
         config_current_dir: current_dir.clone(),

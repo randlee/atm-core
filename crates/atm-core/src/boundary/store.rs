@@ -270,7 +270,7 @@ pub struct TaskStoreResponse {
     pub record: TaskStoreTaskRecord,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct TaskStoreDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
@@ -367,7 +367,7 @@ pub struct RosterStoreResponse {
     pub replaced: bool,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct RosterStoreDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }
@@ -384,7 +384,7 @@ pub struct ConfigLoadResponse {
     pub config: Option<AtmConfig>,
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct ConfigDoctorReport {
     pub findings: Vec<DoctorFinding>,
 }

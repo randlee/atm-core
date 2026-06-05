@@ -10,6 +10,7 @@ dependencies = [
  "anyhow",
  "atm-daemon-bootstrap",
  "atm-daemon-client",
+ "atm-runtime",
  "atm-runtime-test-support",
  "chrono",
  "clap",
