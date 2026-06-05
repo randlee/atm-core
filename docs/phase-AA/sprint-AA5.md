@@ -77,6 +77,8 @@ code and in review workflow.
     - `crates/atm-architecture/tests/boundary_enforcement.rs`
   - review workflow integration:
     - `.claude/agents/boundary-guard.md`
+  - the Rust crate replaces the now-deleted Python boundary scripts as the
+    sole code-driven architecture guard for this sprint line
 
 - The second guard enforces both code-edge and policy-edge checks. The minimum
   machine-checked contract is frozen now:
@@ -162,8 +164,9 @@ actually clean will either fail immediately or produce more policy cheating.
 
 ## Required Validation
 
-- `crates/atm-architecture/` is the AA.5 boundary-enforcement deliverable; run
-  this check at end-of-sprint after implementation lands
+- `crates/atm-architecture/` is the AA.5 boundary-enforcement deliverable and
+  replaces the deleted Python boundary scripts; run this check at end-of-sprint
+  after implementation lands
 - `just lint boundaries`
 - `cargo test --package atm-architecture`
 - `cargo test --workspace`

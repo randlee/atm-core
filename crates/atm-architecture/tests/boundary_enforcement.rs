@@ -44,9 +44,11 @@ fn atm_graft_must_not_depend_on_atm_rusqlite() {
 fn boundary_toml_forbidden_edges_match_rust_guard_catalog() {
     let expected = expected_edge_set();
     let documented = documented_forbidden_edges();
-    assert_eq!(
-        documented, expected,
-        "boundary TOML forbidden_edges drifted from the Rust architecture guard; update both layers together"
+    let missing = missing_forbidden_edges(&expected, &documented);
+    let unexpected = missing_forbidden_edges(&documented, &expected);
+    assert!(
+        missing.is_empty() && unexpected.is_empty(),
+        "boundary TOML forbidden_edges drifted from the Rust architecture guard; missing: {missing:?}; unexpected: {unexpected:?}"
     );
 }
 
@@ -56,6 +58,21 @@ fn assert_forbidden_edge_absent(source: &str, forbidden: &str) {
     assert!(
         !actual.contains(forbidden),
         "{source} must not have a normal workspace dependency on {forbidden}; actual workspace deps: {actual:?}"
+    );
+}
+
+#[test]
+fn synthetic_boundary_relaxation_fixture_reports_removed_forbidden_edge() {
+    // Synthetic fixture proving the guard will fail closed if a forbidden edge
+    // is relaxed out of the Rust catalog or the boundary TOMLs.
+    let mut relaxed = expected_edge_set();
+    relaxed.remove(&("atm-daemon".to_string(), "atm-rusqlite".to_string()));
+
+    let missing = missing_forbidden_edges(&expected_edge_set(), &relaxed);
+    assert_eq!(
+        missing,
+        vec!["atm-daemon -> atm-rusqlite".to_string()],
+        "synthetic relaxation fixture must demonstrate the removed daemon/sqlite edge is detected"
     );
 }
 
@@ -117,6 +134,16 @@ fn expected_edge_set() -> BTreeSet<(String, String)> {
     EXPECTED_FORBIDDEN_EDGES
         .iter()
         .map(|(source, target)| (source.to_string(), target.to_string()))
+        .collect()
+}
+
+fn missing_forbidden_edges(
+    expected: &BTreeSet<(String, String)>,
+    actual: &BTreeSet<(String, String)>,
+) -> Vec<String> {
+    expected
+        .difference(actual)
+        .map(|(source, target)| format!("{source} -> {target}"))
         .collect()
 }
 

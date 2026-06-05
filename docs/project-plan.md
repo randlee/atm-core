@@ -216,6 +216,11 @@ Status summary:
   the concrete adapters to queue-backed `Logger::log()` admission, renaming
   the retained-log shutdown policy field to `writer_shutdown_timeout`, and
   projecting queue/writer/maintenance health detail intentionally.
+- `AA.7` Rust Boundary Enforcement Crate (`PR #398`,
+  `feature/pAA-s7-atm-architecture-crate`) completes the visible workspace
+  architecture gate by landing `crates/atm-architecture/`, removing the
+  superseded Python boundary scripts, and making `cargo test -p atm-architecture`
+  the sole code-driven boundary-enforcement check. Status: `complete`.
 
 Goal:
 - move concrete SQLite/runtime assembly to `atm-runtime`
@@ -241,6 +246,7 @@ Sprint line:
 - `AA.4` `feature/pAA-s4-delete-daemon-sqlite-leaks`
 - `AA.5` `feature/pAA-s5-boundary-relock-and-permanent-enforcement`
 - `AA.6` `feature/pAA-s6-obs-upgrade`
+- `AA.7` `feature/pAA-s7-atm-architecture-crate`
 
 Acceptance:
 - Phase AA exit criteria are satisfied only through
