@@ -105,9 +105,10 @@ Phase-AA simplification note:
 - backend-specific implementations such as SQLite-backed and Claude-JSON-backed
   adapters are allowed to satisfy that same behavior-named trait family
 - `AA.5` relocks the daemon-to-SQLite edge in both the runtime-composition and
-  SQLite boundary records and adds an independent boundary-guard review script
-  so policy widening is treated as an architecture change rather than routine
-  lint-data churn
+  SQLite boundary records, adds `crates/atm-architecture/` as the primary
+  code-driven merge gate, and keeps the independent Python boundary-guard
+  review script as the secondary CI lint/review layer so policy widening is
+  treated as an architecture change rather than routine lint-data churn
 
 ## 2. Crate Boundaries
 
@@ -217,7 +218,8 @@ Current Phase R boundary direction:
   - `atm-daemon` consumes storage-neutral runtime inputs and stops
     constructing SQLite-backed adapters directly in production composition
   - relocked boundary records forbid a direct `atm-daemon -> atm-rusqlite`
-    edge; any reintroduction must fail both TOML policy checks and the
+    edge; any reintroduction must fail both the Rust
+    `crates/atm-architecture/` dependency guard and the TOML/policy
     boundary-guard review script
 
 Current Phase R lint partition direction:

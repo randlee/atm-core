@@ -71,11 +71,14 @@ code and in review workflow.
     `atm-daemon -> atm-rusqlite` edge so no policy contradiction remains after
     relock
 
-- A second repository-owned architecture guard exists. The minimum executable
-  surface is frozen now:
-  - `scripts/check-boundary-guard.py`
-  - `scripts/test_boundary_guard.py`
-  - `.claude/agents/boundary-guard.md`
+- A second repository-owned architecture guard exists. The executable surfaces
+  are frozen now:
+  - primary Rust merge gate:
+    - `crates/atm-architecture/tests/boundary_enforcement.rs`
+  - secondary CI / review-lint layer:
+    - `scripts/check-boundary-guard.py`
+    - `scripts/test_boundary_guard.py`
+    - `.claude/agents/boundary-guard.md`
 
 - The second guard enforces both code-edge and policy-edge checks. The minimum
   machine-checked contract is frozen now:
@@ -146,7 +149,9 @@ actually clean will either fail immediately or produce more policy cheating.
   boundaries
 - `boundaries/atm-runtime/runtime-composition.toml` and the SQLite boundary
   TOMLs agree on the same forbidden daemon-to-SQLite edge after relock
-- a second architecture-enforcement layer exists beyond the TOML lint
+- a second architecture-enforcement layer exists beyond the TOML lint, with
+  `crates/atm-architecture/` as the canonical Rust guard and the Python
+  boundary-guard scripts as the secondary CI lint layer
 - boundary-policy widening is treated as an architecture change, not routine
   config churn
 - `.claude/agents/boundary-guard.md` exists, `boundary-guard` fires at the two
@@ -160,7 +165,8 @@ actually clean will either fail immediately or produce more policy cheating.
 
 ## Required Validation
 
-- `scripts/check-boundary-guard.py` and `scripts/test_boundary_guard.py` are
+- `crates/atm-architecture/` plus
+  `scripts/check-boundary-guard.py` / `scripts/test_boundary_guard.py` are
   AA.5 deliverables; run these checks at end-of-sprint after implementation
   lands
 - `just lint boundaries`
