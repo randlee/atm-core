@@ -517,6 +517,15 @@ impl DaemonRequestDispatcher {
         );
     }
 
+    pub(crate) fn preflush_observability_shutdown(&self) {
+        let observability = self.observability.clone();
+        Self::run_bounded_shutdown_step(
+            "observability_preflush",
+            SHUTDOWN_OBSERVABILITY_FLUSH_DEADLINE,
+            move || observability.best_effort_preflush_blocking(),
+        );
+    }
+
     fn record_heartbeat(
         &self,
         request: TeamMemberHeartbeatRequest,

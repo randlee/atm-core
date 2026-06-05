@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.6
 worktree: ../atm-core-worktrees/feature/pAA-s6-obs-upgrade
 branch: feature/pAA-s6-obs-upgrade
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -135,6 +135,23 @@ The `1.2.0` migration surface is frozen now:
   6. `LoggingHealthReport` queue/writer/maintenance projection review
   7. `RetainedLogPolicy.writer_shutdown_timeout` and typed policy wrappers
 
+## Implementation Summary
+
+- Workspace `sc-observability` and `sc-observability-types` pins now target
+  `1.2.0`.
+- The concrete CLI and daemon adapters now use `Logger::log()` for blocking
+  queue admission instead of the deprecated `Logger::emit()` compatibility
+  path.
+- Daemon retained-log shutdown keeps `flush()` as the explicit durability
+  barrier and preserves `Logger<Stopped>` health inspection after shutdown.
+- ATM retained-log policy code now uses
+  `RetainedLogPolicy.writer_shutdown_timeout` and the typed
+  `ByteCount` / `FileCount` / `RetentionMaxAge` / `MaintenanceCadence` /
+  `WriterShutdownTimeout` wrappers.
+- CLI and daemon observability detail strings now intentionally project
+  queue-depth, queue-capacity, queue high-water mark, queue-full drops, writer
+  state, and retained-log maintenance state into ATM-owned health output.
+
 ## Split Recommendation
 
 Keep this sprint strictly scoped to the `1.2.0` upgrade. Do not mix in
@@ -142,7 +159,7 @@ unrelated observability refactors or feature work once the migration compiles.
 
 ## Acceptance Criteria
 
-- `docs/phase-AA/sprint-AA6.md` exists with `status: planned`,
+- `docs/phase-AA/sprint-AA6.md` exists with `status: complete`,
   `branch: feature/pAA-s6-obs-upgrade`, and a populated `worktree:`
 - the sprint doc enumerates every `sc-observability` `1.2.0` migration item
   currently required by ATM:

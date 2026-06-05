@@ -144,6 +144,10 @@ pub trait DaemonRuntimeObservability:
     ) -> Result<(), AtmError>;
 
     /// Attempt one best-effort synchronous flush during daemon shutdown.
+    fn best_effort_preflush_blocking(&self) -> Result<(), AtmError>;
+
+    /// Attempt one best-effort synchronous flush + shutdown during daemon
+    /// shutdown finalization.
     fn best_effort_flush_blocking(&self) -> Result<(), AtmError>;
 }
 

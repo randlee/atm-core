@@ -2050,12 +2050,20 @@ Required retained-log maintenance behavior:
   handoff on the synchronous path; it must not reopen, append, flush, rotate,
   or prune retained files inline before returning control to the active daemon
   request/lifecycle path
+- blocking retained-log admission must use the queue-backed
+  `sc-observability` logger admission path (`Logger::log()`); any future
+  non-blocking admission path must use `Logger::try_log()` and handle explicit
+  queue-full degradation
+- `flush()` / `shutdown()` are the only durability barriers for retained-log
+  writes; queue admission alone must not be treated as immediate persistence
 - retained-log file append, rotation, and pruning must run on background
   maintenance machinery instead
 - if retained-log maintenance falls behind, ATM must degrade explicitly with
   structured diagnostics rather than silently blocking the daemon success path
 - retained-log pruning must use a bounded work budget per maintenance tick and
   must not rely on an unbounded wall-clock scan
+- the retained-log shutdown threshold is configured through
+  `RetainedLogPolicy.writer_shutdown_timeout`
 - actor identity when known
 - target identity when known
 - task id when known

@@ -1484,6 +1484,11 @@ Initial-release boundary rulings:
   - `Unavailable`
 - public ATM observability projections must not expose raw
   `serde_json::Value` / `Map<String, Value>` directly
+- the concrete `sc-observability` adapter is queue-backed as of Phase `AA.6`;
+  ATM uses `Logger::log()` for blocking admission, treats `flush()` /
+  `shutdown()` as the only durability barriers, and projects queue/writer/
+  maintenance state through ATM-owned health detail rather than leaking raw
+  shared types across the public boundary
 
 ### 14.2 Shared Crate Usage Rules
 

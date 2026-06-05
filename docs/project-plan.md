@@ -212,6 +212,10 @@ Status summary:
 - `AA.5` relocks the daemon-to-SQLite edge in the runtime and SQLite boundary
   TOMLs, adds the independent `check-boundary-guard.py` review guard, and
   freezes boundary-policy widening as an explicit architecture change.
+- `AA.6` completes the scoped `sc-observability` `1.2.0` migration by moving
+  the concrete adapters to queue-backed `Logger::log()` admission, renaming
+  the retained-log shutdown policy field to `writer_shutdown_timeout`, and
+  projecting queue/writer/maintenance health detail intentionally.
 
 Goal:
 - move concrete SQLite/runtime assembly to `atm-runtime`

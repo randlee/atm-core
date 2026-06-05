@@ -295,6 +295,12 @@ Execution worktree:
 
 ### AA.6 `sc-observability` 1.2.0 Upgrade
 
+Status:
+- complete on `feature/pAA-s6-obs-upgrade`
+- the concrete CLI and daemon adapters now use queue-backed `Logger::log()`
+  admission, the retained-log policy uses `writer_shutdown_timeout`, and ATM
+  health projection surfaces queue/writer/maintenance state intentionally
+
 Purpose:
 - upgrade `sc-observability` / `sc-observability-types` from `1.1.0` to
   `1.2.0`
