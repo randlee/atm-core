@@ -30,8 +30,7 @@ The canonical daemon/client recovery text rule set lives in:
 - singleton daemon startup and host ownership
 - same-host daemon API transport
 - cross-host daemon-to-daemon transport
-- runtime composition of `atm-core` service boundaries
-- runtime composition of the current concrete adapter set used in production
+- daemon-private orchestration around injected `atm-core` service boundaries
 - live agent status cache
 - runtime watch/reconcile loop if enabled
 - daemon-side `sc-observability` emission
@@ -106,8 +105,10 @@ Initial crate requirement IDs:
   requirement `#1` and is not subordinate to convenience test or tooling
   flows. Satisfies the runtime ownership aspects of:
   `REQ-CORE-DAEMON-001`, `REQ-CORE-QA-RUNTIME-001`.
-- `REQ-DAEMON-RUNTIME-002` `atm-daemon` owns runtime composition only and must
-  remain a thin wrapper over `atm-core` service boundaries. Satisfies:
+- `REQ-DAEMON-RUNTIME-002` `atm-daemon` owns runtime orchestration around
+  injected `atm-core` service boundaries only and must remain a thin wrapper
+  over those boundaries. Concrete runtime/store assembly moves to
+  `atm-runtime` in `AA.2`. Satisfies:
   `REQ-CORE-DAEMON-002`, `REQ-CORE-BOUNDARY-001`.
 - `REQ-DAEMON-RUNTIME-003` `atm-daemon` owns graceful shutdown sequencing for
   the singleton runtime. Satisfies:
@@ -205,9 +206,20 @@ Initial crate requirement IDs:
   depend on one daemon-shared mutable cache lock for ordinary reads. Satisfies:
   `REQ-CORE-DOCTOR-002`, `REQ-DAEMON-STATUS-001`.
 - `REQ-DAEMON-CONFIG-001` `atm-daemon` owns daemon config validation at startup
-  and on lifecycle-control-triggered reload or rescan. Invalid config must
-  produce a typed failure or bounded reload rejection rather than a silent
-  degraded state. Satisfies:
+  and on lifecycle-control-triggered reload or rescan. The minimum daemon-owned
+  config inventory includes:
+  - same-host endpoint contract inputs
+  - remote peer transport endpoint and credential inputs
+  - timeout and retry-budget inputs
+  - queue/cap inputs
+  - lifecycle-control / watch / reconcile enablement inputs
+  - retained-log / observability sink inputs
+  Invalid config must produce a typed failure or bounded reload rejection
+  rather than a silent degraded state. Startup-fatal or reload-fatal validation
+  applies to ownership, transport, replay-store, timeout-floor, retry-budget,
+  and cap violations; warning-only handling is allowed only for optional
+  observability sinks or optional background-lane features when the daemon
+  keeps one documented degraded fallback path. Satisfies:
   `REQ-CORE-CONFIG-001`, `REQ-CORE-CONFIG-003`, `REQ-DAEMON-SIGNAL-001`.
 - `REQ-DAEMON-TEST-001` `atm-daemon` must not define the core test strategy.
   Core correctness must remain testable without daemon process spawning.
@@ -244,7 +256,15 @@ Initial crate requirement IDs:
   meaning. Satisfies:
   `REQ-CORE-BOUNDARY-001`, `REQ-CORE-OBS-001`.
 - `REQ-DAEMON-HEALTH-001` `atm-daemon` owns the daemon health interface
-  consumed by `atm doctor`. Satisfies:
+  consumed by `atm doctor`. The minimum daemon-owned field inventory is:
+  - liveness
+  - readiness
+  - owner pid when known
+  - active / idle / offline / unknown counts
+  - daemon-owned degraded-runtime findings
+  During `AA.0` through `AA.2`, the health contract may still carry the
+  transitional SQLite readiness fields documented in the daemon architecture,
+  but those fields are explicitly removed in `AA.3`. Satisfies:
   `REQ-CORE-DOCTOR-002`.
 - `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns runtime-control installation and
   handling for daemon lifecycle transitions. Unix may satisfy this through
@@ -289,6 +309,7 @@ The `atm-daemon` crate docs must remain aligned with:
 - [`../requirements.md`](../requirements.md)
 - [`../architecture.md`](../architecture.md)
 - [`../project-plan.md`](../project-plan.md)
+- [`../plan-phase-AA.md`](../plan-phase-AA.md)
 - [`../plan-phase-R.md`](../plan-phase-R.md)
 - [`../plan-phase-S.md`](../plan-phase-S.md)
 - [`../plan-phase-U.md`](../plan-phase-U.md)
@@ -458,6 +479,11 @@ Required runtime rules:
   - authoritative timeout budget references:
     [`../architecture.md §21.6.4`](../architecture.md) and
     [`architecture.md §3.4`](./architecture.md)
+  - configured values may raise the documented defaults, but they must not
+    drop below the daemon timeout floor of `250ms`; same-host request and
+    daemon-health deadlines must not drop below `1s`
+  - `daemon.remote_retry_budget` is configurable only in the inclusive range
+    `1s..=300s`; out-of-range values are startup-fatal and reload-fatal
 - runtime queues and handles must obey one documented concrete cap policy
 - resource-cap matrix:
   - max concurrent accepted connections: `64`
@@ -493,6 +519,8 @@ Required runtime rules:
   retaining unbounded watcher state
 - notification runtime must reject or degrade delivery beyond the bounded queue
   cap rather than silently buffering unbounded work
+- ingest saturation emits `DaemonIngestQueueSaturated` and the matching health
+  finding rather than silently dropping or only incrementing a counter
 - notification runtime producer paths must publish only lifecycle/degraded
   checks plus bounded command-channel submission; callers must not mutate queue
   state or persistence sequencing directly
@@ -504,9 +532,14 @@ Required runtime rules:
   the daemon must reject the update unless the explicit admin takeover path
   documented in `docs/team-member-state.md` is active
 - accepted pid changes must update daemon memory and emit `AgentPidChanged`
+- the semantic pid newtype closure for daemon-owned runtime state is assigned
+  to `AA.3`, which already owns the runtime-health and doctor DTO rewrite
 - crash recovery must preserve the ordering rule `SQLite commit -> export`
   and any retry/re-export state needed after daemon crash must be durable rather
   than RAM-only
+- replay-store unavailability after startup must fail closed for new replay
+  work, emit typed degraded retry findings, and require operator restart or
+  bounded runtime reload rather than silently bypassing replay durability
 - daemon code must not bypass `atm-core` subsystem boundaries
 - the current Phase R baseline keeps `atm-daemon` as the runtime composition
   root for production runtime wiring unless a later ADR extracts a separate
