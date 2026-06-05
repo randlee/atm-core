@@ -1166,6 +1166,11 @@ Public entrypoint:
 - environment override visibility
 - current team member roster from `config.json`
 - observability health
+- aggregate-only subsystem doctor output from:
+  - `MailStoreDoctor`
+  - `TaskStoreDoctor`
+  - `RosterStoreDoctor`
+  - `ConfigDoctor`
 
 `DoctorFinding` contains:
 - severity
@@ -1176,6 +1181,10 @@ Public entrypoint:
 The report model should reuse the current doctor command’s severity/finding
 structure where useful, but in the current SQLite/daemon architecture it must include
 daemon/runtime checks rather than assuming a daemon-free local-only model.
+Daemon/CLI orchestration stays aggregate-only: those top-level paths may
+compose the `MailStoreDoctor`, `TaskStoreDoctor`, `RosterStoreDoctor`, and
+`ConfigDoctor` reports, but they must not reimplement backend-specific store
+investigation logic.
 
 Roster output rules:
 - show all current `config.json` members in doctor output

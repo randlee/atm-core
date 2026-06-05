@@ -9,7 +9,8 @@ use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use super::{AckTransition, DoctorFinding, MessageKey, ReplaySource, TaskState, sealed};
+use super::mail::{DoctorFinding, MessageFingerprint};
+use super::{AckTransition, MessageKey, ReplaySource, TaskState, sealed};
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct TaskStoreTaskMetadata {
@@ -418,7 +419,7 @@ pub struct InboxIngressIdentityFingerprintRequest {
 /// Stub inbox-ingress identity-fingerprint response for the Phase R skeleton.
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 pub struct InboxIngressIdentityFingerprintResponse {
-    pub fingerprint: Option<String>,
+    pub fingerprint: Option<MessageFingerprint>,
 }
 
 /// Stub inbox-ingress diagnostics request for the Phase R skeleton.
@@ -700,4 +701,59 @@ pub trait NonClaudeOutbound: sealed::Sealed {
         &self,
         request: NonClaudeOutboundDeliveryRequest,
     ) -> Result<NonClaudeOutboundDeliveryResponse, AtmError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct WitnessTaskStoreDoctor;
+    struct WitnessRosterStoreDoctor;
+    struct WitnessConfigDoctor;
+
+    impl sealed::Sealed for WitnessTaskStoreDoctor {}
+    impl sealed::Sealed for WitnessRosterStoreDoctor {}
+    impl sealed::Sealed for WitnessConfigDoctor {}
+
+    impl TaskStoreDoctor for WitnessTaskStoreDoctor {
+        fn inspect_task_store(&self) -> Result<TaskStoreDoctorReport, AtmError> {
+            Ok(TaskStoreDoctorReport::default())
+        }
+    }
+
+    impl RosterStoreDoctor for WitnessRosterStoreDoctor {
+        fn inspect_roster_store(&self) -> Result<RosterStoreDoctorReport, AtmError> {
+            Ok(RosterStoreDoctorReport::default())
+        }
+    }
+
+    impl ConfigDoctor for WitnessConfigDoctor {
+        fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError> {
+            Ok(ConfigDoctorReport::default())
+        }
+    }
+
+    #[test]
+    fn task_store_doctor_trait_is_object_safe_and_compiles() {
+        fn assert_object_safe(_doctor: &dyn TaskStoreDoctor) {}
+
+        let witness = WitnessTaskStoreDoctor;
+        assert_object_safe(&witness);
+    }
+
+    #[test]
+    fn roster_store_doctor_trait_is_object_safe_and_compiles() {
+        fn assert_object_safe(_doctor: &dyn RosterStoreDoctor) {}
+
+        let witness = WitnessRosterStoreDoctor;
+        assert_object_safe(&witness);
+    }
+
+    #[test]
+    fn config_doctor_trait_is_object_safe_and_compiles() {
+        fn assert_object_safe(_doctor: &dyn ConfigDoctor) {}
+
+        let witness = WitnessConfigDoctor;
+        assert_object_safe(&witness);
+    }
 }

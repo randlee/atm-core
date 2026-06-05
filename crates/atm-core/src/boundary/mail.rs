@@ -6,7 +6,6 @@ use std::fmt;
 use std::path::PathBuf;
 
 use super::{MessageKey, sealed};
-
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(try_from = "String", into = "String")]
 pub struct ReplaySource(String);
@@ -352,9 +351,10 @@ pub struct MailStoreResponse {
     pub opened: bool,
 }
 
+pub type DoctorFinding = crate::doctor::DoctorFinding;
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct MailStoreDoctorReport {
-    pub findings: Vec<super::DoctorFinding>,
+    pub findings: Vec<DoctorFinding>,
 }
 
 /// BOUNDARY-MailStore — see docs/atm-core/boundaries.md.
@@ -465,4 +465,44 @@ pub trait MailStoreDoctor: sealed::Sealed + Send + Sync {
     /// Returns `AtmError` when durable mail-store diagnostics cannot be
     /// collected or summarized into the shared doctor report shape.
     fn inspect_mail_store(&self) -> Result<MailStoreDoctorReport, AtmError>;
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::doctor::DoctorSeverity;
+
+    struct WitnessMailStoreDoctor;
+
+    impl sealed::Sealed for WitnessMailStoreDoctor {}
+
+    impl MailStoreDoctor for WitnessMailStoreDoctor {
+        fn inspect_mail_store(&self) -> Result<MailStoreDoctorReport, AtmError> {
+            Ok(MailStoreDoctorReport::default())
+        }
+    }
+
+    #[test]
+    fn mail_store_doctor_trait_is_object_safe_and_compiles() {
+        fn assert_object_safe(_doctor: &dyn MailStoreDoctor) {}
+
+        let witness = WitnessMailStoreDoctor;
+        assert_object_safe(&witness);
+    }
+
+    #[test]
+    fn canonical_doctor_finding_round_trips_json() {
+        let finding = DoctorFinding {
+            severity: DoctorSeverity::Warning,
+            code: crate::error_codes::AtmErrorCode::WarningIdentityDrift,
+            message: "identity drift".to_string(),
+            remediation: Some("refresh ATM_IDENTITY".to_string()),
+        };
+
+        let json = serde_json::to_string(&finding).expect("serialize doctor finding");
+        let round_trip: crate::doctor::DoctorFinding =
+            serde_json::from_str(&json).expect("deserialize doctor finding");
+
+        assert_eq!(round_trip, finding);
+    }
 }

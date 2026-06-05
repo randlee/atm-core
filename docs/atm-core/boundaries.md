@@ -138,6 +138,9 @@ Notes:
 
 ## MailStoreDoctor
 
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/mail-store-doctor.toml](../../boundaries/atm-core/mail-store-doctor.toml)
+
 Purpose:
 - Own durable mail-store diagnostics without moving backend-specific diagnosis
   into daemon or CLI code.
@@ -157,6 +160,9 @@ Notes:
   bounded task-store findings.
 
 ## TaskStoreDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/task-store-doctor.toml](../../boundaries/atm-core/task-store-doctor.toml)
 
 Purpose:
 - Own durable task-store diagnostics without widening the main task capability
@@ -180,6 +186,9 @@ Notes:
   bounded roster-store findings.
 
 ## RosterStoreDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/roster-store-doctor.toml](../../boundaries/atm-core/roster-store-doctor.toml)
 
 Purpose:
 - Own durable roster-store diagnostics without moving backend-specific
@@ -254,6 +263,9 @@ Notes:
   - new violations, which fail lint immediately
 
 ## ConfigDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/config-doctor.toml](../../boundaries/atm-core/config-doctor.toml)
 
 Purpose:
 - Own config-specific diagnosis so daemon/CLI callers aggregate typed config
