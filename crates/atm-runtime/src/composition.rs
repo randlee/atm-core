@@ -56,6 +56,9 @@ impl boundary::sealed::Sealed for RuntimeConfigDoctor {}
 
 impl ConfigDoctor for RuntimeConfigDoctor {
     fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError> {
+        // This doctor path is diagnostic-only: it validates the currently
+        // reachable config snapshot for reporting, but it does not mutate or
+        // pre-stage daemon startup state on behalf of the runtime.
         let current_dir = std::env::current_dir().map_err(|source| {
             AtmError::config("failed to resolve current directory for config doctor")
                 .with_recovery(

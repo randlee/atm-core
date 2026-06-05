@@ -39,7 +39,9 @@ const RETAINED_LOG_ROTATION_MAX_FILES: usize = 5;
 const RETAINED_LOG_RETENTION_MAX_AGE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 const RETAINED_LOG_MAINTENANCE_CADENCE: Duration = Duration::from_secs(60);
 // Allow one bounded maintenance join during shutdown without turning routine
-// daemon stop into a long blocking operation.
+// daemon stop into a long blocking operation. This stays below the outer 2s
+// graceful drain budget so retained-log shutdown cannot consume the entire
+// daemon stop window by itself.
 const RETAINED_LOG_WRITER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(1);
 #[cfg(test)]
 const ATM_OBSERVABILITY_RETAINED_SINK_FAULT_ENV: &str = "ATM_OBSERVABILITY_RETAINED_SINK_FAULT";
@@ -218,27 +220,99 @@ impl DaemonObservability {
     }
 
     pub(crate) fn best_effort_flush_blocking(&self) -> Result<(), AtmError> {
-        let mut logger = self.logger.lock().map_err(|_| {
-            AtmError::observability_health(
-                "failed to finalize daemon observability because the logger lock was poisoned",
-            )
-        })?;
-        let Some(lifecycle) = logger.take() else {
+        let lifecycle = {
+            let mut logger = self.logger.lock().map_err(|_| {
+                AtmError::observability_health(
+                    "failed to finalize daemon observability because the logger lock was poisoned",
+                )
+            })?;
+            logger.take()
+        };
+        let Some(lifecycle) = lifecycle else {
             return Ok(());
         };
         match lifecycle {
             LoggerLifecycle::Running(logger_runtime) => {
-                logger_runtime.flush().map_err(|source| {
+                // Remove the shared logger slot before the blocking
+                // flush/shutdown sequence so concurrent emitters fail closed
+                // instead of waiting on the same mutex during shutdown.
+                let flush_result = logger_runtime.flush().map_err(|source| {
                     AtmError::observability_health(
                         "failed to flush retained observability sink during daemon shutdown",
                     )
                     .with_source(source)
-                })?;
-                let stopped = logger_runtime.shutdown();
-                *logger = Some(LoggerLifecycle::Stopped(stopped));
-                Ok(())
+                });
+                match flush_result {
+                    Ok(()) => {
+                        let stopped = logger_runtime.shutdown();
+                        let mut logger = self.logger.lock().map_err(|_| {
+                            AtmError::observability_health(
+                                "failed to record daemon observability shutdown state because the logger lock was poisoned",
+                            )
+                        })?;
+                        *logger = Some(LoggerLifecycle::Stopped(stopped));
+                        Ok(())
+                    }
+                    Err(error) => {
+                        let mut logger = self.logger.lock().map_err(|_| {
+                            AtmError::observability_health(
+                                "failed to restore daemon observability state after a flush error because the logger lock was poisoned",
+                            )
+                        })?;
+                        *logger = Some(LoggerLifecycle::Running(logger_runtime));
+                        Err(error)
+                    }
+                }
             }
             LoggerLifecycle::Stopped(logger_runtime) => {
+                let mut logger = self.logger.lock().map_err(|_| {
+                    AtmError::observability_health(
+                        "failed to record daemon observability shutdown state because the logger lock was poisoned",
+                    )
+                })?;
+                *logger = Some(LoggerLifecycle::Stopped(logger_runtime));
+                Ok(())
+            }
+        }
+    }
+
+    pub(crate) fn best_effort_preflush_blocking(&self) -> Result<(), AtmError> {
+        let lifecycle = {
+            let mut logger = self.logger.lock().map_err(|_| {
+                AtmError::observability_health(
+                    "failed to preflush daemon observability because the logger lock was poisoned",
+                )
+            })?;
+            logger.take()
+        };
+        let Some(lifecycle) = lifecycle else {
+            return Ok(());
+        };
+        match lifecycle {
+            LoggerLifecycle::Running(logger_runtime) => {
+                // Drain queued work before the final shutdown event is emitted,
+                // but release the mutex first so the blocking flush path cannot
+                // deadlock with a concurrent logger admission attempt.
+                let flush_result = logger_runtime.flush().map_err(|source| {
+                    AtmError::observability_health(
+                        "failed to preflush retained observability sink before daemon shutdown completion",
+                    )
+                    .with_source(source)
+                });
+                let mut logger = self.logger.lock().map_err(|_| {
+                    AtmError::observability_health(
+                        "failed to restore daemon observability state after preflush because the logger lock was poisoned",
+                    )
+                })?;
+                *logger = Some(LoggerLifecycle::Running(logger_runtime));
+                flush_result
+            }
+            LoggerLifecycle::Stopped(logger_runtime) => {
+                let mut logger = self.logger.lock().map_err(|_| {
+                    AtmError::observability_health(
+                        "failed to restore daemon observability state after preflush because the logger lock was poisoned",
+                    )
+                })?;
                 *logger = Some(LoggerLifecycle::Stopped(logger_runtime));
                 Ok(())
             }
@@ -388,6 +462,10 @@ impl ObservabilityPort for DaemonObservability {
 }
 
 impl atm_daemon::DaemonRuntimeObservability for DaemonObservability {
+    fn best_effort_preflush_blocking(&self) -> Result<(), AtmError> {
+        Self::best_effort_preflush_blocking(self)
+    }
+
     fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
         Self::emit_daemon_event(self, event)
     }
@@ -698,6 +776,8 @@ fn observability_test_event(
 }
 
 fn logger_level_override() -> Result<Option<SharedLevelFilter>, AtmError> {
+    // The daemon latches ATM_LOG during bootstrap; changing the environment
+    // later does not reconfigure the live retained logger.
     let Some(raw_value) = std::env::var(ATM_LOG_LEVEL_ENV)
         .ok()
         .map(|value| value.trim().to_string())

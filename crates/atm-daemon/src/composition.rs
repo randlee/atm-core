@@ -478,6 +478,10 @@ impl RuntimeComposition {
                 Ok(()) => Err(force_error),
             };
         }
+        // Drain any earlier retained-log backlog before the terminal shutdown
+        // event is admitted so the final event does not compete with stale
+        // queue pressure during the last bounded flush.
+        self.request_dispatcher.preflush_observability_shutdown();
         match result.as_ref() {
             Ok(()) => {
                 self.composition_observability.emit_or_warn(

@@ -432,6 +432,9 @@ impl atm_core::boundary::sealed::Sealed for ScObservabilityAdapter {}
 
 impl ObservabilityPort for ScObservabilityAdapter {
     fn emit(&self, event: CommandEvent) -> Result<(), AtmError> {
+        // The CLI is a short-lived synchronous caller, so per-command flush is
+        // the explicit durability barrier here. Do not reuse this adapter as a
+        // daemon or async runtime logger without revisiting that contract.
         let event = map_command_event(&self.service_name, &self.target_category, event)?;
         self.logger.log(event).map_err(map_log_error)?;
         self.logger.flush().map_err(map_flush_error)

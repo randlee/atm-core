@@ -180,6 +180,10 @@ impl ObservabilityPort for TestDaemonObservability {
 }
 
 impl DaemonRuntimeObservability for TestDaemonObservability {
+    fn best_effort_preflush_blocking(&self) -> Result<(), AtmError> {
+        self.best_effort_flush_blocking()
+    }
+
     fn emit_daemon_event(&self, event: DaemonEvent) -> Result<(), AtmError> {
         self.append_message(format!(
             "{{\"subsystem\":\"{}\",\"action\":\"{}\",\"outcome\":\"{}\",\"message\":\"{}\"}}",
