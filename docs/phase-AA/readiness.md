@@ -34,8 +34,8 @@ Authoritative supporting inventory:
 - the boundary TOMLs forbid the daemon-to-SQLite edge again
 - a repository-enforced dependency-boundary test or equivalent guard fails
   whenever that edge reappears
-- `python3 scripts/check-boundary-guard.py --base-ref <review-base-ref>` is
-  the required second guard for review-time policy widening detection
+- `cargo test --package atm-architecture` is the required second guard for
+  review-time policy widening detection
 - a `boundary-guard` QA agent reviews both plans and phase-ending reviews
   and flags boundary-policy widening before closure
 - ATM has completed the `sc-observability` / `sc-observability-types` `1.2.0`

@@ -210,8 +210,8 @@ Status summary:
   boundary assembly calls, and relying on `atm-core` / `atm-runtime` replay
   seams instead of a direct `atm-daemon -> atm-rusqlite` dependency.
 - `AA.5` relocks the daemon-to-SQLite edge in the runtime and SQLite boundary
-  TOMLs, adds the independent `check-boundary-guard.py` review guard, and
-  freezes boundary-policy widening as an explicit architecture change.
+  TOMLs, adds the independent `crates/atm-architecture/` Rust review guard,
+  and freezes boundary-policy widening as an explicit architecture change.
 - `AA.6` completes the scoped `sc-observability` `1.2.0` migration by moving
   the concrete adapters to queue-backed `Logger::log()` admission, renaming
   the retained-log shutdown policy field to `writer_shutdown_timeout`, and

@@ -34,8 +34,8 @@ At minimum, detect:
 - any mismatch between `runtime-composition.toml` and the SQLite boundary TOMLs
   on the forbidden `atm-daemon -> atm-rusqlite` edge
 
-Run `python3 scripts/check-boundary-guard.py --base-ref <review-base-ref>` as
-the first machine check and treat any non-zero result as a blocking failure.
+Run `cargo test --package atm-architecture` as the first machine check and
+treat any non-zero result as a blocking failure.
 
 ## Mandatory Trigger Points
 
@@ -62,7 +62,7 @@ Return fenced JSON only.
   "status": "PASS | FAIL",
   "mode": "boundary-guard-review",
   "reviewer": "boundary-guard",
-  "guard_script": "python3 scripts/check-boundary-guard.py --base-ref <review-base-ref>",
+  "guard_script": "cargo test --package atm-architecture",
   "findings": [
     {
       "severity": "Blocking | Important | Minor",

@@ -36,9 +36,9 @@ These are not public boundary traits, but they are important private
 implementation surfaces for review.
 
 AA.5 relock note:
-- `python3 scripts/check-boundary-guard.py --base-ref <review-base-ref>` is the
-  second enforcement layer that detects policy widening and any reintroduced
-  `atm-daemon -> atm-rusqlite` code edge before review closure
+- `cargo test --package atm-architecture` is the second enforcement layer that
+  detects policy widening and any reintroduced `atm-daemon -> atm-rusqlite`
+  code edge before review closure
 
 ## SqliteBoundaryAssembly
 
