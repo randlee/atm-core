@@ -6,9 +6,9 @@ use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 use atm_rusqlite::SqliteBoundaryAssembly;
 
 #[cfg(any(test, feature = "test-utils"))]
-use std::path::PathBuf;
-#[cfg(any(test, feature = "test-utils"))]
 use atm_rusqlite::NullSqliteObservability;
+#[cfg(any(test, feature = "test-utils"))]
+use std::path::PathBuf;
 
 #[derive(Debug, Clone)]
 pub(crate) struct SqliteRemoteReplayStore {
