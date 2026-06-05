@@ -106,9 +106,9 @@ Phase-AA simplification note:
   adapters are allowed to satisfy that same behavior-named trait family
 - `AA.5` relocks the daemon-to-SQLite edge in both the runtime-composition and
   SQLite boundary records, adds `crates/atm-architecture/` as the primary
-  code-driven merge gate, and keeps the independent Python boundary-guard
-  review script as the secondary CI lint/review layer so policy widening is
-  treated as an architecture change rather than routine lint-data churn
+  code-driven merge gate as the sole second enforcement layer, and treats
+  policy widening as an architecture change rather than routine lint-data
+  churn
 
 ## 2. Crate Boundaries
 

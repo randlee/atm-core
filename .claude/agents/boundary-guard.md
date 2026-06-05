@@ -60,16 +60,19 @@ Return fenced JSON only.
 ```json
 {
   "status": "PASS | FAIL",
-  "mode": "boundary-guard-review",
-  "reviewer": "boundary-guard",
-  "guard_script": "cargo test --package atm-architecture",
-  "findings": [
+  "forbidden_edges": ["atm-daemon -> atm-rusqlite"],
+  "policy_relaxations": [
     {
-      "severity": "Blocking | Important | Minor",
-      "category": "POLICY-RELAXATION | FORBIDDEN-EDGE | VISIBILITY-WIDENING | TEST-BYPASS-REMOVAL",
-      "target_refs": ["path:line"],
-      "issue": "clear statement of the boundary problem",
-      "required_correction": "specific corrective action"
+      "field": "allowed_dependents",
+      "change": "added atm-daemon",
+      "requires_approval": true
+    }
+  ],
+  "violations": [
+    {
+      "category": "FORBIDDEN-EDGE | POLICY-RELAXATION",
+      "detail": "clear statement of the boundary problem",
+      "ref": "path:line"
     }
   ]
 }

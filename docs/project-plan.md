@@ -120,6 +120,7 @@ Status:
 - Phase AB is the active planning line for Windows/macOS cross-host ATM smoke
   execution after the accepted Phase Z baseline.
 - the current merged workspace contains:
+  - `crates/atm-architecture`
   - `crates/atm-core`
   - `crates/atm`
   - `crates/atm-daemon`

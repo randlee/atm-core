@@ -4,8 +4,8 @@
 plan_type: sprint_plan
 phase: AA
 sprint: AA.5
-worktree: ../atm-core-worktrees/feature/pAA-s5-boundary-relock-and-permanent-enforcement
-branch: feature/pAA-s5-boundary-relock-and-permanent-enforcement
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pAA-s7-atm-architecture-crate
+branch: feature/pAA-s7-atm-architecture-crate
 status: complete
 estimated_scope: medium
 ```
