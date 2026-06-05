@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.4
 worktree: ../atm-core-worktrees/feature/pAA-s4-delete-daemon-sqlite-leaks
 branch: feature/pAA-s4-delete-daemon-sqlite-leaks
-status: planned
+status: complete
 estimated_scope: medium
 ```
 

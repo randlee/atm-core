@@ -42,7 +42,7 @@ impl RuntimeSqliteObserver for DaemonRuntimeSqliteObserver {
                 .with_source(source)
         })?;
         self.observability.emit_subsystem_event(
-            DaemonSubsystem::Sqlite,
+            DaemonSubsystem::Composition,
             &action,
             &outcome,
             &event.message,
@@ -78,10 +78,10 @@ mod tests {
 
         observability
             .wait_for_message_contains(
-                "\"subsystem\":\"sqlite\"",
+                "\"subsystem\":\"composition\"",
                 std::time::Duration::from_secs(1),
             )
-            .expect("retained log sqlite message");
+            .expect("retained log composition message");
         observability
             .wait_for_message_contains("\"outcome\":\"timeout\"", std::time::Duration::from_secs(1))
             .expect("retained log sqlite timeout outcome");

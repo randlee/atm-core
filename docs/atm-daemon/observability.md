@@ -214,7 +214,7 @@ paths remain:
 - `crates/atm-daemon/src/main.rs`
 - `crates/atm-daemon/src/lib.rs`
 - `crates/atm-daemon/src/test_observability.rs`
-- `crates/atm-daemon/src/runtime_health_test_support.rs`
+- `crates/atm-daemon/src/runtime_health.rs`
 - `crates/atm-daemon/src/test_support.rs`
 - `crates/atm-daemon/src/tests.rs`
 - `crates/atm-daemon/src/tests_advisory.rs`

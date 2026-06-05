@@ -217,6 +217,9 @@ Notes:
   `atm-core`-owned contract even though the first implementation is SQLite.
 - `RuntimeStorageFinalizer` keeps shutdown-time storage finalization, such as
   bounded WAL checkpoint work, outside daemon-private adapter knowledge.
+- `AA.4` relies on these adjunct contracts to remove the direct
+  `atm-daemon -> atm-rusqlite` dependency while keeping replay persistence and
+  shutdown finalization storage-neutral at the daemon boundary.
 
 ## ConfigIngress
 

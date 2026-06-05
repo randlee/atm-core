@@ -253,6 +253,8 @@ Initial crate requirement IDs:
   daemon event payloads through the injected daemon observability trait.
   Satisfies:
   `REQ-CORE-BOUNDARY-001`, `REQ-CORE-OBS-001`, `REQ-CORE-OBS-002`.
+  Phase `AA.4` removes the daemon-private SQLite observability adapter so this
+  rule applies without a daemon-local SQLite glue layer.
 - `REQ-DAEMON-OBS-004` the daemon-injected observability trait must remain
   sealed and object-safe, and its event model must use typed semantic
   identifiers rather than raw strings for subsystem, message-id, and task-id
@@ -269,6 +271,9 @@ Initial crate requirement IDs:
   transitional SQLite readiness fields documented in the daemon architecture,
   but those fields are explicitly removed in `AA.3`. Satisfies:
   `REQ-CORE-DOCTOR-002`.
+  After `AA.4`, daemon code reaches concrete SQLite-backed runtime state only
+  through `atm-runtime` and `atm-core` boundaries rather than a direct
+  `atm-daemon -> atm-rusqlite` dependency.
 - `REQ-DAEMON-SIGNAL-001` `atm-daemon` owns runtime-control installation and
   handling for daemon lifecycle transitions. Unix may satisfy this through
   signals; Windows may satisfy it through console or service-control events.
