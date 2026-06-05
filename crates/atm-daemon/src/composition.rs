@@ -488,6 +488,10 @@ impl RuntimeComposition {
                 Ok(()) => Err(force_error),
             };
         }
+        // Preflush any queued retained-log work before emitting the terminal
+        // shutdown event so the final status update does not race older queue
+        // entries during shutdown.
+        self.request_dispatcher.preflush_observability_shutdown();
         match result.as_ref() {
             Ok(()) => {
                 self.composition_observability.emit_or_warn(
