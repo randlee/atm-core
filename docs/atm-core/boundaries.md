@@ -132,6 +132,18 @@ Notes:
 - After `Y.3`, retained `send` reaches compatibility rewrite only through the
   post-commit runtime refresh owner; retained `ack` and `clear` no longer own
   source-inbox compatibility rewrites.
+- `MailStoreDoctor` is the paired subsystem-owned diagnostics boundary for
+  path resolution, openability, schema/bootstrap/migration readiness, and
+  bounded store findings.
+
+## MailStoreDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/mail-store-doctor.toml](../../boundaries/atm-core/mail-store-doctor.toml)
+
+Purpose:
+- Own durable mail-store diagnostics without moving backend-specific diagnosis
+  into daemon or CLI code.
 
 ## TaskStore
 
@@ -144,6 +156,17 @@ Purpose:
 
 Notes:
 - `ack` is not a top-level public method, but it still mutates task state.
+- `TaskStoreDoctor` is the paired subsystem-owned diagnostics boundary for
+  bounded task-store findings.
+
+## TaskStoreDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/task-store-doctor.toml](../../boundaries/atm-core/task-store-doctor.toml)
+
+Purpose:
+- Own durable task-store diagnostics without widening the main task capability
+  trait family.
 
 ## RosterStore
 
@@ -159,6 +182,17 @@ Notes:
 - Durable roster truth is the canonical team/member model used for daemon
   runtime hydration; `config.json` documents are ingress inputs and daemon-owned
   live `pid` state stays outside this boundary.
+- `RosterStoreDoctor` is the paired subsystem-owned diagnostics boundary for
+  bounded roster-store findings.
+
+## RosterStoreDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/roster-store-doctor.toml](../../boundaries/atm-core/roster-store-doctor.toml)
+
+Purpose:
+- Own durable roster-store diagnostics without moving backend-specific
+  diagnosis into daemon or CLI code.
 
 ## ConfigIngress
 
@@ -204,6 +238,15 @@ Notes:
   - pre-existing survivors explicitly recorded in TOML allowlists with owner
     and sunset-sprint metadata
   - new violations, which fail lint immediately
+
+## ConfigDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/config-doctor.toml](../../boundaries/atm-core/config-doctor.toml)
+
+Purpose:
+- Own config-specific diagnosis so daemon/CLI callers aggregate typed config
+  findings instead of embedding backend-specific config investigation logic.
 
 ## InboxIngress
 

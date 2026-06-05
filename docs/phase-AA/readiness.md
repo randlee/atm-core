@@ -13,7 +13,7 @@ Authoritative supporting inventory:
 | Sprint | Status | Branch | Worktree | Closure Gate |
 | --- | --- | --- | --- | --- |
 | `AA.0` | `complete` | `feature/pAA-s0-daemon-architecture-restatement` | `../atm-core-worktrees/feature/pAA-s0-daemon-architecture-restatement` | daemon role, doctor aggregation model, and state-machine inventory documented and accepted |
-| `AA.1` | `planned` | `feature/pAA-s1-subsystem-doctor-traits` | `../atm-core-worktrees/feature/pAA-s1-subsystem-doctor-traits` | subsystem-owned capability/doctor traits and shared diagnostic DTOs land in the governing docs and code |
+| `AA.1` | `complete` | `feature/pAA-s1-subsystem-doctor-traits` | `../atm-core-worktrees/feature/pAA-s1-subsystem-doctor-traits` | subsystem-owned capability/doctor traits and shared diagnostic DTOs land in the governing docs and code |
 | `AA.2` | `planned` | `feature/pAA-s2-atm-runtime-composition-transfer` | `../atm-core-worktrees/feature/pAA-s2-atm-runtime-composition-transfer` | `atm-runtime` owns concrete SQLite/runtime assembly; `atm-daemon` stops constructing SQLite boundaries; target-state runtime boundary is frozen even though SQLite TOML relock waits for `AA.5` |
 | `AA.3` | `planned` | `feature/pAA-s3-direct-doctor-and-runtime-health-split` | `../atm-core-worktrees/feature/pAA-s3-direct-doctor-and-runtime-health-split` | `atm doctor` regains direct local store diagnostics; daemon aggregates injected subsystem reports plus daemon-owned runtime state without backend-specific diagnosis logic |
 | `AA.4` | `planned` | `feature/pAA-s4-delete-daemon-sqlite-leaks` | `../atm-core-worktrees/feature/pAA-s4-delete-daemon-sqlite-leaks` | remaining SQLite observability, replay, and test-support leaks are removed from `atm-daemon` |

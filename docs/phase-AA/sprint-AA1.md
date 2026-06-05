@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.1
 worktree: ../atm-core-worktrees/feature/pAA-s1-subsystem-doctor-traits
 branch: feature/pAA-s1-subsystem-doctor-traits
-status: planned
+status: complete
 estimated_scope: medium
 ```
 
@@ -71,19 +71,19 @@ peeking into SQLite internals.
   `atm-core`. The intended shape is frozen now:
 
   ```rust
-  pub trait MailStoreDoctor: Send + Sync {
+  pub trait MailStoreDoctor: sealed::Sealed + Send + Sync {
       fn inspect_mail_store(&self) -> Result<MailStoreDoctorReport, AtmError>;
   }
 
-  pub trait TaskStoreDoctor: Send + Sync {
+  pub trait TaskStoreDoctor: sealed::Sealed + Send + Sync {
       fn inspect_task_store(&self) -> Result<TaskStoreDoctorReport, AtmError>;
   }
 
-  pub trait RosterStoreDoctor: Send + Sync {
+  pub trait RosterStoreDoctor: sealed::Sealed + Send + Sync {
       fn inspect_roster_store(&self) -> Result<RosterStoreDoctorReport, AtmError>;
   }
 
-  pub trait ConfigDoctor: Send + Sync {
+  pub trait ConfigDoctor: sealed::Sealed + Send + Sync {
       fn inspect_config(&self) -> Result<ConfigDoctorReport, AtmError>;
   }
   ```
@@ -94,10 +94,10 @@ peeking into SQLite internals.
 
   ```rust
   pub struct DoctorFinding {
-      pub code: &'static str,
       pub severity: DoctorSeverity,
-      pub summary: String,
-      pub detail: Option<String>,
+      pub code: AtmErrorCode,
+      pub message: String,
+      pub remediation: Option<String>,
   }
 
   pub struct MailStoreDoctorReport {
@@ -162,6 +162,11 @@ must settle the contracts before any crate starts moving code across them.
 - `cargo test --workspace`
 - `python3 .just/run_lint.py all`
 - `git diff --check`
+
+Validation completion evidence for the accepted AA.1 branch:
+- `cargo test --workspace` `PASS`
+- `python3 .just/run_lint.py all` `PASS`
+- `git diff --check` `PASS`
 
 ## Required Document Updates
 

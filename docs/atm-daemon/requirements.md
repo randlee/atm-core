@@ -55,6 +55,9 @@ Phase-AA target direction:
   doctor trait
 - daemon doctor code aggregates subsystem reports and daemon-owned runtime
   state only; it must not reimplement backend-specific diagnosis
+- the aggregate-only doctor surface consumes `MailStoreDoctor`,
+  `TaskStoreDoctor`, `RosterStoreDoctor`, and `ConfigDoctor` rather than
+  backend-shaped helpers
 
 Current request/response packet families owned by the daemon transport line:
 - send compose
