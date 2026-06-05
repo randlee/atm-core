@@ -74,6 +74,10 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
         (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
+        (
             SQLITE_RUNTIME_PATH_ENV,
             Some(db_path.to_str().expect("utf8 sqlite db path")),
         ),
