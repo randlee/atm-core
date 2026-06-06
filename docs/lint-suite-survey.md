@@ -296,7 +296,7 @@ This is the highest-value low-custom-dev set.
 
 Recommended default answers unless redirected:
 
-- keep Python boundary enforcement: yes
+- keep boundary enforcement in `crates/atm-architecture`: yes
 - move to centralized `spec/*`: no
 - add `lint fast`: yes
 - add `cargo-modules`: yes

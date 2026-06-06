@@ -218,9 +218,10 @@ Current Phase R boundary direction:
   - `atm-daemon` consumes storage-neutral runtime inputs and stops
     constructing SQLite-backed adapters directly in production composition
   - relocked boundary records forbid a direct `atm-daemon -> atm-rusqlite`
-    edge; any reintroduction must fail both the Rust
-    `crates/atm-architecture/` dependency guard and the TOML/policy
-    boundary-guard review script
+    edge; any reintroduction must fail the Rust
+    `crates/atm-architecture/` dependency guard (`cargo test --package
+    atm-architecture`), which is the sole code-driven boundary enforcement
+    layer
 
 Current Phase R lint partition direction:
 - extend the existing `sc-portability` analyzer for reusable platform-gating

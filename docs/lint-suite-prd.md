@@ -174,7 +174,9 @@ Current source of truth:
 Current enforcement approach:
 
 - boundary records live in fenced YAML inside Markdown docs
-- the Python boundary checker parses those records directly
+- historical note: the original boundary checker parsed those records
+  directly; Phase AA superseded that implementation with the Rust
+  `crates/atm-architecture/` enforcement crate
 - enforcement is repo-local and cross-platform
 
 Current boundary checks include:
@@ -662,7 +664,8 @@ Do not adopt now.
 
 Reason:
 
-- current Python boundary enforcement is already working and cross-platform
+- the current Rust boundary enforcement crate is already working and
+  cross-platform
 - a rewrite would add churn without immediate product gain
 - worth revisiting only if Python parsing/enforcement becomes limiting
 
@@ -672,9 +675,10 @@ Defer.
 
 Reason:
 
-- the current boundary checker already enforces some dependency rules from the boundary
-  records
-- we should first see whether extending the current Python boundary tool is sufficient
+- the current Rust boundary checker already enforces some dependency rules from
+  the boundary records
+- we should first see whether extending `crates/atm-architecture` is
+  sufficient
 
 ### Reject for current phase
 
