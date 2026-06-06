@@ -116,7 +116,6 @@ fn assert_forbidden_edge_absent(source: &str, forbidden: &str) {
         "{source} must not have a normal workspace dependency on {forbidden}; actual workspace deps: {actual:?}"
     );
 }
-
 fn direct_normal_workspace_dependencies() -> BTreeMap<String, BTreeSet<String>> {
     let metadata = MetadataCommand::new()
         .manifest_path(workspace_root().join("Cargo.toml"))
@@ -211,7 +210,6 @@ fn daemon_boundary_files() -> Vec<PathBuf> {
     files.sort();
     files
 }
-
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()

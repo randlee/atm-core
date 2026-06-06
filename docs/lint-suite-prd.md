@@ -174,7 +174,9 @@ Current source of truth:
 Current enforcement approach:
 
 - boundary records live in fenced YAML inside Markdown docs
-- the Python boundary checker parses those records directly
+- historical note: the original boundary checker parsed those records
+  directly; Phase AA superseded that implementation with the Rust
+  `crates/atm-architecture/` enforcement crate
 - enforcement is repo-local and cross-platform
 
 Current boundary checks include:
@@ -349,8 +351,9 @@ Decisions captured here:
 - boundary visualization is architecture visualization
 - lint and view are distinct product surfaces
 - current authoritative boundary source remains `docs/*/boundaries.md`
-- current boundary enforcement remains the repo-local Python implementation unless and
-  until explicitly replaced
+- boundary enforcement was migrated from the repo-local Python implementation to
+  `crates/atm-architecture` in Phase AA; `cargo test --package atm-architecture`
+  is now the authoritative code-driven enforcement gate
 
 ## Next Step
 
@@ -662,7 +665,8 @@ Do not adopt now.
 
 Reason:
 
-- current Python boundary enforcement is already working and cross-platform
+- the current Rust boundary enforcement crate is already working and
+  cross-platform
 - a rewrite would add churn without immediate product gain
 - worth revisiting only if Python parsing/enforcement becomes limiting
 
@@ -672,9 +676,10 @@ Defer.
 
 Reason:
 
-- the current boundary checker already enforces some dependency rules from the boundary
-  records
-- we should first see whether extending the current Python boundary tool is sufficient
+- the current Rust boundary checker already enforces some dependency rules from
+  the boundary records
+- we should first see whether extending `crates/atm-architecture` is
+  sufficient
 
 ### Reject for current phase
 
@@ -710,7 +715,8 @@ The reference document overlaps with current work in these areas:
 The main difference is not direction, but implementation style:
 
 - reference doc prefers `xtask` + TOML spec + `syn`
-- current suite uses Python + crate-local boundary docs + repo-local wrappers
+- current suite uses `crates/atm-architecture` (Rust) + crate-local boundary
+  docs + repo-local wrappers
 
 Decision:
 
