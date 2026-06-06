@@ -351,8 +351,9 @@ Decisions captured here:
 - boundary visualization is architecture visualization
 - lint and view are distinct product surfaces
 - current authoritative boundary source remains `docs/*/boundaries.md`
-- current boundary enforcement remains the repo-local Python implementation unless and
-  until explicitly replaced
+- boundary enforcement was migrated from the repo-local Python implementation to
+  `crates/atm-architecture` in Phase AA; `cargo test --package atm-architecture`
+  is now the authoritative code-driven enforcement gate
 
 ## Next Step
 
@@ -714,7 +715,8 @@ The reference document overlaps with current work in these areas:
 The main difference is not direction, but implementation style:
 
 - reference doc prefers `xtask` + TOML spec + `syn`
-- current suite uses Python + crate-local boundary docs + repo-local wrappers
+- current suite uses `crates/atm-architecture` (Rust) + crate-local boundary
+  docs + repo-local wrappers
 
 Decision:
 
