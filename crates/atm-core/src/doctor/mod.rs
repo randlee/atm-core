@@ -916,6 +916,7 @@ mod tests {
             let root = tempdir.path().to_path_buf();
             let home_dir = root.join("atm-home");
             let current_dir = root.join("workspace");
+            std::fs::write(root.join(".atm.toml"), "[atm]\n").expect("root sentinel");
             std::fs::create_dir_all(&home_dir).expect("home dir");
             std::fs::create_dir_all(&current_dir).expect("workspace dir");
             Self {
