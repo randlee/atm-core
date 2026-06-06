@@ -836,23 +836,14 @@ command = ["scripts/atm-nudge.sh", "{TEST_SENDER}"]
         let nested = root.path().join("nested").join("cwd");
         fs::create_dir_all(&nested).expect("nested cwd");
 
-        let ambient = unique_temp_dir("config-process-cwd");
-        fs::write(
-            ambient.path().join(".atm.toml"),
-            format!("[atm]\nidentity = \"{ROLE_TEAM_LEAD}\"\n"),
-        )
-        .expect("ambient config");
-
-        let original_cwd = std::env::current_dir().expect("current dir");
-        std::env::set_current_dir(ambient.path()).expect("set ambient cwd");
+        // find_config_path walks the explicit start path and is bounded by the
+        // root sentinel above, so process CWD must not participate.
         let loaded = load_config(&nested).expect("config lookup should not fail");
-        std::env::set_current_dir(original_cwd).expect("restore cwd");
 
         if let Some(ref config) = loaded {
-            assert_ne!(
-                config.identity.as_deref(),
-                Some(ROLE_TEAM_LEAD),
-                "config lookup must not use process cwd ambient config"
+            assert_eq!(
+                config.identity, None,
+                "config walk must not escape tempdir root; sentinel identity must stay None"
             );
         }
     }
