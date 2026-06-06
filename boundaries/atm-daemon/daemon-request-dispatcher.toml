@@ -21,7 +21,7 @@ io_forbidden = ["sqlite", "process_spawn"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core", "atm-rusqlite"]
+allowed_dependencies = ["atm-core"]
 forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]
@@ -43,4 +43,4 @@ review_gates = ["no_socket_specific_business_logic"]
 
 [status]
 state = "active"
-notes = ["dispatcher remains thin and runtime-owned", "runtime composition lands through atm_daemon::composition", "dispatcher now routes heartbeat requests and projects daemon-backed doctor health", "direct atm-rusqlite access is limited to runtime-owned boundary assembly for roster truth and SQLite readiness checks"]
+notes = ["dispatcher remains thin and runtime-owned", "runtime composition lands through atm_daemon::composition", "dispatcher now routes heartbeat requests and projects daemon-backed doctor health", "runtime-owned boundary assembly remains responsible for roster truth and SQLite readiness checks so this dispatcher stays storage-neutral"]

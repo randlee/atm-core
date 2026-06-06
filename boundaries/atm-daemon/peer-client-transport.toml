@@ -21,7 +21,7 @@ io_forbidden = ["sqlite", "process_spawn"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core", "atm-rusqlite", "tokio"]
+allowed_dependencies = ["atm-core", "tokio"]
 forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]
@@ -43,4 +43,4 @@ review_gates = ["no_public_impl", "no_public_constructor", "no_cli_to_daemon_edg
 
 [status]
 state = "active"
-notes = ["remote daemon-to-daemon delivery uses the shared AtmProtocol framing with bounded timeout/retry behavior", "the private PeerClientTransport implementation now lives in atm_daemon::peer_transport behind the runtime-owned PeerTransportRuntime wrapper and is assembled through atm_daemon::composition", "durable replay resume is keyed by message_key and backed by the host-scoped SQLite state root"]
+notes = ["remote daemon-to-daemon delivery uses the shared AtmProtocol framing with bounded timeout/retry behavior", "the private PeerClientTransport implementation now lives in atm_daemon::peer_transport behind the runtime-owned PeerTransportRuntime wrapper and is assembled through atm_daemon::composition", "durable replay resume is keyed by message_key and backed by the runtime-owned host-scoped durable state root"]

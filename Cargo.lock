@@ -124,6 +124,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "atm-architecture"
+version = "1.2.1"
+dependencies = [
+ "cargo_metadata",
+ "serde",
+ "toml",
+]
+
+[[package]]
 name = "atm-daemon"
 version = "1.2.1"
 dependencies = [
