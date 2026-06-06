@@ -198,6 +198,12 @@ def run_thorough(binary_sha: str, runtime: ThoroughSmokeRuntime) -> dict[str, ob
             )
             status = "failed"
 
+        copied_fixture = runtime.clone_fixture(
+            fixture,
+            prefix="z21c.",
+            clear_logs=True,
+        )
+
         list_payload = runtime.parse_json_output(
             runtime.run_atm(runtime.root, base_env, fixture.workspace_dir, "list", "--json")
         )
@@ -634,11 +640,6 @@ def run_thorough(binary_sha: str, runtime: ThoroughSmokeRuntime) -> dict[str, ob
                 "send/read/ack/list/clear/log/doctor/teams/members/help common error paths all failed closed with explicit actionable guidance",
             )
 
-        copied_fixture = runtime.clone_fixture(
-            fixture,
-            prefix="z21c.",
-            clear_logs=True,
-        )
         copied_env = runtime.smoke_env(
             copied_fixture, identity=runtime.operator, root=runtime.root
         )
@@ -717,7 +718,7 @@ def run_thorough(binary_sha: str, runtime: ThoroughSmokeRuntime) -> dict[str, ob
         )
         copied_lane_ok = (
             copied_runtime_ready
-            and copied_list.get("count", 0) >= 1
+            and copied_list.get("count", 0) == 0
             and copied_send.get("outcome") == "sent"
             and copied_read.get("selected_message_id") == str(copied_send["message_id"])
         )
