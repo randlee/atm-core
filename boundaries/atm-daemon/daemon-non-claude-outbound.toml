@@ -21,7 +21,7 @@ io_forbidden = ["sqlite", "compatibility_jsonl_append"]
 
 [dependencies]
 allowed_dependents = []
-allowed_dependencies = ["atm-core", "atm-rusqlite"]
+allowed_dependencies = ["atm-core"]
 forbidden_edges = ["atm -> atm-daemon", "atm-graft -> atm-daemon"]
 
 [references]

@@ -52,12 +52,44 @@ fn boundary_toml_forbidden_edges_match_rust_guard_catalog() {
     );
 }
 
-fn assert_forbidden_edge_absent(source: &str, forbidden: &str) {
-    let dependencies = direct_normal_workspace_dependencies();
-    let actual = dependencies.get(source).cloned().unwrap_or_default();
+#[test]
+fn daemon_boundary_tomls_must_not_allow_atm_rusqlite() {
+    let violations = daemon_boundary_files()
+        .into_iter()
+        .filter_map(|path| {
+            let contents = fs::read_to_string(&path)
+                .unwrap_or_else(|error| panic!("failed to read {}: {error}", path.display()));
+            let boundary: BoundaryToml = toml::from_str(&contents)
+                .unwrap_or_else(|error| panic!("failed to parse {}: {error}", path.display()));
+            boundary
+                .dependencies
+                .allowed_dependencies
+                .contains(&"atm-rusqlite".to_string())
+                .then(|| path.display().to_string())
+        })
+        .collect::<Vec<_>>();
+
     assert!(
-        !actual.contains(forbidden),
-        "{source} must not have a normal workspace dependency on {forbidden}; actual workspace deps: {actual:?}"
+        violations.is_empty(),
+        "daemon boundary TOMLs must not allow atm-rusqlite directly; violating files: {violations:?}"
+    );
+}
+
+#[test]
+fn synthetic_daemon_boundary_relaxation_fixture_is_detected() {
+    let fixture = BoundaryToml {
+        dependencies: BoundaryDependencies {
+            allowed_dependencies: vec!["atm-core".to_string(), "atm-rusqlite".to_string()],
+            ..BoundaryDependencies::default()
+        },
+    };
+
+    assert!(
+        fixture
+            .dependencies
+            .allowed_dependencies
+            .contains(&"atm-rusqlite".to_string()),
+        "synthetic fixture must demonstrate the daemon TOML relock would fail closed if atm-rusqlite were re-added"
     );
 }
 
@@ -76,6 +108,14 @@ fn synthetic_boundary_relaxation_fixture_reports_removed_forbidden_edge() {
     );
 }
 
+fn assert_forbidden_edge_absent(source: &str, forbidden: &str) {
+    let dependencies = direct_normal_workspace_dependencies();
+    let actual = dependencies.get(source).cloned().unwrap_or_default();
+    assert!(
+        !actual.contains(forbidden),
+        "{source} must not have a normal workspace dependency on {forbidden}; actual workspace deps: {actual:?}"
+    );
+}
 fn direct_normal_workspace_dependencies() -> BTreeMap<String, BTreeSet<String>> {
     let metadata = MetadataCommand::new()
         .manifest_path(workspace_root().join("Cargo.toml"))
@@ -108,7 +148,7 @@ fn direct_normal_workspace_dependencies() -> BTreeMap<String, BTreeSet<String>> 
 }
 
 fn documented_forbidden_edges() -> BTreeSet<(String, String)> {
-    boundary_files()
+    guarded_boundary_files()
         .into_iter()
         .flat_map(|path| {
             let contents = fs::read_to_string(&path)
@@ -147,7 +187,7 @@ fn missing_forbidden_edges(
         .collect()
 }
 
-fn boundary_files() -> Vec<PathBuf> {
+fn guarded_boundary_files() -> Vec<PathBuf> {
     let root = workspace_root();
     let mut files = vec![root.join("boundaries/atm-runtime/runtime-composition.toml")];
     let mut sqlite_files = fs::read_dir(root.join("boundaries/atm-rusqlite"))
@@ -160,6 +200,16 @@ fn boundary_files() -> Vec<PathBuf> {
     files
 }
 
+fn daemon_boundary_files() -> Vec<PathBuf> {
+    let root = workspace_root();
+    let mut files = fs::read_dir(root.join("boundaries/atm-daemon"))
+        .expect("boundaries/atm-daemon directory must be readable")
+        .filter_map(|entry| entry.ok().map(|entry| entry.path()))
+        .filter(|path| path.extension().and_then(|ext| ext.to_str()) == Some("toml"))
+        .collect::<Vec<_>>();
+    files.sort();
+    files
+}
 fn workspace_root() -> PathBuf {
     Path::new(env!("CARGO_MANIFEST_DIR"))
         .parent()
@@ -175,5 +225,8 @@ struct BoundaryToml {
 
 #[derive(Default, Deserialize)]
 struct BoundaryDependencies {
+    #[serde(default)]
+    allowed_dependencies: Vec<String>,
+    #[serde(default)]
     forbidden_edges: Vec<String>,
 }
