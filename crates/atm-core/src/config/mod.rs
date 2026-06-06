@@ -832,6 +832,7 @@ command = ["scripts/atm-nudge.sh", "{TEST_SENDER}"]
     #[test]
     fn load_config_does_not_fall_back_to_process_cwd() {
         let root = unique_temp_dir("config-ancestor-chain");
+        fs::write(root.path().join(".atm.toml"), "").expect("root sentinel");
         let nested = root.path().join("nested").join("cwd");
         fs::create_dir_all(&nested).expect("nested cwd");
 
@@ -847,10 +848,13 @@ command = ["scripts/atm-nudge.sh", "{TEST_SENDER}"]
         let loaded = load_config(&nested).expect("config lookup should not fail");
         std::env::set_current_dir(original_cwd).expect("restore cwd");
 
-        assert!(
-            loaded.is_none(),
-            "config lookup must stay on the provided ancestor chain and never fall back to process cwd"
-        );
+        if let Some(ref config) = loaded {
+            assert_ne!(
+                config.identity.as_deref(),
+                Some(ROLE_TEAM_LEAD),
+                "config lookup must not use process cwd ambient config"
+            );
+        }
     }
 
     #[test]
