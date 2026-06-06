@@ -208,8 +208,9 @@ Defer.
 Why:
 
 - current boundary checker already enforces some dependency rules
-- we should extend the current Python implementation before adding a second dependency
-  rule engine
+- note: superseded by Phase AA, which replaced the Python implementation with
+  `crates/atm-architecture`; further dependency-rule extension should build on
+  the Rust crate before adding a second rule engine
 
 ## Reject For Current Phase
 
@@ -230,7 +231,8 @@ Reject for current phase.
 
 Why:
 
-- current Python implementation is functioning
+- historical note: the old Python implementation was functioning, but it was
+  superseded in Phase AA by `crates/atm-architecture`
 - the rewrite cost is high
 - the current limitation is product surface, not parser viability
 
@@ -296,7 +298,7 @@ This is the highest-value low-custom-dev set.
 
 Recommended default answers unless redirected:
 
-- keep Python boundary enforcement: yes
+- keep boundary enforcement in `crates/atm-architecture`: yes
 - move to centralized `spec/*`: no
 - add `lint fast`: yes
 - add `cargo-modules`: yes

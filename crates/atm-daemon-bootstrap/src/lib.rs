@@ -10,7 +10,7 @@ static INSTALL_RETAINED_RUNTIME_FACTORY: Once = Once::new();
 pub fn install_sqlite_retained_runtime_factory() {
     INSTALL_RETAINED_RUNTIME_FACTORY.call_once(|| {
         atm_core::runtime_install_hooks::install_retained_runtime_factory_for_daemon_bootstrap(
-            atm_rusqlite::default_local_runtime,
+            atm_runtime::default_local_runtime,
         );
     });
 }
@@ -24,9 +24,7 @@ pub fn install_sqlite_retained_runtime_factory() {
 pub fn with_default_roster_store<T>(
     f: impl FnOnce(&(dyn RosterStore + Send + Sync)) -> Result<T, AtmError>,
 ) -> Result<T, AtmError> {
-    let assembly = atm_rusqlite::assemble_default_boundary()?;
-    let roster_store = assembly.roster_store_arc();
-    f(roster_store.as_ref())
+    atm_runtime::with_default_roster_store(f)
 }
 
 /// # Errors

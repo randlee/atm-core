@@ -24,9 +24,26 @@ Phase-AA simplification direction:
 - the daemon remains part of the product, but it must return to the original
   thin-router role
 - concrete SQLite construction moves to a dedicated `atm-runtime` crate
+- `AA.2` lands that composition root and moves production runtime/store
+  assembly there; later AA sprints finish the doctor split, delete remaining
+  daemon SQLite leaks, and relock the boundary permanently
 - the daemon must not know that the current durable adapter is SQLite
 - direct local diagnostics such as store-openability and baseline SQLite
   health may be answered without routing through the daemon
+- `atm doctor` now uses that direct local path for config/store diagnostics
+  through `atm-runtime`; daemon routing remains only for daemon-owned runtime
+  state
+- each subsystem owns its own diagnostic trait and backend-specific diagnosis
+- top-level doctor code aggregates subsystem findings and daemon-owned runtime
+  state, but must not reimplement backend-specific diagnosis logic
+- `MailStore`, `TaskStore`, and `RosterStore` remain the primary
+  storage-neutral capability traits during this simplification line
+- `MailStoreDoctor`, `TaskStoreDoctor`, `RosterStoreDoctor`, and
+  `ConfigDoctor` are the explicit subsystem doctor traits used by that
+  aggregate-only health model
+- later SQLite-backed and Claude-JSON-backed implementations may satisfy that
+  same behavior-named trait family rather than forcing backend-shaped parallel
+  trait trees
 
 The retained product surface is:
 - `atm send`
@@ -2033,12 +2050,20 @@ Required retained-log maintenance behavior:
   handoff on the synchronous path; it must not reopen, append, flush, rotate,
   or prune retained files inline before returning control to the active daemon
   request/lifecycle path
+- blocking retained-log admission must use the queue-backed
+  `sc-observability` logger admission path (`Logger::log()`); any future
+  non-blocking admission path must use `Logger::try_log()` and handle explicit
+  queue-full degradation
+- `flush()` / `shutdown()` are the only durability barriers for retained-log
+  writes; queue admission alone must not be treated as immediate persistence
 - retained-log file append, rotation, and pruning must run on background
   maintenance machinery instead
 - if retained-log maintenance falls behind, ATM must degrade explicitly with
   structured diagnostics rather than silently blocking the daemon success path
 - retained-log pruning must use a bounded work budget per maintenance tick and
   must not rely on an unbounded wall-clock scan
+- the retained-log shutdown threshold is configured through
+  `RetainedLogPolicy.writer_shutdown_timeout`
 - actor identity when known
 - target identity when known
 - task id when known

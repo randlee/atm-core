@@ -24,6 +24,7 @@ The crate-local machine-readable boundary inventory lives in:
 - list/send/read/ack/clear service behavior
 - log query/follow service behavior over the observability boundary
 - doctor service behavior
+- subsystem doctor trait contracts and shared doctor report DTOs
 - structured core errors
 
 `atm-core` does not own:
@@ -137,6 +138,12 @@ Initial crate requirement IDs:
 - `REQ-CORE-DOCTOR-001` `atm-core` owns local doctor diagnostics and readiness
   evaluation. Satisfies the diagnostic evaluation aspects of:
   `REQ-P-DOCTOR-001`, `REQ-P-OBS-001`.
+  Phase-AA note:
+  - `MailStore`, `TaskStore`, and `RosterStore` remain the primary
+    storage-neutral capability surfaces
+  - `MailStoreDoctor`, `TaskStoreDoctor`, `RosterStoreDoctor`, and
+    `ConfigDoctor` are the subsystem-owned doctor traits that freeze the
+    aggregate-only daemon doctor model
 - `REQ-CORE-OBS-001` `atm-core` owns the abstract observability boundary and
   ATM-owned event/query models above shared crates. Satisfies the ATM event,
   query-model, and health-contract aspects of:

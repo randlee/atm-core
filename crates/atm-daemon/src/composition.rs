@@ -9,21 +9,25 @@ use crate::non_claude_outbound_runtime::DaemonNonClaudeOutbound;
 use crate::notification_runtime::NotificationRuntime;
 use crate::runtime_health::DaemonRequestDispatcher;
 use crate::runtime_health::{DaemonStatusSource, RuntimeStatusCache};
-use crate::sqlite_observability::DaemonSqliteObservability;
+use crate::runtime_sqlite_observer::DaemonRuntimeSqliteObserver;
+use crate::worker_support::retain_join_helper;
 use crate::{
     AtmHomeDir, DaemonSubsystem, LocalIpcServerTransportAdapter, PeerTransportRuntime,
-    RemoteReplayStore, peer_transport::PeerTransportConfig,
-    sqlite_remote_replay_store_from_path_with_observability,
+    peer_transport::PeerTransportConfig,
 };
-use atm_core::boundary::{ConfigIngress, ConfigLoadRequest, RequestDispatcher, RosterStore};
+use atm_core::boundary::{
+    ConfigIngress, ConfigLoadRequest, RemoteReplayStore, RequestDispatcher, RosterStore,
+};
 use atm_core::error::AtmError;
-use atm_rusqlite::SqliteBoundaryAssembly;
+use atm_runtime::{RuntimeAssembly, RuntimeAssemblyInputs, assemble_sqlite_runtime};
 use std::fs::OpenOptions;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Duration;
 
+// Cross-reference: this constant is the per-lane cap enforced by
+// `shutdown_lane_with_deadline(...)` for background runtime drains.
 const BACKGROUND_LANE_SHUTDOWN_DEADLINE: Duration = Duration::from_secs(3);
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -170,86 +174,73 @@ impl RuntimeComposition {
         replay_store_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
     ) -> Result<Self, AtmError> {
-        let composition_observability =
-            SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
         let notification_sink = DaemonNotificationSink::new(
             NotificationRuntime::new_with_observability(SubsystemObservability::new(
                 DaemonSubsystem::NotificationRuntime,
                 Arc::clone(&observability),
             )),
         );
-        let sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability> =
-            Arc::new(DaemonSqliteObservability::new(
-                Arc::clone(&observability),
-                RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
-                    DaemonSubsystem::RuntimeStatusCache,
+        let sqlite_observer =
+            Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
+        let config_current_dir =
+            std::env::current_dir().unwrap_or_else(|_| home_dir.as_path().to_path_buf());
+        let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
+            sqlite_db_path: replay_store_path,
+            config_current_dir: config_current_dir.clone(),
+            sqlite_observer,
+            non_claude_outbound: Arc::new(DaemonNonClaudeOutbound::new()),
+            notification_sink: Arc::new(notification_sink.clone()),
+        })
+        .map_err(|error| {
+            replay_store_assembly_failed(
+                error,
+                &SubsystemObservability::new(
+                    DaemonSubsystem::Composition,
                     Arc::clone(&observability),
-                )),
-            ));
-        let production_boundary = SqliteBoundaryAssembly::new_with_observability(
-            replay_store_path.clone(),
-            Arc::clone(&sqlite_observability),
-        )
-        .map_err(|error| replay_store_assembly_failed(error, &composition_observability))?;
-        let production_runtime = build_production_runtime(
-            production_boundary.mail_store_arc(),
-            production_boundary.task_store_arc(),
-            production_boundary.roster_store_arc(),
-            Arc::new(DaemonNonClaudeOutbound::new()),
-            Arc::new(notification_sink.clone()),
-        );
-        Self::new_with_replay_store_path_and_runtime(
+                ),
+            )
+        })?;
+        Self::new_with_runtime_assembly(
             home_dir,
-            replay_store_path,
             observability,
-            production_runtime,
+            config_current_dir,
+            runtime_assembly,
             notification_sink,
         )
     }
 
-    fn new_with_replay_store_path_and_runtime(
+    fn new_with_runtime_assembly(
         home_dir: AtmHomeDir,
-        replay_store_path: PathBuf,
         observability: Arc<dyn DaemonRuntimeObservability>,
-        production_runtime: atm_core::LocalServiceRuntime,
+        current_dir: PathBuf,
+        runtime_assembly: RuntimeAssembly,
         notification_sink: DaemonNotificationSink,
     ) -> Result<Self, AtmError> {
         let config_ingress = DaemonConfigIngress::new();
         let composition_observability =
             SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability));
+        // Runtime status snapshots are read on the hot doctor/status path, so
+        // the cache uses ArcSwap for lock-free reads while writes stay explicit.
         let status_cache = RuntimeStatusCache::new_with_observability(SubsystemObservability::new(
             DaemonSubsystem::RuntimeStatusCache,
             Arc::clone(&observability),
         ));
-        let sqlite_observability: Arc<dyn atm_rusqlite::SqliteObservability> = Arc::new(
-            DaemonSqliteObservability::new(Arc::clone(&observability), status_cache.clone()),
-        );
         let watch_event_source = FileWatchEventSource::new_with_observability(
             SubsystemObservability::new(DaemonSubsystem::WatchRuntime, Arc::clone(&observability)),
         );
         let inbox_ingress = DaemonInboxIngress::new();
         let peer_transport_config =
-            load_peer_transport_config(&config_ingress, &composition_observability)?;
-        let replay_store = sqlite_remote_replay_store_from_path_with_observability(
-            replay_store_path.clone(),
-            Arc::clone(&sqlite_observability),
-        )
-        .map_err(|error| replay_store_assembly_failed(error, &composition_observability))?;
-        let production_boundary = SqliteBoundaryAssembly::new_with_observability(
-            replay_store_path.clone(),
-            Arc::clone(&sqlite_observability),
-        )
-        .map_err(|error| replay_store_assembly_failed(error, &composition_observability))?;
-        let reconcile_roster_store = production_boundary.roster_store_arc();
+            load_peer_transport_config(current_dir, &config_ingress, &composition_observability)?;
+        let reconcile_roster_store = runtime_assembly.runtime_bundle.roster_store.clone();
         atm_core::runtime_install_hooks::install_retained_runtime_instance_for_daemon(
-            production_runtime.clone(),
+            runtime_assembly.service_runtime.clone(),
         );
         let server_transport = build_server_transport(&observability);
         let request_dispatcher = build_request_dispatcher(
             home_dir,
             &status_cache,
             &observability,
-            production_boundary,
+            runtime_assembly.clone(),
             notification_sink.runtime(),
         );
         let host_ownership_adapter = build_host_ownership_adapter(&observability);
@@ -260,8 +251,11 @@ impl RuntimeComposition {
             notification_sink.clone(),
             &observability,
         );
-        let peer_transport_runtime =
-            build_peer_transport_runtime(replay_store, peer_transport_config, observability);
+        let peer_transport_runtime = build_peer_transport_runtime(
+            runtime_assembly.runtime_bundle.remote_replay_store.clone(),
+            peer_transport_config,
+            observability,
+        );
         Ok(Self {
             lifecycle: Arc::new(RuntimeLifecycle::new()),
             _host_ownership_adapter: host_ownership_adapter,
@@ -269,7 +263,7 @@ impl RuntimeComposition {
             server_transport,
             request_dispatcher,
             composition_observability,
-            _production_runtime: production_runtime,
+            _production_runtime: runtime_assembly.service_runtime,
             _notification_sink: notification_sink.clone(),
             _status_source: DaemonStatusSource::new(status_cache),
             _watch_event_source: watch_event_source.clone(),
@@ -454,6 +448,7 @@ impl RuntimeComposition {
             )
             .or_else(|error| self.rollback_failed_startup(error))?;
         self.serve_runtime(runtime, move || {
+            self.request_dispatcher.preflush_observability_shutdown();
             if let Some(signal) = ready_signal.as_ref() {
                 signal.send(()).map_err(|_| {
                     AtmError::daemon_unavailable(
@@ -496,6 +491,10 @@ impl RuntimeComposition {
                 Ok(()) => Err(force_error),
             };
         }
+        // Preflush any queued retained-log work before emitting the terminal
+        // shutdown event so the final status update does not race older queue
+        // entries during shutdown.
+        self.request_dispatcher.preflush_observability_shutdown();
         match result.as_ref() {
             Ok(()) => {
                 self.composition_observability.emit_or_warn(
@@ -661,6 +660,7 @@ fn build_peer_transport_runtime(
     )
 }
 
+#[cfg(test)]
 pub(crate) fn build_production_runtime(
     mail_store: Arc<dyn atm_core::boundary::MailStore + Send + Sync>,
     task_store: Arc<dyn atm_core::boundary::TaskStore + Send + Sync>,
@@ -703,23 +703,10 @@ fn replay_store_assembly_failed(
 }
 
 fn load_peer_transport_config(
+    current_dir: PathBuf,
     config_ingress: &DaemonConfigIngress,
     observability: &SubsystemObservability,
 ) -> Result<PeerTransportConfig, AtmError> {
-    let current_dir = std::env::current_dir().map_err(|source| {
-        observability.emit_or_warn(
-            "peer_transport_config_resolution",
-            "failed",
-            "daemon startup could not resolve the current working directory for peer transport config",
-        );
-        AtmError::daemon_unavailable(
-            "failed to resolve the current working directory for daemon peer transport config",
-        )
-        .with_recovery(
-            "Start atm-daemon from a readable ATM workspace so the daemon can load and validate peer transport settings before serving requests.",
-        )
-        .with_source(source)
-    })?;
     let config = config_ingress
         .load_config(ConfigLoadRequest { current_dir })
         .inspect_err(|_| {
@@ -743,14 +730,14 @@ fn build_request_dispatcher(
     home_dir: AtmHomeDir,
     status_cache: &RuntimeStatusCache,
     observability: &Arc<dyn DaemonRuntimeObservability>,
-    sqlite_boundary: SqliteBoundaryAssembly,
+    runtime_assembly: RuntimeAssembly,
     notification_runtime: NotificationRuntime,
 ) -> Arc<DaemonRequestDispatcher> {
     Arc::new(DaemonRequestDispatcher::new(
         home_dir,
         status_cache.clone(),
         Arc::clone(observability),
-        sqlite_boundary,
+        runtime_assembly,
         notification_runtime,
     ))
 }
@@ -813,6 +800,7 @@ where
             result
         }
         Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+            retain_join_helper(lane_name, shutdown_handle, deadline);
             tracing::warn!(
                 subsystem = "composition",
                 action = "shutdown_lane_deadline",
@@ -826,7 +814,7 @@ where
                 "daemon {lane_name} shutdown exceeded the {deadline:?} per-lane deadline"
             ))
             .with_recovery(
-                "Restart atm-daemon after the stalled background lane stops holding runtime shutdown open.",
+                "Restart atm-daemon after the stalled background lane stops holding runtime shutdown open; the timed-out join helper was retained for later reap.",
             ))
         }
         Err(std::sync::mpsc::RecvTimeoutError::Disconnected) => shutdown_handle.join().map_or_else(
@@ -895,6 +883,15 @@ pub(crate) fn compose_runtime(
 ) -> Result<RuntimeComposition, AtmError> {
     let home_dir = AtmHomeDir::resolve()?;
     validate_runtime_home_dir(home_dir.as_path())?;
+    let current_dir = std::env::current_dir().map_err(|source| {
+        AtmError::daemon_unavailable(
+            "failed to resolve the current working directory for daemon runtime assembly",
+        )
+        .with_recovery(
+            "Start atm-daemon from a readable ATM workspace so runtime assembly and config inspection share one validated config root.",
+        )
+        .with_source(source)
+    })?;
     let replay_store_path = atm_core::home::host_mail_db_path()?;
     let notification_sink = DaemonNotificationSink::new(
         crate::notification_runtime::NotificationRuntime::new_with_observability(
@@ -904,19 +901,25 @@ pub(crate) fn compose_runtime(
             ),
         ),
     );
-    let production_boundary = SqliteBoundaryAssembly::new(replay_store_path.clone())?;
-    let production_runtime = build_production_runtime(
-        production_boundary.mail_store_arc(),
-        production_boundary.task_store_arc(),
-        production_boundary.roster_store_arc(),
-        Arc::new(DaemonNonClaudeOutbound::new()),
-        Arc::new(notification_sink.clone()),
-    );
-    RuntimeComposition::new_with_replay_store_path_and_runtime(
+    let sqlite_observer = Arc::new(DaemonRuntimeSqliteObserver::new(Arc::clone(&observability)));
+    let runtime_assembly = assemble_sqlite_runtime(RuntimeAssemblyInputs {
+        sqlite_db_path: replay_store_path,
+        config_current_dir: current_dir.clone(),
+        sqlite_observer,
+        non_claude_outbound: Arc::new(DaemonNonClaudeOutbound::new()),
+        notification_sink: Arc::new(notification_sink.clone()),
+    })
+    .map_err(|error| {
+        replay_store_assembly_failed(
+            error,
+            &SubsystemObservability::new(DaemonSubsystem::Composition, Arc::clone(&observability)),
+        )
+    })?;
+    RuntimeComposition::new_with_runtime_assembly(
         home_dir,
-        replay_store_path,
         observability,
-        production_runtime,
+        current_dir,
+        runtime_assembly,
         notification_sink,
     )
 }

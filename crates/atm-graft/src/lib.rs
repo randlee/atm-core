@@ -269,7 +269,7 @@ impl AtmGraftClient for GraftClient {
 
     fn read_message(&self, query: ReadQuery) -> Result<ReadOutcome, AtmError> {
         match self.send_request(RequestEnvelope::Receive(query))? {
-            ResponseEnvelope::Receive(outcome) => Ok(outcome),
+            ResponseEnvelope::Receive(outcome) => Ok(*outcome),
             other => Err(unexpected_response("read", other)),
         }
     }
@@ -1098,23 +1098,25 @@ mod tests {
                     dry_run: false,
                 })),
             ),
-            RequestEnvelope::Receive(query) => Ok(ResponseEnvelope::Receive(ReadOutcome {
-                action: CommandAction::Read,
-                team: query.team_override().cloned().expect("team"),
-                agent: "agent-b".parse().expect("agent"),
-                selection_mode: query.selection_mode(),
-                mutation_applied: false,
-                count: 1,
-                message: None,
-                selected_message_id: Some(read_message_id),
-                match_count: 1,
-                additional_match_count: 0,
-                bucket_counts: BucketCounts {
-                    unread: 1,
-                    pending_ack: 0,
-                    history: 0,
-                },
-            })),
+            RequestEnvelope::Receive(query) => {
+                Ok(ResponseEnvelope::Receive(Box::new(ReadOutcome {
+                    action: CommandAction::Read,
+                    team: query.team_override().cloned().expect("team"),
+                    agent: "agent-b".parse().expect("agent"),
+                    selection_mode: query.selection_mode(),
+                    mutation_applied: false,
+                    count: 1,
+                    message: None,
+                    selected_message_id: Some(read_message_id),
+                    match_count: 1,
+                    additional_match_count: 0,
+                    bucket_counts: BucketCounts {
+                        unread: 1,
+                        pending_ack: 0,
+                        history: 0,
+                    },
+                })))
+            }
             RequestEnvelope::Send(SendRequestEnvelope::Acknowledge(request)) => Ok(
                 ResponseEnvelope::Send(SendResponseEnvelope::Acknowledged(AckOutcome {
                     action: CommandAction::Ack,

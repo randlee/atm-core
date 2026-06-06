@@ -38,7 +38,8 @@ Notes:
   - `HeartbeatActivity` / `TeamMemberHeartbeat{Request,Response}` as the
     canonical daemon-owned member-liveness DTO family added in `R.15`
   - `RuntimeStatusSnapshot` as the daemon-health/status DTO consumed by
-    `atm doctor`
+    `atm doctor`; after `AA.3` it carries daemon-owned runtime state only and
+    no store-specific readiness fields
 - `atm-runtime-test-support` is an allowed workspace-local dependent for the
   retained-runtime test harness seam; it is not a production consumer
   boundary.
@@ -132,6 +133,18 @@ Notes:
 - After `Y.3`, retained `send` reaches compatibility rewrite only through the
   post-commit runtime refresh owner; retained `ack` and `clear` no longer own
   source-inbox compatibility rewrites.
+- `MailStoreDoctor` is the paired subsystem-owned diagnostics boundary for
+  path resolution, openability, schema/bootstrap/migration readiness, and
+  bounded store findings.
+
+## MailStoreDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/mail-store-doctor.toml](../../boundaries/atm-core/mail-store-doctor.toml)
+
+Purpose:
+- Own durable mail-store diagnostics without moving backend-specific diagnosis
+  into daemon or CLI code.
 
 ## TaskStore
 
@@ -144,6 +157,17 @@ Purpose:
 
 Notes:
 - `ack` is not a top-level public method, but it still mutates task state.
+- `TaskStoreDoctor` is the paired subsystem-owned diagnostics boundary for
+  bounded task-store findings.
+
+## TaskStoreDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/task-store-doctor.toml](../../boundaries/atm-core/task-store-doctor.toml)
+
+Purpose:
+- Own durable task-store diagnostics without widening the main task capability
+  trait family.
 
 ## RosterStore
 
@@ -159,6 +183,43 @@ Notes:
 - Durable roster truth is the canonical team/member model used for daemon
   runtime hydration; `config.json` documents are ingress inputs and daemon-owned
   live `pid` state stays outside this boundary.
+- `RosterStoreDoctor` is the paired subsystem-owned diagnostics boundary for
+  bounded roster-store findings.
+
+## RosterStoreDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/roster-store-doctor.toml](../../boundaries/atm-core/roster-store-doctor.toml)
+
+Purpose:
+- Own durable roster-store diagnostics without moving backend-specific
+  diagnosis into daemon or CLI code.
+
+## Phase AA Runtime Composition Adjuncts
+
+Purpose:
+- Own the storage-neutral runtime/replay contracts that concrete composition
+  code and daemon runtime code share without letting those seams become
+  daemon-private or SQLite-private.
+
+Owned shared contracts:
+- `DoctorFinding`
+- `RuntimeBundle`
+- `RemoteReplayStateRecord`
+- `RemoteReplayStore`
+- `RuntimeStorageFinalizer`
+
+Notes:
+- `RuntimeBundle` groups the installed storage-neutral service and doctor
+  handles that callers consume after `atm-runtime` assembles the concrete
+  backend.
+- `RemoteReplayStore` keeps bounded replay persistence behind an
+  `atm-core`-owned contract even though the first implementation is SQLite.
+- `RuntimeStorageFinalizer` keeps shutdown-time storage finalization, such as
+  bounded WAL checkpoint work, outside daemon-private adapter knowledge.
+- `AA.4` relies on these adjunct contracts to remove the direct
+  `atm-daemon -> atm-rusqlite` dependency while keeping replay persistence and
+  shutdown finalization storage-neutral at the daemon boundary.
 
 ## ConfigIngress
 
@@ -204,6 +265,15 @@ Notes:
   - pre-existing survivors explicitly recorded in TOML allowlists with owner
     and sunset-sprint metadata
   - new violations, which fail lint immediately
+
+## ConfigDoctor
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-core/config-doctor.toml](../../boundaries/atm-core/config-doctor.toml)
+
+Purpose:
+- Own config-specific diagnosis so daemon/CLI callers aggregate typed config
+  findings instead of embedding backend-specific config investigation logic.
 
 ## InboxIngress
 

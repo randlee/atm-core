@@ -20,6 +20,9 @@ live in `atm-daemon`.
   - SQLite-backed `TaskStore`
   - SQLite-backed `RosterStore`
   - SQLite-backed `RemoteReplayStore`
+- `atm-runtime` must export a storage-neutral shutdown/finalization seam so
+  daemon runtime code can finalize storage without depending directly on
+  SQLite-owned types.
 - `atm-runtime` must expose storage-neutral runtime inputs to callers through
   the `atm-core` trait surfaces frozen by `Phase AA`.
 - `atm-runtime` must own the concrete `ConfigDoctor` implementation used by
@@ -27,6 +30,8 @@ live in `atm-daemon`.
 - `atm-runtime` must support an `atm -> atm-runtime` dependency edge for the
   direct local doctor path while forbidding any direct `atm -> atm-rusqlite`
   dependency.
+- `atm-runtime` must remain the assembly point used by `atm doctor` when it
+  performs direct local config/store diagnostics.
 - `atm-runtime` must support an `atm-daemon -> atm-runtime` dependency edge
   for runtime bundle assembly while preserving the forbidden
   `atm-daemon -> atm-rusqlite` edge.

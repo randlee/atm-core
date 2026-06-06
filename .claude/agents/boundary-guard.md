@@ -1,6 +1,6 @@
 ---
 name: boundary-guard
-version: 0.1.0
+version: 0.2.0
 description: Reviews boundary TOML and crate-edge changes for policy relaxations or forbidden dependency reintroduction before plan approval and phase closeout.
 tools: Glob, Grep, LS, Read, BashOutput
 model: sonnet
@@ -31,6 +31,11 @@ At minimum, detect:
 - any removal from `forbidden_test_bypasses`
 - any removal from `forbidden`
 - any direct `atm-daemon -> atm-rusqlite` dependency edge in code or manifests
+- any mismatch between `runtime-composition.toml` and the SQLite boundary TOMLs
+  on the forbidden `atm-daemon -> atm-rusqlite` edge
+
+Run `cargo test --package atm-architecture` as the first machine check and
+treat any non-zero result as a blocking failure.
 
 ## Mandatory Trigger Points
 
@@ -55,15 +60,19 @@ Return fenced JSON only.
 ```json
 {
   "status": "PASS | FAIL",
-  "mode": "boundary-guard-review",
-  "reviewer": "boundary-guard",
-  "findings": [
+  "forbidden_edges": ["atm-daemon -> atm-rusqlite"],
+  "policy_relaxations": [
     {
-      "severity": "Blocking | Important | Minor",
-      "category": "POLICY-RELAXATION | FORBIDDEN-EDGE | VISIBILITY-WIDENING | TEST-BYPASS-REMOVAL",
-      "target_refs": ["path:line"],
-      "issue": "clear statement of the boundary problem",
-      "required_correction": "specific corrective action"
+      "field": "allowed_dependents",
+      "change": "added atm-daemon",
+      "requires_approval": true
+    }
+  ],
+  "violations": [
+    {
+      "category": "FORBIDDEN-EDGE | POLICY-RELAXATION",
+      "detail": "clear statement of the boundary problem",
+      "ref": "path:line"
     }
   ]
 }

@@ -231,6 +231,23 @@ Required behavior:
 Existing generic tools such as `clippy` are not sufficient on their own for
 this repository-specific architectural rule.
 
+### Boundary Policy Relock Reviews
+
+Phase AA adds a second enforcement layer for boundary-policy widening:
+
+- `cargo test --package atm-architecture`
+
+Rules:
+
+- the boundary-guard Rust test crate is required on plan branches that modify
+  boundary TOMLs
+- the boundary-guard Rust test crate is required on phase-ending review
+  branches
+- any `FAIL` result is merge-blocking for those review flows
+- this guard remains separate from ordinary `just lint` because it compares the
+  current branch against an explicit review base ref and treats policy widening
+  as an architecture change rather than routine lint churn
+
 ## 7. Quality Bar
 
 A test architecture is acceptable only if it increases confidence in the

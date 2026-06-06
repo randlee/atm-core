@@ -8,7 +8,7 @@ use atm_core::error::AtmError;
 use atm_core::test_support::{remove_env_var, set_env_var};
 use atm_core::{
     LocalFileNonClaudeOutbound, LocalFileNotificationSink, LocalServiceRuntime,
-    home::host_runtime_dir,
+    home::{atm_home, host_runtime_dir_from_home},
 };
 use atm_rusqlite::{SqliteBoundaryAssembly, SqliteWriterLockGuard};
 
@@ -42,7 +42,9 @@ pub struct SqliteRuntimeGuard {
 impl SqliteRuntimeGuard {
     pub fn install(path: impl Into<PathBuf>) -> Self {
         install_sqlite_retained_runtime_factory();
-        let env_guard = env_lock().lock().expect("env lock");
+        let env_guard = env_lock()
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
         let previous = std::env::var_os(SQLITE_RUNTIME_PATH_ENV).map(PathBuf::from);
         set_env_var(SQLITE_RUNTIME_PATH_ENV, path.into().into_os_string());
         Self {
@@ -94,7 +96,7 @@ fn sqlite_retained_runtime() -> Result<LocalServiceRuntime, AtmError> {
         assembly.roster_store_arc(),
         std::sync::Arc::new(LocalFileNonClaudeOutbound::new()),
         std::sync::Arc::new(LocalFileNotificationSink::at_path(
-            host_runtime_dir()?.join("notifications.jsonl"),
+            host_runtime_dir_from_home(&atm_home()?).join("notifications.jsonl"),
         )),
     );
     if runtime_cache.len() >= MAX_SQLITE_RUNTIME_CACHE_ENTRIES {

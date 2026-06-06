@@ -120,6 +120,7 @@ Status:
 - Phase AB is the active planning line for Windows/macOS cross-host ATM smoke
   execution after the accepted Phase Z baseline.
 - the current merged workspace contains:
+  - `crates/atm-architecture`
   - `crates/atm-core`
   - `crates/atm`
   - `crates/atm-daemon`
@@ -196,6 +197,31 @@ Status summary:
 - The authoritative plan is [`docs/plan-phase-AA.md`](./plan-phase-AA.md).
 - The authoritative closure checklist is
   [`docs/phase-AA/readiness.md`](./phase-AA/readiness.md).
+- `AA.0` completed the daemon-role restatement, top-level state-machine
+  inventory, and daemon-side SQLite leak ledger that later AA sprints must
+  follow.
+- `AA.1` completed the subsystem-owned doctor traits and shared diagnostic DTO
+  move into `atm-core`.
+- `AA.2` completed the `atm-runtime` composition-root introduction, moved
+  production SQLite/runtime assembly out of daemon production composition, and
+  froze the target runtime boundary while the SQLite TOML relock remains
+  deferred to `AA.5`.
+- `AA.4` removes the remaining daemon-side SQLite leak paths by deleting the
+  daemon-private SQLite observability adapter, deleting direct daemon test
+  boundary assembly calls, and relying on `atm-core` / `atm-runtime` replay
+  seams instead of a direct `atm-daemon -> atm-rusqlite` dependency.
+- `AA.5` relocks the daemon-to-SQLite edge in the runtime and SQLite boundary
+  TOMLs, adds the independent `crates/atm-architecture/` Rust review guard,
+  and freezes boundary-policy widening as an explicit architecture change.
+- `AA.6` completes the scoped `sc-observability` `1.2.0` migration by moving
+  the concrete adapters to queue-backed `Logger::log()` admission, renaming
+  the retained-log shutdown policy field to `writer_shutdown_timeout`, and
+  projecting queue/writer/maintenance health detail intentionally.
+- `AA.7` Rust Boundary Enforcement Crate (`PR #398`,
+  `feature/pAA-s7-atm-architecture-crate`) completes the visible workspace
+  architecture gate by landing `crates/atm-architecture/`, removing the
+  superseded Python boundary scripts, and making `cargo test -p atm-architecture`
+  the sole code-driven boundary-enforcement check. Status: `complete`.
 
 Goal:
 - move concrete SQLite/runtime assembly to `atm-runtime`
@@ -221,6 +247,7 @@ Sprint line:
 - `AA.4` `feature/pAA-s4-delete-daemon-sqlite-leaks`
 - `AA.5` `feature/pAA-s5-boundary-relock-and-permanent-enforcement`
 - `AA.6` `feature/pAA-s6-obs-upgrade`
+- `AA.7` `feature/pAA-s7-atm-architecture-crate`
 
 Acceptance:
 - Phase AA exit criteria are satisfied only through

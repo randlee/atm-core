@@ -172,15 +172,29 @@ Required subsystem boundaries:
 - `ServerTransport` boundary
 - `RequestDispatcher` boundary
 - `MailStore` boundary
+- `MailStoreDoctor` boundary
 - `TaskStore` boundary
+- `TaskStoreDoctor` boundary
 - `RosterStore` boundary
+- `RosterStoreDoctor` boundary
 - inbox-ingress boundary
 - inbox-export boundary
 - config-ingress boundary
+- `ConfigDoctor` boundary
 - `WatchEventSource` boundary
 - `ReconcileCoordinator` boundary
 - `NotificationSink` boundary
 - `StatusSource` boundary
+- `RemoteReplayStore` boundary
+- `RuntimeStorageFinalizer` boundary
+
+Phase AA shared runtime-composition contracts:
+- `RuntimeBundle` is an `atm-core` DTO that groups the storage-neutral
+  runtime/service handles consumed by daemon and direct-doctor callers
+- `DoctorFinding` is the shared subsystem diagnostic DTO used by the doctor
+  trait family
+- replay persistence ownership crosses the crate boundary through
+  `RemoteReplayStore`, not through daemon-private or SQLite-private helpers
 
 Required architectural rules:
 - business logic must live in service modules, not in concrete adapters
@@ -196,11 +210,15 @@ Required architectural rules:
 
 Sealing posture per boundary:
 - `MailStore`: sealed by default
+- `MailStoreDoctor`: sealed by default
 - `TaskStore`: sealed by default
+- `TaskStoreDoctor`: sealed by default
 - `RosterStore`: sealed by default
+- `RosterStoreDoctor`: sealed by default
 - `InboxIngress`: sealed by default
 - `InboxExport`: sealed by default
 - `ConfigIngress`: sealed by default
+- `ConfigDoctor`: sealed by default
 - watcher/reconcile adapters: sealed by default
 - notifier-facing service adapters: sealed by default unless an ADR explicitly
   opens the boundary
@@ -231,6 +249,15 @@ Phase R redesign notes:
 - `atm-core` owns the immutable public runtime roster projection
   `ClaudeCodeTeamRoster`; that surface is derived from canonical ATM roster
   truth rather than from direct `config.json` reads
+- `atm-core` owns the shared subsystem doctor DTO family:
+  - `DoctorFinding`
+  - `MailStoreDoctorReport`
+  - `TaskStoreDoctorReport`
+  - `RosterStoreDoctorReport`
+  - `ConfigDoctorReport`
+  - `DaemonRuntimeDoctorReport`
+- the daemon may aggregate those subsystem reports and compare them for drift,
+  but it must not reimplement backend-specific diagnosis logic
 - `atm-core` team-admin surfaces must treat ATM roster rows as canonical team
   and member truth; retained Claude `config.json` remains projection/output
   state plus explicit `doctor` comparison input, not a second team-admin

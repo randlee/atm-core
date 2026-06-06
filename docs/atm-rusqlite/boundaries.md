@@ -9,11 +9,17 @@ Current design assumption:
 - runtime composition must go through `atm-core` boundary traits/facades
 - client crates such as `atm`, `atm-graft`, and future harness-specific clients
   must not depend on this crate directly
+- after `AA.5`, `atm-daemon` is forbidden again as a direct dependent of the
+  SQLite assembly, store, and shared-db state-root records; daemon callers
+  reach SQLite only through `atm-runtime`
 
 Canonical machine-readable boundary sources:
 - [`boundaries/atm-rusqlite/mail-store-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-sqlite.toml)
+- [`boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml)
 - [`boundaries/atm-rusqlite/task-store-sqlite.toml`](../../boundaries/atm-rusqlite/task-store-sqlite.toml)
+- [`boundaries/atm-rusqlite/task-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/task-store-doctor-sqlite.toml)
 - [`boundaries/atm-rusqlite/roster-store-sqlite.toml`](../../boundaries/atm-rusqlite/roster-store-sqlite.toml)
+- [`boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml`](../../boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml)
 - [`boundaries/atm-rusqlite/sqlite-boundary-assembly.toml`](../../boundaries/atm-rusqlite/sqlite-boundary-assembly.toml)
 - [`boundaries/atm-rusqlite/shared-db.toml`](../../boundaries/atm-rusqlite/shared-db.toml)
 
@@ -28,6 +34,11 @@ review:
 
 These are not public boundary traits, but they are important private
 implementation surfaces for review.
+
+AA.5 relock note:
+- `cargo test --package atm-architecture` is the second enforcement layer that
+  detects policy widening and any reintroduced `atm-daemon -> atm-rusqlite`
+  code edge before review closure
 
 ## SqliteBoundaryAssembly
 
@@ -72,6 +83,15 @@ Notes:
 - Caller crates should know only the `MailStore` trait, never this concrete
   type.
 
+## SqliteMailStoreDoctorAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml](../../boundaries/atm-rusqlite/mail-store-doctor-sqlite.toml)
+
+Purpose:
+- Own the SQLite-backed implementation of the `MailStoreDoctor` diagnostics
+  contract.
+
 ## SqliteTaskStoreAdapter
 
 Purpose:
@@ -81,6 +101,15 @@ Notes:
 - Task persistence is not an approved SQLite schema line today.
 - The trait may remain upstream as a contract placeholder, but this crate must
   not grow or preserve an unapproved durable task schema.
+
+## SqliteTaskStoreDoctorAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-rusqlite/task-store-doctor-sqlite.toml](../../boundaries/atm-rusqlite/task-store-doctor-sqlite.toml)
+
+Purpose:
+- Own the SQLite-backed implementation of the `TaskStoreDoctor` diagnostics
+  contract.
 
 ## SqliteRosterStoreAdapter
 
@@ -97,3 +126,12 @@ Notes:
   - `model`
   - `metadata_json`
 - Durable roster truth must not carry daemon-owned `pid` continuity.
+
+## SqliteRosterStoreDoctorAdapter
+
+Canonical machine-readable boundary source:
+- [../../boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml](../../boundaries/atm-rusqlite/roster-store-doctor-sqlite.toml)
+
+Purpose:
+- Own the SQLite-backed implementation of the `RosterStoreDoctor` diagnostics
+  contract.

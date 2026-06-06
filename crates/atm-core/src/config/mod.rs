@@ -830,6 +830,25 @@ command = ["scripts/atm-nudge.sh", "{TEST_SENDER}"]
     }
 
     #[test]
+    fn load_config_does_not_fall_back_to_process_cwd() {
+        let root = unique_temp_dir("config-ancestor-chain");
+        fs::write(root.path().join(".atm.toml"), "").expect("root sentinel");
+        let nested = root.path().join("nested").join("cwd");
+        fs::create_dir_all(&nested).expect("nested cwd");
+
+        // find_config_path walks the explicit start path and is bounded by the
+        // root sentinel above, so process CWD must not participate.
+        let loaded = load_config(&nested).expect("config lookup should not fail");
+
+        if let Some(ref config) = loaded {
+            assert_eq!(
+                config.identity, None,
+                "config walk must not escape tempdir root; sentinel identity must stay None"
+            );
+        }
+    }
+
+    #[test]
     fn load_config_rejects_retired_post_send_hook_members_key() {
         let root = unique_temp_dir("retired-hook-members");
         fs::write(

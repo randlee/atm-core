@@ -1,6 +1,8 @@
 [workspace]
 members = [
+    "crates/atm-architecture",
     "crates/atm-core",
+    "crates/atm-runtime",
     "crates/atm-runtime-test-support",
     "crates/atm",
     "crates/atm-daemon-bootstrap",
@@ -31,6 +33,6 @@ tracing = "0.1"
 tracing-subscriber = "0.3"
 uuid = { version = "1", features = ["serde", "v4"] }
 cargo_metadata = "0.23"
-sc-observability = "1.1.0"
-sc-observability-types = "1.1.0"
+sc-observability = "1.2.0"
+sc-observability-types = "1.2.0"
 arc-swap = "1.7"

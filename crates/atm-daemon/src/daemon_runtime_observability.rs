@@ -14,7 +14,6 @@ type OutcomeLabel = sc_observability_types::OutcomeLabel;
 pub enum DaemonSubsystem {
     Bootstrap,
     Composition,
-    Sqlite,
     LocalIpcTransport,
     AdvisoryRuntime,
     NotificationRuntime,
@@ -33,7 +32,6 @@ impl DaemonSubsystem {
         match self {
             Self::Bootstrap => "bootstrap",
             Self::Composition => "composition",
-            Self::Sqlite => "sqlite",
             Self::LocalIpcTransport => "local_ipc_transport",
             Self::AdvisoryRuntime => "advisory_runtime",
             Self::NotificationRuntime => "notification_runtime",
@@ -146,6 +144,10 @@ pub trait DaemonRuntimeObservability:
     ) -> Result<(), AtmError>;
 
     /// Attempt one best-effort synchronous flush during daemon shutdown.
+    fn best_effort_preflush_blocking(&self) -> Result<(), AtmError>;
+
+    /// Attempt one best-effort synchronous flush + shutdown during daemon
+    /// shutdown finalization.
     fn best_effort_flush_blocking(&self) -> Result<(), AtmError>;
 }
 

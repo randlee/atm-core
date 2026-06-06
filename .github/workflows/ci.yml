@@ -36,6 +36,9 @@ jobs:
       - name: Install cargo-deny
         uses: taiki-e/install-action@cargo-deny
 
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@cargo-audit
+
       - name: Install cargo-shear
         uses: taiki-e/install-action@cargo-shear
 
@@ -50,6 +53,9 @@ jobs:
 
       - name: Run just lint
         run: just lint
+
+      - name: Run cargo audit
+        run: cargo audit
 
   fmt:
     name: Format check

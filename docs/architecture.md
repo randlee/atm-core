@@ -13,6 +13,7 @@ The current merged workspace contains:
 
 The daemon/runtime expansion adds:
 - `atm-daemon`: daemon runtime binary / transport host
+- `atm-runtime`: concrete runtime/store composition root
 - `atm-rusqlite`: first concrete SQLite store implementation
 
 The CLI stays thin. Product logic moves into `atm-core`.
@@ -95,14 +96,28 @@ Phase-AA simplification note:
   `atm-daemon`
 - the daemon remains in the product, but as a thin router rather than a
   concrete storage/runtime host
+- subsystem-specific diagnosis belongs behind subsystem-owned diagnostic traits
+  instead of daemon-local backend-aware helpers
+- top-level doctor code may aggregate subsystem reports and daemon-owned
+  runtime state, but must not reimplement backend-specific diagnosis logic
+- `MailStore`, `TaskStore`, and `RosterStore` remain the primary
+  storage-neutral capability traits
+- backend-specific implementations such as SQLite-backed and Claude-JSON-backed
+  adapters are allowed to satisfy that same behavior-named trait family
+- `AA.5` relocks the daemon-to-SQLite edge in both the runtime-composition and
+  SQLite boundary records, adds `crates/atm-architecture/` as the primary
+  code-driven merge gate as the sole second enforcement layer, and treats
+  policy widening as an architecture change rather than routine lint-data
+  churn
 
 ## 2. Crate Boundaries
 
-The post-Q product runtime is implemented by four crates:
+The post-Q product runtime is implemented by five crates:
 
 - `atm-core`
 - `atm`
 - `atm-daemon`
+- `atm-runtime`
 - `atm-rusqlite`
 
 Product-level boundary rules:
@@ -110,13 +125,17 @@ Product-level boundary rules:
 - `atm-core` owns ATM business logic and the strict I/O boundaries that the current SQLite/daemon architecture
   routes through a daemon runtime.
 - `atm` owns CLI parsing, dispatch, rendering, and bootstrap.
-- `atm-daemon` owns runtime composition, transport adapters, singleton
-  enforcement, and live-status runtime state.
+- `atm-daemon` owns transport adapters, singleton enforcement, live-status
+  runtime state, request routing, and daemon-owned runtime projection.
+- `atm-runtime` owns concrete runtime/store composition and storage-neutral
+  doctor/runtime assembly for daemon and direct CLI doctor callers.
 - `atm-rusqlite` owns the first concrete SQLite implementation of the durable
   store boundaries.
 - `atm-core` must not own clap or terminal-formatting concerns.
 - `atm` must not own mailbox, workflow, log-query, or doctor business logic.
 - `atm-daemon` must not become a second business-logic crate.
+- `atm-runtime` must remain a thin composition crate rather than a second
+  daemon or workflow host.
 - `atm-rusqlite` must not absorb workflow or command logic; it implements store
   contracts only.
 - crate-local boundary records in `docs/<crate>/boundaries.md` are the
@@ -197,7 +216,12 @@ Current Phase R boundary direction:
   - `atm` remains the CLI composition root
   - `atm-runtime` becomes the concrete runtime/store composition root
   - `atm-daemon` consumes storage-neutral runtime inputs and stops
-    constructing SQLite-backed adapters directly
+    constructing SQLite-backed adapters directly in production composition
+  - relocked boundary records forbid a direct `atm-daemon -> atm-rusqlite`
+    edge; any reintroduction must fail the Rust
+    `crates/atm-architecture/` dependency guard (`cargo test --package
+    atm-architecture`), which is the sole code-driven boundary enforcement
+    layer
 
 Current Phase R lint partition direction:
 - extend the existing `sc-portability` analyzer for reusable platform-gating
@@ -1152,6 +1176,11 @@ Public entrypoint:
 - environment override visibility
 - current team member roster from `config.json`
 - observability health
+- aggregate-only subsystem doctor output from:
+  - `MailStoreDoctor`
+  - `TaskStoreDoctor`
+  - `RosterStoreDoctor`
+  - `ConfigDoctor`
 
 `DoctorFinding` contains:
 - severity
@@ -1162,6 +1191,10 @@ Public entrypoint:
 The report model should reuse the current doctor command’s severity/finding
 structure where useful, but in the current SQLite/daemon architecture it must include
 daemon/runtime checks rather than assuming a daemon-free local-only model.
+Daemon/CLI orchestration stays aggregate-only: those top-level paths may
+compose the `MailStoreDoctor`, `TaskStoreDoctor`, `RosterStoreDoctor`, and
+`ConfigDoctor` reports, but they must not reimplement backend-specific store
+investigation logic.
 
 Roster output rules:
 - show all current `config.json` members in doctor output
@@ -1454,6 +1487,11 @@ Initial-release boundary rulings:
   - `Unavailable`
 - public ATM observability projections must not expose raw
   `serde_json::Value` / `Map<String, Value>` directly
+- the concrete `sc-observability` adapter is queue-backed as of Phase `AA.6`;
+  ATM uses `Logger::log()` for blocking admission, treats `flush()` /
+  `shutdown()` as the only durability barriers, and projects queue/writer/
+  maintenance state through ATM-owned health detail rather than leaking raw
+  shared types across the public boundary
 
 ### 14.2 Shared Crate Usage Rules
 
@@ -2827,19 +2865,18 @@ Architectural rules:
 explicit daemon health interface.
 
 Architectural rules:
-- CLI doctor code queries daemon/runtime state through one explicit request /
+- CLI doctor code may answer direct local config/store checks without daemon
+  routing, but daemon-owned runtime state still crosses one explicit request /
   response boundary
 - the daemon owns collection of runtime-only health such as:
   - heartbeat-driven runtime member state
   - singleton ownership state
   - live status-cache health
   - ingest backlog / degraded-ingest state
-  - SQLite readiness/openability as observed by the runtime
 - the runtime-health DTO returned across that boundary must carry:
   - liveness
   - readiness
   - singleton-owner pid when known
-  - SQLite-ready state
   - degraded-ingest state
   - aggregate active/idle/offline/unknown member counts
 - CLI code must not inspect private daemon state directly to synthesize health
@@ -2850,9 +2887,9 @@ Phase AA target doctor split:
   daemon-owned runtime state
 - direct local doctor checks that only require config or store access do not
   need daemon routing
-- SQLite/store readiness will be removed from daemon-owned health collection in
-  `AA.3`, with `sqlite_ready` and `sqlite_detail` deleted per
-  `docs/phase-AA/sprint-AA3.md`
+- SQLite/store readiness has been removed from daemon-owned health collection
+  in `AA.3`; `RuntimeStatusSnapshot` carries no store-specific readiness
+  fields
 - store readiness then lives in direct local diagnostics or other subsystem
   doctor reports assembled above the backend, not in the daemon runtime DTO
 

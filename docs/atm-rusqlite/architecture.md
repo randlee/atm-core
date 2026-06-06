@@ -67,6 +67,9 @@ Follow-up work:
   helpers remain private implementation details.
 - public callers depend on `atm-core` traits such as `MailStore`, `TaskStore`,
   and `RosterStore`, not on concrete SQLite structs.
+- Phase AA pairs those capability traits with subsystem-owned doctor traits so
+  SQLite-specific diagnosis stays in this crate instead of moving upward into
+  daemon or CLI code.
 - schema changes are architecture changes and require explicit user approval
   plus matching doc updates before they land.
 - routine database failure handling uses typed `Result`/error-enum paths rather
@@ -85,6 +88,12 @@ public boundary shape must remain split:
 - `RosterStore`
 - `TaskStore` may remain an upstream trait, but no SQLite task schema is
   approved until the task model is explicitly designed.
+- the paired doctor contract owns:
+  - path resolution
+  - openability
+  - schema/bootstrap/migration readiness
+  - bounded store findings
+  - bounded task-store findings when the same SQLite root owns both domains
 
 Within `MailStore`, the current approved durable shape is:
 - `mail_messages` for immutable/authored message content

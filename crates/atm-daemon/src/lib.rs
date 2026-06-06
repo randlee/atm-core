@@ -22,9 +22,9 @@ mod peer_transport;
 mod projection_write_journal;
 mod reconcile_runtime;
 mod runtime_health;
+mod runtime_sqlite_observer;
 mod runtime_status_cache;
 mod shutdown_beacon;
-mod sqlite_observability;
 #[cfg(test)]
 mod test_observability;
 #[cfg(test)]
@@ -43,16 +43,13 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use atm_core::error::{AtmError, AtmErrorCode};
-use atm_rusqlite::SqliteBoundaryAssembly;
 pub use daemon_runtime_observability::{
     DaemonEvent, DaemonRuntimeObservability, DaemonSubsystem, TeamScope,
 };
 
 pub(crate) use daemon_runtime_observability::SubsystemObservability;
-
-pub(crate) use atm_rusqlite::RemoteReplayStateRecord;
 pub(crate) use local_ipc_transport::LocalIpcServerTransportAdapter;
-pub(crate) use peer_transport::{PeerTransportRuntime, RemoteReplayStore};
+pub(crate) use peer_transport::PeerTransportRuntime;
 
 pub(crate) const GRACEFUL_DRAIN_DEADLINE: Duration = Duration::from_secs(2);
 pub(crate) const FORCE_CANCEL_DEADLINE: Duration = Duration::from_secs(3);
@@ -109,70 +106,6 @@ impl AtmHomeDir {
     pub(crate) fn from_path_for_test(path: PathBuf) -> Self {
         Self(path)
     }
-}
-
-#[derive(Debug, Clone)]
-struct SqliteRemoteReplayStore {
-    assembly: Arc<SqliteBoundaryAssembly>,
-}
-
-impl SqliteRemoteReplayStore {
-    #[cfg(test)]
-    fn from_path(db_path: PathBuf) -> Result<Self, AtmError> {
-        Self::from_path_with_observability(db_path, Arc::new(atm_rusqlite::NullSqliteObservability))
-    }
-
-    fn from_path_with_observability(
-        db_path: PathBuf,
-        observability: Arc<dyn atm_rusqlite::SqliteObservability>,
-    ) -> Result<Self, AtmError> {
-        Ok(Self {
-            assembly: Arc::new(SqliteBoundaryAssembly::new_with_observability(
-                db_path,
-                observability,
-            )?),
-        })
-    }
-}
-
-impl RemoteReplayStore for SqliteRemoteReplayStore {
-    fn enqueue(&self, record: RemoteReplayStateRecord) -> Result<(), AtmError> {
-        self.assembly.record_remote_replay_state(record)
-    }
-
-    fn load_all(&self) -> Result<Vec<RemoteReplayStateRecord>, AtmError> {
-        self.assembly.load_remote_replay_states()
-    }
-
-    fn delete(
-        &self,
-        team: &atm_core::types::TeamName,
-        agent: &atm_core::types::AgentName,
-        message_key: &atm_core::boundary::MessageKey,
-    ) -> Result<(), AtmError> {
-        self.assembly
-            .delete_remote_replay_state(team, agent, message_key)
-    }
-
-    fn purge_expired(&self, now: atm_core::types::IsoTimestamp) -> Result<usize, AtmError> {
-        self.assembly.purge_expired_remote_replay_states(now)
-    }
-}
-
-#[cfg(test)]
-pub(crate) fn sqlite_remote_replay_store_from_path(
-    db_path: PathBuf,
-) -> Result<Arc<dyn RemoteReplayStore>, AtmError> {
-    Ok(Arc::new(SqliteRemoteReplayStore::from_path(db_path)?))
-}
-
-pub(crate) fn sqlite_remote_replay_store_from_path_with_observability(
-    db_path: PathBuf,
-    observability: Arc<dyn atm_rusqlite::SqliteObservability>,
-) -> Result<Arc<dyn RemoteReplayStore>, AtmError> {
-    Ok(Arc::new(
-        SqliteRemoteReplayStore::from_path_with_observability(db_path, observability)?,
-    ))
 }
 
 /// Run the daemon entrypoint with the currently assembled runtime composition.

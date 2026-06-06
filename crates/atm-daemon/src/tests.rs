@@ -27,9 +27,9 @@ use atm_core::send::{SendMessageSource, SendRequest, send_mail_with_runtime};
 use atm_core::test_support::EnvGuard;
 use atm_core::test_support::ROLE_TEAM_LEAD;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
-use atm_runtime_test_support::SQLITE_RUNTIME_PATH_ENV;
-use atm_runtime_test_support::install_sqlite_retained_runtime_factory;
-use atm_rusqlite::assemble_boundary;
+use atm_runtime_test_support::{
+    SQLITE_RUNTIME_PATH_ENV, install_sqlite_retained_runtime_factory, open_sqlite_boundary,
+};
 use std::io::Write;
 use std::sync::Arc;
 use std::sync::OnceLock;
@@ -73,6 +73,10 @@ fn local_ipc_runtime_round_trips_doctor_requests_on_shared_transport() {
     let db_path = tempdir.path().join("mail.db");
     let _env = EnvGuard::set_many([
         ("ATM_HOME", Some(atm_home.to_str().expect("utf8 atm home"))),
+        (
+            "ATM_CONFIG_HOME",
+            Some(tempdir.path().to_str().expect("utf8 config home")),
+        ),
         (
             SQLITE_RUNTIME_PATH_ENV,
             Some(db_path.to_str().expect("utf8 sqlite db path")),
@@ -310,7 +314,7 @@ fn windows_local_ipc_runtime_terminate_finishes_within_deadline() {
 }
 
 fn install_test_roster(db_path: &std::path::Path, members: &[&str]) {
-    let assembly = assemble_boundary(db_path).expect("sqlite boundary");
+    let assembly = open_sqlite_boundary(db_path).expect("sqlite boundary");
     assembly
         .roster_store()
         .replace_roster(atm_core::boundary::RosterStoreReplaceRosterRequest {
@@ -386,7 +390,7 @@ fn production_runtime_installs_daemon_notification_sink() {
         SubsystemObservability::disabled(crate::DaemonSubsystem::NotificationRuntime),
     ));
     sink.start().expect("start notification sink");
-    let assembly = assemble_boundary(&db_path).expect("sqlite boundary");
+    let assembly = open_sqlite_boundary(&db_path).expect("sqlite boundary");
     let runtime = build_production_runtime(
         assembly.mail_store_arc(),
         assembly.task_store_arc(),
@@ -859,7 +863,7 @@ fn identity_conflict_insert_evicts_oldest_conflict_when_cache_is_full() {
 
 #[test]
 #[serial_test::serial(env)]
-fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
+fn doctor_projects_degraded_runtime_when_member_identity_conflicts_exist() {
     install_retained_runtime_factory();
     let tempdir = TempDir::new().expect("tempdir");
     let atm_home = tempdir.path().join("atm-home");
@@ -876,7 +880,13 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
     let status_cache = RuntimeStatusCache::new();
     let dispatcher =
         DaemonRequestDispatcher::new_for_test(atm_home.clone(), status_cache.clone(), db_path);
-    status_cache.mark_sqlite_unavailable();
+    status_cache.insert_member_for_test(
+        test_team().clone(),
+        ROLE_TEAM_LEAD.parse().expect("member"),
+        Some(std::process::id()),
+        RuntimeMemberState::IdentityConflict,
+        Some(IsoTimestamp::now()),
+    );
 
     let doctor = dispatcher
         .dispatch(RequestEnvelope::Doctor(atm_core::doctor::DoctorQuery {
@@ -895,10 +905,12 @@ fn doctor_projects_degraded_runtime_when_sqlite_is_unavailable() {
                 .findings
                 .iter()
                 .find(|finding| {
-                    finding.code == atm_core::error_codes::AtmErrorCode::WarningSqliteHealthDegraded
+                    finding.code
+                        == atm_core::error_codes::AtmErrorCode::WarningSendAlertStateDegraded
                 })
                 .expect("runtime finding");
-            assert!(finding.message.contains("sqlite_ready=false"));
+            assert!(finding.message.contains("owner_pid="));
+            assert!(finding.message.contains("unknown=1"));
         }
         other => panic!("expected doctor response, got {other:?}"),
     }
@@ -956,7 +968,7 @@ fn doctor_projects_unavailable_runtime_when_all_members_are_offline() {
                 })
                 .expect("runtime finding");
             assert!(finding.message.contains("owner_pid="));
-            assert!(finding.message.contains("sqlite_ready=true"));
+            assert!(finding.message.contains("degraded_ingest=false"));
         }
         other => panic!("expected doctor response, got {other:?}"),
     }

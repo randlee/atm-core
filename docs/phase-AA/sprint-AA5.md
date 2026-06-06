@@ -4,9 +4,9 @@
 plan_type: sprint_plan
 phase: AA
 sprint: AA.5
-worktree: ../atm-core-worktrees/feature/pAA-s5-boundary-relock-and-permanent-enforcement
-branch: feature/pAA-s5-boundary-relock-and-permanent-enforcement
-status: planned
+worktree: /Users/randlee/Documents/github/atm-core-worktrees/feature/pAA-s7-atm-architecture-crate
+branch: feature/pAA-s7-atm-architecture-crate
+status: complete
 estimated_scope: medium
 ```
 
@@ -40,6 +40,7 @@ code and in review workflow.
 - `boundaries/atm-rusqlite/mail-store-sqlite.toml`
 - `boundaries/atm-rusqlite/roster-store-sqlite.toml`
 - `boundaries/atm-rusqlite/task-store-sqlite.toml`
+- `boundaries/atm-rusqlite/shared-db.toml`
 
 ## Prerequisites
 
@@ -63,16 +64,21 @@ code and in review workflow.
   - restore explicit forbidden edges
   - restore any visibility/constructor privacy that was widened only to permit
     daemon-side SQLite assembly
+  - include the crate-private `SharedDbStateRoot` record in the relock so no
+    daemon allowlist survives on a SQLite state-root seam
   - make the SQLite boundary TOMLs agree with
     `boundaries/atm-runtime/runtime-composition.toml` on the forbidden
     `atm-daemon -> atm-rusqlite` edge so no policy contradiction remains after
     relock
 
-- A second repository-owned architecture guard exists. The minimum executable
-  surface is frozen now:
-  - `scripts/check-boundary-guard.py`
-  - `scripts/test_boundary_guard.py`
-  - `.claude/agents/boundary-guard.md`
+- A second repository-owned architecture guard exists. The executable surfaces
+  are frozen now:
+  - primary Rust merge gate:
+    - `crates/atm-architecture/tests/boundary_enforcement.rs`
+  - review workflow integration:
+    - `.claude/agents/boundary-guard.md`
+  - the Rust crate replaces the now-deleted Python boundary scripts as the
+    sole code-driven architecture guard for this sprint line
 
 - The second guard enforces both code-edge and policy-edge checks. The minimum
   machine-checked contract is frozen now:
@@ -86,6 +92,13 @@ code and in review workflow.
         "field": "allowed_dependents",
         "change": "added atm-daemon",
         "requires_approval": true
+      }
+    ],
+    "violations": [
+      {
+        "category": "FORBIDDEN-EDGE | POLICY-RELAXATION",
+        "detail": "clear statement of the boundary problem",
+        "ref": "path:line"
       }
     ]
   }
@@ -136,7 +149,8 @@ actually clean will either fail immediately or produce more policy cheating.
   boundaries
 - `boundaries/atm-runtime/runtime-composition.toml` and the SQLite boundary
   TOMLs agree on the same forbidden daemon-to-SQLite edge after relock
-- a second architecture-enforcement layer exists beyond the TOML lint
+- a second architecture-enforcement layer exists beyond the TOML lint, with
+  `crates/atm-architecture/` as the canonical Rust guard
 - boundary-policy widening is treated as an architecture change, not routine
   config churn
 - `.claude/agents/boundary-guard.md` exists, `boundary-guard` fires at the two
@@ -150,12 +164,11 @@ actually clean will either fail immediately or produce more policy cheating.
 
 ## Required Validation
 
-- `scripts/check-boundary-guard.py` and `scripts/test_boundary_guard.py` are
-  AA.5 deliverables; run these checks at end-of-sprint after implementation
-  lands
+- `crates/atm-architecture/` is the AA.5 boundary-enforcement deliverable and
+  replaces the deleted Python boundary scripts; run this check at end-of-sprint
+  after implementation lands
 - `just lint boundaries`
-- `python3 scripts/check-boundary-guard.py --base-ref origin/integrate/phase-AA`
-- `python3 -m unittest scripts.test_boundary_guard`
+- `cargo test --package atm-architecture`
 - `cargo test --workspace`
 - `python3 .just/run_lint.py all`
 - `git diff --check`

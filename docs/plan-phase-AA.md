@@ -53,6 +53,8 @@ Current violated state that `Phase AA` must delete:
 Authoritative planning support artifacts:
 - `docs/phase-AA/readiness.md`
 - `docs/phase-AA/issues.md`
+- `docs/phase-AA/daemon-state-machines.md`
+- `docs/phase-AA/daemon-sqlite-leak-ledger.md`
 - `.claude/agents/boundary-guard.md`
 
 ## Why Phase AA Exists
@@ -226,6 +228,12 @@ Execution worktree:
 
 ### AA.2 `atm-runtime` Skeleton And Composition Transfer
 
+Status:
+- complete on `feature/pAA-s2-atm-runtime-composition-transfer`
+- `atm-runtime` now owns concrete production runtime/store assembly
+- the target-state runtime boundary is frozen in
+  `boundaries/atm-runtime/runtime-composition.toml`
+
 Purpose:
 - add `crates/atm-runtime`
 - move concrete SQLite construction and production runtime wiring there
@@ -276,6 +284,8 @@ Purpose:
   reviews for any boundary loosening before closure
 - close the temporary `AA.2` to `AA.4` transition window by making the
   SQLite boundary TOMLs agree with `runtime-composition.toml`
+- include the `SharedDbStateRoot` record in that relock so no daemon allowlist
+  survives on a crate-private SQLite state-root seam
 
 Execution branch:
 - `feature/pAA-s5-boundary-relock-and-permanent-enforcement`
@@ -284,6 +294,12 @@ Execution worktree:
 - `../atm-core-worktrees/feature/pAA-s5-boundary-relock-and-permanent-enforcement`
 
 ### AA.6 `sc-observability` 1.2.0 Upgrade
+
+Status:
+- complete on `feature/pAA-s6-obs-upgrade`
+- the concrete CLI and daemon adapters now use queue-backed `Logger::log()`
+  admission, the retained-log policy uses `writer_shutdown_timeout`, and ATM
+  health projection surfaces queue/writer/maintenance state intentionally
 
 Purpose:
 - upgrade `sc-observability` / `sc-observability-types` from `1.1.0` to

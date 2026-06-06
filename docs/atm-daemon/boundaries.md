@@ -7,6 +7,10 @@ Current design assumption:
 - `atm-daemon` is the production runtime composition root
 - `allowed_dependents: []` means no external crate should depend on these
   daemon-private concrete adapters
+- after `AA.5`, `atm-daemon` reaches SQLite-backed stores only through
+  `atm-runtime`; a direct `atm-daemon -> atm-rusqlite` dependency is a
+  boundary violation guarded by both the boundary TOMLs and
+  `cargo test --package atm-architecture`
 - Runtime test doubles now exist for the watch/reconcile/notifier lanes so
   boundary tests can exercise the daemon-owned runtimes without bypassing the
   declared contracts.

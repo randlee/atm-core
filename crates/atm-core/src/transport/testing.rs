@@ -84,14 +84,14 @@ impl ClientTransport for LoopbackClientTransport {
             RequestEnvelope::List(query) => {
                 list::list_mail(query, self.observability.as_ref()).map(ResponseEnvelope::List)
             }
-            RequestEnvelope::Receive(query) => {
-                read::read_mail(query, self.observability.as_ref()).map(ResponseEnvelope::Receive)
-            }
+            RequestEnvelope::Receive(query) => read::read_mail(query, self.observability.as_ref())
+                .map(|outcome| ResponseEnvelope::Receive(Box::new(outcome))),
             RequestEnvelope::Clear(query) => {
                 clear::clear_mail(query, self.observability.as_ref()).map(ResponseEnvelope::Clear)
             }
             RequestEnvelope::Doctor(query) => {
-                doctor::run_doctor(query, self.observability.as_ref()).map(ResponseEnvelope::Doctor)
+                doctor::run_doctor(query, self.observability.as_ref())
+                    .map(|report| ResponseEnvelope::Doctor(Box::new(report)))
             }
             RequestEnvelope::AdvisoryRegister(_)
             | RequestEnvelope::AdvisoryUnregister(_)

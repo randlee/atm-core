@@ -9,12 +9,14 @@ mod shared_db;
 mod writer;
 
 use atm_core::boundary;
+pub use atm_core::boundary::RemoteReplayStateRecord;
 use atm_core::error::AtmError;
+#[cfg(test)]
+use atm_core::error::AtmErrorCode;
 use atm_core::types::{AgentName, IsoTimestamp, TeamName};
 pub use boundary_assembly::{
-    RemoteReplayStateRecord, SqliteBoundaryAssembly, assemble_boundary,
-    assemble_boundary_with_observability, assemble_default_boundary,
-    assemble_default_boundary_with_observability, default_local_runtime,
+    SqliteBoundaryAssembly, assemble_boundary, assemble_boundary_with_observability,
+    assemble_default_boundary, assemble_default_boundary_with_observability, default_local_runtime,
 };
 use mailbox_metadata::{query_mailbox_metadata_counts, query_mailbox_metadata_rows};
 pub use observability::{
@@ -474,6 +476,15 @@ impl boundary::MailStore for SqliteMailStore {
     }
 }
 
+impl boundary::MailStoreDoctor for SqliteMailStore {
+    fn inspect_mail_store(&self) -> Result<boundary::MailStoreDoctorReport, AtmError> {
+        self.db.with_connection(|_| Ok(()))?;
+        Ok(boundary::MailStoreDoctorReport {
+            findings: Vec::new(),
+        })
+    }
+}
+
 #[derive(Debug)]
 struct SqliteTaskStore {
     db: Arc<SharedDb>,
@@ -792,6 +803,15 @@ impl boundary::TaskStore for SqliteTaskStore {
         }
 
         Ok(boundary::TaskStoreQueryTaskMetadataResponse { records })
+    }
+}
+
+impl boundary::TaskStoreDoctor for SqliteTaskStore {
+    fn inspect_task_store(&self) -> Result<boundary::TaskStoreDoctorReport, AtmError> {
+        self.db.with_connection(|_| Ok(()))?;
+        Ok(boundary::TaskStoreDoctorReport {
+            findings: Vec::new(),
+        })
     }
 }
 
@@ -2358,7 +2378,7 @@ CREATE UNIQUE INDEX uq_mail_messages_legacy_identity
             ),
             attempt_count: 1,
             last_attempt_at: Some(now),
-            last_error: Some("ATM_DAEMON_UNAVAILABLE".to_string()),
+            last_error: Some(AtmErrorCode::DaemonUnavailable),
         };
 
         assembly
