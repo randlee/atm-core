@@ -245,9 +245,10 @@ Status summary:
   pre-production SQLite compatibility scaffolding such as `legacy_message_id`
   is no longer part of the active 1.2 runtime/bootstrap line, and surviving
   references remain only as historical inventory/ADR context.
-- `AA.12` will harden malformed Claude inbox recovery so one bad fragment does
-  not hide recoverable valid messages, and it will record an ADR if the
-  fail-soft policy changes the shared-inbox boundary contract.
+- `AA.12` (`feature/pAA-s12-malformed-claude-inbox-recovery`) is complete:
+  malformed Claude inbox reads now salvage segmentable valid messages, emit
+  explicit degraded warnings for localized bad fragments, and keep rewrite
+  paths fail-closed unless an explicit repair/rebuild action is chosen.
 
 Goal:
 - move concrete SQLite/runtime assembly to `atm-runtime`

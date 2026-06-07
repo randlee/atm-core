@@ -44,7 +44,7 @@ pub(crate) fn append_compat_mailbox_message(
     let export_policy = export_policy_for_path(path)?;
     if inbox_file_format(path) == InboxFileFormat::ClaudeJsonArray {
         let existing_messages = if path.exists() {
-            crate::mailbox::load_compat_mailbox_messages(path)?
+            crate::mailbox::load_compat_mailbox_messages_strict(path)?
         } else {
             Vec::new()
         };
@@ -68,7 +68,7 @@ pub(crate) fn append_compat_mailbox_message_set(
     validate_recovered_message_set(messages)?;
     validate_compat_mailbox_file_size(path)?;
     let mut existing_messages = if path.exists() {
-        crate::mailbox::load_compat_mailbox_messages(path)?
+        crate::mailbox::load_compat_mailbox_messages_strict(path)?
     } else {
         Vec::new()
     };

@@ -128,3 +128,5 @@ Rules:
 - inbound shared-inbox records that still carry `metadata.atm` for backward
   compatibility must be tolerated on read, ignored for active machine-state
   behavior, and must not be promoted back into the forward-write contract
+- malformed `metadata.atm` fragments on an otherwise segmentable shared inbox
+  message must not hide that message from the read surface

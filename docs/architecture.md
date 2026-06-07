@@ -1409,12 +1409,16 @@ When an inbox file is encountered:
    - Required message fields are missing or syntactically invalid
    - File was partially written or contains mixed/corrupt encodings
    - Explicitly unsupported mailbox format
-   - Action: emit diagnostic, optionally attempt recovery of salvageable records, rebuild if safe
+   - Action: emit diagnostic, salvage segmentable valid records with explicit
+     degraded warnings when possible, rebuild if safe only through the
+     repair/rebuild seam
 
 **Key architectural rule:**
 - The legal current Claude inbox JSON-array shape must always stay on the normal primary path and never require repair/rebuild
 - Repair/rebuild does not apply to healthy, well-formed inbox state that conforms to the documented schema
 - If the current primary path still classifies healthy mailboxes as requiring repair, that is a bug in the path classification logic (see `compat_inbox_uses_legacy_array_format()` and related guards)
+- Fail-soft recovery is a read-path rule only; normal send/ack rewrite paths
+  must still fail closed on malformed current Claude inbox arrays
 
 Repair guidance for operators is documented separately in [`persisted-data-repair.md`](./persisted-data-repair.md).
 
@@ -2478,6 +2482,9 @@ Architectural rule:
 - repair/rebuild is reserved for malformed JSON, partial writes, or explicitly
   unsupported mailbox content rather than for the legal current `.json` array
   shape
+- current Claude `.json` reads salvage segmentable valid message objects from
+  malformed arrays and emit explicit degraded warnings for localized bad
+  fragments; only non-segmentable root corruption remains terminal
 - `RetainedServiceRuntime::rebuild_compat_inbox_projection(...)` is the only
   approved full re-export seam for repair/rebuild and must not run on the
   normal send or ack path

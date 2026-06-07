@@ -19,7 +19,7 @@ AA.0 freezes this inventory as the starting point for the execution line.
 | `AA-ISSUE-006` | `closed` | schema docs, Pydantic models, and live historical samples are not frozen together as one current Claude Code inbox contract. | `AA.8` |
 | `AA-ISSUE-007` | `closed` | active docs/tests no longer present historical ATM-owned inbox JSON variants as the primary contract; 1.2 now treats them as read-compatible derivatives only while still accepting legal additive inputs on read. | `AA.10` |
 | `AA-ISSUE-008` | `closed` | pre-production SQLite identity compatibility scaffolding such as `legacy_message_id` no longer remains on the active runtime line; surviving mentions are historical inventory only. | `AA.11` |
-| `AA-ISSUE-009` | `open` | one malformed Claude inbox fragment can still hide unrelated valid messages or surface an opaque parser failure instead of a degraded salvage result. | `AA.12` |
+| `AA-ISSUE-009` | `closed` | malformed Claude inbox fragments no longer hide unrelated valid messages when the valid objects remain segmentable; the read path now emits degraded salvage items instead of opaque whole-inbox failure for localized corruption. | `AA.12` |
 
 ## Inventory Rules
 
