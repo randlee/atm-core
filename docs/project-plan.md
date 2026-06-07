@@ -222,6 +222,17 @@ Status summary:
   architecture gate by landing `crates/atm-architecture/`, removing the
   superseded Python boundary scripts, and making `cargo test -p atm-architecture`
   the sole code-driven boundary-enforcement check. Status: `complete`.
+- `AA.8` will freeze the current Claude Code inbox JSON contract from real
+  `team-lead -> quality-mgr` samples and correct any docs/models/tests that
+  still classify that current array-backed inbox shape as legacy.
+- `AA.9` will repair the retained runtime so the current Claude inbox JSON file
+  shape is the working primary compatibility path rather than a degraded
+  legacy-only path.
+- `AA.10` will remove historical ATM-owned inbox JSON schema support from the
+  active 1.2 contract, including top-level ATM machine fields and
+  `metadata.atm.*` compatibility promises.
+- `AA.11` will delete pre-production SQLite compatibility scaffolding such as
+  `legacy_message_id` unless an explicit user-approved exception survives.
 
 Goal:
 - move concrete SQLite/runtime assembly to `atm-runtime`
@@ -248,6 +259,10 @@ Sprint line:
 - `AA.5` `feature/pAA-s5-boundary-relock-and-permanent-enforcement`
 - `AA.6` `feature/pAA-s6-obs-upgrade`
 - `AA.7` `feature/pAA-s7-atm-architecture-crate`
+- `AA.8` `feature/pAA-s8-claude-schema-contract`
+- `AA.9` `feature/pAA-s9-claude-inbox-primary-path`
+- `AA.10` `feature/pAA-s10-remove-historical-atm-json`
+- `AA.11` `feature/pAA-s11-delete-sqlite-legacy-compat`
 
 Acceptance:
 - Phase AA exit criteria are satisfied only through

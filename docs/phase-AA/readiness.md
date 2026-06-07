@@ -20,6 +20,10 @@ Authoritative supporting inventory:
 | `AA.5` | `complete` | `feature/pAA-s5-boundary-relock-and-permanent-enforcement` | `../atm-core-worktrees/feature/pAA-s5-boundary-relock-and-permanent-enforcement` | daemon-to-SQLite edge is forbidden again, all boundary TOMLs agree on that policy, and a second enforcement layer exists beyond TOML lint |
 | `AA.6` | `complete` | `feature/pAA-s6-obs-upgrade` | `../atm-core-worktrees/feature/pAA-s6-obs-upgrade` | ATM builds and validates on `sc-observability` / `sc-observability-types` `1.2.0` with the queue-backed logger API, retained-log policy field migration, and updated health projection |
 | `AA.7` | `complete` | `feature/pAA-s7-atm-architecture-crate` | `../atm-core-worktrees/feature/pAA-s7-atm-architecture-crate` | Rust boundary enforcement crate lands, Python boundary scripts are removed, and `cargo test -p atm-architecture` becomes the sole code-driven boundary guard |
+| `AA.8` | `planned` | `feature/pAA-s8-claude-schema-contract` | `../atm-core-worktrees/feature/pAA-s8-claude-schema-contract` | current Claude Code inbox schema is frozen from real `team-lead -> quality-mgr` samples and all docs/models stop calling the current array-backed inbox shape legacy |
+| `AA.9` | `planned` | `feature/pAA-s9-claude-inbox-primary-path` | `../atm-core-worktrees/feature/pAA-s9-claude-inbox-primary-path` | the normal retained append path treats the current Claude inbox file shape as supported primary behavior rather than degraded legacy behavior |
+| `AA.10` | `planned` | `feature/pAA-s10-remove-historical-atm-json` | `../atm-core-worktrees/feature/pAA-s10-remove-historical-atm-json` | historical ATM-owned JSON schema variants are removed from the active 1.2 contract and no live doc/runtime path promises their support |
+| `AA.11` | `planned` | `feature/pAA-s11-delete-sqlite-legacy-compat` | `../atm-core-worktrees/feature/pAA-s11-delete-sqlite-legacy-compat` | pre-production SQLite compatibility scaffolding such as `legacy_message_id` support is removed from the active 1.2 runtime line unless explicitly reapproved |
 
 ## Phase Exit Criteria
 
@@ -42,5 +46,16 @@ Authoritative supporting inventory:
 - ATM has completed the `sc-observability` / `sc-observability-types` `1.2.0`
   upgrade and no remaining migration blocker from the deprecated
   `Logger::emit()` path or the old retained-log policy field surface remains
+- the current Claude Code inbox JSON schema is the explicitly documented
+  primary shared inbox contract and is proven against real fixture-backed
+  `team-lead -> quality-mgr` samples
+- the normal retained runtime path does not classify the current array-backed
+  Claude inbox file shape as legacy or degraded-only behavior
+- no active 1.2 documentation or runtime path promises support for historical
+  ATM-owned inbox JSON schema variants such as top-level ATM fields or
+  `metadata.atm.*`
+- no active 1.2 runtime path depends on pre-production SQLite compatibility
+  scaffolding such as `legacy_message_id`, unless an explicit exception is
+  recorded in this readiness file
 - `docs/phase-AA/issues.md` has no open issue whose planned closure sprint is
   still incomplete

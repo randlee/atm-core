@@ -316,6 +316,84 @@ Execution branch:
 Execution worktree:
 - `../atm-core-worktrees/feature/pAA-s6-obs-upgrade`
 
+### AA.7 Rust Boundary Enforcement Crate
+
+Status:
+- complete on `feature/pAA-s7-atm-architecture-crate`
+- `crates/atm-architecture/` is now the visible code-driven boundary guard
+- the superseded Python boundary scripts were removed from the active line
+
+Purpose:
+- make the second architecture-enforcement layer visible in the workspace
+- replace the deleted Python boundary scripts with the Rust crate as the
+  required code-driven guard
+- freeze `cargo test --package atm-architecture` as the merge-gate command
+
+Execution branch:
+- `feature/pAA-s7-atm-architecture-crate`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s7-atm-architecture-crate`
+
+### AA.8 Claude Code Inbox Schema Contract Alignment
+
+Purpose:
+- freeze the current Claude Code inbox JSON schema from real
+  `team-lead -> quality-mgr` samples
+- align docs, schema models, and tests to that current contract
+- remove wording that misclassifies the current array-backed Claude inbox file
+  shape as legacy
+
+Execution branch:
+- `feature/pAA-s8-claude-schema-contract`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s8-claude-schema-contract`
+
+### AA.9 Current Claude Inbox Primary-Path Repair
+
+Purpose:
+- make the current Claude inbox JSON file shape the supported primary ATM
+  compatibility path
+- stop treating the current array-backed Claude mailbox file as degraded
+  legacy-only input
+- reserve repair/rebuild for malformed or truly unsupported mailbox content
+
+Execution branch:
+- `feature/pAA-s9-claude-inbox-primary-path`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s9-claude-inbox-primary-path`
+
+### AA.10 Remove Historical ATM JSON Compatibility From 1.2
+
+Purpose:
+- remove support promises for historical ATM-owned inbox JSON schema variants
+- stop treating top-level ATM machine fields and `metadata.atm.*` as supported
+  active 1.2 schema
+- make current Claude Code inbox JSON the only accepted shared inbox contract
+  unless a narrower exception is reapproved explicitly
+
+Execution branch:
+- `feature/pAA-s10-remove-historical-atm-json`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s10-remove-historical-atm-json`
+
+### AA.11 Delete Pre-Production SQLite Compatibility Scaffolding
+
+Purpose:
+- remove abandoned pre-production SQLite compatibility scaffolding such as
+  `legacy_message_id`
+- restate the supported 1.2 SQLite bootstrap/migration baseline cleanly
+- keep unsupported historical database shapes out of the active runtime line
+
+Execution branch:
+- `feature/pAA-s11-delete-sqlite-legacy-compat`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s11-delete-sqlite-legacy-compat`
+
 ## Out Of Scope
 
 `Phase AA` does not:
@@ -329,6 +407,11 @@ Execution worktree:
 The scoped `sc-observability` / `sc-observability-types` `1.2.0` dependency
 upgrade in `AA.6` is in scope for this phase as closeout work required to
 finish the daemon/runtime simplification line cleanly.
+
+Smoke QA follow-up note:
+- if `team-lead` routes concrete smoke QA findings that widen the accepted
+  Phase AA scope beyond `AA.11`, add a new numbered sprint rather than
+  overloading the schema/runtime/removal sprints above
 
 ## Exit Criteria
 
