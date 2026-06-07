@@ -119,6 +119,9 @@ Proof this sprint must leave behind:
 - no new transport-only message clones remain where the shared canonical struct is sufficient
 - RPC envelope headers carry transport concerns only
 - RPC bodies decode into shared domain structs rather than backend- or transport-specific clones
+- the `atm-daemon-client` boundary TOML records exist, carry
+  `allowed_dependents = [\"atm-storage\"]`, and `lint_boundaries.py` accepts
+  them before sprint closure
 
 ## Required Validation
 
@@ -136,9 +139,9 @@ Proof this sprint must leave behind:
 - `docs/project-plan.md`
 - protocol and architecture docs that describe transport/body shapes
 - create or update `atm-daemon-client` boundary TOML records to make its
-  transport-envelope ownership explicit and to document whether it remains
-  transport-only or consumes canonical `atm-storage` domain bodies without
-  becoming a storage crate
+  transport-envelope ownership explicit with
+  `allowed_dependents = [\"atm-storage\"]` and forbidden edges to
+  `atm-storage-rusqlite` / `atm-storage-claude`
 
 ## Risks And Watchouts
 

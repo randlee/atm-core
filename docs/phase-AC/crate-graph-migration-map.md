@@ -16,6 +16,7 @@ Approved target graph:
 atm-storage
 atm-storage-claude -> atm-storage
 atm-storage-rusqlite -> atm-storage
+atm-daemon-client -> atm-storage
 atm-core -> atm-storage
 ```
 
@@ -30,6 +31,8 @@ atm-storage-sqlserver -> atm-storage
 Forbidden edges and shapes:
 
 - `atm-storage-* -> atm-core`
+- `atm-daemon-client -> atm-storage-rusqlite`
+- `atm-daemon-client -> atm-storage-claude`
 - `atm-storage` owning RPC request / response envelope families
 - `atm-core` owning concrete backend file / SQLite mechanics above the storage
   seam
@@ -80,6 +83,15 @@ Moves:
 Required outcome:
 
 - daemon/runtime/core stop reaching through backend-shaped seams
+
+### AC.5
+
+Owns:
+
+- `RpcEnvelope` ownership at `atm-daemon-client`
+- `atm-daemon-client -> atm-storage` as the permitted canonical-domain edge
+- explicit prohibition of `atm-daemon-client -> atm-storage-rusqlite` and
+  `atm-daemon-client -> atm-storage-claude`
 
 ## Required Use In Later Sprints
 

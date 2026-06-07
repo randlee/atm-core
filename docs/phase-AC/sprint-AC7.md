@@ -110,6 +110,7 @@ Proof this sprint must leave behind:
 - `cargo tree -p atm-storage-claude`
 - `cargo tree -p atm-storage-rusqlite`
 - `git diff --check`
+- `python3 scripts/lint_boundaries.py`
 - `rg -n "Request|Response" crates/atm-storage crates/atm-storage-claude crates/atm-storage-rusqlite -S`
 - `rg -n "SqliteObservability|SqliteBoundaryAssembly|ClaudeCodeRosterMember|ClaudeCodeTeamRoster" crates/atm-storage docs/phase-AC -S`
 
