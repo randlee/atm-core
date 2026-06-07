@@ -26,6 +26,7 @@ TEST_TEAM = "test-team"
 TEST_SENDER = "test-agent"
 TEST_TEAM_LEAD = "test-lead"
 TEST_QM = "test-qm"
+ROLE_TEAM_LEAD = "team-lead"
 FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
@@ -79,9 +80,7 @@ class SchemaModelTests(unittest.TestCase):
 
         for sample in samples:
             validated = ClaudeCodeInboxMessage.model_validate(sample)
-            self.assertEqual(
-                validated.from_, "team-lead"
-            )  # production role name; see crates/atm-core/src/roles.rs
+            self.assertEqual(validated.from_, ROLE_TEAM_LEAD)
             self.assertIsInstance(validated.text, str)
             self.assertIsInstance(validated.timestamp, str)
             self.assertIsInstance(validated.read, bool)
