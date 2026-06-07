@@ -204,4 +204,5 @@ This ADR is implemented by Phase `AC`:
 - `AC.3` SQLite backend convergence
 - `AC.4` `atm-core` storage-boundary adoption
 - `AC.5` RPC envelope and domain type unification
-- `AC.6` cleanup, deletion, and SQL Server readiness
+- `AC.6` cleanup and deletion closeout
+- `AC.7` SQL Server readiness proof

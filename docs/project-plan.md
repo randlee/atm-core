@@ -294,9 +294,10 @@ Status summary:
 - Planning Branch: `plan/phase-AC`
 - Integration Branch: `integrate/phase-AC`
 - `AC.0` planning prerequisite is complete at `ce02b9ff`.
-- latest accepted planning tip is `1d9c81c6`, which adds the final boundary
-  allowed-dependents planning fixes and completes the
-  [exhaustive AC.0 type ledger](./phase-AC/type-ledger.md) collateral.
+- latest accepted planning tip is the current `plan/phase-AC` branch head,
+  which carries the full plan-hardening sequence, the
+  [exhaustive AC.0 type ledger](./phase-AC/type-ledger.md), and the final
+  cross-document consistency corrections for the AC sprint set.
 - The authoritative plan is [`docs/plan-phase-AC.md`](./plan-phase-AC.md).
 - The authoritative closure checklist is
   [`docs/phase-AC/readiness.md`](./phase-AC/readiness.md).
