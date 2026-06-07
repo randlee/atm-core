@@ -73,6 +73,8 @@ schema removal is its own risk surface and belongs in `AA.11`.
 ## Acceptance Criteria
 
 - `docs/phase-AA/sprint-AA10.md` exists with the planned branch/worktree
+- `docs/phase-AA/readiness.md` is updated consistently with the accepted AA.10
+  closure state
 - `docs/legacy-atm-message-schema.md` is removed or clearly retired from the
   active 1.2 contract with no remaining source-of-truth references that imply
   live support

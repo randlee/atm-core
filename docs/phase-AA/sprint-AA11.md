@@ -26,7 +26,7 @@ unless a narrower user-approved compatibility exception is recorded first.
 
 - `crates/atm-rusqlite/src/lib.rs`
 - `docs/phase-U/removal-inventory.md`
-- `docs/phase-Z/smoke-findings-ledger.md`
+- `docs/phase-Z/smoke-findings-review.md`
 - `docs/adr/ADR-012-one-message-identity.md`
 
 ## Prerequisites
@@ -55,6 +55,11 @@ unless a narrower user-approved compatibility exception is recorded first.
 - Tests and docs no longer claim that pre-production `legacy_message_id`
   identity shapes are part of normal runtime support.
 
+- The retained `Phase U` removal inventory reference is justified directly in
+  the sprint outputs as the canonical cross-phase ledger for deleting
+  superseded storage/runtime scaffolding rather than treating it as a stray
+  historical artifact mention.
+
 ## Split Recommendation
 
 Keep this sprint small and mechanical. If deleting the compatibility code
@@ -63,6 +68,8 @@ reveals a broader durable-store redesign need, stop and plan that separately.
 ## Acceptance Criteria
 
 - `docs/phase-AA/sprint-AA11.md` exists with the planned branch/worktree
+- `docs/phase-AA/readiness.md` is updated consistently with the accepted AA.11
+  closure state
 - no normal 1.2 runtime path depends on `legacy_message_id` support
 - docs and tests no longer describe abandoned pre-production SQLite identity
   shapes as supported active behavior

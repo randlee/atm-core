@@ -67,6 +67,12 @@ That invariant no longer holds. Once the boundary widened, daemon code started
 to accumulate concrete adapter knowledge instead of staying a thin router.
 `Phase AA` is not feature expansion; it is architectural damage removal.
 
+The `AA.8` through `AA.10` Claude inbox schema repairs remain inside `Phase AA`
+because `team-lead` explicitly rerouted the smoke-fix closeout into the
+`plan/phase-AA-doctor-hardening` sprint line instead of a separate follow-on
+phase, treating the current Claude inbox contract and append-path drift as part
+of the same daemon/runtime hardening closure.
+
 ## Target Architecture
 
 ### `atm-runtime` becomes the concrete composition root
@@ -260,6 +266,18 @@ Execution branch:
 
 Execution worktree:
 - `../atm-core-worktrees/feature/pAA-s3-direct-doctor-and-runtime-health-split`
+
+### AA.8 Through AA.10 Claude Inbox Hardening Dependency Chain
+
+The Claude inbox repair line is intentionally sequential:
+
+- `AA.8` freezes the current legal Claude inbox contract from real samples and
+  corrects docs/models/tests.
+- `AA.9` then repairs the retained runtime so that frozen current contract is
+  the supported primary path rather than a degraded fallback.
+- `AA.10` only then removes historical ATM-authored JSON compatibility from the
+  active 1.2 contract, after the current supported path is both documented and
+  working.
 
 ### AA.4 Delete Remaining Daemon SQLite Leaks
 

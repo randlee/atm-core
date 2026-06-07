@@ -206,6 +206,8 @@ Status summary:
   production SQLite/runtime assembly out of daemon production composition, and
   froze the target runtime boundary while the SQLite TOML relock remains
   deferred to `AA.5`.
+- `AA.3` completed the direct-local doctor split and daemon runtime-health
+  simplification so store diagnostics no longer require daemon-only routing.
 - `AA.4` removes the remaining daemon-side SQLite leak paths by deleting the
   daemon-private SQLite observability adapter, deleting direct daemon test
   boundary assembly calls, and relying on `atm-core` / `atm-runtime` replay

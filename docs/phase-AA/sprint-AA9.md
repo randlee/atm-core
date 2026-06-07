@@ -30,7 +30,7 @@ unsupported inbox state.
 - `docs/atm-message-schema.md`
 - `crates/atm-core/src/service_runtime.rs`
 - `crates/atm-core/src/mailbox/store.rs`
-- `scripts/claude_inbox_send.py`
+- `scripts/smoke/run.py`
 - `reports/smoke/smoke-thorough.md`
 
 ## Prerequisites
@@ -71,6 +71,8 @@ the current path is fixed, historical JSON removal belongs in `AA.10`.
 ## Acceptance Criteria
 
 - `docs/phase-AA/sprint-AA9.md` exists with the planned branch/worktree
+- `docs/phase-AA/readiness.md` is updated consistently with the accepted AA.9
+  closure state
 - `compat_inbox_uses_legacy_array_format(...)` no longer classifies the current
   Claude array-backed inbox file by its leading `[` alone
 - ATM can append or otherwise write through the normal primary path to the

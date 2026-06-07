@@ -86,6 +86,8 @@ fixture-backed model alignment. Runtime behavior changes belong in `AA.9`.
 ## Acceptance Criteria
 
 - `docs/phase-AA/sprint-AA8.md` exists with the planned branch/worktree
+- `docs/phase-AA/readiness.md` is updated consistently with the accepted AA.8
+  closure state
 - `docs/claude-code-message-schema.md` defines the current shared inbox
   contract clearly enough that `req-qa` can enumerate the legal envelope
   directly from the sprint outputs
