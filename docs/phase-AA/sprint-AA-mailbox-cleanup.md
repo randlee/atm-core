@@ -75,13 +75,13 @@ Write a short assessment section in this sprint doc (under `## Extraction Assess
 
 ## Deliverables
 
-- [ ] Phase 1: Audit notes committed to this sprint doc (under `## Audit Notes`)
-- [ ] Phase 2: Mailbox cleanup committed — `python3 .just/run_lint.py function-length` clean
-- [ ] Phase 3: Extraction assessment written in this sprint doc
-- [ ] Phase 4 (conditional): `crates/atm-mailbox/` created and wired into workspace, OR explicit "Defer/Do not extract" in assessment
-- [ ] `cargo test --workspace` PASS
-- [ ] `cargo clippy --workspace -- -D warnings` PASS
-- [ ] Sprint doc frontmatter updated: `status: complete`
+- [x] Phase 1: Audit notes committed to this sprint doc (under `## Audit Notes`)
+- [x] Phase 2: Mailbox cleanup committed — `python3 .just/run_lint.py function-length` clean
+- [x] Phase 3: Extraction assessment written in this sprint doc
+- [x] Phase 4 (conditional): `crates/atm-mailbox/` created and wired into workspace, OR explicit "Defer/Do not extract" in assessment
+- [x] `cargo test --workspace` PASS
+- [x] `cargo clippy --workspace -- -D warnings` PASS
+- [x] Sprint doc frontmatter updated: `status: complete`
 
 ## Acceptance Criteria
 
