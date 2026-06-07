@@ -128,14 +128,10 @@ The documented lintable boundary plan must forbid direct calls from:
 - `docs/plans/phase-Yb/removal-ledger.md`
 - `docs/plans/phase-Yb/message-path-call-stacks.md`
 - `docs/plans/phase-Yb/lintable-boundary-plan.md`
-- `docs/plans/phase-Yb/sprint-Y7.md`
-- `docs/plans/phase-Yb/sprint-Y8.md`
-- `docs/plans/phase-Yb/sprint-Y9.md`
-- `docs/plans/phase-Yb/sprint-Y10.md`
 - `docs/atm-core/boundaries.md`
 - `docs/atm-daemon/boundaries.md`
-- `docs/plans/phase-Yc/plan-phase-Yc.md`
-- `docs/plans/phase-Yc/issues.md`
-- `docs/plans/phase-Yc/readiness.md`
-- `docs/plans/phase-Yc/sprint-Y12.md`
-- `docs/plans/phase-Yc/sprint-Y13.md`
+
+Historical note:
+- later implementation sequencing ran through Phase Yb/Yc sprint artifacts, but
+  those sprint and phase-plan docs record execution order only and are not part
+  of this ADR's rationale or durable follow-on contract

@@ -163,15 +163,11 @@ Gate failure semantics:
 
 ## Phase Z Implementation Split
 
-This ADR is implemented by `Phase Z` follow-on sprints:
+Implementation later ran through Phase Z follow-on work, but the durable
+contract remains this ADR itself:
 
-- `Z.5` retained runtime command cutover to ATM roster truth
-- `Z.6` Claude send semantics and immutable `ClaudeCodeTeamRoster`
-- `Z.7` config-ingress boundary narrowing and static gate definition
-- `Z.8` watcher-owned Claude config ingress
-- `Z.9` team-admin roster authority and member metadata
-- `Z.10` backup / restore automation and config projection
-
-The authoritative path-by-path delete / narrow / keep map is:
-
-- `docs/plans/phase-Z/config-json-violation-inventory.md`
+- watcher/reconcile is the only allowed reader of Claude config JSON
+- ATM roster state is the only runtime roster truth
+- Claude projection types stay derivative, not authoritative
+- `SCB-CONFIG-*` static gates and their checked-in allowlist define the
+  machine-readable survivor set for any remaining config-json touchpoints

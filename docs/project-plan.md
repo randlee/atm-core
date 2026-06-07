@@ -532,3 +532,12 @@ Acceptance / Phase Entry Gate:
   validation begins
 - the phase does not close until both disposable and copied-state cross-host
   smoke lanes pass with retained evidence
+
+## 38. Chore: ADR Rationale Audit [COMPLETE]
+
+- `CHORE-ADR-AUDIT-001` removed sprint-doc and phase-plan rationale
+  dependencies from permanent ADRs, inlined the missing durable rationale in
+  the affected records, and kept any surviving sprint references as historical
+  execution context only.
+  - branch: `chore/docs-restructure`
+  - authoritative source: `docs/adr/INDEX.md`

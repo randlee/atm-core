@@ -1,3 +1,10 @@
+---
+title: ADR Index
+status: complete
+branch: chore/docs-restructure
+worktree: ../atm-core-worktrees/chore/docs-restructure
+---
+
 # ADR Index
 
 This index lists the repository-wide ADRs in `docs/adr/` and the accepted

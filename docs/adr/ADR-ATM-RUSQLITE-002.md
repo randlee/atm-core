@@ -20,7 +20,6 @@ related_boundaries:
 code_references:
   - crates/atm-rusqlite/src/shared_db.rs
   - crates/atm-rusqlite/src/lib.rs
-  - docs/plans/phase-S/sprint-S15-rusqlite-plan.md
 ```
 
 ## Context
@@ -43,6 +42,12 @@ Introduce one crate-private in-process SQLite write worker that:
 - preserves the current `atm-core` store trait contracts
 - remains private to `atm-rusqlite`
 
+This ADR intentionally keeps the worker private because the application
+already pays SQLite's single-writer serialization cost; the change is to make
+that ownership explicit, bounded, and locally optimizable without widening
+public store contracts. Batching is part of the crate's internal write policy,
+not a new cross-crate abstraction.
+
 ## Consequences
 
 - write-path serialization becomes explicit at the crate boundary
@@ -60,8 +65,6 @@ Introduce one crate-private in-process SQLite write worker that:
 
 ## Follow-Up
 
-- use `docs/plans/phase-S/sprint-S15-rusqlite-plan.md` as the canonical design for
-  the S.15 implementation shape and any follow-on QA reconciliation
 - benchmark the resulting hot-path throughput and latency
 - review WAL autocheckpoint tuning separately if sustained write load requires
   it

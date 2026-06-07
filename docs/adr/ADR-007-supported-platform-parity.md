@@ -99,5 +99,7 @@ The closeout also added:
 - a real local-IPC same-host request/response smoke test that runs through the
   shared frame helpers and daemon server transport on supported hosts with a
   bounded `5ms` readiness backoff and bounded serve-thread completion wait
-- explicit accepted-exception documentation for the remaining bounded production
-  polling and flush-deadline paths in `docs/plans/phase-S/plan-phase-S.md §4.1`
+- explicit accepted-exception documentation for the remaining bounded
+  production polling and flush-deadline paths, which must stay narrow,
+  time-bounded, and reviewable rather than reopening broad platform-specific
+  divergence above the adapter seam
