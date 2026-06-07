@@ -42,4 +42,4 @@ review_gates = ["no_direct_mailbox_helper_calls"]
 
 [status]
 state = "stub_landed"
-notes = ["typed import, fingerprint, and diagnostics request/response contracts landed in atm_core::boundary", "watcher-driven reconcile should call this boundary rather than store helpers directly", "retained send/read/ack/clear cutover to this boundary is formally deferred to R.7 in docs/plan-phase-R.md"]
+notes = ["typed import, fingerprint, and diagnostics request/response contracts landed in atm_core::boundary", "watcher-driven reconcile should call this boundary rather than store helpers directly", "retained send/read/ack/clear cutover to this boundary is formally deferred to R.7 in docs/plans/phase-R/plan-phase-R.md"]

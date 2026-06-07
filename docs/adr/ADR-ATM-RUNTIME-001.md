@@ -17,8 +17,6 @@ related_boundaries:
   - BOUNDARY-RuntimeFactory
   - BOUNDARY-AtmRuntime-Composition
 code_references:
-  - docs/phase-AA/sprint-AA2.md
-  - docs/phase-AA/sprint-AA3.md
   - docs/atm-runtime/architecture.md
 ```
 
@@ -34,6 +32,12 @@ work that currently lives in the wrong place.
 ## Decision
 
 Introduce `atm-runtime` as the concrete composition root.
+
+The point of the new crate is to restore the original daemon boundary:
+`atm-daemon` should route requests and own lifecycle, but it should not know
+which concrete storage backend or doctor assembly is underneath. Centralizing
+that composition in one crate also prevents the CLI and daemon from drifting
+into duplicated SQLite-aware assembly code.
 
 `atm-runtime` owns:
 - `SqliteBoundaryAssembly` construction
@@ -63,6 +67,6 @@ Introduce `atm-runtime` as the concrete composition root.
 - storage-neutral replay/runtime composition contracts live in `atm-core`,
   while `atm-runtime` owns the concrete SQLite-backed implementations and
   assembly wiring
-- the `AA.2` through `AA.4` transition window freezes the target end-state in
-  `boundaries/atm-runtime/runtime-composition.toml` before `AA.5` relocks the
-  authoritative SQLite boundary TOMLs
+- the transition must freeze the target end-state in
+  `boundaries/atm-runtime/runtime-composition.toml` before the authoritative
+  SQLite boundary TOMLs are relocked

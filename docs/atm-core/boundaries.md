@@ -318,7 +318,7 @@ Notes:
     `pendingAckAt`, `acknowledgedAt`, `acknowledgesMessageId`, `expiresAt`
   - `strip_metadata_atm_namespace` — removes the `atm` key from the
     `metadata` object
-- See [docs/phase-Y/inbox-field-inventory.md](../phase-Y/inbox-field-inventory.md)
+- See [docs/plans/phase-Y/inbox-field-inventory.md](../phase-Y/inbox-field-inventory.md)
   for the full field inventory.
 - Phase `Yb` adds a stricter rule:
   - only approved delivery executors may call the write-facing export/append

@@ -62,4 +62,4 @@ References:
 - CLI surfaces:
   - `docs/atm/commands/teams.md`
   - `docs/atm/commands/members.md`
-- [inbox-write-path-audit.md §5](../../../docs/phase-Y/inbox-write-path-audit.md) — retained exceptional write paths policy
+- [inbox-write-path-audit.md §5](../../../docs/plans/phase-Y/inbox-write-path-audit.md) — retained exceptional write paths policy

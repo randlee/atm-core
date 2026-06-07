@@ -130,8 +130,9 @@ default lint.
 
 ## Follow-Up Work
 
-- Phase-wide policy hardening and lint-family expansion planning is recorded in
-  `docs/phase-S/sprint-S5.md`.
+- Phase-wide policy hardening and lint-family expansion remain required after
+  the first accepted no-flaky-test contract lands; any added lint family must
+  prove both boundedness value and a reviewable false-positive profile.
 - tighten top-level and Phase S sprint language so “no fixed sleeps” becomes
   the broader “no flaky or unbounded waits” contract
 - add a feasible-now vs deferred lint inventory to the Phase S planning docs

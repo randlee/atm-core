@@ -15,8 +15,8 @@
   "findings_hash": "",
   "supersedes_task_id": "",
   "replay_nonce": "2026-05-20T00:00:00Z",
-  "source_of_truth": "- docs/phase-X/plan-phase-X.md\n- docs/project-plan.md",
-  "references": "- docs/requirements.md\n- docs/architecture.md\n- docs/phase-X/sprint-X1.md\n- docs/phase-X/sprint-X2.md",
+  "source_of_truth": "- docs/plans/phase-X/plan-phase-X.md\n- docs/project-plan.md",
+  "references": "- docs/requirements.md\n- docs/architecture.md\n- docs/plans/phase-X/sprint-X1.md\n- docs/plans/phase-X/sprint-X2.md",
   "questions_or_concerns": "",
   "previous_step_json": "",
   "reviewer_findings_json": ""
