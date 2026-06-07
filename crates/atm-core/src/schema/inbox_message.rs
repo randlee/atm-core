@@ -230,9 +230,10 @@ pub struct MessageEnvelope {
     pub timestamp: IsoTimestamp,
     pub read: bool,
 
-    // Legacy ATM additive fields layered on top of the native Claude Code
-    // message schema. Historical provenance analysis in this design sprint
-    // confirmed these persisted fields are ATM-added rather than Claude-native.
+    // ATM-owned additive compatibility fields layered on top of the native
+    // Claude Code message schema. Historical provenance analysis in this
+    // design sprint confirmed these persisted fields are ATM-added rather than
+    // Claude-native.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub source_team: Option<TeamName>,
 
@@ -356,7 +357,15 @@ pub(crate) fn to_shared_inbox_value_with_policy(
     strip_metadata_atm_namespace(object);
     strip_removed_compatibility_fields(object);
     if should_export_retrieval_stub(message, policy)? {
-        let retrieval_stub = retrieval_stub_text(message);
+        let message_id = message.message_id.ok_or_else(|| {
+            AtmError::mailbox_write(
+                "retrieval stub export requires an ATM-authored message_id on the source envelope",
+            )
+            .with_recovery(
+                "Preserve ATM-authored message ids on envelopes that export retrieval stubs before retrying shared inbox projection.",
+            )
+        })?;
+        let retrieval_stub = retrieval_stub_text(message_id);
         object.insert("text".to_string(), Value::String(retrieval_stub));
     }
     Ok(value)
@@ -383,10 +392,7 @@ fn should_export_retrieval_stub(
         && (policy.atm_authored_body_export_max_bytes.is_zero() || message.text.len() > export_cap))
 }
 
-fn retrieval_stub_text(message: &MessageEnvelope) -> String {
-    let message_id = message
-        .message_id
-        .expect("retrieval stubs are only emitted for ATM-authored messages with message_id");
+fn retrieval_stub_text(message_id: AtmMessageId) -> String {
     format!("atm read --message-id {message_id}")
 }
 

@@ -19,6 +19,16 @@ def run_shared_host_lane(runtime: Any, rows: dict[str, Any]) -> tuple[bool, Any,
     shared_b = shared_host_fixture_pair.workspace_b
     shared_env_a = runtime.smoke_env(shared_a, identity=shared_a.operator, root=runtime.root)
     shared_env_b = runtime.smoke_env(shared_b, identity=shared_b.operator, root=runtime.root)
+    shared_bootstrap_env = shared_env_a.copy()
+    shared_bootstrap_env.pop("ATM_IDENTITY", None)
+    shared_bootstrap_env.pop("ATM_TEAM", None)
+    runtime.run_atm(
+        runtime.root,
+        shared_bootstrap_env,
+        shared_a.workspace_dir,
+        "doctor",
+        "--json",
+    )
     shared_doctor_a = runtime.parse_json_output(
         runtime.run_atm(runtime.root, shared_env_a, shared_a.workspace_dir, "doctor", "--json")
     )
@@ -60,6 +70,8 @@ def run_shared_host_lane(runtime: Any, rows: dict[str, Any]) -> tuple[bool, Any,
                 "send",
                 target,
                 body,
+                "--from",
+                fixture_item.operator,
                 "--requires-ack",
                 "--json",
             )
@@ -90,6 +102,8 @@ def run_shared_host_lane(runtime: Any, rows: dict[str, Any]) -> tuple[bool, Any,
                 env_item,
                 fixture_item.workspace_dir,
                 "read",
+                fixture_item.recipient,
+                "--as",
                 fixture_item.recipient,
                 "--team",
                 fixture_item.team_name,
@@ -127,10 +141,30 @@ def run_shared_host_lane(runtime: Any, rows: dict[str, Any]) -> tuple[bool, Any,
         shared_read_ack_b = read_ack_future_b.result()
 
     shared_list_a = runtime.parse_json_output(
-        runtime.run_atm(runtime.root, shared_env_a, shared_a.workspace_dir, "list", "--json")
+        runtime.run_atm(
+            runtime.root,
+            shared_env_a,
+            shared_a.workspace_dir,
+            "list",
+            "--as",
+            shared_a.operator,
+            "--team",
+            shared_a.team_name,
+            "--json",
+        )
     )
     shared_list_b = runtime.parse_json_output(
-        runtime.run_atm(runtime.root, shared_env_b, shared_b.workspace_dir, "list", "--json")
+        runtime.run_atm(
+            runtime.root,
+            shared_env_b,
+            shared_b.workspace_dir,
+            "list",
+            "--as",
+            shared_b.operator,
+            "--team",
+            shared_b.team_name,
+            "--json",
+        )
     )
     shared_log_snapshot_a = runtime.parse_json_output(
         runtime.run_atm(runtime.root, shared_env_a, shared_a.workspace_dir, "log", "snapshot", "--json")

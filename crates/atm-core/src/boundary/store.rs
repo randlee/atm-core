@@ -82,7 +82,10 @@ impl RosterMemberRecord {
         let recipient_pane_id = member.tmux_pane_id;
         let mut metadata_json = member.extra;
         if !member.agent_id.is_empty() {
-            metadata_json.insert("agentId".to_string(), Value::String(member.agent_id));
+            metadata_json.insert(
+                "agentId".to_string(),
+                Value::String(member.agent_id.to_string()),
+            );
         }
         if let Some(joined_at) = member.joined_at {
             metadata_json.insert(
@@ -90,8 +93,11 @@ impl RosterMemberRecord {
                 Value::Number(serde_json::Number::from(joined_at)),
             );
         }
-        if !member.cwd.is_empty() {
-            metadata_json.insert("cwd".to_string(), Value::String(member.cwd));
+        if !member.cwd.as_os_str().is_empty() {
+            metadata_json.insert(
+                "cwd".to_string(),
+                Value::String(member.cwd.display().to_string()),
+            );
         }
 
         Self {
