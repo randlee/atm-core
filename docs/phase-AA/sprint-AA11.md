@@ -6,7 +6,7 @@ phase: AA
 sprint: AA.11
 worktree: ../atm-core-worktrees/feature/pAA-s11-delete-sqlite-legacy-compat
 branch: feature/pAA-s11-delete-sqlite-legacy-compat
-status: planned
+status: complete
 estimated_scope: small
 ```
 
@@ -43,9 +43,9 @@ unless a narrower user-approved compatibility exception is recorded first.
 
 ## Deliverables
 
-- The `legacy_message_id` compatibility path is either deleted or moved behind
-  an explicitly documented non-default repair/import seam that is outside normal
-  1.2 runtime behavior.
+- The `legacy_message_id` compatibility path is deleted from the active 1.2
+  runtime line. No normal bootstrap or migration path accepts that abandoned
+  pre-production shape.
 
 - The active 1.2 SQLite bootstrap/migration contract is restated clearly:
   - what exact schema versions/shapes are supported
@@ -73,8 +73,8 @@ reveals a broader durable-store redesign need, stop and plan that separately.
 - no normal 1.2 runtime path depends on `legacy_message_id` support
 - docs and tests no longer describe abandoned pre-production SQLite identity
   shapes as supported active behavior
-- any remaining exceptional repair path is explicit and not silently exercised
-  during normal bootstrap
+- any remaining `legacy_message_id` references are historical documentation
+  only and are not silently exercised during normal bootstrap
 
 ## Required Validation
 

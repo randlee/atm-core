@@ -241,8 +241,10 @@ Status summary:
   contract, while legal additive derivatives such as tolerated top-level ATM
   fields and `metadata.atm.*` remain read-compatible only and are ignored for
   active machine-state behavior.
-- `AA.11` will delete pre-production SQLite compatibility scaffolding such as
-  `legacy_message_id` unless an explicit user-approved exception survives.
+- `AA.11` (`feature/pAA-s11-delete-sqlite-legacy-compat`) is complete:
+  pre-production SQLite compatibility scaffolding such as `legacy_message_id`
+  is no longer part of the active 1.2 runtime/bootstrap line, and surviving
+  references remain only as historical inventory/ADR context.
 - `AA.12` will harden malformed Claude inbox recovery so one bad fragment does
   not hide recoverable valid messages, and it will record an ADR if the
   fail-soft policy changes the shared-inbox boundary contract.
