@@ -63,17 +63,13 @@ Primary closure rule:
 
 Minimum deletion scope:
 
-- all `MailStore*Request` / `MailStore*Response` wrappers still left after `AC.1`
-- all `TaskStore*Request` / `TaskStore*Response` wrappers still left after `AC.1`
-- all `RosterStore*Request` / `RosterStore*Response` wrappers still left after `AC.1`
-- `MailStoreRequest` / `MailStoreResponse`
-- `TaskStoreRequest` / `TaskStoreResponse`
-- `RosterStoreRequest` / `RosterStoreResponse`
 - any surviving `InboxIngress*` and `InboxExport*` wrapper families not explicitly retained as backend-internal implementation detail
 - any surviving backend bundles or public helpers that the ledger marked `delete-bundle`
 
 Minimum scope-reduction proof:
 
+- the `MailStore*`, `TaskStore*`, and `RosterStore*` request/response wrapper
+  families were already deleted by `AC.1` and did not reappear
 - Claude-only projections remain internal to `atm-storage-claude`
 - SQLite-only observability helpers remain internal to `atm-storage-rusqlite`
 - no deleted wrapper family survives in docs or code only because the old architecture used it

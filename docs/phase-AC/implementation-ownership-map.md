@@ -20,8 +20,10 @@ Current concrete trait implementers found during `AC.0`:
 | `TaskStoreDoctor` | `SqliteTaskStore` | `crates/atm-rusqlite/src/lib.rs` | `AC.3` |
 | `RosterStore` | `SqliteRosterStore` | `crates/atm-rusqlite/src/roster_store.rs` | `AC.3` |
 | `RosterStoreDoctor` | `SqliteRosterStore` | `crates/atm-rusqlite/src/boundary_assembly.rs` | `AC.3` |
-| `RemoteReplayStore` | `SqliteRemoteReplayStore` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` and `AC.4` |
-| `RuntimeStorageFinalizer` | `SqliteRuntimeStorageFinalizer` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` and `AC.4` |
+| `RemoteReplayStore` capability/internalization | `SqliteRemoteReplayStore` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` |
+| `RemoteReplayStore` consumer seam deletion | `SqliteRemoteReplayStore` | `crates/atm-runtime/src/replay_store.rs` | `AC.4` |
+| `RuntimeStorageFinalizer` capability/internalization | `SqliteRuntimeStorageFinalizer` | `crates/atm-runtime/src/replay_store.rs` | `AC.3` |
+| `RuntimeStorageFinalizer` consumer seam deletion | `SqliteRuntimeStorageFinalizer` | `crates/atm-runtime/src/replay_store.rs` | `AC.4` |
 | Claude outbound write seam | `ClaudeInboxWriter` trait plus runtime adapters | `crates/atm-core/src/delivery_execution.rs` | `AC.2` and `AC.4` |
 | Non-Claude outbound | `DaemonNonClaudeOutbound` | `crates/atm-daemon/src/non_claude_outbound_runtime.rs` | outside core `AC` storage reset scope unless trait convergence requires touch-up |
 
@@ -93,13 +95,16 @@ Owns:
 - moving the SQLite backend behind `atm-storage`
 - reducing `atm-rusqlite` dependence on `atm-core`
 - making replay/finalizer seams compatible with the new storage model
+- deciding whether replay/finalizer seams survive as backend-internal details
+  or named optional capabilities
 
 ### AC.4
 
 Owns:
 
 - consumer migration in `atm-core`
-- deleting backend-shaped seams after shared contract adoption
+- deleting consumer-side replay/finalizer and other backend-shaped seams after
+  shared contract adoption
 
 ### AC.5
 

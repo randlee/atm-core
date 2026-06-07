@@ -50,6 +50,9 @@ Primary closure rule:
 
 ## Deliverables
 
+- `RpcEnvelope` is owned by `atm-daemon-client` as the transport-side shared
+  envelope crate surface for this phase line; `atm-storage` is explicitly not
+  an allowed owner because the envelope is transport, not storage
 - the transport layer uses one generic envelope:
 
   ```rust
@@ -131,6 +134,10 @@ Proof this sprint must leave behind:
 - `docs/phase-AC/readiness.md`
 - `docs/project-plan.md`
 - protocol and architecture docs that describe transport/body shapes
+- update `atm-daemon-client` boundary TOML records to make its
+  transport-envelope ownership explicit and to document whether it remains
+  transport-only or consumes canonical `atm-storage` domain bodies without
+  becoming a storage crate
 
 ## Risks And Watchouts
 

@@ -29,6 +29,7 @@ pub trait TaskStore {
     fn save_task(&self, task: &Task) -> Result<(), AtmError>;
     fn load_task(&self, key: &TaskKey) -> Result<Option<Task>, AtmError>;
     fn list_tasks(&self, query: &TaskQuery) -> Result<Vec<Task>, AtmError>;
+    fn delete_task(&self, key: &TaskKey) -> Result<(), AtmError>;
 }
 
 pub trait StorageNotifier {
@@ -106,11 +107,14 @@ If more than these are needed, `AC.1` must justify the expansion against
 Before `AC.1` closes, it must answer:
 
 - which current query wrappers collapse into `MessageQuery` / `TaskQuery`
-- whether `delete_message` belongs in the initial core contract or as an
-  immediate capability
 - whether replay state belongs in the core contract or only in a capability
   trait
 - which current roster projection fields are canonical shared fields versus
   Claude-backend-only projection details
 - whether any temporary `MailStore` compatibility seam survives inside the
   implementation phase at all; the planning default is deletion at `AC.1`
+
+Resolved during planning hardening:
+
+- `delete_message` and `delete_task` are both part of the initial core CRUD
+  contract and are no longer open review questions

@@ -176,8 +176,9 @@ Proof this sprint must leave behind:
 - `atm-storage` is small enough to audit directly
 - the old boundary traits are no longer the authoritative shared contract
 - no surviving shared public type is backend-shaped or request/response-shaped
-- wrapper-family deletion is committed as an `AC.1` closure obligation; `AC.6`
-  only proves no stragglers survived
+- wrapper-family deletion is committed as an `AC.1` closure obligation and is
+  not deferred to `AC.6`; later sprints may only verify that no deleted family
+  reappeared
 
 ## Acceptance Criteria
 
