@@ -165,8 +165,7 @@ mod tests {
         assert!(error.message.contains("exceeds"));
         assert!(
             error
-                .recovery
-                .as_deref()
+                .primary_recovery()
                 .is_some_and(|value| value.contains("10 MiB"))
         );
         assert!(
