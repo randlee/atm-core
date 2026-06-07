@@ -3338,13 +3338,20 @@ mail correctness.
 
 ### 22.5 Claude Compatibility And Native Agent Path
 
-- `REQ-CORE-COMPAT-001` Claude inbox JSONL remains the required compatibility
-  path for Claude context injection.
+- `REQ-CORE-COMPAT-001` Current Claude inbox JSON-array files are the required
+  primary compatibility path for Claude context injection, while JSONL remains
+  a supported append-style compatibility surface only where ATM explicitly
+  owns that projection.
 
   Required behavior:
+  - healthy current Claude `.json` inbox files must be accepted on the normal
+    primary write path rather than surfaced as degraded rebuild-only state
   - ATM-authored Claude inbox exports must remain Claude-native at the top
     level with only the limited additive compatibility fields ATM still
     requires
+  - ATM may continue to use JSONL append semantics only for explicit `.jsonl`
+    compatibility projections it owns; that append surface must not redefine
+    the current Claude inbox contract
   - Claude-native external writes must be importable into SQLite through one
     owned ingress boundary
   - once team roster and pane mapping truth move to SQLite, ATM-owned
@@ -3353,8 +3360,8 @@ mail correctness.
 - post-send hooks must be able to rely on that payload field instead of
     rediscovering pane mappings from local files once roster migration is
     complete
-  - ATM-authored JSONL exports must remain valid JSONL records
-  - the default ATM-authored JSONL body export cap is `128 KiB`
+  - ATM-authored `.jsonl` exports must remain valid JSONL records
+  - the default ATM-authored `.jsonl` body export cap is `128 KiB`
   - ATM must expose config `[atm].claude_jsonl_body_export_max_bytes`; `0`
     means stub-only ATM-authored export
   - when an ATM-authored body exceeds the configured export cap, the exported

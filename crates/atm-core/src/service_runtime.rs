@@ -23,7 +23,9 @@ pub(crate) struct RetainedMailboxTimeoutPolicy {
     pub(crate) workflow_lock_timeout: Duration,
 }
 
-pub(crate) trait RetainedServiceRuntime: crate::boundary::NotificationSink {
+pub(crate) trait RetainedServiceRuntime:
+    crate::boundary::NotificationSink + crate::boundary::sealed::Sealed
+{
     fn load_config(&self, current_dir: &Path) -> Result<Option<AtmConfig>, AtmError>;
     fn load_team_config_for_doctor_compare(&self, team_dir: &Path) -> Result<TeamConfig, AtmError>;
     fn team_dir(&self, home_dir: &Path, team: &TeamName) -> Result<PathBuf, AtmError>;
@@ -354,7 +356,7 @@ impl RetainedServiceRuntime for LocalServiceRuntime {
         message: &MessageEnvelope,
     ) -> Result<(), AtmError> {
         crate::mailbox::store::append_compat_mailbox_message(inbox_path, message).map_err(|error| {
-            if compat_inbox_uses_legacy_array_format(inbox_path).unwrap_or(false) {
+            if current_claude_inbox_requires_repair(inbox_path).unwrap_or(false) {
                 AtmError::validation(format!(
                     "compatibility inbox {} is malformed or unsupported for the primary Claude delivery path",
                     inbox_path.display()
@@ -496,18 +498,15 @@ fn load_projection_message(
         })
 }
 
-fn compat_inbox_uses_legacy_array_format(path: &Path) -> Result<bool, AtmError> {
-    if !path.exists() || !uses_claude_json_array_projection(path) {
+fn current_claude_inbox_requires_repair(path: &Path) -> Result<bool, AtmError> {
+    if !path.exists()
+        || crate::mailbox::store::inbox_file_format(path)
+            != crate::mailbox::store::InboxFileFormat::ClaudeJsonArray
+    {
         return Ok(false);
     }
 
     Ok(crate::mailbox::load_compat_mailbox_messages(path).is_err())
-}
-
-fn uses_claude_json_array_projection(path: &Path) -> bool {
-    path.extension()
-        .and_then(|value| value.to_str())
-        .is_some_and(|value| value.eq_ignore_ascii_case("json"))
 }
 
 #[cfg(test)]

@@ -50,6 +50,13 @@ Observed current `team-lead -> quality-mgr` sample classes used by this repo:
 Those additive fields do not become Claude-owned native schema merely because
 they are tolerated by the read path.
 
+Current ATM compatibility note:
+
+- healthy current Claude `.json` inbox files are the primary shared inbox
+  path ATM must support directly
+- repair/rebuild is reserved for malformed or truly unsupported inbox content,
+  not for the legal current Claude JSON-array shape
+
 ## 2.1 Current Shared Inbox Contract Categories
 
 This repository distinguishes three categories at the shared inbox boundary:

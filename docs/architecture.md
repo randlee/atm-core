@@ -2451,12 +2451,18 @@ Architectural rules:
 There are three distinct paths:
 
 1. Claude / compatibility path
-   - Claude or legacy writers append JSONL
+   - current Claude inbox files use JSON-array mailbox documents as the
+     primary shared compatibility shape
+   - healthy current Claude `.json` inboxes stay on the normal primary path
+     and must not require repair/rebuild warnings
+   - ATM-owned `.jsonl` compatibility projections remain append-style only
+     where ATM explicitly owns that export surface
    - ATM imports through one owned inbox-ingress boundary
    - imported records become durable in SQLite
    - replay is idempotent and parseable rows are not silently dropped
-   - ATM-authored oversized-body exports replace JSONL `text` with exactly
-     `atm read --message-id <id>` while keeping the full body durable in SQLite
+   - ATM-authored oversized-body exports replace compatibility-surface `text`
+     with exactly `atm read --message-id <id>` while keeping the full body
+     durable in SQLite
 
 2. Native agent path
    - native agent/plugin traffic does not use JSONL

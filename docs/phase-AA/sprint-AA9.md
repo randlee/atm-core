@@ -74,7 +74,7 @@ the current path is fixed, historical JSON removal belongs in `AA.10`.
 - `docs/phase-AA/sprint-AA9.md` exists with the planned branch/worktree
 - `docs/phase-AA/readiness.md` is updated consistently with the accepted AA.9
   closure state
-- `compat_inbox_uses_legacy_array_format(...)` no longer classifies the current
+- `current_claude_inbox_requires_repair(...)` no longer classifies the current
   Claude JSON-array inbox file by its leading `[` alone
 - ATM can append or otherwise write through the normal primary path to the
   current Claude inbox file shape without surfacing a degraded rebuild-only
