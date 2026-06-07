@@ -1,3 +1,7 @@
+---
+title: ADR Index
+---
+
 # ADR Index
 
 This index lists the repository-wide ADRs in `docs/adr/` and the accepted
