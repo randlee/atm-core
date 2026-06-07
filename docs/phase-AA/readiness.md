@@ -22,8 +22,9 @@ Authoritative supporting inventory:
 | `AA.7` | `complete` | `feature/pAA-s7-atm-architecture-crate` | `../atm-core-worktrees/feature/pAA-s7-atm-architecture-crate` | Rust boundary enforcement crate lands, Python boundary scripts are removed, and `cargo test -p atm-architecture` becomes the sole code-driven boundary guard |
 | `AA.8` | `planned` | `feature/pAA-s8-claude-schema-contract` | `../atm-core-worktrees/feature/pAA-s8-claude-schema-contract` | current Claude Code inbox schema is frozen from real `team-lead -> quality-mgr` samples and all docs/models stop calling the current array-backed inbox shape legacy |
 | `AA.9` | `planned` | `feature/pAA-s9-claude-inbox-primary-path` | `../atm-core-worktrees/feature/pAA-s9-claude-inbox-primary-path` | the normal retained append path treats the current Claude inbox file shape as supported primary behavior rather than degraded legacy behavior |
-| `AA.10` | `planned` | `feature/pAA-s10-remove-historical-atm-json` | `../atm-core-worktrees/feature/pAA-s10-remove-historical-atm-json` | historical ATM-owned JSON schema variants are removed from the active 1.2 contract and no live doc/runtime path promises their support |
+| `AA.10` | `planned` | `feature/pAA-s10-remove-historical-atm-json` | `../atm-core-worktrees/feature/pAA-s10-remove-historical-atm-json` | historical ATM-owned JSON schema variants stop being the active 1.2 contract while legal ATM additive derivatives remain accepted on read |
 | `AA.11` | `planned` | `feature/pAA-s11-delete-sqlite-legacy-compat` | `../atm-core-worktrees/feature/pAA-s11-delete-sqlite-legacy-compat` | pre-production SQLite compatibility scaffolding such as `legacy_message_id` support is removed from the active 1.2 runtime line unless explicitly reapproved |
+| `AA.12` | `planned` | `feature/pAA-s12-malformed-claude-inbox-recovery` | `../atm-core-worktrees/feature/pAA-s12-malformed-claude-inbox-recovery` | malformed Claude inbox content degrades and salvages recoverable messages instead of aborting the entire inbox surface where segmented valid records still exist |
 
 ## Phase Exit Criteria
 
@@ -51,9 +52,12 @@ Authoritative supporting inventory:
   `team-lead -> quality-mgr` samples
 - the normal retained runtime path does not classify the current array-backed
   Claude inbox file shape as legacy or degraded-only behavior
-- no active 1.2 documentation or runtime path promises support for historical
-  ATM-owned inbox JSON schema variants such as top-level ATM fields or
-  `metadata.atm.*`
+- no active 1.2 documentation or runtime path presents historical ATM-owned
+  inbox JSON schema variants such as top-level ATM fields or `metadata.atm.*`
+  as the primary or forward-write contract, while legal additive derivatives
+  remain accepted on read
+- one malformed shared-inbox fragment cannot hide unrelated valid messages when
+  the valid messages are still segmentable from the same Claude inbox file
 - no active 1.2 runtime path depends on pre-production SQLite compatibility
   scaffolding such as `legacy_message_id`, unless an explicit exception is
   recorded in this readiness file

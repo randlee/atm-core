@@ -230,11 +230,14 @@ Status summary:
 - `AA.9` will repair the retained runtime so the current Claude inbox JSON file
   shape is the working primary compatibility path rather than a degraded
   legacy-only path.
-- `AA.10` will remove historical ATM-owned inbox JSON schema support from the
-  active 1.2 contract, including top-level ATM machine fields and
-  `metadata.atm.*` compatibility promises.
+- `AA.10` will remove historical ATM-owned inbox JSON from the active primary
+  1.2 contract while preserving read compatibility for legal additive
+  derivatives such as tolerated top-level ATM fields and `metadata.atm.*`.
 - `AA.11` will delete pre-production SQLite compatibility scaffolding such as
   `legacy_message_id` unless an explicit user-approved exception survives.
+- `AA.12` will harden malformed Claude inbox recovery so one bad fragment does
+  not hide recoverable valid messages, and it will record an ADR if the
+  fail-soft policy changes the shared-inbox boundary contract.
 
 Goal:
 - move concrete SQLite/runtime assembly to `atm-runtime`
@@ -265,6 +268,7 @@ Sprint line:
 - `AA.9` `feature/pAA-s9-claude-inbox-primary-path`
 - `AA.10` `feature/pAA-s10-remove-historical-atm-json`
 - `AA.11` `feature/pAA-s11-delete-sqlite-legacy-compat`
+- `AA.12` `feature/pAA-s12-malformed-claude-inbox-recovery`
 
 Acceptance:
 - Phase AA exit criteria are satisfied only through

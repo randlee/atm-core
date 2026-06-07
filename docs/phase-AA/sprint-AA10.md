@@ -12,17 +12,21 @@ estimated_scope: medium
 
 ## Goal
 
-Remove support promises for historical ATM-owned inbox JSON schema variants so
-ATM 1.2 supports only the current legal Claude Code inbox schema on the
-Claude-to-Claude shared inbox path.
+Stop treating historical ATM-authored inbox JSON extensions as the primary or
+forward-write contract for 1.2 while preserving read compatibility for legal
+Claude-schema derivatives produced by ATM 1.1.
 
 ## Scope Summary
 
-This sprint is the JSON compatibility removal line. It deletes the repo-owned
-contract that still promises read support for historical ATM top-level inbox
-fields and `metadata.atm` machine-state shapes, and it replaces that promise
-with explicit 1.2 behavior for obsolete inputs: ignore, reject, or repair
-through a named admin path, but do not treat them as supported live schema.
+This sprint is the JSON contract-tightening line. It removes the repo-owned
+claim that historical ATM top-level inbox fields and `metadata.atm`
+machine-state shapes are the active primary shared-inbox contract for 1.2, but
+it does not make legal Claude-schema derivatives invalid on read. Historical
+ATM-authored additive fields remain read-compatible when they extend the legal
+Claude envelope; ATM ignores or strips the ATM-owned machine metadata rather
+than failing schema validation for those derivative shapes. Malformed-record
+salvage policy is not part of this sprint and is planned separately in
+`AA.12`.
 
 ## Governing Sources
 
@@ -43,11 +47,12 @@ through a named admin path, but do not treat them as supported live schema.
 - no SQLite durable-schema removal
 - no change to Claude-owned message semantics
 - no silent extension of the supported 1.2 schema surface
+- no malformed-record salvage/recovery behavior changes
 
 ## Deliverables
 
-- The repo no longer presents historical ATM JSON variants as supported active
-  shared inbox schema for 1.2.
+- The repo no longer presents historical ATM JSON variants as the supported
+  active primary shared inbox schema for 1.2.
 
 - ATM 1.1 messages that extend the Claude Code schema by adding metadata fields
   such as `metadata.atm.*` MUST parse successfully. The read path silently
@@ -55,21 +60,29 @@ through a named admin path, but do not treat them as supported live schema.
   means no new code depends on those fields; it does not mean reading them
   fails.
 
-- The removal set is explicit and authoritative:
-  - historical top-level ATM fields such as `message_id`, `source_team`,
-    `pendingAckAt`, `acknowledgedAt`, and `acknowledgesMessageId`
+- The contract split is explicit and authoritative:
+  - current Claude Code-native inbox schema is the primary shared inbox
+    contract
+  - historical ATM additive fields such as `message_id`, `source_team`,
+    `pendingAckAt`, `acknowledgedAt`, and `acknowledgesMessageId` are
+    read-compatible derivative fields, not the forward-write contract
   - historical alert-only top-level fields such as `atmAlertKind` and
-    `missingConfigPath`
-  - `metadata.atm.*` as an active shared inbox contract
+    `missingConfigPath` remain read-compatible only as additive derivatives
+  - `metadata.atm.*` is not the active primary contract, but inbox records that
+    carry it still validate as legal additive derivatives and are ignored or
+    stripped by the read path rather than rejected as invalid schema
 
-- The docs, schema models, and tests agree on 1.2 behavior for obsolete JSON:
+- The docs, schema models, and tests agree on 1.2 behavior for derivative JSON:
   - current Claude schema is supported
-  - obsolete ATM-authored JSON is not treated as a supported live contract
-  - any remaining repair or import path is explicitly named and does not leak
-    into normal send/read/runtime behavior
+  - legal ATM-authored schema derivatives do not fail validation solely because
+    they contain additive ATM metadata
+  - those derivatives are not described as the primary or forward-write
+    contract
+  - any truly obsolete/non-derivative repair or import path is explicitly named
+    and does not leak into normal send/read/runtime behavior
 
 - The repo no longer ships a “legacy ATM message schema” doc/model as if that
-  were part of the accepted 1.2 shared inbox contract.
+  were the accepted primary 1.2 shared inbox contract.
 
 ## Split Recommendation
 
@@ -81,18 +94,24 @@ schema removal is its own risk surface and belongs in `AA.11`.
 - `docs/phase-AA/sprint-AA10.md` exists with the planned branch/worktree
 - `docs/phase-AA/readiness.md` is updated consistently with the accepted AA.10
   closure state
-- `docs/legacy-atm-message-schema.md` is removed or clearly retired from the
-  active 1.2 contract with no remaining source-of-truth references that imply
-  live support
-- `tools/schema_models/legacy_atm_message_schema.py` is removed or retired from
-  the active test gate
-- no requirements/architecture/Phase AA doc still promises normal read-path
-  support for historical ATM top-level JSON or `metadata.atm.*`
+- `docs/legacy-atm-message-schema.md` is retained only as a read-compatibility
+  contract for legal additive derivatives or is clearly retired in favor of an
+  equivalent read-compatibility contract with no wording that implies
+  primary/write ownership
+- `tools/schema_models/legacy_atm_message_schema.py` and/or the active schema
+  test gate continue validating legal additive derivative shapes on read
+- no requirements/architecture/Phase AA doc still promises that historical ATM
+  top-level JSON or `metadata.atm.*` are the primary or forward-write 1.2
+  contract
 - schema-derivative messages (ATM 1.1 format = Claude Code schema + metadata
   extension fields) parse without error; tests explicitly assert non-failure
   for these inputs
-- the active tests validate the current Claude contract and the chosen fail
-  behavior for obsolete ATM-authored JSON
+- the active tests validate:
+  - the current Claude contract
+  - top-level ATM additive derivative shapes
+  - `metadata.atm.*` additive derivative shapes
+  - derivative-schema validation does not fail solely because of tolerated ATM
+    additive metadata
 
 ## Required Validation
 
@@ -119,8 +138,8 @@ schema removal is its own risk surface and belongs in `AA.11`.
 
 ## Risks And Watchouts
 
-- if this sprint leaves documentation and tests half-migrated, QA will read one
-  contract while runtime enforces another
-- if obsolete ATM-authored JSON remains silently accepted without an explicit
-  policy, operators will not know whether they are on supported or unsupported
-  1.2 behavior
+- if this sprint confuses “not the primary contract” with “invalid on read,”
+  it will break legal ATM 1.1 Claude-schema derivatives that must remain
+  accepted
+- if documentation and tests are half-migrated, QA will read one contract while
+  runtime enforces another

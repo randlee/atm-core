@@ -389,11 +389,13 @@ Execution worktree:
 ### AA.10 Remove Historical ATM JSON Compatibility From 1.2
 
 Purpose:
-- remove support promises for historical ATM-owned inbox JSON schema variants
-- stop treating top-level ATM machine fields and `metadata.atm.*` as supported
-  active 1.2 schema
-- make current Claude Code inbox JSON the only accepted shared inbox contract
-  unless a narrower exception is reapproved explicitly
+- remove primary-contract support promises for historical ATM-owned inbox JSON
+  schema variants
+- stop treating top-level ATM machine fields and `metadata.atm.*` as the
+  active or forward-write 1.2 schema
+- preserve read compatibility for legal ATM additive derivatives that extend
+  the current Claude Code envelope
+- leave malformed-ingress salvage policy to `AA.12`
 
 Depends on:
 - `AA.9` (primary path must be proven before compatibility removal)
@@ -417,6 +419,22 @@ Execution branch:
 
 Execution worktree:
 - `../atm-core-worktrees/feature/pAA-s11-delete-sqlite-legacy-compat`
+
+### AA.12 Malformed Claude Inbox Recovery Hardening
+
+Purpose:
+- define the fail-soft malformed-ingress policy for Claude inbox reads
+- salvage recoverable valid messages even when adjacent fragments are malformed
+- emit explicit degraded warnings/sentinels instead of dropping the whole inbox
+  surface when best-effort recovery is possible
+- add or update an ADR if the recovery contract changes the accepted
+  repository-wide shared-inbox boundary policy
+
+Execution branch:
+- `feature/pAA-s12-malformed-claude-inbox-recovery`
+
+Execution worktree:
+- `../atm-core-worktrees/feature/pAA-s12-malformed-claude-inbox-recovery`
 
 ## Out Of Scope
 
