@@ -447,6 +447,7 @@ impl fmt::Display for PaneId {
 #[cfg(test)]
 mod tests {
     use super::{AgentId, AgentName, ModelName, PaneId, TaskId, TeamName};
+    const TEST_AGENT_ID: &str = "test-agent@test-team";
 
     #[test]
     fn task_id_rejects_blank_deserialization() {
@@ -493,12 +494,13 @@ mod tests {
 
     #[test]
     fn agent_id_round_trips_as_opaque_string() {
-        let agent_id: AgentId = serde_json::from_str("\"team-lead@atm-dev\"").expect("agent id");
+        let agent_id: AgentId =
+            serde_json::from_str(&format!("\"{TEST_AGENT_ID}\"")).expect("agent id");
 
-        assert_eq!(agent_id.as_str(), "team-lead@atm-dev");
+        assert_eq!(agent_id.as_str(), TEST_AGENT_ID);
         assert_eq!(
             serde_json::to_string(&agent_id).expect("encode"),
-            "\"team-lead@atm-dev\""
+            format!("\"{TEST_AGENT_ID}\"")
         );
     }
 }

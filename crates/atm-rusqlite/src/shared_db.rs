@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 /// same-process SQLite budget stays explicit under WAL mode without turning read bursts into an
 /// unbounded connection fan-out.
 const MAX_SQLITE_READER_CONNECTIONS: usize = 3;
+const SQLITE_BUSY_TIMEOUT_MS: u64 = 5_000;
 #[cfg(test)]
 static NEXT_IN_MEMORY_DB_ID: AtomicU64 = AtomicU64::new(1);
 
@@ -253,6 +254,7 @@ impl SharedDb {
         &self,
         operation: impl FnOnce(&mut Connection) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
+        debug_assert_blocking_only("SharedDb::with_connection");
         let _connection_guard = self.acquire_connection_guard()?;
         let mut connection = self.open_connection()?;
         operation(&mut connection)
@@ -268,6 +270,7 @@ impl SharedDb {
         &self,
         operation: impl FnOnce(&rusqlite::Transaction<'_>) -> Result<T, AtmError>,
     ) -> Result<T, AtmError> {
+        debug_assert_blocking_only("SharedDb::with_transaction");
         self.with_connection(|connection| {
             let transaction = connection.transaction().map_err(|error| {
                 sqlite_error(
@@ -429,12 +432,26 @@ impl std::fmt::Debug for SharedDb {
     }
 }
 
+fn debug_assert_blocking_only(method: &str) {
+    #[cfg(debug_assertions)]
+    {
+        let current_thread = std::thread::current();
+        let thread_name = current_thread.name().unwrap_or("<unnamed>");
+        debug_assert!(
+            !thread_name.starts_with("tokio-runtime-worker"),
+            "{method} must run from a blocking code path; enter spawn_blocking before borrowing sqlite state"
+        );
+    }
+}
+
 pub(crate) fn configure_connection(
     connection: &mut Connection,
     target: &SharedDbTarget,
 ) -> Result<(), AtmError> {
+    // Bound SQLite lock waits so contention returns an actionable ATM timeout
+    // instead of hanging an adapter thread indefinitely.
     connection
-        .busy_timeout(std::time::Duration::from_millis(5000))
+        .busy_timeout(std::time::Duration::from_millis(SQLITE_BUSY_TIMEOUT_MS))
         .map_err(|error| sqlite_error(target, "failed to configure sqlite busy timeout", error))?;
     connection
         .pragma_update(None, "foreign_keys", "ON")
@@ -787,5 +804,31 @@ mod tests {
         assert_eq!(events[0].outcome, SqliteObservabilityOutcome::Failed);
 
         drop((first, second, third));
+    }
+
+    #[test]
+    #[cfg(debug_assertions)]
+    fn with_connection_rejects_tokio_worker_named_threads_in_debug() {
+        let observability = Arc::new(RecordingSqliteObservability::default());
+        let db = Arc::new(
+            SharedDb::open_in_memory_with_observability(observability).expect("in-memory db"),
+        );
+        let worker = std::thread::Builder::new()
+            .name("tokio-runtime-worker".to_string())
+            .spawn({
+                let db = Arc::clone(&db);
+                move || {
+                    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                        db.with_connection(|_| Ok(())).expect("with_connection");
+                    }))
+                }
+            })
+            .expect("spawn");
+
+        let panic = worker.join().expect("join");
+        assert!(
+            panic.is_err(),
+            "debug guard should reject tokio worker threads"
+        );
     }
 }
